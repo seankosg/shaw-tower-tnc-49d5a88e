@@ -1,0 +1,210 @@
+import * as XLSX from 'xlsx';
+
+// ── Header normalization ──────────────────────────────────────────────
+const HEADER_MAP: Record<string, string> = {
+  system: 'system',
+  'system name': 'system',
+  itemno: 'item_no',
+  'item no': 'item_no',
+  'item_no': 'item_no',
+  level: 'level',
+  equipment: 'equipment',
+  description: 'description',
+  'mos-1': 'mos_1',
+  'mos-2': 'mos_2',
+  'mos-3': 'mos_3',
+  'mos-4': 'mos_4',
+  'mos-5': 'mos_5',
+  'mos code': 'mos_code',
+  'mos_code': 'mos_code',
+  moscode: 'mos_code',
+  'subtest id': 'subtest_id',
+  subtestid: 'subtest_id',
+  'subtest_id': 'subtest_id',
+  't1 planned': 't1_planned_date',
+  't1planned': 't1_planned_date',
+  't1 planned date': 't1_planned_date',
+  't1_planned_date': 't1_planned_date',
+  't1 status': 't1_status',
+  't1status': 't1_status',
+  't1_status': 't1_status',
+  't2 planned': 't2_planned_date',
+  't2planned': 't2_planned_date',
+  't2 planned date': 't2_planned_date',
+  't2_planned_date': 't2_planned_date',
+  't2 status': 't2_status',
+  't2status': 't2_status',
+  't2_status': 't2_status',
+  'predecessor status': 'predecessor_status_raw',
+  'precessor status': 'predecessor_status_raw',
+  'predecessor': 'predecessor_status_raw',
+  'predecessor_status_raw': 'predecessor_status_raw',
+  subcontractor: 'subcontractor_name',
+  'subcontractor name': 'subcontractor_name',
+  'subcontractor_name': 'subcontractor_name',
+  'hdec pic': 'hdec_pic_name',
+  'hdecpic': 'hdec_pic_name',
+  'hdec_pic_name': 'hdec_pic_name',
+  'hdec pic name': 'hdec_pic_name',
+};
+
+function normalizeHeader(raw: string): string {
+  const cleaned = raw.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  return HEADER_MAP[cleaned] || cleaned;
+}
+
+// ── Date normalization ────────────────────────────────────────────────
+function normalizeDate(val: any): string | null {
+  if (val == null || val === '') return null;
+  if (typeof val === 'number') {
+    // Excel serial date
+    const d = XLSX.SSF.parse_date_code(val);
+    if (d) return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+  }
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().substring(0, 10);
+  }
+  return null;
+}
+
+function normalizeStatus(val: any): string | null {
+  if (val == null || val === '') return null;
+  const s = String(val).trim();
+  const map: Record<string, string> = { planned: 'Planned', wip: 'WIP', done: 'Done', hold: 'Hold' };
+  return map[s.toLowerCase()] || s;
+}
+
+function normalizePredecessor(val: any): string | null {
+  if (val == null || val === '') return null;
+  const s = String(val).trim();
+  if (s.toLowerCase() === 'done') return 'Done';
+  const d = normalizeDate(val);
+  return d || s;
+}
+
+// ── Parsed row type ───────────────────────────────────────────────────
+export interface ParsedSubtest {
+  raw_row_no: number;
+  raw_system_name: string;
+  item_no: string;
+  level: string | null;
+  equipment: string | null;
+  description: string | null;
+  mos_code: string;
+  subtest_id: string;
+  t1_planned_date: string | null;
+  t1_status: string | null;
+  t2_planned_date: string | null;
+  t2_status: string | null;
+  predecessor_status_raw: string | null;
+  subcontractor_name: string | null;
+  hdec_pic_name: string | null;
+}
+
+// ── Parse Excel file ──────────────────────────────────────────────────
+export function parseExcelFile(file: ArrayBuffer): Record<string, string>[] {
+  const wb = XLSX.read(file, { type: 'array', cellDates: false });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  if (raw.length < 2) return [];
+
+  const headers = (raw[0] as string[]).map(h => normalizeHeader(String(h)));
+  return raw.slice(1)
+    .filter(row => row.some((c: any) => c !== '' && c != null))
+    .map((row, idx) => {
+      const obj: Record<string, string> = { __row_no: String(idx + 2) };
+      headers.forEach((h, i) => {
+        obj[h] = row[i] != null ? String(row[i]) : '';
+      });
+      return obj;
+    });
+}
+
+// ── Legacy parse: 1 row → multiple subtests (MOS-1~5) ────────────────
+export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
+  const result: ParsedSubtest[] = [];
+  for (const row of rows) {
+    const system = (row.system || '').trim();
+    const item_no = (row.item_no || '').trim();
+    if (!item_no) continue;
+
+    const base = {
+      raw_row_no: parseInt(row.__row_no) || 0,
+      raw_system_name: system,
+      item_no,
+      level: row.level?.trim() || null,
+      equipment: row.equipment?.trim() || null,
+      description: row.description?.trim() || null,
+      t1_planned_date: normalizeDate(row.t1_planned_date),
+      t1_status: normalizeStatus(row.t1_status),
+      t2_planned_date: normalizeDate(row.t2_planned_date),
+      t2_status: normalizeStatus(row.t2_status),
+      predecessor_status_raw: normalizePredecessor(row.predecessor_status_raw),
+      subcontractor_name: row.subcontractor_name?.trim() || null,
+      hdec_pic_name: row.hdec_pic_name?.trim() || null,
+    };
+
+    const mosCodes: string[] = [];
+    for (let i = 1; i <= 5; i++) {
+      const code = (row[`mos_${i}`] || '').trim();
+      if (code) mosCodes.push(code);
+    }
+
+    if (mosCodes.length === 0) {
+      // If no MOS columns, try mos_code directly
+      const code = (row.mos_code || '').trim();
+      if (code) mosCodes.push(code);
+    }
+
+    if (mosCodes.length === 0) continue;
+
+    for (const mos of mosCodes) {
+      result.push({
+        ...base,
+        mos_code: mos,
+        subtest_id: `${item_no}-${mos}`,
+      });
+    }
+  }
+  return result;
+}
+
+// ── Standard parse: 1 row = 1 subtest ────────────────────────────────
+export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
+  const result: ParsedSubtest[] = [];
+  for (const row of rows) {
+    const system = (row.system || '').trim();
+    const item_no = (row.item_no || '').trim();
+    const mos_code = (row.mos_code || '').trim();
+    if (!item_no || !mos_code) continue;
+
+    result.push({
+      raw_row_no: parseInt(row.__row_no) || 0,
+      raw_system_name: system,
+      item_no,
+      level: row.level?.trim() || null,
+      equipment: row.equipment?.trim() || null,
+      description: row.description?.trim() || null,
+      mos_code,
+      subtest_id: row.subtest_id?.trim() || `${item_no}-${mos_code}`,
+      t1_planned_date: normalizeDate(row.t1_planned_date),
+      t1_status: normalizeStatus(row.t1_status),
+      t2_planned_date: normalizeDate(row.t2_planned_date),
+      t2_status: normalizeStatus(row.t2_status),
+      predecessor_status_raw: normalizePredecessor(row.predecessor_status_raw),
+      subcontractor_name: row.subcontractor_name?.trim() || null,
+      hdec_pic_name: row.hdec_pic_name?.trim() || null,
+    });
+  }
+  return result;
+}
+
+// ── Value resolution: blank = keep, "clear" = null ───────────────────
+export function resolveValue(newVal: string | null, existingVal: string | null): string | null | undefined {
+  if (newVal == null || newVal === '') return undefined; // keep existing
+  if (newVal.toLowerCase() === 'clear') return null; // set to null
+  return newVal;
+}

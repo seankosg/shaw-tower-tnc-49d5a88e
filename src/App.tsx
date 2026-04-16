@@ -6,6 +6,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout/AppLayout";
 import SubtestList from "./pages/SubtestList";
 import SubtestDetail from "./pages/SubtestDetail";
+import ImportPage from "./pages/ImportPage";
+import ImportLogsPage from "./pages/ImportLogsPage";
+import ExportPage from "./pages/ExportPage";
+import MobileUpdatePage from "./pages/MobileUpdatePage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 
 const queryClient = new QueryClient();
@@ -20,9 +24,11 @@ const App = () => (
           <Route element={<AppLayout />}>
             <Route path="/" element={<SubtestList />} />
             <Route path="/subtests/:id" element={<SubtestDetail />} />
+            <Route path="/import" element={<ImportPage />} />
+            <Route path="/import/logs" element={<ImportLogsPage />} />
+            <Route path="/export" element={<ExportPage />} />
+            <Route path="/mobile" element={<MobileUpdatePage />} />
             <Route path="/dashboard" element={<PlaceholderPage title="Executive Dashboard" />} />
-            <Route path="/import" element={<PlaceholderPage title="Import" />} />
-            <Route path="/export" element={<PlaceholderPage title="Export" />} />
             <Route path="/admin" element={<PlaceholderPage title="Admin Workspace" />} />
           </Route>
         </Routes>
