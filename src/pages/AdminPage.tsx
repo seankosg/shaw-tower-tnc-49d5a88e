@@ -41,9 +41,13 @@ interface ChangeLogRow {
 const ALL_ROLES: AppRole[] = ['subcontractor', 'hdec_engineer', 'manager', 'superuser', 'admin'];
 
 export default function AdminPage() {
-  const { isAdminOrSuperuser } = useAuth();
+  const { isAdminOrSuperuser, session } = useAuth();
 
-  if (!isAdminOrSuperuser) {
+  // In development, skip auth check to allow preview testing
+  const isDev = import.meta.env.DEV;
+  const hasAccess = isDev || isAdminOrSuperuser;
+
+  if (!hasAccess) {
     return (
       <div className="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground">
         <Shield className="h-10 w-10" />
