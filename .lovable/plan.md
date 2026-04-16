@@ -1,32 +1,32 @@
 
 
-# 테이블 헤더/필터 틀고정 + 정렬/다중필터 개선
+# Import 날짜 파싱 수정
 
-## 현재 문제
-- `Table` 컴포넌트가 자체적으로 `overflow-auto` div를 감싸고 있어 sticky header가 제대로 동작하지 않음 (이중 스크롤 컨테이너)
-- Select 필터가 단일 선택만 지원
+## 원인
+1. `parseExcelFile`이 모든 값을 `String()`으로 변환 → Excel serial number(예: 45678)가 문자열 `"45678"`이 됨
+2. `normalizeDate`는 `typeof val === 'number'`일 때만 serial date 파싱 → 문자열이므로 건너뜀
+3. `dd-MMM` 형식(예: `15-Jan`, `03-Feb`)도 처리 로직 없음
 
-## 변경 사항
+## 수정 (`src/lib/import-parser.ts`)
 
-### 1. Table 컴포넌트 수정 (`src/components/ui/table.tsx`)
-- `Table`의 wrapper div에서 `overflow-auto` 제거 → 외부 스크롤 컨테이너만 사용하도록 변경
+### `normalizeDate` 함수 개선
+- 문자열이 순수 숫자(`/^\d+$/`)이면 Excel serial date로 파싱 시도
+- `dd-MMM` 형식(예: `15-Jan`, `03-Feb`) 정규식 추가: `/^(\d{1,2})-(Jan|Feb|Mar|...)\b/i`
+- `dd-MMM-YYYY` 형식도 함께 지원
 
-### 2. SubtestList 테이블 구조 변경 (`src/pages/SubtestList.tsx`)
-- 외부 div를 스크롤 컨테이너로 사용하고, `<thead>`를 `sticky top-0`으로 고정
-- 헤더 행 + 필터 행 모두 sticky 유지 (헤더 bg-background로 겹침 방지)
-- Select 필터를 **다중 선택** 지원으로 변경:
-  - Radix Select → Popover + Checkbox 기반 다중 선택 UI
-  - 선택된 값 목록으로 필터링 (여러 상태/시스템 동시 필터)
-- 정렬: 이미 구현되어 있음 (클릭 시 asc/desc 토글 + 화살표 표시) — 유지
-
-### 3. 다중 Select 필터 (`ColumnFilter` 컴포넌트 개선)
-- `type === 'multi-select'`일 때 Popover + Checkbox 목록 렌더링
-- 선택된 항목 수 표시 (예: "2 selected")
-- `filterFn`을 배열 기반으로 변경: `filterValue`가 배열이면 `includes` 체크
+```text
+normalizeDate 흐름:
+1. null/빈값 → null
+2. typeof number → XLSX.SSF.parse_date_code
+3. 문자열 순수 숫자 → parseFloat 후 XLSX.SSF.parse_date_code
+4. YYYY-MM-DD → 그대로 반환
+5. dd-MMM 또는 dd-MMM-YYYY → 월 약어 매핑 후 변환
+6. new Date() fallback → ISO 변환
+7. 모두 실패 → null
+```
 
 ## 수정 파일
-| 파일 | 작업 |
+| 파일 | 변경 |
 |------|------|
-| `src/components/ui/table.tsx` | Table wrapper에서 overflow-auto 제거 |
-| `src/pages/SubtestList.tsx` | sticky 헤더 구조 수정, 다중 선택 필터 구현 |
+| `src/lib/import-parser.ts` | `normalizeDate` 함수에 숫자 문자열 및 dd-MMM 형식 처리 추가 |
 
