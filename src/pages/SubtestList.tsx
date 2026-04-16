@@ -30,6 +30,9 @@ interface SubtestRow {
   t2_planned_date: string | null;
   t2_actual_date: string | null;
   t2_status: TcStatus | null;
+  predecessor_status_raw: string | null;
+  subcontractor_name: string | null;
+  hdec_pic_name: string | null;
   data_source_type: DataSource | null;
   updated_at: string;
   system_code: string;
@@ -94,6 +97,9 @@ export default function SubtestList() {
       cell: ({ getValue }) => <StatusBadge status={getValue() as TcStatus | null} /> },
     { accessorKey: 't2_planned_date', header: 'T2 Planned', size: 100 },
     { accessorKey: 't2_actual_date', header: 'T2 Actual', size: 100 },
+    { accessorKey: 'predecessor_status_raw', header: 'Predecessor', size: 110 },
+    { accessorKey: 'subcontractor_name', header: 'Subcontractor', size: 120 },
+    { accessorKey: 'hdec_pic_name', header: 'HDEC PIC', size: 110 },
     { accessorKey: 'data_source_type', header: 'Source', size: 110,
       cell: ({ getValue }) => <DataSourceTag source={getValue() as DataSource | null} /> },
     { accessorKey: 'updated_at', header: 'Updated', size: 140,

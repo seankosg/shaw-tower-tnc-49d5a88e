@@ -36,6 +36,9 @@ interface SubtestDetail {
   r2_status: string | null;
   remarks: string | null;
   punchlist_comments: string | null;
+  predecessor_status_raw: string | null;
+  subcontractor_name: string | null;
+  hdec_pic_name: string | null;
   data_source_type: DataSource | null;
   updated_at: string;
   row_version: number;
@@ -92,6 +95,9 @@ export default function SubtestDetailPage() {
         r2_status: d.r2_status,
         remarks: d.remarks,
         punchlist_comments: d.punchlist_comments,
+        predecessor_status_raw: d.predecessor_status_raw,
+        subcontractor_name: d.subcontractor_name,
+        hdec_pic_name: d.hdec_pic_name,
       });
     }
     setLoading(false);
@@ -118,6 +124,7 @@ export default function SubtestDetailPage() {
       't2_planned_date', 't2_actual_date', 't2_status',
       'r1_status', 'aconex_ref_no', 'r2_status',
       'remarks', 'punchlist_comments',
+      'predecessor_status_raw', 'subcontractor_name', 'hdec_pic_name',
     ] as const;
 
     for (const field of editableFields) {
@@ -140,6 +147,9 @@ export default function SubtestDetailPage() {
       r2_status: form.r2_status || null,
       remarks: form.remarks || null,
       punchlist_comments: form.punchlist_comments || null,
+      predecessor_status_raw: form.predecessor_status_raw || null,
+      subcontractor_name: form.subcontractor_name || null,
+      hdec_pic_name: form.hdec_pic_name || null,
       updated_by: null,
       data_source_type: 'app_direct_input' as DataSource,
       row_version: record.row_version + 1,
@@ -287,6 +297,26 @@ export default function SubtestDetailPage() {
           <div className="space-y-1.5 md:col-span-3">
             <Label className="text-xs">Punchlist Comments</Label>
             <Textarea value={form.punchlist_comments || ''} onChange={e => updateField('punchlist_comments', e.target.value)} rows={2} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="py-3">
+          <CardTitle className="text-sm font-medium">Predecessor & Responsibility</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Predecessor Status</Label>
+            <Input className="h-9" value={form.predecessor_status_raw || ''} onChange={e => updateField('predecessor_status_raw', e.target.value)} placeholder="e.g. Done or 2026-03-15" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Subcontractor</Label>
+            <Input className="h-9" value={form.subcontractor_name || ''} onChange={e => updateField('subcontractor_name', e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">HDEC PIC</Label>
+            <Input className="h-9" value={form.hdec_pic_name || ''} onChange={e => updateField('hdec_pic_name', e.target.value)} />
           </div>
         </CardContent>
       </Card>
