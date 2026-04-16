@@ -84,18 +84,21 @@ export default function SubtestList() {
   const columns = useMemo<ColumnDef<SubtestRow>[]>(() => [
     { accessorKey: 'system_code', header: 'System', size: 100 },
     { accessorKey: 'item_no', header: 'Item No', size: 100 },
+    { accessorKey: 'equipment', header: 'Equipment', size: 120, cell: ({ getValue }) => (
+      <span className="truncate block max-w-[120px]">{getValue() as string || '—'}</span>
+    )},
     { accessorKey: 'subtest_id', header: 'Subtest ID', size: 160 },
     { accessorKey: 'mos_code', header: 'MOS Code', size: 100 },
     { accessorKey: 'description', header: 'Description', size: 200, cell: ({ getValue }) => (
       <span className="truncate block max-w-[200px]">{getValue() as string || '—'}</span>
     )},
+    { accessorKey: 'predecessor_status_raw', header: 'Predecessor', size: 110 },
+    { accessorKey: 't1_planned_date', header: 'T1 Planned', size: 100 },
     { accessorKey: 't1_status', header: 'T1 Status', size: 90,
       cell: ({ getValue }) => <StatusBadge status={getValue() as TcStatus | null} /> },
-    { accessorKey: 't1_planned_date', header: 'T1 Planned', size: 100 },
+    { accessorKey: 't2_planned_date', header: 'T2 Planned', size: 100 },
     { accessorKey: 't2_status', header: 'T2 Status', size: 90,
       cell: ({ getValue }) => <StatusBadge status={getValue() as TcStatus | null} /> },
-    { accessorKey: 't2_planned_date', header: 'T2 Planned', size: 100 },
-    { accessorKey: 'predecessor_status_raw', header: 'Predecessor', size: 110 },
     { accessorKey: 'subcontractor_name', header: 'Subcontractor', size: 120 },
     { accessorKey: 'hdec_pic_name', header: 'HDEC PIC', size: 110 },
     { accessorKey: 'data_source_type', header: 'Source', size: 110,
