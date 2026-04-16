@@ -17,6 +17,14 @@ import type { TcStatus, DataSource } from '@/types/enums';
 import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS } from '@/types/enums';
 import { cn } from '@/lib/utils';
 
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const formatDdMmm = (v: string | null) => {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return v;
+  return `${String(d.getDate()).padStart(2, '0')}-${MONTH_ABBR[d.getMonth()]}`;
+};
+
 interface SubtestRow {
   id: string;
   subtest_id: string;
@@ -200,11 +208,13 @@ export default function SubtestList() {
         <span className="truncate block max-w-[200px]">{getValue() as string || '—'}</span>
       )},
     { accessorKey: 'predecessor_status_raw', header: 'Predecessor', size: 110, filterFn: textFilterFn },
-    { accessorKey: 't1_planned_date', header: 'T1 Planned', size: 100, enableColumnFilter: false },
+    { accessorKey: 't1_planned_date', header: 'T1 Planned', size: 100, enableColumnFilter: false,
+      cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
     { accessorKey: 't1_status', header: 'T1 Status', size: 90, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select' as const, filterOptions: statusOptions },
       cell: ({ getValue }) => <StatusBadge status={getValue() as TcStatus | null} /> },
-    { accessorKey: 't2_planned_date', header: 'T2 Planned', size: 100, enableColumnFilter: false },
+    { accessorKey: 't2_planned_date', header: 'T2 Planned', size: 100, enableColumnFilter: false,
+      cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
     { accessorKey: 't2_status', header: 'T2 Status', size: 90, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select' as const, filterOptions: statusOptions },
       cell: ({ getValue }) => <StatusBadge status={getValue() as TcStatus | null} /> },
@@ -214,10 +224,7 @@ export default function SubtestList() {
       meta: { filterType: 'multi-select' as const, filterOptions: sourceOptions },
       cell: ({ getValue }) => <DataSourceTag source={getValue() as DataSource | null} /> },
     { accessorKey: 'updated_at', header: 'Updated', size: 140, enableColumnFilter: false,
-      cell: ({ getValue }) => {
-        const v = getValue() as string;
-        return v ? new Date(v).toLocaleDateString() : '—';
-      }},
+      cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
   ], [systemOptions, statusOptions, sourceOptions]);
 
   const table = useReactTable({
