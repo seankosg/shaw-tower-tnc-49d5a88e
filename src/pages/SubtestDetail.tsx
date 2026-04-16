@@ -184,7 +184,26 @@ export default function SubtestDetailPage() {
   };
 
   const updateField = (field: string, value: any) => {
-    setForm(prev => ({ ...prev, [field]: value || null }));
+    setForm(prev => {
+      const updated = { ...prev, [field]: value || null };
+      // Auto-set actual date when status changes to "Done"
+      const today = new Date().toISOString().split('T')[0];
+      if (field === 't1_status') {
+        if (value === 'Done' && prev.t1_status !== 'Done') {
+          updated.t1_actual_date = today;
+        } else if (value !== 'Done' && prev.t1_status === 'Done') {
+          updated.t1_actual_date = null;
+        }
+      }
+      if (field === 't2_status') {
+        if (value === 'Done' && prev.t2_status !== 'Done') {
+          updated.t2_actual_date = today;
+        } else if (value !== 'Done' && prev.t2_status === 'Done') {
+          updated.t2_actual_date = null;
+        }
+      }
+      return updated;
+    });
   };
 
   if (loading) {
@@ -225,7 +244,7 @@ export default function SubtestDetailPage() {
         <CardHeader className="py-3">
           <CardTitle className="text-sm font-medium">T1 — Internal Test</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label className="text-xs">T1 Status</Label>
             <Select value={form.t1_status || '_blank'} onValueChange={v => updateField('t1_status', v === '_blank' ? null : v)}>
@@ -240,10 +259,6 @@ export default function SubtestDetailPage() {
             <Label className="text-xs">T1 Planned Date</Label>
             <Input type="date" className="h-9" value={form.t1_planned_date || ''} onChange={e => updateField('t1_planned_date', e.target.value)} />
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">T1 Actual Date</Label>
-            <Input type="date" className="h-9" value={form.t1_actual_date || ''} onChange={e => updateField('t1_actual_date', e.target.value)} />
-          </div>
         </CardContent>
       </Card>
 
@@ -251,7 +266,7 @@ export default function SubtestDetailPage() {
         <CardHeader className="py-3">
           <CardTitle className="text-sm font-medium">T2 — RTO Witness Test</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label className="text-xs">T2 Status</Label>
             <Select value={form.t2_status || '_blank'} onValueChange={v => updateField('t2_status', v === '_blank' ? null : v)}>
@@ -265,10 +280,6 @@ export default function SubtestDetailPage() {
           <div className="space-y-1.5">
             <Label className="text-xs">T2 Planned Date</Label>
             <Input type="date" className="h-9" value={form.t2_planned_date || ''} onChange={e => updateField('t2_planned_date', e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">T2 Actual Date</Label>
-            <Input type="date" className="h-9" value={form.t2_actual_date || ''} onChange={e => updateField('t2_actual_date', e.target.value)} />
           </div>
         </CardContent>
       </Card>
