@@ -11,7 +11,8 @@ import ImportPage from "./pages/ImportPage";
 import ImportLogsPage from "./pages/ImportLogsPage";
 import ExportPage from "./pages/ExportPage";
 import MobileUpdatePage from "./pages/MobileUpdatePage";
-import PlaceholderPage from "./pages/PlaceholderPage";
+import DashboardPage from "./pages/DashboardPage";
+import AdminPage from "./pages/AdminPage";
 
 const queryClient = new QueryClient();
 
@@ -30,8 +31,8 @@ const App = () => (
             <Route path="/import/logs" element={<ImportLogsPage />} />
             <Route path="/export" element={<ExportPage />} />
             <Route path="/mobile" element={<MobileUpdatePage />} />
-            <Route path="/dashboard" element={<PlaceholderPage title="Executive Dashboard" />} />
-            <Route path="/admin" element={<PlaceholderPage title="Admin Workspace" />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/admin" element={<AdminPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

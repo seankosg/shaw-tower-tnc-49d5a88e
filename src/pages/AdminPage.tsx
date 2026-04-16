@@ -259,8 +259,10 @@ function PermissionsTab() {
   };
   useEffect(() => { load(); }, []);
 
-  const togglePerm = async (perm: PermRow, field: keyof Pick<PermRow, 'can_view'|'can_edit'|'can_import'|'can_export'|'can_create_key'>) => {
-    await supabase.from('user_system_permissions').update({ [field]: !perm[field] }).eq('id', perm.id);
+  const togglePerm = async (perm: PermRow, field: 'can_view'|'can_edit'|'can_import'|'can_export'|'can_create_key') => {
+    const update = { can_view: perm.can_view, can_edit: perm.can_edit, can_import: perm.can_import, can_export: perm.can_export, can_create_key: perm.can_create_key };
+    update[field] = !perm[field];
+    await supabase.from('user_system_permissions').update(update).eq('id', perm.id);
     toast({ title: 'Permission updated' });
     load();
   };
@@ -327,7 +329,9 @@ function FieldConfigTab() {
   useEffect(() => { load(); }, []);
 
   const toggle = async (f: FieldCfg, key: 'is_enabled' | 'is_required') => {
-    await supabase.from('field_config').update({ [key]: !f[key] }).eq('id', f.id);
+    const update = { is_enabled: f.is_enabled, is_required: f.is_required };
+    update[key] = !f[key];
+    await supabase.from('field_config').update(update).eq('id', f.id);
     toast({ title: 'Field updated' });
     load();
   };

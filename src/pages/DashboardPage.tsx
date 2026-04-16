@@ -168,7 +168,7 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
-            <CheckCircle2 className="h-8 w-8 text-green-600" />
+            <CheckCircle2 className="h-8 w-8 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">T1 Completion</p>
               <p className="text-2xl font-bold text-foreground">{stats.t1Rate}%</p>
@@ -177,7 +177,7 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
-            <CheckCircle2 className="h-8 w-8 text-blue-600" />
+            <CheckCircle2 className="h-8 w-8 text-primary" />
             <div>
               <p className="text-sm text-muted-foreground">T2 Completion</p>
               <p className="text-2xl font-bold text-foreground">{stats.t2Rate}%</p>
