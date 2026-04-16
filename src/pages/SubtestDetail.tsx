@@ -186,6 +186,22 @@ export default function SubtestDetailPage() {
     setSaving(false);
   };
 
+  const handleDelete = async () => {
+    if (!record) return;
+    setDeleting(true);
+    const { error } = await supabase
+      .from('subtests')
+      .delete()
+      .eq('id', record.id);
+    if (error) {
+      toast({ title: 'Delete Failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Deleted', description: `Subtest ${record.subtest_id} has been deleted.` });
+      navigate('/');
+    }
+    setDeleting(false);
+  };
+
   const updateField = (field: string, value: any) => {
     setForm(prev => {
       const updated = { ...prev, [field]: value || null };
