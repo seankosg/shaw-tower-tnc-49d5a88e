@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import SubtestList from "./pages/SubtestList";
 import SubtestDetail from "./pages/SubtestDetail";
@@ -16,10 +17,11 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
         <Routes>
           <Route element={<AppLayout />}>
             <Route path="/" element={<SubtestList />} />
@@ -34,6 +36,7 @@ const App = () => (
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
+  </AuthProvider>
   </QueryClientProvider>
 );
 
