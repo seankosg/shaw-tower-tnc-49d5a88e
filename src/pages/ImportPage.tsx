@@ -186,7 +186,7 @@ export default function ImportPage() {
         updates.row_version = (existing.row_version || 1) + 1;
         updates.subtest_id = row.subtest_id;
 
-        const { error } = await supabase.from('subtests').update(updates).eq('id', existing.id);
+        const { error } = await supabase.from('subtests').update(updates as any).eq('id', existing.id);
         if (error) {
           res.rejected++;
           rowLogs.push({

@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Database, BarChart3, Upload, Download, Shield, Settings,
+  Database, BarChart3, Upload, Download, Shield, Settings, Smartphone,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -14,6 +14,7 @@ const mainNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/dashboard' },
   { label: 'Import', icon: Upload, path: '/import' },
   { label: 'Export', icon: Download, path: '/export' },
+  { label: 'Quick Update', icon: Smartphone, path: '/mobile' },
 ];
 
 const adminNav = [

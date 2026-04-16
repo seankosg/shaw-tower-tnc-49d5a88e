@@ -77,7 +77,7 @@ export default function MobileUpdatePage() {
       updates.t2_actual_date = new Date().toISOString().slice(0, 10);
     }
 
-    const { error } = await supabase.from('subtests').update(updates).eq('id', card.id);
+    const { error } = await supabase.from('subtests').update(updates as any).eq('id', card.id);
     if (error) {
       toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
     } else {
