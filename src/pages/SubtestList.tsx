@@ -62,7 +62,7 @@ export default function SubtestList() {
     setLoading(true);
     const { data, error } = await supabase
       .from('subtests')
-      .select('id, subtest_id, item_no, mos_code, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, data_source_type, updated_at, system_id, system_master!inner(system_code)')
+      .select('id, subtest_id, item_no, mos_code, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, subcontractor_name, hdec_pic_name, data_source_type, updated_at, system_id, system_master!inner(system_code)')
       .eq('is_active', true)
       .order('updated_at', { ascending: false })
       .limit(500);
