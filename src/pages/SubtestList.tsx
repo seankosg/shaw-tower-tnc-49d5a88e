@@ -218,7 +218,7 @@ export default function SubtestList() {
                     key={row.id}
                     className={cn(
                       'cursor-pointer hover:bg-muted/50',
-                      delayed && 'bg-red-50 dark:bg-red-950/20'
+                      delayed && 'bg-destructive/5'
                     )}
                     onClick={() => navigate(`/subtests/${r.id}`)}
                   >
