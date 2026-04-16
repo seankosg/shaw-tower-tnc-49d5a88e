@@ -1,10 +1,9 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Database, BarChart3, Upload, Download, Shield, LogOut, Settings,
+  Database, BarChart3, Upload, Download, Shield, Settings,
 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
 import {
-  Sidebar, SidebarContent, SidebarFooter, SidebarGroup,
+  Sidebar, SidebarContent, SidebarGroup,
   SidebarGroupContent, SidebarGroupLabel, SidebarHeader,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem,
 } from '@/components/ui/sidebar';
@@ -24,7 +23,6 @@ const adminNav = [
 export function AppSidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { signOut, isAdminOrSuperuser, profile } = useAuth();
 
   return (
     <Sidebar>
@@ -58,44 +56,26 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {isAdminOrSuperuser && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Administration</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {adminNav.map((item) => (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={pathname.startsWith(item.path)}
-                      onClick={() => navigate(item.path)}
-                      tooltip={item.label}
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        <SidebarGroup>
+          <SidebarGroupLabel>Administration</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {adminNav.map((item) => (
+                <SidebarMenuItem key={item.path}>
+                  <SidebarMenuButton
+                    isActive={pathname.startsWith(item.path)}
+                    onClick={() => navigate(item.path)}
+                    tooltip={item.label}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
-
-      <SidebarFooter className="border-t border-sidebar-border">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
-              {profile?.name || profile?.email || 'User'}
-            </div>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={signOut}>
-              <LogOut className="h-4 w-4" />
-              <span>Sign Out</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
     </Sidebar>
   );
 }
