@@ -55,7 +55,7 @@ interface ChangeLog {
 export default function SubtestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  
   const { toast } = useToast();
   const [record, setRecord] = useState<SubtestDetail | null>(null);
   const [form, setForm] = useState<Partial<SubtestDetail>>({});
@@ -108,7 +108,7 @@ export default function SubtestDetailPage() {
   };
 
   const handleSave = async () => {
-    if (!record || !user) return;
+    if (!record) return;
     setSaving(true);
 
     // Build change log entries
@@ -140,7 +140,7 @@ export default function SubtestDetailPage() {
       r2_status: form.r2_status || null,
       remarks: form.remarks || null,
       punchlist_comments: form.punchlist_comments || null,
-      updated_by: user.id,
+      updated_by: null,
       data_source_type: 'app_direct_input' as DataSource,
       row_version: record.row_version + 1,
     };
@@ -161,7 +161,7 @@ export default function SubtestDetailPage() {
             changed_field: c.field,
             old_value: c.old_val,
             new_value: c.new_val,
-            changed_by: user.id,
+            changed_by: null,
             change_source: 'app_direct_input' as ChangeSource,
           }))
         );
