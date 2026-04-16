@@ -9,10 +9,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { StatusBadge } from '@/components/shared/StatusBadge';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { DataSourceTag } from '@/components/shared/DataSourceTag';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { TC_STATUS_OPTIONS } from '@/types/enums';
 import type { TcStatus, DataSource, ChangeSource } from '@/types/enums';
 
@@ -60,10 +61,12 @@ export default function SubtestDetailPage() {
   const navigate = useNavigate();
   
   const { toast } = useToast();
+  const { isAdminOrSuperuser } = useAuth();
   const [record, setRecord] = useState<SubtestDetail | null>(null);
   const [form, setForm] = useState<Partial<SubtestDetail>>({});
   const [changeLogs, setChangeLogs] = useState<ChangeLog[]>([]);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -332,12 +335,36 @@ export default function SubtestDetailPage() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving}>
-          <Save className="mr-1.5 h-4 w-4" />
-          {saving ? 'Saving...' : 'Save Changes'}
-        </Button>
-      </div>
+      {isAdminOrSuperuser && (
+        <div className="flex justify-between">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" disabled={deleting}>
+                <Trash2 className="mr-1.5 h-4 w-4" />
+                {deleting ? 'Deleting...' : 'Delete Subtest'}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Subtest</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete <strong>{record.subtest_id}</strong>? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <Button onClick={handleSave} disabled={saving}>
+            <Save className="mr-1.5 h-4 w-4" />
+            {saving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </div>
+      )}
 
       {/* Change History */}
       <Card>
