@@ -14,16 +14,637 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      field_config: {
+        Row: {
+          display_name: string
+          editable_to_roles: Database["public"]["Enums"]["app_role"][] | null
+          field_name: string
+          id: string
+          is_enabled: boolean
+          is_required: boolean
+          sort_order: number
+          visible_to_roles: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Insert: {
+          display_name: string
+          editable_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+          field_name: string
+          id?: string
+          is_enabled?: boolean
+          is_required?: boolean
+          sort_order?: number
+          visible_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Update: {
+          display_name?: string
+          editable_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+          field_name?: string
+          id?: string
+          is_enabled?: boolean
+          is_required?: boolean
+          sort_order?: number
+          visible_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          is_active: boolean
+          name: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          project_code: string
+          project_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          project_code: string
+          project_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          project_code?: string
+          project_name?: string
+        }
+        Relationships: []
+      }
+      subtest_change_log: {
+        Row: {
+          change_source: Database["public"]["Enums"]["change_source"] | null
+          changed_at: string
+          changed_by: string | null
+          changed_field: string
+          id: string
+          new_value: string | null
+          old_value: string | null
+          subtest_id: string
+          upload_id: string | null
+        }
+        Insert: {
+          change_source?: Database["public"]["Enums"]["change_source"] | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_field: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          subtest_id: string
+          upload_id?: string | null
+        }
+        Update: {
+          change_source?: Database["public"]["Enums"]["change_source"] | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_field?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          subtest_id?: string
+          upload_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subtest_change_log_subtest_id_fkey"
+            columns: ["subtest_id"]
+            isOneToOne: false
+            referencedRelation: "subtests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subtests: {
+        Row: {
+          aconex_ref_no: string | null
+          data_source_type: Database["public"]["Enums"]["data_source"] | null
+          description: string | null
+          equipment: string | null
+          id: string
+          is_active: boolean
+          item_no: string
+          level: string | null
+          mos_code: string
+          mos_sequence: number | null
+          project_id: string
+          punchlist_comments: string | null
+          r1_status: string | null
+          r2_status: string | null
+          remarks: string | null
+          row_version: number
+          source_upload_id: string | null
+          subtest_id: string
+          system_id: string
+          t1_actual_date: string | null
+          t1_planned_date: string | null
+          t1_status: Database["public"]["Enums"]["tc_status"] | null
+          t2_actual_date: string | null
+          t2_planned_date: string | null
+          t2_status: Database["public"]["Enums"]["tc_status"] | null
+          test_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          aconex_ref_no?: string | null
+          data_source_type?: Database["public"]["Enums"]["data_source"] | null
+          description?: string | null
+          equipment?: string | null
+          id?: string
+          is_active?: boolean
+          item_no: string
+          level?: string | null
+          mos_code: string
+          mos_sequence?: number | null
+          project_id: string
+          punchlist_comments?: string | null
+          r1_status?: string | null
+          r2_status?: string | null
+          remarks?: string | null
+          row_version?: number
+          source_upload_id?: string | null
+          subtest_id: string
+          system_id: string
+          t1_actual_date?: string | null
+          t1_planned_date?: string | null
+          t1_status?: Database["public"]["Enums"]["tc_status"] | null
+          t2_actual_date?: string | null
+          t2_planned_date?: string | null
+          t2_status?: Database["public"]["Enums"]["tc_status"] | null
+          test_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          aconex_ref_no?: string | null
+          data_source_type?: Database["public"]["Enums"]["data_source"] | null
+          description?: string | null
+          equipment?: string | null
+          id?: string
+          is_active?: boolean
+          item_no?: string
+          level?: string | null
+          mos_code?: string
+          mos_sequence?: number | null
+          project_id?: string
+          punchlist_comments?: string | null
+          r1_status?: string | null
+          r2_status?: string | null
+          remarks?: string | null
+          row_version?: number
+          source_upload_id?: string | null
+          subtest_id?: string
+          system_id?: string
+          t1_actual_date?: string | null
+          t1_planned_date?: string | null
+          t1_status?: Database["public"]["Enums"]["tc_status"] | null
+          t2_actual_date?: string | null
+          t2_planned_date?: string | null
+          t2_status?: Database["public"]["Enums"]["tc_status"] | null
+          test_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subtests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subtests_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "system_master"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subtests_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_alias_map: {
+        Row: {
+          alias_name: string
+          created_at: string
+          id: string
+          is_active: boolean
+          project_id: string
+          system_id: string
+        }
+        Insert: {
+          alias_name: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          project_id: string
+          system_id: string
+        }
+        Update: {
+          alias_name?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          project_id?: string
+          system_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_alias_map_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "system_alias_map_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "system_master"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_master: {
+        Row: {
+          auto_created_at: string | null
+          auto_created_by: string | null
+          created_at: string
+          discipline: string | null
+          id: string
+          is_active: boolean
+          is_auto_created: boolean
+          project_id: string
+          requires_admin_review: boolean
+          system_code: string
+          system_name_std: string | null
+        }
+        Insert: {
+          auto_created_at?: string | null
+          auto_created_by?: string | null
+          created_at?: string
+          discipline?: string | null
+          id?: string
+          is_active?: boolean
+          is_auto_created?: boolean
+          project_id: string
+          requires_admin_review?: boolean
+          system_code: string
+          system_name_std?: string | null
+        }
+        Update: {
+          auto_created_at?: string | null
+          auto_created_by?: string | null
+          created_at?: string
+          discipline?: string | null
+          id?: string
+          is_active?: boolean
+          is_auto_created?: boolean
+          project_id?: string
+          requires_admin_review?: boolean
+          system_code?: string
+          system_name_std?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_master_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tests: {
+        Row: {
+          created_at: string
+          description: string | null
+          equipment: string | null
+          id: string
+          is_active: boolean
+          item_no: string
+          level: string | null
+          project_id: string
+          source_seed_row_no: number | null
+          system_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          equipment?: string | null
+          id?: string
+          is_active?: boolean
+          item_no: string
+          level?: string | null
+          project_id: string
+          source_seed_row_no?: number | null
+          system_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          equipment?: string | null
+          id?: string
+          is_active?: boolean
+          item_no?: string
+          level?: string | null
+          project_id?: string
+          source_seed_row_no?: number | null
+          system_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tests_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "system_master"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      upload_batches: {
+        Row: {
+          id: string
+          import_type: Database["public"]["Enums"]["import_type"] | null
+          note: string | null
+          processed_rows: number | null
+          project_id: string
+          rejected_rows: number | null
+          skipped_rows: number | null
+          source_type: string | null
+          status: Database["public"]["Enums"]["upload_status"]
+          success_rows: number | null
+          template_version: string | null
+          total_rows: number | null
+          uploaded_at: string
+          uploaded_by: string | null
+          uploaded_file_name: string
+        }
+        Insert: {
+          id?: string
+          import_type?: Database["public"]["Enums"]["import_type"] | null
+          note?: string | null
+          processed_rows?: number | null
+          project_id: string
+          rejected_rows?: number | null
+          skipped_rows?: number | null
+          source_type?: string | null
+          status?: Database["public"]["Enums"]["upload_status"]
+          success_rows?: number | null
+          template_version?: string | null
+          total_rows?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+          uploaded_file_name: string
+        }
+        Update: {
+          id?: string
+          import_type?: Database["public"]["Enums"]["import_type"] | null
+          note?: string | null
+          processed_rows?: number | null
+          project_id?: string
+          rejected_rows?: number | null
+          skipped_rows?: number | null
+          source_type?: string | null
+          status?: Database["public"]["Enums"]["upload_status"]
+          success_rows?: number | null
+          template_version?: string | null
+          total_rows?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+          uploaded_file_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upload_batches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      upload_row_logs: {
+        Row: {
+          action_taken: Database["public"]["Enums"]["action_taken"] | null
+          id: string
+          item_no: string | null
+          mapped_system_id: string | null
+          mos_code: string | null
+          processed_at: string
+          raw_row_no: number | null
+          raw_system_name: string | null
+          reason_code: string | null
+          reason_detail: string | null
+          upload_id: string
+        }
+        Insert: {
+          action_taken?: Database["public"]["Enums"]["action_taken"] | null
+          id?: string
+          item_no?: string | null
+          mapped_system_id?: string | null
+          mos_code?: string | null
+          processed_at?: string
+          raw_row_no?: number | null
+          raw_system_name?: string | null
+          reason_code?: string | null
+          reason_detail?: string | null
+          upload_id: string
+        }
+        Update: {
+          action_taken?: Database["public"]["Enums"]["action_taken"] | null
+          id?: string
+          item_no?: string | null
+          mapped_system_id?: string | null
+          mos_code?: string | null
+          processed_at?: string
+          raw_row_no?: number | null
+          raw_system_name?: string | null
+          reason_code?: string | null
+          reason_detail?: string | null
+          upload_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upload_row_logs_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "upload_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_system_permissions: {
+        Row: {
+          can_create_key: boolean
+          can_edit: boolean
+          can_export: boolean
+          can_import: boolean
+          can_view: boolean
+          granted_at: string
+          granted_by: string | null
+          id: string
+          project_id: string
+          system_id: string
+          user_id: string
+        }
+        Insert: {
+          can_create_key?: boolean
+          can_edit?: boolean
+          can_export?: boolean
+          can_import?: boolean
+          can_view?: boolean
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          project_id: string
+          system_id: string
+          user_id: string
+        }
+        Update: {
+          can_create_key?: boolean
+          can_edit?: boolean
+          can_export?: boolean
+          can_import?: boolean
+          can_view?: boolean
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          project_id?: string
+          system_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_system_permissions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_system_permissions_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "system_master"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_any_role: {
+        Args: {
+          _roles: Database["public"]["Enums"]["app_role"][]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      has_system_permission: {
+        Args: {
+          _permission: string
+          _project_id: string
+          _system_id: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_admin_or_superuser: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      action_taken: "inserted" | "updated" | "skipped" | "rejected"
+      app_role:
+        | "subcontractor"
+        | "hdec_engineer"
+        | "manager"
+        | "superuser"
+        | "admin"
+      change_source:
+        | "app_direct_input"
+        | "mobile_input"
+        | "excel_import"
+        | "admin_edit"
+      data_source:
+        | "legacy_import_inherited"
+        | "app_direct_input"
+        | "mobile_input"
+        | "standard_import"
+        | "admin_edit"
+      import_type: "legacy" | "standard"
+      tc_status: "Planned" | "WIP" | "Done" | "Hold"
+      upload_status: "pending" | "processing" | "completed" | "failed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +771,31 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      action_taken: ["inserted", "updated", "skipped", "rejected"],
+      app_role: [
+        "subcontractor",
+        "hdec_engineer",
+        "manager",
+        "superuser",
+        "admin",
+      ],
+      change_source: [
+        "app_direct_input",
+        "mobile_input",
+        "excel_import",
+        "admin_edit",
+      ],
+      data_source: [
+        "legacy_import_inherited",
+        "app_direct_input",
+        "mobile_input",
+        "standard_import",
+        "admin_edit",
+      ],
+      import_type: ["legacy", "standard"],
+      tc_status: ["Planned", "WIP", "Done", "Hold"],
+      upload_status: ["pending", "processing", "completed", "failed"],
+    },
   },
 } as const
