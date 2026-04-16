@@ -10,7 +10,7 @@ import {
 import { APP_NAME } from '@/lib/constants';
 
 const mainNav = [
-  { label: 'Subtests', icon: Database, path: '/' },
+  { label: 'Test Status', icon: Database, path: '/' },
   { label: 'Dashboard', icon: BarChart3, path: '/dashboard' },
   { label: 'Import', icon: Upload, path: '/import' },
   { label: 'Export', icon: Download, path: '/export' },
