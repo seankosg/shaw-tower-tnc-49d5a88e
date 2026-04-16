@@ -128,14 +128,26 @@ export default function SubtestDetailPage() {
       }
     }
 
+    const updatePayload = {
+      t1_planned_date: form.t1_planned_date || null,
+      t1_actual_date: form.t1_actual_date || null,
+      t1_status: form.t1_status || null,
+      t2_planned_date: form.t2_planned_date || null,
+      t2_actual_date: form.t2_actual_date || null,
+      t2_status: form.t2_status || null,
+      r1_status: form.r1_status || null,
+      aconex_ref_no: form.aconex_ref_no || null,
+      r2_status: form.r2_status || null,
+      remarks: form.remarks || null,
+      punchlist_comments: form.punchlist_comments || null,
+      updated_by: user.id,
+      data_source_type: 'app_direct_input' as DataSource,
+      row_version: record.row_version + 1,
+    };
+
     const { error } = await supabase
       .from('subtests')
-      .update({
-        ...form,
-        updated_by: user.id,
-        data_source_type: 'app_direct_input' as DataSource,
-        row_version: record.row_version + 1,
-      })
+      .update(updatePayload)
       .eq('id', record.id);
 
     if (error) {
