@@ -9,9 +9,10 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { DataSourceTag } from '@/components/shared/DataSourceTag';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Upload, Download } from 'lucide-react';
+import { Search, Upload, Download, ChevronDown } from 'lucide-react';
 import type { TcStatus, DataSource } from '@/types/enums';
 import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS } from '@/types/enums';
 import { cn } from '@/lib/utils';
@@ -38,9 +39,10 @@ interface SubtestRow {
   system_code: string;
 }
 
-const selectFilterFn = (row: any, columnId: string, filterValue: string) => {
-  if (!filterValue || filterValue === 'all') return true;
-  return row.getValue(columnId) === filterValue;
+const multiSelectFilterFn = (row: any, columnId: string, filterValue: string[]) => {
+  if (!filterValue || filterValue.length === 0) return true;
+  const val = row.getValue(columnId);
+  return filterValue.includes(val);
 };
 
 const textFilterFn = (row: any, columnId: string, filterValue: string) => {
@@ -50,26 +52,58 @@ const textFilterFn = (row: any, columnId: string, filterValue: string) => {
   return String(val).toLowerCase().includes(filterValue.toLowerCase());
 };
 
+function MultiSelectFilter({ column, options }: {
+  column: any;
+  options: { value: string; label: string }[];
+}) {
+  const selected: string[] = (column.getFilterValue() as string[]) ?? [];
+
+  const toggle = (value: string) => {
+    const next = selected.includes(value)
+      ? selected.filter(v => v !== value)
+      : [...selected, value];
+    column.setFilterValue(next.length ? next : undefined);
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="h-7 text-[11px] w-full min-w-0 border-muted justify-between font-normal">
+          <span className="truncate">
+            {selected.length === 0 ? 'All' : `${selected.length} selected`}
+          </span>
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-48 p-2 max-h-60 overflow-auto" align="start">
+        <button
+          className="text-[11px] text-muted-foreground hover:underline mb-1 px-1"
+          onClick={() => column.setFilterValue(undefined)}
+        >
+          Clear all
+        </button>
+        {options.map(o => (
+          <label key={o.value} className="flex items-center gap-2 px-1 py-1 text-xs cursor-pointer hover:bg-muted/50 rounded">
+            <Checkbox
+              checked={selected.includes(o.value)}
+              onCheckedChange={() => toggle(o.value)}
+              className="h-3.5 w-3.5"
+            />
+            {o.label}
+          </label>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function ColumnFilter({ column, type, options }: {
   column: any;
-  type: 'text' | 'select';
+  type: 'text' | 'multi-select';
   options?: { value: string; label: string }[];
 }) {
-  if (type === 'select' && options) {
-    const val = (column.getFilterValue() as string) ?? 'all';
-    return (
-      <Select value={val} onValueChange={(v) => column.setFilterValue(v === 'all' ? undefined : v)}>
-        <SelectTrigger className="h-7 text-[11px] w-full min-w-0 border-muted">
-          <SelectValue placeholder="All" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All</SelectItem>
-          {options.map(o => (
-            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
+  if (type === 'multi-select' && options) {
+    return <MultiSelectFilter column={column} options={options} />;
   }
   return (
     <Input
@@ -108,7 +142,7 @@ export default function SubtestList() {
     let hasMore = true;
 
     while (hasMore) {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('subtests')
         .select('id, subtest_id, item_no, mos_code, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, subcontractor_name, hdec_pic_name, data_source_type, updated_at, system_id, system_master!inner(system_code)')
         .eq('is_active', true)
@@ -152,8 +186,8 @@ export default function SubtestList() {
   );
 
   const columns = useMemo<ColumnDef<SubtestRow>[]>(() => [
-    { accessorKey: 'system_code', header: 'System', size: 100, filterFn: selectFilterFn,
-      meta: { filterType: 'select' as const, filterOptions: systemOptions } },
+    { accessorKey: 'system_code', header: 'System', size: 100, filterFn: multiSelectFilterFn,
+      meta: { filterType: 'multi-select' as const, filterOptions: systemOptions } },
     { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn },
     { accessorKey: 'equipment', header: 'Equipment', size: 120, filterFn: textFilterFn,
       cell: ({ getValue }) => (
@@ -167,17 +201,17 @@ export default function SubtestList() {
       )},
     { accessorKey: 'predecessor_status_raw', header: 'Predecessor', size: 110, filterFn: textFilterFn },
     { accessorKey: 't1_planned_date', header: 'T1 Planned', size: 100, enableColumnFilter: false },
-    { accessorKey: 't1_status', header: 'T1 Status', size: 90, filterFn: selectFilterFn,
-      meta: { filterType: 'select' as const, filterOptions: statusOptions },
+    { accessorKey: 't1_status', header: 'T1 Status', size: 90, filterFn: multiSelectFilterFn,
+      meta: { filterType: 'multi-select' as const, filterOptions: statusOptions },
       cell: ({ getValue }) => <StatusBadge status={getValue() as TcStatus | null} /> },
     { accessorKey: 't2_planned_date', header: 'T2 Planned', size: 100, enableColumnFilter: false },
-    { accessorKey: 't2_status', header: 'T2 Status', size: 90, filterFn: selectFilterFn,
-      meta: { filterType: 'select' as const, filterOptions: statusOptions },
+    { accessorKey: 't2_status', header: 'T2 Status', size: 90, filterFn: multiSelectFilterFn,
+      meta: { filterType: 'multi-select' as const, filterOptions: statusOptions },
       cell: ({ getValue }) => <StatusBadge status={getValue() as TcStatus | null} /> },
     { accessorKey: 'subcontractor_name', header: 'Subcontractor', size: 120, filterFn: textFilterFn },
     { accessorKey: 'hdec_pic_name', header: 'HDEC PIC', size: 110, filterFn: textFilterFn },
-    { accessorKey: 'data_source_type', header: 'Source', size: 110, filterFn: selectFilterFn,
-      meta: { filterType: 'select' as const, filterOptions: sourceOptions },
+    { accessorKey: 'data_source_type', header: 'Source', size: 110, filterFn: multiSelectFilterFn,
+      meta: { filterType: 'multi-select' as const, filterOptions: sourceOptions },
       cell: ({ getValue }) => <DataSourceTag source={getValue() as DataSource | null} /> },
     { accessorKey: 'updated_at', header: 'Updated', size: 140, enableColumnFilter: false,
       cell: ({ getValue }) => {
@@ -212,7 +246,6 @@ export default function SubtestList() {
         </div>
       </div>
 
-      {/* Global search */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -228,16 +261,16 @@ export default function SubtestList() {
         </span>
       </div>
 
-      {/* Table with sticky header */}
+      {/* Scrollable table with sticky header */}
       <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
         <Table>
-          <TableHeader className="sticky top-0 z-10 bg-background">
+          <TableHeader className="sticky top-0 z-10">
             {table.getHeaderGroups().map(hg => (
-              <TableRow key={hg.id}>
+              <TableRow key={hg.id} className="border-b-0">
                 {hg.headers.map(header => (
                   <TableHead
                     key={header.id}
-                    className="text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background"
+                    className="text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b"
                     onClick={header.column.getToggleSortingHandler()}
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
@@ -247,7 +280,7 @@ export default function SubtestList() {
               </TableRow>
             ))}
             {/* Filter row */}
-            <TableRow>
+            <TableRow className="border-b">
               {table.getHeaderGroups()[0].headers.map(header => {
                 const meta = header.column.columnDef.meta as any;
                 const canFilter = header.column.getCanFilter();
@@ -256,7 +289,7 @@ export default function SubtestList() {
                     {canFilter ? (
                       <ColumnFilter
                         column={header.column}
-                        type={meta?.filterType === 'select' ? 'select' : 'text'}
+                        type={meta?.filterType === 'multi-select' ? 'multi-select' : 'text'}
                         options={meta?.filterOptions}
                       />
                     ) : null}
