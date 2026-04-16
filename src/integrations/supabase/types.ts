@@ -148,12 +148,14 @@ export type Database = {
           data_source_type: Database["public"]["Enums"]["data_source"] | null
           description: string | null
           equipment: string | null
+          hdec_pic_name: string | null
           id: string
           is_active: boolean
           item_no: string
           level: string | null
           mos_code: string
           mos_sequence: number | null
+          predecessor_status_raw: string | null
           project_id: string
           punchlist_comments: string | null
           r1_status: string | null
@@ -161,6 +163,7 @@ export type Database = {
           remarks: string | null
           row_version: number
           source_upload_id: string | null
+          subcontractor_name: string | null
           subtest_id: string
           system_id: string
           t1_actual_date: string | null
@@ -178,12 +181,14 @@ export type Database = {
           data_source_type?: Database["public"]["Enums"]["data_source"] | null
           description?: string | null
           equipment?: string | null
+          hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
           item_no: string
           level?: string | null
           mos_code: string
           mos_sequence?: number | null
+          predecessor_status_raw?: string | null
           project_id: string
           punchlist_comments?: string | null
           r1_status?: string | null
@@ -191,6 +196,7 @@ export type Database = {
           remarks?: string | null
           row_version?: number
           source_upload_id?: string | null
+          subcontractor_name?: string | null
           subtest_id: string
           system_id: string
           t1_actual_date?: string | null
@@ -208,12 +214,14 @@ export type Database = {
           data_source_type?: Database["public"]["Enums"]["data_source"] | null
           description?: string | null
           equipment?: string | null
+          hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
           item_no?: string
           level?: string | null
           mos_code?: string
           mos_sequence?: number | null
+          predecessor_status_raw?: string | null
           project_id?: string
           punchlist_comments?: string | null
           r1_status?: string | null
@@ -221,6 +229,7 @@ export type Database = {
           remarks?: string | null
           row_version?: number
           source_upload_id?: string | null
+          subcontractor_name?: string | null
           subtest_id?: string
           system_id?: string
           t1_actual_date?: string | null
