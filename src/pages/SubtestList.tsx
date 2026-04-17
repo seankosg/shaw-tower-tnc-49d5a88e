@@ -293,7 +293,16 @@ export default function SubtestList() {
                     onClick={header.column.getToggleSortingHandler()}
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
-                    {{ asc: ' ▲', desc: ' ▼' }[header.column.getIsSorted() as string] ?? ''}
+                    {header.column.getIsSorted() && (
+                      <span className="ml-0.5">
+                        {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
+                        {sorting.length > 1 && (
+                          <sup className="ml-0.5 text-[9px] text-muted-foreground">
+                            {header.column.getSortIndex() + 1}
+                          </sup>
+                        )}
+                      </span>
+                    )}
                   </TableHead>
                 ))}
               </TableRow>
