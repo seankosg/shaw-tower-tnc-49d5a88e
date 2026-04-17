@@ -43,6 +43,7 @@ interface SubtestRow {
   t2_status: TcStatus | null;
   predecessor_status_raw: string | null;
   subcontractor_name: string | null;
+  subsub_name: string | null;
   hdec_pic_name: string | null;
   data_source_type: DataSource | null;
   updated_at: string;
@@ -215,7 +216,7 @@ export default function SubtestList() {
     while (hasMore) {
       const { data } = await supabase
         .from('subtests')
-        .select('id, subtest_id, item_no, mos_code, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, subcontractor_name, hdec_pic_name, data_source_type, updated_at, system_id, system_master!inner(system_code)')
+        .select('id, subtest_id, item_no, mos_code, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, updated_at, system_id, system_master!inner(system_code)')
         .eq('is_active', true)
         .order('updated_at', { ascending: false })
         .range(from, from + PAGE_SIZE - 1);
@@ -282,6 +283,7 @@ export default function SubtestList() {
       meta: { filterType: 'multi-select' as const, filterOptions: statusOptions },
       cell: ({ getValue }) => <StatusBadge status={getValue() as TcStatus | null} /> },
     { accessorKey: 'subcontractor_name', header: 'Subcontractor', size: 120, filterFn: textFilterFn },
+    { accessorKey: 'subsub_name', header: 'Sub-Sub', size: 120, filterFn: textFilterFn },
     { accessorKey: 'hdec_pic_name', header: 'HDEC PIC', size: 110, filterFn: textFilterFn },
     { accessorKey: 'data_source_type', header: 'Source', size: 110, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select' as const, filterOptions: sourceOptions },
