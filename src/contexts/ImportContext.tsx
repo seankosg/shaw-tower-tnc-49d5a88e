@@ -172,6 +172,11 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           ['subcontractor_name', row.subcontractor_name],
           ['subsub_name', row.subsub_name],
           ['hdec_pic_name', row.hdec_pic_name],
+          ['r1_status', row.r1_status],
+          ['r2_status', row.r2_status],
+          ['aconex_ref_no', row.aconex_ref_no],
+          ['remarks', row.remarks],
+          ['punchlist_comments', row.punchlist_comments],
         ];
         for (const [field, val] of fields) {
           const resolved = resolveValue(val, null);
@@ -220,6 +225,11 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           subcontractor_name: row.subcontractor_name,
           subsub_name: row.subsub_name,
           hdec_pic_name: row.hdec_pic_name,
+          r1_status: row.r1_status,
+          r2_status: row.r2_status,
+          aconex_ref_no: row.aconex_ref_no,
+          remarks: row.remarks,
+          punchlist_comments: row.punchlist_comments,
           data_source_type: dataSourceType as any, source_upload_id: uploadId,
         } as any);
         if (error) {

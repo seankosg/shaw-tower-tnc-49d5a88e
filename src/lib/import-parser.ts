@@ -218,6 +218,11 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
       subcontractor_name: row.subcontractor_name?.trim() || null,
       subsub_name: row.subsub_name?.trim() || null,
       hdec_pic_name: row.hdec_pic_name?.trim() || null,
+      r1_status: row.r1_status?.trim() || null,
+      r2_status: row.r2_status?.trim() || null,
+      aconex_ref_no: row.aconex_ref_no?.trim() || null,
+      remarks: row.remarks?.trim() || null,
+      punchlist_comments: row.punchlist_comments?.trim() || null,
     };
 
     const mosCodes: string[] = [];
@@ -271,6 +276,11 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
       subcontractor_name: row.subcontractor_name?.trim() || null,
       subsub_name: row.subsub_name?.trim() || null,
       hdec_pic_name: row.hdec_pic_name?.trim() || null,
+      r1_status: row.r1_status?.trim() || null,
+      r2_status: row.r2_status?.trim() || null,
+      aconex_ref_no: row.aconex_ref_no?.trim() || null,
+      remarks: row.remarks?.trim() || null,
+      punchlist_comments: row.punchlist_comments?.trim() || null,
     });
   }
   return result;
