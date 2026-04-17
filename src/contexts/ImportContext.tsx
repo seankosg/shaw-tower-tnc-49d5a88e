@@ -336,6 +336,14 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       rejected_rows: res.rejected,
     }).eq('id', uploadId);
 
+    if (userCreateFails.length > 0) {
+      toast({
+        title: `${userCreateFails.length} user account(s) failed`,
+        description: userCreateFails.slice(0, 3).join('; ') + (userCreateFails.length > 3 ? '...' : ''),
+        variant: 'destructive',
+      });
+    }
+
     return res;
   };
 
