@@ -351,8 +351,30 @@ export default function SubtestList() {
       <div ref={tableRef} className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
         <Table style={{ width: table.getTotalSize(), tableLayout: 'fixed' }}>
           <TableHeader className="sticky top-0 z-10">
+            {/* Filter row */}
+            <TableRow className="border-b-0">
+              {table.getHeaderGroups()[0].headers.map(header => {
+                const meta = header.column.columnDef.meta as any;
+                const canFilter = header.column.getCanFilter();
+                return (
+                  <TableHead
+                    key={`filter-${header.id}`}
+                    style={{ width: header.getSize() }}
+                    className="py-1 px-1 bg-muted/30"
+                  >
+                    {canFilter ? (
+                      <ColumnFilter
+                        column={header.column}
+                        type={meta?.filterType === 'multi-select' ? 'multi-select' : 'text'}
+                        options={meta?.filterOptions}
+                      />
+                    ) : null}
+                  </TableHead>
+                );
+              })}
+            </TableRow>
             {table.getHeaderGroups().map(hg => (
-              <TableRow key={hg.id} className="border-b-0">
+              <TableRow key={hg.id} className="border-b">
                 {hg.headers.map(header => (
                   <TableHead
                     key={header.id}
@@ -389,28 +411,6 @@ export default function SubtestList() {
                 ))}
               </TableRow>
             ))}
-            {/* Filter row */}
-            <TableRow className="border-b">
-              {table.getHeaderGroups()[0].headers.map(header => {
-                const meta = header.column.columnDef.meta as any;
-                const canFilter = header.column.getCanFilter();
-                return (
-                  <TableHead
-                    key={`filter-${header.id}`}
-                    style={{ width: header.getSize() }}
-                    className="py-1 px-1 bg-muted/30"
-                  >
-                    {canFilter ? (
-                      <ColumnFilter
-                        column={header.column}
-                        type={meta?.filterType === 'multi-select' ? 'multi-select' : 'text'}
-                        options={meta?.filterOptions}
-                      />
-                    ) : null}
-                  </TableHead>
-                );
-              })}
-            </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
