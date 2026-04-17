@@ -1,52 +1,43 @@
 
 
-# 다중 파일 Import + 백그라운드 진행 + 일괄 삭제
+# 컬럼 순서 변경 + 기본 정렬 + 사용자별 필터/정렬 상태 영구 저장
 
-## 1. 다중 파일 Import (`src/pages/ImportPage.tsx`)
+## 1. 컬럼 순서 재조정 (`src/pages/SubtestList.tsx`)
+`columns` 배열에서 `item_no`를 맨 앞으로 이동:
+- 변경 전: `system_code → item_no → equipment → subtest_id → ...`
+- 변경 후: `item_no → system_code → equipment → subtest_id → ...`
 
-- `<input type="file" multiple>` + drag-drop 다중 허용
-- 선택된 파일 목록 카드 표시 (파일명, 크기, 파싱된 행 수, 상태: pending/processing/done/failed)
-- "Execute Import (N files)" 버튼으로 큐 순차 처리
-- 파일별 결과 누적 후 총합 표시
+## 2. 기본 정렬값
+`sorting` 초기값을 `[{ id: 'item_no', desc: false }]`로 설정 (Item No 오름차순).
 
-## 2. 백그라운드 진행 — Global Import Context
+## 3. 사용자별 필터/정렬 상태 유지
 
-탭 이동해도 import가 계속 돌아가도록 import 상태/실행 로직을 페이지 컴포넌트 밖으로 끌어올림.
+### 저장 대상
+- `sorting` (다중 정렬 상태)
+- `columnFilters` (컬럼별 필터)
+- `globalFilter` (검색어)
 
-**신규**: `src/contexts/ImportContext.tsx`
-- 큐 상태(파일 리스트, 현재 인덱스, 진행률, 결과) 보관
-- `startImport(files, importType)` — 백그라운드 비동기 루프 (현재 `executeImport` 로직을 그대로 이전)
-- `App.tsx`에서 `AuthProvider` 안에 `ImportProvider`로 감싸기
-- AppLayout 상단 또는 sidebar 하단에 작은 진행 인디케이터 (예: "Importing file.xlsx · 45%")
-- ImportPage는 이 context를 구독하여 UI 표시 (현재 로컬 state 대신)
+### 저장 방식: localStorage (사용자별 키)
+`AuthContext`의 `user.id`를 키 prefix로 사용 → 같은 브라우저에서 다른 사용자 로그인 시 분리.
 
-**기술 메모**: 단순 setInterval/promise 루프이므로 React state만 context로 옮기면 페이지 unmount되어도 계속 동작.
+```ts
+const storageKey = user?.id 
+  ? `subtest-list-state:${user.id}` 
+  : 'subtest-list-state:anon';
+```
 
-## 3. Admin 일괄 삭제 (`src/pages/ImportLogsPage.tsx`)
+### 동작
+- **마운트 시**: localStorage에서 읽어 `useState` 초기값으로 사용 (없으면 기본값 = Item No 오름차순)
+- **상태 변경 시**: `useEffect`로 `sorting`, `columnFilters`, `globalFilter` 직렬화 후 저장
+- **Clear sort / 필터 초기화**: 자동으로 빈 상태가 저장됨
 
-- 각 batch row에 휴지통 아이콘 (Admin/Superuser만, 개발모드 포함)
-- 클릭 시 AlertDialog 확인 → 다음 순서 삭제:
-  1. `subtests` where `source_upload_id = batch.id`
-  2. `upload_row_logs` where `upload_id = batch.id`
-  3. `upload_batches` where `id = batch.id`
-- RLS 확인: `subtests` DELETE는 `is_admin_or_superuser` 만 허용 / `upload_row_logs`, `upload_batches`에는 현재 DELETE policy 없음
-- **DB 마이그레이션 필요**: `upload_row_logs`와 `upload_batches`에 admin DELETE policy 추가
-  ```sql
-  CREATE POLICY "Admins can delete upload logs" ON upload_row_logs
-    FOR DELETE TO authenticated USING (is_admin_or_superuser(auth.uid()));
-  CREATE POLICY "Admins can delete upload batches" ON upload_batches
-    FOR DELETE TO authenticated USING (is_admin_or_superuser(auth.uid()));
-  ```
-- 삭제 후 toast + batch 목록 refetch
+### 왜 localStorage인가
+- DB 저장은 별도 테이블/RLS/마이그레이션 필요 → 과한 비용
+- 사용자가 브라우저 바꾸면 리셋되지만, 일반적인 "내 화면 기억" 요구사항에는 충분
+- 추후 필요하면 `user_preferences` 테이블로 마이그레이션 가능
 
 ## 변경 파일
-
 | 파일 | 변경 |
 |------|------|
-| `src/contexts/ImportContext.tsx` | **신규** — 백그라운드 import 큐/상태 |
-| `src/App.tsx` | `ImportProvider` 추가 |
-| `src/components/layout/AppLayout.tsx` | 글로벌 import 진행 인디케이터 |
-| `src/pages/ImportPage.tsx` | 다중 파일 UI, context 사용 |
-| `src/pages/ImportLogsPage.tsx` | Admin 삭제 버튼 + 확인 다이얼로그 |
-| DB migration | upload_row_logs, upload_batches DELETE policy 추가 |
+| `src/pages/SubtestList.tsx` | 컬럼 순서 재배열, 기본 sorting을 Item No asc로, useAuth로 user.id 가져와 localStorage에 sorting/columnFilters/globalFilter persist |
 
