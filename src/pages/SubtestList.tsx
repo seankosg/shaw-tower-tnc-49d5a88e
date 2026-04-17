@@ -234,9 +234,9 @@ export default function SubtestList() {
   );
 
   const columns = useMemo<ColumnDef<SubtestRow>[]>(() => [
+    { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn },
     { accessorKey: 'system_code', header: 'System', size: 100, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select' as const, filterOptions: systemOptions } },
-    { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn },
     { accessorKey: 'equipment', header: 'Equipment', size: 120, filterFn: textFilterFn,
       cell: ({ getValue }) => (
         <span className="truncate block max-w-[120px]">{getValue() as string || '—'}</span>
