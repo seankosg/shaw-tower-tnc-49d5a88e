@@ -17,7 +17,11 @@ import {
   ALL_ROLES, ALL_USER_TYPES, ROLE_LABELS, USER_TYPE_LABELS,
   type AppRole, type UserType,
 } from '@/types/enums';
-import { Shield, Plus, KeyRound, Trash2, Pencil } from 'lucide-react';
+import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 /* ───── Types ───── */
 interface Profile {
