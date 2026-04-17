@@ -384,17 +384,169 @@ function CreateUserDialog({
   );
 }
 
-/* ═══════ Tab: Subcontractor / HDEC PIC Master ═══════ */
+/* ═══════ Tab: Subcontractor / SubSub / HDEC PIC Master ═══════ */
 function MastersTab() {
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <MasterTable table="subcontractor_master" title="Subcontractor Master" />
+      <SubcontractorMasterTable />
       <MasterTable table="hdec_pic_master" title="HDEC PIC Master" />
     </div>
   );
 }
 
-function MasterTable({ table, title }: { table: 'subcontractor_master' | 'hdec_pic_master'; title: string }) {
+function SubcontractorMasterTable() {
+  const { toast } = useToast();
+  const [rows, setRows] = useState<MasterRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newSubName, setNewSubName] = useState('');
+  const [newSubSubName, setNewSubSubName] = useState('');
+  const [newSubSubParent, setNewSubSubParent] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('subcontractor_master').select('*').order('name');
+    if (data) setRows(data as MasterRow[]);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const subs = rows.filter(r => (r.type ?? 'sub') === 'sub');
+  const subsubs = rows.filter(r => r.type === 'subsub');
+
+  const addSub = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubName.trim()) return;
+    const { error } = await supabase.from('subcontractor_master').insert({ name: newSubName.trim(), type: 'sub' } as any);
+    if (error) toast({ title: 'Add failed', description: error.message, variant: 'destructive' });
+    else { toast({ title: 'Subcontractor added' }); setNewSubName(''); load(); }
+  };
+
+  const addSubSub = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubSubName.trim() || !newSubSubParent) {
+      toast({ title: 'Name and parent required', variant: 'destructive' });
+      return;
+    }
+    const { error } = await supabase.from('subcontractor_master').insert({
+      name: newSubSubName.trim(),
+      type: 'subsub',
+      parent_subcontractor_id: newSubSubParent,
+    } as any);
+    if (error) toast({ title: 'Add failed', description: error.message, variant: 'destructive' });
+    else { toast({ title: 'SubSub added' }); setNewSubSubName(''); setNewSubSubParent(''); load(); }
+  };
+
+  const toggleActive = async (r: MasterRow) => {
+    await supabase.from('subcontractor_master').update({ is_active: !r.is_active }).eq('id', r.id);
+    load();
+  };
+
+  const remove = async (r: MasterRow) => {
+    if (!confirm(`Delete "${r.name}"?`)) return;
+    const { error } = await supabase.from('subcontractor_master').delete().eq('id', r.id);
+    if (error) toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
+    else load();
+  };
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Subcontractor Master</CardTitle></CardHeader>
+      <CardContent className="space-y-5">
+        {/* Subcontractors */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subcontractors</h3>
+          <form onSubmit={addSub} className="flex gap-2">
+            <Input value={newSubName} onChange={(e) => setNewSubName(e.target.value)} placeholder="Add Subcontractor..." />
+            <Button type="submit" size="sm"><Plus className="h-4 w-4" /></Button>
+          </form>
+          {loading ? (
+            <p className="py-2 text-center text-sm text-muted-foreground">Loading...</p>
+          ) : (
+            <div className="max-h-[200px] overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="w-20 text-center">Active</TableHead>
+                    <TableHead className="w-12"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {subs.map(r => (
+                    <TableRow key={r.id}>
+                      <TableCell>{r.name}</TableCell>
+                      <TableCell className="text-center">
+                        <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
+                      </TableCell>
+                      <TableCell>
+                        <Button size="icon" variant="ghost" onClick={() => remove(r)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+
+        {/* SubSubs */}
+        <div className="space-y-2 border-t pt-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">SubSubs (재하도)</h3>
+          <form onSubmit={addSubSub} className="flex gap-2">
+            <Input value={newSubSubName} onChange={(e) => setNewSubSubName(e.target.value)} placeholder="SubSub name..." className="flex-1" />
+            <Select value={newSubSubParent} onValueChange={setNewSubSubParent}>
+              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Parent Sub" /></SelectTrigger>
+              <SelectContent>
+                {subs.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button type="submit" size="sm"><Plus className="h-4 w-4" /></Button>
+          </form>
+          {!loading && (
+            <div className="max-h-[200px] overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Parent</TableHead>
+                    <TableHead className="w-20 text-center">Active</TableHead>
+                    <TableHead className="w-12"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {subsubs.map(r => {
+                    const parent = subs.find(s => s.id === r.parent_subcontractor_id);
+                    return (
+                      <TableRow key={r.id}>
+                        <TableCell>{r.name}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{parent?.name ?? '—'}</TableCell>
+                        <TableCell className="text-center">
+                          <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
+                        </TableCell>
+                        <TableCell>
+                          <Button size="icon" variant="ghost" onClick={() => remove(r)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {subsubs.length === 0 && (
+                    <TableRow><TableCell colSpan={4} className="text-center text-xs text-muted-foreground py-3">No SubSubs yet.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string }) {
   const { toast } = useToast();
   const [rows, setRows] = useState<MasterRow[]>([]);
   const [loading, setLoading] = useState(true);
