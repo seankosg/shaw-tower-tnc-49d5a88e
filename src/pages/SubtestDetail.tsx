@@ -339,7 +339,7 @@ export default function SubtestDetailPage() {
           <CardTitle className="text-sm font-medium">Predecessor & Responsibility</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1.5md:col-span-2">
+          <div className="space-y-1.5 md:col-span-2">
             <Label className="text-xs">Predecessor Status</Label>
             <Input className="h-9" value={form.predecessor_status_raw || ''} onChange={e => updateField('predecessor_status_raw', e.target.value)} placeholder="e.g. Done or 2026-03-15" />
           </div>

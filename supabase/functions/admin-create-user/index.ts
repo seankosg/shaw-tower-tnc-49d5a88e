@@ -15,6 +15,7 @@ interface Body {
   user_type: 'subcontractor' | 'hdec' | 'pm_pd' | 'admin';
   role: 'guest' | 'super_guest' | 'user' | 'senior_user' | 'superuser' | 'admin';
   subcontractor_name?: string | null;
+  subsub_name?: string | null;
   hdec_pic_name?: string | null;
 }
 
@@ -67,6 +68,7 @@ Deno.serve(async (req) => {
         login_id: loginId,
         user_type: body.user_type,
         subcontractor_name: body.subcontractor_name ?? null,
+        subsub_name: body.subsub_name ?? null,
         hdec_pic_name: body.hdec_pic_name ?? null,
         must_change_password: true,
       },
