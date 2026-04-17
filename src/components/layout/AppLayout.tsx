@@ -7,8 +7,14 @@ import { Progress } from '@/components/ui/progress';
 import { Loader2 } from 'lucide-react';
 
 function GlobalImportIndicator() {
-  const { isRunning, files, currentIndex } = useImport();
   const navigate = useNavigate();
+  let ctx;
+  try {
+    ctx = useImport();
+  } catch {
+    return null;
+  }
+  const { isRunning, files, currentIndex } = ctx;
   if (!isRunning) return null;
   const current = currentIndex >= 0 ? files[currentIndex] : null;
   const total = files.filter(f => f.status === 'ready' || f.status === 'processing' || f.status === 'done').length;
