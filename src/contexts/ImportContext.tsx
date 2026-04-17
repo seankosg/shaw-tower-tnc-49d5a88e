@@ -97,6 +97,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     if (!item.parsed) return null;
     const parsed = item.parsed;
     const res = { inserted: 0, updated: 0, skipped: 0, rejected: 0 };
+    const userCreateFails: string[] = [];
 
     const { data: projects } = await supabase.from('projects').select('id').eq('is_active', true).limit(1);
     const projectId = projects?.[0]?.id;
@@ -140,9 +141,10 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         .insert({ name: name.trim(), type: 'sub' } as any).select('id').single();
       if (!ins) return;
       subconCache.set(key, { id: ins.id, active: true });
-      supabase.functions.invoke('auto-create-master-user', {
+      const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
         body: { name: name.trim(), master_type: 'subcontractor', subcontractor_name: name.trim() },
-      }).catch(() => {});
+      });
+      if (fnErr) userCreateFails.push(`${name.trim()} (sub): ${fnErr.message}`);
     }
 
     async function ensureSubsub(name: string | null, parentName: string | null): Promise<void> {
@@ -163,12 +165,13 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         .insert({ name: name.trim(), type: 'subsub', parent_subcontractor_id: parentId } as any).select('id').single();
       if (!ins) return;
       subsubCache.set(key, { id: ins.id, active: true, parent_id: parentId });
-      supabase.functions.invoke('auto-create-master-user', {
+      const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
         body: {
           name: name.trim(), master_type: 'subsub',
           subcontractor_name: parentName ?? null, subsub_name: name.trim(),
         },
-      }).catch(() => {});
+      });
+      if (fnErr) userCreateFails.push(`${name.trim()} (subsub): ${fnErr.message}`);
     }
 
     async function ensureHdecPic(name: string | null): Promise<void> {
@@ -179,9 +182,10 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         .insert({ name: name.trim() }).select('id').single();
       if (!ins) return;
       hdecCache.set(key, { id: ins.id, active: true });
-      supabase.functions.invoke('auto-create-master-user', {
+      const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
         body: { name: name.trim(), master_type: 'hdec_pic', hdec_pic_name: name.trim() },
-      }).catch(() => {});
+      });
+      if (fnErr) userCreateFails.push(`${name.trim()} (hdec_pic): ${fnErr.message}`);
     }
 
     async function resolveSystem(rawName: string): Promise<string | null> {
@@ -331,6 +335,14 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       skipped_rows: res.skipped,
       rejected_rows: res.rejected,
     }).eq('id', uploadId);
+
+    if (userCreateFails.length > 0) {
+      toast({
+        title: `${userCreateFails.length} user account(s) failed`,
+        description: userCreateFails.slice(0, 3).join('; ') + (userCreateFails.length > 3 ? '...' : ''),
+        variant: 'destructive',
+      });
+    }
 
     return res;
   };

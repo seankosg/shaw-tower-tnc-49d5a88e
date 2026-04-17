@@ -414,10 +414,70 @@ function CreateUserDialog({
 
 /* ═══════ Tab: Subcontractor / Sub-Sub / HDEC PIC Master ═══════ */
 function MastersTab() {
+  const { toast } = useToast();
+  const [syncing, setSyncing] = useState(false);
+
+  const syncMissingUsers = async () => {
+    setSyncing(true);
+    let created = 0, failed = 0, skipped = 0;
+    try {
+      const [{ data: subs }, { data: pics }, { data: profiles }] = await Promise.all([
+        supabase.from('subcontractor_master').select('id, name, type, parent_subcontractor_id, is_active').eq('is_active', true),
+        supabase.from('hdec_pic_master').select('id, name, is_active').eq('is_active', true),
+        supabase.from('profiles').select('subcontractor_name, subsub_name, hdec_pic_name'),
+      ]);
+      const subProfiles = new Set((profiles || []).map(p => (p.subcontractor_name || '').toLowerCase().trim()).filter(Boolean));
+      const subsubProfiles = new Set((profiles || []).map(p => (p.subsub_name || '').toLowerCase().trim()).filter(Boolean));
+      const picProfiles = new Set((profiles || []).map(p => (p.hdec_pic_name || '').toLowerCase().trim()).filter(Boolean));
+      const subById = new Map((subs || []).map(s => [s.id, s.name]));
+
+      for (const s of subs || []) {
+        const key = s.name.toLowerCase().trim();
+        const t = (s as any).type ?? 'sub';
+        const exists = t === 'sub' ? subProfiles.has(key) : subsubProfiles.has(key);
+        if (exists) { skipped++; continue; }
+        const parentName = t === 'subsub' ? (subById.get((s as any).parent_subcontractor_id) ?? null) : null;
+        const { error } = await supabase.functions.invoke('auto-create-master-user', {
+          body: {
+            name: s.name,
+            master_type: t === 'sub' ? 'subcontractor' : 'subsub',
+            subcontractor_name: t === 'sub' ? s.name : parentName,
+            subsub_name: t === 'subsub' ? s.name : null,
+          },
+        });
+        if (error) failed++; else created++;
+      }
+      for (const p of pics || []) {
+        const key = p.name.toLowerCase().trim();
+        if (picProfiles.has(key)) { skipped++; continue; }
+        const { error } = await supabase.functions.invoke('auto-create-master-user', {
+          body: { name: p.name, master_type: 'hdec_pic', hdec_pic_name: p.name },
+        });
+        if (error) failed++; else created++;
+      }
+      toast({
+        title: 'Sync complete',
+        description: `${created} created, ${skipped} already exist, ${failed} failed`,
+      });
+    } catch (e: any) {
+      toast({ title: 'Sync failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <SubcontractorMasterTable />
-      <MasterTable table="hdec_pic_master" title="HDEC PIC Master" />
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button onClick={syncMissingUsers} disabled={syncing} variant="outline" size="sm">
+          <KeyRound className="mr-2 h-4 w-4" />
+          {syncing ? 'Syncing...' : 'Sync Missing Users'}
+        </Button>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <SubcontractorMasterTable />
+        <MasterTable table="hdec_pic_master" title="HDEC PIC Master" />
+      </div>
     </div>
   );
 }
@@ -444,9 +504,15 @@ function SubcontractorMasterTable() {
   const addSub = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubName.trim()) return;
-    const { error } = await supabase.from('subcontractor_master').insert({ name: newSubName.trim(), type: 'sub' } as any);
-    if (error) toast({ title: 'Add failed', description: error.message, variant: 'destructive' });
-    else { toast({ title: 'Subcontractor added' }); setNewSubName(''); load(); }
+    const name = newSubName.trim();
+    const { error } = await supabase.from('subcontractor_master').insert({ name, type: 'sub' } as any);
+    if (error) { toast({ title: 'Add failed', description: error.message, variant: 'destructive' }); return; }
+    const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
+      body: { name, master_type: 'subcontractor', subcontractor_name: name },
+    });
+    if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
+    else toast({ title: 'Subcontractor added', description: 'User account created (PW: SHAW00)' });
+    setNewSubName(''); load();
   };
 
   const addSubSub = async (e: React.FormEvent) => {
@@ -455,13 +521,18 @@ function SubcontractorMasterTable() {
       toast({ title: 'Name and parent required', variant: 'destructive' });
       return;
     }
+    const name = newSubSubName.trim();
+    const parentName = subs.find(s => s.id === newSubSubParent)?.name ?? null;
     const { error } = await supabase.from('subcontractor_master').insert({
-      name: newSubSubName.trim(),
-      type: 'subsub',
-      parent_subcontractor_id: newSubSubParent,
+      name, type: 'subsub', parent_subcontractor_id: newSubSubParent,
     } as any);
-    if (error) toast({ title: 'Add failed', description: error.message, variant: 'destructive' });
-    else { toast({ title: 'Sub-Sub added' }); setNewSubSubName(''); setNewSubSubParent(''); load(); }
+    if (error) { toast({ title: 'Add failed', description: error.message, variant: 'destructive' }); return; }
+    const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
+      body: { name, master_type: 'subsub', subcontractor_name: parentName, subsub_name: name },
+    });
+    if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
+    else toast({ title: 'Sub-Sub added', description: 'User account created (PW: SHAW00)' });
+    setNewSubSubName(''); setNewSubSubParent(''); load();
   };
 
   const toggleActive = async (r: MasterRow) => {
@@ -604,9 +675,19 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    const { error } = await supabase.from(table).insert({ name: newName.trim() });
-    if (error) toast({ title: 'Add failed', description: error.message, variant: 'destructive' });
-    else { toast({ title: 'Added' }); setNewName(''); load(); }
+    const name = newName.trim();
+    const { error } = await supabase.from(table).insert({ name });
+    if (error) { toast({ title: 'Add failed', description: error.message, variant: 'destructive' }); return; }
+    if (table === 'hdec_pic_master') {
+      const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
+        body: { name, master_type: 'hdec_pic', hdec_pic_name: name },
+      });
+      if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
+      else toast({ title: 'Added', description: 'User account created (PW: SHAW00)' });
+    } else {
+      toast({ title: 'Added' });
+    }
+    setNewName(''); load();
   };
 
   const toggleActive = async (r: MasterRow) => {
