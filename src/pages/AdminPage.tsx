@@ -221,18 +221,25 @@ function UsersTab() {
 
 /* ───── Create User Dialog ───── */
 function CreateUserDialog({
-  subcons, hdecPics, onCreated,
+  subcons, subsubs, hdecPics, onCreated,
 }: {
-  subcons: MasterRow[]; hdecPics: MasterRow[]; onCreated: () => void;
+  subcons: MasterRow[]; subsubs: MasterRow[]; hdecPics: MasterRow[]; onCreated: () => void;
 }) {
   const { toast } = useToast();
   const [loginId, setLoginId] = useState('');
   const [name, setName] = useState('');
   const [userType, setUserType] = useState<UserType>('hdec');
   const [role, setRole] = useState<AppRole>('user');
+  const [affiliation, setAffiliation] = useState<'sub' | 'subsub'>('sub');
   const [subconName, setSubconName] = useState<string>('');
+  const [subsubId, setSubsubId] = useState<string>('');
   const [hdecPicName, setHdecPicName] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+
+  const selectedSubsub = subsubs.find(s => s.id === subsubId);
+  const subsubParent = selectedSubsub
+    ? subcons.find(s => s.id === selectedSubsub.parent_subcontractor_id)
+    : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -240,9 +247,18 @@ function CreateUserDialog({
       toast({ title: 'Invalid User ID', description: '3–32 chars, lowercase letters / digits / underscore only.', variant: 'destructive' });
       return;
     }
-    if (userType === 'subcontractor' && !subconName) {
-      toast({ title: 'Subcontractor required', variant: 'destructive' });
-      return;
+    let payloadSubconName: string | null = null;
+    let payloadSubsubName: string | null = null;
+    if (userType === 'subcontractor') {
+      if (affiliation === 'sub') {
+        if (!subconName) { toast({ title: 'Subcontractor required', variant: 'destructive' }); return; }
+        payloadSubconName = subconName;
+      } else {
+        if (!selectedSubsub) { toast({ title: 'SubSub required', variant: 'destructive' }); return; }
+        if (!subsubParent) { toast({ title: 'SubSub has no parent Subcontractor', variant: 'destructive' }); return; }
+        payloadSubsubName = selectedSubsub.name;
+        payloadSubconName = subsubParent.name;
+      }
     }
     setSubmitting(true);
     const { data, error } = await supabase.functions.invoke('admin-create-user', {
@@ -251,7 +267,8 @@ function CreateUserDialog({
         name: name.trim(),
         user_type: userType,
         role,
-        subcontractor_name: userType === 'subcontractor' ? subconName : null,
+        subcontractor_name: payloadSubconName,
+        subsub_name: payloadSubsubName,
         hdec_pic_name: (userType === 'hdec' || userType === 'pm_pd') ? (hdecPicName || null) : null,
       },
     });
@@ -261,7 +278,7 @@ function CreateUserDialog({
       return;
     }
     toast({ title: 'User created', description: `Initial password: SHAW00` });
-    setLoginId(''); setName(''); setSubconName(''); setHdecPicName('');
+    setLoginId(''); setName(''); setSubconName(''); setSubsubId(''); setHdecPicName('');
     onCreated();
   };
 
@@ -301,16 +318,52 @@ function CreateUserDialog({
           </div>
         </div>
         {userType === 'subcontractor' && (
-          <div className="space-y-1.5">
-            <Label>Subcontractor</Label>
-            <Select value={subconName} onValueChange={setSubconName}>
-              <SelectTrigger><SelectValue placeholder="Select subcontractor" /></SelectTrigger>
-              <SelectContent>
-                {subcons.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">One account per subcontractor (DB-enforced).</p>
-          </div>
+          <>
+            <div className="space-y-1.5">
+              <Label>Affiliation</Label>
+              <div className="flex gap-4 text-sm">
+                <label className="flex items-center gap-1.5">
+                  <input type="radio" checked={affiliation === 'sub'} onChange={() => setAffiliation('sub')} />
+                  Subcontractor
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input type="radio" checked={affiliation === 'subsub'} onChange={() => setAffiliation('subsub')} />
+                  SubSub (재하도)
+                </label>
+              </div>
+            </div>
+            {affiliation === 'sub' ? (
+              <div className="space-y-1.5">
+                <Label>Subcontractor</Label>
+                <Select value={subconName} onValueChange={setSubconName}>
+                  <SelectTrigger><SelectValue placeholder="Select subcontractor" /></SelectTrigger>
+                  <SelectContent>
+                    {subcons.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>SubSub Company</Label>
+                <Select value={subsubId} onValueChange={setSubsubId}>
+                  <SelectTrigger><SelectValue placeholder="Select SubSub" /></SelectTrigger>
+                  <SelectContent>
+                    {subsubs.map(s => {
+                      const parent = subcons.find(p => p.id === s.parent_subcontractor_id);
+                      return (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}{parent ? ` (← ${parent.name})` : ''}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {subsubParent && (
+                  <p className="text-xs text-muted-foreground">Parent Subcontractor: <strong>{subsubParent.name}</strong> (auto-linked)</p>
+                )}
+              </div>
+            )}
+          </>
         )}
         {(userType === 'hdec' || userType === 'pm_pd') && (
           <div className="space-y-1.5">
