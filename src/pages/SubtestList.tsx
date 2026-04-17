@@ -348,7 +348,114 @@ export default function SubtestList() {
       </div>
 
       {/* Scrollable table with sticky header */}
-      <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
+      <div ref={tableRef} className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
+        <Table style={{ width: table.getTotalSize(), tableLayout: 'fixed' }}>
+          <TableHeader className="sticky top-0 z-10">
+            {table.getHeaderGroups().map(hg => (
+              <TableRow key={hg.id} className="border-b-0">
+                {hg.headers.map(header => (
+                  <TableHead
+                    key={header.id}
+                    data-column-id={header.column.id}
+                    style={{ width: header.getSize() }}
+                    className="relative text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b"
+                    onClick={header.column.getToggleSortingHandler()}
+                  >
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                    {header.column.getIsSorted() && (
+                      <span className="ml-0.5">
+                        {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
+                        {sorting.length > 1 && (
+                          <sup className="ml-0.5 text-[9px] text-muted-foreground">
+                            {header.column.getSortIndex() + 1}
+                          </sup>
+                        )}
+                      </span>
+                    )}
+                    {header.column.getCanResize() && (
+                      <div
+                        onMouseDown={header.getResizeHandler()}
+                        onTouchStart={header.getResizeHandler()}
+                        onClick={(e) => e.stopPropagation()}
+                        onDoubleClick={(e) => { e.stopPropagation(); autoSizeColumn(header.column.id); }}
+                        title="Drag to resize, double-click to auto-fit"
+                        className={cn(
+                          'absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40',
+                          header.column.getIsResizing() && 'bg-primary/60'
+                        )}
+                      />
+                    )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+            {/* Filter row */}
+            <TableRow className="border-b">
+              {table.getHeaderGroups()[0].headers.map(header => {
+                const meta = header.column.columnDef.meta as any;
+                const canFilter = header.column.getCanFilter();
+                return (
+                  <TableHead
+                    key={`filter-${header.id}`}
+                    style={{ width: header.getSize() }}
+                    className="py-1 px-1 bg-muted/30"
+                  >
+                    {canFilter ? (
+                      <ColumnFilter
+                        column={header.column}
+                        type={meta?.filterType === 'multi-select' ? 'multi-select' : 'text'}
+                        options={meta?.filterOptions}
+                      />
+                    ) : null}
+                  </TableHead>
+                );
+              })}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">
+                  Loading...
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">
+                  No subtests found. Import data to get started.
+                </TableCell>
+              </TableRow>
+            ) : (
+              table.getRowModel().rows.map(row => {
+                const r = row.original;
+                const delayed = isDelayed(r.t1_planned_date, r.t1_actual_date) ||
+                                isDelayed(r.t2_planned_date, r.t2_actual_date);
+                return (
+                  <TableRow
+                    key={row.id}
+                    className={cn(
+                      'cursor-pointer hover:bg-muted/50',
+                      delayed && 'bg-destructive/5'
+                    )}
+                    onClick={() => navigate(`/subtests/${r.id}`)}
+                  >
+                    {row.getVisibleCells().map(cell => (
+                      <TableCell
+                        key={cell.id}
+                        data-column-id={cell.column.id}
+                        style={{ width: cell.column.getSize() }}
+                        className="text-xs py-2 truncate"
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
         <Table style={{ width: table.getTotalSize(), tableLayout: 'fixed' }}>
           <TableHeader className="sticky top-0 z-10">
             {table.getHeaderGroups().map(hg => (
