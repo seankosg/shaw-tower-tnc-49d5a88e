@@ -17,7 +17,7 @@ import {
   ALL_ROLES, ALL_USER_TYPES, ROLE_LABELS, USER_TYPE_LABELS,
   type AppRole, type UserType,
 } from '@/types/enums';
-import { Shield, Plus, KeyRound, Trash2 } from 'lucide-react';
+import { Shield, Plus, KeyRound, Trash2, Pencil } from 'lucide-react';
 
 /* ───── Types ───── */
 interface Profile {
@@ -28,7 +28,7 @@ interface Profile {
 }
 interface UserRole { id: string; user_id: string; role: AppRole; }
 interface SystemRow {
-  id: string; system_code: string; system_name_std: string | null; discipline: string | null;
+  id: string; project_id: string; system_code: string; system_name_std: string | null; discipline: string | null;
   is_active: boolean; is_auto_created: boolean; requires_admin_review: boolean;
 }
 interface PermRow {
@@ -417,10 +417,11 @@ function SystemsTab() {
   const { toast } = useToast();
   const [systems, setSystems] = useState<SystemRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editTarget, setEditTarget] = useState<SystemRow | null>(null);
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from('system_master').select('id, system_code, system_name_std, discipline, is_active, is_auto_created, requires_admin_review').order('system_code');
+    const { data } = await supabase.from('system_master').select('id, project_id, system_code, system_name_std, discipline, is_active, is_auto_created, requires_admin_review').order('system_code');
     if (data) setSystems(data as SystemRow[]);
     setLoading(false);
   };
@@ -454,6 +455,7 @@ function SystemsTab() {
                 <TableHead>Auto-Created</TableHead>
                 <TableHead>Review</TableHead>
                 <TableHead>Active</TableHead>
+                <TableHead className="w-16">Edit</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -473,13 +475,125 @@ function SystemsTab() {
                   <TableCell>
                     <Switch checked={s.is_active} onCheckedChange={() => toggleActive(s)} />
                   </TableCell>
+                  <TableCell>
+                    <Button size="icon" variant="ghost" onClick={() => setEditTarget(s)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
       </CardContent>
+      {editTarget && (
+        <EditSystemDialog
+          system={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => { setEditTarget(null); load(); }}
+        />
+      )}
     </Card>
+  );
+}
+
+function EditSystemDialog({ system, onClose, onSaved }: { system: SystemRow; onClose: () => void; onSaved: () => void; }) {
+  const { toast } = useToast();
+  const [code, setCode] = useState(system.system_code);
+  const [name, setName] = useState(system.system_name_std ?? '');
+  const [discipline, setDiscipline] = useState(system.discipline ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      toast({ title: 'Code is required', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    try {
+      // 1) Duplicate check (exclude self)
+      const { data: dup, error: dupErr } = await supabase
+        .from('system_master')
+        .select('id')
+        .eq('system_code', trimmed)
+        .neq('id', system.id)
+        .maybeSingle();
+      if (dupErr) throw dupErr;
+      if (dup) {
+        toast({ title: 'Duplicate code', description: `System code "${trimmed}" already exists.`, variant: 'destructive' });
+        setSaving(false);
+        return;
+      }
+
+      // 2) If code changed → preserve old code as alias for import compatibility
+      if (trimmed !== system.system_code) {
+        const { data: existingAlias } = await supabase
+          .from('system_alias_map')
+          .select('id')
+          .eq('project_id', system.project_id)
+          .eq('system_id', system.id)
+          .eq('alias_name', system.system_code)
+          .maybeSingle();
+        if (!existingAlias) {
+          await supabase.from('system_alias_map').insert({
+            project_id: system.project_id,
+            system_id: system.id,
+            alias_name: system.system_code,
+            is_active: true,
+          });
+        }
+      }
+
+      // 3) Update system_master
+      const { error: updErr } = await supabase
+        .from('system_master')
+        .update({
+          system_code: trimmed,
+          system_name_std: name.trim() || null,
+          discipline: discipline.trim() || null,
+        })
+        .eq('id', system.id);
+      if (updErr) throw updErr;
+
+      toast({ title: 'System updated', description: trimmed !== system.system_code ? `Old code "${system.system_code}" preserved as alias.` : undefined });
+      onSaved();
+    } catch (e: any) {
+      toast({ title: 'Update failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit System</DialogTitle>
+          <DialogDescription>
+            Changing the code updates all linked subtests automatically. The old code is preserved as an import alias.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>Code *</Label>
+            <Input value={code} onChange={(e) => setCode(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Discipline</Label>
+            <Input value={discipline} onChange={(e) => setDiscipline(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
