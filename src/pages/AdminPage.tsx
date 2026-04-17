@@ -504,9 +504,15 @@ function SubcontractorMasterTable() {
   const addSub = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubName.trim()) return;
-    const { error } = await supabase.from('subcontractor_master').insert({ name: newSubName.trim(), type: 'sub' } as any);
-    if (error) toast({ title: 'Add failed', description: error.message, variant: 'destructive' });
-    else { toast({ title: 'Subcontractor added' }); setNewSubName(''); load(); }
+    const name = newSubName.trim();
+    const { error } = await supabase.from('subcontractor_master').insert({ name, type: 'sub' } as any);
+    if (error) { toast({ title: 'Add failed', description: error.message, variant: 'destructive' }); return; }
+    const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
+      body: { name, master_type: 'subcontractor', subcontractor_name: name },
+    });
+    if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
+    else toast({ title: 'Subcontractor added', description: 'User account created (PW: SHAW00)' });
+    setNewSubName(''); load();
   };
 
   const addSubSub = async (e: React.FormEvent) => {
@@ -515,13 +521,18 @@ function SubcontractorMasterTable() {
       toast({ title: 'Name and parent required', variant: 'destructive' });
       return;
     }
+    const name = newSubSubName.trim();
+    const parentName = subs.find(s => s.id === newSubSubParent)?.name ?? null;
     const { error } = await supabase.from('subcontractor_master').insert({
-      name: newSubSubName.trim(),
-      type: 'subsub',
-      parent_subcontractor_id: newSubSubParent,
+      name, type: 'subsub', parent_subcontractor_id: newSubSubParent,
     } as any);
-    if (error) toast({ title: 'Add failed', description: error.message, variant: 'destructive' });
-    else { toast({ title: 'Sub-Sub added' }); setNewSubSubName(''); setNewSubSubParent(''); load(); }
+    if (error) { toast({ title: 'Add failed', description: error.message, variant: 'destructive' }); return; }
+    const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
+      body: { name, master_type: 'subsub', subcontractor_name: parentName, subsub_name: name },
+    });
+    if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
+    else toast({ title: 'Sub-Sub added', description: 'User account created (PW: SHAW00)' });
+    setNewSubSubName(''); setNewSubSubParent(''); load();
   };
 
   const toggleActive = async (r: MasterRow) => {
