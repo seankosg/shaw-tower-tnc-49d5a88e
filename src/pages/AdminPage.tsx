@@ -467,7 +467,165 @@ function CreateUserDialog({
   );
 }
 
-/* ═══════ Tab: Subcontractor / Sub-Sub / HDEC PIC Master ═══════ */
+/* ───── Edit User Dialog ───── */
+function EditUserDialog({
+  profile, subcons, subsubs, hdecPics, onClose, onSaved,
+}: {
+  profile: Profile;
+  subcons: MasterRow[];
+  subsubs: MasterRow[];
+  hdecPics: MasterRow[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [name, setName] = useState(profile.name ?? '');
+  const [userType, setUserType] = useState<UserType>(profile.user_type);
+  const [affiliation, setAffiliation] = useState<'sub' | 'subsub'>(profile.subsub_name ? 'subsub' : 'sub');
+  const [subconName, setSubconName] = useState<string>(profile.subcontractor_name ?? '');
+  const initialSubsubId = subsubs.find(s => s.name === profile.subsub_name)?.id ?? '';
+  const [subsubId, setSubsubId] = useState<string>(initialSubsubId);
+  const [hdecPicName, setHdecPicName] = useState<string>(profile.hdec_pic_name ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const selectedSubsub = subsubs.find(s => s.id === subsubId);
+  const subsubParent = selectedSubsub
+    ? subcons.find(s => s.id === selectedSubsub.parent_subcontractor_id)
+    : null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    let payloadSubconName: string | null = null;
+    let payloadSubsubName: string | null = null;
+    let payloadHdecPicName: string | null = null;
+
+    if (userType === 'subcontractor') {
+      if (affiliation === 'sub') {
+        if (!subconName) { toast({ title: 'Subcontractor required', variant: 'destructive' }); return; }
+        payloadSubconName = subconName;
+      } else {
+        if (!selectedSubsub || !subsubParent) {
+          toast({ title: 'Sub-Sub with valid parent required', variant: 'destructive' });
+          return;
+        }
+        payloadSubsubName = selectedSubsub.name;
+        payloadSubconName = subsubParent.name;
+      }
+    } else if (userType === 'hdec' || userType === 'pm_pd') {
+      payloadHdecPicName = hdecPicName || null;
+    }
+
+    setSaving(true);
+    const { data, error } = await supabase.functions.invoke('admin-update-user', {
+      body: {
+        user_id: profile.user_id,
+        name: name.trim(),
+        user_type: userType,
+        subcontractor_name: payloadSubconName,
+        subsub_name: payloadSubsubName,
+        hdec_pic_name: payloadHdecPicName,
+      },
+    });
+    setSaving(false);
+    if (error || (data as any)?.error) {
+      toast({ title: 'Update failed', description: error?.message ?? (data as any)?.error, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'User updated' });
+    onSaved();
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit User</DialogTitle>
+          <DialogDescription>Login ID <code className="font-mono">{profile.login_id}</code> — use the Login ID action to change it.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-name">Name</Label>
+            <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>User Type</Label>
+            <Select value={userType} onValueChange={(v) => setUserType(v as UserType)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ALL_USER_TYPES.map(t => <SelectItem key={t} value={t}>{USER_TYPE_LABELS[t]}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {userType === 'subcontractor' && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Affiliation</Label>
+                <div className="flex gap-4 text-sm">
+                  <label className="flex items-center gap-1.5">
+                    <input type="radio" checked={affiliation === 'sub'} onChange={() => setAffiliation('sub')} />
+                    Subcontractor
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input type="radio" checked={affiliation === 'subsub'} onChange={() => setAffiliation('subsub')} />
+                    Sub-Sub (재하도)
+                  </label>
+                </div>
+              </div>
+              {affiliation === 'sub' ? (
+                <div className="space-y-1.5">
+                  <Label>Subcontractor</Label>
+                  <Select value={subconName} onValueChange={setSubconName}>
+                    <SelectTrigger><SelectValue placeholder="Select subcontractor" /></SelectTrigger>
+                    <SelectContent>
+                      {subcons.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label>Sub-Sub Company</Label>
+                  <Select value={subsubId} onValueChange={setSubsubId}>
+                    <SelectTrigger><SelectValue placeholder="Select Sub-Sub" /></SelectTrigger>
+                    <SelectContent>
+                      {subsubs.map(s => {
+                        const parent = subcons.find(p => p.id === s.parent_subcontractor_id);
+                        return (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}{parent ? ` (← ${parent.name})` : ''}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  {subsubParent && (
+                    <p className="text-xs text-muted-foreground">Parent: <strong>{subsubParent.name}</strong></p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+          {(userType === 'hdec' || userType === 'pm_pd') && (
+            <div className="space-y-1.5">
+              <Label>HDEC PIC (optional)</Label>
+              <Select value={hdecPicName} onValueChange={setHdecPicName}>
+                <SelectTrigger><SelectValue placeholder="Select HDEC PIC" /></SelectTrigger>
+                <SelectContent>
+                  {hdecPics.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
 function MastersTab() {
   const { toast } = useToast();
   const [syncing, setSyncing] = useState(false);
