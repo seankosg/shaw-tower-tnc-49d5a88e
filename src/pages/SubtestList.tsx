@@ -237,6 +237,10 @@ export default function SubtestList() {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    enableMultiSort: true,
+    enableSortingRemoval: true,
+    isMultiSortEvent: (e) => (e as unknown as MouseEvent).shiftKey,
+    maxMultiSortColCount: 5,
   });
 
   return (
