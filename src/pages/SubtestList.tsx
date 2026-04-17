@@ -270,6 +270,14 @@ export default function SubtestList() {
         <span className="text-sm text-muted-foreground self-center">
           {table.getFilteredRowModel().rows.length} records
         </span>
+        <span className="text-xs text-muted-foreground self-center hidden md:inline">
+          Tip: Shift+Click headers for multi-sort
+        </span>
+        {sorting.length > 0 && (
+          <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setSorting([])}>
+            Clear sort ({sorting.length})
+          </Button>
+        )}
       </div>
 
       {/* Scrollable table with sticky header */}
