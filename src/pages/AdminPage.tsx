@@ -155,6 +155,7 @@ function UsersTab() {
           </DialogTrigger>
           <CreateUserDialog
             subcons={subcons}
+            subsubs={subsubs}
             hdecPics={hdecPics}
             onCreated={() => { setCreateOpen(false); load(); }}
           />
@@ -178,7 +179,7 @@ function UsersTab() {
               {profiles.map(p => {
                 const role = getUserRole(p.user_id);
                 const linked =
-                  p.user_type === 'subcontractor' ? p.subcontractor_name :
+                  p.user_type === 'subcontractor' ? (p.subsub_name ? `${p.subcontractor_name ?? '—'} / ${p.subsub_name}` : p.subcontractor_name) :
                   p.user_type === 'hdec' || p.user_type === 'pm_pd' ? p.hdec_pic_name : null;
                 return (
                   <TableRow key={p.id}>
