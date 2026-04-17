@@ -533,7 +533,7 @@ function SubcontractorMasterTable() {
                     const parent = subs.find(s => s.id === r.parent_subcontractor_id);
                     return (
                       <TableRow key={r.id}>
-                        <TableCell>{r.name}</TableCell>
+                        <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
                         <TableCell className="text-xs text-muted-foreground">{parent?.name ?? '—'}</TableCell>
                         <TableCell className="text-center">
                           <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
