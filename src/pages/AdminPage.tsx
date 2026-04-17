@@ -749,7 +749,19 @@ function SubcontractorMasterTable() {
   };
 
   const toggleActive = async (r: MasterRow) => {
-    await supabase.from('subcontractor_master').update({ is_active: !r.is_active }).eq('id', r.id);
+    const newActive = !r.is_active;
+    await supabase.from('subcontractor_master').update({ is_active: newActive }).eq('id', r.id);
+    // Cascade to linked profiles
+    const col = (r.type ?? 'sub') === 'sub' ? 'subcontractor_name' : 'subsub_name';
+    const { data: linked } = await supabase
+      .from('profiles')
+      .update({ is_active: newActive } as any)
+      .eq(col, r.name)
+      .select('id');
+    toast({
+      title: newActive ? 'Activated' : 'Deactivated',
+      description: linked?.length ? `${linked.length} linked user(s) ${newActive ? 'activated' : 'deactivated'}` : undefined,
+    });
     load();
   };
 
@@ -767,10 +779,31 @@ function SubcontractorMasterTable() {
   };
 
   const remove = async (r: MasterRow) => {
-    if (!confirm(`Delete "${r.name}"?`)) return;
+    const col = (r.type ?? 'sub') === 'sub' ? 'subcontractor_name' : 'subsub_name';
+    // Block hard delete if any subtests or profiles still reference this name
+    const [{ count: subtestCount }, { count: profileCount }, { count: childCount }] = await Promise.all([
+      supabase.from('subtests').select('id', { count: 'exact', head: true }).eq(col, r.name),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).eq(col, r.name),
+      (r.type ?? 'sub') === 'sub'
+        ? supabase.from('subcontractor_master').select('id', { count: 'exact', head: true }).eq('parent_subcontractor_id', r.id)
+        : Promise.resolve({ count: 0 } as any),
+    ]);
+    const refs: string[] = [];
+    if (subtestCount) refs.push(`${subtestCount} subtest(s)`);
+    if (profileCount) refs.push(`${profileCount} user profile(s)`);
+    if (childCount) refs.push(`${childCount} Sub-Sub child(ren)`);
+    if (refs.length > 0) {
+      toast({
+        title: 'Cannot delete — references exist',
+        description: `Linked: ${refs.join(', ')}. Deactivate instead, or remove references first.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!confirm(`Permanently delete "${r.name}"? This cannot be undone.`)) return;
     const { error } = await supabase.from('subcontractor_master').delete().eq('id', r.id);
     if (error) toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
-    else load();
+    else { toast({ title: 'Deleted permanently' }); load(); }
   };
 
   return (
