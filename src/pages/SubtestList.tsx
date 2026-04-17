@@ -312,8 +312,35 @@ export default function SubtestList() {
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
   ], [systemOptions, statusOptions, sourceOptions]);
 
+  // Apply status (overdue / at_risk) URL filter at data level
+  const filteredData = useMemo(() => {
+    if (!urlStatusFilter) return data;
+    const today = new Date().toISOString().slice(0, 10);
+    const daysFromToday = (iso: string) => {
+      const a = new Date(iso + 'T00:00:00Z').getTime();
+      const b = new Date(today + 'T00:00:00Z').getTime();
+      return Math.round((a - b) / 86400000);
+    };
+    return data.filter(r => {
+      const overdue =
+        (r.t1_planned_date && r.t1_planned_date < today && r.t1_status !== 'Done') ||
+        (r.t2_planned_date && r.t2_planned_date < today && r.t2_status !== 'Done');
+      if (urlStatusFilter === 'overdue') return overdue;
+      if (urlStatusFilter === 'at_risk') {
+        if (overdue) return false;
+        const within = (planned: string | null, status: TcStatus | null) => {
+          if (!planned || status === 'Done') return false;
+          const d = daysFromToday(planned);
+          return d >= 0 && d <= urlAtRiskDays;
+        };
+        return within(r.t1_planned_date, r.t1_status) || within(r.t2_planned_date, r.t2_status);
+      }
+      return true;
+    });
+  }, [data, urlStatusFilter, urlAtRiskDays]);
+
   const table = useReactTable({
-    data,
+    data: filteredData,
     columns,
     state: { sorting, globalFilter, columnFilters, columnSizing },
     onSortingChange: setSorting,
@@ -331,6 +358,27 @@ export default function SubtestList() {
     columnResizeMode: 'onChange',
     defaultColumn: { minSize: 60, maxSize: 600 },
   });
+
+  const activeUrlFilters = useMemo(() => {
+    const out: { label: string; param: string }[] = [];
+    const map: Record<string, string> = {
+      system: 'System', subcon: 'Subcon', subsub: 'Sub-Sub',
+      hdec_pic: 'HDEC PIC', t1_status: 'T1', t2_status: 'T2', status: 'Status',
+    };
+    for (const [k, lbl] of Object.entries(map)) {
+      const v = searchParams.get(k);
+      if (v) out.push({ label: `${lbl}: ${v}`, param: k });
+    }
+    return out;
+  }, [searchParams]);
+
+  const clearUrlFilter = (param: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.delete(param);
+    if (param === 'status') next.delete('at_risk_days');
+    setSearchParams(next, { replace: true });
+  };
+  const clearAllUrlFilters = () => setSearchParams(new URLSearchParams(), { replace: true });
 
   return (
     <div className="space-y-4">
