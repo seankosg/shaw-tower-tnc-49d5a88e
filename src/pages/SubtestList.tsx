@@ -5,6 +5,7 @@ import {
   flexRender, type ColumnDef, type SortingState, type ColumnFiltersState,
 } from '@tanstack/react-table';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { DataSourceTag } from '@/components/shared/DataSourceTag';
 import { Input } from '@/components/ui/input';
