@@ -97,6 +97,8 @@ function UsersTab() {
   const [hdecPics, setHdecPics] = useState<MasterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Profile | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -167,7 +169,18 @@ function UsersTab() {
     }
   };
 
-  if (loading) return <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>;
+  const hardDelete = async (profile: Profile) => {
+    const { error } = await supabase.functions.invoke('admin-delete-user', {
+      body: { user_id: profile.user_id },
+    });
+    if (error) {
+      toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'User permanently deleted' });
+      load();
+    }
+    setDeleteTarget(null);
+  };
 
   return (
     <Card>
