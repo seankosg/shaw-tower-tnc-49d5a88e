@@ -23,7 +23,7 @@ import { Shield, Plus, KeyRound, Trash2, Pencil } from 'lucide-react';
 interface Profile {
   id: string; user_id: string; name: string | null; email: string | null;
   login_id: string | null; user_type: UserType;
-  subcontractor_name: string | null; hdec_pic_name: string | null;
+  subcontractor_name: string | null; subsub_name: string | null; hdec_pic_name: string | null;
   must_change_password: boolean; is_active: boolean;
 }
 interface UserRole { id: string; user_id: string; role: AppRole; }
@@ -43,7 +43,7 @@ interface ChangeLogRow {
   id: string; subtest_id: string; changed_field: string; old_value: string | null;
   new_value: string | null; changed_by: string | null; changed_at: string; change_source: string | null;
 }
-interface MasterRow { id: string; name: string; is_active: boolean; }
+interface MasterRow { id: string; name: string; is_active: boolean; type?: 'sub' | 'subsub'; parent_subcontractor_id?: string | null; }
 
 export default function AdminPage() {
   const { isAdminOrSuperuser } = useAuth();
@@ -89,6 +89,7 @@ function UsersTab() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [roles, setRoles] = useState<UserRole[]>([]);
   const [subcons, setSubcons] = useState<MasterRow[]>([]);
+  const [subsubs, setSubsubs] = useState<MasterRow[]>([]);
   const [hdecPics, setHdecPics] = useState<MasterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -103,7 +104,11 @@ function UsersTab() {
     ]);
     if (p.data) setProfiles(p.data as Profile[]);
     if (r.data) setRoles(r.data as UserRole[]);
-    if (s.data) setSubcons(s.data as MasterRow[]);
+    if (s.data) {
+      const all = s.data as MasterRow[];
+      setSubcons(all.filter(m => (m.type ?? 'sub') === 'sub'));
+      setSubsubs(all.filter(m => m.type === 'subsub'));
+    }
     if (h.data) setHdecPics(h.data as MasterRow[]);
     setLoading(false);
   };
@@ -150,6 +155,7 @@ function UsersTab() {
           </DialogTrigger>
           <CreateUserDialog
             subcons={subcons}
+            subsubs={subsubs}
             hdecPics={hdecPics}
             onCreated={() => { setCreateOpen(false); load(); }}
           />
@@ -173,7 +179,7 @@ function UsersTab() {
               {profiles.map(p => {
                 const role = getUserRole(p.user_id);
                 const linked =
-                  p.user_type === 'subcontractor' ? p.subcontractor_name :
+                  p.user_type === 'subcontractor' ? (p.subsub_name ? `${p.subcontractor_name ?? '—'} / ${p.subsub_name}` : p.subcontractor_name) :
                   p.user_type === 'hdec' || p.user_type === 'pm_pd' ? p.hdec_pic_name : null;
                 return (
                   <TableRow key={p.id}>
@@ -215,18 +221,25 @@ function UsersTab() {
 
 /* ───── Create User Dialog ───── */
 function CreateUserDialog({
-  subcons, hdecPics, onCreated,
+  subcons, subsubs, hdecPics, onCreated,
 }: {
-  subcons: MasterRow[]; hdecPics: MasterRow[]; onCreated: () => void;
+  subcons: MasterRow[]; subsubs: MasterRow[]; hdecPics: MasterRow[]; onCreated: () => void;
 }) {
   const { toast } = useToast();
   const [loginId, setLoginId] = useState('');
   const [name, setName] = useState('');
   const [userType, setUserType] = useState<UserType>('hdec');
   const [role, setRole] = useState<AppRole>('user');
+  const [affiliation, setAffiliation] = useState<'sub' | 'subsub'>('sub');
   const [subconName, setSubconName] = useState<string>('');
+  const [subsubId, setSubsubId] = useState<string>('');
   const [hdecPicName, setHdecPicName] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+
+  const selectedSubsub = subsubs.find(s => s.id === subsubId);
+  const subsubParent = selectedSubsub
+    ? subcons.find(s => s.id === selectedSubsub.parent_subcontractor_id)
+    : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,9 +247,18 @@ function CreateUserDialog({
       toast({ title: 'Invalid User ID', description: '3–32 chars, lowercase letters / digits / underscore only.', variant: 'destructive' });
       return;
     }
-    if (userType === 'subcontractor' && !subconName) {
-      toast({ title: 'Subcontractor required', variant: 'destructive' });
-      return;
+    let payloadSubconName: string | null = null;
+    let payloadSubsubName: string | null = null;
+    if (userType === 'subcontractor') {
+      if (affiliation === 'sub') {
+        if (!subconName) { toast({ title: 'Subcontractor required', variant: 'destructive' }); return; }
+        payloadSubconName = subconName;
+      } else {
+        if (!selectedSubsub) { toast({ title: 'SubSub required', variant: 'destructive' }); return; }
+        if (!subsubParent) { toast({ title: 'SubSub has no parent Subcontractor', variant: 'destructive' }); return; }
+        payloadSubsubName = selectedSubsub.name;
+        payloadSubconName = subsubParent.name;
+      }
     }
     setSubmitting(true);
     const { data, error } = await supabase.functions.invoke('admin-create-user', {
@@ -245,7 +267,8 @@ function CreateUserDialog({
         name: name.trim(),
         user_type: userType,
         role,
-        subcontractor_name: userType === 'subcontractor' ? subconName : null,
+        subcontractor_name: payloadSubconName,
+        subsub_name: payloadSubsubName,
         hdec_pic_name: (userType === 'hdec' || userType === 'pm_pd') ? (hdecPicName || null) : null,
       },
     });
@@ -255,7 +278,7 @@ function CreateUserDialog({
       return;
     }
     toast({ title: 'User created', description: `Initial password: SHAW00` });
-    setLoginId(''); setName(''); setSubconName(''); setHdecPicName('');
+    setLoginId(''); setName(''); setSubconName(''); setSubsubId(''); setHdecPicName('');
     onCreated();
   };
 
@@ -295,16 +318,52 @@ function CreateUserDialog({
           </div>
         </div>
         {userType === 'subcontractor' && (
-          <div className="space-y-1.5">
-            <Label>Subcontractor</Label>
-            <Select value={subconName} onValueChange={setSubconName}>
-              <SelectTrigger><SelectValue placeholder="Select subcontractor" /></SelectTrigger>
-              <SelectContent>
-                {subcons.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">One account per subcontractor (DB-enforced).</p>
-          </div>
+          <>
+            <div className="space-y-1.5">
+              <Label>Affiliation</Label>
+              <div className="flex gap-4 text-sm">
+                <label className="flex items-center gap-1.5">
+                  <input type="radio" checked={affiliation === 'sub'} onChange={() => setAffiliation('sub')} />
+                  Subcontractor
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input type="radio" checked={affiliation === 'subsub'} onChange={() => setAffiliation('subsub')} />
+                  SubSub (재하도)
+                </label>
+              </div>
+            </div>
+            {affiliation === 'sub' ? (
+              <div className="space-y-1.5">
+                <Label>Subcontractor</Label>
+                <Select value={subconName} onValueChange={setSubconName}>
+                  <SelectTrigger><SelectValue placeholder="Select subcontractor" /></SelectTrigger>
+                  <SelectContent>
+                    {subcons.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>SubSub Company</Label>
+                <Select value={subsubId} onValueChange={setSubsubId}>
+                  <SelectTrigger><SelectValue placeholder="Select SubSub" /></SelectTrigger>
+                  <SelectContent>
+                    {subsubs.map(s => {
+                      const parent = subcons.find(p => p.id === s.parent_subcontractor_id);
+                      return (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}{parent ? ` (← ${parent.name})` : ''}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {subsubParent && (
+                  <p className="text-xs text-muted-foreground">Parent Subcontractor: <strong>{subsubParent.name}</strong> (auto-linked)</p>
+                )}
+              </div>
+            )}
+          </>
         )}
         {(userType === 'hdec' || userType === 'pm_pd') && (
           <div className="space-y-1.5">
@@ -325,17 +384,169 @@ function CreateUserDialog({
   );
 }
 
-/* ═══════ Tab: Subcontractor / HDEC PIC Master ═══════ */
+/* ═══════ Tab: Subcontractor / SubSub / HDEC PIC Master ═══════ */
 function MastersTab() {
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <MasterTable table="subcontractor_master" title="Subcontractor Master" />
+      <SubcontractorMasterTable />
       <MasterTable table="hdec_pic_master" title="HDEC PIC Master" />
     </div>
   );
 }
 
-function MasterTable({ table, title }: { table: 'subcontractor_master' | 'hdec_pic_master'; title: string }) {
+function SubcontractorMasterTable() {
+  const { toast } = useToast();
+  const [rows, setRows] = useState<MasterRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newSubName, setNewSubName] = useState('');
+  const [newSubSubName, setNewSubSubName] = useState('');
+  const [newSubSubParent, setNewSubSubParent] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('subcontractor_master').select('*').order('name');
+    if (data) setRows(data as MasterRow[]);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const subs = rows.filter(r => (r.type ?? 'sub') === 'sub');
+  const subsubs = rows.filter(r => r.type === 'subsub');
+
+  const addSub = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubName.trim()) return;
+    const { error } = await supabase.from('subcontractor_master').insert({ name: newSubName.trim(), type: 'sub' } as any);
+    if (error) toast({ title: 'Add failed', description: error.message, variant: 'destructive' });
+    else { toast({ title: 'Subcontractor added' }); setNewSubName(''); load(); }
+  };
+
+  const addSubSub = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubSubName.trim() || !newSubSubParent) {
+      toast({ title: 'Name and parent required', variant: 'destructive' });
+      return;
+    }
+    const { error } = await supabase.from('subcontractor_master').insert({
+      name: newSubSubName.trim(),
+      type: 'subsub',
+      parent_subcontractor_id: newSubSubParent,
+    } as any);
+    if (error) toast({ title: 'Add failed', description: error.message, variant: 'destructive' });
+    else { toast({ title: 'SubSub added' }); setNewSubSubName(''); setNewSubSubParent(''); load(); }
+  };
+
+  const toggleActive = async (r: MasterRow) => {
+    await supabase.from('subcontractor_master').update({ is_active: !r.is_active }).eq('id', r.id);
+    load();
+  };
+
+  const remove = async (r: MasterRow) => {
+    if (!confirm(`Delete "${r.name}"?`)) return;
+    const { error } = await supabase.from('subcontractor_master').delete().eq('id', r.id);
+    if (error) toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
+    else load();
+  };
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Subcontractor Master</CardTitle></CardHeader>
+      <CardContent className="space-y-5">
+        {/* Subcontractors */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subcontractors</h3>
+          <form onSubmit={addSub} className="flex gap-2">
+            <Input value={newSubName} onChange={(e) => setNewSubName(e.target.value)} placeholder="Add Subcontractor..." />
+            <Button type="submit" size="sm"><Plus className="h-4 w-4" /></Button>
+          </form>
+          {loading ? (
+            <p className="py-2 text-center text-sm text-muted-foreground">Loading...</p>
+          ) : (
+            <div className="max-h-[200px] overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="w-20 text-center">Active</TableHead>
+                    <TableHead className="w-12"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {subs.map(r => (
+                    <TableRow key={r.id}>
+                      <TableCell>{r.name}</TableCell>
+                      <TableCell className="text-center">
+                        <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
+                      </TableCell>
+                      <TableCell>
+                        <Button size="icon" variant="ghost" onClick={() => remove(r)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+
+        {/* SubSubs */}
+        <div className="space-y-2 border-t pt-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">SubSubs (재하도)</h3>
+          <form onSubmit={addSubSub} className="flex gap-2">
+            <Input value={newSubSubName} onChange={(e) => setNewSubSubName(e.target.value)} placeholder="SubSub name..." className="flex-1" />
+            <Select value={newSubSubParent} onValueChange={setNewSubSubParent}>
+              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Parent Sub" /></SelectTrigger>
+              <SelectContent>
+                {subs.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button type="submit" size="sm"><Plus className="h-4 w-4" /></Button>
+          </form>
+          {!loading && (
+            <div className="max-h-[200px] overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Parent</TableHead>
+                    <TableHead className="w-20 text-center">Active</TableHead>
+                    <TableHead className="w-12"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {subsubs.map(r => {
+                    const parent = subs.find(s => s.id === r.parent_subcontractor_id);
+                    return (
+                      <TableRow key={r.id}>
+                        <TableCell>{r.name}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{parent?.name ?? '—'}</TableCell>
+                        <TableCell className="text-center">
+                          <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
+                        </TableCell>
+                        <TableCell>
+                          <Button size="icon" variant="ghost" onClick={() => remove(r)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {subsubs.length === 0 && (
+                    <TableRow><TableCell colSpan={4} className="text-center text-xs text-muted-foreground py-3">No SubSubs yet.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string }) {
   const { toast } = useToast();
   const [rows, setRows] = useState<MasterRow[]>([]);
   const [loading, setLoading] = useState(true);

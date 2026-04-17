@@ -11,6 +11,7 @@ interface Profile {
   login_id: string | null;
   user_type: UserType;
   subcontractor_name: string | null;
+  subsub_name: string | null;
   hdec_pic_name: string | null;
   must_change_password: boolean;
   is_active: boolean;

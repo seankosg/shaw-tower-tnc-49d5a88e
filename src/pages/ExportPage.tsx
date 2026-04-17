@@ -26,7 +26,7 @@ export default function ExportPage() {
     try {
       let query = supabase
         .from('subtests')
-        .select('item_no, equipment, subtest_id, mos_code, description, predecessor_status_raw, t1_planned_date, t1_status, t2_planned_date, t2_status, subcontractor_name, hdec_pic_name, data_source_type, updated_at, system_master!inner(system_code)')
+        .select('item_no, equipment, subtest_id, mos_code, description, predecessor_status_raw, t1_planned_date, t1_status, t2_planned_date, t2_status, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, updated_at, system_master!inner(system_code)')
         .eq('is_active', true)
         .order('updated_at', { ascending: false });
 
@@ -59,6 +59,7 @@ export default function ExportPage() {
         'T2 Planned': r.t2_planned_date || '',
         'T2 Status': r.t2_status || '',
         'Subcontractor': r.subcontractor_name || '',
+        'SubSub': r.subsub_name || '',
         'HDEC PIC': r.hdec_pic_name || '',
         'Source': r.data_source_type ? (DATA_SOURCE_LABELS[r.data_source_type as DataSource] || r.data_source_type) : '',
         'Updated': r.updated_at ? new Date(r.updated_at).toLocaleDateString() : '',

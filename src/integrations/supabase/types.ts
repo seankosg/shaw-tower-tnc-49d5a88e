@@ -79,6 +79,7 @@ export type Database = {
           must_change_password: boolean
           name: string | null
           subcontractor_name: string | null
+          subsub_name: string | null
           user_id: string
           user_type: Database["public"]["Enums"]["user_type"]
         }
@@ -92,6 +93,7 @@ export type Database = {
           must_change_password?: boolean
           name?: string | null
           subcontractor_name?: string | null
+          subsub_name?: string | null
           user_id: string
           user_type?: Database["public"]["Enums"]["user_type"]
         }
@@ -105,6 +107,7 @@ export type Database = {
           must_change_password?: boolean
           name?: string | null
           subcontractor_name?: string | null
+          subsub_name?: string | null
           user_id?: string
           user_type?: Database["public"]["Enums"]["user_type"]
         }
@@ -140,20 +143,34 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          parent_subcontractor_id: string | null
+          type: string
         }
         Insert: {
           created_at?: string
           id?: string
           is_active?: boolean
           name: string
+          parent_subcontractor_id?: string | null
+          type?: string
         }
         Update: {
           created_at?: string
           id?: string
           is_active?: boolean
           name?: string
+          parent_subcontractor_id?: string | null
+          type?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "subcontractor_master_parent_subcontractor_id_fkey"
+            columns: ["parent_subcontractor_id"]
+            isOneToOne: false
+            referencedRelation: "subcontractor_master"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subtest_change_log: {
         Row: {
@@ -221,6 +238,7 @@ export type Database = {
           row_version: number
           source_upload_id: string | null
           subcontractor_name: string | null
+          subsub_name: string | null
           subtest_id: string
           system_id: string
           t1_actual_date: string | null
@@ -254,6 +272,7 @@ export type Database = {
           row_version?: number
           source_upload_id?: string | null
           subcontractor_name?: string | null
+          subsub_name?: string | null
           subtest_id: string
           system_id: string
           t1_actual_date?: string | null
@@ -287,6 +306,7 @@ export type Database = {
           row_version?: number
           source_upload_id?: string | null
           subcontractor_name?: string | null
+          subsub_name?: string | null
           subtest_id?: string
           system_id?: string
           t1_actual_date?: string | null
