@@ -493,9 +493,9 @@ function SubcontractorMasterTable() {
 
         {/* SubSubs */}
         <div className="space-y-2 border-t pt-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">SubSubs (재하도)</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sub-Subs (재하도)</h3>
           <form onSubmit={addSubSub} className="flex gap-2">
-            <Input value={newSubSubName} onChange={(e) => setNewSubSubName(e.target.value)} placeholder="SubSub name..." className="flex-1" />
+            <Input value={newSubSubName} onChange={(e) => setNewSubSubName(e.target.value)} placeholder="Sub-Sub name..." className="flex-1" />
             <Select value={newSubSubParent} onValueChange={setNewSubSubParent}>
               <SelectTrigger className="w-[160px]"><SelectValue placeholder="Parent Sub" /></SelectTrigger>
               <SelectContent>
