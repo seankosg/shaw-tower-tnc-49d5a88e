@@ -119,6 +119,71 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     const aliasByName = new Map<string, string>();
     (aliasData || []).forEach(a => aliasByName.set(a.alias_name.toLowerCase(), a.system_id));
 
+    // Master caches: name(lowercased) -> id
+    const { data: subData } = await supabase.from('subcontractor_master').select('id, name, type, parent_subcontractor_id, is_active');
+    const { data: hdecData } = await supabase.from('hdec_pic_master').select('id, name, is_active');
+    const subconCache = new Map<string, { id: string; active: boolean }>();
+    const subsubCache = new Map<string, { id: string; active: boolean; parent_id: string | null }>();
+    (subData || []).forEach((m: any) => {
+      const t = m.type ?? 'sub';
+      if (t === 'sub') subconCache.set(m.name.toLowerCase().trim(), { id: m.id, active: m.is_active });
+      else subsubCache.set(m.name.toLowerCase().trim(), { id: m.id, active: m.is_active, parent_id: m.parent_subcontractor_id });
+    });
+    const hdecCache = new Map<string, { id: string; active: boolean }>();
+    (hdecData || []).forEach((m: any) => hdecCache.set(m.name.toLowerCase().trim(), { id: m.id, active: m.is_active }));
+
+    async function ensureSubcontractor(name: string | null): Promise<void> {
+      if (!name) return;
+      const key = name.toLowerCase().trim();
+      if (subconCache.has(key)) return;
+      const { data: ins } = await supabase.from('subcontractor_master')
+        .insert({ name: name.trim(), type: 'sub' } as any).select('id').single();
+      if (!ins) return;
+      subconCache.set(key, { id: ins.id, active: true });
+      supabase.functions.invoke('auto-create-master-user', {
+        body: { name: name.trim(), master_type: 'subcontractor', subcontractor_name: name.trim() },
+      }).catch(() => {});
+    }
+
+    async function ensureSubsub(name: string | null, parentName: string | null): Promise<void> {
+      if (!name) return;
+      const key = name.toLowerCase().trim();
+      if (subsubCache.has(key)) return;
+      let parentId: string | null = null;
+      if (parentName) {
+        await ensureSubcontractor(parentName);
+        parentId = subconCache.get(parentName.toLowerCase().trim())?.id ?? null;
+      }
+      if (!parentId) {
+        const anyParent = subconCache.values().next().value;
+        if (!anyParent) return;
+        parentId = anyParent.id;
+      }
+      const { data: ins } = await supabase.from('subcontractor_master')
+        .insert({ name: name.trim(), type: 'subsub', parent_subcontractor_id: parentId } as any).select('id').single();
+      if (!ins) return;
+      subsubCache.set(key, { id: ins.id, active: true, parent_id: parentId });
+      supabase.functions.invoke('auto-create-master-user', {
+        body: {
+          name: name.trim(), master_type: 'subsub',
+          subcontractor_name: parentName ?? null, subsub_name: name.trim(),
+        },
+      }).catch(() => {});
+    }
+
+    async function ensureHdecPic(name: string | null): Promise<void> {
+      if (!name) return;
+      const key = name.toLowerCase().trim();
+      if (hdecCache.has(key)) return;
+      const { data: ins } = await supabase.from('hdec_pic_master')
+        .insert({ name: name.trim() }).select('id').single();
+      if (!ins) return;
+      hdecCache.set(key, { id: ins.id, active: true });
+      supabase.functions.invoke('auto-create-master-user', {
+        body: { name: name.trim(), master_type: 'hdec_pic', hdec_pic_name: name.trim() },
+      }).catch(() => {});
+    }
+
     async function resolveSystem(rawName: string): Promise<string | null> {
       if (!rawName) return null;
       const key = rawName.toLowerCase().trim();
