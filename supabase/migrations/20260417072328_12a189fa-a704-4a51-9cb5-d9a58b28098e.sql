@@ -1,0 +1,1 @@
+UPDATE public.field_config SET display_name = 'Sub-Sub' WHERE field_name = 'subsub_name';
