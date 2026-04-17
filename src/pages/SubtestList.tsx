@@ -140,6 +140,24 @@ export default function SubtestList() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  const autoSizeColumn = (columnId: string) => {
+    const container = tableRef.current;
+    if (!container) return;
+    const cells = container.querySelectorAll<HTMLElement>(`[data-column-id="${columnId}"]`);
+    let max = 60;
+    cells.forEach(cell => {
+      const clone = cell.cloneNode(true) as HTMLElement;
+      clone.style.cssText = 'position:absolute; visibility:hidden; width:auto; white-space:nowrap; max-width:none; left:-9999px; top:0;';
+      document.body.appendChild(clone);
+      const w = clone.getBoundingClientRect().width;
+      document.body.removeChild(clone);
+      if (w > max) max = w;
+    });
+    const finalWidth = Math.min(Math.ceil(max) + 16, 600);
+    setColumnSizing(prev => ({ ...prev, [columnId]: finalWidth }));
+  };
 
   // Load persisted state when user/storageKey changes
   useEffect(() => {
