@@ -348,7 +348,7 @@ export default function SubtestDetailPage() {
             <Input className="h-9" value={form.subcontractor_name || ''} onChange={e => updateField('subcontractor_name', e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">SubSub</Label>
+            <Label className="text-xs">Sub-Sub</Label>
             <Input className="h-9" value={form.subsub_name || ''} onChange={e => updateField('subsub_name', e.target.value)} />
           </div>
           <div className="space-y-1.5 md:col-span-2">

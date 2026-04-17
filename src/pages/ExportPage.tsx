@@ -59,7 +59,7 @@ export default function ExportPage() {
         'T2 Planned': r.t2_planned_date || '',
         'T2 Status': r.t2_status || '',
         'Subcontractor': r.subcontractor_name || '',
-        'SubSub': r.subsub_name || '',
+        'Sub-Sub': r.subsub_name || '',
         'HDEC PIC': r.hdec_pic_name || '',
         'Source': r.data_source_type ? (DATA_SOURCE_LABELS[r.data_source_type as DataSource] || r.data_source_type) : '',
         'Updated': r.updated_at ? new Date(r.updated_at).toLocaleDateString() : '',
