@@ -1069,3 +1069,37 @@ function AuditTab() {
     </Card>
   );
 }
+
+/* ───── Inline editable name field ───── */
+function InlineNameEdit({ value, onSave }: { value: string; onSave: (v: string) => void | Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { setDraft(value); }, [value]);
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="text-left hover:underline"
+      >
+        {value}
+      </button>
+    );
+  }
+  const commit = async () => {
+    setEditing(false);
+    if (draft.trim() && draft.trim() !== value) await onSave(draft.trim());
+  };
+  return (
+    <Input
+      autoFocus
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') { setDraft(value); setEditing(false); }
+      }}
+      className="h-7 text-sm"
+    />
+  );
+}
