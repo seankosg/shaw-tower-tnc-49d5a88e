@@ -157,31 +157,54 @@ export default function SubtestList() {
     setColumnSizing(prev => ({ ...prev, [columnId]: finalWidth }));
   };
 
-  // Load persisted state when user/storageKey changes
+  // Load persisted state when user/storageKey changes; URL params override per-column filters
   useEffect(() => {
     setStateLoaded(false);
+    let baseFilters: ColumnFiltersState = [];
+    let baseSorting: SortingState = DEFAULT_SORTING;
+    let baseGlobal = '';
+    let baseSizing: ColumnSizingState = {};
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
-        setSorting(Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING);
-        setColumnFilters(Array.isArray(parsed.columnFilters) ? parsed.columnFilters : []);
-        setGlobalFilter(typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '');
-        setColumnSizing(parsed.columnSizing && typeof parsed.columnSizing === 'object' ? parsed.columnSizing : {});
-      } else {
-        setSorting(DEFAULT_SORTING);
-        setColumnFilters([]);
-        setGlobalFilter('');
-        setColumnSizing({});
+        baseSorting = Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING;
+        baseFilters = Array.isArray(parsed.columnFilters) ? parsed.columnFilters : [];
+        baseGlobal = typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '';
+        baseSizing = parsed.columnSizing && typeof parsed.columnSizing === 'object' ? parsed.columnSizing : {};
       }
     } catch {
-      setSorting(DEFAULT_SORTING);
-      setColumnFilters([]);
-      setGlobalFilter('');
-      setColumnSizing({});
+      // ignore
     }
+
+    // URL-driven filters take precedence (replace any prior filter on these columns)
+    const urlMap: Record<string, string> = {
+      system: 'system_code',
+      subcon: 'subcontractor_name',
+      subsub: 'subsub_name',
+      hdec_pic: 'hdec_pic_name',
+      t1_status: 't1_status',
+      t2_status: 't2_status',
+    };
+    const next = baseFilters.filter(f => !Object.values(urlMap).includes(f.id));
+    for (const [param, col] of Object.entries(urlMap)) {
+      const v = searchParams.get(param);
+      if (v) {
+        // multi-select columns expect string[]
+        if (col === 'system_code' || col === 't1_status' || col === 't2_status') {
+          next.push({ id: col, value: [v] });
+        } else {
+          next.push({ id: col, value: v });
+        }
+      }
+    }
+    setSorting(baseSorting);
+    setColumnFilters(next);
+    setGlobalFilter(baseGlobal);
+    setColumnSizing(baseSizing);
     setStateLoaded(true);
-  }, [storageKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey, searchParams]);
 
   // Persist on change (only after initial load to avoid overwriting)
   useEffect(() => {
