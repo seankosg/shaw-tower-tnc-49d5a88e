@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel,
@@ -140,6 +140,24 @@ export default function SubtestList() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  const autoSizeColumn = (columnId: string) => {
+    const container = tableRef.current;
+    if (!container) return;
+    const cells = container.querySelectorAll<HTMLElement>(`[data-column-id="${columnId}"]`);
+    let max = 60;
+    cells.forEach(cell => {
+      const clone = cell.cloneNode(true) as HTMLElement;
+      clone.style.cssText = 'position:absolute; visibility:hidden; width:auto; white-space:nowrap; max-width:none; left:-9999px; top:0;';
+      document.body.appendChild(clone);
+      const w = clone.getBoundingClientRect().width;
+      document.body.removeChild(clone);
+      if (w > max) max = w;
+    });
+    const finalWidth = Math.min(Math.ceil(max) + 16, 600);
+    setColumnSizing(prev => ({ ...prev, [columnId]: finalWidth }));
+  };
 
   // Load persisted state when user/storageKey changes
   useEffect(() => {
@@ -330,7 +348,7 @@ export default function SubtestList() {
       </div>
 
       {/* Scrollable table with sticky header */}
-      <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
+      <div ref={tableRef} className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
         <Table style={{ width: table.getTotalSize(), tableLayout: 'fixed' }}>
           <TableHeader className="sticky top-0 z-10">
             {table.getHeaderGroups().map(hg => (
@@ -338,6 +356,7 @@ export default function SubtestList() {
                 {hg.headers.map(header => (
                   <TableHead
                     key={header.id}
+                    data-column-id={header.column.id}
                     style={{ width: header.getSize() }}
                     className="relative text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b"
                     onClick={header.column.getToggleSortingHandler()}
@@ -358,6 +377,8 @@ export default function SubtestList() {
                         onMouseDown={header.getResizeHandler()}
                         onTouchStart={header.getResizeHandler()}
                         onClick={(e) => e.stopPropagation()}
+                        onDoubleClick={(e) => { e.stopPropagation(); autoSizeColumn(header.column.id); }}
+                        title="Drag to resize, double-click to auto-fit"
                         className={cn(
                           'absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40',
                           header.column.getIsResizing() && 'bg-primary/60'
@@ -421,6 +442,7 @@ export default function SubtestList() {
                     {row.getVisibleCells().map(cell => (
                       <TableCell
                         key={cell.id}
+                        data-column-id={cell.column.id}
                         style={{ width: cell.column.getSize() }}
                         className="text-xs py-2 truncate"
                       >
