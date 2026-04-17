@@ -237,6 +237,10 @@ export default function SubtestList() {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    enableMultiSort: true,
+    enableSortingRemoval: true,
+    isMultiSortEvent: (e) => (e as unknown as MouseEvent).shiftKey,
+    maxMultiSortColCount: 5,
   });
 
   return (
@@ -266,6 +270,14 @@ export default function SubtestList() {
         <span className="text-sm text-muted-foreground self-center">
           {table.getFilteredRowModel().rows.length} records
         </span>
+        <span className="text-xs text-muted-foreground self-center hidden md:inline">
+          Tip: Shift+Click headers for multi-sort
+        </span>
+        {sorting.length > 0 && (
+          <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setSorting([])}>
+            Clear sort ({sorting.length})
+          </Button>
+        )}
       </div>
 
       {/* Scrollable table with sticky header */}
@@ -281,7 +293,16 @@ export default function SubtestList() {
                     onClick={header.column.getToggleSortingHandler()}
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
-                    {{ asc: ' ▲', desc: ' ▼' }[header.column.getIsSorted() as string] ?? ''}
+                    {header.column.getIsSorted() && (
+                      <span className="ml-0.5">
+                        {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
+                        {sorting.length > 1 && (
+                          <sup className="ml-0.5 text-[9px] text-muted-foreground">
+                            {header.column.getSortIndex() + 1}
+                          </sup>
+                        )}
+                      </span>
+                    )}
                   </TableHead>
                 ))}
               </TableRow>
