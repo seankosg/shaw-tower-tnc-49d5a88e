@@ -183,7 +183,15 @@ function UsersTab() {
                   p.user_type === 'hdec' || p.user_type === 'pm_pd' ? p.hdec_pic_name : null;
                 return (
                   <TableRow key={p.id}>
-                    <TableCell className="font-mono text-xs">{p.login_id ?? '—'}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <button
+                        onClick={() => editLoginId(p)}
+                        className="hover:underline"
+                        title="Click to edit Login ID"
+                      >
+                        {p.login_id ?? '—'}
+                      </button>
+                    </TableCell>
                     <TableCell className="font-medium">{p.name ?? '—'}</TableCell>
                     <TableCell><Badge variant="outline" className="text-xs">{USER_TYPE_LABELS[p.user_type]}</Badge></TableCell>
                     <TableCell className="text-xs">{linked ?? '—'}</TableCell>
