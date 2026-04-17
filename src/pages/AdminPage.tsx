@@ -414,10 +414,70 @@ function CreateUserDialog({
 
 /* ═══════ Tab: Subcontractor / Sub-Sub / HDEC PIC Master ═══════ */
 function MastersTab() {
+  const { toast } = useToast();
+  const [syncing, setSyncing] = useState(false);
+
+  const syncMissingUsers = async () => {
+    setSyncing(true);
+    let created = 0, failed = 0, skipped = 0;
+    try {
+      const [{ data: subs }, { data: pics }, { data: profiles }] = await Promise.all([
+        supabase.from('subcontractor_master').select('id, name, type, parent_subcontractor_id, is_active').eq('is_active', true),
+        supabase.from('hdec_pic_master').select('id, name, is_active').eq('is_active', true),
+        supabase.from('profiles').select('subcontractor_name, subsub_name, hdec_pic_name'),
+      ]);
+      const subProfiles = new Set((profiles || []).map(p => (p.subcontractor_name || '').toLowerCase().trim()).filter(Boolean));
+      const subsubProfiles = new Set((profiles || []).map(p => (p.subsub_name || '').toLowerCase().trim()).filter(Boolean));
+      const picProfiles = new Set((profiles || []).map(p => (p.hdec_pic_name || '').toLowerCase().trim()).filter(Boolean));
+      const subById = new Map((subs || []).map(s => [s.id, s.name]));
+
+      for (const s of subs || []) {
+        const key = s.name.toLowerCase().trim();
+        const t = (s as any).type ?? 'sub';
+        const exists = t === 'sub' ? subProfiles.has(key) : subsubProfiles.has(key);
+        if (exists) { skipped++; continue; }
+        const parentName = t === 'subsub' ? (subById.get((s as any).parent_subcontractor_id) ?? null) : null;
+        const { error } = await supabase.functions.invoke('auto-create-master-user', {
+          body: {
+            name: s.name,
+            master_type: t === 'sub' ? 'subcontractor' : 'subsub',
+            subcontractor_name: t === 'sub' ? s.name : parentName,
+            subsub_name: t === 'subsub' ? s.name : null,
+          },
+        });
+        if (error) failed++; else created++;
+      }
+      for (const p of pics || []) {
+        const key = p.name.toLowerCase().trim();
+        if (picProfiles.has(key)) { skipped++; continue; }
+        const { error } = await supabase.functions.invoke('auto-create-master-user', {
+          body: { name: p.name, master_type: 'hdec_pic', hdec_pic_name: p.name },
+        });
+        if (error) failed++; else created++;
+      }
+      toast({
+        title: 'Sync complete',
+        description: `${created} created, ${skipped} already exist, ${failed} failed`,
+      });
+    } catch (e: any) {
+      toast({ title: 'Sync failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <SubcontractorMasterTable />
-      <MasterTable table="hdec_pic_master" title="HDEC PIC Master" />
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button onClick={syncMissingUsers} disabled={syncing} variant="outline" size="sm">
+          <KeyRound className="mr-2 h-4 w-4" />
+          {syncing ? 'Syncing...' : 'Sync Missing Users'}
+        </Button>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <SubcontractorMasterTable />
+        <MasterTable table="hdec_pic_master" title="HDEC PIC Master" />
+      </div>
     </div>
   );
 }
