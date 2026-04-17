@@ -23,7 +23,7 @@ import { Shield, Plus, KeyRound, Trash2, Pencil } from 'lucide-react';
 interface Profile {
   id: string; user_id: string; name: string | null; email: string | null;
   login_id: string | null; user_type: UserType;
-  subcontractor_name: string | null; hdec_pic_name: string | null;
+  subcontractor_name: string | null; subsub_name: string | null; hdec_pic_name: string | null;
   must_change_password: boolean; is_active: boolean;
 }
 interface UserRole { id: string; user_id: string; role: AppRole; }
@@ -43,7 +43,7 @@ interface ChangeLogRow {
   id: string; subtest_id: string; changed_field: string; old_value: string | null;
   new_value: string | null; changed_by: string | null; changed_at: string; change_source: string | null;
 }
-interface MasterRow { id: string; name: string; is_active: boolean; }
+interface MasterRow { id: string; name: string; is_active: boolean; type?: 'sub' | 'subsub'; parent_subcontractor_id?: string | null; }
 
 export default function AdminPage() {
   const { isAdminOrSuperuser } = useAuth();
