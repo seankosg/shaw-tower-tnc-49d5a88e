@@ -124,14 +124,53 @@ function ColumnFilter({ column, type, options }: {
   );
 }
 
+const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
+
 export default function SubtestList() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const storageKey = user?.id ? `subtest-list-state:${user.id}` : 'subtest-list-state:anon';
+
   const [data, setData] = useState<SubtestRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [stateLoaded, setStateLoaded] = useState(false);
+  const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
+
+  // Load persisted state when user/storageKey changes
+  useEffect(() => {
+    setStateLoaded(false);
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setSorting(Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING);
+        setColumnFilters(Array.isArray(parsed.columnFilters) ? parsed.columnFilters : []);
+        setGlobalFilter(typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '');
+      } else {
+        setSorting(DEFAULT_SORTING);
+        setColumnFilters([]);
+        setGlobalFilter('');
+      }
+    } catch {
+      setSorting(DEFAULT_SORTING);
+      setColumnFilters([]);
+      setGlobalFilter('');
+    }
+    setStateLoaded(true);
+  }, [storageKey]);
+
+  // Persist on change (only after initial load to avoid overwriting)
+  useEffect(() => {
+    if (!stateLoaded) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ sorting, columnFilters, globalFilter }));
+    } catch {
+      // ignore quota errors
+    }
+  }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter]);
 
   useEffect(() => {
     fetchData();
