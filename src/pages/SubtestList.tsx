@@ -331,14 +331,15 @@ export default function SubtestList() {
 
       {/* Scrollable table with sticky header */}
       <div className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
-        <Table>
+        <Table style={{ width: table.getTotalSize(), tableLayout: 'fixed' }}>
           <TableHeader className="sticky top-0 z-10">
             {table.getHeaderGroups().map(hg => (
               <TableRow key={hg.id} className="border-b-0">
                 {hg.headers.map(header => (
                   <TableHead
                     key={header.id}
-                    className="text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b"
+                    style={{ width: header.getSize() }}
+                    className="relative text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b"
                     onClick={header.column.getToggleSortingHandler()}
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
@@ -352,6 +353,17 @@ export default function SubtestList() {
                         )}
                       </span>
                     )}
+                    {header.column.getCanResize() && (
+                      <div
+                        onMouseDown={header.getResizeHandler()}
+                        onTouchStart={header.getResizeHandler()}
+                        onClick={(e) => e.stopPropagation()}
+                        className={cn(
+                          'absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40',
+                          header.column.getIsResizing() && 'bg-primary/60'
+                        )}
+                      />
+                    )}
                   </TableHead>
                 ))}
               </TableRow>
@@ -362,7 +374,11 @@ export default function SubtestList() {
                 const meta = header.column.columnDef.meta as any;
                 const canFilter = header.column.getCanFilter();
                 return (
-                  <TableHead key={`filter-${header.id}`} className="py-1 px-1 bg-muted/30">
+                  <TableHead
+                    key={`filter-${header.id}`}
+                    style={{ width: header.getSize() }}
+                    className="py-1 px-1 bg-muted/30"
+                  >
                     {canFilter ? (
                       <ColumnFilter
                         column={header.column}
