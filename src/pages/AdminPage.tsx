@@ -10,17 +10,23 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { ROLE_LABELS, type AppRole } from '@/types/enums';
-import { Shield } from 'lucide-react';
+import {
+  ALL_ROLES, ALL_USER_TYPES, ROLE_LABELS, USER_TYPE_LABELS,
+  type AppRole, type UserType,
+} from '@/types/enums';
+import { Shield, Plus, KeyRound, Trash2 } from 'lucide-react';
 
 /* ───── Types ───── */
 interface Profile {
-  id: string; user_id: string; name: string | null; email: string | null; is_active: boolean;
+  id: string; user_id: string; name: string | null; email: string | null;
+  login_id: string | null; user_type: UserType;
+  subcontractor_name: string | null; hdec_pic_name: string | null;
+  must_change_password: boolean; is_active: boolean;
 }
-interface UserRole {
-  id: string; user_id: string; role: AppRole;
-}
+interface UserRole { id: string; user_id: string; role: AppRole; }
 interface SystemRow {
   id: string; system_code: string; system_name_std: string | null; discipline: string | null;
   is_active: boolean; is_auto_created: boolean; requires_admin_review: boolean;
@@ -37,13 +43,10 @@ interface ChangeLogRow {
   id: string; subtest_id: string; changed_field: string; old_value: string | null;
   new_value: string | null; changed_by: string | null; changed_at: string; change_source: string | null;
 }
-
-const ALL_ROLES: AppRole[] = ['subcontractor', 'hdec_engineer', 'manager', 'superuser', 'admin'];
+interface MasterRow { id: string; name: string; is_active: boolean; }
 
 export default function AdminPage() {
-  const { isAdminOrSuperuser, session } = useAuth();
-
-  // In development, skip auth check to allow preview testing
+  const { isAdminOrSuperuser } = useAuth();
   const isDev = import.meta.env.DEV;
   const hasAccess = isDev || isAdminOrSuperuser;
 
@@ -62,6 +65,7 @@ export default function AdminPage() {
       <Tabs defaultValue="users">
         <TabsList className="flex-wrap">
           <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="masters">Subcontractor / HDEC PIC</TabsTrigger>
           <TabsTrigger value="systems">Systems</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="fields">Field Config</TabsTrigger>
@@ -69,6 +73,7 @@ export default function AdminPage() {
         </TabsList>
 
         <TabsContent value="users"><UsersTab /></TabsContent>
+        <TabsContent value="masters"><MastersTab /></TabsContent>
         <TabsContent value="systems"><SystemsTab /></TabsContent>
         <TabsContent value="permissions"><PermissionsTab /></TabsContent>
         <TabsContent value="fields"><FieldConfigTab /></TabsContent>
@@ -83,29 +88,36 @@ function UsersTab() {
   const { toast } = useToast();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [roles, setRoles] = useState<UserRole[]>([]);
+  const [subcons, setSubcons] = useState<MasterRow[]>([]);
+  const [hdecPics, setHdecPics] = useState<MasterRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
-    const [p, r] = await Promise.all([
-      supabase.from('profiles').select('*').order('name'),
+    const [p, r, s, h] = await Promise.all([
+      supabase.from('profiles').select('*').order('login_id'),
       supabase.from('user_roles').select('*'),
+      supabase.from('subcontractor_master').select('*').eq('is_active', true).order('name'),
+      supabase.from('hdec_pic_master').select('*').eq('is_active', true).order('name'),
     ]);
     if (p.data) setProfiles(p.data as Profile[]);
     if (r.data) setRoles(r.data as UserRole[]);
+    if (s.data) setSubcons(s.data as MasterRow[]);
+    if (h.data) setHdecPics(h.data as MasterRow[]);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
 
-  const getUserRoles = (uid: string) => roles.filter(r => r.user_id === uid);
+  const getUserRole = (uid: string): AppRole | undefined =>
+    roles.find(r => r.user_id === uid)?.role;
 
-  const toggleRole = async (uid: string, role: AppRole, hasRole: boolean) => {
-    if (hasRole) {
-      const target = roles.find(r => r.user_id === uid && r.role === role);
-      if (target) await supabase.from('user_roles').delete().eq('id', target.id);
-    } else {
-      await supabase.from('user_roles').insert({ user_id: uid, role });
+  const setUserRole = async (uid: string, role: AppRole) => {
+    const existing = roles.filter(r => r.user_id === uid);
+    if (existing.length > 0) {
+      await supabase.from('user_roles').delete().eq('user_id', uid);
     }
+    await supabase.from('user_roles').insert({ user_id: uid, role });
     toast({ title: 'Role updated' });
     load();
   };
@@ -116,48 +128,79 @@ function UsersTab() {
     load();
   };
 
+  const resetPassword = async (profile: Profile) => {
+    if (!confirm(`Reset password for ${profile.login_id} to SHAW00?`)) return;
+    const { error } = await supabase.functions.invoke('admin-reset-password', {
+      body: { user_id: profile.user_id },
+    });
+    if (error) toast({ title: 'Reset failed', description: error.message, variant: 'destructive' });
+    else toast({ title: 'Password reset to SHAW00' });
+    load();
+  };
+
   if (loading) return <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>;
 
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base">User Management</CardTitle></CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">User Management</CardTitle>
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm"><Plus className="mr-1 h-4 w-4" /> New User</Button>
+          </DialogTrigger>
+          <CreateUserDialog
+            subcons={subcons}
+            hdecPics={hdecPics}
+            onCreated={() => { setCreateOpen(false); load(); }}
+          />
+        </Dialog>
+      </CardHeader>
       <CardContent>
         <div className="overflow-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Login ID</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Roles</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Linked Master</TableHead>
+                <TableHead>Role</TableHead>
                 <TableHead>Active</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {profiles.map(p => {
-                const userRoles = getUserRoles(p.user_id);
+                const role = getUserRole(p.user_id);
+                const linked =
+                  p.user_type === 'subcontractor' ? p.subcontractor_name :
+                  p.user_type === 'hdec' || p.user_type === 'pm_pd' ? p.hdec_pic_name : null;
                 return (
                   <TableRow key={p.id}>
+                    <TableCell className="font-mono text-xs">{p.login_id ?? '—'}</TableCell>
                     <TableCell className="font-medium">{p.name ?? '—'}</TableCell>
-                    <TableCell>{p.email ?? '—'}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-xs">{USER_TYPE_LABELS[p.user_type]}</Badge></TableCell>
+                    <TableCell className="text-xs">{linked ?? '—'}</TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {ALL_ROLES.map(role => {
-                          const has = userRoles.some(r => r.role === role);
-                          return (
-                            <Badge
-                              key={role}
-                              variant={has ? 'default' : 'outline'}
-                              className="cursor-pointer text-xs"
-                              onClick={() => toggleRole(p.user_id, role, has)}
-                            >
-                              {ROLE_LABELS[role]}
-                            </Badge>
-                          );
-                        })}
-                      </div>
+                      <Select value={role ?? ''} onValueChange={(v) => setUserRole(p.user_id, v as AppRole)}>
+                        <SelectTrigger className="h-8 w-[140px]"><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectContent>
+                          {ALL_ROLES.map(r => (
+                            <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
                       <Switch checked={p.is_active} onCheckedChange={() => toggleActive(p)} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button size="sm" variant="outline" onClick={() => resetPassword(p)}>
+                        <KeyRound className="mr-1 h-3.5 w-3.5" /> Reset PW
+                      </Button>
+                      {p.must_change_password && (
+                        <Badge variant="secondary" className="ml-2 text-xs">PW change pending</Badge>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
@@ -165,6 +208,205 @@ function UsersTab() {
             </TableBody>
           </Table>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ───── Create User Dialog ───── */
+function CreateUserDialog({
+  subcons, hdecPics, onCreated,
+}: {
+  subcons: MasterRow[]; hdecPics: MasterRow[]; onCreated: () => void;
+}) {
+  const { toast } = useToast();
+  const [loginId, setLoginId] = useState('');
+  const [name, setName] = useState('');
+  const [userType, setUserType] = useState<UserType>('hdec');
+  const [role, setRole] = useState<AppRole>('user');
+  const [subconName, setSubconName] = useState<string>('');
+  const [hdecPicName, setHdecPicName] = useState<string>('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!/^[a-z0-9_]{3,32}$/.test(loginId.trim().toLowerCase())) {
+      toast({ title: 'Invalid User ID', description: '3–32 chars, lowercase letters / digits / underscore only.', variant: 'destructive' });
+      return;
+    }
+    if (userType === 'subcontractor' && !subconName) {
+      toast({ title: 'Subcontractor required', variant: 'destructive' });
+      return;
+    }
+    setSubmitting(true);
+    const { data, error } = await supabase.functions.invoke('admin-create-user', {
+      body: {
+        login_id: loginId.trim().toLowerCase(),
+        name: name.trim(),
+        user_type: userType,
+        role,
+        subcontractor_name: userType === 'subcontractor' ? subconName : null,
+        hdec_pic_name: (userType === 'hdec' || userType === 'pm_pd') ? (hdecPicName || null) : null,
+      },
+    });
+    setSubmitting(false);
+    if (error || (data as any)?.error) {
+      toast({ title: 'Create failed', description: error?.message ?? (data as any)?.error, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'User created', description: `Initial password: SHAW00` });
+    setLoginId(''); setName(''); setSubconName(''); setHdecPicName('');
+    onCreated();
+  };
+
+  return (
+    <DialogContent className="max-w-md">
+      <DialogHeader>
+        <DialogTitle>Create User</DialogTitle>
+        <DialogDescription>Initial password is <code className="font-mono">SHAW00</code>. User must change on first login.</DialogDescription>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="lid">User ID</Label>
+          <Input id="lid" value={loginId} onChange={(e) => setLoginId(e.target.value)} placeholder="e.g. kim_hdec" required />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="nm">Name</Label>
+          <Input id="nm" value={name} onChange={(e) => setName(e.target.value)} required />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>User Type</Label>
+            <Select value={userType} onValueChange={(v) => setUserType(v as UserType)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ALL_USER_TYPES.map(t => <SelectItem key={t} value={t}>{USER_TYPE_LABELS[t]}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Role</Label>
+            <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ALL_ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        {userType === 'subcontractor' && (
+          <div className="space-y-1.5">
+            <Label>Subcontractor</Label>
+            <Select value={subconName} onValueChange={setSubconName}>
+              <SelectTrigger><SelectValue placeholder="Select subcontractor" /></SelectTrigger>
+              <SelectContent>
+                {subcons.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">One account per subcontractor (DB-enforced).</p>
+          </div>
+        )}
+        {(userType === 'hdec' || userType === 'pm_pd') && (
+          <div className="space-y-1.5">
+            <Label>HDEC PIC (optional)</Label>
+            <Select value={hdecPicName} onValueChange={setHdecPicName}>
+              <SelectTrigger><SelectValue placeholder="Select HDEC PIC" /></SelectTrigger>
+              <SelectContent>
+                {hdecPics.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <DialogFooter>
+          <Button type="submit" disabled={submitting}>{submitting ? 'Creating...' : 'Create'}</Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  );
+}
+
+/* ═══════ Tab: Subcontractor / HDEC PIC Master ═══════ */
+function MastersTab() {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <MasterTable table="subcontractor_master" title="Subcontractor Master" />
+      <MasterTable table="hdec_pic_master" title="HDEC PIC Master" />
+    </div>
+  );
+}
+
+function MasterTable({ table, title }: { table: 'subcontractor_master' | 'hdec_pic_master'; title: string }) {
+  const { toast } = useToast();
+  const [rows, setRows] = useState<MasterRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newName, setNewName] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from(table).select('*').order('name');
+    if (data) setRows(data as MasterRow[]);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, [table]);
+
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    const { error } = await supabase.from(table).insert({ name: newName.trim() });
+    if (error) toast({ title: 'Add failed', description: error.message, variant: 'destructive' });
+    else { toast({ title: 'Added' }); setNewName(''); load(); }
+  };
+
+  const toggleActive = async (r: MasterRow) => {
+    await supabase.from(table).update({ is_active: !r.is_active }).eq('id', r.id);
+    load();
+  };
+
+  const remove = async (r: MasterRow) => {
+    if (!confirm(`Delete "${r.name}"?`)) return;
+    const { error } = await supabase.from(table).delete().eq('id', r.id);
+    if (error) toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
+    else load();
+  };
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <form onSubmit={add} className="flex gap-2">
+          <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Add new name..." />
+          <Button type="submit" size="sm"><Plus className="h-4 w-4" /></Button>
+        </form>
+        {loading ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">Loading...</p>
+        ) : (
+          <div className="max-h-[420px] overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead className="w-20 text-center">Active</TableHead>
+                  <TableHead className="w-12"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map(r => (
+                  <TableRow key={r.id}>
+                    <TableCell>{r.name}</TableCell>
+                    <TableCell className="text-center">
+                      <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
+                    </TableCell>
+                    <TableCell>
+                      <Button size="icon" variant="ghost" onClick={() => remove(r)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -253,7 +495,7 @@ function PermissionsTab() {
     setLoading(true);
     const [permRes, profRes, sysRes] = await Promise.all([
       supabase.from('user_system_permissions').select('*'),
-      supabase.from('profiles').select('id, user_id, name, email, is_active').eq('is_active', true),
+      supabase.from('profiles').select('*').eq('is_active', true),
       supabase.from('system_master').select('id, system_code').eq('is_active', true).order('system_code'),
     ]);
     if (permRes.data) setPerms(permRes.data as PermRow[]);
@@ -299,7 +541,7 @@ function PermissionsTab() {
                   const sys = systems.find(s => s.id === perm.system_id);
                   return (
                     <TableRow key={perm.id}>
-                      <TableCell>{prof?.name ?? prof?.email ?? perm.user_id.slice(0, 8)}</TableCell>
+                      <TableCell>{prof?.login_id ?? prof?.name ?? perm.user_id.slice(0, 8)}</TableCell>
                       <TableCell>{sys?.system_code ?? '—'}</TableCell>
                       {(['can_view', 'can_edit', 'can_import', 'can_export', 'can_create_key'] as const).map(f => (
                         <TableCell key={f} className="text-center">
