@@ -17,7 +17,11 @@ import {
   ALL_ROLES, ALL_USER_TYPES, ROLE_LABELS, USER_TYPE_LABELS,
   type AppRole, type UserType,
 } from '@/types/enums';
-import { Shield, Plus, KeyRound, Trash2, Pencil } from 'lucide-react';
+import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 /* ───── Types ───── */
 interface Profile {
@@ -93,6 +97,8 @@ function UsersTab() {
   const [hdecPics, setHdecPics] = useState<MasterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Profile | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -163,7 +169,18 @@ function UsersTab() {
     }
   };
 
-  if (loading) return <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>;
+  const hardDelete = async (profile: Profile) => {
+    const { error } = await supabase.functions.invoke('admin-delete-user', {
+      body: { user_id: profile.user_id },
+    });
+    if (error) {
+      toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'User permanently deleted' });
+      load();
+    }
+    setDeleteTarget(null);
+  };
 
   return (
     <Card>
@@ -229,12 +246,20 @@ function UsersTab() {
                       <Switch checked={p.is_active} onCheckedChange={() => toggleActive(p)} />
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline" onClick={() => resetPassword(p)}>
-                        <KeyRound className="mr-1 h-3.5 w-3.5" /> Reset PW
-                      </Button>
-                      {p.must_change_password && (
-                        <Badge variant="secondary" className="ml-2 text-xs">PW change pending</Badge>
-                      )}
+                      <div className="flex flex-wrap items-center justify-end gap-1">
+                        {p.must_change_password && (
+                          <Badge variant="secondary" className="text-xs">PW pending</Badge>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => setEditTarget(p)} title="Edit user">
+                          <UserCog className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => resetPassword(p)} title="Reset password">
+                          <KeyRound className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(p)} title="Delete permanently">
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -243,6 +268,36 @@ function UsersTab() {
           </Table>
         </div>
       </CardContent>
+      {editTarget && (
+        <EditUserDialog
+          profile={editTarget}
+          subcons={subcons}
+          subsubs={subsubs}
+          hdecPics={hdecPics}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => { setEditTarget(null); load(); }}
+        />
+      )}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove <strong>{deleteTarget?.login_id}</strong> ({deleteTarget?.name}) and cannot be undone.
+              Audit log references will be preserved but unlinked. Consider deactivating instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTarget && hardDelete(deleteTarget)}
+            >
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
@@ -412,7 +467,165 @@ function CreateUserDialog({
   );
 }
 
-/* ═══════ Tab: Subcontractor / Sub-Sub / HDEC PIC Master ═══════ */
+/* ───── Edit User Dialog ───── */
+function EditUserDialog({
+  profile, subcons, subsubs, hdecPics, onClose, onSaved,
+}: {
+  profile: Profile;
+  subcons: MasterRow[];
+  subsubs: MasterRow[];
+  hdecPics: MasterRow[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [name, setName] = useState(profile.name ?? '');
+  const [userType, setUserType] = useState<UserType>(profile.user_type);
+  const [affiliation, setAffiliation] = useState<'sub' | 'subsub'>(profile.subsub_name ? 'subsub' : 'sub');
+  const [subconName, setSubconName] = useState<string>(profile.subcontractor_name ?? '');
+  const initialSubsubId = subsubs.find(s => s.name === profile.subsub_name)?.id ?? '';
+  const [subsubId, setSubsubId] = useState<string>(initialSubsubId);
+  const [hdecPicName, setHdecPicName] = useState<string>(profile.hdec_pic_name ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const selectedSubsub = subsubs.find(s => s.id === subsubId);
+  const subsubParent = selectedSubsub
+    ? subcons.find(s => s.id === selectedSubsub.parent_subcontractor_id)
+    : null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    let payloadSubconName: string | null = null;
+    let payloadSubsubName: string | null = null;
+    let payloadHdecPicName: string | null = null;
+
+    if (userType === 'subcontractor') {
+      if (affiliation === 'sub') {
+        if (!subconName) { toast({ title: 'Subcontractor required', variant: 'destructive' }); return; }
+        payloadSubconName = subconName;
+      } else {
+        if (!selectedSubsub || !subsubParent) {
+          toast({ title: 'Sub-Sub with valid parent required', variant: 'destructive' });
+          return;
+        }
+        payloadSubsubName = selectedSubsub.name;
+        payloadSubconName = subsubParent.name;
+      }
+    } else if (userType === 'hdec' || userType === 'pm_pd') {
+      payloadHdecPicName = hdecPicName || null;
+    }
+
+    setSaving(true);
+    const { data, error } = await supabase.functions.invoke('admin-update-user', {
+      body: {
+        user_id: profile.user_id,
+        name: name.trim(),
+        user_type: userType,
+        subcontractor_name: payloadSubconName,
+        subsub_name: payloadSubsubName,
+        hdec_pic_name: payloadHdecPicName,
+      },
+    });
+    setSaving(false);
+    if (error || (data as any)?.error) {
+      toast({ title: 'Update failed', description: error?.message ?? (data as any)?.error, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'User updated' });
+    onSaved();
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit User</DialogTitle>
+          <DialogDescription>Login ID <code className="font-mono">{profile.login_id}</code> — use the Login ID action to change it.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-name">Name</Label>
+            <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>User Type</Label>
+            <Select value={userType} onValueChange={(v) => setUserType(v as UserType)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ALL_USER_TYPES.map(t => <SelectItem key={t} value={t}>{USER_TYPE_LABELS[t]}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {userType === 'subcontractor' && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Affiliation</Label>
+                <div className="flex gap-4 text-sm">
+                  <label className="flex items-center gap-1.5">
+                    <input type="radio" checked={affiliation === 'sub'} onChange={() => setAffiliation('sub')} />
+                    Subcontractor
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input type="radio" checked={affiliation === 'subsub'} onChange={() => setAffiliation('subsub')} />
+                    Sub-Sub (재하도)
+                  </label>
+                </div>
+              </div>
+              {affiliation === 'sub' ? (
+                <div className="space-y-1.5">
+                  <Label>Subcontractor</Label>
+                  <Select value={subconName} onValueChange={setSubconName}>
+                    <SelectTrigger><SelectValue placeholder="Select subcontractor" /></SelectTrigger>
+                    <SelectContent>
+                      {subcons.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label>Sub-Sub Company</Label>
+                  <Select value={subsubId} onValueChange={setSubsubId}>
+                    <SelectTrigger><SelectValue placeholder="Select Sub-Sub" /></SelectTrigger>
+                    <SelectContent>
+                      {subsubs.map(s => {
+                        const parent = subcons.find(p => p.id === s.parent_subcontractor_id);
+                        return (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}{parent ? ` (← ${parent.name})` : ''}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  {subsubParent && (
+                    <p className="text-xs text-muted-foreground">Parent: <strong>{subsubParent.name}</strong></p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+          {(userType === 'hdec' || userType === 'pm_pd') && (
+            <div className="space-y-1.5">
+              <Label>HDEC PIC (optional)</Label>
+              <Select value={hdecPicName} onValueChange={setHdecPicName}>
+                <SelectTrigger><SelectValue placeholder="Select HDEC PIC" /></SelectTrigger>
+                <SelectContent>
+                  {hdecPics.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
 function MastersTab() {
   const { toast } = useToast();
   const [syncing, setSyncing] = useState(false);
@@ -536,7 +749,19 @@ function SubcontractorMasterTable() {
   };
 
   const toggleActive = async (r: MasterRow) => {
-    await supabase.from('subcontractor_master').update({ is_active: !r.is_active }).eq('id', r.id);
+    const newActive = !r.is_active;
+    await supabase.from('subcontractor_master').update({ is_active: newActive }).eq('id', r.id);
+    // Cascade to linked profiles
+    const col = (r.type ?? 'sub') === 'sub' ? 'subcontractor_name' : 'subsub_name';
+    const { data: linked } = await supabase
+      .from('profiles')
+      .update({ is_active: newActive } as any)
+      .eq(col, r.name)
+      .select('id');
+    toast({
+      title: newActive ? 'Activated' : 'Deactivated',
+      description: linked?.length ? `${linked.length} linked user(s) ${newActive ? 'activated' : 'deactivated'}` : undefined,
+    });
     load();
   };
 
@@ -554,10 +779,31 @@ function SubcontractorMasterTable() {
   };
 
   const remove = async (r: MasterRow) => {
-    if (!confirm(`Delete "${r.name}"?`)) return;
+    const col = (r.type ?? 'sub') === 'sub' ? 'subcontractor_name' : 'subsub_name';
+    // Block hard delete if any subtests or profiles still reference this name
+    const [{ count: subtestCount }, { count: profileCount }, { count: childCount }] = await Promise.all([
+      supabase.from('subtests').select('id', { count: 'exact', head: true }).eq(col, r.name),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).eq(col, r.name),
+      (r.type ?? 'sub') === 'sub'
+        ? supabase.from('subcontractor_master').select('id', { count: 'exact', head: true }).eq('parent_subcontractor_id', r.id)
+        : Promise.resolve({ count: 0 } as any),
+    ]);
+    const refs: string[] = [];
+    if (subtestCount) refs.push(`${subtestCount} subtest(s)`);
+    if (profileCount) refs.push(`${profileCount} user profile(s)`);
+    if (childCount) refs.push(`${childCount} Sub-Sub child(ren)`);
+    if (refs.length > 0) {
+      toast({
+        title: 'Cannot delete — references exist',
+        description: `Linked: ${refs.join(', ')}. Deactivate instead, or remove references first.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!confirm(`Permanently delete "${r.name}"? This cannot be undone.`)) return;
     const { error } = await supabase.from('subcontractor_master').delete().eq('id', r.id);
     if (error) toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
-    else load();
+    else { toast({ title: 'Deleted permanently' }); load(); }
   };
 
   return (
@@ -691,7 +937,21 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
   };
 
   const toggleActive = async (r: MasterRow) => {
-    await supabase.from(table).update({ is_active: !r.is_active }).eq('id', r.id);
+    const newActive = !r.is_active;
+    await supabase.from(table).update({ is_active: newActive }).eq('id', r.id);
+    let linkedCount = 0;
+    if (table === 'hdec_pic_master') {
+      const { data: linked } = await supabase
+        .from('profiles')
+        .update({ is_active: newActive } as any)
+        .eq('hdec_pic_name', r.name)
+        .select('id');
+      linkedCount = linked?.length ?? 0;
+    }
+    toast({
+      title: newActive ? 'Activated' : 'Deactivated',
+      description: linkedCount ? `${linkedCount} linked user(s) ${newActive ? 'activated' : 'deactivated'}` : undefined,
+    });
     load();
   };
 
@@ -709,10 +969,27 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
   };
 
   const remove = async (r: MasterRow) => {
-    if (!confirm(`Delete "${r.name}"?`)) return;
+    if (table === 'hdec_pic_master') {
+      const [{ count: subtestCount }, { count: profileCount }] = await Promise.all([
+        supabase.from('subtests').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name),
+      ]);
+      const refs: string[] = [];
+      if (subtestCount) refs.push(`${subtestCount} subtest(s)`);
+      if (profileCount) refs.push(`${profileCount} user profile(s)`);
+      if (refs.length > 0) {
+        toast({
+          title: 'Cannot delete — references exist',
+          description: `Linked: ${refs.join(', ')}. Deactivate instead.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+    if (!confirm(`Permanently delete "${r.name}"? This cannot be undone.`)) return;
     const { error } = await supabase.from(table).delete().eq('id', r.id);
     if (error) toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
-    else load();
+    else { toast({ title: 'Deleted permanently' }); load(); }
   };
 
   return (
