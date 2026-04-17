@@ -246,12 +246,20 @@ function UsersTab() {
                       <Switch checked={p.is_active} onCheckedChange={() => toggleActive(p)} />
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline" onClick={() => resetPassword(p)}>
-                        <KeyRound className="mr-1 h-3.5 w-3.5" /> Reset PW
-                      </Button>
-                      {p.must_change_password && (
-                        <Badge variant="secondary" className="ml-2 text-xs">PW change pending</Badge>
-                      )}
+                      <div className="flex flex-wrap items-center justify-end gap-1">
+                        {p.must_change_password && (
+                          <Badge variant="secondary" className="text-xs">PW pending</Badge>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => setEditTarget(p)} title="Edit user">
+                          <UserCog className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => resetPassword(p)} title="Reset password">
+                          <KeyRound className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(p)} title="Delete permanently">
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -260,6 +268,36 @@ function UsersTab() {
           </Table>
         </div>
       </CardContent>
+      {editTarget && (
+        <EditUserDialog
+          profile={editTarget}
+          subcons={subcons}
+          subsubs={subsubs}
+          hdecPics={hdecPics}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => { setEditTarget(null); load(); }}
+        />
+      )}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove <strong>{deleteTarget?.login_id}</strong> ({deleteTarget?.name}) and cannot be undone.
+              Audit log references will be preserved but unlinked. Consider deactivating instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTarget && hardDelete(deleteTarget)}
+            >
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
