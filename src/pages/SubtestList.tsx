@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel,
   flexRender, type ColumnDef, type SortingState, type ColumnFiltersState,
@@ -124,6 +124,7 @@ const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
 export default function SubtestList() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const storageKey = user?.id ? `subtest-list-state:${user.id}` : 'subtest-list-state:anon';
 
   const [data, setData] = useState<SubtestRow[]>([]);
@@ -134,6 +135,9 @@ export default function SubtestList() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
+  // status URL filter (overdue / at_risk) — applied client-side
+  const urlStatusFilter = searchParams.get('status'); // 'overdue' | 'at_risk' | null
+  const urlAtRiskDays = Number(searchParams.get('at_risk_days') ?? '2');
   const tableRef = useRef<HTMLDivElement>(null);
 
   const autoSizeColumn = (columnId: string) => {
