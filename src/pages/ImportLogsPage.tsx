@@ -4,8 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Trash2, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 interface UploadBatch {
   id: string;
@@ -46,21 +52,23 @@ const actionColor: Record<string, string> = {
 
 export default function ImportLogsPage() {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { isAdminOrSuperuser } = useAuth();
+  const canDelete = isAdminOrSuperuser || import.meta.env.DEV;
+
   const [batches, setBatches] = useState<UploadBatch[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
   const [rowLogs, setRowLogs] = useState<RowLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchBatches();
-  }, []);
+  useEffect(() => { fetchBatches(); }, []);
 
   const fetchBatches = async () => {
     setLoading(true);
     const { data } = await supabase.from('upload_batches')
       .select('id, uploaded_file_name, uploaded_at, import_type, status, total_rows, success_rows, skipped_rows, rejected_rows')
-      .order('uploaded_at', { ascending: false })
-      .limit(100);
+      .order('uploaded_at', { ascending: false }).limit(100);
     if (data) setBatches(data);
     setLoading(false);
   };
@@ -69,10 +77,26 @@ export default function ImportLogsPage() {
     setSelectedBatch(id);
     const { data } = await supabase.from('upload_row_logs')
       .select('id, raw_row_no, raw_system_name, item_no, mos_code, action_taken, reason_code, reason_detail')
-      .eq('upload_id', id)
-      .order('raw_row_no', { ascending: true })
-      .limit(500);
+      .eq('upload_id', id).order('raw_row_no', { ascending: true }).limit(500);
     if (data) setRowLogs(data);
+  };
+
+  const deleteBatch = async (batch: UploadBatch) => {
+    setDeletingId(batch.id);
+    try {
+      const { error: e1 } = await supabase.from('subtests').delete().eq('source_upload_id', batch.id);
+      if (e1) throw e1;
+      const { error: e2 } = await supabase.from('upload_row_logs').delete().eq('upload_id', batch.id);
+      if (e2) throw e2;
+      const { error: e3 } = await supabase.from('upload_batches').delete().eq('id', batch.id);
+      if (e3) throw e3;
+      toast({ title: 'Batch deleted', description: `Removed ${batch.uploaded_file_name} and its data` });
+      await fetchBatches();
+    } catch (e: any) {
+      toast({ title: 'Delete failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -101,25 +125,51 @@ export default function ImportLogsPage() {
                     <TableHead className="text-xs text-right">Success</TableHead>
                     <TableHead className="text-xs text-right">Skipped</TableHead>
                     <TableHead className="text-xs text-right">Rejected</TableHead>
+                    {canDelete && <TableHead className="text-xs w-10"></TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={canDelete ? 9 : 8} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
                   ) : batches.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No import history</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={canDelete ? 9 : 8} className="text-center py-8 text-muted-foreground">No import history</TableCell></TableRow>
                   ) : batches.map(b => (
-                    <TableRow key={b.id} className="cursor-pointer hover:bg-muted/50" onClick={() => selectBatch(b.id)}>
-                      <TableCell className="text-xs font-medium">{b.uploaded_file_name}</TableCell>
-                      <TableCell className="text-xs capitalize">{b.import_type || '—'}</TableCell>
-                      <TableCell className="text-xs">{new Date(b.uploaded_at).toLocaleString()}</TableCell>
-                      <TableCell>
+                    <TableRow key={b.id} className="hover:bg-muted/50">
+                      <TableCell className="text-xs font-medium cursor-pointer" onClick={() => selectBatch(b.id)}>{b.uploaded_file_name}</TableCell>
+                      <TableCell className="text-xs capitalize cursor-pointer" onClick={() => selectBatch(b.id)}>{b.import_type || '—'}</TableCell>
+                      <TableCell className="text-xs cursor-pointer" onClick={() => selectBatch(b.id)}>{new Date(b.uploaded_at).toLocaleString()}</TableCell>
+                      <TableCell className="cursor-pointer" onClick={() => selectBatch(b.id)}>
                         <Badge variant="outline" className={`text-xs ${statusColor[b.status] || ''}`}>{b.status}</Badge>
                       </TableCell>
-                      <TableCell className="text-xs text-right">{b.total_rows ?? 0}</TableCell>
-                      <TableCell className="text-xs text-right">{b.success_rows ?? 0}</TableCell>
-                      <TableCell className="text-xs text-right">{b.skipped_rows ?? 0}</TableCell>
-                      <TableCell className="text-xs text-right">{b.rejected_rows ?? 0}</TableCell>
+                      <TableCell className="text-xs text-right cursor-pointer" onClick={() => selectBatch(b.id)}>{b.total_rows ?? 0}</TableCell>
+                      <TableCell className="text-xs text-right cursor-pointer" onClick={() => selectBatch(b.id)}>{b.success_rows ?? 0}</TableCell>
+                      <TableCell className="text-xs text-right cursor-pointer" onClick={() => selectBatch(b.id)}>{b.skipped_rows ?? 0}</TableCell>
+                      <TableCell className="text-xs text-right cursor-pointer" onClick={() => selectBatch(b.id)}>{b.rejected_rows ?? 0}</TableCell>
+                      {canDelete && (
+                        <TableCell className="text-right">
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" disabled={deletingId === b.id}>
+                                {deletingId === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete import batch?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will permanently delete <strong>{b.uploaded_file_name}</strong>, all subtests imported from it, and the row logs. This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => deleteBatch(b)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
