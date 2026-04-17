@@ -219,7 +219,12 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         continue;
       }
 
-      const { data: existing } = await supabase.from('subtests')
+      // Auto-register masters mentioned in this row
+      await ensureSubcontractor(row.subcontractor_name);
+      await ensureSubsub(row.subsub_name, row.subcontractor_name);
+      await ensureHdecPic(row.hdec_pic_name);
+
+
         .select('id, updated_at, row_version')
         .eq('project_id', projectId!).eq('system_id', systemId)
         .eq('item_no', row.item_no).eq('mos_code', row.mos_code).eq('is_active', true)
