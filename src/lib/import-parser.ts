@@ -63,6 +63,29 @@ const HEADER_MAP: Record<string, string> = {
   'hdecpic': 'hdec_pic_name',
   'hdec_pic_name': 'hdec_pic_name',
   'hdec pic name': 'hdec_pic_name',
+  'r1 status': 'r1_status',
+  'r1status': 'r1_status',
+  'r1_status': 'r1_status',
+  'r1': 'r1_status',
+  'r2 status': 'r2_status',
+  'r2status': 'r2_status',
+  'r2_status': 'r2_status',
+  'r2': 'r2_status',
+  'aconex': 'aconex_ref_no',
+  'aconex ref': 'aconex_ref_no',
+  'aconex ref no': 'aconex_ref_no',
+  'aconex_ref_no': 'aconex_ref_no',
+  'aconex no': 'aconex_ref_no',
+  'remarks': 'remarks',
+  'remark': 'remarks',
+  'note': 'remarks',
+  'notes': 'remarks',
+  'punchlist': 'punchlist_comments',
+  'punch list': 'punchlist_comments',
+  'punchlist comments': 'punchlist_comments',
+  'punch list comments': 'punchlist_comments',
+  'punchlist_comments': 'punchlist_comments',
+  'punchlist comment': 'punchlist_comments',
 };
 
 function normalizeHeader(raw: string): string {
@@ -146,6 +169,11 @@ export interface ParsedSubtest {
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
+  r1_status: string | null;
+  r2_status: string | null;
+  aconex_ref_no: string | null;
+  remarks: string | null;
+  punchlist_comments: string | null;
 }
 
 // ── Parse Excel file ──────────────────────────────────────────────────
