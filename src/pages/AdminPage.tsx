@@ -143,6 +143,26 @@ function UsersTab() {
     load();
   };
 
+  const editLoginId = async (profile: Profile) => {
+    const next = window.prompt(`New Login ID for ${profile.name ?? profile.login_id}\n(3-32 chars: a-z, 0-9, _)`, profile.login_id ?? '');
+    if (!next) return;
+    const trimmed = next.trim().toLowerCase();
+    if (trimmed === profile.login_id) return;
+    if (!/^[a-z0-9_]{3,32}$/.test(trimmed)) {
+      toast({ title: 'Invalid Login ID', description: '3-32 chars: a-z 0-9 _', variant: 'destructive' });
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke('admin-update-login-id', {
+      body: { user_id: profile.user_id, new_login_id: trimmed },
+    });
+    if (error || (data as any)?.error) {
+      toast({ title: 'Update failed', description: error?.message ?? (data as any)?.error, variant: 'destructive' });
+    } else {
+      toast({ title: 'Login ID updated', description: `Now: ${trimmed}` });
+      load();
+    }
+  };
+
   if (loading) return <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>;
 
   return (
@@ -183,7 +203,15 @@ function UsersTab() {
                   p.user_type === 'hdec' || p.user_type === 'pm_pd' ? p.hdec_pic_name : null;
                 return (
                   <TableRow key={p.id}>
-                    <TableCell className="font-mono text-xs">{p.login_id ?? '—'}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <button
+                        onClick={() => editLoginId(p)}
+                        className="hover:underline"
+                        title="Click to edit Login ID"
+                      >
+                        {p.login_id ?? '—'}
+                      </button>
+                    </TableCell>
                     <TableCell className="font-medium">{p.name ?? '—'}</TableCell>
                     <TableCell><Badge variant="outline" className="text-xs">{USER_TYPE_LABELS[p.user_type]}</Badge></TableCell>
                     <TableCell className="text-xs">{linked ?? '—'}</TableCell>
@@ -441,6 +469,19 @@ function SubcontractorMasterTable() {
     load();
   };
 
+  const renameMaster = async (r: MasterRow, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === r.name) return;
+    const { error } = await supabase.from('subcontractor_master').update({ name: trimmed }).eq('id', r.id);
+    if (error) { toast({ title: 'Rename failed', description: error.message, variant: 'destructive' }); return; }
+    // Cascade to subtests + profiles
+    const col = (r.type ?? 'sub') === 'sub' ? 'subcontractor_name' : 'subsub_name';
+    await supabase.from('subtests').update({ [col]: trimmed } as any).eq(col, r.name);
+    await supabase.from('profiles').update({ [col]: trimmed } as any).eq(col, r.name);
+    toast({ title: 'Renamed', description: 'Linked subtests and profiles updated' });
+    load();
+  };
+
   const remove = async (r: MasterRow) => {
     if (!confirm(`Delete "${r.name}"?`)) return;
     const { error } = await supabase.from('subcontractor_master').delete().eq('id', r.id);
@@ -474,7 +515,7 @@ function SubcontractorMasterTable() {
                 <TableBody>
                   {subs.map(r => (
                     <TableRow key={r.id}>
-                      <TableCell>{r.name}</TableCell>
+                      <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
                       <TableCell className="text-center">
                         <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
                       </TableCell>
@@ -520,7 +561,7 @@ function SubcontractorMasterTable() {
                     const parent = subs.find(s => s.id === r.parent_subcontractor_id);
                     return (
                       <TableRow key={r.id}>
-                        <TableCell>{r.name}</TableCell>
+                        <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
                         <TableCell className="text-xs text-muted-foreground">{parent?.name ?? '—'}</TableCell>
                         <TableCell className="text-center">
                           <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
@@ -573,6 +614,19 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
     load();
   };
 
+  const renameRow = async (r: MasterRow, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === r.name) return;
+    const { error } = await supabase.from(table).update({ name: trimmed }).eq('id', r.id);
+    if (error) { toast({ title: 'Rename failed', description: error.message, variant: 'destructive' }); return; }
+    if (table === 'hdec_pic_master') {
+      await supabase.from('subtests').update({ hdec_pic_name: trimmed } as any).eq('hdec_pic_name', r.name);
+      await supabase.from('profiles').update({ hdec_pic_name: trimmed } as any).eq('hdec_pic_name', r.name);
+    }
+    toast({ title: 'Renamed', description: 'Linked records updated' });
+    load();
+  };
+
   const remove = async (r: MasterRow) => {
     if (!confirm(`Delete "${r.name}"?`)) return;
     const { error } = await supabase.from(table).delete().eq('id', r.id);
@@ -603,7 +657,7 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
               <TableBody>
                 {rows.map(r => (
                   <TableRow key={r.id}>
-                    <TableCell>{r.name}</TableCell>
+                    <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameRow(r, v)} /></TableCell>
                     <TableCell className="text-center">
                       <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
                     </TableCell>
@@ -1041,5 +1095,39 @@ function AuditTab() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/* ───── Inline editable name field ───── */
+function InlineNameEdit({ value, onSave }: { value: string; onSave: (v: string) => void | Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { setDraft(value); }, [value]);
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="text-left hover:underline"
+      >
+        {value}
+      </button>
+    );
+  }
+  const commit = async () => {
+    setEditing(false);
+    if (draft.trim() && draft.trim() !== value) await onSave(draft.trim());
+  };
+  return (
+    <Input
+      autoFocus
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') { setDraft(value); setEditing(false); }
+      }}
+      className="h-7 text-sm"
+    />
   );
 }
