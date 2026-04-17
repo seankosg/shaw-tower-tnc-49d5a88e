@@ -5,6 +5,7 @@ import {
   flexRender, type ColumnDef, type SortingState, type ColumnFiltersState,
 } from '@tanstack/react-table';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { DataSourceTag } from '@/components/shared/DataSourceTag';
 import { Input } from '@/components/ui/input';
@@ -123,14 +124,53 @@ function ColumnFilter({ column, type, options }: {
   );
 }
 
+const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
+
 export default function SubtestList() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const storageKey = user?.id ? `subtest-list-state:${user.id}` : 'subtest-list-state:anon';
+
   const [data, setData] = useState<SubtestRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [stateLoaded, setStateLoaded] = useState(false);
+  const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
+
+  // Load persisted state when user/storageKey changes
+  useEffect(() => {
+    setStateLoaded(false);
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setSorting(Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING);
+        setColumnFilters(Array.isArray(parsed.columnFilters) ? parsed.columnFilters : []);
+        setGlobalFilter(typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '');
+      } else {
+        setSorting(DEFAULT_SORTING);
+        setColumnFilters([]);
+        setGlobalFilter('');
+      }
+    } catch {
+      setSorting(DEFAULT_SORTING);
+      setColumnFilters([]);
+      setGlobalFilter('');
+    }
+    setStateLoaded(true);
+  }, [storageKey]);
+
+  // Persist on change (only after initial load to avoid overwriting)
+  useEffect(() => {
+    if (!stateLoaded) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ sorting, columnFilters, globalFilter }));
+    } catch {
+      // ignore quota errors
+    }
+  }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter]);
 
   useEffect(() => {
     fetchData();
@@ -194,9 +234,9 @@ export default function SubtestList() {
   );
 
   const columns = useMemo<ColumnDef<SubtestRow>[]>(() => [
+    { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn },
     { accessorKey: 'system_code', header: 'System', size: 100, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select' as const, filterOptions: systemOptions } },
-    { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn },
     { accessorKey: 'equipment', header: 'Equipment', size: 120, filterFn: textFilterFn,
       cell: ({ getValue }) => (
         <span className="truncate block max-w-[120px]">{getValue() as string || '—'}</span>
