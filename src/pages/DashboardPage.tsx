@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { AlertTriangle, CheckCircle2, Clock, ListChecks } from 'lucide-react';
 import type { TcStatus } from '@/types/enums';
+import { formatDdMmm } from '@/lib/format';
 
 interface SubtestRow {
   id: string;
@@ -320,13 +321,13 @@ export default function DashboardPage() {
                             {row.t1_status ?? '—'}
                           </Badge>
                         </TableCell>
-                        <TableCell>{row.t1_planned_date ?? '—'}</TableCell>
+                        <TableCell>{formatDdMmm(row.t1_planned_date)}</TableCell>
                         <TableCell>
                           <Badge variant={row.t2_status === 'Done' ? 'default' : 'secondary'}>
                             {row.t2_status ?? '—'}
                           </Badge>
                         </TableCell>
-                        <TableCell>{row.t2_planned_date ?? '—'}</TableCell>
+                        <TableCell>{formatDdMmm(row.t2_planned_date)}</TableCell>
                       </TableRow>
                     );
                   })}

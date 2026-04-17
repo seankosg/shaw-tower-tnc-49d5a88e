@@ -18,14 +18,7 @@ import { Search, Upload, Download, ChevronDown } from 'lucide-react';
 import type { TcStatus, DataSource } from '@/types/enums';
 import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS } from '@/types/enums';
 import { cn } from '@/lib/utils';
-
-const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const formatDdMmm = (v: string | null) => {
-  if (!v) return '—';
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return v;
-  return `${String(d.getDate()).padStart(2, '0')}-${MONTH_ABBR[d.getMonth()]}`;
-};
+import { formatDdMmm } from '@/lib/format';
 
 interface SubtestRow {
   id: string;
