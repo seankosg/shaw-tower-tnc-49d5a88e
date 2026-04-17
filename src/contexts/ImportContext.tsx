@@ -97,6 +97,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     if (!item.parsed) return null;
     const parsed = item.parsed;
     const res = { inserted: 0, updated: 0, skipped: 0, rejected: 0 };
+    const userCreateFails: string[] = [];
 
     const { data: projects } = await supabase.from('projects').select('id').eq('is_active', true).limit(1);
     const projectId = projects?.[0]?.id;
