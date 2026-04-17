@@ -75,25 +75,27 @@ function suggestBase(name: string, type: MasterType): string {
   return abbreviate6(name) ?? randomFallback('sub');
 }
 
+async function loginIdTaken(admin: ReturnType<typeof createClient>, lid: string): Promise<boolean> {
+  const { data } = await admin.from('profiles').select('id').eq('login_id', lid).maybeSingle();
+  return !!data;
+}
+
 async function findUniqueLoginId(
   admin: ReturnType<typeof createClient>,
   base: string,
 ): Promise<string> {
-  const exists = async (lid: string): Promise<boolean> => {
-    const { data } = await admin.from('profiles').select('id').eq('login_id', lid).maybeSingle();
-    return !!data;
-  };
-  if (!(await exists(base))) return base;
+  if (!(await loginIdTaken(admin, base))) return base;
+  // Try numeric suffixes keeping length reasonable
   for (let n = 2; n <= 99; n++) {
-    const candidate = base.length === 6 ? `${base.slice(0, 5)}${n > 9 ? n : '0' + n}`.slice(0, 6) : `${base}${n}`;
-    // Simpler: hyuele -> hyule2, hyule3 ... hyul10 (6 chars)
-    const c = base.length >= 5 ? `${base.slice(0, 6 - String(n).length)}${n}` : `${base}${n}`;
-    if (!(await exists(c))) return c;
+    const suffix = String(n);
+    const trimBase = base.length + suffix.length > 6 ? base.slice(0, 6 - suffix.length) : base;
+    const candidate = `${trimBase}${suffix}`;
+    if (candidate.length >= 3 && !(await loginIdTaken(admin, candidate))) return candidate;
   }
-  // fallback random
+  // Fallback random
   for (let i = 0; i < 20; i++) {
     const c = `${base.slice(0, 3)}${Math.floor(1000 + Math.random() * 9000)}`;
-    if (!(await exists(c))) return c;
+    if (!(await loginIdTaken(admin, c))) return c;
   }
   throw new Error('Unable to generate unique login_id');
 }
