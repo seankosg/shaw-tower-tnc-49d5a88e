@@ -675,9 +675,19 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    const { error } = await supabase.from(table).insert({ name: newName.trim() });
-    if (error) toast({ title: 'Add failed', description: error.message, variant: 'destructive' });
-    else { toast({ title: 'Added' }); setNewName(''); load(); }
+    const name = newName.trim();
+    const { error } = await supabase.from(table).insert({ name });
+    if (error) { toast({ title: 'Add failed', description: error.message, variant: 'destructive' }); return; }
+    if (table === 'hdec_pic_master') {
+      const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
+        body: { name, master_type: 'hdec_pic', hdec_pic_name: name },
+      });
+      if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
+      else toast({ title: 'Added', description: 'User account created (PW: SHAW00)' });
+    } else {
+      toast({ title: 'Added' });
+    }
+    setNewName(''); load();
   };
 
   const toggleActive = async (r: MasterRow) => {
