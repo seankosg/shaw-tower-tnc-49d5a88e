@@ -487,7 +487,7 @@ function SubcontractorMasterTable() {
                 <TableBody>
                   {subs.map(r => (
                     <TableRow key={r.id}>
-                      <TableCell>{r.name}</TableCell>
+                      <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
                       <TableCell className="text-center">
                         <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
                       </TableCell>
