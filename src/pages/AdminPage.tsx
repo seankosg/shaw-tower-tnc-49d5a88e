@@ -937,7 +937,21 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
   };
 
   const toggleActive = async (r: MasterRow) => {
-    await supabase.from(table).update({ is_active: !r.is_active }).eq('id', r.id);
+    const newActive = !r.is_active;
+    await supabase.from(table).update({ is_active: newActive }).eq('id', r.id);
+    let linkedCount = 0;
+    if (table === 'hdec_pic_master') {
+      const { data: linked } = await supabase
+        .from('profiles')
+        .update({ is_active: newActive } as any)
+        .eq('hdec_pic_name', r.name)
+        .select('id');
+      linkedCount = linked?.length ?? 0;
+    }
+    toast({
+      title: newActive ? 'Activated' : 'Deactivated',
+      description: linkedCount ? `${linkedCount} linked user(s) ${newActive ? 'activated' : 'deactivated'}` : undefined,
+    });
     load();
   };
 
@@ -955,10 +969,27 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
   };
 
   const remove = async (r: MasterRow) => {
-    if (!confirm(`Delete "${r.name}"?`)) return;
+    if (table === 'hdec_pic_master') {
+      const [{ count: subtestCount }, { count: profileCount }] = await Promise.all([
+        supabase.from('subtests').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name),
+      ]);
+      const refs: string[] = [];
+      if (subtestCount) refs.push(`${subtestCount} subtest(s)`);
+      if (profileCount) refs.push(`${profileCount} user profile(s)`);
+      if (refs.length > 0) {
+        toast({
+          title: 'Cannot delete — references exist',
+          description: `Linked: ${refs.join(', ')}. Deactivate instead.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+    if (!confirm(`Permanently delete "${r.name}"? This cannot be undone.`)) return;
     const { error } = await supabase.from(table).delete().eq('id', r.id);
     if (error) toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
-    else load();
+    else { toast({ title: 'Deleted permanently' }); load(); }
   };
 
   return (
