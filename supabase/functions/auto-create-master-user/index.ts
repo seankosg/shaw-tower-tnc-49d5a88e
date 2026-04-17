@@ -114,28 +114,40 @@ Deno.serve(async (req) => {
     }
 
     const base = suggestBase(body.name.trim(), body.master_type);
-    const loginId = await findUniqueLoginId(admin, base);
-    const email = `${loginId}@${FAKE_EMAIL_DOMAIN}`;
-
     const userType =
       body.master_type === 'hdec_pic' ? 'hdec' : 'subcontractor';
 
-    const { data: created, error: createErr } = await admin.auth.admin.createUser({
-      email,
-      password: DEFAULT_PASSWORD,
-      email_confirm: true,
-      user_metadata: {
-        name: body.name.trim(),
-        login_id: loginId,
-        user_type: userType,
-        subcontractor_name: body.subcontractor_name ?? null,
-        subsub_name: body.subsub_name ?? null,
-        hdec_pic_name: body.hdec_pic_name ?? null,
-        must_change_password: true,
-      },
-    });
-    if (createErr || !created.user) {
-      return json({ error: createErr?.message ?? 'Create failed' }, 400);
+    // Retry to handle race conditions on login_id uniqueness
+    let loginId = '';
+    let createdUser: any = null;
+    let lastErr: string | null = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      loginId = await findUniqueLoginId(admin, base);
+      const email = `${loginId}@${FAKE_EMAIL_DOMAIN}`;
+      const { data: created, error: createErr } = await admin.auth.admin.createUser({
+        email,
+        password: DEFAULT_PASSWORD,
+        email_confirm: true,
+        user_metadata: {
+          name: body.name.trim(),
+          login_id: loginId,
+          user_type: userType,
+          subcontractor_name: body.subcontractor_name ?? null,
+          subsub_name: body.subsub_name ?? null,
+          hdec_pic_name: body.hdec_pic_name ?? null,
+          must_change_password: true,
+        },
+      });
+      if (!createErr && created?.user) {
+        createdUser = created.user;
+        break;
+      }
+      lastErr = createErr?.message ?? 'Create failed';
+      // If it's a uniqueness/email-exists error, retry with a new login_id
+      if (!/already|duplicate|exist|unique/i.test(lastErr)) break;
+    }
+    if (!createdUser) {
+      return json({ error: lastErr ?? 'Create failed' }, 400);
     }
 
     const newUserId = created.user.id;
