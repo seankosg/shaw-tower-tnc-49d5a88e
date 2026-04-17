@@ -419,7 +419,11 @@ export default function SubtestList() {
                     onClick={() => navigate(`/subtests/${r.id}`)}
                   >
                     {row.getVisibleCells().map(cell => (
-                      <TableCell key={cell.id} className="text-xs py-2">
+                      <TableCell
+                        key={cell.id}
+                        style={{ width: cell.column.getSize() }}
+                        className="text-xs py-2 truncate"
+                      >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}
