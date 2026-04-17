@@ -47,30 +47,66 @@ export type Database = {
         }
         Relationships: []
       }
+      hdec_pic_master: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
           email: string | null
+          hdec_pic_name: string | null
           id: string
           is_active: boolean
+          login_id: string
+          must_change_password: boolean
           name: string | null
+          subcontractor_name: string | null
           user_id: string
+          user_type: Database["public"]["Enums"]["user_type"]
         }
         Insert: {
           created_at?: string
           email?: string | null
+          hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
+          login_id: string
+          must_change_password?: boolean
           name?: string | null
+          subcontractor_name?: string | null
           user_id: string
+          user_type?: Database["public"]["Enums"]["user_type"]
         }
         Update: {
           created_at?: string
           email?: string | null
+          hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
+          login_id?: string
+          must_change_password?: boolean
           name?: string | null
+          subcontractor_name?: string | null
           user_id?: string
+          user_type?: Database["public"]["Enums"]["user_type"]
         }
         Relationships: []
       }
@@ -95,6 +131,27 @@ export type Database = {
           is_active?: boolean
           project_code?: string
           project_name?: string
+        }
+        Relationships: []
+      }
+      subcontractor_master: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
         }
         Relationships: []
       }
@@ -635,9 +692,10 @@ export type Database = {
     Enums: {
       action_taken: "inserted" | "updated" | "skipped" | "rejected"
       app_role:
-        | "subcontractor"
-        | "hdec_engineer"
-        | "manager"
+        | "guest"
+        | "super_guest"
+        | "user"
+        | "senior_user"
         | "superuser"
         | "admin"
       change_source:
@@ -654,6 +712,7 @@ export type Database = {
       import_type: "legacy" | "standard"
       tc_status: "Planned" | "WIP" | "Done" | "Hold"
       upload_status: "pending" | "processing" | "completed" | "failed"
+      user_type: "subcontractor" | "hdec" | "pm_pd" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -783,9 +842,10 @@ export const Constants = {
     Enums: {
       action_taken: ["inserted", "updated", "skipped", "rejected"],
       app_role: [
-        "subcontractor",
-        "hdec_engineer",
-        "manager",
+        "guest",
+        "super_guest",
+        "user",
+        "senior_user",
         "superuser",
         "admin",
       ],
@@ -805,6 +865,7 @@ export const Constants = {
       import_type: ["legacy", "standard"],
       tc_status: ["Planned", "WIP", "Done", "Hold"],
       upload_status: ["pending", "processing", "completed", "failed"],
+      user_type: ["subcontractor", "hdec", "pm_pd", "admin"],
     },
   },
 } as const
