@@ -394,6 +394,25 @@ export default function SubtestList() {
         </div>
       </div>
 
+      {activeUrlFilters.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+          <span className="text-xs font-medium text-primary">Filtered from Dashboard:</span>
+          {activeUrlFilters.map(f => (
+            <button
+              key={f.param}
+              onClick={() => clearUrlFilter(f.param)}
+              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary hover:bg-primary/20"
+              title="Click to remove"
+            >
+              {f.label} ✕
+            </button>
+          ))}
+          <Button variant="ghost" size="sm" className="h-6 text-xs ml-auto" onClick={clearAllUrlFilters}>
+            Clear all
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
