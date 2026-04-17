@@ -275,10 +275,11 @@ export default function SubtestList() {
   const table = useReactTable({
     data,
     columns,
-    state: { sorting, globalFilter, columnFilters },
+    state: { sorting, globalFilter, columnFilters, columnSizing },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,
+    onColumnSizingChange: setColumnSizing,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -286,6 +287,9 @@ export default function SubtestList() {
     enableSortingRemoval: true,
     isMultiSortEvent: (e) => (e as unknown as MouseEvent).shiftKey,
     maxMultiSortColCount: 5,
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    defaultColumn: { minSize: 60, maxSize: 600 },
   });
 
   return (
