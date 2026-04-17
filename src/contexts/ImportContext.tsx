@@ -169,7 +169,9 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           ['t1_planned_date', row.t1_planned_date], ['t1_status', row.t1_status],
           ['t2_planned_date', row.t2_planned_date], ['t2_status', row.t2_status],
           ['predecessor_status_raw', row.predecessor_status_raw],
-          ['subcontractor_name', row.subcontractor_name], ['hdec_pic_name', row.hdec_pic_name],
+          ['subcontractor_name', row.subcontractor_name],
+          ['subsub_name', row.subsub_name],
+          ['hdec_pic_name', row.hdec_pic_name],
         ];
         for (const [field, val] of fields) {
           const resolved = resolveValue(val, null);
@@ -215,9 +217,11 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           t1_planned_date: row.t1_planned_date, t1_status: row.t1_status as any,
           t2_planned_date: row.t2_planned_date, t2_status: row.t2_status as any,
           predecessor_status_raw: row.predecessor_status_raw,
-          subcontractor_name: row.subcontractor_name, hdec_pic_name: row.hdec_pic_name,
+          subcontractor_name: row.subcontractor_name,
+          subsub_name: row.subsub_name,
+          hdec_pic_name: row.hdec_pic_name,
           data_source_type: dataSourceType as any, source_upload_id: uploadId,
-        });
+        } as any);
         if (error) {
           res.rejected++;
           rowLogs.push({

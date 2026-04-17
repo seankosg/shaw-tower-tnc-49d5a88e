@@ -39,6 +39,7 @@ interface SubtestDetail {
   punchlist_comments: string | null;
   predecessor_status_raw: string | null;
   subcontractor_name: string | null;
+  subsub_name: string | null;
   hdec_pic_name: string | null;
   data_source_type: DataSource | null;
   updated_at: string;
@@ -100,6 +101,7 @@ export default function SubtestDetailPage() {
         punchlist_comments: d.punchlist_comments,
         predecessor_status_raw: d.predecessor_status_raw,
         subcontractor_name: d.subcontractor_name,
+        subsub_name: d.subsub_name,
         hdec_pic_name: d.hdec_pic_name,
       });
     }
@@ -127,7 +129,7 @@ export default function SubtestDetailPage() {
       't2_planned_date', 't2_actual_date', 't2_status',
       'r1_status', 'aconex_ref_no', 'r2_status',
       'remarks', 'punchlist_comments',
-      'predecessor_status_raw', 'subcontractor_name', 'hdec_pic_name',
+      'predecessor_status_raw', 'subcontractor_name', 'subsub_name', 'hdec_pic_name',
     ] as const;
 
     for (const field of editableFields) {
@@ -152,6 +154,7 @@ export default function SubtestDetailPage() {
       punchlist_comments: form.punchlist_comments || null,
       predecessor_status_raw: form.predecessor_status_raw || null,
       subcontractor_name: form.subcontractor_name || null,
+      subsub_name: form.subsub_name || null,
       hdec_pic_name: form.hdec_pic_name || null,
       updated_by: null,
       data_source_type: 'app_direct_input' as DataSource,
@@ -335,8 +338,8 @@ export default function SubtestDetailPage() {
         <CardHeader className="py-3">
           <CardTitle className="text-sm font-medium">Predecessor & Responsibility</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-1.5">
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5md:col-span-2">
             <Label className="text-xs">Predecessor Status</Label>
             <Input className="h-9" value={form.predecessor_status_raw || ''} onChange={e => updateField('predecessor_status_raw', e.target.value)} placeholder="e.g. Done or 2026-03-15" />
           </div>
@@ -345,6 +348,10 @@ export default function SubtestDetailPage() {
             <Input className="h-9" value={form.subcontractor_name || ''} onChange={e => updateField('subcontractor_name', e.target.value)} />
           </div>
           <div className="space-y-1.5">
+            <Label className="text-xs">SubSub</Label>
+            <Input className="h-9" value={form.subsub_name || ''} onChange={e => updateField('subsub_name', e.target.value)} />
+          </div>
+          <div className="space-y-1.5 md:col-span-2">
             <Label className="text-xs">HDEC PIC</Label>
             <Input className="h-9" value={form.hdec_pic_name || ''} onChange={e => updateField('hdec_pic_name', e.target.value)} />
           </div>

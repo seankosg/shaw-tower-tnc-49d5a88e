@@ -23,6 +23,7 @@ interface SubtestCard {
   t2_planned_date: string | null;
   predecessor_status_raw: string | null;
   subcontractor_name: string | null;
+  subsub_name: string | null;
   hdec_pic_name: string | null;
   row_version: number;
   system_code: string;
@@ -42,7 +43,7 @@ export default function MobileUpdatePage() {
     const q = query.trim();
     const { data } = await supabase
       .from('subtests')
-      .select('id, subtest_id, item_no, mos_code, description, equipment, t1_status, t2_status, t1_planned_date, t2_planned_date, predecessor_status_raw, subcontractor_name, hdec_pic_name, row_version, system_master!inner(system_code)')
+      .select('id, subtest_id, item_no, mos_code, description, equipment, t1_status, t2_status, t1_planned_date, t2_planned_date, predecessor_status_raw, subcontractor_name, subsub_name, hdec_pic_name, row_version, system_master!inner(system_code)')
       .eq('is_active', true)
       .or(`subtest_id.ilike.%${q}%,item_no.ilike.%${q}%`)
       .limit(20);
@@ -172,6 +173,14 @@ export default function MobileUpdatePage() {
                       className="h-8 text-xs"
                       value={(getVal(card, 'subcontractor_name') as string) || ''}
                       onChange={e => updateField(card.id, 'subcontractor_name', e.target.value || null)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">SubSub</label>
+                    <Input
+                      className="h-8 text-xs"
+                      value={(getVal(card, 'subsub_name') as string) || ''}
+                      onChange={e => updateField(card.id, 'subsub_name', e.target.value || null)}
                     />
                   </div>
                   <div>

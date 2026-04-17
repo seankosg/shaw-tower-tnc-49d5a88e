@@ -46,6 +46,13 @@ const HEADER_MAP: Record<string, string> = {
   subcontractor: 'subcontractor_name',
   'subcontractor name': 'subcontractor_name',
   'subcontractor_name': 'subcontractor_name',
+  subsub: 'subsub_name',
+  'sub-sub': 'subsub_name',
+  'sub sub': 'subsub_name',
+  'sub_sub': 'subsub_name',
+  'subsub name': 'subsub_name',
+  'subsub_name': 'subsub_name',
+  'sub-sub name': 'subsub_name',
   'hdec pic': 'hdec_pic_name',
   'hdecpic': 'hdec_pic_name',
   'hdec_pic_name': 'hdec_pic_name',
@@ -131,6 +138,7 @@ export interface ParsedSubtest {
   t2_status: string | null;
   predecessor_status_raw: string | null;
   subcontractor_name: string | null;
+  subsub_name: string | null;
   hdec_pic_name: string | null;
 }
 
@@ -174,6 +182,7 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
       t2_status: normalizeStatus(row.t2_status),
       predecessor_status_raw: normalizePredecessor(row.predecessor_status_raw),
       subcontractor_name: row.subcontractor_name?.trim() || null,
+      subsub_name: row.subsub_name?.trim() || null,
       hdec_pic_name: row.hdec_pic_name?.trim() || null,
     };
 
@@ -226,6 +235,7 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
       t2_status: normalizeStatus(row.t2_status),
       predecessor_status_raw: normalizePredecessor(row.predecessor_status_raw),
       subcontractor_name: row.subcontractor_name?.trim() || null,
+      subsub_name: row.subsub_name?.trim() || null,
       hdec_pic_name: row.hdec_pic_name?.trim() || null,
     });
   }
