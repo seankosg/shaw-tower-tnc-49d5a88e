@@ -176,7 +176,7 @@ export default function MobileUpdatePage() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">SubSub</label>
+                    <label className="text-xs font-medium text-muted-foreground">Sub-Sub</label>
                     <Input
                       className="h-8 text-xs"
                       value={(getVal(card, 'subsub_name') as string) || ''}

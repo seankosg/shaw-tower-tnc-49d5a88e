@@ -254,8 +254,8 @@ function CreateUserDialog({
         if (!subconName) { toast({ title: 'Subcontractor required', variant: 'destructive' }); return; }
         payloadSubconName = subconName;
       } else {
-        if (!selectedSubsub) { toast({ title: 'SubSub required', variant: 'destructive' }); return; }
-        if (!subsubParent) { toast({ title: 'SubSub has no parent Subcontractor', variant: 'destructive' }); return; }
+        if (!selectedSubsub) { toast({ title: 'Sub-Sub required', variant: 'destructive' }); return; }
+        if (!subsubParent) { toast({ title: 'Sub-Sub has no parent Subcontractor', variant: 'destructive' }); return; }
         payloadSubsubName = selectedSubsub.name;
         payloadSubconName = subsubParent.name;
       }
@@ -328,7 +328,7 @@ function CreateUserDialog({
                 </label>
                 <label className="flex items-center gap-1.5">
                   <input type="radio" checked={affiliation === 'subsub'} onChange={() => setAffiliation('subsub')} />
-                  SubSub (재하도)
+                  Sub-Sub (재하도)
                 </label>
               </div>
             </div>
@@ -344,9 +344,9 @@ function CreateUserDialog({
               </div>
             ) : (
               <div className="space-y-1.5">
-                <Label>SubSub Company</Label>
+                <Label>Sub-Sub Company</Label>
                 <Select value={subsubId} onValueChange={setSubsubId}>
-                  <SelectTrigger><SelectValue placeholder="Select SubSub" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Select Sub-Sub" /></SelectTrigger>
                   <SelectContent>
                     {subsubs.map(s => {
                       const parent = subcons.find(p => p.id === s.parent_subcontractor_id);
@@ -384,7 +384,7 @@ function CreateUserDialog({
   );
 }
 
-/* ═══════ Tab: Subcontractor / SubSub / HDEC PIC Master ═══════ */
+/* ═══════ Tab: Subcontractor / Sub-Sub / HDEC PIC Master ═══════ */
 function MastersTab() {
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -433,7 +433,7 @@ function SubcontractorMasterTable() {
       parent_subcontractor_id: newSubSubParent,
     } as any);
     if (error) toast({ title: 'Add failed', description: error.message, variant: 'destructive' });
-    else { toast({ title: 'SubSub added' }); setNewSubSubName(''); setNewSubSubParent(''); load(); }
+    else { toast({ title: 'Sub-Sub added' }); setNewSubSubName(''); setNewSubSubParent(''); load(); }
   };
 
   const toggleActive = async (r: MasterRow) => {
@@ -493,9 +493,9 @@ function SubcontractorMasterTable() {
 
         {/* SubSubs */}
         <div className="space-y-2 border-t pt-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">SubSubs (재하도)</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sub-Subs (재하도)</h3>
           <form onSubmit={addSubSub} className="flex gap-2">
-            <Input value={newSubSubName} onChange={(e) => setNewSubSubName(e.target.value)} placeholder="SubSub name..." className="flex-1" />
+            <Input value={newSubSubName} onChange={(e) => setNewSubSubName(e.target.value)} placeholder="Sub-Sub name..." className="flex-1" />
             <Select value={newSubSubParent} onValueChange={setNewSubSubParent}>
               <SelectTrigger className="w-[160px]"><SelectValue placeholder="Parent Sub" /></SelectTrigger>
               <SelectContent>
@@ -534,7 +534,7 @@ function SubcontractorMasterTable() {
                     );
                   })}
                   {subsubs.length === 0 && (
-                    <TableRow><TableCell colSpan={4} className="text-center text-xs text-muted-foreground py-3">No SubSubs yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={4} className="text-center text-xs text-muted-foreground py-3">No Sub-Subs yet.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
