@@ -18,6 +18,7 @@ import {
   type AppRole, type UserType,
 } from '@/types/enums';
 import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog } from 'lucide-react';
+import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
