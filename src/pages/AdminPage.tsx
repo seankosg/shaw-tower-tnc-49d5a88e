@@ -89,6 +89,7 @@ function UsersTab() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [roles, setRoles] = useState<UserRole[]>([]);
   const [subcons, setSubcons] = useState<MasterRow[]>([]);
+  const [subsubs, setSubsubs] = useState<MasterRow[]>([]);
   const [hdecPics, setHdecPics] = useState<MasterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -103,7 +104,11 @@ function UsersTab() {
     ]);
     if (p.data) setProfiles(p.data as Profile[]);
     if (r.data) setRoles(r.data as UserRole[]);
-    if (s.data) setSubcons(s.data as MasterRow[]);
+    if (s.data) {
+      const all = s.data as MasterRow[];
+      setSubcons(all.filter(m => (m.type ?? 'sub') === 'sub'));
+      setSubsubs(all.filter(m => m.type === 'subsub'));
+    }
     if (h.data) setHdecPics(h.data as MasterRow[]);
     setLoading(false);
   };
