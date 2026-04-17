@@ -441,6 +441,19 @@ function SubcontractorMasterTable() {
     load();
   };
 
+  const renameMaster = async (r: MasterRow, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === r.name) return;
+    const { error } = await supabase.from('subcontractor_master').update({ name: trimmed }).eq('id', r.id);
+    if (error) { toast({ title: 'Rename failed', description: error.message, variant: 'destructive' }); return; }
+    // Cascade to subtests + profiles
+    const col = (r.type ?? 'sub') === 'sub' ? 'subcontractor_name' : 'subsub_name';
+    await supabase.from('subtests').update({ [col]: trimmed }).eq(col, r.name);
+    await supabase.from('profiles').update({ [col]: trimmed }).eq(col, r.name);
+    toast({ title: 'Renamed', description: 'Linked subtests and profiles updated' });
+    load();
+  };
+
   const remove = async (r: MasterRow) => {
     if (!confirm(`Delete "${r.name}"?`)) return;
     const { error } = await supabase.from('subcontractor_master').delete().eq('id', r.id);
