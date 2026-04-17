@@ -151,15 +151,18 @@ export default function SubtestList() {
         setSorting(Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING);
         setColumnFilters(Array.isArray(parsed.columnFilters) ? parsed.columnFilters : []);
         setGlobalFilter(typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '');
+        setColumnSizing(parsed.columnSizing && typeof parsed.columnSizing === 'object' ? parsed.columnSizing : {});
       } else {
         setSorting(DEFAULT_SORTING);
         setColumnFilters([]);
         setGlobalFilter('');
+        setColumnSizing({});
       }
     } catch {
       setSorting(DEFAULT_SORTING);
       setColumnFilters([]);
       setGlobalFilter('');
+      setColumnSizing({});
     }
     setStateLoaded(true);
   }, [storageKey]);
@@ -168,11 +171,11 @@ export default function SubtestList() {
   useEffect(() => {
     if (!stateLoaded) return;
     try {
-      localStorage.setItem(storageKey, JSON.stringify({ sorting, columnFilters, globalFilter }));
+      localStorage.setItem(storageKey, JSON.stringify({ sorting, columnFilters, globalFilter, columnSizing }));
     } catch {
       // ignore quota errors
     }
-  }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter]);
+  }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter, columnSizing]);
 
   useEffect(() => {
     fetchData();
