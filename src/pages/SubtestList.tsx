@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel,
   flexRender, type ColumnDef, type SortingState, type ColumnFiltersState,
@@ -124,6 +124,7 @@ const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
 export default function SubtestList() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const storageKey = user?.id ? `subtest-list-state:${user.id}` : 'subtest-list-state:anon';
 
   const [data, setData] = useState<SubtestRow[]>([]);
@@ -134,6 +135,9 @@ export default function SubtestList() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
+  // status URL filter (overdue / at_risk) — applied client-side
+  const urlStatusFilter = searchParams.get('status'); // 'overdue' | 'at_risk' | null
+  const urlAtRiskDays = Number(searchParams.get('at_risk_days') ?? '2');
   const tableRef = useRef<HTMLDivElement>(null);
 
   const autoSizeColumn = (columnId: string) => {
@@ -153,31 +157,54 @@ export default function SubtestList() {
     setColumnSizing(prev => ({ ...prev, [columnId]: finalWidth }));
   };
 
-  // Load persisted state when user/storageKey changes
+  // Load persisted state when user/storageKey changes; URL params override per-column filters
   useEffect(() => {
     setStateLoaded(false);
+    let baseFilters: ColumnFiltersState = [];
+    let baseSorting: SortingState = DEFAULT_SORTING;
+    let baseGlobal = '';
+    let baseSizing: ColumnSizingState = {};
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
-        setSorting(Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING);
-        setColumnFilters(Array.isArray(parsed.columnFilters) ? parsed.columnFilters : []);
-        setGlobalFilter(typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '');
-        setColumnSizing(parsed.columnSizing && typeof parsed.columnSizing === 'object' ? parsed.columnSizing : {});
-      } else {
-        setSorting(DEFAULT_SORTING);
-        setColumnFilters([]);
-        setGlobalFilter('');
-        setColumnSizing({});
+        baseSorting = Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING;
+        baseFilters = Array.isArray(parsed.columnFilters) ? parsed.columnFilters : [];
+        baseGlobal = typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '';
+        baseSizing = parsed.columnSizing && typeof parsed.columnSizing === 'object' ? parsed.columnSizing : {};
       }
     } catch {
-      setSorting(DEFAULT_SORTING);
-      setColumnFilters([]);
-      setGlobalFilter('');
-      setColumnSizing({});
+      // ignore
     }
+
+    // URL-driven filters take precedence (replace any prior filter on these columns)
+    const urlMap: Record<string, string> = {
+      system: 'system_code',
+      subcon: 'subcontractor_name',
+      subsub: 'subsub_name',
+      hdec_pic: 'hdec_pic_name',
+      t1_status: 't1_status',
+      t2_status: 't2_status',
+    };
+    const next = baseFilters.filter(f => !Object.values(urlMap).includes(f.id));
+    for (const [param, col] of Object.entries(urlMap)) {
+      const v = searchParams.get(param);
+      if (v) {
+        // multi-select columns expect string[]
+        if (col === 'system_code' || col === 't1_status' || col === 't2_status') {
+          next.push({ id: col, value: [v] });
+        } else {
+          next.push({ id: col, value: v });
+        }
+      }
+    }
+    setSorting(baseSorting);
+    setColumnFilters(next);
+    setGlobalFilter(baseGlobal);
+    setColumnSizing(baseSizing);
     setStateLoaded(true);
-  }, [storageKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey, searchParams]);
 
   // Persist on change (only after initial load to avoid overwriting)
   useEffect(() => {
@@ -285,8 +312,35 @@ export default function SubtestList() {
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
   ], [systemOptions, statusOptions, sourceOptions]);
 
+  // Apply status (overdue / at_risk) URL filter at data level
+  const filteredData = useMemo(() => {
+    if (!urlStatusFilter) return data;
+    const today = new Date().toISOString().slice(0, 10);
+    const daysFromToday = (iso: string) => {
+      const a = new Date(iso + 'T00:00:00Z').getTime();
+      const b = new Date(today + 'T00:00:00Z').getTime();
+      return Math.round((a - b) / 86400000);
+    };
+    return data.filter(r => {
+      const overdue =
+        (r.t1_planned_date && r.t1_planned_date < today && r.t1_status !== 'Done') ||
+        (r.t2_planned_date && r.t2_planned_date < today && r.t2_status !== 'Done');
+      if (urlStatusFilter === 'overdue') return overdue;
+      if (urlStatusFilter === 'at_risk') {
+        if (overdue) return false;
+        const within = (planned: string | null, status: TcStatus | null) => {
+          if (!planned || status === 'Done') return false;
+          const d = daysFromToday(planned);
+          return d >= 0 && d <= urlAtRiskDays;
+        };
+        return within(r.t1_planned_date, r.t1_status) || within(r.t2_planned_date, r.t2_status);
+      }
+      return true;
+    });
+  }, [data, urlStatusFilter, urlAtRiskDays]);
+
   const table = useReactTable({
-    data,
+    data: filteredData,
     columns,
     state: { sorting, globalFilter, columnFilters, columnSizing },
     onSortingChange: setSorting,
@@ -305,6 +359,27 @@ export default function SubtestList() {
     defaultColumn: { minSize: 60, maxSize: 600 },
   });
 
+  const activeUrlFilters = useMemo(() => {
+    const out: { label: string; param: string }[] = [];
+    const map: Record<string, string> = {
+      system: 'System', subcon: 'Subcon', subsub: 'Sub-Sub',
+      hdec_pic: 'HDEC PIC', t1_status: 'T1', t2_status: 'T2', status: 'Status',
+    };
+    for (const [k, lbl] of Object.entries(map)) {
+      const v = searchParams.get(k);
+      if (v) out.push({ label: `${lbl}: ${v}`, param: k });
+    }
+    return out;
+  }, [searchParams]);
+
+  const clearUrlFilter = (param: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.delete(param);
+    if (param === 'status') next.delete('at_risk_days');
+    setSearchParams(next, { replace: true });
+  };
+  const clearAllUrlFilters = () => setSearchParams(new URLSearchParams(), { replace: true });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -318,6 +393,25 @@ export default function SubtestList() {
           </Button>
         </div>
       </div>
+
+      {activeUrlFilters.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+          <span className="text-xs font-medium text-primary">Filtered from Dashboard:</span>
+          {activeUrlFilters.map(f => (
+            <button
+              key={f.param}
+              onClick={() => clearUrlFilter(f.param)}
+              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary hover:bg-primary/20"
+              title="Click to remove"
+            >
+              {f.label} ✕
+            </button>
+          ))}
+          <Button variant="ghost" size="sm" className="h-6 text-xs ml-auto" onClick={clearAllUrlFilters}>
+            Clear all
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">

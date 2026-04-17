@@ -18,6 +18,7 @@ import {
   type AppRole, type UserType,
 } from '@/types/enums';
 import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog } from 'lucide-react';
+import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -73,6 +74,7 @@ export default function AdminPage() {
           <TabsTrigger value="systems">Systems</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="fields">Field Config</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
         </TabsList>
 
@@ -81,9 +83,64 @@ export default function AdminPage() {
         <TabsContent value="systems"><SystemsTab /></TabsContent>
         <TabsContent value="permissions"><PermissionsTab /></TabsContent>
         <TabsContent value="fields"><FieldConfigTab /></TabsContent>
+        <TabsContent value="settings"><SettingsTab /></TabsContent>
         <TabsContent value="audit"><AuditTab /></TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+/* ═══════ Tab: Settings ═══════ */
+function SettingsTab() {
+  const { toast } = useToast();
+  const { value: threshold, loading, updateValue } = useAtRiskThreshold();
+  const [draft, setDraft] = useState<number>(2);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setDraft(threshold); }, [threshold]);
+
+  const onSave = async () => {
+    if (!Number.isFinite(draft) || draft < 1 || draft > 30) {
+      toast({ title: 'Invalid value', description: 'Threshold must be between 1 and 30 days.', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    const { error } = await updateValue(Math.round(draft));
+    setSaving(false);
+    if (error) {
+      toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Settings saved', description: `At-Risk threshold set to ${draft} day(s).` });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Dashboard Settings</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 max-w-md">
+        <div className="space-y-2">
+          <Label htmlFor="at-risk">At-Risk Threshold (days)</Label>
+          <div className="flex items-center gap-2">
+            <Input
+              id="at-risk"
+              type="number"
+              min={1}
+              max={30}
+              value={loading ? '' : draft}
+              onChange={e => setDraft(Number(e.target.value))}
+              className="w-32"
+            />
+            <Button onClick={onSave} disabled={saving || loading}>Save</Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Subtests whose planned date is within ≤ N days from today (and not Done) will be flagged as At-Risk on the Dashboard.
+            Default: 2 days.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
