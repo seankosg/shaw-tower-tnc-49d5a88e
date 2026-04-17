@@ -143,6 +143,26 @@ function UsersTab() {
     load();
   };
 
+  const editLoginId = async (profile: Profile) => {
+    const next = window.prompt(`New Login ID for ${profile.name ?? profile.login_id}\n(3-32 chars: a-z, 0-9, _)`, profile.login_id ?? '');
+    if (!next) return;
+    const trimmed = next.trim().toLowerCase();
+    if (trimmed === profile.login_id) return;
+    if (!/^[a-z0-9_]{3,32}$/.test(trimmed)) {
+      toast({ title: 'Invalid Login ID', description: '3-32 chars: a-z 0-9 _', variant: 'destructive' });
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke('admin-update-login-id', {
+      body: { user_id: profile.user_id, new_login_id: trimmed },
+    });
+    if (error || (data as any)?.error) {
+      toast({ title: 'Update failed', description: error?.message ?? (data as any)?.error, variant: 'destructive' });
+    } else {
+      toast({ title: 'Login ID updated', description: `Now: ${trimmed}` });
+      load();
+    }
+  };
+
   if (loading) return <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>;
 
   return (
