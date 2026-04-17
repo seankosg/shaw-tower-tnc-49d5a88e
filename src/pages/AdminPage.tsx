@@ -586,6 +586,19 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
     load();
   };
 
+  const renameRow = async (r: MasterRow, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === r.name) return;
+    const { error } = await supabase.from(table).update({ name: trimmed }).eq('id', r.id);
+    if (error) { toast({ title: 'Rename failed', description: error.message, variant: 'destructive' }); return; }
+    if (table === 'hdec_pic_master') {
+      await supabase.from('subtests').update({ hdec_pic_name: trimmed } as any).eq('hdec_pic_name', r.name);
+      await supabase.from('profiles').update({ hdec_pic_name: trimmed } as any).eq('hdec_pic_name', r.name);
+    }
+    toast({ title: 'Renamed', description: 'Linked records updated' });
+    load();
+  };
+
   const remove = async (r: MasterRow) => {
     if (!confirm(`Delete "${r.name}"?`)) return;
     const { error } = await supabase.from(table).delete().eq('id', r.id);
@@ -616,7 +629,7 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
               <TableBody>
                 {rows.map(r => (
                   <TableRow key={r.id}>
-                    <TableCell>{r.name}</TableCell>
+                    <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameRow(r, v)} /></TableCell>
                     <TableCell className="text-center">
                       <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
                     </TableCell>
