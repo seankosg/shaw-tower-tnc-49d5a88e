@@ -7,9 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { APP_NAME } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
+import { PASSWORD_HINT } from '@/types/enums';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useAuth();
@@ -19,7 +20,7 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    const { error } = await signIn(email, password);
+    const { error } = await signIn(loginId, password);
     setIsLoading(false);
     if (error) {
       toast({ title: 'Login Failed', description: error.message, variant: 'destructive' });
@@ -38,13 +39,15 @@ export default function Login() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="loginId">User ID</Label>
               <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                id="loginId"
+                type="text"
+                autoCapitalize="none"
+                autoCorrect="off"
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
+                placeholder="e.g. kim_hdec"
                 required
               />
             </div>
@@ -55,9 +58,10 @@ export default function Login() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="••••••"
                 required
               />
+              <p className="text-xs text-muted-foreground">{PASSWORD_HINT}</p>
             </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? 'Signing in...' : 'Sign In'}

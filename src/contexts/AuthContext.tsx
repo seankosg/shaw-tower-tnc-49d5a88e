@@ -1,13 +1,18 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import type { AppRole } from '@/types/enums';
+import { loginIdToEmail, type AppRole, type UserType } from '@/types/enums';
 
 interface Profile {
   id: string;
   user_id: string;
   name: string | null;
   email: string | null;
+  login_id: string | null;
+  user_type: UserType;
+  subcontractor_name: string | null;
+  hdec_pic_name: string | null;
+  must_change_password: boolean;
   is_active: boolean;
 }
 
@@ -17,9 +22,9 @@ interface AuthContextValue {
   profile: Profile | null;
   roles: AppRole[];
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, name?: string) => Promise<{ error: Error | null }>;
+  signIn: (loginId: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   isAdmin: boolean;
   isSuperuser: boolean;
   isAdminOrSuperuser: boolean;
@@ -48,12 +53,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (rolesRes.data) setRoles(rolesRes.data.map((r) => r.role as AppRole));
   };
 
+  const refreshProfile = async () => {
+    if (session?.user) await fetchUserData(session.user.id);
+  };
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        if (session?.user) {
-          setTimeout(() => fetchUserData(session.user.id), 0);
+      async (_event, newSession) => {
+        setSession(newSession);
+        if (newSession?.user) {
+          setTimeout(() => fetchUserData(newSession.user.id), 0);
         } else {
           setProfile(null);
           setRoles([]);
@@ -62,28 +71,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        fetchUserData(session.user.id);
-      }
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+      if (s?.user) fetchUserData(s.user.id);
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (loginId: string, password: string) => {
+    const email = loginIdToEmail(loginId);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
-  };
-
-  const signUp = async (email: string, password: string, name?: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name }, emailRedirectTo: window.location.origin },
-    });
     return { error: error as Error | null };
   };
 
@@ -105,8 +104,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         roles,
         loading,
         signIn,
-        signUp,
         signOut,
+        refreshProfile,
         isAdmin,
         isSuperuser,
         isAdminOrSuperuser: isAdmin || isSuperuser,

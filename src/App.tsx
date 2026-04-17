@@ -6,6 +6,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ImportProvider } from "@/contexts/ImportContext";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
+import Login from "./pages/Login";
+import ChangePassword from "./pages/ChangePassword";
 import SubtestList from "./pages/SubtestList";
 import SubtestDetail from "./pages/SubtestDetail";
 import ImportPage from "./pages/ImportPage";
@@ -26,7 +29,9 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route element={<AppLayout />}>
+              <Route path="/login" element={<Login />} />
+              <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
+              <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                 <Route path="/" element={<SubtestList />} />
                 <Route path="/subtests/:id" element={<SubtestDetail />} />
                 <Route path="/import" element={<ImportPage />} />
