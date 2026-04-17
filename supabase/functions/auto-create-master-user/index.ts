@@ -80,19 +80,36 @@ async function loginIdTaken(admin: ReturnType<typeof createClient>, lid: string)
   return !!data;
 }
 
+async function findExistingMasterUser(
+  admin: ReturnType<typeof createClient>,
+  body: Body,
+): Promise<{ user_id: string; login_id: string } | null> {
+  let query = admin.from('profiles').select('user_id, login_id').eq('user_type', body.master_type === 'hdec_pic' ? 'hdec' : 'subcontractor').limit(1);
+
+  if (body.master_type === 'subcontractor') {
+    query = query.eq('subcontractor_name', body.name.trim()).is('subsub_name', null);
+  } else if (body.master_type === 'subsub') {
+    query = query.eq('subcontractor_name', body.subcontractor_name ?? '').eq('subsub_name', body.name.trim());
+  } else {
+    query = query.eq('hdec_pic_name', body.name.trim());
+  }
+
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
+
 async function findUniqueLoginId(
   admin: ReturnType<typeof createClient>,
   base: string,
 ): Promise<string> {
   if (!(await loginIdTaken(admin, base))) return base;
-  // Try numeric suffixes keeping length reasonable
   for (let n = 2; n <= 99; n++) {
     const suffix = String(n);
     const trimBase = base.length + suffix.length > 6 ? base.slice(0, 6 - suffix.length) : base;
     const candidate = `${trimBase}${suffix}`;
     if (candidate.length >= 3 && !(await loginIdTaken(admin, candidate))) return candidate;
   }
-  // Fallback random
   for (let i = 0; i < 20; i++) {
     const c = `${base.slice(0, 3)}${Math.floor(1000 + Math.random() * 9000)}`;
     if (!(await loginIdTaken(admin, c))) return c;
@@ -113,11 +130,21 @@ Deno.serve(async (req) => {
       return json({ error: 'Missing name or master_type' }, 400);
     }
 
-    const base = suggestBase(body.name.trim(), body.master_type);
-    const userType =
-      body.master_type === 'hdec_pic' ? 'hdec' : 'subcontractor';
+    const trimmedName = body.name.trim();
+    const existing = await findExistingMasterUser(admin, {
+      ...body,
+      name: trimmedName,
+      subcontractor_name: body.subcontractor_name?.trim() ?? null,
+      subsub_name: body.subsub_name?.trim() ?? null,
+      hdec_pic_name: body.hdec_pic_name?.trim() ?? null,
+    });
+    if (existing) {
+      return json({ ok: true, user_id: existing.user_id, login_id: existing.login_id, already_exists: true });
+    }
 
-    // Retry to handle race conditions on login_id uniqueness
+    const base = suggestBase(trimmedName, body.master_type);
+    const userType = body.master_type === 'hdec_pic' ? 'hdec' : 'subcontractor';
+
     let loginId = '';
     let createdUser: any = null;
     let lastErr: string | null = null;
@@ -129,7 +156,7 @@ Deno.serve(async (req) => {
         password: DEFAULT_PASSWORD,
         email_confirm: true,
         user_metadata: {
-          name: body.name.trim(),
+          name: trimmedName,
           login_id: loginId,
           user_type: userType,
           subcontractor_name: body.subcontractor_name ?? null,
@@ -143,7 +170,6 @@ Deno.serve(async (req) => {
         break;
       }
       lastErr = createErr?.message ?? 'Create failed';
-      // If it's a uniqueness/email-exists error, retry with a new login_id
       if (!/already|duplicate|exist|unique/i.test(lastErr)) break;
     }
     if (!createdUser) {
