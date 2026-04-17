@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
       return json({ error: lastErr ?? 'Create failed' }, 400);
     }
 
-    const newUserId = created.user.id;
+    const newUserId = createdUser.id;
     const { error: roleErr } = await admin
       .from('user_roles')
       .insert({ user_id: newUserId, role: 'user' });
