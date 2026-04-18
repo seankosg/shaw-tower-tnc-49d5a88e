@@ -129,6 +129,7 @@ export default function SubtestList() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const storageKey = user?.id ? `subtest-list-state:${user.id}` : 'subtest-list-state:anon';
+  const { isFieldVisible } = useFieldConfig();
 
   const [data, setData] = useState<SubtestRow[]>([]);
   const [loading, setLoading] = useState(true);
