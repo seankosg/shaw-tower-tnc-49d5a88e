@@ -150,6 +150,7 @@ export interface PlanActualRow {
   key: string;
   label: string;
   totalSubtests: number;
+  predecessor: PlanActualMetrics;
   t1: PlanActualMetrics;
   t2: PlanActualMetrics;
 }
