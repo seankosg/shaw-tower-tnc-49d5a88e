@@ -9,6 +9,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { DataSourceTag } from '@/components/shared/DataSourceTag';
+import { StageProgress, StageProgressLegend } from '@/components/shared/StageProgress';
+import { Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -279,6 +281,32 @@ export default function SubtestList() {
 
   const columns = useMemo<ColumnDef<SubtestRow>[]>(() => [
     { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn },
+    {
+      id: 'stage_progress',
+      header: 'Progress',
+      size: 110,
+      enableColumnFilter: false,
+      enableSorting: true,
+      // Sort by stage completion score: pred(1) + t1Done(2) + t2Done(4) so T2-done rows last (asc) or first (desc)
+      accessorFn: (r) => {
+        const t1Done = r.t1_status === 'Done';
+        const t2Done = r.t2_status === 'Done';
+        const t1Started = r.t1_status === 'WIP' || t1Done;
+        const predDone = t1Started || (r.predecessor_status_raw
+          ? /done|완료|cleared|clear|^ok$|complete|closed|^y(es)?$/i.test(r.predecessor_status_raw)
+          : false);
+        return (predDone ? 1 : 0) + (t1Done ? 2 : 0) + (t2Done ? 4 : 0);
+      },
+      cell: ({ row }) => (
+        <StageProgress
+          predecessorRaw={row.original.predecessor_status_raw}
+          t1Status={row.original.t1_status}
+          t1ActualDate={row.original.t1_actual_date}
+          t2Status={row.original.t2_status}
+          t2ActualDate={row.original.t2_actual_date}
+        />
+      ),
+    },
     { accessorKey: 'system_code', header: 'System', size: 100, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select' as const, filterOptions: systemOptions } },
     { accessorKey: 'equipment', header: 'Equipment', size: 120, filterFn: textFilterFn,
@@ -294,11 +322,35 @@ export default function SubtestList() {
     { accessorKey: 'predecessor_status_raw', header: 'Predecessor', size: 110, filterFn: textFilterFn },
     { accessorKey: 't1_planned_date', header: 'T1 Planned', size: 100, enableColumnFilter: false,
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
+    { accessorKey: 't1_actual_date', header: 'T1 Actual', size: 100, enableColumnFilter: false,
+      cell: ({ row }) => {
+        const actual = row.original.t1_actual_date;
+        const planned = row.original.t1_planned_date;
+        if (!actual) return <span className="text-muted-foreground">—</span>;
+        const late = planned && actual > planned;
+        return (
+          <span className={cn('inline-flex items-center gap-1 font-medium', late ? 'text-destructive' : 'text-success')}>
+            <Check className="h-3 w-3" />{formatDdMmm(actual)}
+          </span>
+        );
+      }},
     { accessorKey: 't1_status', header: 'T1 Status', size: 90, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select' as const, filterOptions: statusOptions },
       cell: ({ getValue }) => <StatusBadge status={getValue() as TcStatus | null} /> },
     { accessorKey: 't2_planned_date', header: 'T2 Planned', size: 100, enableColumnFilter: false,
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
+    { accessorKey: 't2_actual_date', header: 'T2 Actual', size: 100, enableColumnFilter: false,
+      cell: ({ row }) => {
+        const actual = row.original.t2_actual_date;
+        const planned = row.original.t2_planned_date;
+        if (!actual) return <span className="text-muted-foreground">—</span>;
+        const late = planned && actual > planned;
+        return (
+          <span className={cn('inline-flex items-center gap-1 font-medium', late ? 'text-destructive' : 'text-success')}>
+            <Check className="h-3 w-3" />{formatDdMmm(actual)}
+          </span>
+        );
+      }},
     { accessorKey: 't2_status', header: 'T2 Status', size: 90, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select' as const, filterOptions: statusOptions },
       cell: ({ getValue }) => <StatusBadge status={getValue() as TcStatus | null} /> },
@@ -461,6 +513,7 @@ export default function SubtestList() {
             Clear sort ({sorting.length})
           </Button>
         )}
+        <div className="ml-auto"><StageProgressLegend /></div>
       </div>
 
       {/* Scrollable table with sticky header */}
@@ -546,12 +599,14 @@ export default function SubtestList() {
                 const r = row.original;
                 const delayed = isDelayed(r.t1_planned_date, r.t1_actual_date) ||
                                 isDelayed(r.t2_planned_date, r.t2_actual_date);
+                const t2Done = r.t2_status === 'Done';
                 return (
                   <TableRow
                     key={row.id}
                     className={cn(
                       'cursor-pointer hover:bg-muted/50',
-                      delayed && 'bg-destructive/5'
+                      t2Done && 'bg-muted/30 text-muted-foreground',
+                      delayed && !t2Done && 'bg-destructive/5'
                     )}
                     onClick={() => navigate(`/subtests/${r.id}`)}
                   >
