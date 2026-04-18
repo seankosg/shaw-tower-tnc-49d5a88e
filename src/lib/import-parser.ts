@@ -8,6 +8,7 @@ const HEADER_MAP: Record<string, string> = {
   'item no': 'item_no',
   'item_no': 'item_no',
   level: 'level',
+  lv: 'level',
   equipment: 'equipment',
   description: 'description',
   'mos-1': 'mos_1',
