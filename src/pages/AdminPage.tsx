@@ -17,7 +17,7 @@ import {
   ALL_ROLES, ALL_USER_TYPES, ROLE_LABELS, USER_TYPE_LABELS,
   type AppRole, type UserType,
 } from '@/types/enums';
-import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog } from 'lucide-react';
+import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown } from 'lucide-react';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -1363,7 +1363,20 @@ function FieldConfigTab() {
   const load = async () => {
     setLoading(true);
     const { data } = await supabase.from('field_config').select('*').order('sort_order');
-    if (data) setFields(data as FieldCfg[]);
+    if (data) {
+      let rows = data as FieldCfg[];
+      // Normalize sort_order if all zero (initial seed) so swap works predictably.
+      const allZero = rows.every(r => (r.sort_order ?? 0) === 0);
+      if (allZero && rows.length > 0) {
+        await Promise.all(
+          rows.map((r, idx) =>
+            supabase.from('field_config').update({ sort_order: (idx + 1) * 10 }).eq('id', r.id)
+          )
+        );
+        rows = rows.map((r, idx) => ({ ...r, sort_order: (idx + 1) * 10 }));
+      }
+      setFields(rows);
+    }
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -1376,6 +1389,27 @@ function FieldConfigTab() {
     load();
   };
 
+  const move = async (index: number, direction: 'up' | 'down') => {
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (target < 0 || target >= fields.length) return;
+    const a = fields[index];
+    const b = fields[target];
+    // Swap sort_order values
+    const next = [...fields];
+    next[index] = { ...a, sort_order: b.sort_order };
+    next[target] = { ...b, sort_order: a.sort_order };
+    next.sort((x, y) => x.sort_order - y.sort_order);
+    setFields(next); // optimistic
+    const [r1, r2] = await Promise.all([
+      supabase.from('field_config').update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from('field_config').update({ sort_order: a.sort_order }).eq('id', b.id),
+    ]);
+    if (r1.error || r2.error) {
+      toast({ title: 'Reorder failed', description: r1.error?.message ?? r2.error?.message, variant: 'destructive' });
+      load();
+    }
+  };
+
   if (loading) return <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>;
 
   return (
@@ -1386,7 +1420,7 @@ function FieldConfigTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Order</TableHead>
+                <TableHead className="w-[120px]">Order</TableHead>
                 <TableHead>Field Name</TableHead>
                 <TableHead>Display Name</TableHead>
                 <TableHead className="text-center">Enabled</TableHead>
@@ -1394,9 +1428,33 @@ function FieldConfigTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {fields.map(f => (
+              {fields.map((f, idx) => (
                 <TableRow key={f.id}>
-                  <TableCell>{f.sort_order}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={idx === 0}
+                        onClick={() => move(idx, 'up')}
+                        aria-label="Move up"
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={idx === fields.length - 1}
+                        onClick={() => move(idx, 'down')}
+                        aria-label="Move down"
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </Button>
+                      <span className="text-xs text-muted-foreground tabular-nums w-6 text-right">{f.sort_order}</span>
+                    </div>
+                  </TableCell>
                   <TableCell className="font-mono text-xs">{f.field_name}</TableCell>
                   <TableCell>{f.display_name}</TableCell>
                   <TableCell className="text-center">
