@@ -513,6 +513,7 @@ export default function SubtestList() {
             Clear sort ({sorting.length})
           </Button>
         )}
+        <div className="ml-auto"><StageProgressLegend /></div>
       </div>
 
       {/* Scrollable table with sticky header */}
