@@ -155,7 +155,7 @@ export default function DashboardPage() {
     t1Planned: { label: 'T1 Planned', color: 'hsl(220, 65%, 55%)' },
     t1Actual: { label: 'T1 Actual', color: 'hsl(220, 65%, 36%)' },
     t2Planned: { label: 'T2 Planned', color: 'hsl(142, 50%, 55%)' },
-    t2Actual: { label: 'T2 Actual', color: 'hsl(142, 71%, 35%)' },
+    t2Actual: { label: 'T2 Actual', color: 'hsl(0, 72%, 50%)' },
     Done: { label: 'Done', color: STATUS_COLORS.Done },
     WIP: { label: 'WIP', color: STATUS_COLORS.WIP },
     Planned: { label: 'Planned', color: STATUS_COLORS.Planned },
@@ -241,7 +241,7 @@ export default function DashboardPage() {
                 <Line type="monotone" dataKey="t1Planned" stroke="hsl(220, 65%, 55%)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="T1 Planned" />
                 <Line type="monotone" dataKey="t1Actual" stroke="hsl(220, 65%, 36%)" strokeWidth={2} dot={false} name="T1 Actual" />
                 <Line type="monotone" dataKey="t2Planned" stroke="hsl(142, 50%, 55%)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="T2 Planned" />
-                <Line type="monotone" dataKey="t2Actual" stroke="hsl(142, 71%, 35%)" strokeWidth={2} dot={false} name="T2 Actual" />
+                <Line type="monotone" dataKey="t2Actual" stroke="hsl(0, 72%, 50%)" strokeWidth={2} dot={false} name="T2 Actual" />
               </LineChart>
             </ChartContainer>
           )}
