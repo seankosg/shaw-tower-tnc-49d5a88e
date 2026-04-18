@@ -1,52 +1,60 @@
 
 
-## Plan vs Actual Breakdown 표 재구성 — Predecessor / T1 / T2 분리
+## Plan vs Actual Breakdown — "어제까지 누계" + "어제 당일" 컬럼 추가
 
 ### 변경 컨셉
-각 그룹마다 **3개 sub-row (Predecessor / T1 / T2)**로 분리하여 누계·당일 Plan/Actual/Δ를 명확히 표시. 첫 컬럼 헤더는 **System** (System 탭) / **Subcontractor** / **Sub-Sub** / **HDEC PIC** — 탭별 그룹명 사용 ("Group" 명칭 제거).
+현재 표는 **To-Date (오늘까지 누계)** + **Today (당일)** 2개 그룹. 사용자 요청:
+1. **누계 기준 변경**: 오늘까지 → **어제까지 누계** (Cumulative as of Yesterday)
+2. **신규 그룹 추가**: **Yesterday (어제 당일)** Plan/Actual/Δ
+3. 결과: **3개 그룹** = `To-Yesterday (누계)` | `Yesterday (어제)` | `Today (오늘)`
 
-### Predecessor 정의 (옵션 1 채택 가정)
-DB 변경 없이: **Predecessor Actual = T1이 WIP 또는 Done인 subtest 수**, **Predecessor Plan = T1 planned_date ≤ 오늘인 수**. (T1 시작 = Predecessor 완료로 간주)
-
-> 다른 옵션을 원하시면 말씀해 주세요.
-
-### 표 구조
+### 새 표 구조
 
 ```
-┌──────────┬───────┬──────┬──────────────────┬───────────────┬──────────┐
-│ System   │ Total │Stage │  To-Date 누계    │  Today 당일   │ Progress │
-│          │       │      │ Plan│Actual│ Δ  │Plan│Actual│ Δ │          │
-├──────────┼───────┼──────┼─────┼──────┼────┼────┼──────┼───┼──────────┤
-│ SYS-001  │  50   │ Pred │ 45  │  40  │ -5 │  2 │  1   │-1 │ ███░ 80% │
-│ rowspan=3│       │ T1   │ 40  │  35  │ -5 │  3 │  2   │-1 │ ██░░ 70% │
-│          │       │ T2   │ 30  │  20  │-10 │  2 │  0   │-2 │ █░░░ 40% │
-├──────────┼───────┼──────┴─────┴──────┴────┴────┴──────┴───┴──────────┤
-│ SYS-002  │ ...                                                        │
+┌───────┬──────┬──────┬───────────────────┬───────────────────┬───────────────────┬──────────┐
+│System │Total │Stage │ To-Yesterday 누계 │ Yesterday 어제   │ Today 오늘       │ Progress │
+│       │      │      │ Plan│Actual│ Δ   │ Plan│Actual│ Δ   │ Plan│Actual│ Δ   │          │
+├───────┼──────┼──────┼─────┼──────┼─────┼─────┼──────┼─────┼─────┼──────┼─────┼──────────┤
+│SYS-001│  50  │ Pred │ 43  │  39  │ -4  │  2  │  1   │ -1  │  2  │  0   │ -2  │ ███░ 78% │
+│       │      │ T1   │ 37  │  33  │ -4  │  3  │  2   │ -1  │  3  │  0   │ -3  │ ██░░ 66% │
+│       │      │ T2   │ 28  │  20  │ -8  │  2  │  0   │ -2  │  2  │  0   │ -2  │ █░░░ 40% │
 ```
 
-- 첫 컬럼 헤더는 탭별로 변경: **System** / **Subcontractor** / **Sub-Sub** / **HDEC PIC**
-- **Stage 배지**: Pred(회색) / T1(파랑) / T2(보라)
-- **Δ 컬러**: 음수=빨강, 0=회색, 양수=초록
-- **Progress**: stage별 단일 bar (`cumActual / totalSubtests`) + %
-- 그룹 사이 `border-t-2`로 구분 강화
-- 정렬 기본: T2 누계 Δ 가장 음수 순
+### 계산 규칙
+어제 = `today - 1 day`
 
-### 셀 클릭 Drill-down
-| 셀 | URL |
+| 메트릭 | 정의 |
 |---|---|
-| 첫 컬럼 이름 | `?<group>=...` |
-| T1/T2 누계 Plan | `?<group>=...&t{n}_planned_to=오늘` |
-| T1/T2 누계 Actual | `?<group>=...&t{n}_actual_to=오늘` |
-| T1/T2 당일 Plan | `?<group>=...&t{n}_planned_on=오늘` |
-| T1/T2 당일 Actual | `?<group>=...&t{n}_actual_on=오늘` |
-| Pred 누계 Actual | `?<group>=...&t1_status=WIP,Done` |
-| Pred 누계 Plan | `?<group>=...&t1_planned_to=오늘` |
+| `cumPlan` (누계) | `planned_date <= 어제` 건수 |
+| `cumActual` (누계) | `actual_date != null && actual_date <= 어제` 건수 |
+| `yesterdayPlan` | `planned_date == 어제` |
+| `yesterdayActual` | `actual_date == 어제` |
+| `todayPlan` | `planned_date == 오늘` |
+| `todayActual` | `actual_date == 오늘` |
+
+Predecessor도 동일 패턴 (T1 status 기반 actual은 누계만 의미가 있으므로, 어제/오늘 actual은 `t1_actual_date` 기준으로 사용).
+
+### Drill-down URL
+새로운 query param 추가 필요:
+- `t{n}_planned_to=어제`, `t{n}_actual_to=어제` (이미 `_to` 패턴 지원, 값만 어제로)
+- `t{n}_planned_on=어제/오늘`, `t{n}_actual_on=어제/오늘` (이미 `_on` 패턴 지원)
+
+→ **`SubtestList` 변경 불필요**. 기존 `_to` / `_on` 처리 그대로 활용.
+
+### Progress 컬럼
+분자는 **어제까지 누계 actual**로 변경 (그룹의 진척도 = 어제까지 완료된 비율).
+
+### 정렬 기본
+T2 누계 Δ (어제까지) 가장 음수 순 — 기존과 동일 로직, 데이터 기준만 어제.
 
 ### 변경 파일
 | 파일 | 변경 |
 |---|---|
-| `src/lib/dashboard-utils.ts` | `PlanActualRow`에 `predecessor` 메트릭 추가 (T1 status 기반 계산) |
-| `src/pages/DashboardPage.tsx` | `PlanActualTable` 재구성: rowspan 3-stage, 첫 컬럼 헤더 prop화 (System/Subcon/Sub-Sub/HDEC PIC) |
+| `src/lib/dashboard-utils.ts` | `PlanActualMetrics`에 `yesterdayPlan`, `yesterdayActual` 필드 추가 + `cumPlan/cumActual` 기준 일자 = `today - 1`로 변경. `aggregatePlanActualByGroup` 시그니처에 `yesterday` 파라미터 추가 |
+| `src/pages/DashboardPage.tsx` | `PlanActualTable`에 Yesterday 컬럼 그룹 (3 컬럼 colspan) 추가, 누계 헤더를 "To-Yesterday"로 변경, drill-down URL의 날짜 값을 어제로 변경 |
 
-DB / Edge function 변경 없음.
+DB / Edge function / 마이그레이션 변경 없음.
+
+### 모바일 대응
+컬럼이 9개(3그룹×3) + Total + Stage + Progress = 12개로 증가 → `overflow-x-auto` 유지, 셀 패딩 축소 (`px-2 py-1.5`).
 
