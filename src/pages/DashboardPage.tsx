@@ -447,12 +447,13 @@ function ClickVariance({ value, onClick }: { value: number; onClick?: () => void
 }
 
 function PlanActualTable({
-  rows, groupParam, groupHeader, today, navigate, keyToFilterValue,
+  rows, groupParam, groupHeader, today, yesterday, navigate, keyToFilterValue,
 }: {
   rows: PlanActualRow[];
   groupParam: 'system' | 'subcon' | 'subsub' | 'hdec_pic';
   groupHeader: string;
   today: string;
+  yesterday: string;
   navigate: (to: string) => void;
   keyToFilterValue?: (key: string) => string;
 }) {
@@ -486,11 +487,15 @@ function PlanActualTable({
             <TableHead rowSpan={2} className="align-bottom">{groupHeader}</TableHead>
             <TableHead rowSpan={2} className="text-right align-bottom">Total<br /><span className="text-[10px] font-normal text-muted-foreground">Subtests</span></TableHead>
             <TableHead rowSpan={2} className="align-bottom">Stage</TableHead>
-            <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">To-Date (Cumulative)</TableHead>
+            <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">To-Yesterday (Cumulative)</TableHead>
+            <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">Yesterday</TableHead>
             <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">Today</TableHead>
             <TableHead rowSpan={2} className="w-[140px] align-bottom border-l border-border">Progress</TableHead>
           </TableRow>
           <TableRow>
+            <TableHead className="text-right border-l border-border text-[11px]">Plan</TableHead>
+            <TableHead className="text-right text-[11px]">Actual</TableHead>
+            <TableHead className="text-right text-[11px]">Δ</TableHead>
             <TableHead className="text-right border-l border-border text-[11px]">Plan</TableHead>
             <TableHead className="text-right text-[11px]">Actual</TableHead>
             <TableHead className="text-right text-[11px]">Δ</TableHead>
@@ -505,7 +510,6 @@ function PlanActualTable({
               {
                 stage: 'pred', label: 'Pred', metrics: r.predecessor,
                 planTo: 't1_planned_to',
-                // Pred actual is "T1 has started" — filter by t1_status WIP/Done
                 actualOverride: { param: 't1_status', value: 'WIP,Done' },
                 planOn: 't1_planned_on',
                 actualOn: 't1_actual_on',
@@ -529,6 +533,7 @@ function PlanActualTable({
             return stages.map((st, i) => {
               const m = st.metrics;
               const cumD = m.cumActual - m.cumPlan;
+              const yD = m.yesterdayActual - m.yesterdayPlan;
               const todayD = m.todayActual - m.todayPlan;
               const pct = r.totalSubtests ? Math.round((m.cumActual / r.totalSubtests) * 100) : 0;
               const isFirst = i === 0;
@@ -541,44 +546,54 @@ function PlanActualTable({
                 >
                   {isFirst && (
                     <>
-                      <TableCell rowSpan={3} className="font-medium align-top">{r.label}</TableCell>
-                      <TableCell rowSpan={3} className="text-right tabular-nums align-top">{r.totalSubtests}</TableCell>
+                      <TableCell rowSpan={3} className="font-medium align-top px-2 py-1.5">{r.label}</TableCell>
+                      <TableCell rowSpan={3} className="text-right tabular-nums align-top px-2 py-1.5">{r.totalSubtests}</TableCell>
                     </>
                   )}
-                  <TableCell><StageBadge stage={st.stage} label={st.label} /></TableCell>
-                  {/* Cumulative */}
-                  <TableCell className="text-right border-l border-border text-xs">
-                    <ClickNum value={m.cumPlan} onClick={st.planTo ? () => go(r.key, { [st.planTo!]: today }) : undefined} />
+                  <TableCell className="px-2 py-1.5"><StageBadge stage={st.stage} label={st.label} /></TableCell>
+                  {/* Cumulative (to yesterday) */}
+                  <TableCell className="text-right border-l border-border text-xs px-2 py-1.5">
+                    <ClickNum value={m.cumPlan} onClick={st.planTo ? () => go(r.key, { [st.planTo!]: yesterday }) : undefined} />
                   </TableCell>
-                  <TableCell className="text-right text-xs">
+                  <TableCell className="text-right text-xs px-2 py-1.5">
                     <ClickNum
                       value={m.cumActual}
                       onClick={
                         st.actualTo
-                          ? () => go(r.key, { [st.actualTo!]: today })
+                          ? () => go(r.key, { [st.actualTo!]: yesterday })
                           : st.actualOverride
                             ? () => go(r.key, { [st.actualOverride!.param]: st.actualOverride!.value })
                             : undefined
                       }
                     />
                   </TableCell>
-                  <TableCell className="text-right text-xs">
+                  <TableCell className="text-right text-xs px-2 py-1.5">
                     <ClickVariance
                       value={cumD}
                       onClick={cumD < 0 ? () => go(r.key, { status: 'overdue' }) : undefined}
                     />
                   </TableCell>
+                  {/* Yesterday */}
+                  <TableCell className="text-right border-l border-border text-xs px-2 py-1.5">
+                    <ClickNum value={m.yesterdayPlan} onClick={st.planOn ? () => go(r.key, { [st.planOn!]: yesterday }) : undefined} />
+                  </TableCell>
+                  <TableCell className="text-right text-xs px-2 py-1.5">
+                    <ClickNum value={m.yesterdayActual} onClick={st.actualOn ? () => go(r.key, { [st.actualOn!]: yesterday }) : undefined} />
+                  </TableCell>
+                  <TableCell className="text-right text-xs px-2 py-1.5">
+                    <VarianceCell value={yD} />
+                  </TableCell>
                   {/* Today */}
-                  <TableCell className="text-right border-l border-border text-xs">
+                  <TableCell className="text-right border-l border-border text-xs px-2 py-1.5">
                     <ClickNum value={m.todayPlan} onClick={st.planOn ? () => go(r.key, { [st.planOn!]: today }) : undefined} />
                   </TableCell>
-                  <TableCell className="text-right text-xs">
+                  <TableCell className="text-right text-xs px-2 py-1.5">
                     <ClickNum value={m.todayActual} onClick={st.actualOn ? () => go(r.key, { [st.actualOn!]: today }) : undefined} />
                   </TableCell>
-                  <TableCell className="text-right text-xs">
+                  <TableCell className="text-right text-xs px-2 py-1.5">
                     <VarianceCell value={todayD} />
                   </TableCell>
-                  <TableCell className="border-l border-border">
+                  <TableCell className="border-l border-border px-2 py-1.5">
                     <div className="flex items-center gap-1.5">
                       <Progress value={pct} className="h-1.5 flex-1" />
                       <span className="text-[10px] text-muted-foreground w-9 text-right tabular-nums">{pct}%</span>
