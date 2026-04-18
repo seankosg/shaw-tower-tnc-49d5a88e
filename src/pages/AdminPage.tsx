@@ -1416,6 +1416,9 @@ function FieldConfigTab() {
     <Card>
       <CardHeader><CardTitle className="text-base">Field Configuration</CardTitle></CardHeader>
       <CardContent>
+        <p className="mb-3 text-xs text-muted-foreground">
+          The "Visible" toggle only controls whether the field is shown in the UI (Subtest List columns and Subtest Detail fields). Underlying data is always saved regardless of this setting.
+        </p>
         <div className="overflow-auto">
           <Table>
             <TableHeader>
@@ -1423,7 +1426,7 @@ function FieldConfigTab() {
                 <TableHead className="w-[120px]">Order</TableHead>
                 <TableHead>Field Name</TableHead>
                 <TableHead>Display Name</TableHead>
-                <TableHead className="text-center">Enabled</TableHead>
+                <TableHead className="text-center">Visible</TableHead>
                 <TableHead className="text-center">Required</TableHead>
               </TableRow>
             </TableHeader>
