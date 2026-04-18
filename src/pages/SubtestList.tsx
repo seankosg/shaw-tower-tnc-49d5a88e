@@ -133,10 +133,15 @@ export default function SubtestList() {
   const storageKey = user?.id ? `subtest-list-state:${user.id}` : 'subtest-list-state:anon';
   const { isFieldVisible, orderedFieldNames } = useFieldConfig();
 
-  const [data, setData] = useState<SubtestRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<SubtestRow[]>(() => {
+    const c = getSubtestCache();
+    return c.data ?? [];
+  });
+  const [loading, setLoading] = useState(() => getSubtestCache().data === null);
   const [stateLoaded, setStateLoaded] = useState(false);
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
+  // Debounced filter: searchInput is what the user types; globalFilter is what react-table sees
+  const [searchInput, setSearchInput] = useState('');
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
@@ -145,6 +150,7 @@ export default function SubtestList() {
   const urlStatusFilter = searchParams.get('status'); // 'overdue' | 'at_risk' | null
   const urlAtRiskDays = Number(searchParams.get('at_risk_days') ?? '2');
   const tableRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const autoSizeColumn = (columnId: string) => {
     const container = tableRef.current;
