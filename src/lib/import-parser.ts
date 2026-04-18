@@ -178,23 +178,47 @@ export interface ParsedSubtest {
   punchlist_comments: string | null;
 }
 
+// ── Known target field names (after normalization) ───────────────────
+export const KNOWN_FIELDS = new Set<string>([
+  'system', 'item_no', 'level', 'equipment', 'description',
+  'mos_1', 'mos_2', 'mos_3', 'mos_4', 'mos_5', 'mos_code', 'subtest_id',
+  't1_planned_date', 't1_status', 't2_planned_date', 't2_status',
+  'predecessor_status_raw',
+  'subcontractor_name', 'subsub_name', 'hdec_pic_name',
+  'r1_status', 'r2_status', 'aconex_ref_no', 'remarks', 'punchlist_comments',
+]);
+
+export interface ParseExcelResult {
+  rows: Record<string, string>[];
+  rawHeaders: string[];
+  mappedHeaders: string[];
+  unmappedHeaders: string[];
+}
+
 // ── Parse Excel file ──────────────────────────────────────────────────
-export function parseExcelFile(file: ArrayBuffer): Record<string, string>[] {
+export function parseExcelFile(file: ArrayBuffer): ParseExcelResult {
   const wb = XLSX.read(file, { type: 'array', cellDates: false });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-  if (raw.length < 2) return [];
+  if (raw.length < 2) {
+    return { rows: [], rawHeaders: [], mappedHeaders: [], unmappedHeaders: [] };
+  }
 
-  const headers = (raw[0] as string[]).map(h => normalizeHeader(String(h)));
-  return raw.slice(1)
+  const rawHeaders = (raw[0] as any[]).map(h => String(h ?? '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim());
+  const mappedHeaders = rawHeaders.map(h => normalizeHeader(h));
+  const unmappedHeaders = rawHeaders.filter((h, i) => h !== '' && !KNOWN_FIELDS.has(mappedHeaders[i]));
+
+  const rows = raw.slice(1)
     .filter(row => row.some((c: any) => c !== '' && c != null))
     .map((row, idx) => {
       const obj: Record<string, string> = { __row_no: String(idx + 2) };
-      headers.forEach((h, i) => {
+      mappedHeaders.forEach((h, i) => {
         obj[h] = row[i] != null ? String(row[i]) : '';
       });
       return obj;
     });
+
+  return { rows, rawHeaders, mappedHeaders, unmappedHeaders };
 }
 
 // ── Legacy parse: 1 row → multiple subtests (MOS-1~5) ────────────────
