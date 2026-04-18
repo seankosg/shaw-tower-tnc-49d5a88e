@@ -17,8 +17,9 @@ import {
 } from 'lucide-react';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import {
-  type SubtestForDashboard, todayIso, isOverdue, isAtRisk, maxDelayDays,
-  aggregateTests, aggregateByGroup, buildSCurve, NONE_LABEL,
+  type SubtestForDashboard, type PlanActualRow, type PlanActualMetrics,
+  todayIso, isOverdue, isAtRisk, maxDelayDays,
+  aggregateTests, aggregatePlanActualByGroup, buildSCurve, NONE_LABEL,
 } from '@/lib/dashboard-utils';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -98,22 +99,27 @@ export default function DashboardPage() {
     };
   }, [subtests, today, atRiskDays]);
 
-  // ───── Group aggregates per tab
+  // ───── Group aggregates per tab — Plan vs Actual rows
   const bySystem = useMemo(
-    () => aggregateByGroup(subtests, today, s => s.system_id, k => sysCodeById.get(k) ?? '—'),
+    () => aggregatePlanActualByGroup(subtests, today, s => s.system_id, k => sysCodeById.get(k) ?? '—'),
     [subtests, today, sysCodeById]
   );
   const bySubcon = useMemo(
-    () => aggregateByGroup(subtests, today, s => s.subcontractor_name ?? NONE_LABEL, k => k),
+    () => aggregatePlanActualByGroup(subtests, today, s => s.subcontractor_name ?? NONE_LABEL, k => k),
     [subtests, today]
   );
   const bySubsub = useMemo(
-    () => aggregateByGroup(subtests, today, s => s.subsub_name ?? NONE_LABEL, k => k),
+    () => aggregatePlanActualByGroup(subtests, today, s => s.subsub_name ?? NONE_LABEL, k => k),
     [subtests, today]
   );
   const byHdec = useMemo(
-    () => aggregateByGroup(subtests, today, s => s.hdec_pic_name ?? NONE_LABEL, k => k),
+    () => aggregatePlanActualByGroup(subtests, today, s => s.hdec_pic_name ?? NONE_LABEL, k => k),
     [subtests, today]
+  );
+  // bySystem uses system_id as key; URL filter expects system_code
+  const systemKeyResolver = useMemo(
+    () => (key: string) => sysCodeById.get(key) ?? key,
+    [sysCodeById]
   );
 
   // ───── S-Curve
@@ -256,16 +262,16 @@ export default function DashboardPage() {
               <TabsTrigger value="hdec">By HDEC PIC</TabsTrigger>
             </TabsList>
             <TabsContent value="system">
-              <GroupTable rows={bySystem} groupParam="system" navigate={navigate} />
+              <PlanActualTable rows={bySystem} groupParam="system" today={today} navigate={navigate} keyToFilterValue={systemKeyResolver} />
             </TabsContent>
             <TabsContent value="subcon">
-              <GroupTable rows={bySubcon} groupParam="subcon" navigate={navigate} />
+              <PlanActualTable rows={bySubcon} groupParam="subcon" today={today} navigate={navigate} />
             </TabsContent>
             <TabsContent value="subsub">
-              <GroupTable rows={bySubsub} groupParam="subsub" navigate={navigate} />
+              <PlanActualTable rows={bySubsub} groupParam="subsub" today={today} navigate={navigate} />
             </TabsContent>
             <TabsContent value="hdec">
-              <GroupTable rows={byHdec} groupParam="hdec_pic" navigate={navigate} />
+              <PlanActualTable rows={byHdec} groupParam="hdec_pic" today={today} navigate={navigate} />
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -393,72 +399,156 @@ function AlertBanner({
   );
 }
 
-interface GroupRow {
-  key: string;
-  label: string;
-  totalTests: number;
-  testsDone: number;
-  testsInProgress: number;
-  testsNotStarted: number;
-  overdueSubtests: number;
-  t1DonePct: number;
-  t2DonePct: number;
+function VarianceCell({ value }: { value: number }) {
+  if (value === 0) return <span className="text-muted-foreground">0</span>;
+  if (value > 0) return <span className="text-green-700 dark:text-green-400">+{value}</span>;
+  return <span className="text-destructive font-semibold">{value}</span>;
 }
 
-function GroupTable({
-  rows, groupParam, navigate,
+function PairCell({
+  t1, t2, onT1Click, onT2Click, render,
 }: {
-  rows: GroupRow[];
+  t1: number; t2: number;
+  onT1Click?: () => void; onT2Click?: () => void;
+  render?: (v: number) => React.ReactNode;
+}) {
+  const r = render ?? ((v: number) => <>{v}</>);
+  return (
+    <span className="tabular-nums text-xs">
+      <button
+        type="button"
+        className={onT1Click ? 'hover:underline' : 'cursor-default'}
+        onClick={(e) => { e.stopPropagation(); onT1Click?.(); }}
+      >
+        {r(t1)}
+      </button>
+      <span className="text-muted-foreground"> / </span>
+      <button
+        type="button"
+        className={onT2Click ? 'hover:underline' : 'cursor-default'}
+        onClick={(e) => { e.stopPropagation(); onT2Click?.(); }}
+      >
+        {r(t2)}
+      </button>
+    </span>
+  );
+}
+
+function PlanActualTable({
+  rows, groupParam, today, navigate, keyToFilterValue,
+}: {
+  rows: PlanActualRow[];
   groupParam: 'system' | 'subcon' | 'subsub' | 'hdec_pic';
+  today: string;
   navigate: (to: string) => void;
+  keyToFilterValue?: (key: string) => string;
 }) {
   if (rows.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">No data.</p>;
   }
+  const filterValue = (key: string) => (keyToFilterValue ? keyToFilterValue(key) : key);
   const go = (groupKey: string, extra?: Record<string, string>) => {
-    const value = groupKey === NONE_LABEL ? '' : groupKey;
+    const value = filterValue(groupKey);
     const params: Record<string, string> = { ...extra };
-    if (value) params[groupParam] = value;
+    if (value && value !== NONE_LABEL) params[groupParam] = value;
     navigate(`/?${new URLSearchParams(params).toString()}`);
   };
   return (
-    <div className="max-h-[420px] overflow-auto">
+    <div className="max-h-[460px] overflow-auto">
       <Table>
         <TableHeader className="sticky top-0 bg-background z-10">
           <TableRow>
-            <TableHead>Group</TableHead>
-            <TableHead className="text-right">Tests</TableHead>
-            <TableHead className="text-right">Done</TableHead>
-            <TableHead className="text-right">WIP</TableHead>
-            <TableHead className="text-right">Not Started</TableHead>
-            <TableHead className="text-right">Overdue</TableHead>
-            <TableHead className="text-right">T1 %</TableHead>
-            <TableHead className="text-right">T2 %</TableHead>
-            <TableHead className="w-[120px]">Progress</TableHead>
+            <TableHead rowSpan={2} className="align-bottom">Group</TableHead>
+            <TableHead rowSpan={2} className="text-right align-bottom">Total<br/><span className="text-[10px] font-normal text-muted-foreground">Subtests</span></TableHead>
+            <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">To-Date (Cumulative)</TableHead>
+            <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">Today</TableHead>
+            <TableHead rowSpan={2} className="w-[140px] align-bottom border-l border-border">Progress<br/><span className="text-[10px] font-normal text-muted-foreground">T1 / T2</span></TableHead>
+          </TableRow>
+          <TableRow>
+            <TableHead className="text-right border-l border-border text-[11px]">Plan<br/><span className="text-[9px] text-muted-foreground">T1/T2</span></TableHead>
+            <TableHead className="text-right text-[11px]">Actual<br/><span className="text-[9px] text-muted-foreground">T1/T2</span></TableHead>
+            <TableHead className="text-right text-[11px]">Δ<br/><span className="text-[9px] text-muted-foreground">T1/T2</span></TableHead>
+            <TableHead className="text-right border-l border-border text-[11px]">Plan<br/><span className="text-[9px] text-muted-foreground">T1/T2</span></TableHead>
+            <TableHead className="text-right text-[11px]">Actual<br/><span className="text-[9px] text-muted-foreground">T1/T2</span></TableHead>
+            <TableHead className="text-right text-[11px]">Δ<br/><span className="text-[9px] text-muted-foreground">T1/T2</span></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map(r => {
-            const donePct = r.totalTests ? Math.round((r.testsDone / r.totalTests) * 100) : 0;
+            const t1Pct = r.totalSubtests ? Math.round((r.t1.cumActual / r.totalSubtests) * 100) : 0;
+            const t2Pct = r.totalSubtests ? Math.round((r.t2.cumActual / r.totalSubtests) * 100) : 0;
+            const t1CumD = r.t1.cumActual - r.t1.cumPlan;
+            const t2CumD = r.t2.cumActual - r.t2.cumPlan;
+            const t1TodayD = r.t1.todayActual - r.t1.todayPlan;
+            const t2TodayD = r.t2.todayActual - r.t2.todayPlan;
             return (
               <TableRow key={r.key} className="cursor-pointer" onClick={() => go(r.key)}>
                 <TableCell className="font-medium">{r.label}</TableCell>
-                <TableCell className="text-right">{r.totalTests}</TableCell>
-                <TableCell className="text-right text-green-700 dark:text-green-400">{r.testsDone}</TableCell>
-                <TableCell className="text-right text-amber-700 dark:text-amber-400">{r.testsInProgress}</TableCell>
-                <TableCell className="text-right text-muted-foreground">{r.testsNotStarted}</TableCell>
-                <TableCell
-                  className={`text-right font-semibold ${r.overdueSubtests > 0 ? 'text-destructive' : 'text-muted-foreground'}`}
-                  onClick={(e) => { e.stopPropagation(); go(r.key, { status: 'overdue' }); }}
-                >
-                  {r.overdueSubtests > 0 ? `+${r.overdueSubtests}` : '0'}
+                <TableCell className="text-right tabular-nums">{r.totalSubtests}</TableCell>
+                {/* Cumulative */}
+                <TableCell className="text-right border-l border-border">
+                  <PairCell
+                    t1={r.t1.cumPlan}
+                    t2={r.t2.cumPlan}
+                    onT1Click={() => go(r.key, { t1_planned_to: today })}
+                    onT2Click={() => go(r.key, { t2_planned_to: today })}
+                  />
                 </TableCell>
-                <TableCell className="text-right">{r.t1DonePct}%</TableCell>
-                <TableCell className="text-right">{r.t2DonePct}%</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Progress value={donePct} className="h-2" />
-                    <span className="text-xs text-muted-foreground w-9 text-right">{donePct}%</span>
+                <TableCell className="text-right">
+                  <PairCell
+                    t1={r.t1.cumActual}
+                    t2={r.t2.cumActual}
+                    onT1Click={() => go(r.key, { t1_actual_to: today })}
+                    onT2Click={() => go(r.key, { t2_actual_to: today })}
+                  />
+                </TableCell>
+                <TableCell className="text-right">
+                  <span className="text-xs tabular-nums">
+                    <button type="button" className="hover:underline" onClick={(e) => { e.stopPropagation(); if (t1CumD < 0) go(r.key, { status: 'overdue' }); }}>
+                      <VarianceCell value={t1CumD} />
+                    </button>
+                    <span className="text-muted-foreground"> / </span>
+                    <button type="button" className="hover:underline" onClick={(e) => { e.stopPropagation(); if (t2CumD < 0) go(r.key, { status: 'overdue' }); }}>
+                      <VarianceCell value={t2CumD} />
+                    </button>
+                  </span>
+                </TableCell>
+                {/* Today */}
+                <TableCell className="text-right border-l border-border">
+                  <PairCell
+                    t1={r.t1.todayPlan}
+                    t2={r.t2.todayPlan}
+                    onT1Click={() => go(r.key, { t1_planned_on: today })}
+                    onT2Click={() => go(r.key, { t2_planned_on: today })}
+                  />
+                </TableCell>
+                <TableCell className="text-right">
+                  <PairCell
+                    t1={r.t1.todayActual}
+                    t2={r.t2.todayActual}
+                    onT1Click={() => go(r.key, { t1_actual_on: today })}
+                    onT2Click={() => go(r.key, { t2_actual_on: today })}
+                  />
+                </TableCell>
+                <TableCell className="text-right">
+                  <span className="text-xs tabular-nums">
+                    <VarianceCell value={t1TodayD} />
+                    <span className="text-muted-foreground"> / </span>
+                    <VarianceCell value={t2TodayD} />
+                  </span>
+                </TableCell>
+                <TableCell className="border-l border-border">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-muted-foreground w-4">T1</span>
+                      <Progress value={t1Pct} className="h-1.5 flex-1" />
+                      <span className="text-[10px] text-muted-foreground w-8 text-right tabular-nums">{t1Pct}%</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-muted-foreground w-4">T2</span>
+                      <Progress value={t2Pct} className="h-1.5 flex-1" />
+                      <span className="text-[10px] text-muted-foreground w-8 text-right tabular-nums">{t2Pct}%</span>
+                    </div>
                   </div>
                 </TableCell>
               </TableRow>
