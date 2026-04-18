@@ -18,7 +18,7 @@ import {
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import {
   type SubtestForDashboard, type PlanActualRow, type PlanActualMetrics,
-  todayIso, isOverdue, isAtRisk, maxDelayDays,
+  todayIso, yesterdayIso, isOverdue, isAtRisk, maxDelayDays,
   aggregateTests, aggregatePlanActualByGroup, buildSCurve, NONE_LABEL,
 } from '@/lib/dashboard-utils';
 
