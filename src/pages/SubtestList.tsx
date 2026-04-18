@@ -213,19 +213,30 @@ export default function SubtestList() {
     setSorting(baseSorting);
     setColumnFilters(next);
     setGlobalFilter(baseGlobal);
+    setSearchInput(baseGlobal);
     setColumnSizing(baseSizing);
     setStateLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, searchParams]);
 
-  // Persist on change (only after initial load to avoid overwriting)
+  // Debounce: searchInput → globalFilter (300ms). Prevents re-filter on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setGlobalFilter(searchInput), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Persist on change (only after initial load to avoid overwriting). Debounced 500ms so
+  // column resize drag does not stringify on every pixel.
   useEffect(() => {
     if (!stateLoaded) return;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify({ sorting, columnFilters, globalFilter, columnSizing }));
-    } catch {
-      // ignore quota errors
-    }
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify({ sorting, columnFilters, globalFilter, columnSizing }));
+      } catch {
+        // ignore quota errors
+      }
+    }, 500);
+    return () => clearTimeout(t);
   }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter, columnSizing]);
 
   useEffect(() => {
@@ -239,7 +250,15 @@ export default function SubtestList() {
   };
 
   const fetchData = async () => {
-    setLoading(true);
+    // If cache present, render immediately and refresh in background.
+    const cached = getSubtestCache();
+    if (cached.data) {
+      setData(cached.data as SubtestRow[]);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
     let allData: any[] = [];
     const PAGE_SIZE = 1000;
     let from = 0;
@@ -262,10 +281,12 @@ export default function SubtestList() {
       }
     }
 
-    setData(allData.map((row: any) => ({
+    const mapped = allData.map((row: any) => ({
       ...row,
       system_code: row.system_master?.system_code ?? '',
-    })));
+    }));
+    setData(mapped as SubtestRow[]);
+    setSubtestCache(mapped as any);
     setLoading(false);
   };
 
