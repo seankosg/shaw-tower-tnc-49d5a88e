@@ -400,45 +400,57 @@ function AlertBanner({
 }
 
 function VarianceCell({ value }: { value: number }) {
-  if (value === 0) return <span className="text-muted-foreground">0</span>;
-  if (value > 0) return <span className="text-green-700 dark:text-green-400">+{value}</span>;
-  return <span className="text-destructive font-semibold">{value}</span>;
+  if (value === 0) return <span className="text-muted-foreground tabular-nums">0</span>;
+  if (value > 0) return <span className="text-green-700 dark:text-green-400 tabular-nums">+{value}</span>;
+  return <span className="text-destructive font-semibold tabular-nums">{value}</span>;
 }
 
-function PairCell({
-  t1, t2, onT1Click, onT2Click, render,
-}: {
-  t1: number; t2: number;
-  onT1Click?: () => void; onT2Click?: () => void;
-  render?: (v: number) => React.ReactNode;
-}) {
-  const r = render ?? ((v: number) => <>{v}</>);
+const STAGE_BADGE: Record<'pred' | 't1' | 't2', string> = {
+  pred: 'bg-muted text-muted-foreground border-border',
+  t1: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30',
+  t2: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30',
+};
+
+function StageBadge({ stage, label }: { stage: 'pred' | 't1' | 't2'; label: string }) {
   return (
-    <span className="tabular-nums text-xs">
-      <button
-        type="button"
-        className={onT1Click ? 'hover:underline' : 'cursor-default'}
-        onClick={(e) => { e.stopPropagation(); onT1Click?.(); }}
-      >
-        {r(t1)}
-      </button>
-      <span className="text-muted-foreground"> / </span>
-      <button
-        type="button"
-        className={onT2Click ? 'hover:underline' : 'cursor-default'}
-        onClick={(e) => { e.stopPropagation(); onT2Click?.(); }}
-      >
-        {r(t2)}
-      </button>
+    <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold ${STAGE_BADGE[stage]}`}>
+      {label}
     </span>
   );
 }
 
+function ClickNum({ value, onClick }: { value: number; onClick?: () => void }) {
+  if (!onClick) return <span className="tabular-nums">{value}</span>;
+  return (
+    <button
+      type="button"
+      className="tabular-nums hover:underline"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+    >
+      {value}
+    </button>
+  );
+}
+
+function ClickVariance({ value, onClick }: { value: number; onClick?: () => void }) {
+  if (!onClick) return <VarianceCell value={value} />;
+  return (
+    <button
+      type="button"
+      className="hover:underline"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+    >
+      <VarianceCell value={value} />
+    </button>
+  );
+}
+
 function PlanActualTable({
-  rows, groupParam, today, navigate, keyToFilterValue,
+  rows, groupParam, groupHeader, today, navigate, keyToFilterValue,
 }: {
   rows: PlanActualRow[];
   groupParam: 'system' | 'subcon' | 'subsub' | 'hdec_pic';
+  groupHeader: string;
   today: string;
   navigate: (to: string) => void;
   keyToFilterValue?: (key: string) => string;
@@ -453,106 +465,127 @@ function PlanActualTable({
     if (value && value !== NONE_LABEL) params[groupParam] = value;
     navigate(`/?${new URLSearchParams(params).toString()}`);
   };
+
+  type StageDef = {
+    stage: 'pred' | 't1' | 't2';
+    label: string;
+    metrics: PlanActualMetrics;
+    planTo?: string;
+    actualTo?: string;
+    planOn?: string;
+    actualOn?: string;
+    actualOverride?: { param: string; value: string };
+  };
+
   return (
-    <div className="max-h-[460px] overflow-auto">
+    <div className="max-h-[520px] overflow-auto">
       <Table>
         <TableHeader className="sticky top-0 bg-background z-10">
           <TableRow>
-            <TableHead rowSpan={2} className="align-bottom">Group</TableHead>
-            <TableHead rowSpan={2} className="text-right align-bottom">Total<br/><span className="text-[10px] font-normal text-muted-foreground">Subtests</span></TableHead>
+            <TableHead rowSpan={2} className="align-bottom">{groupHeader}</TableHead>
+            <TableHead rowSpan={2} className="text-right align-bottom">Total<br /><span className="text-[10px] font-normal text-muted-foreground">Subtests</span></TableHead>
+            <TableHead rowSpan={2} className="align-bottom">Stage</TableHead>
             <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">To-Date (Cumulative)</TableHead>
             <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">Today</TableHead>
-            <TableHead rowSpan={2} className="w-[140px] align-bottom border-l border-border">Progress<br/><span className="text-[10px] font-normal text-muted-foreground">T1 / T2</span></TableHead>
+            <TableHead rowSpan={2} className="w-[140px] align-bottom border-l border-border">Progress</TableHead>
           </TableRow>
           <TableRow>
-            <TableHead className="text-right border-l border-border text-[11px]">Plan<br/><span className="text-[9px] text-muted-foreground">T1/T2</span></TableHead>
-            <TableHead className="text-right text-[11px]">Actual<br/><span className="text-[9px] text-muted-foreground">T1/T2</span></TableHead>
-            <TableHead className="text-right text-[11px]">Δ<br/><span className="text-[9px] text-muted-foreground">T1/T2</span></TableHead>
-            <TableHead className="text-right border-l border-border text-[11px]">Plan<br/><span className="text-[9px] text-muted-foreground">T1/T2</span></TableHead>
-            <TableHead className="text-right text-[11px]">Actual<br/><span className="text-[9px] text-muted-foreground">T1/T2</span></TableHead>
-            <TableHead className="text-right text-[11px]">Δ<br/><span className="text-[9px] text-muted-foreground">T1/T2</span></TableHead>
+            <TableHead className="text-right border-l border-border text-[11px]">Plan</TableHead>
+            <TableHead className="text-right text-[11px]">Actual</TableHead>
+            <TableHead className="text-right text-[11px]">Δ</TableHead>
+            <TableHead className="text-right border-l border-border text-[11px]">Plan</TableHead>
+            <TableHead className="text-right text-[11px]">Actual</TableHead>
+            <TableHead className="text-right text-[11px]">Δ</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map(r => {
-            const t1Pct = r.totalSubtests ? Math.round((r.t1.cumActual / r.totalSubtests) * 100) : 0;
-            const t2Pct = r.totalSubtests ? Math.round((r.t2.cumActual / r.totalSubtests) * 100) : 0;
-            const t1CumD = r.t1.cumActual - r.t1.cumPlan;
-            const t2CumD = r.t2.cumActual - r.t2.cumPlan;
-            const t1TodayD = r.t1.todayActual - r.t1.todayPlan;
-            const t2TodayD = r.t2.todayActual - r.t2.todayPlan;
-            return (
-              <TableRow key={r.key} className="cursor-pointer" onClick={() => go(r.key)}>
-                <TableCell className="font-medium">{r.label}</TableCell>
-                <TableCell className="text-right tabular-nums">{r.totalSubtests}</TableCell>
-                {/* Cumulative */}
-                <TableCell className="text-right border-l border-border">
-                  <PairCell
-                    t1={r.t1.cumPlan}
-                    t2={r.t2.cumPlan}
-                    onT1Click={() => go(r.key, { t1_planned_to: today })}
-                    onT2Click={() => go(r.key, { t2_planned_to: today })}
-                  />
-                </TableCell>
-                <TableCell className="text-right">
-                  <PairCell
-                    t1={r.t1.cumActual}
-                    t2={r.t2.cumActual}
-                    onT1Click={() => go(r.key, { t1_actual_to: today })}
-                    onT2Click={() => go(r.key, { t2_actual_to: today })}
-                  />
-                </TableCell>
-                <TableCell className="text-right">
-                  <span className="text-xs tabular-nums">
-                    <button type="button" className="hover:underline" onClick={(e) => { e.stopPropagation(); if (t1CumD < 0) go(r.key, { status: 'overdue' }); }}>
-                      <VarianceCell value={t1CumD} />
-                    </button>
-                    <span className="text-muted-foreground"> / </span>
-                    <button type="button" className="hover:underline" onClick={(e) => { e.stopPropagation(); if (t2CumD < 0) go(r.key, { status: 'overdue' }); }}>
-                      <VarianceCell value={t2CumD} />
-                    </button>
-                  </span>
-                </TableCell>
-                {/* Today */}
-                <TableCell className="text-right border-l border-border">
-                  <PairCell
-                    t1={r.t1.todayPlan}
-                    t2={r.t2.todayPlan}
-                    onT1Click={() => go(r.key, { t1_planned_on: today })}
-                    onT2Click={() => go(r.key, { t2_planned_on: today })}
-                  />
-                </TableCell>
-                <TableCell className="text-right">
-                  <PairCell
-                    t1={r.t1.todayActual}
-                    t2={r.t2.todayActual}
-                    onT1Click={() => go(r.key, { t1_actual_on: today })}
-                    onT2Click={() => go(r.key, { t2_actual_on: today })}
-                  />
-                </TableCell>
-                <TableCell className="text-right">
-                  <span className="text-xs tabular-nums">
-                    <VarianceCell value={t1TodayD} />
-                    <span className="text-muted-foreground"> / </span>
-                    <VarianceCell value={t2TodayD} />
-                  </span>
-                </TableCell>
-                <TableCell className="border-l border-border">
-                  <div className="space-y-1">
+          {rows.map((r, idx) => {
+            const stages: StageDef[] = [
+              {
+                stage: 'pred', label: 'Pred', metrics: r.predecessor,
+                planTo: 't1_planned_to',
+                // Pred actual is "T1 has started" — filter by t1_status WIP/Done
+                actualOverride: { param: 't1_status', value: 'WIP,Done' },
+                planOn: 't1_planned_on',
+                actualOn: 't1_actual_on',
+              },
+              {
+                stage: 't1', label: 'T1', metrics: r.t1,
+                planTo: 't1_planned_to',
+                actualTo: 't1_actual_to',
+                planOn: 't1_planned_on',
+                actualOn: 't1_actual_on',
+              },
+              {
+                stage: 't2', label: 'T2', metrics: r.t2,
+                planTo: 't2_planned_to',
+                actualTo: 't2_actual_to',
+                planOn: 't2_planned_on',
+                actualOn: 't2_actual_on',
+              },
+            ];
+
+            return stages.map((st, i) => {
+              const m = st.metrics;
+              const cumD = m.cumActual - m.cumPlan;
+              const todayD = m.todayActual - m.todayPlan;
+              const pct = r.totalSubtests ? Math.round((m.cumActual / r.totalSubtests) * 100) : 0;
+              const isFirst = i === 0;
+              const groupBorder = idx > 0 && isFirst ? 'border-t-2 border-t-border' : '';
+              return (
+                <TableRow
+                  key={`${r.key}-${st.stage}`}
+                  className={`${groupBorder} cursor-pointer`}
+                  onClick={() => go(r.key)}
+                >
+                  {isFirst && (
+                    <>
+                      <TableCell rowSpan={3} className="font-medium align-top">{r.label}</TableCell>
+                      <TableCell rowSpan={3} className="text-right tabular-nums align-top">{r.totalSubtests}</TableCell>
+                    </>
+                  )}
+                  <TableCell><StageBadge stage={st.stage} label={st.label} /></TableCell>
+                  {/* Cumulative */}
+                  <TableCell className="text-right border-l border-border text-xs">
+                    <ClickNum value={m.cumPlan} onClick={st.planTo ? () => go(r.key, { [st.planTo!]: today }) : undefined} />
+                  </TableCell>
+                  <TableCell className="text-right text-xs">
+                    <ClickNum
+                      value={m.cumActual}
+                      onClick={
+                        st.actualTo
+                          ? () => go(r.key, { [st.actualTo!]: today })
+                          : st.actualOverride
+                            ? () => go(r.key, { [st.actualOverride!.param]: st.actualOverride!.value })
+                            : undefined
+                      }
+                    />
+                  </TableCell>
+                  <TableCell className="text-right text-xs">
+                    <ClickVariance
+                      value={cumD}
+                      onClick={cumD < 0 ? () => go(r.key, { status: 'overdue' }) : undefined}
+                    />
+                  </TableCell>
+                  {/* Today */}
+                  <TableCell className="text-right border-l border-border text-xs">
+                    <ClickNum value={m.todayPlan} onClick={st.planOn ? () => go(r.key, { [st.planOn!]: today }) : undefined} />
+                  </TableCell>
+                  <TableCell className="text-right text-xs">
+                    <ClickNum value={m.todayActual} onClick={st.actualOn ? () => go(r.key, { [st.actualOn!]: today }) : undefined} />
+                  </TableCell>
+                  <TableCell className="text-right text-xs">
+                    <VarianceCell value={todayD} />
+                  </TableCell>
+                  <TableCell className="border-l border-border">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-muted-foreground w-4">T1</span>
-                      <Progress value={t1Pct} className="h-1.5 flex-1" />
-                      <span className="text-[10px] text-muted-foreground w-8 text-right tabular-nums">{t1Pct}%</span>
+                      <Progress value={pct} className="h-1.5 flex-1" />
+                      <span className="text-[10px] text-muted-foreground w-9 text-right tabular-nums">{pct}%</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-muted-foreground w-4">T2</span>
-                      <Progress value={t2Pct} className="h-1.5 flex-1" />
-                      <span className="text-[10px] text-muted-foreground w-8 text-right tabular-nums">{t2Pct}%</span>
-                    </div>
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
+                  </TableCell>
+                </TableRow>
+              );
+            });
           })}
         </TableBody>
       </Table>
