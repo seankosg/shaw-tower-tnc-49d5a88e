@@ -140,10 +140,21 @@ export function aggregateByGroup(
 }
 
 export interface PlanActualMetrics {
+  /** Cumulative as of yesterday (planned_date <= yesterday) */
   cumPlan: number;
+  /** Cumulative as of yesterday (actual_date <= yesterday) */
   cumActual: number;
+  yesterdayPlan: number;
+  yesterdayActual: number;
   todayPlan: number;
   todayActual: number;
+}
+
+/** Returns ISO date string for (today - 1 day). */
+export function yesterdayIso(today: string): string {
+  const d = new Date(today + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
 }
 
 export interface PlanActualRow {
