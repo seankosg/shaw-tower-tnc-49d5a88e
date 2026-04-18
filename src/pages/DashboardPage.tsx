@@ -17,8 +17,9 @@ import {
 } from 'lucide-react';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import {
-  type SubtestForDashboard, todayIso, isOverdue, isAtRisk, maxDelayDays,
-  aggregateTests, aggregateByGroup, buildSCurve, NONE_LABEL,
+  type SubtestForDashboard, type PlanActualRow, type PlanActualMetrics,
+  todayIso, isOverdue, isAtRisk, maxDelayDays,
+  aggregateTests, aggregatePlanActualByGroup, buildSCurve, NONE_LABEL,
 } from '@/lib/dashboard-utils';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -98,22 +99,27 @@ export default function DashboardPage() {
     };
   }, [subtests, today, atRiskDays]);
 
-  // ───── Group aggregates per tab
+  // ───── Group aggregates per tab — Plan vs Actual rows
   const bySystem = useMemo(
-    () => aggregateByGroup(subtests, today, s => s.system_id, k => sysCodeById.get(k) ?? '—'),
+    () => aggregatePlanActualByGroup(subtests, today, s => s.system_id, k => sysCodeById.get(k) ?? '—'),
     [subtests, today, sysCodeById]
   );
   const bySubcon = useMemo(
-    () => aggregateByGroup(subtests, today, s => s.subcontractor_name ?? NONE_LABEL, k => k),
+    () => aggregatePlanActualByGroup(subtests, today, s => s.subcontractor_name ?? NONE_LABEL, k => k),
     [subtests, today]
   );
   const bySubsub = useMemo(
-    () => aggregateByGroup(subtests, today, s => s.subsub_name ?? NONE_LABEL, k => k),
+    () => aggregatePlanActualByGroup(subtests, today, s => s.subsub_name ?? NONE_LABEL, k => k),
     [subtests, today]
   );
   const byHdec = useMemo(
-    () => aggregateByGroup(subtests, today, s => s.hdec_pic_name ?? NONE_LABEL, k => k),
+    () => aggregatePlanActualByGroup(subtests, today, s => s.hdec_pic_name ?? NONE_LABEL, k => k),
     [subtests, today]
+  );
+  // bySystem uses system_id as key; URL filter expects system_code
+  const systemKeyResolver = useMemo(
+    () => (key: string) => sysCodeById.get(key) ?? key,
+    [sysCodeById]
   );
 
   // ───── S-Curve
@@ -256,16 +262,16 @@ export default function DashboardPage() {
               <TabsTrigger value="hdec">By HDEC PIC</TabsTrigger>
             </TabsList>
             <TabsContent value="system">
-              <GroupTable rows={bySystem} groupParam="system" navigate={navigate} />
+              <PlanActualTable rows={bySystem} groupParam="system" today={today} navigate={navigate} keyToFilterValue={systemKeyResolver} />
             </TabsContent>
             <TabsContent value="subcon">
-              <GroupTable rows={bySubcon} groupParam="subcon" navigate={navigate} />
+              <PlanActualTable rows={bySubcon} groupParam="subcon" today={today} navigate={navigate} />
             </TabsContent>
             <TabsContent value="subsub">
-              <GroupTable rows={bySubsub} groupParam="subsub" navigate={navigate} />
+              <PlanActualTable rows={bySubsub} groupParam="subsub" today={today} navigate={navigate} />
             </TabsContent>
             <TabsContent value="hdec">
-              <GroupTable rows={byHdec} groupParam="hdec_pic" navigate={navigate} />
+              <PlanActualTable rows={byHdec} groupParam="hdec_pic" today={today} navigate={navigate} />
             </TabsContent>
           </Tabs>
         </CardContent>
