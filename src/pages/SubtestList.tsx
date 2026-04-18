@@ -129,7 +129,7 @@ export default function SubtestList() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const storageKey = user?.id ? `subtest-list-state:${user.id}` : 'subtest-list-state:anon';
-  const { isFieldVisible } = useFieldConfig();
+  const { isFieldVisible, orderedFieldNames } = useFieldConfig();
 
   const [data, setData] = useState<SubtestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -421,6 +421,8 @@ export default function SubtestList() {
     system_code: 'system',
     // others map by identical key (e.g. item_no, mos_code, t1_status, ...)
   };
+  // Reverse map: field_name → react-table column id
+  const fieldNameToColumnId: Record<string, string> = { system: 'system_code' };
   const columnVisibility = useMemo<VisibilityState>(() => {
     const visibility: VisibilityState = {};
     for (const col of columns) {
@@ -434,6 +436,34 @@ export default function SubtestList() {
     return visibility;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columns, isFieldVisible]);
+
+  // Compute column order from field_config sort_order.
+  // Pinned identity columns stay at the front; stage_progress stays right after item_no.
+  const columnOrder = useMemo<string[]>(() => {
+    const allIds = columns
+      .map(c => (c as any).id ?? (c as any).accessorKey)
+      .filter(Boolean) as string[];
+    const PINNED_FRONT = ['item_no', 'stage_progress', 'system_code', 'subtest_id', 'mos_code'];
+    const pinned = PINNED_FRONT.filter(id => allIds.includes(id));
+    const remaining = new Set(allIds.filter(id => !pinned.includes(id)));
+    const ordered: string[] = [];
+    for (const fname of orderedFieldNames) {
+      const colId = fieldNameToColumnId[fname] ?? fname;
+      if (remaining.has(colId)) {
+        ordered.push(colId);
+        remaining.delete(colId);
+      }
+    }
+    // Append any leftover columns (no config row) at the end, preserving original order.
+    for (const id of allIds) {
+      if (remaining.has(id)) {
+        ordered.push(id);
+        remaining.delete(id);
+      }
+    }
+    return [...pinned, ...ordered];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns, orderedFieldNames]);
 
   const table = useReactTable({
     data: filteredData,
