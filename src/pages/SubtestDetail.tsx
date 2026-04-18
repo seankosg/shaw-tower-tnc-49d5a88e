@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useFieldConfig } from '@/hooks/useFieldConfig';
 import { TC_STATUS_OPTIONS } from '@/types/enums';
 import type { TcStatus, DataSource, ChangeSource } from '@/types/enums';
+import { invalidateSubtestCache } from '@/lib/subtest-cache';
 
 interface SubtestDetail {
   id: string;
@@ -185,6 +186,7 @@ export default function SubtestDetailPage() {
         );
       }
       toast({ title: 'Saved', description: 'Subtest updated successfully.' });
+      invalidateSubtestCache();
       fetchRecord();
       fetchChangeLogs();
     }
@@ -202,6 +204,7 @@ export default function SubtestDetailPage() {
       toast({ title: 'Delete Failed', description: error.message, variant: 'destructive' });
     } else {
       toast({ title: 'Deleted', description: `Subtest ${record.subtest_id} has been deleted.` });
+      invalidateSubtestCache();
       navigate('/');
     }
     setDeleting(false);
