@@ -346,7 +346,7 @@ export default function SubtestList() {
         if (!actual) return <span className="text-muted-foreground">—</span>;
         const late = planned && actual > planned;
         return (
-          <span className={cn('inline-flex items-center gap-1 font-medium', late ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400')}>
+          <span className={cn('inline-flex items-center gap-1 font-medium', late ? 'text-destructive' : 'text-success')}>
             <Check className="h-3 w-3" />{formatDdMmm(actual)}
           </span>
         );
