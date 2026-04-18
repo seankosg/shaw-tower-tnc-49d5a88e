@@ -69,6 +69,7 @@ export default function DashboardPage() {
   }, []);
 
   const today = todayIso();
+  const yesterday = yesterdayIso(today);
   const sysCodeById = useMemo(() => {
     const m = new Map<string, string>();
     systems.forEach(s => m.set(s.id, s.system_code));
