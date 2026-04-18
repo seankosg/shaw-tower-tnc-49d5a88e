@@ -72,12 +72,12 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     for (const item of items) {
       try {
         const buf = await item.file.arrayBuffer();
-        const rows = parseExcelFile(buf);
+        const { rows, unmappedHeaders } = parseExcelFile(buf);
         const subtests = importTypeRef.current === 'legacy' ? parseLegacy(rows) : parseStandard(rows);
         if (subtests.length === 0) {
-          updateFile(item.id, { status: 'failed', error: 'No valid rows found' });
+          updateFile(item.id, { status: 'failed', error: 'No valid rows found', unmappedHeaders });
         } else {
-          updateFile(item.id, { status: 'ready', parsedCount: subtests.length, parsed: subtests });
+          updateFile(item.id, { status: 'ready', parsedCount: subtests.length, parsed: subtests, unmappedHeaders });
         }
       } catch (e: any) {
         updateFile(item.id, { status: 'failed', error: e.message });
