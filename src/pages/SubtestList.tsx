@@ -3,10 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel,
   flexRender, type ColumnDef, type SortingState, type ColumnFiltersState,
-  type ColumnSizingState,
+  type ColumnSizingState, type VisibilityState,
 } from '@tanstack/react-table';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFieldConfig } from '@/hooks/useFieldConfig';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { DataSourceTag } from '@/components/shared/DataSourceTag';
 import { StageProgress, StageProgressLegend } from '@/components/shared/StageProgress';
@@ -128,6 +129,7 @@ export default function SubtestList() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const storageKey = user?.id ? `subtest-list-state:${user.id}` : 'subtest-list-state:anon';
+  const { isFieldVisible } = useFieldConfig();
 
   const [data, setData] = useState<SubtestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -414,10 +416,29 @@ export default function SubtestList() {
       urlT1PlannedTo, urlT2PlannedTo, urlT1ActualTo, urlT2ActualTo,
       urlT1PlannedOn, urlT2PlannedOn, urlT1ActualOn, urlT2ActualOn]);
 
+  // Map react-table column id → field_config.field_name
+  const columnIdToFieldName: Record<string, string> = {
+    system_code: 'system',
+    // others map by identical key (e.g. item_no, mos_code, t1_status, ...)
+  };
+  const columnVisibility = useMemo<VisibilityState>(() => {
+    const visibility: VisibilityState = {};
+    for (const col of columns) {
+      const id = (col as any).id ?? (col as any).accessorKey;
+      if (!id) continue;
+      // stage_progress is a synthetic UI column — always show
+      if (id === 'stage_progress') continue;
+      const fieldName = columnIdToFieldName[id] ?? id;
+      visibility[id] = isFieldVisible(fieldName);
+    }
+    return visibility;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns, isFieldVisible]);
+
   const table = useReactTable({
     data: filteredData,
     columns,
-    state: { sorting, globalFilter, columnFilters, columnSizing },
+    state: { sorting, globalFilter, columnFilters, columnSizing, columnVisibility },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,
