@@ -510,7 +510,7 @@ export default function SubtestList() {
     isMultiSortEvent: (e) => (e as unknown as MouseEvent).shiftKey,
     maxMultiSortColCount: 5,
     enableColumnResizing: true,
-    columnResizeMode: 'onChange',
+    columnResizeMode: 'onEnd',
     defaultColumn: { minSize: 60, maxSize: 600 },
   });
 
