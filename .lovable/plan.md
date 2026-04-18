@@ -1,30 +1,53 @@
 
 
-## Import 헤더 줄바꿈 처리 — "Pre\ndecessor\nStatus" 매핑
+## Field Config 순서 이동 기능 추가
 
-### 문제
-Excel 셀 안에서 헤더가 줄바꿈으로 끊긴 경우 (예: `"Pre\ndecessor\nStatus"`) `normalizeHeader()`가 `predecessor status`로 정상 변환됩니다 — 이미 `\r\n` → space 처리 + 공백 정규화 로직 있음.
+### 목표
+Admin > Field Config 탭에서 각 필드의 표시 순서를 변경할 수 있도록 하고, 변경된 순서가 SubtestList(컬럼 순서)와 SubtestDetail(필드 순서)에 실제로 반영되도록 합니다.
 
-**진짜 문제**: 줄바꿈 제거 후 결과가 `"predecessor status"` 인데, `HEADER_MAP`에는 `'predecessor status'` 키가 **없음**. 현재 등록된 키:
-- `'predecessor status'` ❌ (없음)
-- `'precessor status'` ✓
-- `'predecessor'` ✓
-- `'predecessor_status_raw'` ✓
+### 현재 상태
+- `field_config.sort_order` 컬럼은 이미 존재 (integer, default 0)
+- `useFieldConfig` 훅이 `sort_order`를 가져오고 있지만 활용 안 됨
+- `FieldConfigTab()`은 단순 리스트로 표시, 순서 변경 UI 없음
+- `SubtestList`: 컬럼 순서가 코드에 하드코딩됨
+- `SubtestDetail`: 필드 순서가 JSX 구조로 하드코딩됨
 
-따라서 `"Pre\ndecessor\nStatus"` → `"predecessor status"` → 매핑 실패 → 그대로 `"predecessor status"`로 남아 `parseStandard/parseLegacy`에서 `row.predecessor_status_raw`로 못 읽음.
+### 변경 방안
 
-### 해결
-`src/lib/import-parser.ts`의 `HEADER_MAP`에 누락된 별칭 추가:
-- `'predecessor status'` → `'predecessor_status_raw'`
-- `'pre decessor status'` → `'predecessor_status_raw'` (혹시 공백이 다르게 합쳐질 경우 대비)
-- `'pre decessor'` → `'predecessor_status_raw'`
+**1. Admin UI — 순서 변경 컨트롤 (`AdminPage.tsx` > `FieldConfigTab`)**
+- 각 행에 `↑` / `↓` 버튼 추가 (단순/직관적, 모바일 친화)
+- `sort_order` 기준으로 정렬하여 표시
+- 위/아래 버튼 클릭 시 인접한 두 행의 `sort_order` 값을 swap (DB UPDATE 2건)
+- 첫 행은 `↑` disable, 마지막 행은 `↓` disable
+- 드래그앤드롭은 의존성 추가 필요 + 모바일 UX 복잡 → 단순 버튼 방식 채택
 
-추가로 헤더 정규화에 **이미 있는** `\r\n` → space 처리가 모든 줄바꿈 (`\n`, `\r\n`, `\v`, `\f`)을 잡는지 확인 — 현재 `/[\r\n]+/g`로 `\n`도 처리됨 ✓.
+**2. Hook 정렬 (`useFieldConfig.ts`)**
+- 쿼리에 `.order('sort_order', { ascending: true })` 추가
+- 정렬된 `field_name` 배열을 노출하는 `orderedFieldNames` 헬퍼 추가
+
+**3. SubtestList 컬럼 순서 반영 (`SubtestList.tsx`)**
+- TanStack Table의 `columnOrder` state 사용
+- `field_config`의 `sort_order`에 맞춰 `columnOrder` 계산
+- 항상 표시되는 키 컬럼(`system`, `item_no`, `subtest_id`, `mos_code`)은 항상 맨 앞 + `stage_progress`는 마지막 고정 (기존 UX 유지)
+- 나머지는 config 순서대로 배치
+
+**4. SubtestDetail 필드 순서 반영 (`SubtestDetail.tsx`)**
+- 현재는 카드(섹션)별 JSX 하드코딩 구조 → 카드 단위 재정렬은 큰 리팩터 필요
+- **MVP 범위**: 카드 내부 필드 순서는 유지하되, "Additional Fields" 같은 자유 필드 영역만 `sort_order`로 정렬. (이 부분은 Detail 페이지 구조 확인 후 정확히 결정 — 가능하면 이번에 적용, 불가하면 List만 적용 후 후속으로)
 
 ### 변경 파일
+
 | 파일 | 변경 |
 |---|---|
-| `src/lib/import-parser.ts` | `HEADER_MAP`에 줄바꿈으로 분리되는 케이스의 별칭 3개 추가 |
+| `src/hooks/useFieldConfig.ts` | `sort_order` 정렬 + `orderedFieldNames` 노출 |
+| `src/pages/AdminPage.tsx` | `FieldConfigTab`에 ↑↓ 버튼 + swap 로직 추가 |
+| `src/pages/SubtestList.tsx` | `columnOrder` state로 컬럼 순서 동적 적용 |
+| `src/pages/SubtestDetail.tsx` | (가능 범위에서) sort_order 적용, 또는 후속 처리 |
 
-DB / Edge function 변경 없음.
+DB 스키마 변경 없음 (sort_order 컬럼 이미 존재).
+
+### 기술 메모
+- Swap 시 두 UPDATE를 `Promise.all`로 병렬 실행 후 `loadFields()` 재호출
+- 동일 `sort_order` 충돌 방지: 초기 로드 시 sort_order가 모두 0이면 인덱스로 1회 normalize (선택)
+- SubtestList 키 컬럼 고정 정책은 `useFieldConfig`의 `ALWAYS_VISIBLE_FIELDS`와 동일한 의도 유지
 
