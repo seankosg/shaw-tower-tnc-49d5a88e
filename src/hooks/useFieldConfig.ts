@@ -10,14 +10,13 @@ export interface FieldConfigRow {
 }
 
 /**
- * Always-visible fields (key/identity columns). These are never hidden by
- * the Field Config toggle to preserve data integrity & navigation.
+ * Minimal protection: only `subtest_id` is always visible so each row remains
+ * identifiable/clickable. All other fields (including key columns like
+ * system/item_no/mos_code) can be freely hidden via Field Config — the
+ * underlying data is always saved regardless of visibility.
  */
 const ALWAYS_VISIBLE_FIELDS = new Set<string>([
-  'system',
-  'item_no',
   'subtest_id',
-  'mos_code',
 ]);
 
 /**
