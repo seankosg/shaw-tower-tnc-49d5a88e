@@ -416,10 +416,29 @@ export default function SubtestList() {
       urlT1PlannedTo, urlT2PlannedTo, urlT1ActualTo, urlT2ActualTo,
       urlT1PlannedOn, urlT2PlannedOn, urlT1ActualOn, urlT2ActualOn]);
 
+  // Map react-table column id → field_config.field_name
+  const columnIdToFieldName: Record<string, string> = {
+    system_code: 'system',
+    // others map by identical key (e.g. item_no, mos_code, t1_status, ...)
+  };
+  const columnVisibility = useMemo<VisibilityState>(() => {
+    const visibility: VisibilityState = {};
+    for (const col of columns) {
+      const id = (col as any).id ?? (col as any).accessorKey;
+      if (!id) continue;
+      // stage_progress is a synthetic UI column — always show
+      if (id === 'stage_progress') continue;
+      const fieldName = columnIdToFieldName[id] ?? id;
+      visibility[id] = isFieldVisible(fieldName);
+    }
+    return visibility;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns, isFieldVisible]);
+
   const table = useReactTable({
     data: filteredData,
     columns,
-    state: { sorting, globalFilter, columnFilters, columnSizing },
+    state: { sorting, globalFilter, columnFilters, columnSizing, columnVisibility },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,
