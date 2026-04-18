@@ -3,10 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel,
   flexRender, type ColumnDef, type SortingState, type ColumnFiltersState,
-  type ColumnSizingState,
+  type ColumnSizingState, type VisibilityState,
 } from '@tanstack/react-table';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFieldConfig } from '@/hooks/useFieldConfig';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { DataSourceTag } from '@/components/shared/DataSourceTag';
 import { StageProgress, StageProgressLegend } from '@/components/shared/StageProgress';
