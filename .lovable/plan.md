@@ -1,89 +1,71 @@
 
 
-## Dashboard 재디자인 — 최종 플랜 (At-Risk 임계값 반영)
+## Breakdown 표 재디자인 — Plan vs Actual + Variance
 
-### 핵심 컨셉
-**"Plan vs Actual, drill from big to small"** — 프로젝트 전체 → System / Subcontractor / Sub-Sub / HDEC PIC → Subtest 상세까지 파고드는 대시보드. 지연 경고가 항상 최상단.
+### 핵심 변경
+현재 표는 "Done / In Progress / Not Started / Overdue / T1% / T2%"로 상태 분포만 보여주고, **계획대비 실적·차이가 직관적으로 안 드러남**. 이를 **Plan / Actual / Variance** 중심 표로 재구성.
 
-### 데이터 모델 활용
-- **Test 단위 완료 판정**: `(project_id, system_id, item_no)` 그룹 내 모든 subtest의 T2가 Done이면 Test 완료
-- **지연 분류** (Admin에서 임계값 설정 가능, default 2일):
-  - 🔴 **Overdue**: 계획일 < 오늘 & 미완료
-  - 🟡 **At-Risk**: 계획일까지 ≤ N일 (default 2일) & 미완료
-  - 즉, 3일 이상 남은 건은 정상
+### 새 표 구조 (System / Subcon / Sub-Sub / HDEC PIC 공통)
 
----
+서브테스트 단위 카운트 기준 (T1, T2 각각). 실적 = `actual_date <= 오늘`인 건수, 계획 = `planned_date <= 오늘`인 건수.
 
-### 레이아웃 (Top → Bottom)
+| 그룹 | Total Subtests | **누계 (To-Date)** ||| **금일 (Today)** ||| Progress |
+|---|---|---|---|---|---|---|---|---|
+| | | Plan | Actual | **Δ** | Plan | Actual | **Δ** | |
 
-#### 1. Top KPI Strip (8개 카드, 2행 × 4열)
-Total Tests / Tests Done / Tests in Progress / Tests Not Started  
-Total Subtests / T1 Done % / T2 Done % / Overdue Count (빨강)
-- 카드 클릭 → SubtestList로 해당 필터 적용 이동
+각 셀은 **T1 / T2**를 한 줄에 표기 (예: `45 / 30`). Variance Δ:
+- **음수 (지연)**: 빨강, `-5` 형식
+- **0 / 양수**: 회색 / 녹색
+- 계획보다 실적이 적으면 음수
 
-#### 2. Alert Banner — Overdue & At-Risk
-- 🔴 **Overdue** 건수 + "View"
-- 🟡 **At-Risk (≤2일)** 건수 + "View"
+**Progress** 컬럼: 작은 dual-bar (T1 누계실적/Total, T2 누계실적/Total) + % 텍스트.
 
-#### 3. Plan vs Actual — S-Curve (전체 폭)
-**시간 단위 토글: Daily / Weekly**
-- 4개 라인: T1 Planned (점선), T1 Actual (실선), T2 Planned (점선), T2 Actual (실선)
-- 오늘 날짜 세로선 표시
+**Total Subtests** = 그룹의 전체 subtest 수 (= "최종 목표량"으로서 분모 역할).
 
-#### 4. 4개 탭: System / Subcontractor / Sub-Sub / HDEC PIC
-| 그룹명 | Total Tests | Done | In Progress | Not Started | Overdue | T1 % | T2 % | Progress |
+### 정렬 / 인터랙션
+- 기본 정렬: **Cumulative Variance가 가장 큰 음수 (가장 지연된)** 순 — Overdue 정렬 대체
+- 정렬 토글: Total / 누계Δ / 금일Δ
+- 셀 클릭 drill-down:
+  - "누계 Plan" 클릭 → SubtestList `?<group>=...&t1_planned_to=오늘` (또는 t2)
+  - "누계 Actual" 클릭 → `?<group>=...&t1_actual_to=오늘`
+  - "누계 Δ (음수)" 클릭 → `?<group>=...&status=overdue`
+  - "금일 Plan" 클릭 → `?<group>=...&t1_planned_on=오늘`
+  - 그룹명 클릭 → 그룹 전체 필터
 
-- 행 클릭 → SubtestList로 해당 그룹 필터 이동
-- 기본 정렬: Overdue 많은 순
-- Sub-Sub 탭: NULL은 "(None)" 그룹
-
-#### 5. 하단 2분할
-**왼쪽**: Top 10 Overdue Subtests (지연일수 표시) → 행 클릭 시 SubtestDetail  
-**오른쪽**: Status Distribution 도넛 2개 (T1 / T2) — 세그먼트 클릭 시 SubtestList 필터
-
----
-
-### Subtest 연동 (Drill-Down)
-SubtestList가 `useSearchParams`로 URL query param 필터 수신:
-- `?system=` / `?subcon=` / `?subsub=` / `?hdec_pic=`
-- `?status=overdue` / `?status=at_risk`
-- `?t1_status=` / `?t2_status=`
-
----
-
-### At-Risk 임계값 — Admin 설정
-
-**저장 방식**: 신규 테이블 `app_settings` (key/value)
-```sql
-CREATE TABLE app_settings (
-  key text PRIMARY KEY,
-  value jsonb NOT NULL,
-  updated_at timestamptz DEFAULT now(),
-  updated_by uuid
-);
--- RLS: 모두 SELECT 가능, admin/superuser만 UPDATE
--- Seed: ('at_risk_threshold_days', '2'::jsonb)
+### 데이터 모델 추가
+`dashboard-utils.ts`에 새 헬퍼:
+```ts
+interface PlanActualRow {
+  key: string; label: string;
+  totalSubtests: number;
+  t1: { cumPlan, cumActual, todayPlan, todayActual };
+  t2: { cumPlan, cumActual, todayPlan, todayActual };
+}
+function aggregatePlanActualByGroup(subs, today, groupKey, groupLabel): PlanActualRow[]
 ```
+계산 규칙:
+- `cumPlan`: `t1_planned_date <= today` 건수
+- `cumActual`: `t1_actual_date != null && t1_actual_date <= today` 건수
+- `todayPlan`: `t1_planned_date == today`
+- `todayActual`: `t1_actual_date == today`
+- `Δ = Actual − Plan` (음수 = 지연)
 
-**Admin UI**: AdminPage.tsx에 신규 **Settings** 탭 추가
-- "At-Risk Threshold (days)" number input (1~30 범위)
-- "현재 ≤ N일 남은 미완료 건을 At-Risk로 표시" 설명
-- Save 버튼 → toast
+기존 `aggregateByGroup` (Tests Done/WIP 기반)은 KPI strip / Top Overdue용으로 유지.
 
-**대시보드 사용**: 마운트 시 `app_settings`에서 `at_risk_threshold_days` fetch → 분류 로직에 반영. 변경 시 dashboard 새로고침으로 반영.
-
----
+### SubtestList 필터 확장
+신규 query param 처리:
+- `t1_planned_to`, `t2_planned_to`, `t1_actual_to`, `t2_actual_to` (≤ 날짜)
+- `t1_planned_on`, `t2_planned_on`, `t1_actual_on`, `t2_actual_on` (= 날짜)
 
 ### 변경 파일
-
 | 파일 | 변경 |
-|------|------|
-| `src/pages/DashboardPage.tsx` | 전면 재작성: KPI strip, Alert banner, S-curve(Daily/Weekly), 4-tab breakdown, 하단 split |
-| `src/pages/SubtestList.tsx` | URL query param 필터 수신 (system/subcon/subsub/hdec_pic/status/t1_status/t2_status) |
-| `src/pages/AdminPage.tsx` | Settings 탭 추가 (At-Risk 임계값 input) |
-| `src/lib/dashboard-utils.ts` (신규) | Test 완료 판정, overdue/at-risk 분류, S-curve 일/주 단위 aggregation, 4종 그룹별 집계 |
-| `src/hooks/useAppSettings.ts` (신규) | `at_risk_threshold_days` fetch/update 훅 |
-| Migration | `app_settings` 테이블 생성 + RLS + seed |
+|---|---|
+| `src/lib/dashboard-utils.ts` | `aggregatePlanActualByGroup` + `PlanActualRow` 타입 추가 |
+| `src/pages/DashboardPage.tsx` | `GroupTable` → `PlanActualTable`로 교체, 4개 탭 모두 새 데이터 사용 |
+| `src/pages/SubtestList.tsx` | 신규 날짜 query param (`*_to`, `*_on`) 필터링 로직 추가 |
 
-Edge function 변경 없음. recharts 기존 그대로.
+DB / Edge function / 마이그레이션 변경 없음.
+
+### 모바일 대응
+430px 뷰포트에선 컬럼이 많으므로 표는 가로 스크롤 (`overflow-x-auto`). "누계/금일" 그룹 헤더는 colspan으로 시각적으로 묶음.
 
