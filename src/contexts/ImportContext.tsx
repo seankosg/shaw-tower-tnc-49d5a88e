@@ -17,6 +17,7 @@ export interface ImportFileItem {
   result?: { inserted: number; updated: number; skipped: number; rejected: number };
   error?: string;
   parsed?: ParsedSubtest[];
+  unmappedHeaders?: string[];
 }
 
 interface ImportContextValue {
