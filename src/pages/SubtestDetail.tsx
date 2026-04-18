@@ -14,6 +14,7 @@ import { DataSourceTag } from '@/components/shared/DataSourceTag';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFieldConfig } from '@/hooks/useFieldConfig';
 import { TC_STATUS_OPTIONS } from '@/types/enums';
 import type { TcStatus, DataSource, ChangeSource } from '@/types/enums';
 
