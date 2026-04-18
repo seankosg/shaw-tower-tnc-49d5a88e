@@ -599,12 +599,14 @@ export default function SubtestList() {
                 const r = row.original;
                 const delayed = isDelayed(r.t1_planned_date, r.t1_actual_date) ||
                                 isDelayed(r.t2_planned_date, r.t2_actual_date);
+                const t2Done = r.t2_status === 'Done';
                 return (
                   <TableRow
                     key={row.id}
                     className={cn(
                       'cursor-pointer hover:bg-muted/50',
-                      delayed && 'bg-destructive/5'
+                      t2Done && 'bg-muted/30 text-muted-foreground',
+                      delayed && !t2Done && 'bg-destructive/5'
                     )}
                     onClick={() => navigate(`/subtests/${r.id}`)}
                   >
