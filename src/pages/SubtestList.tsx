@@ -567,8 +567,12 @@ export default function SubtestList() {
         <div className="ml-auto"><StageProgressLegend /></div>
       </div>
 
-      {/* Scrollable table with sticky header */}
-      <div ref={tableRef} className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
+      {/* Scrollable table with sticky header.
+          Outer = vertical scroll only. Inner = horizontal scroll.
+          This keeps the horizontal scrollbar under the scrollable (non-sticky) columns area only,
+          since sticky columns also live inside the horizontal scroller and stay pinned via position: sticky. */}
+      <div ref={tableRef} className="rounded-md border max-h-[calc(100vh-220px)] overflow-y-auto overflow-x-hidden">
+        <div className="overflow-x-auto">
         {(() => {
           const STICKY_COUNT = 3;
           const leafCols = table.getVisibleLeafColumns();
@@ -724,6 +728,7 @@ export default function SubtestList() {
             </Table>
           );
         })()}
+        </div>
       </div>
     </div>
   );
