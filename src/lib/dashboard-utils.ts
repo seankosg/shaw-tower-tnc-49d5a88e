@@ -139,6 +139,69 @@ export function aggregateByGroup(
   return out.sort((a, b) => b.overdueSubtests - a.overdueSubtests || a.label.localeCompare(b.label));
 }
 
+export interface PlanActualMetrics {
+  cumPlan: number;
+  cumActual: number;
+  todayPlan: number;
+  todayActual: number;
+}
+
+export interface PlanActualRow {
+  key: string;
+  label: string;
+  totalSubtests: number;
+  t1: PlanActualMetrics;
+  t2: PlanActualMetrics;
+}
+
+/** Aggregate Plan vs Actual metrics by group. */
+export function aggregatePlanActualByGroup(
+  subs: SubtestForDashboard[],
+  today: string,
+  groupKey: (s: SubtestForDashboard) => string,
+  groupLabel: (key: string) => string
+): PlanActualRow[] {
+  const buckets = new Map<string, SubtestForDashboard[]>();
+  for (const s of subs) {
+    const k = groupKey(s);
+    const arr = buckets.get(k) ?? [];
+    arr.push(s);
+    buckets.set(k, arr);
+  }
+
+  const out: PlanActualRow[] = [];
+  for (const [k, items] of buckets) {
+    const calc = (
+      plannedField: 't1_planned_date' | 't2_planned_date',
+      actualField: 't1_actual_date' | 't2_actual_date'
+    ): PlanActualMetrics => {
+      let cumPlan = 0, cumActual = 0, todayPlan = 0, todayActual = 0;
+      for (const i of items) {
+        const p = i[plannedField];
+        const a = i[actualField];
+        if (p && p <= today) cumPlan++;
+        if (a && a <= today) cumActual++;
+        if (p === today) todayPlan++;
+        if (a === today) todayActual++;
+      }
+      return { cumPlan, cumActual, todayPlan, todayActual };
+    };
+    out.push({
+      key: k,
+      label: groupLabel(k),
+      totalSubtests: items.length,
+      t1: calc('t1_planned_date', 't1_actual_date'),
+      t2: calc('t2_planned_date', 't2_actual_date'),
+    });
+  }
+  // default sort: most-delayed (largest negative cumulative variance T2 then T1) first
+  return out.sort((a, b) => {
+    const va = (a.t1.cumActual - a.t1.cumPlan) + (a.t2.cumActual - a.t2.cumPlan);
+    const vb = (b.t1.cumActual - b.t1.cumPlan) + (b.t2.cumActual - b.t2.cumPlan);
+    return va - vb || a.label.localeCompare(b.label);
+  });
+}
+
 export type SCurveBucket = 'day' | 'week';
 
 export interface SCurvePoint {
