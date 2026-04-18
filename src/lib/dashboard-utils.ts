@@ -140,10 +140,21 @@ export function aggregateByGroup(
 }
 
 export interface PlanActualMetrics {
+  /** Cumulative as of yesterday (planned_date <= yesterday) */
   cumPlan: number;
+  /** Cumulative as of yesterday (actual_date <= yesterday) */
   cumActual: number;
+  yesterdayPlan: number;
+  yesterdayActual: number;
   todayPlan: number;
   todayActual: number;
+}
+
+/** Returns ISO date string for (today - 1 day). */
+export function yesterdayIso(today: string): string {
+  const d = new Date(today + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
 }
 
 export interface PlanActualRow {
@@ -170,38 +181,43 @@ export function aggregatePlanActualByGroup(
     buckets.set(k, arr);
   }
 
+  const yesterday = yesterdayIso(today);
   const out: PlanActualRow[] = [];
   for (const [k, items] of buckets) {
     const calc = (
       plannedField: 't1_planned_date' | 't2_planned_date',
       actualField: 't1_actual_date' | 't2_actual_date'
     ): PlanActualMetrics => {
-      let cumPlan = 0, cumActual = 0, todayPlan = 0, todayActual = 0;
+      let cumPlan = 0, cumActual = 0, yPlan = 0, yActual = 0, tPlan = 0, tActual = 0;
       for (const i of items) {
         const p = i[plannedField];
         const a = i[actualField];
-        if (p && p <= today) cumPlan++;
-        if (a && a <= today) cumActual++;
-        if (p === today) todayPlan++;
-        if (a === today) todayActual++;
+        if (p && p <= yesterday) cumPlan++;
+        if (a && a <= yesterday) cumActual++;
+        if (p === yesterday) yPlan++;
+        if (a === yesterday) yActual++;
+        if (p === today) tPlan++;
+        if (a === today) tActual++;
       }
-      return { cumPlan, cumActual, todayPlan, todayActual };
+      return { cumPlan, cumActual, yesterdayPlan: yPlan, yesterdayActual: yActual, todayPlan: tPlan, todayActual: tActual };
     };
-    // Predecessor = T1 시작 전 단계.
-    // Plan = T1 planned_date <= today (T1 시작 예정이면 Pred 끝나야 함)
-    // Actual = T1이 WIP 또는 Done인 subtest 수 (T1 시작 = Pred 완료)
+    // Predecessor: T1 시작 전 단계
+    // Plan = T1 planned_date <= 어제 / Actual cumulative = T1이 WIP 또는 Done
+    // 어제/오늘 actual은 t1_actual_date 기준 (T1 시작일 = Pred 완료일로 간주)
     const calcPred = (): PlanActualMetrics => {
-      let cumPlan = 0, cumActual = 0, todayPlan = 0, todayActual = 0;
+      let cumPlan = 0, cumActual = 0, yPlan = 0, yActual = 0, tPlan = 0, tActual = 0;
       for (const i of items) {
         const p = i.t1_planned_date;
+        const a = i.t1_actual_date;
         const started = i.t1_status === 'WIP' || i.t1_status === 'Done';
-        if (p && p <= today) cumPlan++;
-        if (started) cumActual++;
-        if (p === today) todayPlan++;
-        // todayActual approximation: T1 actual_date == today means Pred completed today
-        if (i.t1_actual_date === today) todayActual++;
+        if (p && p <= yesterday) cumPlan++;
+        if (started && (!a || a <= yesterday)) cumActual++;
+        if (p === yesterday) yPlan++;
+        if (a === yesterday) yActual++;
+        if (p === today) tPlan++;
+        if (a === today) tActual++;
       }
-      return { cumPlan, cumActual, todayPlan, todayActual };
+      return { cumPlan, cumActual, yesterdayPlan: yPlan, yesterdayActual: yActual, todayPlan: tPlan, todayActual: tActual };
     };
     out.push({
       key: k,
