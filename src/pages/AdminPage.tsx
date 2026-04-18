@@ -1392,20 +1392,30 @@ function FieldConfigTab() {
   const move = async (index: number, direction: 'up' | 'down') => {
     const target = direction === 'up' ? index - 1 : index + 1;
     if (target < 0 || target >= fields.length) return;
-    const a = fields[index];
-    const b = fields[target];
-    // Swap sort_order values
-    const next = [...fields];
-    next[index] = { ...a, sort_order: b.sort_order };
-    next[target] = { ...b, sort_order: a.sort_order };
-    next.sort((x, y) => x.sort_order - y.sort_order);
-    setFields(next); // optimistic
-    const [r1, r2] = await Promise.all([
-      supabase.from('field_config').update({ sort_order: b.sort_order }).eq('id', a.id),
-      supabase.from('field_config').update({ sort_order: a.sort_order }).eq('id', b.id),
-    ]);
-    if (r1.error || r2.error) {
-      toast({ title: 'Reorder failed', description: r1.error?.message ?? r2.error?.message, variant: 'destructive' });
+
+    // Reorder array, then re-normalize ALL sort_order values to (idx+1)*10.
+    // This avoids issues with duplicate or zero sort_order values that would
+    // make a simple swap a no-op (e.g. last row not moving when its sort_order
+    // ties with a neighbor).
+    const reordered = [...fields];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    const normalized = reordered.map((r, idx) => ({ ...r, sort_order: (idx + 1) * 10 }));
+
+    setFields(normalized); // optimistic
+
+    // Persist only rows whose sort_order actually changed.
+    const changed = normalized.filter((r) => {
+      const prev = fields.find((f) => f.id === r.id);
+      return !prev || prev.sort_order !== r.sort_order;
+    });
+    const results = await Promise.all(
+      changed.map((r) =>
+        supabase.from('field_config').update({ sort_order: r.sort_order }).eq('id', r.id)
+      )
+    );
+    const firstError = results.find((r) => r.error)?.error;
+    if (firstError) {
+      toast({ title: 'Reorder failed', description: firstError.message, variant: 'destructive' });
       load();
     }
   };
