@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useImport, type FileStatus } from '@/contexts/ImportContext';
 
@@ -150,6 +150,18 @@ export default function ImportPage() {
                         </span>
                       )}
                     </div>
+                    {f.unmappedHeaders && f.unmappedHeaders.length > 0 && (
+                      <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950 px-2 py-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 text-yellow-700 dark:text-yellow-300 shrink-0 mt-0.5" />
+                        <div className="text-xs text-yellow-800 dark:text-yellow-200 min-w-0">
+                          <span className="font-medium">Unmapped headers ({f.unmappedHeaders.length}):</span>{' '}
+                          <span className="break-words">{f.unmappedHeaders.join(', ')}</span>
+                          <div className="text-[11px] text-yellow-700 dark:text-yellow-300 mt-0.5">
+                            These columns will be ignored during import.
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {f.status === 'processing' && (
                       <Progress value={f.progress} className="h-1 mt-2" />
                     )}
