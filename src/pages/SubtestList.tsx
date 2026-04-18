@@ -312,9 +312,17 @@ export default function SubtestList() {
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
   ], [systemOptions, statusOptions, sourceOptions]);
 
-  // Apply status (overdue / at_risk) URL filter at data level
+  // Apply status (overdue / at_risk) + date URL filters at data level
+  const urlT1PlannedTo = searchParams.get('t1_planned_to');
+  const urlT2PlannedTo = searchParams.get('t2_planned_to');
+  const urlT1ActualTo = searchParams.get('t1_actual_to');
+  const urlT2ActualTo = searchParams.get('t2_actual_to');
+  const urlT1PlannedOn = searchParams.get('t1_planned_on');
+  const urlT2PlannedOn = searchParams.get('t2_planned_on');
+  const urlT1ActualOn = searchParams.get('t1_actual_on');
+  const urlT2ActualOn = searchParams.get('t2_actual_on');
+
   const filteredData = useMemo(() => {
-    if (!urlStatusFilter) return data;
     const today = new Date().toISOString().slice(0, 10);
     const daysFromToday = (iso: string) => {
       const a = new Date(iso + 'T00:00:00Z').getTime();
@@ -322,22 +330,37 @@ export default function SubtestList() {
       return Math.round((a - b) / 86400000);
     };
     return data.filter(r => {
-      const overdue =
-        (r.t1_planned_date && r.t1_planned_date < today && r.t1_status !== 'Done') ||
-        (r.t2_planned_date && r.t2_planned_date < today && r.t2_status !== 'Done');
-      if (urlStatusFilter === 'overdue') return overdue;
-      if (urlStatusFilter === 'at_risk') {
-        if (overdue) return false;
-        const within = (planned: string | null, status: TcStatus | null) => {
-          if (!planned || status === 'Done') return false;
-          const d = daysFromToday(planned);
-          return d >= 0 && d <= urlAtRiskDays;
-        };
-        return within(r.t1_planned_date, r.t1_status) || within(r.t2_planned_date, r.t2_status);
+      // status filter
+      if (urlStatusFilter) {
+        const overdue =
+          (r.t1_planned_date && r.t1_planned_date < today && r.t1_status !== 'Done') ||
+          (r.t2_planned_date && r.t2_planned_date < today && r.t2_status !== 'Done');
+        if (urlStatusFilter === 'overdue' && !overdue) return false;
+        if (urlStatusFilter === 'at_risk') {
+          if (overdue) return false;
+          const within = (planned: string | null, status: TcStatus | null) => {
+            if (!planned || status === 'Done') return false;
+            const d = daysFromToday(planned);
+            return d >= 0 && d <= urlAtRiskDays;
+          };
+          if (!within(r.t1_planned_date, r.t1_status) && !within(r.t2_planned_date, r.t2_status)) return false;
+        }
       }
+      // date <= filters
+      if (urlT1PlannedTo && !(r.t1_planned_date && r.t1_planned_date <= urlT1PlannedTo)) return false;
+      if (urlT2PlannedTo && !(r.t2_planned_date && r.t2_planned_date <= urlT2PlannedTo)) return false;
+      if (urlT1ActualTo && !(r.t1_actual_date && r.t1_actual_date <= urlT1ActualTo)) return false;
+      if (urlT2ActualTo && !(r.t2_actual_date && r.t2_actual_date <= urlT2ActualTo)) return false;
+      // date == filters
+      if (urlT1PlannedOn && r.t1_planned_date !== urlT1PlannedOn) return false;
+      if (urlT2PlannedOn && r.t2_planned_date !== urlT2PlannedOn) return false;
+      if (urlT1ActualOn && r.t1_actual_date !== urlT1ActualOn) return false;
+      if (urlT2ActualOn && r.t2_actual_date !== urlT2ActualOn) return false;
       return true;
     });
-  }, [data, urlStatusFilter, urlAtRiskDays]);
+  }, [data, urlStatusFilter, urlAtRiskDays,
+      urlT1PlannedTo, urlT2PlannedTo, urlT1ActualTo, urlT2ActualTo,
+      urlT1PlannedOn, urlT2PlannedOn, urlT1ActualOn, urlT2ActualOn]);
 
   const table = useReactTable({
     data: filteredData,
@@ -364,10 +387,14 @@ export default function SubtestList() {
     const map: Record<string, string> = {
       system: 'System', subcon: 'Subcon', subsub: 'Sub-Sub',
       hdec_pic: 'HDEC PIC', t1_status: 'T1', t2_status: 'T2', status: 'Status',
+      t1_planned_to: 'T1 Plan ≤', t2_planned_to: 'T2 Plan ≤',
+      t1_actual_to: 'T1 Actual ≤', t2_actual_to: 'T2 Actual ≤',
+      t1_planned_on: 'T1 Plan =', t2_planned_on: 'T2 Plan =',
+      t1_actual_on: 'T1 Actual =', t2_actual_on: 'T2 Actual =',
     };
     for (const [k, lbl] of Object.entries(map)) {
       const v = searchParams.get(k);
-      if (v) out.push({ label: `${lbl}: ${v}`, param: k });
+      if (v) out.push({ label: `${lbl} ${v}`, param: k });
     }
     return out;
   }, [searchParams]);
