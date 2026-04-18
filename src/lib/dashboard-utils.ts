@@ -187,10 +187,27 @@ export function aggregatePlanActualByGroup(
       }
       return { cumPlan, cumActual, todayPlan, todayActual };
     };
+    // Predecessor = T1 시작 전 단계.
+    // Plan = T1 planned_date <= today (T1 시작 예정이면 Pred 끝나야 함)
+    // Actual = T1이 WIP 또는 Done인 subtest 수 (T1 시작 = Pred 완료)
+    const calcPred = (): PlanActualMetrics => {
+      let cumPlan = 0, cumActual = 0, todayPlan = 0, todayActual = 0;
+      for (const i of items) {
+        const p = i.t1_planned_date;
+        const started = i.t1_status === 'WIP' || i.t1_status === 'Done';
+        if (p && p <= today) cumPlan++;
+        if (started) cumActual++;
+        if (p === today) todayPlan++;
+        // todayActual approximation: T1 actual_date == today means Pred completed today
+        if (i.t1_actual_date === today) todayActual++;
+      }
+      return { cumPlan, cumActual, todayPlan, todayActual };
+    };
     out.push({
       key: k,
       label: groupLabel(k),
       totalSubtests: items.length,
+      predecessor: calcPred(),
       t1: calc('t1_planned_date', 't1_actual_date'),
       t2: calc('t2_planned_date', 't2_actual_date'),
     });
