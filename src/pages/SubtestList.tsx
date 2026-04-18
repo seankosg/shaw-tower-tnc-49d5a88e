@@ -1,10 +1,11 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel,
   flexRender, type ColumnDef, type SortingState, type ColumnFiltersState,
   type ColumnSizingState, type VisibilityState,
 } from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFieldConfig } from '@/hooks/useFieldConfig';
@@ -22,6 +23,7 @@ import type { TcStatus, DataSource } from '@/types/enums';
 import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS } from '@/types/enums';
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
+import { getSubtestCache, setSubtestCache } from '@/lib/subtest-cache';
 
 interface SubtestRow {
   id: string;
