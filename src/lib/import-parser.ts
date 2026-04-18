@@ -40,6 +40,8 @@ const HEADER_MAP: Record<string, string> = {
   't2status': 't2_status',
   't2_status': 't2_status',
   'predecessor status': 'predecessor_status_raw',
+  'pre decessor status': 'predecessor_status_raw',
+  'pre decessor': 'predecessor_status_raw',
   'precessor status': 'predecessor_status_raw',
   'predecessor': 'predecessor_status_raw',
   'predecessor_status_raw': 'predecessor_status_raw',
