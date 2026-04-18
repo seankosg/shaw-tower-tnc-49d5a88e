@@ -1,60 +1,30 @@
 
 
-## Subtest Master DB — 완료 단계 시인성 강화
+## Import 헤더 줄바꿈 처리 — "Pre\ndecessor\nStatus" 매핑
 
-### 현재 상태
-Subtest 표에는 `Predecessor` (text), `T1 Status`, `T2 Status` (Badge) 컬럼만 있어 **언제 완료됐는지 / 어느 단계까지 완료됐는지** 한눈에 안 보임. 상태 Badge는 4색(Planned/WIP/Done/Hold)이지만 행 단위 진행도가 직관적이지 않음.
+### 문제
+Excel 셀 안에서 헤더가 줄바꿈으로 끊긴 경우 (예: `"Pre\ndecessor\nStatus"`) `normalizeHeader()`가 `predecessor status`로 정상 변환됩니다 — 이미 `\r\n` → space 처리 + 공백 정규화 로직 있음.
 
-### 제안: 3단계 옵션 (조합 가능)
+**진짜 문제**: 줄바꿈 제거 후 결과가 `"predecessor status"` 인데, `HEADER_MAP`에는 `'predecessor status'` 키가 **없음**. 현재 등록된 키:
+- `'predecessor status'` ❌ (없음)
+- `'precessor status'` ✓
+- `'predecessor'` ✓
+- `'predecessor_status_raw'` ✓
 
-#### 옵션 A — Stage Progress 컬럼 (추천, 신규 단일 컬럼)
-한 행의 Pred → T1 → T2 진행 상태를 **3-pip 가로 인디케이터**로 시각화. 기존 컬럼 유지하면서 맨 앞 또는 Item No 옆에 추가.
+따라서 `"Pre\ndecessor\nStatus"` → `"predecessor status"` → 매핑 실패 → 그대로 `"predecessor status"`로 남아 `parseStandard/parseLegacy`에서 `row.predecessor_status_raw`로 못 읽음.
 
-```
-●━━●━━○   Pred ✓ → T1 ✓ → T2 (WIP/계획)
-●━━◐━━○   Pred ✓ → T1 진행중 → T2 미시작
-●━━●━━●   완료 (전 단계 Done)
-○━━○━━○   미시작
-⊘ ━━●━━○   Hold 표시
-```
+### 해결
+`src/lib/import-parser.ts`의 `HEADER_MAP`에 누락된 별칭 추가:
+- `'predecessor status'` → `'predecessor_status_raw'`
+- `'pre decessor status'` → `'predecessor_status_raw'` (혹시 공백이 다르게 합쳐질 경우 대비)
+- `'pre decessor'` → `'predecessor_status_raw'`
 
-- **Pred**: `predecessor_status_raw`가 "Done/완료/Cleared" 등이면 ●, T1이 시작됐어도 ● (옵션 1 로직 재사용)
-- **T1 / T2**: status별 아이콘 — Done=●(초록), WIP=◐(앰버), Planned=○(회색), Hold=⊘(빨강)
-- 호버 툴팁에 각 단계 status + actual_date 표시
-- 너비 ~80px, 시각적 노이즈 최소
+추가로 헤더 정규화에 **이미 있는** `\r\n` → space 처리가 모든 줄바꿈 (`\n`, `\r\n`, `\v`, `\f`)을 잡는지 확인 — 현재 `/[\r\n]+/g`로 `\n`도 처리됨 ✓.
 
-#### 옵션 B — 행 좌측 컬러 바 (Row Status Stripe)
-표 첫 셀 좌측 4px 세로 바로 **전체 완료도** 즉시 인식.
-- T2 Done → 초록 / T1 Done & T2 미완 → 파랑 / T1 WIP → 앰버 / Pred만 완료 → 옅은 회색 / 미시작 → 투명 / Hold → 빨강
-
-#### 옵션 C — Done 행 디밍 + Done 날짜 강조
-- T2 Done인 행은 배경 `bg-muted/30` + 텍스트 `text-muted-foreground` (완료된 작업은 시각적으로 후순위)
-- `T1 Actual` / `T2 Actual` 컬럼 추가 (현재 Planned만 표시) → Done인 셀은 **굵은 초록 텍스트 + ✓ 아이콘**, 지연 완료(actual > planned)는 빨간 ✓
-
-#### 옵션 D — StatusBadge 강화
-기존 Badge에 아이콘 추가 + Done에 더 진한 강조:
-- Done: `✓` 아이콘 + 진한 초록 배경 (현재는 옅음)
-- WIP: 작은 펄스 닷
-- Planned: 점선 테두리만 (배경 없음)
-- Hold: `⊘` 아이콘
-
-### 추천 조합: **A + C**
-- 옵션 A로 행마다 Pred/T1/T2 진행도를 한눈에 (정렬·필터 안 막음)
-- 옵션 C로 완료된 행은 시각적 후순위 처리 + Actual 날짜 강조 (지연 완료 즉시 식별)
-
-### 추가 미니 기능
-- 표 상단에 **Legend** (●=Done, ◐=WIP, ○=Planned, ⊘=Hold) 한 줄
-- Stage Progress 컬럼 클릭 → 단계별 정렬 (T2 완료 우선 / 미시작 우선 토글)
-
-### 변경 파일 (옵션 A+C 채택 시)
+### 변경 파일
 | 파일 | 변경 |
 |---|---|
-| `src/components/shared/StageProgress.tsx` (신규) | Pred/T1/T2 3-pip 컴포넌트 + 툴팁 |
-| `src/pages/SubtestList.tsx` | StageProgress 컬럼 추가 (Item No 다음), T2 Done 행 디밍, T1/T2 Actual 컬럼 추가, Legend 표시 |
-| `src/components/shared/StatusBadge.tsx` | (선택) Done에 ✓ 아이콘 추가 |
+| `src/lib/import-parser.ts` | `HEADER_MAP`에 줄바꿈으로 분리되는 케이스의 별칭 3개 추가 |
 
-DB / migration / edge function 변경 없음.
-
-### 결정 필요
-어떤 옵션(또는 조합)을 적용할지 — **A+C 추천**, 또는 다른 조합 알려주세요.
+DB / Edge function 변경 없음.
 
