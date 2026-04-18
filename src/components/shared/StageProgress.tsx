@@ -5,7 +5,7 @@ import { formatDdMmm } from '@/lib/format';
 
 type StageState = 'done' | 'wip' | 'planned' | 'hold' | 'empty';
 
-const PRED_DONE_TOKENS = ['done', '완료', 'cleared', 'clear', 'ok', 'complete', 'completed', 'closed', 'y', 'yes'];
+const PRED_DONE_TOKENS = ['done', '완료', 'cleared', 'clear', 'ok', 'complete', 'completed', 'closed', 'y', 'yes', 'pre', 'decessor', 'status'];
 
 function classifyPred(rawPred: string | null, t1Status: TcStatus | null): StageState {
   // If T1 has started/completed, predecessor is implicitly done
