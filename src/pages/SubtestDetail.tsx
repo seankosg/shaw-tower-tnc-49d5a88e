@@ -257,18 +257,26 @@ export default function SubtestDetailPage() {
           <div><Label className="text-xs text-muted-foreground">System</Label><div>{record.system_master?.system_code}</div></div>
           <div><Label className="text-xs text-muted-foreground">Item No</Label><div>{record.item_no}</div></div>
           <div><Label className="text-xs text-muted-foreground">MOS Code</Label><div>{record.mos_code}</div></div>
-          <div><Label className="text-xs text-muted-foreground">Level</Label><div>{record.level || '—'}</div></div>
-          <div><Label className="text-xs text-muted-foreground">Equipment</Label><div>{record.equipment || '—'}</div></div>
-          <div className="col-span-2"><Label className="text-xs text-muted-foreground">Description</Label><div>{record.description || '—'}</div></div>
+          {isFieldVisible('level') && (
+            <div><Label className="text-xs text-muted-foreground">Level</Label><div>{record.level || '—'}</div></div>
+          )}
+          {isFieldVisible('equipment') && (
+            <div><Label className="text-xs text-muted-foreground">Equipment</Label><div>{record.equipment || '—'}</div></div>
+          )}
+          {isFieldVisible('description') && (
+            <div className="col-span-2"><Label className="text-xs text-muted-foreground">Description</Label><div>{record.description || '—'}</div></div>
+          )}
         </CardContent>
       </Card>
 
       {/* Editable fields */}
+      {(isFieldVisible('t1_status') || isFieldVisible('t1_planned_date')) && (
       <Card>
         <CardHeader className="py-3">
           <CardTitle className="text-sm font-medium">T1 — Internal Test</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {isFieldVisible('t1_status') && (
           <div className="space-y-1.5">
             <Label className="text-xs">T1 Status</Label>
             <Select value={form.t1_status || '_blank'} onValueChange={v => updateField('t1_status', v === '_blank' ? null : v)}>
@@ -279,18 +287,24 @@ export default function SubtestDetailPage() {
               </SelectContent>
             </Select>
           </div>
+          )}
+          {isFieldVisible('t1_planned_date') && (
           <div className="space-y-1.5">
             <Label className="text-xs">T1 Planned Date</Label>
             <Input type="date" className="h-9" value={form.t1_planned_date || ''} onChange={e => updateField('t1_planned_date', e.target.value)} />
           </div>
+          )}
         </CardContent>
       </Card>
+      )}
 
+      {(isFieldVisible('t2_status') || isFieldVisible('t2_planned_date')) && (
       <Card>
         <CardHeader className="py-3">
           <CardTitle className="text-sm font-medium">T2 — RTO Witness Test</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {isFieldVisible('t2_status') && (
           <div className="space-y-1.5">
             <Label className="text-xs">T2 Status</Label>
             <Select value={form.t2_status || '_blank'} onValueChange={v => updateField('t2_status', v === '_blank' ? null : v)}>
@@ -301,64 +315,90 @@ export default function SubtestDetailPage() {
               </SelectContent>
             </Select>
           </div>
+          )}
+          {isFieldVisible('t2_planned_date') && (
           <div className="space-y-1.5">
             <Label className="text-xs">T2 Planned Date</Label>
             <Input type="date" className="h-9" value={form.t2_planned_date || ''} onChange={e => updateField('t2_planned_date', e.target.value)} />
           </div>
+          )}
         </CardContent>
       </Card>
+      )}
 
+      {(isFieldVisible('r1_status') || isFieldVisible('aconex_ref_no') || isFieldVisible('r2_status') || isFieldVisible('remarks') || isFieldVisible('punchlist_comments')) && (
       <Card>
         <CardHeader className="py-3">
           <CardTitle className="text-sm font-medium">Additional Fields</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {isFieldVisible('r1_status') && (
           <div className="space-y-1.5">
             <Label className="text-xs">R1 Status</Label>
             <Input className="h-9" value={form.r1_status || ''} onChange={e => updateField('r1_status', e.target.value)} />
           </div>
+          )}
+          {isFieldVisible('aconex_ref_no') && (
           <div className="space-y-1.5">
             <Label className="text-xs">Aconex Ref No</Label>
             <Input className="h-9" value={form.aconex_ref_no || ''} onChange={e => updateField('aconex_ref_no', e.target.value)} />
           </div>
+          )}
+          {isFieldVisible('r2_status') && (
           <div className="space-y-1.5">
             <Label className="text-xs">R2 Status</Label>
             <Input className="h-9" value={form.r2_status || ''} onChange={e => updateField('r2_status', e.target.value)} />
           </div>
+          )}
+          {isFieldVisible('remarks') && (
           <div className="space-y-1.5 md:col-span-3">
             <Label className="text-xs">Remarks</Label>
             <Textarea value={form.remarks || ''} onChange={e => updateField('remarks', e.target.value)} rows={2} />
           </div>
+          )}
+          {isFieldVisible('punchlist_comments') && (
           <div className="space-y-1.5 md:col-span-3">
             <Label className="text-xs">Punchlist Comments</Label>
             <Textarea value={form.punchlist_comments || ''} onChange={e => updateField('punchlist_comments', e.target.value)} rows={2} />
           </div>
+          )}
         </CardContent>
       </Card>
+      )}
 
+      {(isFieldVisible('predecessor_status_raw') || isFieldVisible('subcontractor_name') || isFieldVisible('subsub_name') || isFieldVisible('hdec_pic_name')) && (
       <Card>
         <CardHeader className="py-3">
           <CardTitle className="text-sm font-medium">Predecessor & Responsibility</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {isFieldVisible('predecessor_status_raw') && (
           <div className="space-y-1.5 md:col-span-2">
             <Label className="text-xs">Predecessor Status</Label>
             <Input className="h-9" value={form.predecessor_status_raw || ''} onChange={e => updateField('predecessor_status_raw', e.target.value)} placeholder="e.g. Done or 2026-03-15" />
           </div>
+          )}
+          {isFieldVisible('subcontractor_name') && (
           <div className="space-y-1.5">
             <Label className="text-xs">Subcontractor</Label>
             <Input className="h-9" value={form.subcontractor_name || ''} onChange={e => updateField('subcontractor_name', e.target.value)} />
           </div>
+          )}
+          {isFieldVisible('subsub_name') && (
           <div className="space-y-1.5">
             <Label className="text-xs">Sub-Sub</Label>
             <Input className="h-9" value={form.subsub_name || ''} onChange={e => updateField('subsub_name', e.target.value)} />
           </div>
+          )}
+          {isFieldVisible('hdec_pic_name') && (
           <div className="space-y-1.5 md:col-span-2">
             <Label className="text-xs">HDEC PIC</Label>
             <Input className="h-9" value={form.hdec_pic_name || ''} onChange={e => updateField('hdec_pic_name', e.target.value)} />
           </div>
+          )}
         </CardContent>
       </Card>
+      )}
 
       {isAdminOrSuperuser && (
         <div className="flex justify-between">
