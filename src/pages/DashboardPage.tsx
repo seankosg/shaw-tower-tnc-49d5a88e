@@ -263,16 +263,16 @@ export default function DashboardPage() {
               <TabsTrigger value="hdec">By HDEC PIC</TabsTrigger>
             </TabsList>
             <TabsContent value="system">
-              <PlanActualTable rows={bySystem} groupParam="system" groupHeader="System" today={today} navigate={navigate} keyToFilterValue={systemKeyResolver} />
+              <PlanActualTable rows={bySystem} groupParam="system" groupHeader="System" today={today} yesterday={yesterday} navigate={navigate} keyToFilterValue={systemKeyResolver} />
             </TabsContent>
             <TabsContent value="subcon">
-              <PlanActualTable rows={bySubcon} groupParam="subcon" groupHeader="Subcontractor" today={today} navigate={navigate} />
+              <PlanActualTable rows={bySubcon} groupParam="subcon" groupHeader="Subcontractor" today={today} yesterday={yesterday} navigate={navigate} />
             </TabsContent>
             <TabsContent value="subsub">
-              <PlanActualTable rows={bySubsub} groupParam="subsub" groupHeader="Sub-Sub" today={today} navigate={navigate} />
+              <PlanActualTable rows={bySubsub} groupParam="subsub" groupHeader="Sub-Sub" today={today} yesterday={yesterday} navigate={navigate} />
             </TabsContent>
             <TabsContent value="hdec">
-              <PlanActualTable rows={byHdec} groupParam="hdec_pic" groupHeader="HDEC PIC" today={today} navigate={navigate} />
+              <PlanActualTable rows={byHdec} groupParam="hdec_pic" groupHeader="HDEC PIC" today={today} yesterday={yesterday} navigate={navigate} />
             </TabsContent>
           </Tabs>
         </CardContent>
