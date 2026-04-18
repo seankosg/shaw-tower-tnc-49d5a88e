@@ -22,7 +22,8 @@ const ALWAYS_VISIBLE_FIELDS = new Set<string>([
 
 /**
  * Fetches field_config and exposes helpers to determine whether a given
- * field should be visible in the UI (List columns, Detail form fields).
+ * field should be visible in the UI (List columns, Detail form fields)
+ * and the configured display order.
  */
 export function useFieldConfig() {
   const [fields, setFields] = useState<FieldConfigRow[]>([]);
@@ -33,7 +34,8 @@ export function useFieldConfig() {
     (async () => {
       const { data } = await supabase
         .from('field_config')
-        .select('field_name, display_name, is_enabled, is_required, sort_order');
+        .select('field_name, display_name, is_enabled, is_required, sort_order')
+        .order('sort_order', { ascending: true });
       if (!cancelled && data) setFields(data as FieldConfigRow[]);
       if (!cancelled) setLoading(false);
     })();
@@ -58,5 +60,8 @@ export function useFieldConfig() {
     return row?.is_required ?? false;
   };
 
-  return { fields, loading, isFieldVisible, isFieldRequired };
+  // Field names ordered by sort_order ascending (already sorted from DB).
+  const orderedFieldNames: string[] = fields.map((f) => f.field_name);
+
+  return { fields, loading, isFieldVisible, isFieldRequired, orderedFieldNames };
 }
