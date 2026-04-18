@@ -728,6 +728,7 @@ export default function SubtestList() {
             </Table>
           );
         })()}
+        </div>
       </div>
     </div>
   );
