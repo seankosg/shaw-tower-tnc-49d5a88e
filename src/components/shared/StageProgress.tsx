@@ -30,7 +30,7 @@ function classifyStatus(s: TcStatus | null): StageState {
 function Pip({ state, label }: { state: StageState; label: string }) {
   const base = 'inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] font-bold leading-none border';
   const styles: Record<StageState, string> = {
-    done: 'bg-emerald-500 border-emerald-600 text-white',
+    done: 'bg-success border-success text-success-foreground',
     wip: 'bg-amber-400 border-amber-500 text-white',
     planned: 'bg-transparent border-muted-foreground/40 text-muted-foreground/60',
     hold: 'bg-destructive border-destructive text-destructive-foreground',
