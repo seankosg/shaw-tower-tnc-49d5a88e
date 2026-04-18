@@ -64,6 +64,7 @@ export default function SubtestDetailPage() {
   
   const { toast } = useToast();
   const { isAdminOrSuperuser } = useAuth();
+  const { isFieldVisible } = useFieldConfig();
   const [record, setRecord] = useState<SubtestDetail | null>(null);
   const [form, setForm] = useState<Partial<SubtestDetail>>({});
   const [changeLogs, setChangeLogs] = useState<ChangeLog[]>([]);
