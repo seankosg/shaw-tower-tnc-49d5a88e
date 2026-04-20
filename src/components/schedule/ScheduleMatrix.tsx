@@ -57,11 +57,11 @@ export function ScheduleMatrix({
   };
 
   return (
-    <div className="overflow-x-auto rounded-md border border-border bg-card">
+    <div className="overflow-auto rounded-md border border-border bg-card max-h-[calc(100vh-260px)]">
       <div className="inline-block min-w-full">
         {/* Header */}
-        <div className="sticky top-0 z-20 flex border-b border-border bg-muted/60 text-[11px] font-semibold">
-          <div className="sticky left-0 z-30 flex bg-muted/60">
+        <div className="sticky top-0 z-30 flex border-b border-border bg-muted text-[11px] font-semibold">
+          <div className="sticky left-0 z-40 flex bg-muted">
             <div className="flex w-[200px] items-center px-3 py-2">{groupHeader}</div>
             <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-2">Done/Total</div>
             <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-2">Cum Plan</div>
