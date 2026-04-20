@@ -250,6 +250,9 @@ export type Database = {
           level: string | null
           mos_code: string
           mos_sequence: number | null
+          pred_actual_date: string | null
+          pred_planned_date: string | null
+          pred_status: Database["public"]["Enums"]["tc_status"] | null
           predecessor_status_raw: string | null
           project_id: string
           punchlist_comments: string | null
@@ -284,6 +287,9 @@ export type Database = {
           level?: string | null
           mos_code: string
           mos_sequence?: number | null
+          pred_actual_date?: string | null
+          pred_planned_date?: string | null
+          pred_status?: Database["public"]["Enums"]["tc_status"] | null
           predecessor_status_raw?: string | null
           project_id: string
           punchlist_comments?: string | null
@@ -318,6 +324,9 @@ export type Database = {
           level?: string | null
           mos_code?: string
           mos_sequence?: number | null
+          pred_actual_date?: string | null
+          pred_planned_date?: string | null
+          pred_status?: Database["public"]["Enums"]["tc_status"] | null
           predecessor_status_raw?: string | null
           project_id?: string
           punchlist_comments?: string | null
