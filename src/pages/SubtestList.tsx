@@ -24,6 +24,9 @@ import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS } from '@/types/enums';
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
 import { getSubtestCache, setSubtestCache } from '@/lib/subtest-cache';
+import { exportSubtestsToExcel } from '@/lib/excel-export';
+import { useToast } from '@/hooks/use-toast';
+import { USER_TYPE_LABELS } from '@/types/enums';
 
 interface SubtestRow {
   id: string;
@@ -128,10 +131,11 @@ const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
 
 export default function SubtestList() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const storageKey = user?.id ? `subtest-list-state:${user.id}` : 'subtest-list-state:anon';
-  const { isFieldVisible, orderedFieldNames } = useFieldConfig();
+  const { isFieldVisible, orderedFieldNames, fields: fieldConfigRows } = useFieldConfig();
 
   const [data, setData] = useState<SubtestRow[]>(() => {
     const c = getSubtestCache();
@@ -546,6 +550,35 @@ export default function SubtestList() {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => navigate('/import')}>
             <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const visibleRows = table.getSortedRowModel().rows.length;
+              if (visibleRows === 0) {
+                toast({ title: 'No rows to export', description: 'Adjust filters and try again.', variant: 'destructive' });
+                return;
+              }
+              try {
+                const result = exportSubtestsToExcel({
+                  table,
+                  fieldConfig: fieldConfigRows,
+                  globalFilter,
+                  searchParams,
+                  meta: {
+                    userName: profile?.name || profile?.login_id || 'Unknown',
+                    userType: profile?.user_type ? USER_TYPE_LABELS[profile.user_type] : '',
+                  },
+                });
+                toast({ title: 'Export complete', description: `${result.rowCount} rows → ${result.fileName}` });
+              } catch (err) {
+                console.error('Excel export failed', err);
+                toast({ title: 'Export failed', description: String((err as Error)?.message ?? err), variant: 'destructive' });
+              }
+            }}
+          >
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export Excel
           </Button>
           <Button variant="outline" size="sm" onClick={() => navigate('/export')}>
             <Download className="mr-1.5 h-3.5 w-3.5" /> Export
