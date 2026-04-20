@@ -21,7 +21,7 @@ interface ScheduleMatrixProps {
   onCellClick?: (groupKey: string, bucketIso: string, stage: ScheduleStage | 'all') => void;
 }
 
-const STICKY_LEFT_WIDTH = 440; // 200 + 80 + 80 + 80
+const STICKY_LEFT_WIDTH = 380; // 200 (group) + 70 (done/total) + 110 (actual/plan)
 
 export function ScheduleMatrix({
   data,
