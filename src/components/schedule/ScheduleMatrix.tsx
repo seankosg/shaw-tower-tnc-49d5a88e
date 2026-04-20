@@ -141,39 +141,75 @@ export function ScheduleMatrix({
           ref={headerScrollRef}
           className="overflow-x-auto overflow-y-hidden border-b border-border text-[11px] font-semibold"
         >
-          <div className="flex" style={{ width: totalGridWidth, minWidth: totalGridWidth }}>
-            <div className="sticky left-0 z-40 flex bg-muted">
-              <div className="flex items-center px-3 py-2" style={{ width: W_GROUP }}>{groupHeader}</div>
-
-              {/* Total / Done / % / Remain */}
-              <HeaderNum width={W_NUM} title={`${stageLabel} total scope`}>Total</HeaderNum>
-              <HeaderNum width={W_NUM} title={`${stageLabel} done count`}>Done</HeaderNum>
-              <HeaderNum width={W_PCT} title={totalBlockTitle}>%</HeaderNum>
-              <HeaderNum width={W_NUM} title="Total - Done">Remain</HeaderNum>
-
-              {/* Plan / Actual / % / Diff */}
-              <HeaderNum width={W_NUM} borderLeft title="Plan up to today">Plan</HeaderNum>
-              <HeaderNum width={W_NUM} title="Actual up to today">Actual</HeaderNum>
-              <HeaderNum width={W_PCT} title="Actual / Plan up to today">%</HeaderNum>
-              <HeaderNum width={W_NUM} borderRight title="Actual - Plan">Diff</HeaderNum>
-            </div>
-            {data.buckets.map((b, i) => {
-              const lbl = formatBucketLabel(b, bucket);
-              const isToday = i === todayBucketIdx;
-              return (
-                <div
-                  key={b}
-                  className={cn(
-                    'flex flex-col items-center justify-center border-r border-border px-1 py-1.5 text-center',
-                    isToday && 'border-l-2 border-l-primary bg-primary/10',
-                  )}
-                  style={{ width: cellWidth, minWidth: cellWidth }}
-                >
-                  <div className="leading-tight">{lbl.primary}</div>
-                  <div className="text-[9px] font-normal text-muted-foreground leading-tight">{lbl.secondary}</div>
+          <div className="flex flex-col" style={{ width: totalGridWidth, minWidth: totalGridWidth }}>
+            {/* Row 1: group headers */}
+            <div className="flex border-b border-border">
+              <div className="sticky left-0 z-40 flex bg-muted">
+                <div className="flex items-center px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground" style={{ width: W_GROUP }}>
+                  {groupHeader}
                 </div>
-              );
-            })}
+                <div
+                  className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide bg-muted text-foreground border-l border-border"
+                  style={{ width: W_TOTAL_BLOCK, minWidth: W_TOTAL_BLOCK }}
+                  title="Overall scope across full timeline"
+                >
+                  Total Scope
+                </div>
+                <div
+                  className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide bg-secondary/40 text-foreground border-l-2 border-border border-r border-border"
+                  style={{ width: W_PLAN_BLOCK, minWidth: W_PLAN_BLOCK }}
+                  title="Cumulative plan vs actual through today"
+                >
+                  Up to Today
+                </div>
+              </div>
+              <div
+                className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground"
+                style={{ width: data.buckets.length * cellWidth, minWidth: data.buckets.length * cellWidth }}
+              >
+                Timeline
+              </div>
+            </div>
+
+            {/* Row 2: sub-column labels + bucket labels */}
+            <div className="flex">
+              <div className="sticky left-0 z-40 flex bg-muted">
+                <div className="flex items-center px-3 py-2" style={{ width: W_GROUP }}></div>
+
+                {/* Total Scope block */}
+                <div className="flex bg-muted">
+                  <HeaderNum width={W_NUM} title={`${stageLabel} total scope`}>Total</HeaderNum>
+                  <HeaderNum width={W_NUM} title={`${stageLabel} done count`}>Done</HeaderNum>
+                  <HeaderNum width={W_PCT} title={totalBlockTitle}>%</HeaderNum>
+                  <HeaderNum width={W_NUM} title="Total - Done">Remain</HeaderNum>
+                </div>
+
+                {/* Up to Today block */}
+                <div className="flex bg-secondary/40">
+                  <HeaderNum width={W_NUM} borderLeft title="Plan up to today">Plan</HeaderNum>
+                  <HeaderNum width={W_NUM} title="Actual up to today">Actual</HeaderNum>
+                  <HeaderNum width={W_PCT} title="Actual / Plan up to today">%</HeaderNum>
+                  <HeaderNum width={W_NUM} borderRight title="Actual - Plan">Diff</HeaderNum>
+                </div>
+              </div>
+              {data.buckets.map((b, i) => {
+                const lbl = formatBucketLabel(b, bucket);
+                const isToday = i === todayBucketIdx;
+                return (
+                  <div
+                    key={b}
+                    className={cn(
+                      'flex flex-col items-center justify-center border-r border-border px-1 py-1.5 text-center',
+                      isToday && 'border-l-2 border-l-primary bg-primary/10',
+                    )}
+                    style={{ width: cellWidth, minWidth: cellWidth }}
+                  >
+                    <div className="leading-tight">{lbl.primary}</div>
+                    <div className="text-[9px] font-normal text-muted-foreground leading-tight">{lbl.secondary}</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -211,18 +247,22 @@ export function ScheduleMatrix({
                       <span className="truncate font-medium" title={row.label}>{row.label}</span>
                     </button>
 
-                    <TotalDoneCells
-                      total={row.total}
-                      done={row.doneCount}
-                      bold
-                      py="py-2"
-                    />
-                    <PlanActualCells
-                      plan={row.cumPlan}
-                      actual={row.cumActual}
-                      bold
-                      py="py-2"
-                    />
+                    <div className="flex bg-muted/40">
+                      <TotalDoneCells
+                        total={row.total}
+                        done={row.doneCount}
+                        bold
+                        py="py-2"
+                      />
+                    </div>
+                    <div className="flex bg-secondary/20">
+                      <PlanActualCells
+                        plan={row.cumPlan}
+                        actual={row.cumActual}
+                        bold
+                        py="py-2"
+                      />
+                    </div>
                   </div>
                   {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
                   {virtualCols.map(vc => {
@@ -262,16 +302,20 @@ export function ScheduleMatrix({
                             {STAGE_LABELS[st]}
                           </span>
                         </div>
-                        <TotalDoneCells
-                          total={sr.total}
-                          done={sr.totalDone}
-                          py="py-1.5"
-                        />
-                        <PlanActualCells
-                          plan={sr.cumPlan}
-                          actual={sr.cumActual}
-                          py="py-1.5"
-                        />
+                        <div className="flex bg-muted/40">
+                          <TotalDoneCells
+                            total={sr.total}
+                            done={sr.totalDone}
+                            py="py-1.5"
+                          />
+                        </div>
+                        <div className="flex bg-secondary/20">
+                          <PlanActualCells
+                            plan={sr.cumPlan}
+                            actual={sr.cumActual}
+                            py="py-1.5"
+                          />
+                        </div>
                       </div>
                       {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
                       {virtualCols.map(vc => {
