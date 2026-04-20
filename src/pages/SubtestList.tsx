@@ -626,42 +626,36 @@ interface SubtestTableViewProps {
 function SubtestTableView({
   table, loading, columns, sorting, autoSizeColumn, isDelayed, navigate, tableRef,
 }: SubtestTableViewProps) {
-  const STICKY_COUNT = 3;
+  const FROZEN_COUNT = 3;
   const leafCols = table.getVisibleLeafColumns();
 
-  // Memoize sticky offsets so we don't recompute per cell on every render.
-  const stickyOffsets = useMemo(() => {
-    const offs: number[] = [];
-    for (let i = 0; i < Math.min(STICKY_COUNT, leafCols.length); i++) {
-      offs.push(i === 0 ? 0 : offs[i - 1] + leafCols[i - 1].getSize());
-    }
-    return offs;
-    // recompute when visible columns or their sizes change
-  }, [leafCols, table.getState().columnSizing, table.getState().columnVisibility, table.getState().columnOrder]);
-
-  const stickyIdSet = useMemo(() => {
-    const s = new Set<string>();
-    for (let i = 0; i < Math.min(STICKY_COUNT, leafCols.length); i++) s.add(leafCols[i].id);
-    return s;
-  }, [leafCols]);
-
-  const lastStickyId = useMemo(
-    () => leafCols[Math.min(STICKY_COUNT, leafCols.length) - 1]?.id,
+  const frozenCols = useMemo(
+    () => leafCols.slice(0, Math.min(FROZEN_COUNT, leafCols.length)),
+    [leafCols]
+  );
+  const scrollCols = useMemo(
+    () => leafCols.slice(Math.min(FROZEN_COUNT, leafCols.length)),
     [leafCols]
   );
 
-  const getStickyStyle = useCallback(
-    (columnId: string, isHeader: boolean): React.CSSProperties | undefined => {
-      const idx = leafCols.findIndex(c => c.id === columnId);
-      if (idx < 0 || idx >= STICKY_COUNT) return undefined;
-      return { position: 'sticky', left: stickyOffsets[idx], zIndex: isHeader ? 30 : 10 };
-    },
-    [leafCols, stickyOffsets]
+  const sizingState = table.getState().columnSizing;
+  const frozenWidth = useMemo(
+    () => frozenCols.reduce((s, c) => s + c.getSize(), 0),
+    [frozenCols, sizingState]
+  );
+  const scrollWidth = useMemo(
+    () => scrollCols.reduce((s, c) => s + c.getSize(), 0),
+    [scrollCols, sizingState]
   );
 
-  const rows = table.getRowModel().rows;
-  const ROW_HEIGHT = 36; // approximate; virtualizer measures dynamically too
+  const frozenPaneRef = useRef<HTMLDivElement>(null);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
+  const rows = table.getRowModel().rows;
+  const ROW_HEIGHT = 36;
+
+  // Virtualizer attached to the SCROLL pane (single source of truth for vertical scroll).
+  // tableRef is forwarded to the scroll pane below.
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => tableRef.current,
@@ -674,154 +668,205 @@ function SubtestTableView({
   const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
   const paddingBottom = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
 
-  return (
-    <div ref={tableRef} className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
-      <Table style={{ width: table.getTotalSize(), tableLayout: 'fixed' }}>
-          <TableHeader className="sticky top-0 z-20">
-            {/* Filter row */}
-            <TableRow className="border-b-0 bg-muted/30">
-              {table.getHeaderGroups()[0].headers.map(header => {
-                const meta = header.column.columnDef.meta as any;
-                const canFilter = header.column.getCanFilter();
-                const sticky = getStickyStyle(header.column.id, true);
+  // Sync vertical scroll: scroll pane → frozen pane
+  const handleScroll = useCallback(() => {
+    if (frozenPaneRef.current && tableRef.current) {
+      frozenPaneRef.current.scrollTop = tableRef.current.scrollTop;
+    }
+  }, [tableRef]);
+
+  // Wheel events over frozen pane → forward vertical delta to scroll pane
+  const handleFrozenWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    if (tableRef.current && e.deltaY !== 0) {
+      tableRef.current.scrollTop += e.deltaY;
+    }
+  }, [tableRef]);
+
+  // Render a header (filter row + sort row) for a given subset of columns.
+  const renderHeader = (cols: typeof leafCols, isFrozen: boolean) => (
+    <TableHeader className="sticky top-0 z-20">
+      {/* Filter row */}
+      <TableRow className="border-b-0 bg-muted/30">
+        {cols.map(col => {
+          const meta = col.columnDef.meta as any;
+          const canFilter = col.getCanFilter();
+          return (
+            <TableHead
+              key={`filter-${col.id}`}
+              style={{ width: col.getSize() }}
+              className="py-1 px-1 bg-muted/30"
+            >
+              {canFilter ? (
+                <ColumnFilter
+                  column={col}
+                  type={meta?.filterType === 'multi-select' ? 'multi-select' : 'text'}
+                  options={meta?.filterOptions}
+                />
+              ) : null}
+            </TableHead>
+          );
+        })}
+      </TableRow>
+      {/* Sort row */}
+      <TableRow className="border-b bg-background">
+        {cols.map(col => {
+          // Find the matching header for this column in the table's first header group
+          const header = table.getHeaderGroups()[table.getHeaderGroups().length - 1]
+            .headers.find(h => h.column.id === col.id);
+          if (!header) return null;
+          return (
+            <TableHead
+              key={header.id}
+              data-column-id={col.id}
+              style={{ width: col.getSize() }}
+              className={cn(
+                'relative text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b'
+              )}
+              onClick={col.getToggleSortingHandler()}
+            >
+              {flexRender(col.columnDef.header, header.getContext())}
+              {col.getIsSorted() && (
+                <span className="ml-0.5">
+                  {col.getIsSorted() === 'asc' ? '▲' : '▼'}
+                  {sorting.length > 1 && (
+                    <sup className="ml-0.5 text-[9px] text-muted-foreground">
+                      {col.getSortIndex() + 1}
+                    </sup>
+                  )}
+                </span>
+              )}
+              {col.getCanResize() && (
+                <div
+                  onMouseDown={header.getResizeHandler()}
+                  onTouchStart={header.getResizeHandler()}
+                  onClick={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => { e.stopPropagation(); autoSizeColumn(col.id); }}
+                  title="Drag to resize, double-click to auto-fit"
+                  className={cn(
+                    'absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40',
+                    col.getIsResizing() && 'bg-primary/60'
+                  )}
+                />
+              )}
+            </TableHead>
+          );
+        })}
+      </TableRow>
+    </TableHeader>
+  );
+
+  // Render a body for a given subset of columns. `measure` controls whether rows get
+  // attached to the virtualizer's measureElement (only the scroll pane should).
+  const renderBody = (cols: typeof leafCols, measure: boolean) => {
+    if (loading) {
+      return (
+        <TableBody>
+          <TableRow>
+            <TableCell colSpan={cols.length || 1} className="text-center py-8 text-muted-foreground">
+              Loading...
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      );
+    }
+    if (rows.length === 0) {
+      return (
+        <TableBody>
+          <TableRow>
+            <TableCell colSpan={cols.length || 1} className="text-center py-8 text-muted-foreground">
+              No subtests found. Import data to get started.
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      );
+    }
+    return (
+      <TableBody>
+        {paddingTop > 0 && (
+          <tr style={{ height: paddingTop }} aria-hidden>
+            <td colSpan={cols.length || 1} style={{ padding: 0, border: 0 }} />
+          </tr>
+        )}
+        {virtualRows.map(virtualRow => {
+          const row = rows[virtualRow.index];
+          const r = row.original;
+          const delayed = isDelayed(r.t1_planned_date, r.t1_actual_date) ||
+                          isDelayed(r.t2_planned_date, r.t2_actual_date);
+          const t2Done = r.t2_status === 'Done';
+          const isHovered = hoveredIndex === virtualRow.index;
+          const allCells = row.getVisibleCells();
+          const cellMap = new Map(allCells.map(c => [c.column.id, c]));
+          return (
+            <TableRow
+              key={row.id}
+              data-index={virtualRow.index}
+              ref={measure ? (el) => el && rowVirtualizer.measureElement(el) : undefined}
+              className={cn(
+                'cursor-pointer',
+                t2Done && 'bg-muted/30 text-muted-foreground',
+                delayed && !t2Done && 'bg-destructive/5',
+                isHovered && 'bg-muted/50'
+              )}
+              onMouseEnter={() => setHoveredIndex(virtualRow.index)}
+              onMouseLeave={() => setHoveredIndex(prev => prev === virtualRow.index ? null : prev)}
+              onClick={() => navigate(`/subtests/${r.id}`)}
+            >
+              {cols.map(col => {
+                const cell = cellMap.get(col.id);
+                if (!cell) return (
+                  <TableCell key={col.id} style={{ width: col.getSize() }} className="text-xs py-2" />
+                );
                 return (
-                  <TableHead
-                    key={`filter-${header.id}`}
-                    style={{ width: header.getSize(), ...(sticky ?? {}) }}
-                    className={cn(
-                      'py-1 px-1 bg-muted/30',
-                      sticky && header.column.id === lastStickyId && 'border-r border-border shadow-[1px_0_0_0_hsl(var(--border))]'
-                    )}
+                  <TableCell
+                    key={cell.id}
+                    data-column-id={col.id}
+                    style={{ width: col.getSize() }}
+                    className="text-xs py-2 truncate"
                   >
-                    {canFilter ? (
-                      <ColumnFilter
-                        column={header.column}
-                        type={meta?.filterType === 'multi-select' ? 'multi-select' : 'text'}
-                        options={meta?.filterOptions}
-                      />
-                    ) : null}
-                  </TableHead>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
                 );
               })}
             </TableRow>
-            {table.getHeaderGroups().map(hg => (
-              <TableRow key={hg.id} className="border-b bg-background">
-                {hg.headers.map(header => {
-                  const sticky = getStickyStyle(header.column.id, true);
-                  return (
-                    <TableHead
-                      key={header.id}
-                      data-column-id={header.column.id}
-                      style={{ width: header.getSize(), ...(sticky ?? {}) }}
-                      className={cn(
-                        'relative text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b',
-                        sticky && header.column.id === lastStickyId && 'border-r border-border shadow-[1px_0_0_0_hsl(var(--border))]'
-                      )}
-                      onClick={header.column.getToggleSortingHandler()}
-                    >
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                      {header.column.getIsSorted() && (
-                        <span className="ml-0.5">
-                          {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
-                          {sorting.length > 1 && (
-                            <sup className="ml-0.5 text-[9px] text-muted-foreground">
-                              {header.column.getSortIndex() + 1}
-                            </sup>
-                          )}
-                        </span>
-                      )}
-                      {header.column.getCanResize() && (
-                        <div
-                          onMouseDown={header.getResizeHandler()}
-                          onTouchStart={header.getResizeHandler()}
-                          onClick={(e) => e.stopPropagation()}
-                          onDoubleClick={(e) => { e.stopPropagation(); autoSizeColumn(header.column.id); }}
-                          title="Drag to resize, double-click to auto-fit"
-                          className={cn(
-                            'absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40',
-                            header.column.getIsResizing() && 'bg-primary/60'
-                          )}
-                        />
-                      )}
-                    </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">
-                  Loading...
-                </TableCell>
-              </TableRow>
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">
-                  No subtests found. Import data to get started.
-                </TableCell>
-              </TableRow>
-            ) : (
-              <>
-                {paddingTop > 0 && (
-                  <tr style={{ height: paddingTop }} aria-hidden>
-                    <td colSpan={leafCols.length} style={{ padding: 0, border: 0 }} />
-                  </tr>
-                )}
-                {virtualRows.map(virtualRow => {
-                  const row = rows[virtualRow.index];
-                  const r = row.original;
-                  const delayed = isDelayed(r.t1_planned_date, r.t1_actual_date) ||
-                                  isDelayed(r.t2_planned_date, r.t2_actual_date);
-                  const t2Done = r.t2_status === 'Done';
-                  const rowBgClass = t2Done
-                    ? 'bg-[hsl(var(--muted))]'
-                    : delayed
-                      ? 'bg-[hsl(var(--destructive)/0.05)]'
-                      : 'bg-background';
-                  return (
-                    <TableRow
-                      key={row.id}
-                      data-index={virtualRow.index}
-                      ref={(el) => el && rowVirtualizer.measureElement(el)}
-                      className={cn(
-                        'group cursor-pointer hover:bg-muted/50',
-                        t2Done && 'bg-muted/30 text-muted-foreground',
-                        delayed && !t2Done && 'bg-destructive/5'
-                      )}
-                      onClick={() => navigate(`/subtests/${r.id}`)}
-                    >
-                      {row.getVisibleCells().map(cell => {
-                        const isSticky = stickyIdSet.has(cell.column.id);
-                        const sticky = isSticky ? getStickyStyle(cell.column.id, false) : undefined;
-                        return (
-                          <TableCell
-                            key={cell.id}
-                            data-column-id={cell.column.id}
-                            style={{ width: cell.column.getSize(), ...(sticky ?? {}) }}
-                            className={cn(
-                              'text-xs py-2 truncate',
-                              sticky && cn(rowBgClass, 'group-hover:bg-muted/50'),
-                              sticky && cell.column.id === lastStickyId && 'border-r border-border shadow-[1px_0_0_0_hsl(var(--border))]'
-                            )}
-                          >
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  );
-                })}
-                {paddingBottom > 0 && (
-                  <tr style={{ height: paddingBottom }} aria-hidden>
-                    <td colSpan={leafCols.length} style={{ padding: 0, border: 0 }} />
-                  </tr>
-                )}
-              </>
-            )}
-        </TableBody>
-      </Table>
+          );
+        })}
+        {paddingBottom > 0 && (
+          <tr style={{ height: paddingBottom }} aria-hidden>
+            <td colSpan={cols.length || 1} style={{ padding: 0, border: 0 }} />
+          </tr>
+        )}
+      </TableBody>
+    );
+  };
+
+  return (
+    <div className="rounded-md border max-h-[calc(100vh-220px)] flex overflow-hidden">
+      {/* Frozen pane — no horizontal scrollbar, vertical synced from scroll pane */}
+      {frozenCols.length > 0 && (
+        <div
+          ref={frozenPaneRef}
+          onWheel={handleFrozenWheel}
+          className="overflow-hidden border-r border-border shadow-[2px_0_4px_-2px_hsl(var(--border))]"
+          style={{ width: frozenWidth, flexShrink: 0 }}
+        >
+          <Table style={{ width: frozenWidth, tableLayout: 'fixed' }}>
+            {renderHeader(frozenCols, true)}
+            {renderBody(frozenCols, false)}
+          </Table>
+        </div>
+      )}
+
+      {/* Scroll pane — horizontal scrollbar lives here, only here */}
+      <div
+        ref={tableRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-auto"
+      >
+        <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
+          {renderHeader(scrollCols, false)}
+          {renderBody(scrollCols, true)}
+        </Table>
+      </div>
     </div>
   );
 }
