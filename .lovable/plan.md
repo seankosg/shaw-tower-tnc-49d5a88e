@@ -1,83 +1,82 @@
 
 
-## Subtest Master DB → Excel 내보내기 (WYSIWYG) 통합 계획
+## Schedule Page (A+D) — 최종 구현 계획
 
-### 목표
-SubtestList 화면에 **현재 보이는 그대로** 엑셀로 내보내기. 대쉬보드 진입(쿼리스트링 필터 적용 포함)도 동일 버튼 하나로 처리.
+### 컨셉
+Plan vs Actual Breakdown의 시간축 확장. System(기본) / Subcon / SubSub 그룹화 + Day(기본) / Week 토글. 각 셀에 Plan(회색) vs Actual(파랑/초과 초록/미달 빨강) 미니 바차트. 시스템 행 펼침 시 Pred/T1/T2 sub-row 분리. 우측 Critical Watchlist.
 
-### 핵심 원칙
-- **단일 진실원**: react-table 인스턴스(`getVisibleLeafColumns`, `getSortedRowModel`)에서 직접 추출. 별도 DB 테이블 불필요(어긋남 위험·트래픽·RLS 부담만 증가).
-- **영속화**: 이미 `localStorage` 로 사용자별 분리 저장 중 → 추가 인프라 0
-- **대쉬보드 연계**: 대쉬보드 클릭 → URL params → SubtestList가 자동으로 필터 변환 → 같은 Export 버튼 사용
+### 화면 구성
 
-### 엑셀 출력 구조
+**Toolbar**
+- Group: `[System▾] [Subcon] [SubSub]`
+- Bucket: `[Day▾] [Week]`
+- Stage: `[All▾] [Pred] [T1] [T2]`
+- Range: `[60d▾]` (30/60/90/All)
+- Today indicator + Export
+
+**KPI Strip** (6개)
+Today Plan / Today Actual / Cum Plan / Cum Actual / Variance% / Critical(≤7d) + Overdue
+
+**Schedule Matrix** (좌 sticky 4열 + 우 horizontal scroll)
+- Sticky 좌: Group | Done/Total | Cum Plan | Cum Actual
+- 우: 일자/주차 셀 (각 ~70/110px)
+- Stage `All`일 때: 시스템 행 펼침(▶) → Pred/T1/T2 3개 sub-row
+- Stage 단일 선택 시: sub-row 없이 해당 stage만
+
+**Critical Watchlist (우측 320px)**
+1. High Risk: T2 plan ≤ 7d & not Done
+2. T1 Bottleneck: T1 미완료 + T2 plan ≤ 7d
+3. Lagging Groups: cum_actual/cum_plan 비율 하위 5
+
+### 셀 디자인 (확정 색상)
+
+| 상태 | 시각 |
+|---|---|
+| Plan 배경 | `bg-gray-300` |
+| Actual ≤ Plan | 파랑 `bg-blue-600` |
+| Actual > Plan (초과 부분만) | 초록 `bg-green-600` |
+| Delta 음수 | `text-red-600` (예: `-2`) |
+| Delta 양수 | `text-green-600` (예: `+3`) |
+| Today 컬럼 | `border-l-2 border-primary` |
+| 미래 셀 | Plan만 (Actual 없음) |
+
 ```text
-Row 1: SHAW T&C — Subtest Master DB Export                    (14pt 굵게, 병합)
-Row 2: Exported: 2026-04-20 14:30 by John Doe (HDEC)          (10pt 회색)
-Row 3: Source: Dashboard → Overdue Subtests                   (URL params 자동 추론)
-Row 4: Search: "valve"
-Row 5: Filters: System=[A,B] · T1 Status=[Done,WIP]
-Row 6: Sort: Item No ↑, T1 Planned ↓
-Row 7: (빈 줄)
-Row 8: [컬럼 헤더 — Field Config display_name 사용, 진한 배경+흰 글씨]
-Row 9~: [데이터 행 — 화면 정렬/필터 결과 그대로]
+정상:    ███▓▓░░    초과:    ██████▓▓   미래:   ░░░░
+         3 / 5               5 / 3              — / 4
+         -2 (red)            +2 (green)
 ```
 
-**스타일·레이아웃**
-- 컬럼 폭: `column.getSize() / 7` 로 px → Excel `wch` 변환
-- 행 높이: 헤더 28pt, 데이터 20pt
-- **틀고정**: 헤더(Row 8) + 좌측 3개 컬럼 → Excel Freeze Panes (화면 UX와 동일)
-- 메타 영역(1~6): 옅은 회색, 테두리 없음
-
-**Source 라인 자동 추론**
-| URL param | 표기 |
-|---|---|
-| `status=overdue` | Dashboard → Overdue Subtests |
-| `status=at_risk` | Dashboard → At-Risk Subtests (≤N days) |
-| `subcon=X` | Dashboard → Subcontractor: X |
-| `subsub=X` | Dashboard → Sub-subcontractor: X |
-| `hdec_pic=X` | Dashboard → HDEC PIC: X |
-| `system=X` | Dashboard → System: X |
-| `t1_status=X` / `t2_status=X` | Dashboard → T1/T2 Status: X |
-| (없음) | Subtest Master DB (direct) |
-
-### 셀 값 포맷 (화면과 100% 일치)
-| 컬럼 종류 | 출력 |
-|---|---|
-| 날짜(`*_date`) | `formatDdMmm()` (예: `15-Jan`) |
-| `t1_status`/`t2_status` | enum 텍스트 (`Planned`/`WIP`/`Done`/`Hold`) |
-| `predecessor_status_raw` | 화면 표기 그대로 |
-| `data_source_type` | `DATA_SOURCE_LABELS[v]` |
-| `system_code` | join 값 그대로 |
-| `updated_at` | `toLocaleDateString()` |
-| 기타 | 값 그대로, `null` → `''` |
-
-**헤더명 우선순위**: `field_config.display_name` → `column.columnDef.header` → `column.id`
+### 데이터 로직 (`src/lib/schedule-utils.ts` 신규)
+- 모든 active subtests 로드 (Dashboard 방식 재사용)
+- Stage별 (group_key, date_bucket)에 plan/actual 집계
+  - Pred: `predecessor_status_raw` 완료 일자 추정 (T1 시작 ≥ 1일 전 or done 키워드)
+  - T1: `t1_planned_date` (plan), `t1_actual_date` (actual, status=Done)
+  - T2: `t2_planned_date` (plan), `t2_actual_date` (actual, status=Done)
+- Cum 누적: bucket 정렬 후 sequential sum
+- Critical: 오늘+7일 이내 plan & not Done
 
 ### 변경 파일
-| 파일 | 변경 |
+
+| 파일 | 역할 |
 |---|---|
-| `src/lib/excel-export.ts` (신규) | `exportSubtestsToExcel(ctx)` — 메타블록·헤더·데이터·스타일·틀고정·Source 추론·파일 저장 |
-| `src/pages/SubtestList.tsx` | 툴바에 `Export Excel` 버튼 추가, 클릭 시 위 함수 호출 (table, fieldConfig, globalFilter, user, searchParams 전달) |
-| `package.json` | `xlsx-js-style` 추가 (셀 스타일링·Freeze Panes 지원, `xlsx` 드롭인 호환) |
+| `src/pages/SchedulePage.tsx` | 메인 페이지 (Toolbar + KPI + Matrix + Watchlist) |
+| `src/components/schedule/ScheduleMatrix.tsx` | sticky-left + h-scroll 매트릭스, 행 펼침 |
+| `src/components/schedule/ScheduleCell.tsx` | 미니 바차트 셀 |
+| `src/components/schedule/CriticalWatchlist.tsx` | 우측 알림 패널 |
+| `src/lib/schedule-utils.ts` | 집계·bucket·critical 로직 |
+| `src/App.tsx` | `/schedule` 라우트 |
+| `src/components/layout/AppSidebar.tsx` | "Schedule" 메뉴 (Calendar 아이콘) |
 
 ### 변경 없음
-- `ExportPage` (사용자 지시대로 종합 메뉴 탭 역할 유지)
-- `DashboardPage` (URL params 흐름 그대로 사용)
-- DB 스키마 / RLS / Edge Function
+DB / RLS / Edge Functions / DashboardPage / SubtestList
 
-### 검증 시나리오
-1. Field Config에서 컬럼 3개 비활성화 → Export 결과에 해당 컬럼 없음
-2. 화면에서 `Status=Done` 필터 → Done 행만 + 메타블록에 `Filters: T1 Status=[Done]`
-3. 컬럼 리사이즈 후 Export → Excel 열 너비가 화면 비율과 유사
-4. Excel 열기 → 좌측 3개 컬럼 + 헤더 행 틀고정 동작
-5. 대쉬보드 "Overdue Subtests" KPI → SubtestList 진입 → Export → Overdue 행만 + Source 라인에 `Dashboard → Overdue Subtests`
-6. 대쉬보드 At-Risk 배너 / Pie 슬라이스 / Plan-vs-Actual 그룹 클릭 → 각각 동일 패턴으로 정확 반영
-7. 0건 결과 → toast `No rows to export`
-
-### 결론
-- 별도 DB 테이블 신설 불필요 — react-table 직접 추출이 화면 일치 보장 측면에서 유일한 정답
-- 컬럼 폭/제목/필터 조건은 메타블록 + Excel 셀 스타일·Freeze Panes 로 모두 반영
-- 대쉬보드 지연항목 등 모든 진입 경로는 단일 Export 버튼으로 자동 처리 (추가 분기 불필요)
-- Export 탭과 완전 분리, 1개 신규 파일 + 1개 페이지 수정 + 1개 패키지 추가로 완료
+### 검증
+1. Group 토글 → System/Subcon/SubSub 즉시 전환
+2. Day↔Week 토글 → bucket 자동 재집계
+3. 시스템 행 펼침 → Pred/T1/T2 sub-row, 합계 일치
+4. Stage `T1` 선택 → T1만 단일 행 표시
+5. 셀 클릭 → SubtestList 필터 진입 (group + date + stage)
+6. Critical 항목 클릭 → 해당 필터로 SubtestList 진입
+7. 오늘 컬럼 강조 + 미래 셀 Plan만 표시
+8. 초과달성/미달 색상 정확히 분기
 
