@@ -1,67 +1,33 @@
 
 
-## Schedule 페이지 속도 개선 계획
+## Sticky 좌측 컬럼 오버랩 버그 수정
 
-### 진단
+### 원인
+`ScheduleMatrix.tsx`의 본문 행에서 좌측 4개 컬럼을 `sticky left-0 z-10`로 처리하고 있는데, 가로 스크롤 시 우측 날짜 셀들이 sticky 영역 **아래(z-index 낮음)**가 아니라 **위로 비쳐 보이는** 현상 발생.
 
-| 병목 | 영향 |
-|---|---|
-| **1. DOM 폭발** — Day×74일×N시스템(×3 stages 펼침) → 셀당 5개 div = 수천~수만 노드 한 번에 렌더 | 스크롤 jank·초기 페인트 지연의 주범 |
-| **2. 매 방문마다 풀 fetch** — 캐시 없음, `predecessor_status_raw`(text) 포함 1000행씩 페이징 | 첫 진입 2~5초 대기 |
-| **3. `today` recompute** — `todayIso()` 매 렌더 호출 → useMemo 재계산 트리거 | 토글마다 전체 aggregate 재실행 |
-| **4. `ScheduleCell` 무거움** — 셀마다 absolute-position 3개 div + 2개 텍스트 + cn() 계산 | 각 셀 비용 × 수천 |
-| **5. ref warning** — `RiskRow`/`Section`이 함수형인데 Card에 ref 전달 시도 | 콘솔 경고 (기능 영향 적음) |
+근본 원인 2가지:
+1. **배경 불투명도 부족** — sticky 좌측 div는 `bg-card`지만, 부모 `<div className="flex border-b ...">`에 `hover:bg-accent/30`이 적용. hover 시 sticky 셀 뒤로 비치지는 않지만, **sub-row의 sticky div는 `bg-muted/20` (반투명)** 이라 우측 셀이 그대로 비침.
+2. **z-index 경쟁** — 가상화로 렌더되는 우측 셀들(`ScheduleCell`)에 명시적 z-index가 없지만, sticky 좌측이 `z-10`이고 ScheduleCell 내부에 `relative` 또는 변환(transform)이 있으면 stacking context가 꼬여 우측이 위로 올라올 수 있음.
 
-### 해결책 (효과 큰 순)
+### 해결
 
-#### A. 가로 가상화 (Virtualization) — **가장 큰 효과**
-`@tanstack/react-virtual` 의 horizontal virtualizer 도입. 화면에 보이는 ~15개 날짜 셀만 렌더, 나머지는 spacer. 현재 row당 74개 → 15개로 약 **5배 감축**. 펼침 sub-row까지 포함하면 체감 속도 대폭 개선.
-- 세로 가상화는 그룹 수가 보통 30~50개라 불필요 (오히려 sticky 복잡도만 증가). 가로만.
+**1. Sub-row sticky 좌측 배경 불투명화**
+- `bg-muted/20` → `bg-card` (또는 `bg-muted` 불투명)로 변경. 행 자체 배경은 `bg-muted/20` 유지하되 sticky 영역만 불투명.
 
-#### B. 캐시 도입
-`subtest-cache.ts` 패턴 따라 `schedule-cache.ts` 신규. 60초 TTL 동안 재방문 시 즉시 렌더 + 백그라운드 refresh. 페이지 진입 체감 즉시화.
+**2. Sticky 좌측 z-index 상향**
+- 본문 sticky 좌측: `z-10` → `z-20`
+- 가상화 컬럼 wrapper에도 `relative z-0` 명시해 stacking 충돌 방지
 
-#### C. `ScheduleCell` 경량화
-- 빈 셀(plan=0, actual=0)은 `<div />` 단순 placeholder만 (현재는 "·" 텍스트 div). 빈 셀 비율이 매우 높음 (대부분 날짜는 plan 0).
-- `cn()` 호출 줄이고 className 정적 분기.
-- Delta 0일 때 div 자체 생략.
-
-#### D. `today` 안정화
-`SchedulePage`에서 `const today = useMemo(() => todayIso(), [])` 로 마운트 시 1회 고정.
-
-#### E. `aggregateSchedule` 미세 최적화
-- `groupMap` 순회 시 빈 stage(전체 plan=0 & actual=0)는 cells 배열 push 생략 가능 — 그러나 매트릭스에서 인덱스 매칭 필요해 구조 유지. 대신 **inner loop의 `bucketize` 호출 결과를 subtest별로 캐시** (3 stage × 같은 날짜면 동일).
-- 사실 가장 큰 비용은 렌더이므로 aggregate은 현 상태로도 충분.
-
-#### F. 컴포넌트 메모이제이션
-- `ScheduleCell` 을 `React.memo` 로 감싸서 props 동일 시 재렌더 skip.
-- `CriticalWatchlist` 도 `React.memo`.
-
-#### G. ref warning 수정
-`Section`, `RiskRow`를 `React.forwardRef` 로 감싸기 (또는 Card ref 전달 차단). 빠른 수정.
+**3. ScheduleCell `position: relative` 확인**
+- `ScheduleCell.tsx`에 명시적 z-index 없는지 확인, 필요 시 `z-0` 명시
 
 ### 변경 파일
-
-| 파일 | 변경 |
-|---|---|
-| `src/components/schedule/ScheduleMatrix.tsx` | 가로 virtualizer 적용 (헤더+본문 모두), spacer div 좌/우 |
-| `src/components/schedule/ScheduleCell.tsx` | empty 단순화, memo 적용, delta 0 생략 |
-| `src/components/schedule/CriticalWatchlist.tsx` | memo + forwardRef |
-| `src/lib/schedule-cache.ts` | 신규 — TTL 캐시 |
-| `src/pages/SchedulePage.tsx` | 캐시 사용, `today` useMemo 1회, range 기본값 검토 |
-
-### 라이브러리
-- `@tanstack/react-virtual` — 이미 SubtestList에서 사용 중. 추가 설치 불필요.
+- `src/components/schedule/ScheduleMatrix.tsx` — sticky 좌측 배경/ z-index 수정 (그룹 행 + sub-row 둘 다)
+- (필요 시) `src/components/schedule/ScheduleCell.tsx` — z-index 명시
 
 ### 검증
-1. Day 60일 × 30 그룹 첫 진입: 5초 → 1초 이내
-2. 가로 스크롤 부드러움 (60fps 근접)
-3. Group/Bucket/Stage 토글 < 200ms
-4. 재방문 시 즉시 표시 (캐시 hit)
-5. 콘솔 ref warning 사라짐
-6. 시스템 행 펼침 후에도 스크롤 부드러움
-7. 셀 클릭 / Today 강조 / sticky 헤더·좌측 컬럼 정상
-
-### 비변경
-DB / RLS / Edge Functions / Dashboard / SubtestList / 라우팅
+1. 가로 스크롤 시 우측 셀이 좌측 sticky 영역에 비쳐 보이지 않음
+2. 시스템 행 펼침(Pred/T1/T2 sub-row) 후에도 동일하게 깔끔
+3. Hover 효과 정상 (sticky 영역 hover 비침 없음)
+4. 헤더-본문 sticky 레이어 순서 유지 (corner > header > body sticky > cells)
 
