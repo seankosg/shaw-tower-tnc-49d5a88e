@@ -218,7 +218,7 @@ export default function SchedulePage() {
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
             <CalendarIcon className="h-5 w-5 text-primary" />
-            Schedule Matrix
+            Progress Status
           </h1>
           <p className="text-xs text-muted-foreground">
             Plan vs Actual by {GROUP_LABELS[groupBy]} · {bucket === 'day' ? 'Daily' : 'Weekly'} · Today {today}
