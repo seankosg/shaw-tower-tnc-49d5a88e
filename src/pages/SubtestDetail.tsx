@@ -40,6 +40,9 @@ interface SubtestDetail {
   remarks: string | null;
   punchlist_comments: string | null;
   predecessor_status_raw: string | null;
+  pred_status: TcStatus | null;
+  pred_planned_date: string | null;
+  pred_actual_date: string | null;
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
@@ -103,6 +106,9 @@ export default function SubtestDetailPage() {
         remarks: d.remarks,
         punchlist_comments: d.punchlist_comments,
         predecessor_status_raw: d.predecessor_status_raw,
+        pred_status: d.pred_status,
+        pred_planned_date: d.pred_planned_date,
+        pred_actual_date: d.pred_actual_date,
         subcontractor_name: d.subcontractor_name,
         subsub_name: d.subsub_name,
         hdec_pic_name: d.hdec_pic_name,
@@ -132,7 +138,8 @@ export default function SubtestDetailPage() {
       't2_planned_date', 't2_actual_date', 't2_status',
       'r1_status', 'aconex_ref_no', 'r2_status',
       'remarks', 'punchlist_comments',
-      'predecessor_status_raw', 'subcontractor_name', 'subsub_name', 'hdec_pic_name',
+      'predecessor_status_raw', 'pred_status', 'pred_planned_date', 'pred_actual_date',
+      'subcontractor_name', 'subsub_name', 'hdec_pic_name',
     ] as const;
 
     for (const field of editableFields) {
@@ -156,6 +163,9 @@ export default function SubtestDetailPage() {
       remarks: form.remarks || null,
       punchlist_comments: form.punchlist_comments || null,
       predecessor_status_raw: form.predecessor_status_raw || null,
+      pred_status: form.pred_status || null,
+      pred_planned_date: form.pred_planned_date || null,
+      pred_actual_date: form.pred_actual_date || null,
       subcontractor_name: form.subcontractor_name || null,
       subsub_name: form.subsub_name || null,
       hdec_pic_name: form.hdec_pic_name || null,
@@ -216,15 +226,18 @@ export default function SubtestDetailPage() {
       // Auto-set actual date when status changes to "Done"
       const today = new Date().toISOString().split('T')[0];
       if (field === 't1_status') {
-        // Only fill when becoming Done AND no existing actual_date (preserve existing)
         if (value === 'Done' && !prev.t1_actual_date) {
           updated.t1_actual_date = today;
         }
-        // Do NOT clear actual_date when leaving Done — preserve history
       }
       if (field === 't2_status') {
         if (value === 'Done' && !prev.t2_actual_date) {
           updated.t2_actual_date = today;
+        }
+      }
+      if (field === 'pred_status') {
+        if (value === 'Done' && !prev.pred_actual_date) {
+          updated.pred_actual_date = today;
         }
       }
       return updated;
