@@ -86,7 +86,7 @@ export const CriticalWatchlist = memo(function CriticalWatchlist({
       </Section>
     </div>
   );
-}
+});
 
 function Section({
   title, icon, children, empty, count, accent,
