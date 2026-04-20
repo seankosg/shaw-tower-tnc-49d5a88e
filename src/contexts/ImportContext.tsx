@@ -245,6 +245,9 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           ['t1_planned_date', row.t1_planned_date], ['t1_status', row.t1_status],
           ['t2_planned_date', row.t2_planned_date], ['t2_status', row.t2_status],
           ['predecessor_status_raw', row.predecessor_status_raw],
+          ['pred_status', row.pred_status],
+          ['pred_planned_date', row.pred_planned_date],
+          ['pred_actual_date', row.pred_actual_date],
           ['subcontractor_name', row.subcontractor_name],
           ['subsub_name', row.subsub_name],
           ['hdec_pic_name', row.hdec_pic_name],
@@ -275,19 +278,24 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         updates.subtest_id = row.subtest_id;
 
         // Auto-fill actual_date when status becomes Done and actual_date is empty
-        // Fetch existing actual dates to check
         const { data: existingDates } = await supabase.from('subtests')
-          .select('t1_status, t1_actual_date, t2_status, t2_actual_date')
+          .select('t1_status, t1_actual_date, t2_status, t2_actual_date, pred_status, pred_actual_date' as any)
           .eq('id', existing.id).maybeSingle();
-        const finalT1Status = updates.t1_status !== undefined ? updates.t1_status : existingDates?.t1_status;
-        const finalT1Actual = updates.t1_actual_date !== undefined ? updates.t1_actual_date : existingDates?.t1_actual_date;
+        const ed: any = existingDates;
+        const finalT1Status = updates.t1_status !== undefined ? updates.t1_status : ed?.t1_status;
+        const finalT1Actual = updates.t1_actual_date !== undefined ? updates.t1_actual_date : ed?.t1_actual_date;
         if (finalT1Status === 'Done' && !finalT1Actual) {
           updates.t1_actual_date = yesterday;
         }
-        const finalT2Status = updates.t2_status !== undefined ? updates.t2_status : existingDates?.t2_status;
-        const finalT2Actual = updates.t2_actual_date !== undefined ? updates.t2_actual_date : existingDates?.t2_actual_date;
+        const finalT2Status = updates.t2_status !== undefined ? updates.t2_status : ed?.t2_status;
+        const finalT2Actual = updates.t2_actual_date !== undefined ? updates.t2_actual_date : ed?.t2_actual_date;
         if (finalT2Status === 'Done' && !finalT2Actual) {
           updates.t2_actual_date = yesterday;
+        }
+        const finalPredStatus = updates.pred_status !== undefined ? updates.pred_status : ed?.pred_status;
+        const finalPredActual = updates.pred_actual_date !== undefined ? updates.pred_actual_date : ed?.pred_actual_date;
+        if (finalPredStatus === 'Done' && !finalPredActual) {
+          updates.pred_actual_date = yesterday;
         }
 
         const { error } = await supabase.from('subtests').update(updates as any).eq('id', existing.id);
@@ -310,6 +318,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         // Auto-fill actual_date for new inserts when status is Done
         const insertT1Actual = row.t1_status === 'Done' ? yesterday : null;
         const insertT2Actual = row.t2_status === 'Done' ? yesterday : null;
+        const insertPredActual = row.pred_status === 'Done' ? yesterday : (row.pred_actual_date ?? null);
         const { error } = await supabase.from('subtests').insert({
           project_id: projectId!, system_id: systemId,
           item_no: row.item_no, mos_code: row.mos_code, subtest_id: row.subtest_id,
@@ -319,6 +328,9 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           t2_planned_date: row.t2_planned_date, t2_status: row.t2_status as any,
           t2_actual_date: insertT2Actual,
           predecessor_status_raw: row.predecessor_status_raw,
+          pred_status: row.pred_status as any,
+          pred_planned_date: row.pred_planned_date,
+          pred_actual_date: insertPredActual,
           subcontractor_name: row.subcontractor_name,
           subsub_name: row.subsub_name,
           hdec_pic_name: row.hdec_pic_name,
