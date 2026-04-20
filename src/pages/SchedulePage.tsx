@@ -214,7 +214,7 @@ export default function SchedulePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
-            <Calendar className="h-5 w-5 text-primary" />
+            <CalendarIcon className="h-5 w-5 text-primary" />
             Schedule Matrix
           </h1>
           <p className="text-xs text-muted-foreground">
