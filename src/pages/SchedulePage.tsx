@@ -307,7 +307,7 @@ export default function SchedulePage() {
             <Skeleton className="h-[500px] w-full" />
           ) : (
             <ScheduleMatrix
-              data={aggregate}
+              data={visibleData}
               bucket={bucket}
               stageFilter={stageFilter}
               today={today}
