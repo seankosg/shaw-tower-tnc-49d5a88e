@@ -149,7 +149,11 @@ export default function SchedulePage() {
     if (stage === 't1' || stage === 't2' || stage === 'pred') {
       params.stage = stage;
     }
-    params.cell_status = field === 'planned' ? 'Planned' : 'Done';
+    // Plan bar counts by planned_date regardless of status — don't constrain status.
+    // Actual bar implies completion — keep Done filter.
+    if (field === 'actual') {
+      params.cell_status = 'Done';
+    }
 
     goSubtests(params);
   };
