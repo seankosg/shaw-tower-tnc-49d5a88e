@@ -158,6 +158,46 @@ function normalizePredecessor(val: any): string | null {
   return d || s;
 }
 
+/**
+ * Parse predecessor cell into normalized fields.
+ * Returns { raw, status, plannedDate, actualDate }.
+ * - Date value → status='Planned', plannedDate=date
+ * - 'done'/'완료'/'complete' → status='Done', no date set (caller fills actual)
+ * - Other text → raw kept, no status
+ * - Empty → all null
+ */
+export interface ParsedPredecessor {
+  raw: string | null;
+  status: 'Planned' | 'Done' | null;
+  plannedDate: string | null;
+  actualDate: string | null;
+}
+
+const PRED_DONE_KEYWORDS = ['done', 'complete', 'completed', 'finished', '완료'];
+
+export function parsePredecessor(val: any): ParsedPredecessor {
+  if (val == null || val === '') {
+    return { raw: null, status: null, plannedDate: null, actualDate: null };
+  }
+  const s = String(val).trim();
+  if (!s) return { raw: null, status: null, plannedDate: null, actualDate: null };
+
+  // Done keyword check
+  const lower = s.toLowerCase();
+  if (PRED_DONE_KEYWORDS.some(k => lower === k || lower.includes(k))) {
+    return { raw: 'Done', status: 'Done', plannedDate: null, actualDate: null };
+  }
+
+  // Try date parse
+  const d = normalizeDate(val);
+  if (d) {
+    return { raw: d, status: 'Planned', plannedDate: d, actualDate: null };
+  }
+
+  // Other text — keep raw, no normalized status
+  return { raw: s, status: null, plannedDate: null, actualDate: null };
+}
+
 // ── Parsed row type ───────────────────────────────────────────────────
 export interface ParsedSubtest {
   raw_row_no: number;
@@ -173,6 +213,9 @@ export interface ParsedSubtest {
   t2_planned_date: string | null;
   t2_status: string | null;
   predecessor_status_raw: string | null;
+  pred_status: 'Planned' | 'Done' | null;
+  pred_planned_date: string | null;
+  pred_actual_date: string | null;
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
