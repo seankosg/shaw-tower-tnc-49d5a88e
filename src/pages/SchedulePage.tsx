@@ -297,14 +297,6 @@ export default function SchedulePage() {
                     if (!d) return;
                     setPickedDate(d);
                     setPickerOpen(false);
-                    const iso = format(d, 'yyyy-MM-dd');
-                    const params: Record<string, string> = {
-                      date_from: iso,
-                      date_to: iso,
-                      date_field: pickedField,
-                    };
-                    if (pickedField === 'actual') params.cell_status = 'Done';
-                    navigate(`/?${new URLSearchParams(params).toString()}`);
                   }}
                   initialFocus
                   className={cn('p-3 pointer-events-auto')}
@@ -317,6 +309,24 @@ export default function SchedulePage() {
                 <TabsTrigger value="actual" className="h-6 px-2 text-xs">Actual</TabsTrigger>
               </TabsList>
             </Tabs>
+            <Button
+              size="sm"
+              className="h-8 px-3 text-xs"
+              disabled={!pickedDate}
+              onClick={() => {
+                if (!pickedDate) return;
+                const iso = format(pickedDate, 'yyyy-MM-dd');
+                const params: Record<string, string> = {
+                  date_from: iso,
+                  date_to: iso,
+                  date_field: pickedField,
+                };
+                if (pickedField === 'actual') params.cell_status = 'Done';
+                navigate(`/?${new URLSearchParams(params).toString()}`);
+              }}
+            >
+              Go
+            </Button>
           </ToolbarGroup>
 
           <div className="ml-auto flex items-center gap-3 text-xs">
