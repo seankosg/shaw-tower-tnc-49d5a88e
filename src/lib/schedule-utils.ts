@@ -20,6 +20,10 @@ export interface StageRow {
   totalActual: number;
   totalDone: number; // # subtests for this stage marked Done
   total: number; // # subtests in group (denominator)
+  /** # of subtests with plan_date <= today (for this stage). */
+  cumPlan: number;
+  /** # of subtests with actual_date <= today (for this stage). */
+  cumActual: number;
 }
 
 export interface GroupRow {
