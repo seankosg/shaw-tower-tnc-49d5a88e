@@ -152,7 +152,7 @@ export default function SchedulePage() {
       if (s.t1_planned_date && s.t1_planned_date >= today && s.t1_planned_date <= upcomingEnd) upcoming7Plan++;
       if (s.t2_planned_date && s.t2_planned_date >= today && s.t2_planned_date <= upcomingEnd) upcoming7Plan++;
     }
-    return { cumPlan, cumActual, variance, progressPct, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
+    return { cumPlan, cumActual, variance, progressPct, doneStages, totalStages, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
   }, [aggregate.rows, today, subtests, critical.highRisk.length]);
 
   // ───── Navigation handlers ─────
