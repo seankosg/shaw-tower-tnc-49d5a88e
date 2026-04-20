@@ -322,11 +322,15 @@ export default function SchedulePage() {
                   date_field: pickedField,
                 };
                 if (pickedField === 'actual') params.cell_status = 'Done';
+                if (stageFilter !== 'all') params.stage = stageFilter;
                 navigate(`/?${new URLSearchParams(params).toString()}`);
               }}
             >
               Go
             </Button>
+            <span className="text-[10px] text-muted-foreground">
+              Applies current Stage filter. Group/Bucket/Range are view-only.
+            </span>
           </ToolbarGroup>
 
           <div className="ml-auto flex items-center gap-3 text-xs">
