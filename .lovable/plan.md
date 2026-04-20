@@ -1,48 +1,30 @@
 
 
-## Schedule Matrix 컬럼 그룹 시각적 구분
+## 셀 색상 의미 정리 + 녹색 추가 검토
 
-### 변경사항
+현재 ScheduleCell의 막대 색상 체계는 다음과 같습니다 (tailwind config의 `schedule.*` 토큰):
 
-좌측 sticky 영역의 8개 sub-column을 두 개의 논리 그룹으로 명확히 구분:
-- **Total Scope** (Total / Done / % / Remain)
-- **Up to Today** (Plan / Actual / % / Diff)
+| 토큰 | 현재 용도 | 색 계열 |
+|---|---|---|
+| `schedule-plan` | Plan 막대 (계획 수량) | 회색 |
+| `schedule-actual` | Actual 막대 (실적, plan 이내) | 파랑 |
+| `schedule-over` | 초과 실적 (actual > plan) | 주황 |
+| `schedule-short` | 부족 (actual < plan, Diff 음수 텍스트) | 빨강 |
 
-### 구현 방식 (2단 헤더 + 배경색 구분)
+→ **현재 schedule 색상 팔레트에 녹색은 정의되어 있지 않습니다.**
 
-#### 1. 헤더를 2단으로 변경
-기존 1단 헤더 위에 그룹 헤더 행 추가:
+질문하신 "녹색"이 어디에서 보이는지에 따라 두 가지 가능성이 있어 확인이 필요합니다:
 
-```text
-| Group(200) |    Total Scope        |    Up to Today        | ...buckets...
-|            | Total Done  %  Remain | Plan Actual  %  Diff  |
-```
+### 가능성 A — 직전 plan 메시지의 표현 오류
+직전 plan에서 제가 "파란/주황 영역(actual)" 을 "파란 혹은 초록"으로 적었는데, 실제 코드상 actual은 **파랑(schedule-actual)** + 초과분은 **주황(schedule-over)** 입니다. 초록은 사용되지 않습니다. → 이 경우 분리 클릭 plan은 그대로 유효하며, "actual 막대 클릭 = 파랑+주황 영역" 으로 정정하면 됩니다.
 
-- 1단 (그룹 헤더): `Total Scope` (192px) | `Up to Today` (192px)
-- 2단 (sub-header): 기존 8개 컬럼 라벨
+### 가능성 B — 다른 화면의 녹색
+SubtestList의 `StageProgress` / `StatusBadge` 등 다른 컴포넌트에서 Done 상태를 녹색으로 표시할 수 있습니다. 이건 ScheduleCell의 막대 색과는 별개입니다.
 
-#### 2. 배경색으로 그룹 시각적 구분
-- **Total Scope** 그룹: `bg-muted` 유지 (현행)
-- **Up to Today** 그룹: `bg-secondary/40` (살짝 다른 톤)
-- 그룹 사이에 굵은 구분선 (`border-l-2 border-border`)
+### 확인 요청
 
-#### 3. 데이터 행에도 동일한 그룹 배경 적용
-- 그룹 행과 Stage sub-row 양쪽 모두 일관되게 두 블록 배경색 차이 유지
-
-### 변경 파일
-
-| 파일 | 변경 |
-|---|---|
-| `src/components/schedule/ScheduleMatrix.tsx` | 헤더 2단 구조로 재구성, 두 블록에 배경색 적용, `TotalDoneCells`/`PlanActualCells`에 그룹 배경 prop 추가 |
-
-### 비변경
-- 컬럼 폭 (W_GROUP=200, W_NUM=48, W_PCT=48) 유지
-- 좌측 sticky 폭 584px 유지
-- 계산 로직, ScheduleCell, KPI strip 변경 없음
-
-### 검증
-1. 헤더에 `Total Scope` / `Up to Today` 두 그룹 라벨이 sub-header 위에 표시
-2. 두 그룹의 배경색이 시각적으로 구분
-3. 가로 스크롤 시 sticky left 영역에서도 그룹 구분이 유지
-4. Stage 토글(All/Pred/T1/T2) 모두에서 동일하게 표시
+녹색이 보이는 위치를 알려주시면 정확히 정리해 드리겠습니다:
+- Schedule Matrix의 시간축 셀 막대 안 → **현재 코드엔 녹색 없음** (제 직전 표현이 잘못됨)
+- Subtest List / Status Badge → 별도 색상 체계 (Done = 녹색 가능)
+- 또는 사용자가 의도한 "녹색을 새로 도입"하고 싶은 케이스 (예: actual=plan 정확 일치 시 녹색)
 
