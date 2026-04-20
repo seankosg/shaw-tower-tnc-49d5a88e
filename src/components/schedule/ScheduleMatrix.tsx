@@ -247,18 +247,22 @@ export function ScheduleMatrix({
                       <span className="truncate font-medium" title={row.label}>{row.label}</span>
                     </button>
 
-                    <TotalDoneCells
-                      total={row.total}
-                      done={row.doneCount}
-                      bold
-                      py="py-2"
-                    />
-                    <PlanActualCells
-                      plan={row.cumPlan}
-                      actual={row.cumActual}
-                      bold
-                      py="py-2"
-                    />
+                    <div className="flex bg-muted/40">
+                      <TotalDoneCells
+                        total={row.total}
+                        done={row.doneCount}
+                        bold
+                        py="py-2"
+                      />
+                    </div>
+                    <div className="flex bg-secondary/20">
+                      <PlanActualCells
+                        plan={row.cumPlan}
+                        actual={row.cumActual}
+                        bold
+                        py="py-2"
+                      />
+                    </div>
                   </div>
                   {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
                   {virtualCols.map(vc => {
