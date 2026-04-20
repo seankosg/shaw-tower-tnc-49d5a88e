@@ -216,17 +216,15 @@ export default function SubtestDetailPage() {
       // Auto-set actual date when status changes to "Done"
       const today = new Date().toISOString().split('T')[0];
       if (field === 't1_status') {
-        if (value === 'Done' && prev.t1_status !== 'Done') {
+        // Only fill when becoming Done AND no existing actual_date (preserve existing)
+        if (value === 'Done' && !prev.t1_actual_date) {
           updated.t1_actual_date = today;
-        } else if (value !== 'Done' && prev.t1_status === 'Done') {
-          updated.t1_actual_date = null;
         }
+        // Do NOT clear actual_date when leaving Done — preserve history
       }
       if (field === 't2_status') {
-        if (value === 'Done' && prev.t2_status !== 'Done') {
+        if (value === 'Done' && !prev.t2_actual_date) {
           updated.t2_actual_date = today;
-        } else if (value !== 'Done' && prev.t2_status === 'Done') {
-          updated.t2_actual_date = null;
         }
       }
       return updated;

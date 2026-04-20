@@ -70,12 +70,13 @@ export default function MobileUpdatePage() {
     updates.data_source_type = 'mobile_input';
     updates.row_version = card.row_version + 1;
 
-    // Auto-fill actual dates
-    if (changes.t1_status === 'Done') {
-      updates.t1_actual_date = new Date().toISOString().slice(0, 10);
+    // Auto-fill actual dates only when empty (preserve existing)
+    const today = new Date().toISOString().slice(0, 10);
+    if (changes.t1_status === 'Done' && !card.t1_actual_date && changes.t1_actual_date === undefined) {
+      updates.t1_actual_date = today;
     }
-    if (changes.t2_status === 'Done') {
-      updates.t2_actual_date = new Date().toISOString().slice(0, 10);
+    if (changes.t2_status === 'Done' && !card.t2_actual_date && changes.t2_actual_date === undefined) {
+      updates.t2_actual_date = today;
     }
 
     const { error } = await supabase.from('subtests').update(updates as any).eq('id', card.id);
