@@ -65,7 +65,8 @@ function GlobalImportIndicator() {
 }
 
 export function AppLayout() {
-  useDocumentTitle();
+  const pageLabel = useCurrentPageLabel();
+  useDocumentTitle(pageLabel);
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -73,6 +74,15 @@ export function AppLayout() {
         <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
+            <span className="text-muted-foreground">{APP_NAME}</span>
+            {pageLabel && (
+              <>
+                <span className="text-muted-foreground/50">/</span>
+                <span className="font-medium text-foreground">{pageLabel}</span>
+              </>
+            )}
+          </nav>
           <div className="ml-auto">
             <GlobalImportIndicator />
           </div>
