@@ -820,9 +820,8 @@ function SubtestTableView({
                 )}
               </>
             )}
-          </TableBody>
-        </Table>
-      </div>
+        </TableBody>
+      </Table>
     </div>
   );
 }
