@@ -140,9 +140,22 @@ export function ScheduleMatrix({
           <div className="flex" style={{ width: totalGridWidth, minWidth: totalGridWidth }}>
             <div className="sticky left-0 z-40 flex bg-muted">
               <div className="flex w-[200px] items-center px-3 py-2">{groupHeader}</div>
-              <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-2">Done/Total</div>
-              <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-2">Cum Plan</div>
-              <div className="flex w-[80px] items-center justify-end border-l border-r border-border px-2 py-2">Cum Actual</div>
+              <div
+                className="flex w-[70px] items-center justify-end border-l border-border px-2 py-2"
+                title={
+                  stageFilter === 'all'
+                    ? 'Pred + T1 + T2 Done / (subtests × 3)'
+                    : `${stageFilter.toUpperCase()} Done / subtests`
+                }
+              >
+                {stageFilter === 'all' ? 'Done/Total' : `${stageFilter.toUpperCase()} Done/Total`}
+              </div>
+              <div
+                className="flex w-[110px] items-center justify-end border-l border-r border-border px-2 py-2"
+                title="오늘까지의 Plan 대비 Actual (선택된 Stage 기준)"
+              >
+                Actual/Plan
+              </div>
             </div>
             {data.buckets.map((b, i) => {
               const lbl = formatBucketLabel(b, bucket);
