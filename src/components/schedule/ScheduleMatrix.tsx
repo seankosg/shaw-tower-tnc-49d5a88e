@@ -302,16 +302,20 @@ export function ScheduleMatrix({
                             {STAGE_LABELS[st]}
                           </span>
                         </div>
-                        <TotalDoneCells
-                          total={sr.total}
-                          done={sr.totalDone}
-                          py="py-1.5"
-                        />
-                        <PlanActualCells
-                          plan={sr.cumPlan}
-                          actual={sr.cumActual}
-                          py="py-1.5"
-                        />
+                        <div className="flex bg-muted/40">
+                          <TotalDoneCells
+                            total={sr.total}
+                            done={sr.totalDone}
+                            py="py-1.5"
+                          />
+                        </div>
+                        <div className="flex bg-secondary/20">
+                          <PlanActualCells
+                            plan={sr.cumPlan}
+                            actual={sr.cumActual}
+                            py="py-1.5"
+                          />
+                        </div>
                       </div>
                       {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
                       {virtualCols.map(vc => {
