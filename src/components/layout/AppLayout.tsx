@@ -21,12 +21,16 @@ const ROUTE_TITLES: Array<{ match: (p: string) => boolean; label: string }> = [
   { match: (p) => p === '/change-password', label: 'Change Password' },
 ];
 
-function useDocumentTitle() {
+function useCurrentPageLabel() {
   const { pathname } = useLocation();
+  const found = ROUTE_TITLES.find((r) => r.match(pathname));
+  return found?.label ?? '';
+}
+
+function useDocumentTitle(label: string) {
   useEffect(() => {
-    const found = ROUTE_TITLES.find((r) => r.match(pathname));
-    document.title = found ? `${found.label} · ${APP_NAME}` : APP_NAME;
-  }, [pathname]);
+    document.title = label ? `${label} · ${APP_NAME}` : APP_NAME;
+  }, [label]);
 }
 
 function GlobalImportIndicator() {
