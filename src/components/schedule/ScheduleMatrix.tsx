@@ -210,19 +210,10 @@ export function ScheduleMatrix({
                       <span className="truncate font-medium" title={row.label}>{row.label}</span>
                       <span className="ml-auto text-[10px] text-muted-foreground">({row.total})</span>
                     </button>
-                    <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-2 tabular-nums">
+                    <div className="flex w-[70px] items-center justify-end border-l border-border px-2 py-2 tabular-nums">
                       {row.doneCount}/{row.total}
                     </div>
-                    <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-2 tabular-nums">
-                      {row.cumPlan}
-                    </div>
-                    <div className={cn(
-                      'flex w-[80px] items-center justify-end border-l border-r border-border px-2 py-2 tabular-nums font-semibold',
-                      row.cumActual < row.cumPlan && 'text-schedule-short',
-                      row.cumActual > row.cumPlan && 'text-schedule-over',
-                    )}>
-                      {row.cumActual}
-                    </div>
+                    <ActualPlanCell actual={row.cumActual} plan={row.cumPlan} className="w-[110px] py-2 font-semibold" />
                   </div>
                   {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
                   {virtualCols.map(vc => {
