@@ -1,10 +1,33 @@
-import { Outlet, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { Separator } from '@/components/ui/separator';
 import { useImport } from '@/contexts/ImportContext';
 import { Progress } from '@/components/ui/progress';
 import { Loader2 } from 'lucide-react';
+import { APP_NAME } from '@/lib/constants';
+
+const ROUTE_TITLES: Array<{ match: (p: string) => boolean; label: string }> = [
+  { match: (p) => p === '/dashboard', label: 'Dashboard' },
+  { match: (p) => p === '/schedule', label: 'Progress' },
+  { match: (p) => p === '/', label: 'Raw Data' },
+  { match: (p) => p.startsWith('/subtests/'), label: 'Subtest Detail' },
+  { match: (p) => p === '/import', label: 'Import' },
+  { match: (p) => p === '/import/logs', label: 'Import Logs' },
+  { match: (p) => p === '/export', label: 'Export' },
+  { match: (p) => p === '/mobile', label: 'Quick Update' },
+  { match: (p) => p.startsWith('/admin'), label: 'Admin' },
+  { match: (p) => p === '/change-password', label: 'Change Password' },
+];
+
+function useDocumentTitle() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const found = ROUTE_TITLES.find((r) => r.match(pathname));
+    document.title = found ? `${found.label} · ${APP_NAME}` : APP_NAME;
+  }, [pathname]);
+}
 
 function GlobalImportIndicator() {
   const navigate = useNavigate();
