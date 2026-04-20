@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, AlertTriangle, TrendingUp, Activity } from 'lucide-react';
+import { Calendar, AlertTriangle, TrendingUp, Activity, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -32,6 +33,14 @@ export default function SchedulePage() {
   const [bucket, setBucket] = useState<ScheduleBucket>('day');
   const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>('all');
   const [rangeDays, setRangeDays] = useState<number>(60);
+  const [hidePast, setHidePast] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('schedule_hide_past') === '1';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('schedule_hide_past', hidePast ? '1' : '0');
+  }, [hidePast]);
 
   // Hydrate from cache for instant render
   const cached = useMemo(() => getScheduleCache(), []);
@@ -98,6 +107,24 @@ export default function SchedulePage() {
   );
 
   const lagging = useMemo(() => findLaggingGroups(aggregate.rows, 5), [aggregate.rows]);
+
+  // Past-date hiding: slice buckets/cells to only today-and-future
+  const visibleData = useMemo(() => {
+    if (!hidePast) return aggregate;
+    const startIdx = aggregate.buckets.findIndex(b => b >= today);
+    if (startIdx <= 0) return aggregate;
+    const buckets = aggregate.buckets.slice(startIdx);
+    const rows = aggregate.rows.map(r => ({
+      ...r,
+      combined: r.combined.slice(startIdx),
+      stages: {
+        pred: { ...r.stages.pred, cells: r.stages.pred.cells.slice(startIdx) },
+        t1:   { ...r.stages.t1,   cells: r.stages.t1.cells.slice(startIdx) },
+        t2:   { ...r.stages.t2,   cells: r.stages.t2.cells.slice(startIdx) },
+      },
+    }));
+    return { ...aggregate, buckets, rows };
+  }, [aggregate, hidePast, today]);
 
   const kpis = useMemo(() => {
     let todayPlan = 0, todayActual = 0, cumPlan = 0, cumActual = 0;
@@ -202,6 +229,16 @@ export default function SchedulePage() {
                 <TabsTrigger value="week" className="h-6 px-2 text-xs">Week</TabsTrigger>
               </TabsList>
             </Tabs>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 text-xs"
+              onClick={() => setHidePast(p => !p)}
+              title={hidePast ? 'Show past dates' : 'Hide past dates'}
+            >
+              {hidePast ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
+              <span className="ml-1">{hidePast ? 'Show past' : 'Hide past'}</span>
+            </Button>
           </ToolbarGroup>
 
           <ToolbarGroup label="Stage">
@@ -270,7 +307,7 @@ export default function SchedulePage() {
             <Skeleton className="h-[500px] w-full" />
           ) : (
             <ScheduleMatrix
-              data={aggregate}
+              data={visibleData}
               bucket={bucket}
               stageFilter={stageFilter}
               today={today}
