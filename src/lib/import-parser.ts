@@ -277,6 +277,7 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
     const item_no = (row.item_no || '').trim();
     if (!item_no) continue;
 
+    const pred = parsePredecessor(row.predecessor_status_raw);
     const base = {
       raw_row_no: parseInt(row.__row_no) || 0,
       raw_system_name: system,
@@ -288,7 +289,10 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
       t1_status: normalizeStatus(row.t1_status),
       t2_planned_date: normalizeDate(row.t2_planned_date),
       t2_status: normalizeStatus(row.t2_status),
-      predecessor_status_raw: normalizePredecessor(row.predecessor_status_raw),
+      predecessor_status_raw: pred.raw,
+      pred_status: pred.status,
+      pred_planned_date: pred.plannedDate,
+      pred_actual_date: pred.actualDate,
       subcontractor_name: row.subcontractor_name?.trim() || null,
       subsub_name: row.subsub_name?.trim() || null,
       hdec_pic_name: row.hdec_pic_name?.trim() || null,
@@ -333,6 +337,7 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
     const mos_code = (row.mos_code || '').trim();
     if (!item_no || !mos_code) continue;
 
+    const pred = parsePredecessor(row.predecessor_status_raw);
     result.push({
       raw_row_no: parseInt(row.__row_no) || 0,
       raw_system_name: system,
@@ -346,7 +351,10 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
       t1_status: normalizeStatus(row.t1_status),
       t2_planned_date: normalizeDate(row.t2_planned_date),
       t2_status: normalizeStatus(row.t2_status),
-      predecessor_status_raw: normalizePredecessor(row.predecessor_status_raw),
+      predecessor_status_raw: pred.raw,
+      pred_status: pred.status,
+      pred_planned_date: pred.plannedDate,
+      pred_actual_date: pred.actualDate,
       subcontractor_name: row.subcontractor_name?.trim() || null,
       subsub_name: row.subsub_name?.trim() || null,
       hdec_pic_name: row.hdec_pic_name?.trim() || null,
