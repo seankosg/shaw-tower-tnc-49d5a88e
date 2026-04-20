@@ -675,9 +675,8 @@ function SubtestTableView({
   const paddingBottom = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
 
   return (
-    <div ref={tableRef} className="rounded-md border max-h-[calc(100vh-220px)] overflow-y-auto overflow-x-hidden">
-      <div className="overflow-x-auto">
-        <Table style={{ width: table.getTotalSize(), tableLayout: 'fixed' }}>
+    <div ref={tableRef} className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
+      <Table style={{ width: table.getTotalSize(), tableLayout: 'fixed' }}>
           <TableHeader className="sticky top-0 z-20">
             {/* Filter row */}
             <TableRow className="border-b-0 bg-muted/30">
@@ -821,9 +820,8 @@ function SubtestTableView({
                 )}
               </>
             )}
-          </TableBody>
-        </Table>
-      </div>
+        </TableBody>
+      </Table>
     </div>
   );
 }
