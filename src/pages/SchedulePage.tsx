@@ -41,6 +41,9 @@ export default function SchedulePage() {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('schedule_hide_past') === '1';
   });
+  const [pickedDate, setPickedDate] = useState<Date | undefined>(new Date());
+  const [pickedField, setPickedField] = useState<'planned' | 'actual'>('planned');
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('schedule_hide_past', hidePast ? '1' : '0');
