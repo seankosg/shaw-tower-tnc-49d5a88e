@@ -21,6 +21,8 @@ interface SubtestCard {
   t2_status: TcStatus | null;
   t1_planned_date: string | null;
   t2_planned_date: string | null;
+  t1_actual_date: string | null;
+  t2_actual_date: string | null;
   predecessor_status_raw: string | null;
   subcontractor_name: string | null;
   subsub_name: string | null;
@@ -43,7 +45,7 @@ export default function MobileUpdatePage() {
     const q = query.trim();
     const { data } = await supabase
       .from('subtests')
-      .select('id, subtest_id, item_no, mos_code, description, equipment, t1_status, t2_status, t1_planned_date, t2_planned_date, predecessor_status_raw, subcontractor_name, subsub_name, hdec_pic_name, row_version, system_master!inner(system_code)')
+      .select('id, subtest_id, item_no, mos_code, description, equipment, t1_status, t2_status, t1_planned_date, t2_planned_date, t1_actual_date, t2_actual_date, predecessor_status_raw, subcontractor_name, subsub_name, hdec_pic_name, row_version, system_master!inner(system_code)')
       .eq('is_active', true)
       .or(`subtest_id.ilike.%${q}%,item_no.ilike.%${q}%`)
       .limit(20);
@@ -70,12 +72,13 @@ export default function MobileUpdatePage() {
     updates.data_source_type = 'mobile_input';
     updates.row_version = card.row_version + 1;
 
-    // Auto-fill actual dates
-    if (changes.t1_status === 'Done') {
-      updates.t1_actual_date = new Date().toISOString().slice(0, 10);
+    // Auto-fill actual dates only when empty (preserve existing)
+    const today = new Date().toISOString().slice(0, 10);
+    if (changes.t1_status === 'Done' && !card.t1_actual_date && changes.t1_actual_date === undefined) {
+      updates.t1_actual_date = today;
     }
-    if (changes.t2_status === 'Done') {
-      updates.t2_actual_date = new Date().toISOString().slice(0, 10);
+    if (changes.t2_status === 'Done' && !card.t2_actual_date && changes.t2_actual_date === undefined) {
+      updates.t2_actual_date = today;
     }
 
     const { error } = await supabase.from('subtests').update(updates as any).eq('id', card.id);

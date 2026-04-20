@@ -236,6 +236,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
 
       const dataSourceType = importTypeRef.current === 'legacy' ? 'legacy_import_inherited' : 'standard_import';
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
       if (existing) {
         const updates: Record<string, any> = {};
@@ -273,6 +274,22 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         updates.row_version = (existing.row_version || 1) + 1;
         updates.subtest_id = row.subtest_id;
 
+        // Auto-fill actual_date when status becomes Done and actual_date is empty
+        // Fetch existing actual dates to check
+        const { data: existingDates } = await supabase.from('subtests')
+          .select('t1_status, t1_actual_date, t2_status, t2_actual_date')
+          .eq('id', existing.id).maybeSingle();
+        const finalT1Status = updates.t1_status !== undefined ? updates.t1_status : existingDates?.t1_status;
+        const finalT1Actual = updates.t1_actual_date !== undefined ? updates.t1_actual_date : existingDates?.t1_actual_date;
+        if (finalT1Status === 'Done' && !finalT1Actual) {
+          updates.t1_actual_date = yesterday;
+        }
+        const finalT2Status = updates.t2_status !== undefined ? updates.t2_status : existingDates?.t2_status;
+        const finalT2Actual = updates.t2_actual_date !== undefined ? updates.t2_actual_date : existingDates?.t2_actual_date;
+        if (finalT2Status === 'Done' && !finalT2Actual) {
+          updates.t2_actual_date = yesterday;
+        }
+
         const { error } = await supabase.from('subtests').update(updates as any).eq('id', existing.id);
         if (error) {
           res.rejected++;
@@ -290,12 +307,17 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           });
         }
       } else {
+        // Auto-fill actual_date for new inserts when status is Done
+        const insertT1Actual = row.t1_status === 'Done' ? yesterday : null;
+        const insertT2Actual = row.t2_status === 'Done' ? yesterday : null;
         const { error } = await supabase.from('subtests').insert({
           project_id: projectId!, system_id: systemId,
           item_no: row.item_no, mos_code: row.mos_code, subtest_id: row.subtest_id,
           level: row.level, equipment: row.equipment, description: row.description,
           t1_planned_date: row.t1_planned_date, t1_status: row.t1_status as any,
+          t1_actual_date: insertT1Actual,
           t2_planned_date: row.t2_planned_date, t2_status: row.t2_status as any,
+          t2_actual_date: insertT2Actual,
           predecessor_status_raw: row.predecessor_status_raw,
           subcontractor_name: row.subcontractor_name,
           subsub_name: row.subsub_name,
