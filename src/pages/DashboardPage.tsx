@@ -53,7 +53,7 @@ export default function DashboardPage() {
           .eq('is_active', true)
           .range(from, from + PAGE - 1);
         if (!data || data.length === 0) break;
-        all = all.concat(data as SubtestForDashboard[]);
+        all = all.concat(data as unknown as SubtestForDashboard[]);
         if (data.length < PAGE) break;
         from += PAGE;
       }
