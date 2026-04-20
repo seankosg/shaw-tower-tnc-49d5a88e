@@ -555,7 +555,7 @@ export default function SubtestList() {
   });
 
   const activeUrlFilters = useMemo(() => {
-    const out: { label: string; param: string }[] = [];
+    const out: { label: string; param: string; clears?: string[] }[] = [];
     const map: Record<string, string> = {
       system: 'System', subcon: 'Subcon', subsub: 'Sub-Sub',
       hdec_pic: 'HDEC PIC', t1_status: 'T1', t2_status: 'T2', status: 'Status',
@@ -563,10 +563,24 @@ export default function SubtestList() {
       t1_actual_to: 'T1 Actual ≤', t2_actual_to: 'T2 Actual ≤',
       t1_planned_on: 'T1 Plan =', t2_planned_on: 'T2 Plan =',
       t1_actual_on: 'T1 Actual =', t2_actual_on: 'T2 Actual =',
+      stage: 'Stage', cell_status: 'Cell Status',
     };
     for (const [k, lbl] of Object.entries(map)) {
       const v = searchParams.get(k);
       if (v) out.push({ label: `${lbl} ${v}`, param: k });
+    }
+    // Combined date_from/date_to/date_field chip
+    const df = searchParams.get('date_from');
+    const dt = searchParams.get('date_to');
+    const fld = searchParams.get('date_field');
+    if (df || dt) {
+      const fldLbl = fld === 'actual' ? 'Actual' : 'Planned';
+      const range = df === dt || !dt ? df : `${df} → ${dt}`;
+      out.push({
+        label: `${fldLbl} ${range}`,
+        param: 'date_from',
+        clears: ['date_from', 'date_to', 'date_field'],
+      });
     }
     return out;
   }, [searchParams]);
