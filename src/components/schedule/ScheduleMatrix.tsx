@@ -76,6 +76,28 @@ export function ScheduleMatrix({
     return idx;
   }, [data.buckets, today]);
 
+  // Auto-scroll horizontally so Today column is visible near the left.
+  // Re-runs when buckets change (range/bucket toggle) or cellWidth changes.
+  const didAutoScrollRef = useRef<string>('');
+  useEffect(() => {
+    const body = bodyScrollRef.current;
+    const header = headerScrollRef.current;
+    if (!body || todayBucketIdx < 0) return;
+    // Scroll key prevents redundant re-scrolls but allows on bucket/range change
+    const scrollKey = `${data.buckets.length}|${cellWidth}|${todayBucketIdx}`;
+    if (didAutoScrollRef.current === scrollKey) return;
+    didAutoScrollRef.current = scrollKey;
+
+    // Position Today ~2 cells from the left edge of the scrollable area
+    const offsetCells = 2;
+    const target = Math.max(0, (todayBucketIdx - offsetCells) * cellWidth);
+    syncingRef.current = true;
+    body.scrollLeft = target;
+    if (header) header.scrollLeft = target;
+    requestAnimationFrame(() => { syncingRef.current = false; });
+  }, [todayBucketIdx, data.buckets.length, cellWidth]);
+
+
   const stagesToShow: ScheduleStage[] =
     stageFilter === 'all' ? ['pred', 't1', 't2'] : [stageFilter as ScheduleStage];
 
