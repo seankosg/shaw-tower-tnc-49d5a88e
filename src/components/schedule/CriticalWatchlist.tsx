@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { AlertTriangle, Clock, TrendingDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -11,7 +12,7 @@ interface CriticalWatchlistProps {
   onGroupClick?: (groupLabel: string) => void;
 }
 
-export function CriticalWatchlist({
+export const CriticalWatchlist = memo(function CriticalWatchlist({
   highRisk,
   t1Bottleneck,
   lagging,
@@ -85,7 +86,7 @@ export function CriticalWatchlist({
       </Section>
     </div>
   );
-}
+});
 
 function Section({
   title, icon, children, empty, count, accent,

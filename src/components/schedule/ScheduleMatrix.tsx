@@ -1,4 +1,5 @@
 import { useState, Fragment, useMemo, useRef, useEffect } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScheduleCell } from './ScheduleCell';
@@ -20,6 +21,8 @@ interface ScheduleMatrixProps {
   onCellClick?: (groupKey: string, bucketIso: string, stage: ScheduleStage | 'all') => void;
 }
 
+const STICKY_LEFT_WIDTH = 440; // 200 + 80 + 80 + 80
+
 export function ScheduleMatrix({
   data,
   bucket,
@@ -31,11 +34,12 @@ export function ScheduleMatrix({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const cellWidth = bucket === 'day' ? 64 : 96;
 
-  // Sync horizontal scroll between sticky header scrollbar and body
+  // The body is the source of truth for horizontal scrolling and virtualization.
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const bodyScrollRef = useRef<HTMLDivElement>(null);
   const syncingRef = useRef(false);
 
+  // Sync horizontal scroll between header scrollbar and body
   useEffect(() => {
     const header = headerScrollRef.current;
     const body = bodyScrollRef.current;
@@ -63,17 +67,14 @@ export function ScheduleMatrix({
   }, []);
 
   const todayBucketIdx = useMemo(() => {
-    const todayBucket = bucket === 'day'
-      ? today
-      : data.buckets.find(b => b <= today && b > '') ?? '';
     let idx = -1;
     for (let i = 0; i < data.buckets.length; i++) {
-      if (data.buckets[i] === todayBucket) { idx = i; break; }
+      if (data.buckets[i] === today) { idx = i; break; }
       if (data.buckets[i] > today) break;
       idx = i;
     }
     return idx;
-  }, [data.buckets, today, bucket]);
+  }, [data.buckets, today]);
 
   const stagesToShow: ScheduleStage[] =
     stageFilter === 'all' ? ['pred', 't1', 't2'] : [stageFilter as ScheduleStage];
@@ -87,15 +88,29 @@ export function ScheduleMatrix({
     });
   };
 
-  // Sticky left column total width (200 + 80 + 80 + 80 = 440)
-  const stickyLeftWidth = 440;
-  const totalGridWidth = stickyLeftWidth + data.buckets.length * cellWidth;
+  const totalGridWidth = STICKY_LEFT_WIDTH + data.buckets.length * cellWidth;
+
+  // Horizontal virtualizer — driven by body scroll container
+  const colVirtualizer = useVirtualizer({
+    count: data.buckets.length,
+    getScrollElement: () => bodyScrollRef.current,
+    estimateSize: () => cellWidth,
+    horizontal: true,
+    overscan: 4,
+    paddingStart: STICKY_LEFT_WIDTH,
+  });
+
+  const virtualCols = colVirtualizer.getVirtualItems();
+  const leftPad = virtualCols.length > 0 ? virtualCols[0].start - STICKY_LEFT_WIDTH : 0;
+  const rightPad =
+    virtualCols.length > 0
+      ? colVirtualizer.getTotalSize() - virtualCols[virtualCols.length - 1].end
+      : 0;
 
   return (
     <div className="rounded-md border border-border bg-card">
-      {/* Sticky header section: contains both column titles AND a horizontal scrollbar */}
+      {/* Sticky header section */}
       <div className="sticky top-0 z-30 bg-muted">
-        {/* Header row (titles + date cells). Scrolls horizontally in sync with body. */}
         <div
           ref={headerScrollRef}
           className="overflow-x-auto overflow-y-hidden border-b border-border text-[11px] font-semibold"
@@ -128,11 +143,10 @@ export function ScheduleMatrix({
         </div>
       </div>
 
-      {/* Body: scrolls vertically with the page; horizontal scroll synced with header */}
+      {/* Body — horizontal scroll source + horizontal virtualizer */}
       <div
         ref={bodyScrollRef}
-        className="overflow-x-auto overflow-y-hidden max-h-[calc(100vh-300px)]"
-        style={{ overflowY: 'auto' }}
+        className="overflow-auto max-h-[calc(100vh-300px)]"
       >
         <div style={{ width: totalGridWidth, minWidth: totalGridWidth }}>
           {data.rows.length === 0 && (
@@ -175,20 +189,26 @@ export function ScheduleMatrix({
                       {row.cumActual}
                     </div>
                   </div>
-                  {row.combined.map((c, i) => (
-                    <ScheduleCell
-                      key={c.bucket}
-                      plan={c.plan}
-                      actual={c.actual}
-                      isFuture={i > todayBucketIdx}
-                      isToday={i === todayBucketIdx}
-                      width={cellWidth}
-                      onClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter) : undefined}
-                    />
-                  ))}
+                  {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
+                  {virtualCols.map(vc => {
+                    const c = row.combined[vc.index];
+                    if (!c) return null;
+                    return (
+                      <ScheduleCell
+                        key={c.bucket}
+                        plan={c.plan}
+                        actual={c.actual}
+                        isFuture={vc.index > todayBucketIdx}
+                        isToday={vc.index === todayBucketIdx}
+                        width={cellWidth}
+                        onClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter) : undefined}
+                      />
+                    );
+                  })}
+                  {rightPad > 0 && <div style={{ width: rightPad, minWidth: rightPad }} />}
                 </div>
 
-                {/* Stage sub-rows when expanded (only when stage=all) */}
+                {/* Stage sub-rows when expanded */}
                 {isExp && stagesToShow.map(st => {
                   const sr = row.stages[st];
                   return (
@@ -218,17 +238,23 @@ export function ScheduleMatrix({
                           {sr.totalActual}
                         </div>
                       </div>
-                      {sr.cells.map((c, i) => (
-                        <ScheduleCell
-                          key={c.bucket}
-                          plan={c.plan}
-                          actual={c.actual}
-                          isFuture={i > todayBucketIdx}
-                          isToday={i === todayBucketIdx}
-                          width={cellWidth}
-                          onClick={onCellClick ? () => onCellClick(row.key, c.bucket, st) : undefined}
-                        />
-                      ))}
+                      {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
+                      {virtualCols.map(vc => {
+                        const c = sr.cells[vc.index];
+                        if (!c) return null;
+                        return (
+                          <ScheduleCell
+                            key={c.bucket}
+                            plan={c.plan}
+                            actual={c.actual}
+                            isFuture={vc.index > todayBucketIdx}
+                            isToday={vc.index === todayBucketIdx}
+                            width={cellWidth}
+                            onClick={onCellClick ? () => onCellClick(row.key, c.bucket, st) : undefined}
+                          />
+                        );
+                      })}
+                      {rightPad > 0 && <div style={{ width: rightPad, minWidth: rightPad }} />}
                     </div>
                   );
                 })}
