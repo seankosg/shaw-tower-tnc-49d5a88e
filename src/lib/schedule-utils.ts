@@ -146,6 +146,8 @@ export interface AggregateOptions {
   stageFilter: ScheduleStageFilter;
   rangeStart: string;
   rangeEnd: string;
+  /** Today ISO date — used to compute cum Plan/Actual up-to-today. */
+  today: string;
   sysCodeById: Map<string, string>;
 }
 
