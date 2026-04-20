@@ -221,7 +221,7 @@ export default function SchedulePage() {
             Progress Status
           </h1>
           <p className="text-xs text-muted-foreground">
-            Plan vs Actual by {GROUP_LABELS[groupBy]} · {bucket === 'day' ? 'Daily' : 'Weekly'} · Today {today}
+            Track planned vs actual progress by {GROUP_LABELS[groupBy]} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Today {today}
           </p>
         </div>
       </div>
