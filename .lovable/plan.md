@@ -1,35 +1,51 @@
 
 
-## Cumulative Progress Card에 진행률 시각화 추가
+## Schedule 페이지에 "Date Picker" 추가 — 특정 날짜 클릭 시 해당일 Subtest 리스트 조회
 
 ### 목적
-현재 텍스트로만 표시되는 `${cumActual}/${cumPlan} (XX%)` 값을 시각적 Progress 바로 전환하여 한 눈에 진행률 파악 가능하게.
+사용자가 특정 날짜를 선택하면 그날 계획된(또는 실적이 발생한) 모든 subtest를 SubtestList에서 바로 조회. 미래 일일 계획 사전 검토 + 과거 실적 회고 양쪽 용도.
 
-### 변경 내용
+### UI 위치
+SchedulePage 상단 Toolbar의 우측(Legend 옆) 또는 KPI 카드 위에 새 행:
+```
+[📅 Pick a date  ▼]   [Plan ▾]  [Go →]
+```
+- **Date Picker**: shadcn `Calendar` + `Popover` (오늘 default)
+- **Field 선택**: Plan / Actual 작은 토글 (default Plan — 사전 검토 목적)
+- **Go 버튼**: 클릭 시 `/?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&date_field=planned|actual` 로 navigate
+- 날짜 선택 직후 자동 navigate (Go 버튼 생략 가능 — 더 빠름)
+
+### 동작
+- 선택 날짜 → SubtestList의 기존 URL 필터(`date_from`, `date_to`, `date_field`)와 동일 메커니즘 사용 → 추가 백엔드 작업 없음
+- `date_from === date_to`면 "그날 단일" 의미
+- Plan 모드: status 무관 (해당일 계획된 모든 subtest, 어제 plan 클릭 버그 수정 때와 동일 의미)
+- Actual 모드: 자동으로 `cell_status=Done` 추가 (해당일 완료된 subtest)
+
+### 변경 파일
 | 파일 | 변경 |
 |---|---|
-| `src/pages/SchedulePage.tsx` | Cumulative Progress KPI 카드 내부에 `Progress` 컴포넌트 추가, value에 `kpis.progressPct` 바인딩 |
+| `src/pages/SchedulePage.tsx` | Toolbar에 DatePicker + Field 토글 + navigate 핸들러 추가. `Calendar`, `Popover`, `format` import |
 
-### 구현 상세
-**SchedulePage.tsx 210-225행 (Cumulative Progress Kpi) 수정:**
-- 기존: `value` prop에 `${cumActual}/${cumPlan} (${progressPct}%)` 텍스트만 표시
-- 변경: 
-  1. `value` prop 제거하거나 축소 (예: `${progressPct.toFixed(0)}%`)
-  2. 카드 본문에 `<Progress value={kpis.progressPct} className="h-2 mt-1" />` 추가
-  3. 하단에 `subValue`로 `${cumActual}/${cumPlan}` 유지 (전체 개수 맥락 제공)
+### 구현 스니펫
+```tsx
+const [pickedDate, setPickedDate] = useState<Date | undefined>(new Date());
+const [pickedField, setPickedField] = useState<'planned'|'actual'>('planned');
 
-### UI 예시
+const handleDatePick = (d: Date | undefined) => {
+  if (!d) return;
+  setPickedDate(d);
+  const iso = format(d, 'yyyy-MM-dd');
+  const params: Record<string,string> = {
+    date_from: iso, date_to: iso, date_field: pickedField,
+  };
+  if (pickedField === 'actual') params.cell_status = 'Done';
+  navigate(`/?${new URLSearchParams(params).toString()}`);
+};
 ```
-┌─────────────────────────┐
-│ Cumulative Progress     │
-│        67%              │
-│ [████████████░░░░░]     │
-│ 45/67 completed         │
-└─────────────────────────┘
-```
 
-### 추가 고려사항
-- 진행률 < 30%: `bg-schedule-short` (빨강) 적용
-- 진행률 30-90%: 기본 `bg-primary` (파랑) 적용  
-- 진행률 >= 90%: `bg-green-500` (초록) 적용 — 색상 변화로 완료 임박 시각화
+### 검증
+1. Toolbar에서 오늘 날짜 클릭 → SubtestList로 이동, 오늘 plan된 subtest 표시
+2. 과거 날짜 + Actual 모드 → 그날 완료된 subtest만 표시
+3. 미래 날짜 + Plan 모드 → 그날 계획된 모든 subtest (status 무관) 표시
+4. 좁은 viewport(997px)에서 Toolbar wrap 정상
 
