@@ -127,22 +127,25 @@ export default function SchedulePage() {
   }, [aggregate, hidePast, today]);
 
   const kpis = useMemo(() => {
-    let todayPlan = 0, todayActual = 0, cumPlan = 0, cumActual = 0;
+    let cumPlan = 0, cumActual = 0;
     for (const r of aggregate.rows) {
       cumPlan += r.cumPlan;
       cumActual += r.cumActual;
-      const todayCell = r.combined.find(c => c.bucket === today);
-      if (todayCell) {
-        todayPlan += todayCell.plan;
-        todayActual += todayCell.actual;
-      }
     }
     const variance = cumPlan ? ((cumActual - cumPlan) / cumPlan) * 100 : 0;
+    const progressPct = cumPlan ? (cumActual / cumPlan) * 100 : 0;
     const overdue = subtests.filter(s =>
       (s.t1_planned_date && s.t1_planned_date < today && s.t1_status !== 'Done') ||
       (s.t2_planned_date && s.t2_planned_date < today && s.t2_status !== 'Done')
     ).length;
-    return { todayPlan, todayActual, cumPlan, cumActual, variance, criticalCount: critical.highRisk.length, overdue };
+    // Upcoming 7-day plan: count planned T1/T2 dates in [today, today+7]
+    const upcomingEnd = addDays(today, 7);
+    let upcoming7Plan = 0;
+    for (const s of subtests) {
+      if (s.t1_planned_date && s.t1_planned_date >= today && s.t1_planned_date <= upcomingEnd) upcoming7Plan++;
+      if (s.t2_planned_date && s.t2_planned_date >= today && s.t2_planned_date <= upcomingEnd) upcoming7Plan++;
+    }
+    return { cumPlan, cumActual, variance, progressPct, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
   }, [aggregate.rows, today, subtests, critical.highRisk.length]);
 
   // ───── Navigation handlers ─────
