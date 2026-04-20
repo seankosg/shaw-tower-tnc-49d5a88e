@@ -208,23 +208,34 @@ export function aggregateSchedule(
 
     // combined = sum of stages in stageFilter
     const combined: BucketCell[] = buckets.map(b => ({ bucket: b, plan: 0, actual: 0 }));
-    let cumPlan = 0;
-    let cumActual = 0;
     for (const st of stagesToShow) {
       stageData[st].cells.forEach((c, i) => {
         combined[i].plan += c.plan;
         combined[i].actual += c.actual;
       });
-      cumPlan += stageData[st].totalPlan;
-      cumActual += stageData[st].totalActual;
     }
 
-    const doneCount = items.filter(i => i.t2_status === 'Done').length;
+    // cumPlan / cumActual = up-to-today counts for stages in filter
+    // Iterate items directly so we count regardless of bucket range window.
+    let cumPlan = 0;
+    let cumActual = 0;
+    let doneCount = 0;
+    for (const s of items) {
+      for (const st of stagesToShow) {
+        const { plan, actual, done } = getStageDates(s, st);
+        if (plan && plan <= opts.today) cumPlan++;
+        if (actual && actual <= opts.today) cumActual++;
+        if (done) doneCount++;
+      }
+    }
+
+    // total denominator scales with number of stages shown
+    const total = items.length * stagesToShow.length;
 
     rows.push({
       key,
       label: key,
-      total: items.length,
+      total,
       doneCount,
       cumPlan,
       cumActual,
