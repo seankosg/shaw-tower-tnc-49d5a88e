@@ -319,7 +319,7 @@ export default function SchedulePage() {
         <Kpi
           label="Upcoming 7d Plan"
           value={kpis.upcoming7Plan}
-          icon={<Calendar className="h-3.5 w-3.5" />}
+          icon={<CalendarIcon className="h-3.5 w-3.5" />}
           onClick={
             kpis.upcoming7Plan > 0
               ? () => navigate(`/?date_from=${today}&date_to=${kpis.upcomingEnd}&date_field=planned`)
