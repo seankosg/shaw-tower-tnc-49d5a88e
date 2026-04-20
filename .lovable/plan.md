@@ -1,30 +1,32 @@
 
 
-## 셀 색상 의미 정리 + 녹색 추가 검토
+## Plan 막대 클릭 시 0 records 버그 수정
 
-현재 ScheduleCell의 막대 색상 체계는 다음과 같습니다 (tailwind config의 `schedule.*` 토큰):
+### 원인
+ScheduleCell의 막대 카운팅 로직 vs SubtestList 필터 의미가 불일치:
 
-| 토큰 | 현재 용도 | 색 계열 |
+| | Plan 막대 카운트 (ScheduleMatrix) | SubtestList 필터 (현재) |
 |---|---|---|
-| `schedule-plan` | Plan 막대 (계획 수량) | 회색 |
-| `schedule-actual` | Actual 막대 (실적, plan 이내) | 파랑 |
-| `schedule-over` | 초과 실적 (actual > plan) | 주황 |
-| `schedule-short` | 부족 (actual < plan, Diff 음수 텍스트) | 빨강 |
+| Plan(회색) | `*_planned_date`가 bucket 내 → **status 무관** | `cell_status=Planned` 강제 → status≠Planned 모두 제외 |
+| Actual(파랑/주황) | `*_actual_date`가 bucket 내 (status=Done인 경우만 actual_date 존재) | `cell_status=Done` 강제 (사실상 무해) |
 
-→ **현재 schedule 색상 팔레트에 녹색은 정의되어 있지 않습니다.**
+DB 확인 결과: AHU System L13-26 South Office, t1_planned_date=2026-04-19 인 subtest가 15개 존재하지만 모두 `t1_status=NULL` → `cell_status=Planned` 조건에 걸려 0 records.
 
-질문하신 "녹색"이 어디에서 보이는지에 따라 두 가지 가능성이 있어 확인이 필요합니다:
+### 수정 방안
+`SchedulePage.handleCellClick`에서 **plan 클릭 시 `cell_status` 파라미터를 보내지 않음**. Actual 클릭 시에만 `cell_status=Done` 유지(actual_date가 있다는 것 자체가 거의 Done을 의미하므로 안전).
 
-### 가능성 A — 직전 plan 메시지의 표현 오류
-직전 plan에서 제가 "파란/주황 영역(actual)" 을 "파란 혹은 초록"으로 적었는데, 실제 코드상 actual은 **파랑(schedule-actual)** + 초과분은 **주황(schedule-over)** 입니다. 초록은 사용되지 않습니다. → 이 경우 분리 클릭 plan은 그대로 유효하며, "actual 막대 클릭 = 파랑+주황 영역" 으로 정정하면 됩니다.
+또한 `SubtestList`의 schedule cell 필터 로직도 `urlCellStatus`가 없을 때 status 체크를 건너뛰도록 이미 되어있으므로 추가 수정 불필요. (462-478라인은 cell_status가 있을 때만 status 체크)
 
-### 가능성 B — 다른 화면의 녹색
-SubtestList의 `StageProgress` / `StatusBadge` 등 다른 컴포넌트에서 Done 상태를 녹색으로 표시할 수 있습니다. 이건 ScheduleCell의 막대 색과는 별개입니다.
+### 변경 파일
+| 파일 | 변경 |
+|---|---|
+| `src/pages/SchedulePage.tsx` | `handleCellClick`에서 `field === 'planned'`일 때 `cell_status` 파라미터 생성 안 함. Actual일 때만 `cell_status=Done` 유지 |
 
-### 확인 요청
+### Active filter chip 표시
+Plan 클릭 시 `cell_status` 미설정 → chip은 "Planned 2026-04-19" 형식만 남고 "Cell Status Planned" chip 사라짐. 사용자에게는 "이 날짜에 plan된 모든 subtest" 의미가 더 정확.
 
-녹색이 보이는 위치를 알려주시면 정확히 정리해 드리겠습니다:
-- Schedule Matrix의 시간축 셀 막대 안 → **현재 코드엔 녹색 없음** (제 직전 표현이 잘못됨)
-- Subtest List / Status Badge → 별도 색상 체계 (Done = 녹색 가능)
-- 또는 사용자가 의도한 "녹색을 새로 도입"하고 싶은 케이스 (예: actual=plan 정확 일치 시 녹색)
+### 검증
+1. AHU System L13-26 South Office의 T1 plan 막대(2026-04-19) 클릭 → 15개 subtest 표시 (status 무관)
+2. Actual 막대 클릭 → 종전대로 status=Done인 subtest만 표시
+3. Day/Week 모드, Pred/T1/T2 stage 모두에서 plan 클릭이 status에 무관하게 결과 반환
 
