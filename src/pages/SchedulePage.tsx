@@ -129,10 +129,28 @@ export default function SchedulePage() {
     navigate(`/?${sp.toString()}`);
   };
 
-  const handleCellClick = (groupKey: string, _bucketIso: string, stage: ScheduleStage | 'all') => {
+  const handleCellClick = (
+    groupKey: string,
+    bucketIso: string,
+    stage: ScheduleStage | 'all',
+    field: 'planned' | 'actual',
+  ) => {
     const { key, value } = filterParamForGroup(groupKey);
     const params: Record<string, string> = { [key]: value };
-    if (stage === 't1' || stage === 't2') params[`${stage}_status`] = 'Planned';
+
+    // Bucket date range: day = single day, week = 7-day window
+    const dateFrom = bucketIso;
+    const dateTo = bucket === 'week' ? addDays(bucketIso, 6) : bucketIso;
+    params.date_from = dateFrom;
+    params.date_to = dateTo;
+    params.date_field = field;
+
+    // Stage scope (sub-row click) and matching status
+    if (stage === 't1' || stage === 't2' || stage === 'pred') {
+      params.stage = stage;
+    }
+    params.cell_status = field === 'planned' ? 'Planned' : 'Done';
+
     goSubtests(params);
   };
 
