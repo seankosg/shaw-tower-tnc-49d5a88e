@@ -21,7 +21,13 @@ interface ScheduleMatrixProps {
   onCellClick?: (groupKey: string, bucketIso: string, stage: ScheduleStage | 'all') => void;
 }
 
-const STICKY_LEFT_WIDTH = 380; // 200 (group) + 70 (done/total) + 110 (actual/plan)
+// Sub-column widths
+const W_GROUP = 200;
+const W_NUM = 48;          // Total / Done / Remain / Plan / Actual / Diff
+const W_PCT = 48;          // % columns
+const W_TOTAL_BLOCK = W_NUM * 3 + W_PCT;   // Total | Done | % | Remain  = 192
+const W_PLAN_BLOCK = W_NUM * 3 + W_PCT;    // Plan  | Actual | % | Diff  = 192
+const STICKY_LEFT_WIDTH = W_GROUP + W_TOTAL_BLOCK + W_PLAN_BLOCK; // 584
 
 export function ScheduleMatrix({
   data,
@@ -34,12 +40,10 @@ export function ScheduleMatrix({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const cellWidth = bucket === 'day' ? 64 : 96;
 
-  // The body is the source of truth for horizontal scrolling and virtualization.
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const bodyScrollRef = useRef<HTMLDivElement>(null);
   const syncingRef = useRef(false);
 
-  // Sync horizontal scroll between header scrollbar and body
   useEffect(() => {
     const header = headerScrollRef.current;
     const body = bodyScrollRef.current;
@@ -76,19 +80,15 @@ export function ScheduleMatrix({
     return idx;
   }, [data.buckets, today]);
 
-  // Auto-scroll horizontally so Today column is visible near the left.
-  // Re-runs when buckets change (range/bucket toggle) or cellWidth changes.
   const didAutoScrollRef = useRef<string>('');
   useEffect(() => {
     const body = bodyScrollRef.current;
     const header = headerScrollRef.current;
     if (!body || todayBucketIdx < 0) return;
-    // Scroll key prevents redundant re-scrolls but allows on bucket/range change
     const scrollKey = `${data.buckets.length}|${cellWidth}|${todayBucketIdx}`;
     if (didAutoScrollRef.current === scrollKey) return;
     didAutoScrollRef.current = scrollKey;
 
-    // Position Today ~2 cells from the left edge of the scrollable area
     const offsetCells = 2;
     const target = Math.max(0, (todayBucketIdx - offsetCells) * cellWidth);
     syncingRef.current = true;
@@ -112,7 +112,6 @@ export function ScheduleMatrix({
 
   const totalGridWidth = STICKY_LEFT_WIDTH + data.buckets.length * cellWidth;
 
-  // Horizontal virtualizer — driven by body scroll container
   const colVirtualizer = useVirtualizer({
     count: data.buckets.length,
     getScrollElement: () => bodyScrollRef.current,
@@ -129,6 +128,11 @@ export function ScheduleMatrix({
       ? colVirtualizer.getTotalSize() - virtualCols[virtualCols.length - 1].end
       : 0;
 
+  const stageLabel = stageFilter === 'all' ? 'All' : stageFilter.toUpperCase();
+  const totalBlockTitle = stageFilter === 'all'
+    ? 'Pred + T1 + T2 progress / (subtests × 3)'
+    : `${stageLabel} progress / subtests`;
+
   return (
     <div className="rounded-md border border-border bg-card">
       {/* Sticky header section */}
@@ -139,23 +143,19 @@ export function ScheduleMatrix({
         >
           <div className="flex" style={{ width: totalGridWidth, minWidth: totalGridWidth }}>
             <div className="sticky left-0 z-40 flex bg-muted">
-              <div className="flex w-[200px] items-center px-3 py-2">{groupHeader}</div>
-              <div
-                className="flex w-[70px] items-center justify-end border-l border-border px-2 py-2"
-                title={
-                  stageFilter === 'all'
-                    ? 'Pred + T1 + T2 Done / (subtests × 3)'
-                    : `${stageFilter.toUpperCase()} Done / subtests`
-                }
-              >
-                {stageFilter === 'all' ? 'Done/Total' : `${stageFilter.toUpperCase()} Done/Total`}
-              </div>
-              <div
-                className="flex w-[110px] items-center justify-end border-l border-r border-border px-2 py-2"
-                title="오늘까지의 Plan 대비 Actual (선택된 Stage 기준)"
-              >
-                Actual/Plan
-              </div>
+              <div className="flex items-center px-3 py-2" style={{ width: W_GROUP }}>{groupHeader}</div>
+
+              {/* Total / Done / % / Remain */}
+              <HeaderNum width={W_NUM} title={`${stageLabel} total scope`}>Total</HeaderNum>
+              <HeaderNum width={W_NUM} title={`${stageLabel} done count`}>Done</HeaderNum>
+              <HeaderNum width={W_PCT} title={totalBlockTitle}>%</HeaderNum>
+              <HeaderNum width={W_NUM} title="Total - Done">Remain</HeaderNum>
+
+              {/* Plan / Actual / % / Diff */}
+              <HeaderNum width={W_NUM} borderLeft title="Plan up to today">Plan</HeaderNum>
+              <HeaderNum width={W_NUM} title="Actual up to today">Actual</HeaderNum>
+              <HeaderNum width={W_PCT} title="Actual / Plan up to today">%</HeaderNum>
+              <HeaderNum width={W_NUM} borderRight title="Actual - Plan">Diff</HeaderNum>
             </div>
             {data.buckets.map((b, i) => {
               const lbl = formatBucketLabel(b, bucket);
@@ -178,7 +178,7 @@ export function ScheduleMatrix({
         </div>
       </div>
 
-      {/* Body — horizontal scroll source + horizontal virtualizer */}
+      {/* Body */}
       <div
         ref={bodyScrollRef}
         className="overflow-y-auto overflow-x-hidden max-h-[calc(100vh-300px)]"
@@ -198,9 +198,10 @@ export function ScheduleMatrix({
                       type="button"
                       onClick={() => stageFilter === 'all' && toggle(row.key)}
                       className={cn(
-                        'flex w-[200px] items-center gap-1 px-2 py-2 text-left',
+                        'flex items-center gap-1 px-2 py-2 text-left',
                         stageFilter === 'all' ? 'cursor-pointer hover:bg-accent/40' : 'cursor-default',
                       )}
+                      style={{ width: W_GROUP }}
                     >
                       {stageFilter === 'all' && (
                         isExp
@@ -208,12 +209,20 @@ export function ScheduleMatrix({
                           : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       )}
                       <span className="truncate font-medium" title={row.label}>{row.label}</span>
-                      <span className="ml-auto text-[10px] text-muted-foreground">({row.total})</span>
                     </button>
-                    <div className="flex w-[70px] items-center justify-end border-l border-border px-2 py-2 tabular-nums">
-                      {row.doneCount}/{row.total}
-                    </div>
-                    <ActualPlanCell actual={row.cumActual} plan={row.cumPlan} className="w-[110px] py-2 font-semibold" />
+
+                    <TotalDoneCells
+                      total={row.total}
+                      done={row.doneCount}
+                      bold
+                      py="py-2"
+                    />
+                    <PlanActualCells
+                      plan={row.cumPlan}
+                      actual={row.cumActual}
+                      bold
+                      py="py-2"
+                    />
                   </div>
                   {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
                   {virtualCols.map(vc => {
@@ -240,7 +249,10 @@ export function ScheduleMatrix({
                   return (
                     <div key={st} className="flex border-b border-border bg-muted/20 text-[11px] hover:bg-accent/20">
                       <div className="sticky left-0 z-20 flex bg-card shadow-[2px_0_4px_-2px_hsl(var(--border))]">
-                        <div className="flex w-[200px] items-center gap-2 px-2 py-1.5 pl-8 text-muted-foreground">
+                        <div
+                          className="flex items-center gap-2 px-2 py-1.5 pl-8 text-muted-foreground"
+                          style={{ width: W_GROUP }}
+                        >
                           <span className={cn(
                             'inline-flex h-4 w-7 items-center justify-center rounded text-[9px] font-semibold',
                             st === 'pred' && 'bg-secondary text-secondary-foreground',
@@ -250,10 +262,16 @@ export function ScheduleMatrix({
                             {STAGE_LABELS[st]}
                           </span>
                         </div>
-                        <div className="flex w-[70px] items-center justify-end border-l border-border px-2 py-1.5 tabular-nums">
-                          {sr.totalDone}/{sr.total}
-                        </div>
-                        <ActualPlanCell actual={sr.cumActual} plan={sr.cumPlan} className="w-[110px] py-1.5" />
+                        <TotalDoneCells
+                          total={sr.total}
+                          done={sr.totalDone}
+                          py="py-1.5"
+                        />
+                        <PlanActualCells
+                          plan={sr.cumPlan}
+                          actual={sr.cumActual}
+                          py="py-1.5"
+                        />
                       </div>
                       {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
                       {virtualCols.map(vc => {
@@ -284,32 +302,123 @@ export function ScheduleMatrix({
   );
 }
 
-function ActualPlanCell({
-  actual,
-  plan,
-  className,
+function HeaderNum({
+  width, children, title, borderLeft, borderRight,
 }: {
-  actual: number;
-  plan: number;
-  className?: string;
+  width: number;
+  children: React.ReactNode;
+  title?: string;
+  borderLeft?: boolean;
+  borderRight?: boolean;
 }) {
-  const pct = plan > 0 ? (actual / plan) * 100 : null;
-  const accent =
-    pct === null ? '' : pct < 100 ? 'text-schedule-short' : pct > 100 ? 'text-schedule-over' : '';
   return (
     <div
       className={cn(
-        'flex items-center justify-end gap-1 border-l border-r border-border px-2 tabular-nums',
+        'flex items-center justify-end px-1.5 py-2 border-l border-border',
+        borderLeft && 'border-l-2',
+        borderRight && 'border-r border-border',
+      )}
+      style={{ width, minWidth: width }}
+      title={title}
+    >
+      {children}
+    </div>
+  );
+}
+
+function NumCell({
+  width, children, className, py = 'py-2', borderLeft, borderRight, title,
+}: {
+  width: number;
+  children: React.ReactNode;
+  className?: string;
+  py?: string;
+  borderLeft?: boolean;
+  borderRight?: boolean;
+  title?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-end px-1.5 tabular-nums border-l border-border',
+        borderLeft && 'border-l-2',
+        borderRight && 'border-r border-border',
+        py,
         className,
       )}
-      title="오늘까지의 Plan 대비 Actual"
+      style={{ width, minWidth: width }}
+      title={title}
     >
-      <span className={cn('font-semibold', accent)}>{actual}</span>
-      <span className="text-muted-foreground">/</span>
-      <span>{plan}</span>
-      <span className={cn('text-[10px]', accent)}>
-        ({pct === null ? '—' : `${pct.toFixed(0)}%`})
-      </span>
+      {children}
     </div>
+  );
+}
+
+function TotalDoneCells({
+  total, done, bold, py,
+}: {
+  total: number;
+  done: number;
+  bold?: boolean;
+  py: string;
+}) {
+  const pct = total > 0 ? (done / total) * 100 : null;
+  const remain = total - done;
+  return (
+    <>
+      <NumCell width={W_NUM} py={py}>{total}</NumCell>
+      <NumCell width={W_NUM} py={py} className={bold ? 'font-semibold' : ''}>{done}</NumCell>
+      <NumCell width={W_PCT} py={py} className="text-muted-foreground text-[10px]">
+        {pct === null ? '—' : `${pct.toFixed(0)}%`}
+      </NumCell>
+      <NumCell
+        width={W_NUM}
+        py={py}
+        className={cn(remain > 0 ? 'text-schedule-short' : 'text-muted-foreground')}
+      >
+        {remain}
+      </NumCell>
+    </>
+  );
+}
+
+function PlanActualCells({
+  plan, actual, bold, py,
+}: {
+  plan: number;
+  actual: number;
+  bold?: boolean;
+  py: string;
+}) {
+  const pct = plan > 0 ? (actual / plan) * 100 : null;
+  const diff = actual - plan;
+  const accent =
+    pct === null ? '' : pct < 100 ? 'text-schedule-short' : pct > 100 ? 'text-schedule-over' : '';
+  const diffAccent =
+    diff < 0 ? 'text-schedule-short' : diff > 0 ? 'text-schedule-over' : 'text-muted-foreground';
+  return (
+    <>
+      <NumCell width={W_NUM} py={py} borderLeft title="Plan up to today">{plan}</NumCell>
+      <NumCell
+        width={W_NUM}
+        py={py}
+        title="Actual up to today"
+        className={cn(bold && 'font-semibold', accent)}
+      >
+        {actual}
+      </NumCell>
+      <NumCell width={W_PCT} py={py} className={cn('text-[10px]', accent)} title="Actual / Plan">
+        {pct === null ? '—' : `${pct.toFixed(0)}%`}
+      </NumCell>
+      <NumCell
+        width={W_NUM}
+        py={py}
+        borderRight
+        title="Actual - Plan"
+        className={cn('text-[11px] font-semibold', diffAccent)}
+      >
+        {diff > 0 ? `+${diff}` : diff}
+      </NumCell>
+    </>
   );
 }
