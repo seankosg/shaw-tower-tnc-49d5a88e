@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, AlertTriangle, TrendingUp, Activity, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Calendar, AlertTriangle, TrendingUp, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
