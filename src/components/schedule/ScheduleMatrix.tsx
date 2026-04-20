@@ -180,7 +180,7 @@ export function ScheduleMatrix({
               <Fragment key={row.key}>
                 {/* Group summary row */}
                 <div className="flex border-b border-border text-xs hover:bg-accent/30">
-                  <div className="sticky left-0 z-10 flex bg-card">
+                  <div className="sticky left-0 z-20 flex bg-card shadow-[2px_0_4px_-2px_hsl(var(--border))]">
                     <button
                       type="button"
                       onClick={() => stageFilter === 'all' && toggle(row.key)}
