@@ -108,6 +108,24 @@ export default function SchedulePage() {
 
   const lagging = useMemo(() => findLaggingGroups(aggregate.rows, 5), [aggregate.rows]);
 
+  // Past-date hiding: slice buckets/cells to only today-and-future
+  const visibleData = useMemo(() => {
+    if (!hidePast) return aggregate;
+    const startIdx = aggregate.buckets.findIndex(b => b >= today);
+    if (startIdx <= 0) return aggregate;
+    const buckets = aggregate.buckets.slice(startIdx);
+    const rows = aggregate.rows.map(r => ({
+      ...r,
+      combined: r.combined.slice(startIdx),
+      stages: {
+        pred: { ...r.stages.pred, cells: r.stages.pred.cells.slice(startIdx) },
+        t1:   { ...r.stages.t1,   cells: r.stages.t1.cells.slice(startIdx) },
+        t2:   { ...r.stages.t2,   cells: r.stages.t2.cells.slice(startIdx) },
+      },
+    }));
+    return { ...aggregate, buckets, rows };
+  }, [aggregate, hidePast, today]);
+
   const kpis = useMemo(() => {
     let todayPlan = 0, todayActual = 0, cumPlan = 0, cumActual = 0;
     for (const r of aggregate.rows) {
