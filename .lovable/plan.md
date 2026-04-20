@@ -1,68 +1,45 @@
 
 
-## SubtestList 성능 최적화 — Long Engagement Time 단축
+## 가로 스크롤바를 sticky 컬럼 우측 영역에만 위치시키기 — 재수정
 
-### 사용자 메시지 해석
-"#Low Eng" = **Long Engagement** (페이지를 사용 중일 때 매 동작마다 시간이 오래 걸리고 랙) 의미로 해석. 레코드가 많아질수록 매 키 입력/필터/정렬마다 전체 행을 다시 렌더링해서 발생하는 문제.
+### 지난 시도가 실패한 이유
+이중 컨테이너(`overflow-y-auto` 외부 + `overflow-x-auto` 내부)로 분리했지만:
+- 내부 가로 스크롤 컨테이너가 **자체 콘텐츠 높이만큼 늘어남** → 가로 스크롤바가 viewport 하단이 아닌 **행들의 맨 아래**에 위치
+- 행이 많거나 가상화로 큰 가짜 높이가 생기면 스크롤바가 보이지 않거나 페이지 끝에 매달림
+- 결과: 사용자가 가로 스크롤하려면 페이지 전체가 같이 움직이는 듯한 인상
 
-### 현재 병목 지점 (코드 분석 결과)
+### 진짜 해법 — 단일 스크롤 컨테이너 + sticky 양방향
+이중 컨테이너를 **하나로 통합**합니다:
 
-1. **모든 행을 한 번에 DOM 렌더링** — `table.getRowModel().rows.map(...)`로 5,000~20,000행 전부 `<TableRow>` 생성. 가장 큰 원인.
-2. **검색어 입력 시 매 키스트로크마다 전체 재필터링 + 재렌더** — `globalFilter` debounce 없음.
-3. **컬럼 리사이즈 중 (`columnResizeMode: 'onChange'`)** — 드래그 중 매 픽셀마다 모든 행 재렌더.
-4. **sticky 스타일 계산이 인라인 IIFE 안에서 매 렌더마다 재실행** — `getStickyStyle`이 셀 수 × 매 렌더 호출.
-5. **컬럼 사이징 localStorage 저장이 리사이즈 드래그 중에도 매번 발생** (debounce 없음).
-6. **`fetchData()` 가 페이지 진입마다 무조건 1,000건씩 페이징해 전체 로드** — 첫 진입 비용 큼.
+```
+<div ref={tableRef} className="rounded-md border max-h-[calc(100vh-220px)] overflow-auto">
+  <Table style={{ width: totalSize, tableLayout: 'fixed' }}>
+    <TableHeader className="sticky top-0 z-20"> ...
+    <TableBody> ... sticky left columns ...
+  </Table>
+</div>
+```
 
-### 최적화 방안 (낮은 위험 → 높은 효과 순)
+**작동 원리**:
+- 단일 컨테이너에 `overflow: auto` → 가로/세로 스크롤바 모두 이 컨테이너 **자체 가장자리**(우측·하단)에 부착
+- 가로 스크롤바는 컨테이너 **바닥**(= viewport 하단 부근)에 항상 고정
+- `position: sticky top: 0` → 헤더가 위에 고정 (현재도 작동)
+- `position: sticky left: <offset>` → 좌측 3컬럼이 가로 스크롤 시 그대로 정지
+- 가로 스크롤바 트랙 자체는 컨테이너 너비 전체에 걸쳐 있지만, **사용자는 "스크롤되는 콘텐츠"가 sticky 컬럼 우측에서만 움직이는 것**을 보게 되므로 시각적/기능적으로 의도한 동작 그대로
 
-**A. 가상 스크롤 (Row Virtualization) — 가장 큰 효과**
-- `@tanstack/react-virtual` 도입 (React 18 호환, 이미 `@tanstack/react-table`과 같은 생태계).
-- 화면에 보이는 ~30행만 DOM 렌더 → 5,000행이든 50,000행이든 렌더 비용 일정.
-- sticky 헤더/sticky 컬럼 모두 호환됨 (TableBody만 가상화, TableHeader 그대로 둠).
+### 가상 스크롤 호환성
+- `useVirtualizer` 의 `getScrollElement: () => tableRef.current` 그대로 → 이미 통합 컨테이너를 가리키므로 변경 불필요
+- 세로 가상화와 가로 sticky가 같은 스크롤 컨텍스트에서 자연스럽게 공존
 
-**B. 검색어 debounce (300ms)**
-- `globalFilter` 입력값을 별도 state로 받아 300ms 후 react-table에 반영.
-- 타이핑 중 재필터/재렌더 멈춤.
-
-**C. 컬럼 리사이즈 모드 변경**
-- `columnResizeMode: 'onChange'` → `'onEnd'`. 드래그 중 행 재렌더 0회, 마우스 놓을 때 1회만.
-- 시각적 미리보기는 react-table이 헤더 라인으로 처리.
-
-**D. columnSizing localStorage 저장 debounce (500ms)**
-- 리사이즈 종료 후에만 저장 → JSON.stringify 부담 감소.
-
-**E. sticky 헬퍼 메모화**
-- IIFE 안의 `stickyOffsets`, `getStickyStyle`, `isLastSticky`를 `useMemo`로 빼서 불필요한 재계산 제거.
-- `leafCols` 의존성: `columnVisibility + columnOrder + columnSizing` 변경 시에만 재계산.
-
-**F. 데이터 fetch 캐싱 + 백그라운드 새로고침 (선택)**
-- 사용자가 메시지에서 언급한 "세이브 후/일정 조건에서만 재계산":
-  - 진입 시 메모리 캐시 (`window` 모듈 변수 또는 React Query 도입) 표시 → 즉시 렌더.
-  - 백그라운드에서 fresh 데이터 fetch → 완료 시 갱신.
-  - 상세 페이지에서 저장 후 돌아올 때만 강제 새로고침 (`location.state.refresh = true` 또는 캐시 무효화).
-- **간단한 구현**: 모듈 스코프 변수 (`let cache: SubtestRow[] | null = null`)에 마지막 fetch 결과 저장, `fetchData` 진입 시 캐시 즉시 표시 + 백그라운드 갱신. React Query 추가 없이 가능.
-
-**G. 셀 컴포넌트 메모화 (선택, 효과는 작음)**
-- 가상화 적용 후엔 거의 불필요. 일단 보류.
-
-### 변경 파일
-
+### 변경 요약
 | 파일 | 변경 |
 |---|---|
-| `package.json` | `@tanstack/react-virtual` 추가 |
-| `src/pages/SubtestList.tsx` | (1) `useVirtualizer`로 TableBody 가상화, (2) globalFilter debounce, (3) `columnResizeMode: 'onEnd'`, (4) columnSizing 저장 debounce, (5) sticky 헬퍼 useMemo, (6) 모듈 스코프 캐시로 즉시 표시 + 백그라운드 갱신 |
-| `src/pages/SubtestDetail.tsx` | 저장 후 캐시 무효화 트리거 (export된 invalidate 함수 호출) |
+| `src/pages/SubtestList.tsx` | `SubtestTableView` 의 외부 div `overflow-y-auto overflow-x-hidden` → `overflow-auto`, 내부 `<div className="overflow-x-auto">` 래퍼 **제거** |
 
-### 예상 결과
-- 첫 진입: 캐시가 있으면 **즉시** 표시 (0ms), 없으면 기존과 동일.
-- 검색/필터/정렬 변경: 화면 30행만 다시 그리므로 5,000행 → **수십 ms 이내** (현재는 수백~수천 ms).
-- 컬럼 리사이즈: 드래그 중 완전 부드러움 (행 재렌더 없음).
-- 가로 스크롤/세로 스크롤: 가상화로 항상 일정한 fps.
+가상 스크롤, sticky 헤더, sticky 컬럼, 캐싱, debounce 등 다른 로직은 그대로.
 
-### 위험 / 주의
-- 가상화 적용 시 `<table>` 구조가 약간 바뀜 (TableBody 내부에 spacer 행 + 절대 위치 행). 기존 sticky 컬럼/헤더 동작 유지하도록 careful integration 필요.
-- 캐시 도입 시 다른 사용자가 데이터 수정한 경우 stale 가능 → 백그라운드 새로고침으로 즉시 갱신.
+### 추가로 가로 스크롤바를 "sticky 컬럼 너비만큼 좌측은 가린 것처럼" 보이게 하려면 (선택)
+브라우저 기본 스크롤바는 컨테이너 전체 너비에 걸쳐 그려지므로, **시각적으로 좌측 일부를 가리려면** sticky 컬럼 영역 위에 배경색이 같은 작은 div를 `position: sticky; bottom: 0; left: 0; width: <stickyTotal>; height: <scrollbarHeight>; z-index: 25` 로 덮어 가로 스크롤바 좌측 부분을 시각적으로 마스크. 단, 이건 화장적 효과일 뿐 실제 스크롤 동작은 위 단일 컨테이너 방식으로 이미 정상.
 
-DB / RLS / Import / Export 로직 변경 없음.
+**권장**: 일단 단일 컨테이너 방식만 적용하고, 시각적으로 거슬리면 마스크 div 추가.
 
