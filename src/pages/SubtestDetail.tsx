@@ -385,12 +385,32 @@ export default function SubtestDetailPage() {
         <CardHeader className="py-3">
           <CardTitle className="text-sm font-medium">Predecessor & Responsibility</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {isFieldVisible('predecessor_status_raw') && (
-          <div className="space-y-1.5 md:col-span-2">
+          <>
+          <div className="space-y-1.5">
             <Label className="text-xs">Predecessor Status</Label>
+            <Select value={form.pred_status || '_blank'} onValueChange={v => updateField('pred_status', v === '_blank' ? null : v)}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_blank">— Blank —</SelectItem>
+                {TC_STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Predecessor Planned</Label>
+            <Input type="date" className="h-9" value={form.pred_planned_date || ''} onChange={e => updateField('pred_planned_date', e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Predecessor Actual</Label>
+            <Input type="date" className="h-9" value={form.pred_actual_date || ''} onChange={e => updateField('pred_actual_date', e.target.value)} />
+          </div>
+          <div className="space-y-1.5 md:col-span-3">
+            <Label className="text-xs">Predecessor Raw (Excel original)</Label>
             <Input className="h-9" value={form.predecessor_status_raw || ''} onChange={e => updateField('predecessor_status_raw', e.target.value)} placeholder="e.g. Done or 2026-03-15" />
           </div>
+          </>
           )}
           {isFieldVisible('subcontractor_name') && (
           <div className="space-y-1.5">
