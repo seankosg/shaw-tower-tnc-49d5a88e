@@ -281,6 +281,44 @@ export default function SchedulePage() {
             </Select>
           </ToolbarGroup>
 
+          <ToolbarGroup label="Lookup">
+            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 px-2 text-xs">
+                  <CalendarSearch className="h-3.5 w-3.5" />
+                  <span className="ml-1">{pickedDate ? format(pickedDate, 'yyyy-MM-dd') : 'Pick a date'}</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={pickedDate}
+                  onSelect={(d) => {
+                    if (!d) return;
+                    setPickedDate(d);
+                    setPickerOpen(false);
+                    const iso = format(d, 'yyyy-MM-dd');
+                    const params: Record<string, string> = {
+                      date_from: iso,
+                      date_to: iso,
+                      date_field: pickedField,
+                    };
+                    if (pickedField === 'actual') params.cell_status = 'Done';
+                    navigate(`/?${new URLSearchParams(params).toString()}`);
+                  }}
+                  initialFocus
+                  className={cn('p-3 pointer-events-auto')}
+                />
+              </PopoverContent>
+            </Popover>
+            <Tabs value={pickedField} onValueChange={(v) => setPickedField(v as 'planned' | 'actual')}>
+              <TabsList className="h-8">
+                <TabsTrigger value="planned" className="h-6 px-2 text-xs">Plan</TabsTrigger>
+                <TabsTrigger value="actual" className="h-6 px-2 text-xs">Actual</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </ToolbarGroup>
+
           <div className="ml-auto flex items-center gap-3 text-xs">
             <Legend />
           </div>
