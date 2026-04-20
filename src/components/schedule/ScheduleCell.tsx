@@ -71,10 +71,10 @@ function ScheduleCellInner({ plan, actual, isFuture, isToday, width, onClick }: 
         )}
       </div>
       <div className="flex items-center justify-between font-medium leading-none">
-        <span className={isFuture ? 'text-muted-foreground' : undefined}>
-          {isFuture ? '—' : actual}
+        <span>{plan}</span>
+        <span className={cn('text-muted-foreground', !isFuture && 'text-foreground')}>
+          /{isFuture ? '—' : actual}
         </span>
-        <span className="text-muted-foreground">/{plan}</span>
       </div>
       {!isFuture && plan > 0 && delta !== 0 && (
         <div
