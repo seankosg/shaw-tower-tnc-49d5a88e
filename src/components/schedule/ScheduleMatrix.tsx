@@ -168,7 +168,7 @@ export function ScheduleMatrix({
       {/* Body — horizontal scroll source + horizontal virtualizer */}
       <div
         ref={bodyScrollRef}
-        className="overflow-auto max-h-[calc(100vh-300px)]"
+        className="overflow-y-auto overflow-x-hidden max-h-[calc(100vh-300px)]"
       >
         <div style={{ width: totalGridWidth, minWidth: totalGridWidth }}>
           {data.rows.length === 0 && (
