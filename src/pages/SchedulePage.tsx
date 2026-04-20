@@ -274,33 +274,50 @@ export default function SchedulePage() {
       </Card>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Kpi label="Today Plan" value={kpis.todayPlan} icon={<Calendar className="h-3.5 w-3.5" />} />
-        <Kpi label="Today Actual" value={kpis.todayActual}
-          accent={kpis.todayActual < kpis.todayPlan ? 'short' : kpis.todayActual > kpis.todayPlan ? 'over' : undefined}
-          icon={<Activity className="h-3.5 w-3.5" />} />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Kpi
-          label="Cum Actual/Plan"
+          label="Cumulative Progress"
           value={
             kpis.cumPlan > 0
-              ? `${kpis.cumActual}/${kpis.cumPlan} (${((kpis.cumActual / kpis.cumPlan) * 100).toFixed(0)}%)`
-              : `${kpis.cumActual}/${kpis.cumPlan} (—)`
+              ? `${kpis.cumActual}/${kpis.cumPlan} (${kpis.progressPct.toFixed(0)}%)`
+              : `${kpis.cumActual}/${kpis.cumPlan}`
+          }
+          subValue={
+            kpis.cumPlan > 0
+              ? `Variance ${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%`
+              : undefined
           }
           accent={
-            kpis.cumPlan > 0 && kpis.cumActual < kpis.cumPlan ? 'short'
+            kpis.cumPlan > 0 && kpis.progressPct < 90 ? 'short'
             : kpis.cumPlan > 0 && kpis.cumActual > kpis.cumPlan ? 'over'
             : undefined
           }
+          icon={<TrendingUp className="h-3.5 w-3.5" />}
         />
-        <Kpi label="Variance"
-          value={`${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%`}
-          accent={kpis.variance < 0 ? 'short' : kpis.variance > 0 ? 'over' : undefined}
-          icon={<TrendingUp className="h-3.5 w-3.5" />} />
-        <Kpi label="Critical (≤7d)" value={kpis.criticalCount}
+        <Kpi
+          label="Overdue"
+          value={kpis.overdue}
+          accent={kpis.overdue > 0 ? 'short' : undefined}
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          onClick={kpis.overdue > 0 ? () => navigate('/?overdue=1') : undefined}
+        />
+        <Kpi
+          label="Critical (≤7d)"
+          value={kpis.criticalCount}
           accent={kpis.criticalCount > 0 ? 'short' : undefined}
-          icon={<AlertTriangle className="h-3.5 w-3.5" />} />
-        <Kpi label="Overdue" value={kpis.overdue}
-          accent={kpis.overdue > 0 ? 'short' : undefined} />
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          onClick={kpis.criticalCount > 0 ? () => navigate('/?at_risk=1') : undefined}
+        />
+        <Kpi
+          label="Upcoming 7d Plan"
+          value={kpis.upcoming7Plan}
+          icon={<Calendar className="h-3.5 w-3.5" />}
+          onClick={
+            kpis.upcoming7Plan > 0
+              ? () => navigate(`/?date_from=${today}&date_to=${kpis.upcomingEnd}&date_field=planned`)
+              : undefined
+          }
+        />
       </div>
 
       {/* Matrix + Watchlist */}
