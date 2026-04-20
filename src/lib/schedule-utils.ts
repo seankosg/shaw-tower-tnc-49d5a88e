@@ -104,7 +104,7 @@ export function getGroupKey(s: SubtestForDashboard, by: ScheduleGroupBy, sysCode
 // Pred actual date = t1_actual_date OR (t1_status WIP/Done and predecessor done keyword)
 const PRED_DONE_TOKENS = ['done', 'complete', 'completed', 'finished', '완료'];
 
-export function isPredDone(s: SubtestForDashboard): boolean {
+export function isPredDone(s: SubtestForDashboard & { predecessor_status_raw?: string | null }): boolean {
   if (s.t1_status === 'WIP' || s.t1_status === 'Done') return true;
   const raw = (s.predecessor_status_raw ?? '').toLowerCase();
   return PRED_DONE_TOKENS.some(t => raw.includes(t));
