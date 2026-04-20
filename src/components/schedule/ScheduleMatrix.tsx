@@ -18,7 +18,12 @@ interface ScheduleMatrixProps {
   stageFilter: ScheduleStageFilter;
   today: string;
   groupHeader: string;
-  onCellClick?: (groupKey: string, bucketIso: string, stage: ScheduleStage | 'all') => void;
+  onCellClick?: (
+    groupKey: string,
+    bucketIso: string,
+    stage: ScheduleStage | 'all',
+    field: 'planned' | 'actual',
+  ) => void;
 }
 
 // Sub-column widths
@@ -276,7 +281,8 @@ export function ScheduleMatrix({
                         isFuture={vc.index > todayBucketIdx}
                         isToday={vc.index === todayBucketIdx}
                         width={cellWidth}
-                        onClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter) : undefined}
+                        onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'planned') : undefined}
+                        onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'actual') : undefined}
                       />
                     );
                   })}
@@ -329,7 +335,8 @@ export function ScheduleMatrix({
                             isFuture={vc.index > todayBucketIdx}
                             isToday={vc.index === todayBucketIdx}
                             width={cellWidth}
-                            onClick={onCellClick ? () => onCellClick(row.key, c.bucket, st) : undefined}
+                            onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, st, 'planned') : undefined}
+                            onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, st, 'actual') : undefined}
                           />
                         );
                       })}

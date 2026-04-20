@@ -7,13 +7,18 @@ interface ScheduleCellProps {
   isFuture: boolean;
   isToday: boolean;
   width: number;
-  onClick?: () => void;
+  onPlanClick?: () => void;
+  onActualClick?: () => void;
 }
 
 /**
  * Mini bar chart cell. Memoized + optimized for empty-cell heavy grids.
+ * Plan bar (top, gray) and Actual bar (bottom, blue/orange) are split into
+ * separate clickable regions so each can filter the subtest list distinctly.
  */
-function ScheduleCellInner({ plan, actual, isFuture, isToday, width, onClick }: ScheduleCellProps) {
+function ScheduleCellInner({
+  plan, actual, isFuture, isToday, width, onPlanClick, onActualClick,
+}: ScheduleCellProps) {
   const empty = plan === 0 && actual === 0;
 
   // Empty cell: minimal DOM (most cells in the matrix)
@@ -37,24 +42,52 @@ function ScheduleCellInner({ plan, actual, isFuture, isToday, width, onClick }: 
   const blueWidthPct = (actualBlue / max) * 100;
   const overWidthPct = (actualOver / max) * 100;
   const delta = actual - plan;
-  const interactive = !!onClick;
+
+  const planClickable = !!onPlanClick && plan > 0;
+  const actualClickable = !!onActualClick && !isFuture && actual > 0;
+
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
 
   return (
     <div
-      role={interactive ? 'button' : undefined}
-      onClick={onClick}
       className={cn(
         'flex h-full flex-col justify-center gap-1 px-1.5 py-1 text-[10px] tabular-nums border-r border-border/60',
         isToday && 'border-l-2 border-l-primary bg-primary/5',
-        interactive && 'cursor-pointer hover:bg-accent/40',
       )}
       style={{ width, minWidth: width }}
     >
-      <div className="relative h-2 w-full overflow-hidden rounded-sm bg-schedule-plan/30">
+      {/* Plan bar (top) — clickable region for Planned subtests */}
+      <div
+        role={planClickable ? 'button' : undefined}
+        aria-label={planClickable ? `Filter by planned (${plan})` : undefined}
+        onClick={planClickable ? (e) => { stop(e); onPlanClick!(); } : undefined}
+        className={cn(
+          'relative h-1.5 w-full overflow-hidden rounded-sm bg-schedule-plan/30',
+          planClickable && 'cursor-pointer hover:ring-1 hover:ring-schedule-plan',
+        )}
+        title={planClickable ? `Plan: ${plan} — click to filter planned` : undefined}
+      >
         <div
           className="absolute left-0 top-0 h-full bg-schedule-plan"
           style={{ width: `${planPct}%` }}
         />
+      </div>
+
+      {/* Actual bar (bottom) — clickable region for Done subtests */}
+      <div
+        role={actualClickable ? 'button' : undefined}
+        aria-label={actualClickable ? `Filter by actual (${actual})` : undefined}
+        onClick={actualClickable ? (e) => { stop(e); onActualClick!(); } : undefined}
+        className={cn(
+          'relative h-1.5 w-full overflow-hidden rounded-sm bg-muted/40',
+          actualClickable && 'cursor-pointer hover:ring-1 hover:ring-schedule-actual',
+        )}
+        title={
+          actualClickable
+            ? `Actual: ${actual}${actualOver > 0 ? ` (+${actualOver} over)` : ''} — click to filter done`
+            : undefined
+        }
+      >
         {!isFuture && (
           <>
             <div
@@ -70,6 +103,7 @@ function ScheduleCellInner({ plan, actual, isFuture, isToday, width, onClick }: 
           </>
         )}
       </div>
+
       <div className="flex items-center justify-between font-medium leading-none">
         <span>{plan}</span>
         <span className={cn('text-muted-foreground', !isFuture && 'text-foreground')}>

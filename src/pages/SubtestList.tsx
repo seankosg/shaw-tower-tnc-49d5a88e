@@ -414,6 +414,13 @@ export default function SubtestList() {
   const urlT1ActualOn = searchParams.get('t1_actual_on');
   const urlT2ActualOn = searchParams.get('t2_actual_on');
 
+  // Schedule cell click → bucket range + stage + planned|actual + status
+  const urlDateFrom = searchParams.get('date_from');
+  const urlDateTo = searchParams.get('date_to');
+  const urlDateField = searchParams.get('date_field') as 'planned' | 'actual' | null;
+  const urlStage = searchParams.get('stage') as 'pred' | 't1' | 't2' | null;
+  const urlCellStatus = searchParams.get('cell_status') as TcStatus | null;
+
   const filteredData = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     const daysFromToday = (iso: string) => {
@@ -421,6 +428,10 @@ export default function SubtestList() {
       const b = new Date(today + 'T00:00:00Z').getTime();
       return Math.round((a - b) / 86400000);
     };
+
+    const inRange = (d: string | null) =>
+      !!d && (!urlDateFrom || d >= urlDateFrom) && (!urlDateTo || d <= urlDateTo);
+
     return data.filter(r => {
       // status filter
       if (urlStatusFilter) {
@@ -448,11 +459,31 @@ export default function SubtestList() {
       if (urlT2PlannedOn && r.t2_planned_date !== urlT2PlannedOn) return false;
       if (urlT1ActualOn && r.t1_actual_date !== urlT1ActualOn) return false;
       if (urlT2ActualOn && r.t2_actual_date !== urlT2ActualOn) return false;
+
+      // Schedule cell range filter (date_from / date_to + date_field + stage + cell_status)
+      if (urlDateFrom || urlDateTo) {
+        const stages: Array<'pred' | 't1' | 't2'> = urlStage ? [urlStage] : ['pred', 't1', 't2'];
+        const fieldKey = urlDateField === 'actual' ? 'actual_date' : 'planned_date';
+        let matchAny = false;
+        for (const st of stages) {
+          const dateVal = r[`${st}_${fieldKey}` as keyof SubtestRow] as string | null;
+          if (!inRange(dateVal)) continue;
+          if (urlCellStatus) {
+            const statusVal = r[`${st}_status` as keyof SubtestRow] as TcStatus | null;
+            if (statusVal !== urlCellStatus) continue;
+          }
+          matchAny = true;
+          break;
+        }
+        if (!matchAny) return false;
+      }
+
       return true;
     });
   }, [data, urlStatusFilter, urlAtRiskDays,
       urlT1PlannedTo, urlT2PlannedTo, urlT1ActualTo, urlT2ActualTo,
-      urlT1PlannedOn, urlT2PlannedOn, urlT1ActualOn, urlT2ActualOn]);
+      urlT1PlannedOn, urlT2PlannedOn, urlT1ActualOn, urlT2ActualOn,
+      urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus]);
 
   // Map react-table column id → field_config.field_name
   const columnIdToFieldName: Record<string, string> = {
@@ -524,7 +555,7 @@ export default function SubtestList() {
   });
 
   const activeUrlFilters = useMemo(() => {
-    const out: { label: string; param: string }[] = [];
+    const out: { label: string; param: string; clears?: string[] }[] = [];
     const map: Record<string, string> = {
       system: 'System', subcon: 'Subcon', subsub: 'Sub-Sub',
       hdec_pic: 'HDEC PIC', t1_status: 'T1', t2_status: 'T2', status: 'Status',
@@ -532,18 +563,33 @@ export default function SubtestList() {
       t1_actual_to: 'T1 Actual ≤', t2_actual_to: 'T2 Actual ≤',
       t1_planned_on: 'T1 Plan =', t2_planned_on: 'T2 Plan =',
       t1_actual_on: 'T1 Actual =', t2_actual_on: 'T2 Actual =',
+      stage: 'Stage', cell_status: 'Cell Status',
     };
     for (const [k, lbl] of Object.entries(map)) {
       const v = searchParams.get(k);
       if (v) out.push({ label: `${lbl} ${v}`, param: k });
     }
+    // Combined date_from/date_to/date_field chip
+    const df = searchParams.get('date_from');
+    const dt = searchParams.get('date_to');
+    const fld = searchParams.get('date_field');
+    if (df || dt) {
+      const fldLbl = fld === 'actual' ? 'Actual' : 'Planned';
+      const range = df === dt || !dt ? df : `${df} → ${dt}`;
+      out.push({
+        label: `${fldLbl} ${range}`,
+        param: 'date_from',
+        clears: ['date_from', 'date_to', 'date_field'],
+      });
+    }
     return out;
   }, [searchParams]);
 
-  const clearUrlFilter = (param: string) => {
+  const clearUrlFilter = (param: string, clears?: string[]) => {
     const next = new URLSearchParams(searchParams);
-    next.delete(param);
-    if (param === 'status') next.delete('at_risk_days');
+    const toDelete = clears && clears.length ? clears : [param];
+    for (const p of toDelete) next.delete(p);
+    if (toDelete.includes('status')) next.delete('at_risk_days');
     setSearchParams(next, { replace: true });
   };
   const clearAllUrlFilters = () => setSearchParams(new URLSearchParams(), { replace: true });
@@ -597,7 +643,7 @@ export default function SubtestList() {
           {activeUrlFilters.map(f => (
             <button
               key={f.param}
-              onClick={() => clearUrlFilter(f.param)}
+              onClick={() => clearUrlFilter(f.param, f.clears)}
               className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary hover:bg-primary/20"
               title="Click to remove"
             >
