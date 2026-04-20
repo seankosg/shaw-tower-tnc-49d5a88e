@@ -1,33 +1,77 @@
 
 
-## Sticky 좌측 컬럼 오버랩 버그 수정
+## Actual Date 백필 + Import 자동 채움 (확정안)
 
-### 원인
-`ScheduleMatrix.tsx`의 본문 행에서 좌측 4개 컬럼을 `sticky left-0 z-10`로 처리하고 있는데, 가로 스크롤 시 우측 날짜 셀들이 sticky 영역 **아래(z-index 낮음)**가 아니라 **위로 비쳐 보이는** 현상 발생.
+### 사용자 결정 반영
+- **문제1 (planned_date도 NULL)**: planned_date 있으면 그것 사용, 없으면 `updated_at::date` 사용 (둘 다 NULL이면 2026-04-19)
+- **문제2 (Import 변화 시점)**: status='Done' & actual_date 비어있으면 무조건 채움 (신규 insert 포함)
+- **문제3 (cutoff 포함)**: `planned_date <= '2026-04-19'` 포함
+- **Import 자동 채움 날짜**: import 실행 시점 하루 전 (yesterday)
 
-근본 원인 2가지:
-1. **배경 불투명도 부족** — sticky 좌측 div는 `bg-card`지만, 부모 `<div className="flex border-b ...">`에 `hover:bg-accent/30`이 적용. hover 시 sticky 셀 뒤로 비치지는 않지만, **sub-row의 sticky div는 `bg-muted/20` (반투명)** 이라 우측 셀이 그대로 비침.
-2. **z-index 경쟁** — 가상화로 렌더되는 우측 셀들(`ScheduleCell`)에 명시적 z-index가 없지만, sticky 좌측이 `z-10`이고 ScheduleCell 내부에 `relative` 또는 변환(transform)이 있으면 stacking context가 꼬여 우측이 위로 올라올 수 있음.
+### A. 일회성 백필 (data UPDATE — insert 도구 사용)
 
-### 해결
+T1, T2 각각 다음 우선순위로 actual_date 채움:
+1. `t{n}_planned_date` (NOT NULL이고 ≤ 2026-04-19)
+2. `updated_at::date`
+3. `'2026-04-19'`
 
-**1. Sub-row sticky 좌측 배경 불투명화**
-- `bg-muted/20` → `bg-card` (또는 `bg-muted` 불투명)로 변경. 행 자체 배경은 `bg-muted/20` 유지하되 sticky 영역만 불투명.
+```sql
+-- T1
+UPDATE subtests
+SET t1_actual_date = COALESCE(
+  CASE WHEN t1_planned_date <= '2026-04-19' THEN t1_planned_date END,
+  updated_at::date,
+  '2026-04-19'::date
+)
+WHERE is_active = true
+  AND t1_status = 'Done'
+  AND t1_actual_date IS NULL
+  AND (t1_planned_date IS NULL OR t1_planned_date <= '2026-04-19');
 
-**2. Sticky 좌측 z-index 상향**
-- 본문 sticky 좌측: `z-10` → `z-20`
-- 가상화 컬럼 wrapper에도 `relative z-0` 명시해 stacking 충돌 방지
+-- T2 동일 패턴
+UPDATE subtests
+SET t2_actual_date = COALESCE(
+  CASE WHEN t2_planned_date <= '2026-04-19' THEN t2_planned_date END,
+  updated_at::date,
+  '2026-04-19'::date
+)
+WHERE is_active = true
+  AND t2_status = 'Done'
+  AND t2_actual_date IS NULL
+  AND (t2_planned_date IS NULL OR t2_planned_date <= '2026-04-19');
+```
 
-**3. ScheduleCell `position: relative` 확인**
-- `ScheduleCell.tsx`에 명시적 z-index 없는지 확인, 필요 시 `z-0` 명시
+백필 대상 행에 대해 `subtest_change_log`에 `change_source='excel_import'`로 일괄 기록 (기존 enum 값 사용; 'backfill' 값 없음).
+
+### B. Import 자동 채움 (`src/contexts/ImportContext.tsx`)
+
+`processFile()` 내 upsert 직전:
+- `yesterday = new Date(Date.now() - 86400000).toISOString().slice(0,10)`
+- 최종 t1_status='Done' && 최종 t1_actual_date 비어있음 → `t1_actual_date = yesterday`
+- T2 동일
+- Excel에 명시된 actual_date가 있으면 그대로 우선 (덮어쓰지 않음)
+- 신규 insert/기존 update 양쪽 모두 적용
+
+### C. 덮어쓰기 방지 가드 (`SubtestDetail.tsx`, `MobileUpdatePage.tsx`)
+- status를 Done으로 바꿀 때 `actual_date`가 이미 있으면 유지, 없을 때만 today로 채움
 
 ### 변경 파일
-- `src/components/schedule/ScheduleMatrix.tsx` — sticky 좌측 배경/ z-index 수정 (그룹 행 + sub-row 둘 다)
-- (필요 시) `src/components/schedule/ScheduleCell.tsx` — z-index 명시
+| 파일 | 내용 |
+|---|---|
+| (insert tool 1회 실행) | T1/T2 백필 UPDATE + change_log 일괄 INSERT |
+| `src/contexts/ImportContext.tsx` | Import 시 Done & actual_date 빈 경우 yesterday 자동 채움 |
+| `src/pages/SubtestDetail.tsx` | actual_date 덮어쓰기 방지 가드 |
+| `src/pages/MobileUpdatePage.tsx` | 동일 가드 |
 
 ### 검증
-1. 가로 스크롤 시 우측 셀이 좌측 sticky 영역에 비쳐 보이지 않음
-2. 시스템 행 펼침(Pred/T1/T2 sub-row) 후에도 동일하게 깔끔
-3. Hover 효과 정상 (sticky 영역 hover 비침 없음)
-4. 헤더-본문 sticky 레이어 순서 유지 (corner > header > body sticky > cells)
+1. 백필 후 `SELECT COUNT(*) FROM subtests WHERE t1_status='Done' AND t1_actual_date IS NULL` = 0 (cutoff 이내)
+2. 백필 후 `SELECT COUNT(*) FROM subtests WHERE t2_status='Done' AND t2_actual_date IS NULL` = 0
+3. Schedule KPI Cum Actual ≈ Subtest Master Done 카운트
+4. Excel에 t1_status='Done', actual_date 빈 행 import → DB에 yesterday로 저장
+5. 이미 actual_date 있던 행은 import 후 변경 없음
+6. SubtestDetail에서 Done→Planned→Done 토글 시 기존 actual_date 보존
+7. change_log에 백필/import 자동 채움 이벤트 기록
+
+### 비변경
+DB 스키마 / RLS / Pred 처리 / Schedule 표시 로직 / SubtestList
 
