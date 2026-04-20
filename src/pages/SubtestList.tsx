@@ -131,10 +131,11 @@ const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
 
 export default function SubtestList() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const storageKey = user?.id ? `subtest-list-state:${user.id}` : 'subtest-list-state:anon';
-  const { isFieldVisible, orderedFieldNames } = useFieldConfig();
+  const { isFieldVisible, orderedFieldNames, fields: fieldConfigRows } = useFieldConfig();
 
   const [data, setData] = useState<SubtestRow[]>(() => {
     const c = getSubtestCache();
