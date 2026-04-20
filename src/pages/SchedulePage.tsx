@@ -33,6 +33,14 @@ export default function SchedulePage() {
   const [bucket, setBucket] = useState<ScheduleBucket>('day');
   const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>('all');
   const [rangeDays, setRangeDays] = useState<number>(60);
+  const [hidePast, setHidePast] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('schedule_hide_past') === '1';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('schedule_hide_past', hidePast ? '1' : '0');
+  }, [hidePast]);
 
   // Hydrate from cache for instant render
   const cached = useMemo(() => getScheduleCache(), []);
