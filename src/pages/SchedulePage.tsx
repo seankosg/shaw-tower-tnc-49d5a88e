@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, AlertTriangle, TrendingUp, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { format } from 'date-fns';
+import { Calendar as CalendarIcon, AlertTriangle, TrendingUp, ChevronsLeft, ChevronsRight, CalendarSearch } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,6 +9,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { todayIso, type SubtestForDashboard } from '@/lib/dashboard-utils';
 import {
@@ -38,6 +41,9 @@ export default function SchedulePage() {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('schedule_hide_past') === '1';
   });
+  const [pickedDate, setPickedDate] = useState<Date | undefined>(new Date());
+  const [pickedField, setPickedField] = useState<'planned' | 'actual'>('planned');
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('schedule_hide_past', hidePast ? '1' : '0');
@@ -211,7 +217,7 @@ export default function SchedulePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
-            <Calendar className="h-5 w-5 text-primary" />
+            <CalendarIcon className="h-5 w-5 text-primary" />
             Schedule Matrix
           </h1>
           <p className="text-xs text-muted-foreground">
@@ -275,6 +281,44 @@ export default function SchedulePage() {
             </Select>
           </ToolbarGroup>
 
+          <ToolbarGroup label="Lookup">
+            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 px-2 text-xs">
+                  <CalendarSearch className="h-3.5 w-3.5" />
+                  <span className="ml-1">{pickedDate ? format(pickedDate, 'yyyy-MM-dd') : 'Pick a date'}</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={pickedDate}
+                  onSelect={(d) => {
+                    if (!d) return;
+                    setPickedDate(d);
+                    setPickerOpen(false);
+                    const iso = format(d, 'yyyy-MM-dd');
+                    const params: Record<string, string> = {
+                      date_from: iso,
+                      date_to: iso,
+                      date_field: pickedField,
+                    };
+                    if (pickedField === 'actual') params.cell_status = 'Done';
+                    navigate(`/?${new URLSearchParams(params).toString()}`);
+                  }}
+                  initialFocus
+                  className={cn('p-3 pointer-events-auto')}
+                />
+              </PopoverContent>
+            </Popover>
+            <Tabs value={pickedField} onValueChange={(v) => setPickedField(v as 'planned' | 'actual')}>
+              <TabsList className="h-8">
+                <TabsTrigger value="planned" className="h-6 px-2 text-xs">Plan</TabsTrigger>
+                <TabsTrigger value="actual" className="h-6 px-2 text-xs">Actual</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </ToolbarGroup>
+
           <div className="ml-auto flex items-center gap-3 text-xs">
             <Legend />
           </div>
@@ -316,7 +360,7 @@ export default function SchedulePage() {
         <Kpi
           label="Upcoming 7d Plan"
           value={kpis.upcoming7Plan}
-          icon={<Calendar className="h-3.5 w-3.5" />}
+          icon={<CalendarIcon className="h-3.5 w-3.5" />}
           onClick={
             kpis.upcoming7Plan > 0
               ? () => navigate(`/?date_from=${today}&date_to=${kpis.upcomingEnd}&date_field=planned`)
