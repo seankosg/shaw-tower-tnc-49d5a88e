@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Database, BarChart3, Upload, Download, Shield, Settings, Smartphone, Calendar,
+  Database, BarChart3, Upload, Download, Shield, Settings, Calendar,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -10,12 +10,11 @@ import {
 import { APP_NAME } from '@/lib/constants';
 
 const mainNav = [
-  { label: 'Test Status', icon: Database, path: '/' },
   { label: 'Dashboard', icon: BarChart3, path: '/dashboard' },
-  { label: 'Schedule', icon: Calendar, path: '/schedule' },
-  { label: 'Import', icon: Upload, path: '/import' },
-  { label: 'Export', icon: Download, path: '/export' },
-  { label: 'Quick Update', icon: Smartphone, path: '/mobile' },
+  { label: 'Progress',  icon: Calendar,  path: '/schedule' },
+  { label: 'Raw Data',  icon: Database,  path: '/' },
+  { label: 'Import',    icon: Upload,    path: '/import' },
+  { label: 'Export',    icon: Download,  path: '/export' },
 ];
 
 const adminNav = [
