@@ -31,6 +31,14 @@
     --success: 142 71% 36%;
     --success-foreground: 0 0% 100%;
 
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --schedule-plan: 215 16% 80%;
+    --schedule-actual: 220 65% 45%;
+    --schedule-over: 142 71% 40%;
+    --schedule-short: 0 72% 51%;
+
     --border: 215 20% 90%;
     --input: 215 20% 90%;
     --ring: 220 65% 36%;
@@ -74,6 +82,14 @@
 
     --success: 142 64% 45%;
     --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 55%;
+    --warning-foreground: 0 0% 100%;
+
+    --schedule-plan: 220 12% 30%;
+    --schedule-actual: 215 80% 60%;
+    --schedule-over: 142 64% 50%;
+    --schedule-short: 0 72% 55%;
 
     --border: 220 16% 18%;
     --input: 220 16% 18%;
