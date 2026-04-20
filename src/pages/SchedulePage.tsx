@@ -87,9 +87,9 @@ export default function SchedulePage() {
   const aggregate = useMemo(
     () => aggregateSchedule(subtests, {
       groupBy, bucket, stageFilter,
-      rangeStart, rangeEnd, sysCodeById,
+      rangeStart, rangeEnd, today, sysCodeById,
     }),
-    [subtests, groupBy, bucket, stageFilter, rangeStart, rangeEnd, sysCodeById],
+    [subtests, groupBy, bucket, stageFilter, rangeStart, rangeEnd, today, sysCodeById],
   );
 
   const critical = useMemo(
