@@ -250,19 +250,10 @@ export function ScheduleMatrix({
                             {STAGE_LABELS[st]}
                           </span>
                         </div>
-                        <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-1.5 tabular-nums">
+                        <div className="flex w-[70px] items-center justify-end border-l border-border px-2 py-1.5 tabular-nums">
                           {sr.totalDone}/{sr.total}
                         </div>
-                        <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-1.5 tabular-nums">
-                          {sr.totalPlan}
-                        </div>
-                        <div className={cn(
-                          'flex w-[80px] items-center justify-end border-l border-r border-border px-2 py-1.5 tabular-nums',
-                          sr.totalActual < sr.totalPlan && 'text-schedule-short',
-                          sr.totalActual > sr.totalPlan && 'text-schedule-over',
-                        )}>
-                          {sr.totalActual}
-                        </div>
+                        <ActualPlanCell actual={sr.cumActual} plan={sr.cumPlan} className="w-[110px] py-1.5" />
                       </div>
                       {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
                       {virtualCols.map(vc => {
