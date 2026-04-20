@@ -16,6 +16,7 @@ import ImportLogsPage from "./pages/ImportLogsPage";
 import ExportPage from "./pages/ExportPage";
 import MobileUpdatePage from "./pages/MobileUpdatePage";
 import DashboardPage from "./pages/DashboardPage";
+import SchedulePage from "./pages/SchedulePage";
 import AdminPage from "./pages/AdminPage";
 
 const queryClient = new QueryClient();
@@ -39,6 +40,7 @@ const App = () => (
                 <Route path="/export" element={<ExportPage />} />
                 <Route path="/mobile" element={<MobileUpdatePage />} />
                 <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/schedule" element={<SchedulePage />} />
                 <Route path="/admin" element={<AdminPage />} />
               </Route>
             </Routes>

@@ -35,6 +35,16 @@ export default {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
         },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        schedule: {
+          plan: "hsl(var(--schedule-plan))",
+          actual: "hsl(var(--schedule-actual))",
+          over: "hsl(var(--schedule-over))",
+          short: "hsl(var(--schedule-short))",
+        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
