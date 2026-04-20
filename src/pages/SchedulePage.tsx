@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, AlertTriangle, TrendingUp, Activity, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Calendar, AlertTriangle, TrendingUp, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -127,22 +127,25 @@ export default function SchedulePage() {
   }, [aggregate, hidePast, today]);
 
   const kpis = useMemo(() => {
-    let todayPlan = 0, todayActual = 0, cumPlan = 0, cumActual = 0;
+    let cumPlan = 0, cumActual = 0;
     for (const r of aggregate.rows) {
       cumPlan += r.cumPlan;
       cumActual += r.cumActual;
-      const todayCell = r.combined.find(c => c.bucket === today);
-      if (todayCell) {
-        todayPlan += todayCell.plan;
-        todayActual += todayCell.actual;
-      }
     }
     const variance = cumPlan ? ((cumActual - cumPlan) / cumPlan) * 100 : 0;
+    const progressPct = cumPlan ? (cumActual / cumPlan) * 100 : 0;
     const overdue = subtests.filter(s =>
       (s.t1_planned_date && s.t1_planned_date < today && s.t1_status !== 'Done') ||
       (s.t2_planned_date && s.t2_planned_date < today && s.t2_status !== 'Done')
     ).length;
-    return { todayPlan, todayActual, cumPlan, cumActual, variance, criticalCount: critical.highRisk.length, overdue };
+    // Upcoming 7-day plan: count planned T1/T2 dates in [today, today+7]
+    const upcomingEnd = addDays(today, 7);
+    let upcoming7Plan = 0;
+    for (const s of subtests) {
+      if (s.t1_planned_date && s.t1_planned_date >= today && s.t1_planned_date <= upcomingEnd) upcoming7Plan++;
+      if (s.t2_planned_date && s.t2_planned_date >= today && s.t2_planned_date <= upcomingEnd) upcoming7Plan++;
+    }
+    return { cumPlan, cumActual, variance, progressPct, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
   }, [aggregate.rows, today, subtests, critical.highRisk.length]);
 
   // ───── Navigation handlers ─────
@@ -271,33 +274,50 @@ export default function SchedulePage() {
       </Card>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Kpi label="Today Plan" value={kpis.todayPlan} icon={<Calendar className="h-3.5 w-3.5" />} />
-        <Kpi label="Today Actual" value={kpis.todayActual}
-          accent={kpis.todayActual < kpis.todayPlan ? 'short' : kpis.todayActual > kpis.todayPlan ? 'over' : undefined}
-          icon={<Activity className="h-3.5 w-3.5" />} />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Kpi
-          label="Cum Actual/Plan"
+          label="Cumulative Progress"
           value={
             kpis.cumPlan > 0
-              ? `${kpis.cumActual}/${kpis.cumPlan} (${((kpis.cumActual / kpis.cumPlan) * 100).toFixed(0)}%)`
-              : `${kpis.cumActual}/${kpis.cumPlan} (—)`
+              ? `${kpis.cumActual}/${kpis.cumPlan} (${kpis.progressPct.toFixed(0)}%)`
+              : `${kpis.cumActual}/${kpis.cumPlan}`
+          }
+          subValue={
+            kpis.cumPlan > 0
+              ? `Variance ${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%`
+              : undefined
           }
           accent={
-            kpis.cumPlan > 0 && kpis.cumActual < kpis.cumPlan ? 'short'
+            kpis.cumPlan > 0 && kpis.progressPct < 90 ? 'short'
             : kpis.cumPlan > 0 && kpis.cumActual > kpis.cumPlan ? 'over'
             : undefined
           }
+          icon={<TrendingUp className="h-3.5 w-3.5" />}
         />
-        <Kpi label="Variance"
-          value={`${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%`}
-          accent={kpis.variance < 0 ? 'short' : kpis.variance > 0 ? 'over' : undefined}
-          icon={<TrendingUp className="h-3.5 w-3.5" />} />
-        <Kpi label="Critical (≤7d)" value={kpis.criticalCount}
+        <Kpi
+          label="Overdue"
+          value={kpis.overdue}
+          accent={kpis.overdue > 0 ? 'short' : undefined}
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          onClick={kpis.overdue > 0 ? () => navigate('/?overdue=1') : undefined}
+        />
+        <Kpi
+          label="Critical (≤7d)"
+          value={kpis.criticalCount}
           accent={kpis.criticalCount > 0 ? 'short' : undefined}
-          icon={<AlertTriangle className="h-3.5 w-3.5" />} />
-        <Kpi label="Overdue" value={kpis.overdue}
-          accent={kpis.overdue > 0 ? 'short' : undefined} />
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          onClick={kpis.criticalCount > 0 ? () => navigate('/?at_risk=1') : undefined}
+        />
+        <Kpi
+          label="Upcoming 7d Plan"
+          value={kpis.upcoming7Plan}
+          icon={<Calendar className="h-3.5 w-3.5" />}
+          onClick={
+            kpis.upcoming7Plan > 0
+              ? () => navigate(`/?date_from=${today}&date_to=${kpis.upcomingEnd}&date_field=planned`)
+              : undefined
+          }
+        />
       </div>
 
       {/* Matrix + Watchlist */}
@@ -339,14 +359,19 @@ function ToolbarGroup({ label, children }: { label: string; children: React.Reac
   );
 }
 
-function Kpi({ label, value, accent, icon }: {
+function Kpi({ label, value, subValue, accent, icon, onClick }: {
   label: string;
   value: number | string;
+  subValue?: string;
   accent?: 'short' | 'over';
   icon?: React.ReactNode;
+  onClick?: () => void;
 }) {
   return (
-    <Card>
+    <Card
+      onClick={onClick}
+      className={cn(onClick && 'cursor-pointer transition-colors hover:bg-accent/40')}
+    >
       <CardContent className="flex flex-col gap-0.5 p-2.5">
         <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           {icon}{label}
@@ -358,6 +383,9 @@ function Kpi({ label, value, accent, icon }: {
         )}>
           {value}
         </div>
+        {subValue && (
+          <div className="text-[10px] text-muted-foreground tabular-nums">{subValue}</div>
+        )}
       </CardContent>
     </Card>
   );
