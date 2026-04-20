@@ -61,6 +61,7 @@ function GlobalImportIndicator() {
 }
 
 export function AppLayout() {
+  useDocumentTitle();
   return (
     <SidebarProvider>
       <AppSidebar />
