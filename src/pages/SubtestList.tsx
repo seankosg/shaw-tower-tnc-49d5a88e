@@ -585,10 +585,11 @@ export default function SubtestList() {
     return out;
   }, [searchParams]);
 
-  const clearUrlFilter = (param: string) => {
+  const clearUrlFilter = (param: string, clears?: string[]) => {
     const next = new URLSearchParams(searchParams);
-    next.delete(param);
-    if (param === 'status') next.delete('at_risk_days');
+    const toDelete = clears && clears.length ? clears : [param];
+    for (const p of toDelete) next.delete(p);
+    if (toDelete.includes('status')) next.delete('at_risk_days');
     setSearchParams(next, { replace: true });
   };
   const clearAllUrlFilters = () => setSearchParams(new URLSearchParams(), { replace: true });
@@ -642,7 +643,7 @@ export default function SubtestList() {
           {activeUrlFilters.map(f => (
             <button
               key={f.param}
-              onClick={() => clearUrlFilter(f.param)}
+              onClick={() => clearUrlFilter(f.param, f.clears)}
               className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary hover:bg-primary/20"
               title="Click to remove"
             >
