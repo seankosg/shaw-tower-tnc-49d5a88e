@@ -212,14 +212,24 @@ export default function SchedulePage() {
       </Card>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Kpi label="Today Plan" value={kpis.todayPlan} icon={<Calendar className="h-3.5 w-3.5" />} />
         <Kpi label="Today Actual" value={kpis.todayActual}
           accent={kpis.todayActual < kpis.todayPlan ? 'short' : kpis.todayActual > kpis.todayPlan ? 'over' : undefined}
           icon={<Activity className="h-3.5 w-3.5" />} />
-        <Kpi label="Cum Plan" value={kpis.cumPlan} />
-        <Kpi label="Cum Actual" value={kpis.cumActual}
-          accent={kpis.cumActual < kpis.cumPlan ? 'short' : kpis.cumActual > kpis.cumPlan ? 'over' : undefined} />
+        <Kpi
+          label="Cum Actual/Plan"
+          value={
+            kpis.cumPlan > 0
+              ? `${kpis.cumActual}/${kpis.cumPlan} (${((kpis.cumActual / kpis.cumPlan) * 100).toFixed(0)}%)`
+              : `${kpis.cumActual}/${kpis.cumPlan} (—)`
+          }
+          accent={
+            kpis.cumPlan > 0 && kpis.cumActual < kpis.cumPlan ? 'short'
+            : kpis.cumPlan > 0 && kpis.cumActual > kpis.cumPlan ? 'over'
+            : undefined
+          }
+        />
         <Kpi label="Variance"
           value={`${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%`}
           accent={kpis.variance < 0 ? 'short' : kpis.variance > 0 ? 'over' : undefined}
