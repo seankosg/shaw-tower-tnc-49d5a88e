@@ -25,7 +25,6 @@ import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
 import { getSubtestCache, setSubtestCache } from '@/lib/subtest-cache';
 import { exportSubtestsToExcel } from '@/lib/excel-export';
-import { useFieldConfig as useFieldConfigForExport } from '@/hooks/useFieldConfig';
 import { useToast } from '@/hooks/use-toast';
 import { USER_TYPE_LABELS } from '@/types/enums';
 
