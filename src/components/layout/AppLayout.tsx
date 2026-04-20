@@ -21,12 +21,16 @@ const ROUTE_TITLES: Array<{ match: (p: string) => boolean; label: string }> = [
   { match: (p) => p === '/change-password', label: 'Change Password' },
 ];
 
-function useDocumentTitle() {
+function useCurrentPageLabel() {
   const { pathname } = useLocation();
+  const found = ROUTE_TITLES.find((r) => r.match(pathname));
+  return found?.label ?? '';
+}
+
+function useDocumentTitle(label: string) {
   useEffect(() => {
-    const found = ROUTE_TITLES.find((r) => r.match(pathname));
-    document.title = found ? `${found.label} · ${APP_NAME}` : APP_NAME;
-  }, [pathname]);
+    document.title = label ? `${label} · ${APP_NAME}` : APP_NAME;
+  }, [label]);
 }
 
 function GlobalImportIndicator() {
@@ -61,7 +65,8 @@ function GlobalImportIndicator() {
 }
 
 export function AppLayout() {
-  useDocumentTitle();
+  const pageLabel = useCurrentPageLabel();
+  useDocumentTitle(pageLabel);
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -69,6 +74,15 @@ export function AppLayout() {
         <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
+            <span className="text-muted-foreground">{APP_NAME}</span>
+            {pageLabel && (
+              <>
+                <span className="text-muted-foreground/50">/</span>
+                <span className="font-medium text-foreground">{pageLabel}</span>
+              </>
+            )}
+          </nav>
           <div className="ml-auto">
             <GlobalImportIndicator />
           </div>
