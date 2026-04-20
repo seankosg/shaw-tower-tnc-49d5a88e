@@ -266,6 +266,8 @@ function emptyStageRow(stage: ScheduleStage, buckets: string[], total: number): 
     totalActual: 0,
     totalDone: 0,
     total,
+    cumPlan: 0,
+    cumActual: 0,
   };
 }
 
