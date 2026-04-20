@@ -133,7 +133,14 @@ export default function SchedulePage() {
       cumActual += r.cumActual;
     }
     const variance = cumPlan ? ((cumActual - cumPlan) / cumPlan) * 100 : 0;
-    const progressPct = cumPlan ? (cumActual / cumPlan) * 100 : 0;
+    // Done-vs-Total progress across all T1+T2 stages
+    let totalStages = 0, doneStages = 0;
+    for (const s of subtests) {
+      totalStages += 2;
+      if (s.t1_status === 'Done') doneStages++;
+      if (s.t2_status === 'Done') doneStages++;
+    }
+    const progressPct = totalStages ? (doneStages / totalStages) * 100 : 0;
     const overdue = subtests.filter(s =>
       (s.t1_planned_date && s.t1_planned_date < today && s.t1_status !== 'Done') ||
       (s.t2_planned_date && s.t2_planned_date < today && s.t2_status !== 'Done')
