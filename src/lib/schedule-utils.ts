@@ -197,6 +197,7 @@ export function aggregateSchedule(
             stageData[st].cells[i].plan++;
             stageData[st].totalPlan++;
           }
+          if (plan <= opts.today) stageData[st].cumPlan++;
         }
         if (actual) {
           const b = bucketize(actual, opts.bucket);
@@ -205,6 +206,7 @@ export function aggregateSchedule(
             stageData[st].cells[i].actual++;
             stageData[st].totalActual++;
           }
+          if (actual <= opts.today) stageData[st].cumActual++;
         }
         if (done) stageData[st].totalDone++;
       }
