@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Calendar, AlertTriangle, TrendingUp, Activity } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,6 +15,7 @@ import {
 } from '@/lib/schedule-utils';
 import { ScheduleMatrix } from '@/components/schedule/ScheduleMatrix';
 import { CriticalWatchlist } from '@/components/schedule/CriticalWatchlist';
+import { getScheduleCache, setScheduleCache } from '@/lib/schedule-cache';
 
 const GROUP_LABELS: Record<ScheduleGroupBy, string> = {
   system: 'System',
@@ -25,16 +25,19 @@ const GROUP_LABELS: Record<ScheduleGroupBy, string> = {
 
 export default function SchedulePage() {
   const navigate = useNavigate();
-  const today = todayIso();
+  // Stabilize today across renders so memos don't re-run unnecessarily
+  const today = useMemo(() => todayIso(), []);
 
   const [groupBy, setGroupBy] = useState<ScheduleGroupBy>('system');
   const [bucket, setBucket] = useState<ScheduleBucket>('day');
   const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>('all');
   const [rangeDays, setRangeDays] = useState<number>(60);
 
-  const [subtests, setSubtests] = useState<SubtestForDashboard[]>([]);
-  const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Hydrate from cache for instant render
+  const cached = useMemo(() => getScheduleCache(), []);
+  const [subtests, setSubtests] = useState<SubtestForDashboard[]>(cached.data?.subtests ?? []);
+  const [systems, setSystems] = useState<{ id: string; system_code: string }[]>(cached.data?.systems ?? []);
+  const [loading, setLoading] = useState(!cached.data);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,14 +58,21 @@ export default function SchedulePage() {
       }
       const sysRes = await supabase.from('system_master').select('id, system_code').eq('is_active', true);
       if (!cancelled) {
+        const sysList = sysRes.data ?? [];
         setSubtests(all);
-        setSystems(sysRes.data ?? []);
+        setSystems(sysList);
+        setScheduleCache({ subtests: all, systems: sysList });
         setLoading(false);
       }
     }
+    // If cache is fresh, skip fetch entirely
+    if (cached.fresh) {
+      setLoading(false);
+      return;
+    }
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [cached.fresh]);
 
   const sysCodeById = useMemo(() => {
     const m = new Map<string, string>();
