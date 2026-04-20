@@ -1,77 +1,89 @@
 
 
-## Actual Date 백필 + Import 자동 채움 (확정안)
+## T1/T2 Schedule 반영 점검 결과
 
-### 사용자 결정 반영
-- **문제1 (planned_date도 NULL)**: planned_date 있으면 그것 사용, 없으면 `updated_at::date` 사용 (둘 다 NULL이면 2026-04-19)
-- **문제2 (Import 변화 시점)**: status='Done' & actual_date 비어있으면 무조건 채움 (신규 insert 포함)
-- **문제3 (cutoff 포함)**: `planned_date <= '2026-04-19'` 포함
-- **Import 자동 채움 날짜**: import 실행 시점 하루 전 (yesterday)
+### 결론: T1/T2는 **이미 정규 필드 기반**으로 동작하지만, 미세한 이슈 1개 존재
 
-### A. 일회성 백필 (data UPDATE — insert 도구 사용)
+`schedule-utils.ts`의 `getStageDates()` 검토:
 
-T1, T2 각각 다음 우선순위로 actual_date 채움:
-1. `t{n}_planned_date` (NOT NULL이고 ≤ 2026-04-19)
-2. `updated_at::date`
-3. `'2026-04-19'`
-
-```sql
--- T1
-UPDATE subtests
-SET t1_actual_date = COALESCE(
-  CASE WHEN t1_planned_date <= '2026-04-19' THEN t1_planned_date END,
-  updated_at::date,
-  '2026-04-19'::date
-)
-WHERE is_active = true
-  AND t1_status = 'Done'
-  AND t1_actual_date IS NULL
-  AND (t1_planned_date IS NULL OR t1_planned_date <= '2026-04-19');
-
--- T2 동일 패턴
-UPDATE subtests
-SET t2_actual_date = COALESCE(
-  CASE WHEN t2_planned_date <= '2026-04-19' THEN t2_planned_date END,
-  updated_at::date,
-  '2026-04-19'::date
-)
-WHERE is_active = true
-  AND t2_status = 'Done'
-  AND t2_actual_date IS NULL
-  AND (t2_planned_date IS NULL OR t2_planned_date <= '2026-04-19');
+```typescript
+if (stage === 't1') {
+  return {
+    plan: s.t1_planned_date,
+    actual: s.t1_status === 'Done' ? s.t1_actual_date : null,
+    done: s.t1_status === 'Done',
+  };
+}
+if (stage === 't2') {
+  return {
+    plan: s.t2_planned_date,
+    actual: s.t2_status === 'Done' ? s.t2_actual_date : null,
+    done: s.t2_status === 'Done',
+  };
+}
 ```
 
-백필 대상 행에 대해 `subtest_change_log`에 `change_source='excel_import'`로 일괄 기록 (기존 enum 값 사용; 'backfill' 값 없음).
+T1/T2는 DB 정규 필드(`t1_status`, `t1_planned_date`, `t1_actual_date`, T2 동일)를 직접 읽으므로 **추론 없음**. 이전 백필로 Done 항목 376건의 actual_date도 채워졌음 → Master DB와 일치.
 
-### B. Import 자동 채움 (`src/contexts/ImportContext.tsx`)
+---
 
-`processFile()` 내 upsert 직전:
-- `yesterday = new Date(Date.now() - 86400000).toISOString().slice(0,10)`
-- 최종 t1_status='Done' && 최종 t1_actual_date 비어있음 → `t1_actual_date = yesterday`
-- T2 동일
-- Excel에 명시된 actual_date가 있으면 그대로 우선 (덮어쓰지 않음)
-- 신규 insert/기존 update 양쪽 모두 적용
+### 발견된 이슈 (미세)
 
-### C. 덮어쓰기 방지 가드 (`SubtestDetail.tsx`, `MobileUpdatePage.tsx`)
-- status를 Done으로 바꿀 때 `actual_date`가 이미 있으면 유지, 없을 때만 today로 채움
+#### 이슈 1: actual은 status='Done'일 때만 카운트 → WIP 진행 중 항목 누락
+- 현재: `actual = (status === 'Done') ? actual_date : null`
+- 즉 status='WIP'이고 actual_date가 있어도 Schedule actual에 안 잡힘
+- **영향**: WIP는 시작은 했지만 미완료 → "Cum Actual" 정의를 "완료 누적"으로 본다면 현재 로직이 맞음. "착수 누적"으로 본다면 수정 필요.
+- **판단 필요**: Cum Actual = "완료 기준" 유지 vs "착수 포함"?
 
-### 변경 파일
-| 파일 | 내용 |
+#### 이슈 2: actual_date가 없는 Done 항목 (cutoff 이후 12건)
+- 이전 백필에서 `t1_planned_date > 2026-04-19`인 12개 T1 Done 항목은 제외됨
+- → Schedule에서 이 12건은 done count에는 잡히지만 actual 버킷에는 안 그려짐
+- **권장**: 이번 작업에 같이 백필 (planned_date 그대로 사용)
+
+#### 이슈 3: T2 done인데 T1 데이터 없는 경우 가능성
+- 현재 로직은 T1/T2 독립 처리이므로 문제 없음
+- 단, KPI/progress 표시에서 stage 순서 가정이 깨질 수 있음 → 별도 점검
+
+---
+
+### 종합 계획 (Predecessor + T1/T2 보완)
+
+#### 1. Predecessor 정규화 (앞선 계획 그대로)
+- DB: `pred_status`, `pred_planned_date`, `pred_actual_date` 컬럼 추가
+- 백필: `predecessor_status_raw` 파싱
+- Import/수동편집/Schedule/Dashboard/StageProgress 모두 정규 필드 사용
+- Schedule의 pred 추론 로직 완전 제거
+
+#### 2. T1/T2 보완
+- **2-1. Cutoff 이후 Done 12건 백필**: `t1_planned_date > 2026-04-19`이고 status='Done'인 12개 행도 `t1_actual_date = t1_planned_date`로 채움 (T2 동일 점검)
+- **2-2. Cum Actual 정책 확정**: "완료 기준" 유지 (현재 로직 그대로) — 변경 불필요
+  - 만약 사용자가 "착수 포함"을 원하면 `actual = (status==='Done' || status==='WIP') ? actual_date : null`로 수정 가능 (옵션)
+
+#### 3. 검증
+- AHU System L13-26 South Office에서:
+  - Master DB pred Done 수 = Schedule Pred Done 수
+  - Master DB T1 Done 수 = Schedule T1 Done 수
+  - Master DB T2 Done 수 = Schedule T2 Done 수
+  - 각 stage별 Cum Actual = `*_actual_date` NOT NULL 카운트
+- Excel 재import 후 모든 화면 즉시 일관
+
+---
+
+### 변경 파일 (최종)
+
+| 파일 | 변경 |
 |---|---|
-| (insert tool 1회 실행) | T1/T2 백필 UPDATE + change_log 일괄 INSERT |
-| `src/contexts/ImportContext.tsx` | Import 시 Done & actual_date 빈 경우 yesterday 자동 채움 |
-| `src/pages/SubtestDetail.tsx` | actual_date 덮어쓰기 방지 가드 |
-| `src/pages/MobileUpdatePage.tsx` | 동일 가드 |
-
-### 검증
-1. 백필 후 `SELECT COUNT(*) FROM subtests WHERE t1_status='Done' AND t1_actual_date IS NULL` = 0 (cutoff 이내)
-2. 백필 후 `SELECT COUNT(*) FROM subtests WHERE t2_status='Done' AND t2_actual_date IS NULL` = 0
-3. Schedule KPI Cum Actual ≈ Subtest Master Done 카운트
-4. Excel에 t1_status='Done', actual_date 빈 행 import → DB에 yesterday로 저장
-5. 이미 actual_date 있던 행은 import 후 변경 없음
-6. SubtestDetail에서 Done→Planned→Done 토글 시 기존 actual_date 보존
-7. change_log에 백필/import 자동 채움 이벤트 기록
+| DB migration | pred 3개 컬럼 추가 + pred 백필 + cutoff-after T1/T2 백필 + change_log |
+| `src/lib/import-parser.ts` | normalizePredecessor 확장, ParsedSubtest 필드 추가 |
+| `src/contexts/ImportContext.tsx` | pred 3개 필드 upsert + actual_date 자동 채움 |
+| `src/pages/SubtestDetail.tsx` | Pred 편집 UI + 가드 |
+| `src/pages/MobileUpdatePage.tsx` | Pred 편집 UI + 가드 |
+| `src/lib/schedule-utils.ts` | pred 추론 제거, 정규 필드 직접 사용 |
+| `src/lib/dashboard-utils.ts` | 동일 |
+| `src/components/shared/StageProgress.tsx` | 정규 필드 우선 |
+| `src/pages/SchedulePage.tsx`, `DashboardPage.tsx` | SELECT에 pred 필드 추가 |
+| `src/lib/schedule-cache.ts`, `subtest-cache.ts` | 새 필드 포함 |
 
 ### 비변경
-DB 스키마 / RLS / Pred 처리 / Schedule 표시 로직 / SubtestList
+Excel 템플릿 / RLS / Subtest List 컬럼 구성 / T1·T2 표시 로직(이미 정상)
 
