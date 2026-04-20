@@ -1,82 +1,37 @@
 
 
-## Schedule Page (A+D) — 최종 구현 계획
+## Sticky Header & Sticky Left Column 구현
 
-### 컨셉
-Plan vs Actual Breakdown의 시간축 확장. System(기본) / Subcon / SubSub 그룹화 + Day(기본) / Week 토글. 각 셀에 Plan(회색) vs Actual(파랑/초과 초록/미달 빨강) 미니 바차트. 시스템 행 펼침 시 Pred/T1/T2 sub-row 분리. 우측 Critical Watchlist.
+### 현재 상태
+`ScheduleMatrix.tsx`의 헤더가 `sticky top-0`로 되어있으나, 매트릭스 컨테이너 자체가 `overflow-x-auto`만 있고 세로 스크롤이 페이지 전체에서 발생 → 헤더가 페이지 스크롤 시 따라 사라짐.
 
-### 화면 구성
+### 변경 방안
 
-**Toolbar**
-- Group: `[System▾] [Subcon] [SubSub]`
-- Bucket: `[Day▾] [Week]`
-- Stage: `[All▾] [Pred] [T1] [T2]`
-- Range: `[60d▾]` (30/60/90/All)
-- Today indicator + Export
+**1. Matrix 컨테이너에 고정 높이 + 세로 스크롤**
+- `overflow-x-auto` → `overflow-auto` (가로+세로 둘 다)
+- `max-h-[calc(100vh-260px)]` 부여 (toolbar+KPI 높이 제외)
+- 이로써 sticky top이 컨테이너 내부에서 동작
 
-**KPI Strip** (6개)
-Today Plan / Today Actual / Cum Plan / Cum Actual / Variance% / Critical(≤7d) + Overdue
+**2. 헤더 sticky 보강**
+- 헤더 행: `sticky top-0 z-30` (현재 z-20 → 30으로 상향)
+- 헤더의 좌측 4열(Group/Done-Total/Cum Plan/Cum Actual)은 `sticky left-0 z-40` (corner cell)
 
-**Schedule Matrix** (좌 sticky 4열 + 우 horizontal scroll)
-- Sticky 좌: Group | Done/Total | Cum Plan | Cum Actual
-- 우: 일자/주차 셀 (각 ~70/110px)
-- Stage `All`일 때: 시스템 행 펼침(▶) → Pred/T1/T2 3개 sub-row
-- Stage 단일 선택 시: sub-row 없이 해당 stage만
+**3. 본문 행의 좌측 4열 sticky 유지**
+- 이미 `sticky left-0`인데 z-index 정리:
+  - 본문 좌측 sticky cell: `z-10`
+  - 헤더 우측 날짜 cell: `z-20`
+  - 헤더 좌측 corner: `z-30`
 
-**Critical Watchlist (우측 320px)**
-1. High Risk: T2 plan ≤ 7d & not Done
-2. T1 Bottleneck: T1 미완료 + T2 plan ≤ 7d
-3. Lagging Groups: cum_actual/cum_plan 비율 하위 5
-
-### 셀 디자인 (확정 색상)
-
-| 상태 | 시각 |
-|---|---|
-| Plan 배경 | `bg-gray-300` |
-| Actual ≤ Plan | 파랑 `bg-blue-600` |
-| Actual > Plan (초과 부분만) | 초록 `bg-green-600` |
-| Delta 음수 | `text-red-600` (예: `-2`) |
-| Delta 양수 | `text-green-600` (예: `+3`) |
-| Today 컬럼 | `border-l-2 border-primary` |
-| 미래 셀 | Plan만 (Actual 없음) |
-
-```text
-정상:    ███▓▓░░    초과:    ██████▓▓   미래:   ░░░░
-         3 / 5               5 / 3              — / 4
-         -2 (red)            +2 (green)
-```
-
-### 데이터 로직 (`src/lib/schedule-utils.ts` 신규)
-- 모든 active subtests 로드 (Dashboard 방식 재사용)
-- Stage별 (group_key, date_bucket)에 plan/actual 집계
-  - Pred: `predecessor_status_raw` 완료 일자 추정 (T1 시작 ≥ 1일 전 or done 키워드)
-  - T1: `t1_planned_date` (plan), `t1_actual_date` (actual, status=Done)
-  - T2: `t2_planned_date` (plan), `t2_actual_date` (actual, status=Done)
-- Cum 누적: bucket 정렬 후 sequential sum
-- Critical: 오늘+7일 이내 plan & not Done
+**4. 배경색 누락 보정**
+sticky 셀은 배경 불투명 필수. 현재 `bg-card` / `bg-muted/60` 적용 중인데, hover 시 비치지 않도록 본문 좌측 sticky div에 명시적 `bg-card` 유지 (행 hover는 우측 셀에만 영향).
 
 ### 변경 파일
-
-| 파일 | 역할 |
-|---|---|
-| `src/pages/SchedulePage.tsx` | 메인 페이지 (Toolbar + KPI + Matrix + Watchlist) |
-| `src/components/schedule/ScheduleMatrix.tsx` | sticky-left + h-scroll 매트릭스, 행 펼침 |
-| `src/components/schedule/ScheduleCell.tsx` | 미니 바차트 셀 |
-| `src/components/schedule/CriticalWatchlist.tsx` | 우측 알림 패널 |
-| `src/lib/schedule-utils.ts` | 집계·bucket·critical 로직 |
-| `src/App.tsx` | `/schedule` 라우트 |
-| `src/components/layout/AppSidebar.tsx` | "Schedule" 메뉴 (Calendar 아이콘) |
-
-### 변경 없음
-DB / RLS / Edge Functions / DashboardPage / SubtestList
+- `src/components/schedule/ScheduleMatrix.tsx` 단일 파일 수정 (컨테이너 클래스 + z-index 조정)
 
 ### 검증
-1. Group 토글 → System/Subcon/SubSub 즉시 전환
-2. Day↔Week 토글 → bucket 자동 재집계
-3. 시스템 행 펼침 → Pred/T1/T2 sub-row, 합계 일치
-4. Stage `T1` 선택 → T1만 단일 행 표시
-5. 셀 클릭 → SubtestList 필터 진입 (group + date + stage)
-6. Critical 항목 클릭 → 해당 필터로 SubtestList 진입
-7. 오늘 컬럼 강조 + 미래 셀 Plan만 표시
-8. 초과달성/미달 색상 정확히 분기
+1. 페이지 세로 스크롤 → Toolbar/KPI는 페이지와 함께 스크롤(정상), Matrix는 자체 영역 내 스크롤
+2. Matrix 세로 스크롤 → 날짜 헤더 행 고정
+3. Matrix 가로 스크롤 → System/통계 4열 고정
+4. 양방향 스크롤 → 좌상단 corner(헤더 좌측 4열)가 모든 것 위에 고정
+5. 행 펼침(Pred/T1/T2 sub-row) 후에도 sticky 정상 동작
 
