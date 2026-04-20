@@ -20,6 +20,10 @@ export interface StageRow {
   totalActual: number;
   totalDone: number; // # subtests for this stage marked Done
   total: number; // # subtests in group (denominator)
+  /** # of subtests with plan_date <= today (for this stage). */
+  cumPlan: number;
+  /** # of subtests with actual_date <= today (for this stage). */
+  cumActual: number;
 }
 
 export interface GroupRow {
@@ -146,6 +150,8 @@ export interface AggregateOptions {
   stageFilter: ScheduleStageFilter;
   rangeStart: string;
   rangeEnd: string;
+  /** Today ISO date — used to compute cum Plan/Actual up-to-today. */
+  today: string;
   sysCodeById: Map<string, string>;
 }
 
@@ -191,6 +197,7 @@ export function aggregateSchedule(
             stageData[st].cells[i].plan++;
             stageData[st].totalPlan++;
           }
+          if (plan <= opts.today) stageData[st].cumPlan++;
         }
         if (actual) {
           const b = bucketize(actual, opts.bucket);
@@ -199,6 +206,7 @@ export function aggregateSchedule(
             stageData[st].cells[i].actual++;
             stageData[st].totalActual++;
           }
+          if (actual <= opts.today) stageData[st].cumActual++;
         }
         if (done) stageData[st].totalDone++;
       }
@@ -206,23 +214,30 @@ export function aggregateSchedule(
 
     // combined = sum of stages in stageFilter
     const combined: BucketCell[] = buckets.map(b => ({ bucket: b, plan: 0, actual: 0 }));
-    let cumPlan = 0;
-    let cumActual = 0;
     for (const st of stagesToShow) {
       stageData[st].cells.forEach((c, i) => {
         combined[i].plan += c.plan;
         combined[i].actual += c.actual;
       });
-      cumPlan += stageData[st].totalPlan;
-      cumActual += stageData[st].totalActual;
     }
 
-    const doneCount = items.filter(i => i.t2_status === 'Done').length;
+    // cumPlan / cumActual / doneCount = sum across stages in filter
+    let cumPlan = 0;
+    let cumActual = 0;
+    let doneCount = 0;
+    for (const st of stagesToShow) {
+      cumPlan += stageData[st].cumPlan;
+      cumActual += stageData[st].cumActual;
+      doneCount += stageData[st].totalDone;
+    }
+
+    // total denominator scales with number of stages shown
+    const total = items.length * stagesToShow.length;
 
     rows.push({
       key,
       label: key,
-      total: items.length,
+      total,
       doneCount,
       cumPlan,
       cumActual,
@@ -249,6 +264,8 @@ function emptyStageRow(stage: ScheduleStage, buckets: string[], total: number): 
     totalActual: 0,
     totalDone: 0,
     total,
+    cumPlan: 0,
+    cumActual: 0,
   };
 }
 

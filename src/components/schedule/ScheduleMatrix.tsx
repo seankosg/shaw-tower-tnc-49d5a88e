@@ -21,7 +21,7 @@ interface ScheduleMatrixProps {
   onCellClick?: (groupKey: string, bucketIso: string, stage: ScheduleStage | 'all') => void;
 }
 
-const STICKY_LEFT_WIDTH = 440; // 200 + 80 + 80 + 80
+const STICKY_LEFT_WIDTH = 380; // 200 (group) + 70 (done/total) + 110 (actual/plan)
 
 export function ScheduleMatrix({
   data,
@@ -140,9 +140,22 @@ export function ScheduleMatrix({
           <div className="flex" style={{ width: totalGridWidth, minWidth: totalGridWidth }}>
             <div className="sticky left-0 z-40 flex bg-muted">
               <div className="flex w-[200px] items-center px-3 py-2">{groupHeader}</div>
-              <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-2">Done/Total</div>
-              <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-2">Cum Plan</div>
-              <div className="flex w-[80px] items-center justify-end border-l border-r border-border px-2 py-2">Cum Actual</div>
+              <div
+                className="flex w-[70px] items-center justify-end border-l border-border px-2 py-2"
+                title={
+                  stageFilter === 'all'
+                    ? 'Pred + T1 + T2 Done / (subtests × 3)'
+                    : `${stageFilter.toUpperCase()} Done / subtests`
+                }
+              >
+                {stageFilter === 'all' ? 'Done/Total' : `${stageFilter.toUpperCase()} Done/Total`}
+              </div>
+              <div
+                className="flex w-[110px] items-center justify-end border-l border-r border-border px-2 py-2"
+                title="오늘까지의 Plan 대비 Actual (선택된 Stage 기준)"
+              >
+                Actual/Plan
+              </div>
             </div>
             {data.buckets.map((b, i) => {
               const lbl = formatBucketLabel(b, bucket);
@@ -197,19 +210,10 @@ export function ScheduleMatrix({
                       <span className="truncate font-medium" title={row.label}>{row.label}</span>
                       <span className="ml-auto text-[10px] text-muted-foreground">({row.total})</span>
                     </button>
-                    <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-2 tabular-nums">
+                    <div className="flex w-[70px] items-center justify-end border-l border-border px-2 py-2 tabular-nums">
                       {row.doneCount}/{row.total}
                     </div>
-                    <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-2 tabular-nums">
-                      {row.cumPlan}
-                    </div>
-                    <div className={cn(
-                      'flex w-[80px] items-center justify-end border-l border-r border-border px-2 py-2 tabular-nums font-semibold',
-                      row.cumActual < row.cumPlan && 'text-schedule-short',
-                      row.cumActual > row.cumPlan && 'text-schedule-over',
-                    )}>
-                      {row.cumActual}
-                    </div>
+                    <ActualPlanCell actual={row.cumActual} plan={row.cumPlan} className="w-[110px] py-2 font-semibold" />
                   </div>
                   {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
                   {virtualCols.map(vc => {
@@ -246,19 +250,10 @@ export function ScheduleMatrix({
                             {STAGE_LABELS[st]}
                           </span>
                         </div>
-                        <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-1.5 tabular-nums">
+                        <div className="flex w-[70px] items-center justify-end border-l border-border px-2 py-1.5 tabular-nums">
                           {sr.totalDone}/{sr.total}
                         </div>
-                        <div className="flex w-[80px] items-center justify-end border-l border-border px-2 py-1.5 tabular-nums">
-                          {sr.totalPlan}
-                        </div>
-                        <div className={cn(
-                          'flex w-[80px] items-center justify-end border-l border-r border-border px-2 py-1.5 tabular-nums',
-                          sr.totalActual < sr.totalPlan && 'text-schedule-short',
-                          sr.totalActual > sr.totalPlan && 'text-schedule-over',
-                        )}>
-                          {sr.totalActual}
-                        </div>
+                        <ActualPlanCell actual={sr.cumActual} plan={sr.cumPlan} className="w-[110px] py-1.5" />
                       </div>
                       {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
                       {virtualCols.map(vc => {
@@ -285,6 +280,36 @@ export function ScheduleMatrix({
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ActualPlanCell({
+  actual,
+  plan,
+  className,
+}: {
+  actual: number;
+  plan: number;
+  className?: string;
+}) {
+  const pct = plan > 0 ? (actual / plan) * 100 : null;
+  const accent =
+    pct === null ? '' : pct < 100 ? 'text-schedule-short' : pct > 100 ? 'text-schedule-over' : '';
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-end gap-1 border-l border-r border-border px-2 tabular-nums',
+        className,
+      )}
+      title="오늘까지의 Plan 대비 Actual"
+    >
+      <span className={cn('font-semibold', accent)}>{actual}</span>
+      <span className="text-muted-foreground">/</span>
+      <span>{plan}</span>
+      <span className={cn('text-[10px]', accent)}>
+        ({pct === null ? '—' : `${pct.toFixed(0)}%`})
+      </span>
     </div>
   );
 }
