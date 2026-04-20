@@ -283,3 +283,33 @@ export function ScheduleMatrix({
     </div>
   );
 }
+
+function ActualPlanCell({
+  actual,
+  plan,
+  className,
+}: {
+  actual: number;
+  plan: number;
+  className?: string;
+}) {
+  const pct = plan > 0 ? (actual / plan) * 100 : null;
+  const accent =
+    pct === null ? '' : pct < 100 ? 'text-schedule-short' : pct > 100 ? 'text-schedule-over' : '';
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-end gap-1 border-l border-r border-border px-2 tabular-nums',
+        className,
+      )}
+      title="오늘까지의 Plan 대비 Actual"
+    >
+      <span className={cn('font-semibold', accent)}>{actual}</span>
+      <span className="text-muted-foreground">/</span>
+      <span>{plan}</span>
+      <span className={cn('text-[10px]', accent)}>
+        ({pct === null ? '—' : `${pct.toFixed(0)}%`})
+      </span>
+    </div>
+  );
+}
