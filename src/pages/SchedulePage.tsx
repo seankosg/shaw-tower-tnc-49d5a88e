@@ -359,14 +359,19 @@ function ToolbarGroup({ label, children }: { label: string; children: React.Reac
   );
 }
 
-function Kpi({ label, value, accent, icon }: {
+function Kpi({ label, value, subValue, accent, icon, onClick }: {
   label: string;
   value: number | string;
+  subValue?: string;
   accent?: 'short' | 'over';
   icon?: React.ReactNode;
+  onClick?: () => void;
 }) {
   return (
-    <Card>
+    <Card
+      onClick={onClick}
+      className={cn(onClick && 'cursor-pointer transition-colors hover:bg-accent/40')}
+    >
       <CardContent className="flex flex-col gap-0.5 p-2.5">
         <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           {icon}{label}
@@ -378,6 +383,9 @@ function Kpi({ label, value, accent, icon }: {
         )}>
           {value}
         </div>
+        {subValue && (
+          <div className="text-[10px] text-muted-foreground tabular-nums">{subValue}</div>
+        )}
       </CardContent>
     </Card>
   );
