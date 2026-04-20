@@ -1,51 +1,36 @@
 
 
-## Schedule 페이지에 "Date Picker" 추가 — 특정 날짜 클릭 시 해당일 Subtest 리스트 조회
+## Lookup Go 버튼에 Stage 필터 동시 반영
 
-### 목적
-사용자가 특정 날짜를 선택하면 그날 계획된(또는 실적이 발생한) 모든 subtest를 SubtestList에서 바로 조회. 미래 일일 계획 사전 검토 + 과거 실적 회고 양쪽 용도.
+### 현재 동작
+Go 클릭 시 `date_from`, `date_to`, `date_field`(+ Actual이면 `cell_status=Done`)만 전달. Toolbar의 다른 설정은 무시됨.
 
-### UI 위치
-SchedulePage 상단 Toolbar의 우측(Legend 옆) 또는 KPI 카드 위에 새 행:
-```
-[📅 Pick a date  ▼]   [Plan ▾]  [Go →]
-```
-- **Date Picker**: shadcn `Calendar` + `Popover` (오늘 default)
-- **Field 선택**: Plan / Actual 작은 토글 (default Plan — 사전 검토 목적)
-- **Go 버튼**: 클릭 시 `/?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&date_field=planned|actual` 로 navigate
-- 날짜 선택 직후 자동 navigate (Go 버튼 생략 가능 — 더 빠름)
+### 각 Toolbar 항목별 연동 가능성
+| Toolbar | SubtestList 연동 | 처리 |
+|---|---|---|
+| **Group** (system/subcon/subsub) | 불가 — 그룹 "기준"일 뿐 특정 값 X | 전달 안 함 |
+| **Bucket** (day/week) | 불가 — Schedule 시각화 옵션 | 전달 안 함 |
+| **Stage** (all/pred/t1/t2) | **가능** — `t1_status` / `t2_status` 매핑 | **전달** |
+| **Range** (14~90d) | 불가 — Schedule 보기 범위 | 전달 안 함 |
+| **Hide past** | 불가 — Schedule 표시 토글 | 전달 안 함 |
 
-### 동작
-- 선택 날짜 → SubtestList의 기존 URL 필터(`date_from`, `date_to`, `date_field`)와 동일 메커니즘 사용 → 추가 백엔드 작업 없음
-- `date_from === date_to`면 "그날 단일" 의미
-- Plan 모드: status 무관 (해당일 계획된 모든 subtest, 어제 plan 클릭 버그 수정 때와 동일 의미)
-- Actual 모드: 자동으로 `cell_status=Done` 추가 (해당일 완료된 subtest)
+### 변경 내용
+`src/pages/SchedulePage.tsx` Go 버튼 onClick에 stageFilter 반영:
+- `stageFilter === 't1'` → 추가로 `cell_stage=t1` (cell click과 동일한 의미로 stage를 좁힘)
+- `stageFilter === 't2'` → `cell_stage=t2`
+- `stageFilter === 'pred'` → `cell_stage=pred`
+- `stageFilter === 'all'` → 추가 없음
 
-### 변경 파일
-| 파일 | 변경 |
-|---|---|
-| `src/pages/SchedulePage.tsx` | Toolbar에 DatePicker + Field 토글 + navigate 핸들러 추가. `Calendar`, `Popover`, `format` import |
-
-### 구현 스니펫
-```tsx
-const [pickedDate, setPickedDate] = useState<Date | undefined>(new Date());
-const [pickedField, setPickedField] = useState<'planned'|'actual'>('planned');
-
-const handleDatePick = (d: Date | undefined) => {
-  if (!d) return;
-  setPickedDate(d);
-  const iso = format(d, 'yyyy-MM-dd');
-  const params: Record<string,string> = {
-    date_from: iso, date_to: iso, date_field: pickedField,
-  };
-  if (pickedField === 'actual') params.cell_status = 'Done';
-  navigate(`/?${new URLSearchParams(params).toString()}`);
-};
-```
+단, SubtestList는 현재 `cell_stage` 파라미터를 인식하지 않으므로, **기존에 cell click에서 쓰던 `stage` 파라미터 컨벤션을 동일하게 재사용**합니다(handleCellClick에서 이미 `params.stage = stage` 사용 중). 즉 Go 버튼도 `params.stage = stageFilter` 만 추가.
 
 ### 검증
-1. Toolbar에서 오늘 날짜 클릭 → SubtestList로 이동, 오늘 plan된 subtest 표시
-2. 과거 날짜 + Actual 모드 → 그날 완료된 subtest만 표시
-3. 미래 날짜 + Plan 모드 → 그날 계획된 모든 subtest (status 무관) 표시
-4. 좁은 viewport(997px)에서 Toolbar wrap 정상
+1. Stage=T1 + 미래 날짜 + Plan → 그날 T1 계획된 subtest만 조회
+2. Stage=All + 오늘 + Actual → 오늘 완료된 모든 stage subtest 조회
+3. Stage=Pred + 과거 날짜 + Actual → 그날 Pred 완료된 subtest만 조회
+
+### 사용자 안내(UI)
+Lookup 그룹 옆에 작은 헬퍼 텍스트 한 줄 추가:
+> "Applies current Stage filter. Group/Bucket/Range are view-only options."
+
+→ 어떤 필터가 같이 가고 어떤 게 안 가는지 사용자가 바로 이해.
 
