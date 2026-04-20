@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { todayIso, type SubtestForDashboard } from '@/lib/dashboard-utils';
 import {
@@ -133,7 +134,14 @@ export default function SchedulePage() {
       cumActual += r.cumActual;
     }
     const variance = cumPlan ? ((cumActual - cumPlan) / cumPlan) * 100 : 0;
-    const progressPct = cumPlan ? (cumActual / cumPlan) * 100 : 0;
+    // Done-vs-Total progress across all T1+T2 stages
+    let totalStages = 0, doneStages = 0;
+    for (const s of subtests) {
+      totalStages += 2;
+      if (s.t1_status === 'Done') doneStages++;
+      if (s.t2_status === 'Done') doneStages++;
+    }
+    const progressPct = totalStages ? (doneStages / totalStages) * 100 : 0;
     const overdue = subtests.filter(s =>
       (s.t1_planned_date && s.t1_planned_date < today && s.t1_status !== 'Done') ||
       (s.t2_planned_date && s.t2_planned_date < today && s.t2_status !== 'Done')
@@ -145,7 +153,7 @@ export default function SchedulePage() {
       if (s.t1_planned_date && s.t1_planned_date >= today && s.t1_planned_date <= upcomingEnd) upcoming7Plan++;
       if (s.t2_planned_date && s.t2_planned_date >= today && s.t2_planned_date <= upcomingEnd) upcoming7Plan++;
     }
-    return { cumPlan, cumActual, variance, progressPct, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
+    return { cumPlan, cumActual, variance, progressPct, doneStages, totalStages, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
   }, [aggregate.rows, today, subtests, critical.highRisk.length]);
 
   // ───── Navigation handlers ─────
@@ -277,21 +285,18 @@ export default function SchedulePage() {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Kpi
           label="Cumulative Progress"
-          value={
-            kpis.cumPlan > 0
-              ? `${kpis.cumActual}/${kpis.cumPlan} (${kpis.progressPct.toFixed(0)}%)`
-              : `${kpis.cumActual}/${kpis.cumPlan}`
-          }
+          value={`${kpis.progressPct.toFixed(0)}%`}
           subValue={
-            kpis.cumPlan > 0
-              ? `Variance ${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%`
-              : undefined
+            kpis.totalStages > 0
+              ? `${kpis.doneStages}/${kpis.totalStages} stages done${kpis.cumPlan > 0 ? ` · Var ${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%` : ''}`
+              : '0/0'
           }
           accent={
-            kpis.cumPlan > 0 && kpis.progressPct < 90 ? 'short'
-            : kpis.cumPlan > 0 && kpis.cumActual > kpis.cumPlan ? 'over'
+            kpis.totalStages > 0 && kpis.progressPct < 30 ? 'short'
+            : kpis.totalStages > 0 && kpis.progressPct >= 90 ? 'over'
             : undefined
           }
+          progressPct={kpis.totalStages > 0 ? kpis.progressPct : undefined}
           icon={<TrendingUp className="h-3.5 w-3.5" />}
         />
         <Kpi
@@ -359,13 +364,14 @@ function ToolbarGroup({ label, children }: { label: string; children: React.Reac
   );
 }
 
-function Kpi({ label, value, subValue, accent, icon, onClick }: {
+function Kpi({ label, value, subValue, accent, icon, onClick, progressPct }: {
   label: string;
   value: number | string;
   subValue?: string;
   accent?: 'short' | 'over';
   icon?: React.ReactNode;
   onClick?: () => void;
+  progressPct?: number;
 }) {
   return (
     <Card
@@ -383,6 +389,16 @@ function Kpi({ label, value, subValue, accent, icon, onClick }: {
         )}>
           {value}
         </div>
+        {progressPct !== undefined && (
+          <Progress
+            value={Math.min(100, progressPct)}
+            className={cn(
+              'mt-1 h-1.5',
+              accent === 'short' && '[&>div]:bg-schedule-short',
+              accent === 'over' && '[&>div]:bg-schedule-over',
+            )}
+          />
+        )}
         {subValue && (
           <div className="text-[10px] text-muted-foreground tabular-nums">{subValue}</div>
         )}
