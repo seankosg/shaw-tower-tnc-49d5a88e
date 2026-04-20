@@ -1,89 +1,75 @@
 
 
-## T1/T2 Schedule 반영 점검 결과
+## Schedule Matrix — Stage 필터 연동 + Cum 컬럼 통합
 
-### 결론: T1/T2는 **이미 정규 필드 기반**으로 동작하지만, 미세한 이슈 1개 존재
-
-`schedule-utils.ts`의 `getStageDates()` 검토:
-
-```typescript
-if (stage === 't1') {
-  return {
-    plan: s.t1_planned_date,
-    actual: s.t1_status === 'Done' ? s.t1_actual_date : null,
-    done: s.t1_status === 'Done',
-  };
-}
-if (stage === 't2') {
-  return {
-    plan: s.t2_planned_date,
-    actual: s.t2_status === 'Done' ? s.t2_actual_date : null,
-    done: s.t2_status === 'Done',
-  };
-}
-```
-
-T1/T2는 DB 정규 필드(`t1_status`, `t1_planned_date`, `t1_actual_date`, T2 동일)를 직접 읽으므로 **추론 없음**. 이전 백필로 Done 항목 376건의 actual_date도 채워졌음 → Master DB와 일치.
+### 결정사항 (확정)
+1. **Done/Total**: Stage 필터에 따라 동적
+   - `'all'` → Pred Done + T1 Done + T2 Done / subtest수 × 3
+   - 단일 stage → 해당 stage Done 카운트 / subtest수
+2. **Actual 정의**: 모든 stage(Pred/T1/T2)에서 `*_status === 'Done'`인 항목만 actual 카운트 (현행 유지 확인)
+3. **Cum 컬럼 통합**:
+   - 기존 `Cum Plan` + `Cum Actual` 두 컬럼을 1개로 합침
+   - 헤더: `Actual/Plan` 또는 `Cum Actual/Plan`
+   - 표시 형식: `{actual}/{plan} ({pct}%)`
+   - **기간 정의**: 오늘까지(today 포함)의 Plan 대비 Actual
+     - Plan: `plan_date <= today`인 항목 카운트
+     - Actual: `actual_date <= today`인 항목 카운트
+     - %: `(actual / plan) × 100`, plan=0이면 `—`
 
 ---
 
-### 발견된 이슈 (미세)
+### 변경 내용
 
-#### 이슈 1: actual은 status='Done'일 때만 카운트 → WIP 진행 중 항목 누락
-- 현재: `actual = (status === 'Done') ? actual_date : null`
-- 즉 status='WIP'이고 actual_date가 있어도 Schedule actual에 안 잡힘
-- **영향**: WIP는 시작은 했지만 미완료 → "Cum Actual" 정의를 "완료 누적"으로 본다면 현재 로직이 맞음. "착수 누적"으로 본다면 수정 필요.
-- **판단 필요**: Cum Actual = "완료 기준" 유지 vs "착수 포함"?
+#### 1. `src/lib/schedule-utils.ts`
+- `aggregateSchedule()`:
+  - `doneCount` 계산을 `stageFilter` 기반으로 변경
+    - `'all'` → 3 stage Done 합산
+    - 단일 → 해당 stage Done
+  - `total` (분모):
+    - `'all'` → `items.length × 3`
+    - 단일 → `items.length`
+  - `cumPlan` / `cumActual` 정의를 **"오늘까지"** 로 변경
+    - Plan: `plan_date && plan_date <= today` 카운트 (선택된 stagesToShow만)
+    - Actual: `actual_date && actual_date <= today` 카운트 (선택된 stagesToShow만)
+  - `today` 인자를 `AggregateOptions`에 추가
+- `GroupRow` 인터페이스에 변경 없음 (필드 의미만 갱신)
 
-#### 이슈 2: actual_date가 없는 Done 항목 (cutoff 이후 12건)
-- 이전 백필에서 `t1_planned_date > 2026-04-19`인 12개 T1 Done 항목은 제외됨
-- → Schedule에서 이 12건은 done count에는 잡히지만 actual 버킷에는 안 그려짐
-- **권장**: 이번 작업에 같이 백필 (planned_date 그대로 사용)
+#### 2. `src/pages/SchedulePage.tsx`
+- `aggregateSchedule` 호출 시 `today` 전달
+- KPI strip의 `Cum Plan` / `Cum Actual` 두 카드를 1개 카드 `Cum Actual/Plan`으로 통합
+  - 표시: `{cumActual}/{cumPlan} ({pct}%)`
+  - `pct < 100` → `short` accent, `> 100` → `over` accent
 
-#### 이슈 3: T2 done인데 T1 데이터 없는 경우 가능성
-- 현재 로직은 T1/T2 독립 처리이므로 문제 없음
-- 단, KPI/progress 표시에서 stage 순서 가정이 깨질 수 있음 → 별도 점검
-
----
-
-### 종합 계획 (Predecessor + T1/T2 보완)
-
-#### 1. Predecessor 정규화 (앞선 계획 그대로)
-- DB: `pred_status`, `pred_planned_date`, `pred_actual_date` 컬럼 추가
-- 백필: `predecessor_status_raw` 파싱
-- Import/수동편집/Schedule/Dashboard/StageProgress 모두 정규 필드 사용
-- Schedule의 pred 추론 로직 완전 제거
-
-#### 2. T1/T2 보완
-- **2-1. Cutoff 이후 Done 12건 백필**: `t1_planned_date > 2026-04-19`이고 status='Done'인 12개 행도 `t1_actual_date = t1_planned_date`로 채움 (T2 동일 점검)
-- **2-2. Cum Actual 정책 확정**: "완료 기준" 유지 (현재 로직 그대로) — 변경 불필요
-  - 만약 사용자가 "착수 포함"을 원하면 `actual = (status==='Done' || status==='WIP') ? actual_date : null`로 수정 가능 (옵션)
-
-#### 3. 검증
-- AHU System L13-26 South Office에서:
-  - Master DB pred Done 수 = Schedule Pred Done 수
-  - Master DB T1 Done 수 = Schedule T1 Done 수
-  - Master DB T2 Done 수 = Schedule T2 Done 수
-  - 각 stage별 Cum Actual = `*_actual_date` NOT NULL 카운트
-- Excel 재import 후 모든 화면 즉시 일관
-
----
-
-### 변경 파일 (최종)
-
-| 파일 | 변경 |
-|---|---|
-| DB migration | pred 3개 컬럼 추가 + pred 백필 + cutoff-after T1/T2 백필 + change_log |
-| `src/lib/import-parser.ts` | normalizePredecessor 확장, ParsedSubtest 필드 추가 |
-| `src/contexts/ImportContext.tsx` | pred 3개 필드 upsert + actual_date 자동 채움 |
-| `src/pages/SubtestDetail.tsx` | Pred 편집 UI + 가드 |
-| `src/pages/MobileUpdatePage.tsx` | Pred 편집 UI + 가드 |
-| `src/lib/schedule-utils.ts` | pred 추론 제거, 정규 필드 직접 사용 |
-| `src/lib/dashboard-utils.ts` | 동일 |
-| `src/components/shared/StageProgress.tsx` | 정규 필드 우선 |
-| `src/pages/SchedulePage.tsx`, `DashboardPage.tsx` | SELECT에 pred 필드 추가 |
-| `src/lib/schedule-cache.ts`, `subtest-cache.ts` | 새 필드 포함 |
+#### 3. `src/components/schedule/ScheduleMatrix.tsx`
+- 우측 고정 컬럼:
+  - 기존 `Done`, `Total`, `Cum Plan`, `Cum Actual` (4개)
+  - 변경 후: `Done`, `Total`, `Actual/Plan` (3개)
+- 헤더 라벨 stage별 동적:
+  - `'all'` → "All Done", "Total", "Actual/Plan"
+  - `'pred'/'t1'/'t2'` → 각각 "Pred Done" 등
+- 그룹 행 셀:
+  - `Actual/Plan` 셀: `{cumActual}/{cumPlan} (xx%)`
+  - %에 색상: <100% 빨강(short), >100% 파랑(over)
+  - title 툴팁: "오늘까지의 Plan 대비 Actual"
+- Stage 서브 행도 동일하게 `Actual/Plan` 컬럼 적용
 
 ### 비변경
-Excel 템플릿 / RLS / Subtest List 컬럼 구성 / T1·T2 표시 로직(이미 정상)
+- Bucket(Day/Week), Range — 표시 범위(시간 축 셀)에만 영향
+- ScheduleCell 셀 카운트 — 현행 유지 (Plan/Actual 버킷별 표시)
+- Critical Watchlist, Lagging Groups — 영향 없음
+- DB / Import — 영향 없음
+
+### 검증
+1. Stage='Pred' → Done = Master DB pred Done 수, Actual/Plan은 오늘까지 Pred 기준
+2. Stage='T1'/'T2' → 각 stage 기준
+3. Stage='All' → 3 stage 합산
+4. Actual/Plan % = (오늘까지 actual_date 카운트) / (오늘까지 plan_date 카운트)
+5. 기간 외 미래 항목은 분모/분자 모두 제외
+
+### 변경 파일
+| 파일 | 변경 |
+|---|---|
+| `src/lib/schedule-utils.ts` | doneCount/total/cumPlan/cumActual 로직 + today 인자 |
+| `src/pages/SchedulePage.tsx` | today 전달 + KPI 통합 |
+| `src/components/schedule/ScheduleMatrix.tsx` | 컬럼 통합 + 동적 헤더 + %표시 |
 
