@@ -363,13 +363,14 @@ function ToolbarGroup({ label, children }: { label: string; children: React.Reac
   );
 }
 
-function Kpi({ label, value, subValue, accent, icon, onClick }: {
+function Kpi({ label, value, subValue, accent, icon, onClick, progressPct }: {
   label: string;
   value: number | string;
   subValue?: string;
   accent?: 'short' | 'over';
   icon?: React.ReactNode;
   onClick?: () => void;
+  progressPct?: number;
 }) {
   return (
     <Card
@@ -387,6 +388,16 @@ function Kpi({ label, value, subValue, accent, icon, onClick }: {
         )}>
           {value}
         </div>
+        {progressPct !== undefined && (
+          <Progress
+            value={Math.min(100, progressPct)}
+            className={cn(
+              'mt-1 h-1.5',
+              accent === 'short' && '[&>div]:bg-schedule-short',
+              accent === 'over' && '[&>div]:bg-schedule-over',
+            )}
+          />
+        )}
         {subValue && (
           <div className="text-[10px] text-muted-foreground tabular-nums">{subValue}</div>
         )}
