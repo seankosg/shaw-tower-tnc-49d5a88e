@@ -99,15 +99,17 @@ export function getGroupKey(s: SubtestForDashboard, by: ScheduleGroupBy, sysCode
   return s.subsub_name ?? '(None)';
 }
 
-// ───── Predecessor date inference ─────
-// Pred plan date = (t1_planned_date - 1 day) when t1 plan exists
-// Pred actual date = t1_actual_date OR (t1_status WIP/Done and predecessor done keyword)
+// ───── Predecessor done check ─────
+// Single source of truth: pred_status field. Falls back to raw text only when status missing.
 const PRED_DONE_TOKENS = ['done', 'complete', 'completed', 'finished', '완료'];
 
 export function isPredDone(s: SubtestForDashboard & { predecessor_status_raw?: string | null }): boolean {
-  if (s.t1_status === 'WIP' || s.t1_status === 'Done') return true;
-  const raw = (s.predecessor_status_raw ?? '').toLowerCase();
-  return PRED_DONE_TOKENS.some(t => raw.includes(t));
+  if (s.pred_status === 'Done') return true;
+  if (s.pred_status != null) return false; // status set but not Done
+  // Fallback: raw text (for legacy rows not yet normalized)
+  const raw = (s.predecessor_status_raw ?? '').toLowerCase().trim();
+  if (!raw) return false;
+  return PRED_DONE_TOKENS.some(t => raw === t || raw.includes(t));
 }
 
 function getStageDates(
@@ -128,14 +130,13 @@ function getStageDates(
       done: s.t2_status === 'Done',
     };
   }
-  // pred
-  const planDate = s.t1_planned_date ? addDays(s.t1_planned_date, -1) : null;
+  // pred — use normalized fields directly. No more T1-derived inference.
   const done = isPredDone(s);
-  // actual = t1_actual_date if T1 started/done; else if pred done and we have no date, use today (skip)
-  const actualDate = s.t1_actual_date
-    ? addDays(s.t1_actual_date, -1)
-    : null;
-  return { plan: planDate, actual: done ? actualDate : null, done };
+  return {
+    plan: s.pred_planned_date ?? null,
+    actual: done ? (s.pred_actual_date ?? null) : null,
+    done,
+  };
 }
 
 // ───── main aggregation ─────

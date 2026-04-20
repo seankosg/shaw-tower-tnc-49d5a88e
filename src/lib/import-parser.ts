@@ -158,6 +158,46 @@ function normalizePredecessor(val: any): string | null {
   return d || s;
 }
 
+/**
+ * Parse predecessor cell into normalized fields.
+ * Returns { raw, status, plannedDate, actualDate }.
+ * - Date value → status='Planned', plannedDate=date
+ * - 'done'/'완료'/'complete' → status='Done', no date set (caller fills actual)
+ * - Other text → raw kept, no status
+ * - Empty → all null
+ */
+export interface ParsedPredecessor {
+  raw: string | null;
+  status: 'Planned' | 'Done' | null;
+  plannedDate: string | null;
+  actualDate: string | null;
+}
+
+const PRED_DONE_KEYWORDS = ['done', 'complete', 'completed', 'finished', '완료'];
+
+export function parsePredecessor(val: any): ParsedPredecessor {
+  if (val == null || val === '') {
+    return { raw: null, status: null, plannedDate: null, actualDate: null };
+  }
+  const s = String(val).trim();
+  if (!s) return { raw: null, status: null, plannedDate: null, actualDate: null };
+
+  // Done keyword check
+  const lower = s.toLowerCase();
+  if (PRED_DONE_KEYWORDS.some(k => lower === k || lower.includes(k))) {
+    return { raw: 'Done', status: 'Done', plannedDate: null, actualDate: null };
+  }
+
+  // Try date parse
+  const d = normalizeDate(val);
+  if (d) {
+    return { raw: d, status: 'Planned', plannedDate: d, actualDate: null };
+  }
+
+  // Other text — keep raw, no normalized status
+  return { raw: s, status: null, plannedDate: null, actualDate: null };
+}
+
 // ── Parsed row type ───────────────────────────────────────────────────
 export interface ParsedSubtest {
   raw_row_no: number;
@@ -173,6 +213,9 @@ export interface ParsedSubtest {
   t2_planned_date: string | null;
   t2_status: string | null;
   predecessor_status_raw: string | null;
+  pred_status: 'Planned' | 'Done' | null;
+  pred_planned_date: string | null;
+  pred_actual_date: string | null;
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
@@ -234,6 +277,7 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
     const item_no = (row.item_no || '').trim();
     if (!item_no) continue;
 
+    const pred = parsePredecessor(row.predecessor_status_raw);
     const base = {
       raw_row_no: parseInt(row.__row_no) || 0,
       raw_system_name: system,
@@ -245,7 +289,10 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
       t1_status: normalizeStatus(row.t1_status),
       t2_planned_date: normalizeDate(row.t2_planned_date),
       t2_status: normalizeStatus(row.t2_status),
-      predecessor_status_raw: normalizePredecessor(row.predecessor_status_raw),
+      predecessor_status_raw: pred.raw,
+      pred_status: pred.status,
+      pred_planned_date: pred.plannedDate,
+      pred_actual_date: pred.actualDate,
       subcontractor_name: row.subcontractor_name?.trim() || null,
       subsub_name: row.subsub_name?.trim() || null,
       hdec_pic_name: row.hdec_pic_name?.trim() || null,
@@ -290,6 +337,7 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
     const mos_code = (row.mos_code || '').trim();
     if (!item_no || !mos_code) continue;
 
+    const pred = parsePredecessor(row.predecessor_status_raw);
     result.push({
       raw_row_no: parseInt(row.__row_no) || 0,
       raw_system_name: system,
@@ -303,7 +351,10 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
       t1_status: normalizeStatus(row.t1_status),
       t2_planned_date: normalizeDate(row.t2_planned_date),
       t2_status: normalizeStatus(row.t2_status),
-      predecessor_status_raw: normalizePredecessor(row.predecessor_status_raw),
+      predecessor_status_raw: pred.raw,
+      pred_status: pred.status,
+      pred_planned_date: pred.plannedDate,
+      pred_actual_date: pred.actualDate,
       subcontractor_name: row.subcontractor_name?.trim() || null,
       subsub_name: row.subsub_name?.trim() || null,
       hdec_pic_name: row.hdec_pic_name?.trim() || null,

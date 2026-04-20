@@ -5,16 +5,23 @@ import { formatDdMmm } from '@/lib/format';
 
 type StageState = 'done' | 'wip' | 'planned' | 'hold' | 'empty';
 
-const PRED_DONE_TOKENS = ['done', '완료', 'cleared', 'clear', 'ok', 'complete', 'completed', 'closed', 'y', 'yes', 'pre', 'decessor', 'status'];
+const PRED_DONE_TOKENS = ['done', '완료', 'complete', 'completed', 'finished'];
 
-function classifyPred(rawPred: string | null, t1Status: TcStatus | null): StageState {
-  // If T1 has started/completed, predecessor is implicitly done
-  if (t1Status === 'WIP' || t1Status === 'Done') return 'done';
+function classifyPred(
+  rawPred: string | null,
+  predStatus: TcStatus | null | undefined,
+): StageState {
+  // Single source of truth: normalized pred_status
+  if (predStatus === 'Done') return 'done';
+  if (predStatus === 'WIP') return 'wip';
+  if (predStatus === 'Hold') return 'hold';
+  if (predStatus === 'Planned') return 'planned';
+  // Fallback: raw text only when status is null (legacy rows)
   if (rawPred) {
     const v = rawPred.trim().toLowerCase();
     if (!v) return 'empty';
     if (PRED_DONE_TOKENS.some(t => v === t || v.includes(t))) return 'done';
-    return 'wip'; // raw value present but unrecognized → treat as in-progress
+    return 'planned';
   }
   return 'empty';
 }
@@ -53,6 +60,8 @@ function Pip({ state, label }: { state: StageState; label: string }) {
 
 export interface StageProgressProps {
   predecessorRaw: string | null;
+  predStatus?: TcStatus | null;
+  predActualDate?: string | null;
   t1Status: TcStatus | null;
   t1ActualDate: string | null;
   t2Status: TcStatus | null;
@@ -61,12 +70,14 @@ export interface StageProgressProps {
 
 export function StageProgress({
   predecessorRaw,
+  predStatus = null,
+  predActualDate = null,
   t1Status,
   t1ActualDate,
   t2Status,
   t2ActualDate,
 }: StageProgressProps) {
-  const pred = classifyPred(predecessorRaw, t1Status);
+  const pred = classifyPred(predecessorRaw, predStatus);
   const t1 = classifyStatus(t1Status);
   const t2 = classifyStatus(t2Status);
 
@@ -91,7 +102,7 @@ export function StageProgress({
         <div className="space-y-0.5">
           <div>
             <span className="font-medium">Predecessor:</span> {stateLabel(pred)}
-            {predecessorRaw ? <span className="text-muted-foreground"> ({predecessorRaw})</span> : null}
+            {predActualDate ? <span className="text-muted-foreground"> · {formatDdMmm(predActualDate)}</span> : (predecessorRaw ? <span className="text-muted-foreground"> ({predecessorRaw})</span> : null)}
           </div>
           <div>
             <span className="font-medium">T1:</span> {stateLabel(t1)}

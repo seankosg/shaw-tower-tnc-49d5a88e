@@ -40,6 +40,9 @@ interface SubtestDetail {
   remarks: string | null;
   punchlist_comments: string | null;
   predecessor_status_raw: string | null;
+  pred_status: TcStatus | null;
+  pred_planned_date: string | null;
+  pred_actual_date: string | null;
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
@@ -103,6 +106,9 @@ export default function SubtestDetailPage() {
         remarks: d.remarks,
         punchlist_comments: d.punchlist_comments,
         predecessor_status_raw: d.predecessor_status_raw,
+        pred_status: d.pred_status,
+        pred_planned_date: d.pred_planned_date,
+        pred_actual_date: d.pred_actual_date,
         subcontractor_name: d.subcontractor_name,
         subsub_name: d.subsub_name,
         hdec_pic_name: d.hdec_pic_name,
@@ -132,7 +138,8 @@ export default function SubtestDetailPage() {
       't2_planned_date', 't2_actual_date', 't2_status',
       'r1_status', 'aconex_ref_no', 'r2_status',
       'remarks', 'punchlist_comments',
-      'predecessor_status_raw', 'subcontractor_name', 'subsub_name', 'hdec_pic_name',
+      'predecessor_status_raw', 'pred_status', 'pred_planned_date', 'pred_actual_date',
+      'subcontractor_name', 'subsub_name', 'hdec_pic_name',
     ] as const;
 
     for (const field of editableFields) {
@@ -156,6 +163,9 @@ export default function SubtestDetailPage() {
       remarks: form.remarks || null,
       punchlist_comments: form.punchlist_comments || null,
       predecessor_status_raw: form.predecessor_status_raw || null,
+      pred_status: form.pred_status || null,
+      pred_planned_date: form.pred_planned_date || null,
+      pred_actual_date: form.pred_actual_date || null,
       subcontractor_name: form.subcontractor_name || null,
       subsub_name: form.subsub_name || null,
       hdec_pic_name: form.hdec_pic_name || null,
@@ -216,15 +226,18 @@ export default function SubtestDetailPage() {
       // Auto-set actual date when status changes to "Done"
       const today = new Date().toISOString().split('T')[0];
       if (field === 't1_status') {
-        // Only fill when becoming Done AND no existing actual_date (preserve existing)
         if (value === 'Done' && !prev.t1_actual_date) {
           updated.t1_actual_date = today;
         }
-        // Do NOT clear actual_date when leaving Done — preserve history
       }
       if (field === 't2_status') {
         if (value === 'Done' && !prev.t2_actual_date) {
           updated.t2_actual_date = today;
+        }
+      }
+      if (field === 'pred_status') {
+        if (value === 'Done' && !prev.pred_actual_date) {
+          updated.pred_actual_date = today;
         }
       }
       return updated;
@@ -372,12 +385,32 @@ export default function SubtestDetailPage() {
         <CardHeader className="py-3">
           <CardTitle className="text-sm font-medium">Predecessor & Responsibility</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {isFieldVisible('predecessor_status_raw') && (
-          <div className="space-y-1.5 md:col-span-2">
+          <>
+          <div className="space-y-1.5">
             <Label className="text-xs">Predecessor Status</Label>
+            <Select value={form.pred_status || '_blank'} onValueChange={v => updateField('pred_status', v === '_blank' ? null : v)}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_blank">— Blank —</SelectItem>
+                {TC_STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Predecessor Planned</Label>
+            <Input type="date" className="h-9" value={form.pred_planned_date || ''} onChange={e => updateField('pred_planned_date', e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Predecessor Actual</Label>
+            <Input type="date" className="h-9" value={form.pred_actual_date || ''} onChange={e => updateField('pred_actual_date', e.target.value)} />
+          </div>
+          <div className="space-y-1.5 md:col-span-3">
+            <Label className="text-xs">Predecessor Raw (Excel original)</Label>
             <Input className="h-9" value={form.predecessor_status_raw || ''} onChange={e => updateField('predecessor_status_raw', e.target.value)} placeholder="e.g. Done or 2026-03-15" />
           </div>
+          </>
           )}
           {isFieldVisible('subcontractor_name') && (
           <div className="space-y-1.5">

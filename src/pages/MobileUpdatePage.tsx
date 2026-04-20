@@ -24,6 +24,9 @@ interface SubtestCard {
   t1_actual_date: string | null;
   t2_actual_date: string | null;
   predecessor_status_raw: string | null;
+  pred_status: TcStatus | null;
+  pred_planned_date: string | null;
+  pred_actual_date: string | null;
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
@@ -45,7 +48,7 @@ export default function MobileUpdatePage() {
     const q = query.trim();
     const { data } = await supabase
       .from('subtests')
-      .select('id, subtest_id, item_no, mos_code, description, equipment, t1_status, t2_status, t1_planned_date, t2_planned_date, t1_actual_date, t2_actual_date, predecessor_status_raw, subcontractor_name, subsub_name, hdec_pic_name, row_version, system_master!inner(system_code)')
+      .select('id, subtest_id, item_no, mos_code, description, equipment, t1_status, t2_status, t1_planned_date, t2_planned_date, t1_actual_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, subcontractor_name, subsub_name, hdec_pic_name, row_version, system_master!inner(system_code)' as any)
       .eq('is_active', true)
       .or(`subtest_id.ilike.%${q}%,item_no.ilike.%${q}%`)
       .limit(20);
@@ -79,6 +82,9 @@ export default function MobileUpdatePage() {
     }
     if (changes.t2_status === 'Done' && !card.t2_actual_date && changes.t2_actual_date === undefined) {
       updates.t2_actual_date = today;
+    }
+    if (changes.pred_status === 'Done' && !card.pred_actual_date && changes.pred_actual_date === undefined) {
+      updates.pred_actual_date = today;
     }
 
     const { error } = await supabase.from('subtests').update(updates as any).eq('id', card.id);
@@ -163,7 +169,40 @@ export default function MobileUpdatePage() {
                 </div>
                 <div className="grid grid-cols-1 gap-2">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">Predecessor</label>
+                    <label className="text-xs font-medium text-muted-foreground">Predecessor Status</label>
+                    <Select
+                      value={(getVal(card, 'pred_status') as string) || '__null__'}
+                      onValueChange={v => updateField(card.id, 'pred_status', v === '__null__' ? null : v)}
+                    >
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__null__">—</SelectItem>
+                        {TC_STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Pred Planned</label>
+                      <Input
+                        type="date"
+                        className="h-8 text-xs"
+                        value={(getVal(card, 'pred_planned_date') as string) || ''}
+                        onChange={e => updateField(card.id, 'pred_planned_date', e.target.value || null)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Pred Actual</label>
+                      <Input
+                        type="date"
+                        className="h-8 text-xs"
+                        value={(getVal(card, 'pred_actual_date') as string) || ''}
+                        onChange={e => updateField(card.id, 'pred_actual_date', e.target.value || null)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Predecessor Raw</label>
                     <Input
                       className="h-8 text-xs"
                       value={(getVal(card, 'predecessor_status_raw') as string) || ''}

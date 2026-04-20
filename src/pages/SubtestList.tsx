@@ -43,6 +43,9 @@ interface SubtestRow {
   t2_actual_date: string | null;
   t2_status: TcStatus | null;
   predecessor_status_raw: string | null;
+  pred_status: TcStatus | null;
+  pred_planned_date: string | null;
+  pred_actual_date: string | null;
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
@@ -271,7 +274,7 @@ export default function SubtestList() {
     while (hasMore) {
       const { data } = await supabase
         .from('subtests')
-        .select('id, subtest_id, item_no, mos_code, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, updated_at, system_id, system_master!inner(system_code)')
+        .select('id, subtest_id, item_no, mos_code, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, updated_at, system_id, system_master!inner(system_code)' as any)
         .eq('is_active', true)
         .order('updated_at', { ascending: false })
         .range(from, from + PAGE_SIZE - 1);
@@ -326,15 +329,17 @@ export default function SubtestList() {
       accessorFn: (r) => {
         const t1Done = r.t1_status === 'Done';
         const t2Done = r.t2_status === 'Done';
-        const t1Started = r.t1_status === 'WIP' || t1Done;
-        const predDone = t1Started || (r.predecessor_status_raw
-          ? /done|완료|cleared|clear|^ok$|complete|closed|^y(es)?$/i.test(r.predecessor_status_raw)
+        const predDone = r.pred_status === 'Done' || (r.pred_status == null && r.predecessor_status_raw
+          ? /done|완료|complete|completed|finished/i.test(r.predecessor_status_raw ?? '')
           : false);
-        return (predDone ? 1 : 0) + (t1Done ? 2 : 0) + (t2Done ? 4 : 0);
+        const t1Done2 = r.t1_status === 'Done';
+        return (predDone ? 1 : 0) + (t1Done2 ? 2 : 0) + (t2Done ? 4 : 0);
       },
       cell: ({ row }) => (
         <StageProgress
           predecessorRaw={row.original.predecessor_status_raw}
+          predStatus={row.original.pred_status}
+          predActualDate={row.original.pred_actual_date}
           t1Status={row.original.t1_status}
           t1ActualDate={row.original.t1_actual_date}
           t2Status={row.original.t2_status}

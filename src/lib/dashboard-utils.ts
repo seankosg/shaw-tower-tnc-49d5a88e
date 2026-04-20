@@ -14,6 +14,9 @@ export interface SubtestForDashboard {
   t1_actual_date: string | null;
   t2_planned_date: string | null;
   t2_actual_date: string | null;
+  pred_status?: TcStatus | null;
+  pred_planned_date?: string | null;
+  pred_actual_date?: string | null;
 }
 
 export const NONE_LABEL = '(None)';
@@ -201,17 +204,14 @@ export function aggregatePlanActualByGroup(
       }
       return { cumPlan, cumActual, yesterdayPlan: yPlan, yesterdayActual: yActual, todayPlan: tPlan, todayActual: tActual };
     };
-    // Predecessor: T1 시작 전 단계
-    // Plan = T1 planned_date <= 어제 / Actual cumulative = T1이 WIP 또는 Done
-    // 어제/오늘 actual은 t1_actual_date 기준 (T1 시작일 = Pred 완료일로 간주)
+    // Predecessor: 정규 필드(pred_planned_date, pred_actual_date) 직접 사용
     const calcPred = (): PlanActualMetrics => {
       let cumPlan = 0, cumActual = 0, yPlan = 0, yActual = 0, tPlan = 0, tActual = 0;
       for (const i of items) {
-        const p = i.t1_planned_date;
-        const a = i.t1_actual_date;
-        const started = i.t1_status === 'WIP' || i.t1_status === 'Done';
+        const p = i.pred_planned_date ?? null;
+        const a = i.pred_actual_date ?? null;
         if (p && p <= yesterday) cumPlan++;
-        if (started && (!a || a <= yesterday)) cumActual++;
+        if (a && a <= yesterday) cumActual++;
         if (p === yesterday) yPlan++;
         if (a === yesterday) yActual++;
         if (p === today) tPlan++;

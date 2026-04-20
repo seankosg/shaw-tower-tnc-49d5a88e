@@ -16,6 +16,9 @@ export interface CachedSubtest {
   t2_actual_date: string | null;
   t2_status: any;
   predecessor_status_raw: string | null;
+  pred_status: any;
+  pred_planned_date: string | null;
+  pred_actual_date: string | null;
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
