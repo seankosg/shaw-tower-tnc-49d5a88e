@@ -284,21 +284,18 @@ export default function SchedulePage() {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Kpi
           label="Cumulative Progress"
-          value={
-            kpis.cumPlan > 0
-              ? `${kpis.cumActual}/${kpis.cumPlan} (${kpis.progressPct.toFixed(0)}%)`
-              : `${kpis.cumActual}/${kpis.cumPlan}`
-          }
+          value={`${kpis.progressPct.toFixed(0)}%`}
           subValue={
-            kpis.cumPlan > 0
-              ? `Variance ${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%`
-              : undefined
+            kpis.totalStages > 0
+              ? `${kpis.doneStages}/${kpis.totalStages} stages done${kpis.cumPlan > 0 ? ` · Var ${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%` : ''}`
+              : '0/0'
           }
           accent={
-            kpis.cumPlan > 0 && kpis.progressPct < 90 ? 'short'
-            : kpis.cumPlan > 0 && kpis.cumActual > kpis.cumPlan ? 'over'
+            kpis.totalStages > 0 && kpis.progressPct < 30 ? 'short'
+            : kpis.totalStages > 0 && kpis.progressPct >= 90 ? 'over'
             : undefined
           }
+          progressPct={kpis.totalStages > 0 ? kpis.progressPct : undefined}
           icon={<TrendingUp className="h-3.5 w-3.5" />}
         />
         <Kpi
