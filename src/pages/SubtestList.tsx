@@ -518,10 +518,13 @@ export default function SubtestList() {
           predecessorRaw={row.original.predecessor_status_raw}
           predStatus={row.original.pred_status}
           predActualDate={row.original.pred_actual_date}
+          predPlannedDate={row.original.pred_planned_date}
           t1Status={row.original.t1_status}
           t1ActualDate={row.original.t1_actual_date}
+          t1PlannedDate={row.original.t1_planned_date}
           t2Status={row.original.t2_status}
           t2ActualDate={row.original.t2_actual_date}
+          t2PlannedDate={row.original.t2_planned_date}
         />
       ),
     },
@@ -541,8 +544,15 @@ export default function SubtestList() {
       cell: ({ getValue }) => (
         <span className="truncate block max-w-[200px]">{getValue() as string || '—'}</span>
       )},
-    { accessorKey: 'predecessor_status_raw', header: 'Predecessor', size: 110, filterFn: textFilterFn,
-      meta: { filterType: 'text' } },
+    { accessorKey: 'predecessor_status_raw', header: 'Predecessor', size: 110, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
+      cell: ({ getValue }) => {
+        const v = getValue() as string | null;
+        if (!v) return '—';
+        if (/^\d{4}-\d{2}-\d{2}/.test(v) || /^\d{1,2}-[A-Za-z]{3}/.test(v))
+          return formatDdMmm(v);
+        return v;
+      }},
     { accessorKey: 't1_planned_date', header: 'T1 Planned', size: 100, filterFn: dateRangeFilterFn,
       meta: { filterType: 'date-range' },
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },

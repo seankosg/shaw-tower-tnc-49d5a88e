@@ -7,30 +7,45 @@ type StageState = 'done' | 'wip' | 'planned' | 'hold' | 'empty';
 
 const PRED_DONE_TOKENS = ['done', '완료', 'complete', 'completed', 'finished'];
 
+const TODAY = () => new Date().toISOString().slice(0, 10);
+
+function isOverdue(plannedDate: string | null | undefined): boolean {
+  if (!plannedDate) return false;
+  return plannedDate < TODAY();
+}
+
 function classifyPred(
   rawPred: string | null,
   predStatus: TcStatus | null | undefined,
+  plannedDate?: string | null,
 ): StageState {
-  // Single source of truth: normalized pred_status
   if (predStatus === 'Done') return 'done';
-  if (predStatus === 'WIP') return 'wip';
   if (predStatus === 'Hold') return 'hold';
-  if (predStatus === 'Planned') return 'planned';
+  if (predStatus === 'WIP') {
+    return isOverdue(plannedDate) ? 'hold' : 'wip';
+  }
+  if (predStatus === 'Planned') {
+    return isOverdue(plannedDate) ? 'hold' : 'planned';
+  }
   // Fallback: raw text only when status is null (legacy rows)
   if (rawPred) {
     const v = rawPred.trim().toLowerCase();
     if (!v) return 'empty';
     if (PRED_DONE_TOKENS.some(t => v === t || v.includes(t))) return 'done';
-    return 'planned';
+    return isOverdue(plannedDate) ? 'hold' : 'planned';
   }
   return 'empty';
 }
 
-function classifyStatus(s: TcStatus | null): StageState {
+function classifyStatus(s: TcStatus | null, plannedDate?: string | null): StageState {
   if (s === 'Done') return 'done';
-  if (s === 'WIP') return 'wip';
   if (s === 'Hold') return 'hold';
-  if (s === 'Planned') return 'planned';
+  if (s === 'WIP') {
+    return isOverdue(plannedDate) ? 'hold' : 'wip';
+  }
+  if (s === 'Planned') {
+    return isOverdue(plannedDate) ? 'hold' : 'planned';
+  }
   return 'empty';
 }
 
@@ -62,27 +77,33 @@ export interface StageProgressProps {
   predecessorRaw: string | null;
   predStatus?: TcStatus | null;
   predActualDate?: string | null;
+  predPlannedDate?: string | null;
   t1Status: TcStatus | null;
   t1ActualDate: string | null;
+  t1PlannedDate?: string | null;
   t2Status: TcStatus | null;
   t2ActualDate: string | null;
+  t2PlannedDate?: string | null;
 }
 
 export function StageProgress({
   predecessorRaw,
   predStatus = null,
   predActualDate = null,
+  predPlannedDate = null,
   t1Status,
   t1ActualDate,
+  t1PlannedDate = null,
   t2Status,
   t2ActualDate,
+  t2PlannedDate = null,
 }: StageProgressProps) {
-  const pred = classifyPred(predecessorRaw, predStatus);
-  const t1 = classifyStatus(t1Status);
-  const t2 = classifyStatus(t2Status);
+  const pred = classifyPred(predecessorRaw, predStatus, predPlannedDate);
+  const t1 = classifyStatus(t1Status, t1PlannedDate);
+  const t2 = classifyStatus(t2Status, t2PlannedDate);
 
   const stateLabel = (s: StageState) =>
-    s === 'done' ? 'Done' : s === 'wip' ? 'WIP' : s === 'hold' ? 'Hold' : s === 'planned' ? 'Planned' : '—';
+    s === 'done' ? 'Done' : s === 'wip' ? 'WIP' : s === 'hold' ? 'Delay' : s === 'planned' ? 'Planned' : '—';
 
   return (
     <Tooltip delayDuration={150}>
@@ -125,7 +146,7 @@ export function StageProgressLegend() {
       <span className="inline-flex items-center gap-1"><Pip state="done" label="Done" /> Done</span>
       <span className="inline-flex items-center gap-1"><Pip state="wip" label="WIP" /> WIP</span>
       <span className="inline-flex items-center gap-1"><Pip state="planned" label="Planned" /> Planned</span>
-      <span className="inline-flex items-center gap-1"><Pip state="hold" label="Hold" /> Hold</span>
+      <span className="inline-flex items-center gap-1"><Pip state="hold" label="Delay" /> Delay</span>
       <span className="ml-2">Stages: Pred → T1 → T2</span>
     </div>
   );

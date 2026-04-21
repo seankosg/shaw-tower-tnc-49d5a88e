@@ -286,6 +286,10 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         updates.row_version = (existing.row_version || 1) + 1;
         updates.subtest_id = row.subtest_id;
 
+        // Auto-fill t1/t2 status to 'Planned' when planned_date exists but status is null
+        const finalT1PlannedForAutoFill = updates.t1_planned_date !== undefined ? updates.t1_planned_date : null;
+        const finalT2PlannedForAutoFill = updates.t2_planned_date !== undefined ? updates.t2_planned_date : null;
+
         // Auto-fill actual_date when status becomes Done and actual_date is empty
         const { data: existingDates } = await supabase.from('subtests')
           .select('t1_status, t1_actual_date, t2_status, t2_actual_date, pred_status, pred_actual_date' as any)
@@ -307,6 +311,18 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           updates.pred_actual_date = autoFillDate;
         }
 
+        // Auto-fill status to 'Planned' when planned_date exists but status is null
+        if (finalT1Status == null && (finalT1PlannedForAutoFill || ed?.t1_planned_date)) {
+          updates.t1_status = 'Planned';
+        }
+        if (finalT2Status == null && (finalT2PlannedForAutoFill || ed?.t2_planned_date)) {
+          updates.t2_status = 'Planned';
+        }
+        const finalPredPlannedForAutoFill = updates.pred_planned_date !== undefined ? updates.pred_planned_date : ed?.pred_planned_date;
+        if (finalPredStatus == null && finalPredPlannedForAutoFill) {
+          updates.pred_status = 'Planned';
+        }
+
         const { error } = await supabase.from('subtests').update(updates as any).eq('id', existing.id);
         if (error) {
           res.rejected++;
@@ -324,20 +340,24 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           });
         }
       } else {
+        // Auto-fill status to 'Planned' when planned_date exists but status is null (new inserts)
+        const insertT1Status = (!row.t1_status && row.t1_planned_date) ? 'Planned' : row.t1_status;
+        const insertT2Status = (!row.t2_status && row.t2_planned_date) ? 'Planned' : row.t2_status;
+        const insertPredStatus = (!row.pred_status && row.pred_planned_date) ? 'Planned' : row.pred_status;
         // Auto-fill actual_date for new inserts when status is Done
-        const insertT1Actual = row.t1_status === 'Done' ? autoFillDate : null;
-        const insertT2Actual = row.t2_status === 'Done' ? autoFillDate : null;
-        const insertPredActual = row.pred_status === 'Done' ? autoFillDate : (row.pred_actual_date ?? null);
+        const insertT1Actual = insertT1Status === 'Done' ? autoFillDate : null;
+        const insertT2Actual = insertT2Status === 'Done' ? autoFillDate : null;
+        const insertPredActual = insertPredStatus === 'Done' ? autoFillDate : (row.pred_actual_date ?? null);
         const { error } = await supabase.from('subtests').insert({
           project_id: projectId!, system_id: systemId,
           item_no: row.item_no, mos_code: row.mos_code, subtest_id: row.subtest_id,
           level: row.level, equipment: row.equipment, description: row.description,
-          t1_planned_date: row.t1_planned_date, t1_status: row.t1_status as any,
+          t1_planned_date: row.t1_planned_date, t1_status: insertT1Status as any,
           t1_actual_date: insertT1Actual,
-          t2_planned_date: row.t2_planned_date, t2_status: row.t2_status as any,
+          t2_planned_date: row.t2_planned_date, t2_status: insertT2Status as any,
           t2_actual_date: insertT2Actual,
           predecessor_status_raw: row.predecessor_status_raw,
-          pred_status: row.pred_status as any,
+          pred_status: insertPredStatus as any,
           pred_planned_date: row.pred_planned_date,
           pred_actual_date: insertPredActual,
           subcontractor_name: row.subcontractor_name,
