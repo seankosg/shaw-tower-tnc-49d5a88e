@@ -179,9 +179,20 @@ export default function DashboardPage() {
     <div className="space-y-6 p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-foreground">T&C Executive Dashboard</h1>
-        <p className="text-xs text-muted-foreground">
-          At-Risk threshold: ≤ {atRiskDays} day{atRiskDays === 1 ? '' : 's'} (configurable in Admin → Settings)
-        </p>
+        <div className="flex items-center gap-3">
+          <Select value={teamFilter} onValueChange={setTeamFilter}>
+            <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Teams</SelectItem>
+              {ALL_TEAMS.map(t => (
+                <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            At-Risk threshold: ≤ {atRiskDays} day{atRiskDays === 1 ? '' : 's'}
+          </p>
+        </div>
       </div>
 
       {/* ─── KPI Strip ─── */}
@@ -273,6 +284,7 @@ export default function DashboardPage() {
               <TabsTrigger value="subcon">By Subcontractor</TabsTrigger>
               <TabsTrigger value="subsub">By Sub-Sub</TabsTrigger>
               <TabsTrigger value="hdec">By HDEC PIC</TabsTrigger>
+              <TabsTrigger value="team">By Team</TabsTrigger>
             </TabsList>
             <TabsContent value="system">
               <PlanActualTable rows={bySystem} groupParam="system" groupHeader="System" today={today} yesterday={yesterday} navigate={navigate} keyToFilterValue={systemKeyResolver} />
@@ -285,6 +297,9 @@ export default function DashboardPage() {
             </TabsContent>
             <TabsContent value="hdec">
               <PlanActualTable rows={byHdec} groupParam="hdec_pic" groupHeader="HDEC PIC" today={today} yesterday={yesterday} navigate={navigate} />
+            </TabsContent>
+            <TabsContent value="team">
+              <PlanActualTable rows={byTeam} groupParam="team" groupHeader="Team" today={today} yesterday={yesterday} navigate={navigate} />
             </TabsContent>
           </Tabs>
         </CardContent>
