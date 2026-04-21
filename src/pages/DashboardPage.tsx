@@ -477,7 +477,7 @@ function PlanActualTable({
   rows, groupParam, groupHeader, today, yesterday, navigate, keyToFilterValue,
 }: {
   rows: PlanActualRow[];
-  groupParam: 'system' | 'subcon' | 'subsub' | 'hdec_pic';
+  groupParam: 'system' | 'subcon' | 'subsub' | 'hdec_pic' | 'team';
   groupHeader: string;
   today: string;
   yesterday: string;
