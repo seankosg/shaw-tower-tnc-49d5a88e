@@ -1058,6 +1058,7 @@ function SubtestTableView({
                   const isHovered = hoveredIndex === virtualRow.index;
                   return (
                     <TableRow
+                      style={{ height: virtualRow.size }}
                       key={row.id}
                       data-index={virtualRow.index}
                       className={cn(
