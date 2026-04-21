@@ -539,7 +539,6 @@ function EditUserDialog({
   const { toast } = useToast();
   const [name, setName] = useState(profile.name ?? '');
   const [userType, setUserType] = useState<UserType>(profile.user_type);
-  const [affiliation, setAffiliation] = useState<'sub' | 'subsub'>(profile.subsub_name ? 'subsub' : 'sub');
   const [subconName, setSubconName] = useState<string>(profile.subcontractor_name ?? '');
   const initialSubsubId = subsubs.find(s => s.name === profile.subsub_name)?.id ?? '';
   const [subsubId, setSubsubId] = useState<string>(initialSubsubId);
@@ -559,17 +558,15 @@ function EditUserDialog({
     let payloadHdecPicName: string | null = null;
 
     if (userType === 'subcontractor') {
-      if (affiliation === 'sub') {
-        if (!subconName) { toast({ title: 'Subcontractor required', variant: 'destructive' }); return; }
-        payloadSubconName = subconName;
-      } else {
-        if (!selectedSubsub || !subsubParent) {
-          toast({ title: 'Sub-Sub with valid parent required', variant: 'destructive' });
-          return;
-        }
-        payloadSubsubName = selectedSubsub.name;
-        payloadSubconName = subsubParent.name;
+      if (!subconName) { toast({ title: 'Subcontractor required', variant: 'destructive' }); return; }
+      payloadSubconName = subconName;
+    } else if (userType === 'subsub') {
+      if (!selectedSubsub || !subsubParent) {
+        toast({ title: 'Sub-Sub with valid parent required', variant: 'destructive' });
+        return;
       }
+      payloadSubsubName = selectedSubsub.name;
+      payloadSubconName = subsubParent.name;
     } else if (userType === 'hdec' || userType === 'pm_pd') {
       payloadHdecPicName = hdecPicName || null;
     }
