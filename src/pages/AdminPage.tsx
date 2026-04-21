@@ -282,6 +282,7 @@ function UsersTab() {
             onCreated={() => { setCreateOpen(false); load(); }}
           />
         </Dialog>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="overflow-auto">
