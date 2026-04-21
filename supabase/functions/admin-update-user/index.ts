@@ -13,6 +13,7 @@ interface Body {
   subcontractor_name?: string | null;
   subsub_name?: string | null;
   hdec_pic_name?: string | null;
+  team?: 'Mech' | 'Elec' | 'Arch' | 'Supp' | null;
 }
 
 Deno.serve(async (req) => {
@@ -51,6 +52,7 @@ Deno.serve(async (req) => {
     if (body.subcontractor_name !== undefined) updates.subcontractor_name = body.subcontractor_name;
     if (body.subsub_name !== undefined) updates.subsub_name = body.subsub_name;
     if (body.hdec_pic_name !== undefined) updates.hdec_pic_name = body.hdec_pic_name;
+    if (body.team !== undefined) updates.team = body.team;
 
     if (Object.keys(updates).length === 0) return json({ error: 'No changes' }, 400);
 
