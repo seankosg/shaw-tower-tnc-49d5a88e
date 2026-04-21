@@ -28,7 +28,7 @@ function formatSize(bytes: number) {
 export default function ImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { files, importType, isRunning, setImportType, addFiles, removeFile, clearAll, startImport, setFileDataDate } = useImport();
+  const { files, importType, isRunning, setImportType, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam } = useImport();
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
