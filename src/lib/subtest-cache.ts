@@ -23,6 +23,7 @@ export interface CachedSubtest {
   subsub_name: string | null;
   hdec_pic_name: string | null;
   data_source_type: any;
+  team: any;
   updated_at: string;
   system_code: string;
 }

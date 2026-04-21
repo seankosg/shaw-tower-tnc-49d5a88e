@@ -19,8 +19,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Search, Upload, Download, ChevronDown } from 'lucide-react';
-import type { TcStatus, DataSource } from '@/types/enums';
-import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS } from '@/types/enums';
+import type { TcStatus, DataSource, TeamType } from '@/types/enums';
+import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS, ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
 import { getSubtestCache, setSubtestCache } from '@/lib/subtest-cache';
@@ -50,6 +50,7 @@ interface SubtestRow {
   subsub_name: string | null;
   hdec_pic_name: string | null;
   data_source_type: DataSource | null;
+  team: TeamType | null;
   updated_at: string;
   system_code: string;
 }
@@ -436,7 +437,7 @@ export default function SubtestList() {
     while (hasMore) {
       const { data } = await supabase
         .from('subtests')
-        .select('id, subtest_id, item_no, mos_code, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, updated_at, system_id, system_master!inner(system_code)' as any)
+        .select('id, subtest_id, item_no, mos_code, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, team, updated_at, system_id, system_master!inner(system_code)' as any)
         .eq('is_active', true)
         .order('updated_at', { ascending: false })
         .range(from, from + PAGE_SIZE - 1);
@@ -494,6 +495,11 @@ export default function SubtestList() {
     const unique = [...new Set(data.map(r => r.hdec_pic_name).filter(Boolean))] as string[];
     return unique.sort().map(v => ({ value: v, label: v }));
   }, [data]);
+
+  const teamOptions = useMemo(() =>
+    ALL_TEAMS.map(t => ({ value: t, label: TEAM_LABELS[t] })),
+    []
+  );
 
   const columns = useMemo<ColumnDef<SubtestRow>[]>(() => [
     { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn,
@@ -603,13 +609,19 @@ export default function SubtestList() {
       meta: { filterType: 'multi-select', filterOptions: subsubOptions } },
     { accessorKey: 'hdec_pic_name', header: 'HDEC PIC', size: 110, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select', filterOptions: hdecPicOptions } },
+    { accessorKey: 'team', header: 'Team', size: 90, filterFn: multiSelectFilterFn,
+      meta: { filterType: 'multi-select', filterOptions: teamOptions },
+      cell: ({ getValue }) => {
+        const v = getValue() as TeamType | null;
+        return v ? TEAM_LABELS[v] : '—';
+      }},
     { accessorKey: 'data_source_type', header: 'Source', size: 110, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select', filterOptions: sourceOptions },
       cell: ({ getValue }) => <DataSourceTag source={getValue() as DataSource | null} /> },
     { accessorKey: 'updated_at', header: 'Updated', size: 140, filterFn: dateRangeFilterFn,
       meta: { filterType: 'date-range' },
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
-  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions]);
+  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions]);
 
   // Apply status (overdue / at_risk) + date URL filters at data level
   const urlT1PlannedTo = searchParams.get('t1_planned_to');

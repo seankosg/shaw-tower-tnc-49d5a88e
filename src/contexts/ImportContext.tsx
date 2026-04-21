@@ -19,6 +19,7 @@ export interface ImportFileItem {
   parsed?: ParsedSubtest[];
   unmappedHeaders?: string[];
   dataDate?: string;
+  team?: string;
 }
 
 interface ImportContextValue {
@@ -32,6 +33,7 @@ interface ImportContextValue {
   clearAll: () => void;
   startImport: () => Promise<void>;
   setFileDataDate: (id: string, date: string) => void;
+  setFileTeam: (id: string, team: string) => void;
 }
 
 const ImportContext = createContext<ImportContextValue | null>(null);
@@ -100,6 +102,10 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
 
   const setFileDataDate = (id: string, date: string) => {
     updateFile(id, { dataDate: date });
+  };
+
+  const setFileTeam = (id: string, team: string) => {
+    updateFile(id, { team });
   };
 
   const processFile = async (item: ImportFileItem): Promise<{ inserted: number; updated: number; skipped: number; rejected: number } | null> => {
@@ -289,6 +295,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         updates.source_upload_id = uploadId;
         updates.row_version = (existing.row_version || 1) + 1;
         updates.subtest_id = row.subtest_id;
+        if (item.team) updates.team = item.team;
 
         // Auto-fill t1/t2 status to 'Planned' when planned_date exists but status is null
         const finalT1PlannedForAutoFill = updates.t1_planned_date !== undefined ? updates.t1_planned_date : null;
@@ -373,6 +380,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           remarks: row.remarks,
           punchlist_comments: row.punchlist_comments,
           data_source_type: dataSourceType as any, source_upload_id: uploadId,
+          team: (item.team || null) as any,
         } as any);
         if (error) {
           res.rejected++;
@@ -451,7 +459,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   return (
     <ImportContext.Provider value={{
       files, importType, isRunning, currentIndex,
-      setImportType, addFiles, removeFile, clearAll, startImport, setFileDataDate,
+      setImportType, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam,
     }}>
       {children}
     </ImportContext.Provider>

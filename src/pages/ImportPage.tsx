@@ -8,6 +8,7 @@ import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTr
 import { useNavigate } from 'react-router-dom';
 import { useImport, type FileStatus } from '@/contexts/ImportContext';
 import { Input } from '@/components/ui/input';
+import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 
 const statusBadge: Record<FileStatus, { label: string; cls: string }> = {
   pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
@@ -27,7 +28,7 @@ function formatSize(bytes: number) {
 export default function ImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { files, importType, isRunning, setImportType, addFiles, removeFile, clearAll, startImport, setFileDataDate } = useImport();
+  const { files, importType, isRunning, setImportType, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam } = useImport();
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -41,7 +42,7 @@ export default function ImportPage() {
     if (inputRef.current) inputRef.current.value = '';
   }, [addFiles]);
 
-  const readyCount = files.filter(f => f.status === 'ready').length;
+  const readyCount = files.filter(f => f.status === 'ready' && f.team).length;
   const totals = files.reduce((acc, f) => {
     if (f.result) {
       acc.inserted += f.result.inserted;
@@ -160,6 +161,21 @@ export default function ImportPage() {
                         disabled={isRunning || f.status === 'done' || f.status === 'failed'}
                         className="h-7 w-[150px] text-xs"
                       />
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">Team:</span>
+                      <Select
+                        value={f.team || ''}
+                        onValueChange={(v) => setFileTeam(f.id, v)}
+                        disabled={isRunning || f.status === 'done' || f.status === 'failed'}
+                      >
+                        <SelectTrigger className="h-7 w-[140px] text-xs">
+                          <SelectValue placeholder="Select team" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ALL_TEAMS.map(t => (
+                            <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     {f.unmappedHeaders && f.unmappedHeaders.length > 0 && (
                       <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950 px-2 py-1.5">

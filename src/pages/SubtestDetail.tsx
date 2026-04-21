@@ -15,8 +15,8 @@ import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFieldConfig } from '@/hooks/useFieldConfig';
-import { TC_STATUS_OPTIONS } from '@/types/enums';
-import type { TcStatus, DataSource, ChangeSource } from '@/types/enums';
+import { TC_STATUS_OPTIONS, TEAM_LABELS } from '@/types/enums';
+import type { TcStatus, DataSource, ChangeSource, TeamType } from '@/types/enums';
 import { invalidateSubtestCache } from '@/lib/subtest-cache';
 
 interface SubtestDetail {
@@ -47,6 +47,7 @@ interface SubtestDetail {
   subsub_name: string | null;
   hdec_pic_name: string | null;
   data_source_type: DataSource | null;
+  team: TeamType | null;
   updated_at: string;
   row_version: number;
   system_master: { system_code: string } | null;
@@ -280,6 +281,7 @@ export default function SubtestDetailPage() {
           {isFieldVisible('description') && (
             <div className="col-span-2"><Label className="text-xs text-muted-foreground">Description</Label><div>{record.description || '—'}</div></div>
           )}
+          <div><Label className="text-xs text-muted-foreground">Team</Label><div>{record.team ? TEAM_LABELS[record.team] : '—'}</div></div>
         </CardContent>
       </Card>
 

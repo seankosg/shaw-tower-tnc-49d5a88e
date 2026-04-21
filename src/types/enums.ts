@@ -9,6 +9,15 @@ export const TC_STATUS_OPTIONS: TcStatus[] = ['Planned', 'WIP', 'Done', 'Hold'];
 export const ALL_ROLES: AppRole[] = ['guest', 'super_guest', 'user', 'senior_user', 'superuser', 'admin'];
 export const ALL_USER_TYPES: UserType[] = ['subcontractor', 'hdec', 'pm_pd', 'admin'];
 
+export type TeamType = 'Mech' | 'Elec' | 'Arch' | 'Supp';
+export const ALL_TEAMS: TeamType[] = ['Mech', 'Elec', 'Arch', 'Supp'];
+export const TEAM_LABELS: Record<TeamType, string> = {
+  Mech: 'Mechanical',
+  Elec: 'Electrical',
+  Arch: 'Architecture',
+  Supp: 'Support',
+};
+
 export const ROLE_LABELS: Record<AppRole, string> = {
   guest: 'Guest',
   super_guest: 'Super Guest',
