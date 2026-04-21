@@ -104,6 +104,10 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     updateFile(id, { dataDate: date });
   };
 
+  const setFileTeam = (id: string, team: string) => {
+    updateFile(id, { team });
+  };
+
   const processFile = async (item: ImportFileItem): Promise<{ inserted: number; updated: number; skipped: number; rejected: number } | null> => {
     if (!item.parsed) return null;
     const parsed = item.parsed;
