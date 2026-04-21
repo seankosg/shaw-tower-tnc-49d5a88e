@@ -293,17 +293,17 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         const finalT1Status = updates.t1_status !== undefined ? updates.t1_status : ed?.t1_status;
         const finalT1Actual = updates.t1_actual_date !== undefined ? updates.t1_actual_date : ed?.t1_actual_date;
         if (finalT1Status === 'Done' && !finalT1Actual) {
-          updates.t1_actual_date = yesterday;
+          updates.t1_actual_date = autoFillDate;
         }
         const finalT2Status = updates.t2_status !== undefined ? updates.t2_status : ed?.t2_status;
         const finalT2Actual = updates.t2_actual_date !== undefined ? updates.t2_actual_date : ed?.t2_actual_date;
         if (finalT2Status === 'Done' && !finalT2Actual) {
-          updates.t2_actual_date = yesterday;
+          updates.t2_actual_date = autoFillDate;
         }
         const finalPredStatus = updates.pred_status !== undefined ? updates.pred_status : ed?.pred_status;
         const finalPredActual = updates.pred_actual_date !== undefined ? updates.pred_actual_date : ed?.pred_actual_date;
         if (finalPredStatus === 'Done' && !finalPredActual) {
-          updates.pred_actual_date = yesterday;
+          updates.pred_actual_date = autoFillDate;
         }
 
         const { error } = await supabase.from('subtests').update(updates as any).eq('id', existing.id);
@@ -324,9 +324,9 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         // Auto-fill actual_date for new inserts when status is Done
-        const insertT1Actual = row.t1_status === 'Done' ? yesterday : null;
-        const insertT2Actual = row.t2_status === 'Done' ? yesterday : null;
-        const insertPredActual = row.pred_status === 'Done' ? yesterday : (row.pred_actual_date ?? null);
+        const insertT1Actual = row.t1_status === 'Done' ? autoFillDate : null;
+        const insertT2Actual = row.t2_status === 'Done' ? autoFillDate : null;
+        const insertPredActual = row.pred_status === 'Done' ? autoFillDate : (row.pred_actual_date ?? null);
         const { error } = await supabase.from('subtests').insert({
           project_id: projectId!, system_id: systemId,
           item_no: row.item_no, mos_code: row.mos_code, subtest_id: row.subtest_id,
