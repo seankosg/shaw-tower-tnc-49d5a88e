@@ -1671,6 +1671,7 @@ function BackupTab() {
         row_count: allRows.length,
         created_by: user?.id,
         note: note || null,
+        snapshot_type: 'manual',
       });
       if (error) throw error;
       toast({ title: 'Snapshot created', description: `${allRows.length} rows saved` });
