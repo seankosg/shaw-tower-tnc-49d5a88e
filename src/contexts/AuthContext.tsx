@@ -23,7 +23,7 @@ interface AuthContextValue {
   profile: Profile | null;
   roles: AppRole[];
   loading: boolean;
-  signIn: (loginId: string, password: string) => Promise<{ error: Error | null }>;
+  signIn: (loginId: string, password: string) => Promise<{ error: Error | null; profile: { is_active: boolean } | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   isAdmin: boolean;
