@@ -613,54 +613,38 @@ function EditUserDialog({
               </SelectContent>
             </Select>
           </div>
-          {userType === 'subcontractor' && (
-            <>
-              <div className="space-y-1.5">
-                <Label>Affiliation</Label>
-                <div className="flex gap-4 text-sm">
-                  <label className="flex items-center gap-1.5">
-                    <input type="radio" checked={affiliation === 'sub'} onChange={() => setAffiliation('sub')} />
-                    Subcontractor
-                  </label>
-                  <label className="flex items-center gap-1.5">
-                    <input type="radio" checked={affiliation === 'subsub'} onChange={() => setAffiliation('subsub')} />
-                    Sub-Sub (재하도)
-                  </label>
-                </div>
-              </div>
-              {affiliation === 'sub' ? (
-                <div className="space-y-1.5">
-                  <Label>Subcontractor</Label>
-                  <Select value={subconName} onValueChange={setSubconName}>
-                    <SelectTrigger><SelectValue placeholder="Select subcontractor" /></SelectTrigger>
-                    <SelectContent>
-                      {subcons.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <Label>Sub-Sub Company</Label>
-                  <Select value={subsubId} onValueChange={setSubsubId}>
-                    <SelectTrigger><SelectValue placeholder="Select Sub-Sub" /></SelectTrigger>
-                    <SelectContent>
-                      {subsubs.map(s => {
-                        const parent = subcons.find(p => p.id === s.parent_subcontractor_id);
-                        return (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}{parent ? ` (← ${parent.name})` : ''}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                  {subsubParent && (
-                    <p className="text-xs text-muted-foreground">Parent: <strong>{subsubParent.name}</strong></p>
-                  )}
-                </div>
-              )}
-            </>
-          )}
+        {userType === 'subcontractor' && (
+          <div className="space-y-1.5">
+            <Label>Subcontractor</Label>
+            <Select value={subconName} onValueChange={setSubconName}>
+              <SelectTrigger><SelectValue placeholder="Select subcontractor" /></SelectTrigger>
+              <SelectContent>
+                {subcons.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {userType === 'subsub' && (
+          <div className="space-y-1.5">
+            <Label>Sub-Sub Company</Label>
+            <Select value={subsubId} onValueChange={setSubsubId}>
+              <SelectTrigger><SelectValue placeholder="Select Sub-Sub" /></SelectTrigger>
+              <SelectContent>
+                {subsubs.map(s => {
+                  const parent = subcons.find(p => p.id === s.parent_subcontractor_id);
+                  return (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}{parent ? ` (← ${parent.name})` : ''}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            {subsubParent && (
+              <p className="text-xs text-muted-foreground">Parent: <strong>{subsubParent.name}</strong></p>
+            )}
+          </div>
+        )}
           {(userType === 'hdec' || userType === 'pm_pd') && (
             <div className="space-y-1.5">
               <Label>HDEC PIC (optional)</Label>
