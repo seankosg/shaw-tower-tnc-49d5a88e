@@ -753,6 +753,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_edit_subtest: {
+        Args: {
+          _project_id: string
+          _subcontractor_name: string
+          _subsub_name: string
+          _system_id: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
       can_view_subtest: {
         Args: {
           _subcontractor_name: string
