@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, AlertTriangle, TrendingUp, ChevronsLeft, ChevronsRight, CalendarSearch } from 'lucide-react';
+import { Calendar as CalendarIcon, AlertTriangle, TrendingUp, ChevronsLeft, ChevronsRight, CalendarSearch, Download } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { exportScheduleToExcel } from '@/lib/schedule-excel-export';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +29,7 @@ const GROUP_LABELS: Record<ScheduleGroupBy, string> = {
   system: 'System',
   subcon: 'Subcontractor',
   subsub: 'Sub-Sub',
+  hdec: 'PIC',
   team: 'Team',
 };
 
@@ -172,7 +175,7 @@ export default function SchedulePage() {
 
   // ───── Navigation handlers ─────
   const filterParamForGroup = (label: string): { key: string; value: string } => {
-    const key = groupBy === 'system' ? 'system' : groupBy === 'subcon' ? 'subcon' : groupBy === 'team' ? 'team' : 'subsub';
+    const key = groupBy === 'system' ? 'system' : groupBy === 'subcon' ? 'subcon' : groupBy === 'hdec' ? 'hdec_pic' : groupBy === 'team' ? 'team' : 'subsub';
     return { key, value: label };
   };
 
@@ -218,6 +221,20 @@ export default function SchedulePage() {
     const { key, value } = filterParamForGroup(label);
     goSubtests({ [key]: value });
   };
+  const { toast } = useToast();
+  const handleScheduleExport = () => {
+    if (!visibleData.rows.length) {
+      toast({ title: 'No data to export', variant: 'destructive' });
+      return;
+    }
+    const { rowCount, fileName } = exportScheduleToExcel(visibleData, {
+      groupHeader: GROUP_LABELS[groupBy],
+      stageFilter,
+      bucket,
+      today,
+    });
+    toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
+  };
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -232,6 +249,10 @@ export default function SchedulePage() {
             Track planned vs actual progress by {GROUP_LABELS[groupBy]} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Today {today}
           </p>
         </div>
+        <Button variant="outline" size="sm" onClick={handleScheduleExport}>
+          <Download className="mr-1.5 h-4 w-4" />
+          Excel
+        </Button>
       </div>
 
       {/* Toolbar */}
@@ -243,6 +264,7 @@ export default function SchedulePage() {
                 <TabsTrigger value="system" className="h-6 px-2 text-xs">System</TabsTrigger>
                 <TabsTrigger value="subcon" className="h-6 px-2 text-xs">Subcon</TabsTrigger>
                 <TabsTrigger value="subsub" className="h-6 px-2 text-xs">Sub-Sub</TabsTrigger>
+                <TabsTrigger value="hdec" className="h-6 px-2 text-xs">PIC</TabsTrigger>
                 <TabsTrigger value="team" className="h-6 px-2 text-xs">Team</TabsTrigger>
               </TabsList>
             </Tabs>

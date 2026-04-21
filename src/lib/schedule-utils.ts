@@ -5,7 +5,7 @@ import type { SubtestForDashboard } from '@/lib/dashboard-utils';
 export type ScheduleStage = 'pred' | 't1' | 't2';
 export type ScheduleStageFilter = 'all' | ScheduleStage;
 export type ScheduleBucket = 'day' | 'week';
-export type ScheduleGroupBy = 'system' | 'subcon' | 'subsub' | 'team';
+export type ScheduleGroupBy = 'system' | 'subcon' | 'subsub' | 'hdec' | 'team';
 
 export interface BucketCell {
   bucket: string; // ISO date (day) or week-start ISO
@@ -100,6 +100,7 @@ export function buildBucketRange(startIso: string, endIso: string, granularity: 
 export function getGroupKey(s: SubtestForDashboard, by: ScheduleGroupBy, sysCodeById: Map<string, string>): string {
   if (by === 'system') return sysCodeById.get(s.system_id) ?? '—';
   if (by === 'subcon') return s.subcontractor_name ?? '(None)';
+  if (by === 'hdec') return s.hdec_pic_name ?? '(None)';
   if (by === 'team') return s.team ?? '(None)';
   return s.subsub_name ?? '(None)';
 }
