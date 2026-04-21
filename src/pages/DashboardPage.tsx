@@ -8,12 +8,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import {
   ChartContainer, ChartTooltip, ChartTooltipContent,
 } from '@/components/ui/chart';
 import {
-  PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine,
+  PieChart, Pie, Cell, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine,
 } from 'recharts';
+import {
+  AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight, CalendarIcon,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { formatDdMmm } from '@/lib/format';
 import {
   AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight,
 } from 'lucide-react';
