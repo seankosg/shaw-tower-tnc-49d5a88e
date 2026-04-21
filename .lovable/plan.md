@@ -1,58 +1,53 @@
 
 
-# Team(공종) 분류 필드 추가
+# Dashboard & Schedule 페이지에 Team 필터링/그룹핑 추가
 
 ## 요약
-`subtests` 테이블에 `team` 컬럼(Mech/Elec/Arch/Supp)을 추가하고, Import 시 파일별로 공종을 선택하여 모든 subtest에 해당 값을 저장합니다.
+Dashboard와 Schedule 페이지에서 Team(Mech/Elec/Arch/Supp)별 필터링 드롭다운과 그룹핑 옵션을 추가합니다.
 
 ---
 
-## 1. DB 마이그레이션
+## 1. SubtestForDashboard 타입에 team 필드 추가
 
-`subtests` 테이블에 `team` 컬럼 추가:
+**파일**: `src/lib/dashboard-utils.ts`
 
-```sql
-CREATE TYPE public.team_type AS ENUM ('Mech', 'Elec', 'Arch', 'Supp');
-
-ALTER TABLE public.subtests
-  ADD COLUMN team public.team_type NULL;
-```
+`SubtestForDashboard` 인터페이스에 `team?: string | null` 추가. 이 타입은 Dashboard와 Schedule 모두에서 사용됩니다.
 
 ---
 
-## 2. Import 흐름에 Team 선택 추가
+## 2. Supabase 쿼리에 team 필드 포함
 
-### ImportContext.tsx
-- `ImportFileItem` 인터페이스에 `team?: string` 필드 추가
-- `ImportContextValue`에 `setFileTeam(id: string, team: string)` 함수 추가
-- `processFile()` 내 insert/update 시 `team` 값을 파일의 `team` 설정값으로 포함
+**파일**: `src/pages/DashboardPage.tsx`, `src/pages/SchedulePage.tsx`
 
-### ImportPage.tsx
-- 파일별 "Data Date" 입력 옆에 **Team 선택 드롭다운** 추가 (Mech / Elec / Arch / Supp)
-- 파일이 `ready` 상태이고 team이 미선택이면 Import 실행 불가 (readyCount 조건에 team 필수 체크 추가)
+두 페이지의 `.select()` 쿼리에 `team` 필드를 추가하여 데이터를 가져옵니다.
 
 ---
 
-## 3. types/enums.ts 업데이트
+## 3. Dashboard 페이지 — Team 필터 + "By Team" 탭 추가
 
-```typescript
-export type TeamType = 'Mech' | 'Elec' | 'Arch' | 'Supp';
-export const ALL_TEAMS: TeamType[] = ['Mech', 'Elec', 'Arch', 'Supp'];
-export const TEAM_LABELS: Record<TeamType, string> = {
-  Mech: '설비 (Mechanical)',
-  Elec: '전기 (Electrical)',
-  Arch: '건축 (Architecture)',
-  Supp: '지원 (Support)',
-};
-```
+**파일**: `src/pages/DashboardPage.tsx`
+
+- **Team 필터 드롭다운** 추가 (All / Mech / Elec / Arch / Supp). 선택 시 `subtests`를 필터링하여 모든 KPI, S-Curve, 테이블에 반영.
+- **Plan vs Actual Breakdown** 탭에 **"By Team"** 탭 추가. `aggregatePlanActualByGroup`의 groupKey로 `s.team ?? '(None)'` 사용.
 
 ---
 
-## 4. Raw Data (SubtestList) 컬럼 추가
+## 4. Schedule 페이지 — Team 필터 + Group By Team 옵션 추가
 
-- `SubtestRow`에 `team` 필드 추가
-- 테이블 columns에 "Team" 컬럼 추가 (multi-select 필터 지원)
-- Supabase 쿼리의 select에 `team` 포함
+**파일**: `src/pages/SchedulePage.tsx`, `src/lib/schedule-utils.ts`
+
+- `ScheduleGroupBy` 타입에 `'team'` 추가, `GROUP_LABELS`에 `team: 'Team'` 추가.
+- `getGroupKey` 함수에 `team` 케이스 추가: `s.team ?? '(None)'.
+- **Team 필터 드롭다운** 추가 (All / Mech / Elec / Arch / Supp). 선택 시 subtests를 필터링.
+- Group 탭에 **Team** 탭 추가.
+
+---
+
+## 5. Schedule Cache 타입 업데이트
+
+**파일**: `src/lib/schedule-cache.ts`
+
+`SubtestForDashboard`에 team이 포함되므로 캐시는 자동으로 반영됨. 별도 수정 불필요.
 
 ---
 
@@ -60,10 +55,8 @@ export const TEAM_LABELS: Record<TeamType, string> = {
 
 | 파일 | 변경 내용 |
 |------|----------|
-| `supabase/migrations/` | team_type enum + subtests.team 컬럼 |
-| `src/types/enums.ts` | TeamType, ALL_TEAMS, TEAM_LABELS 추가 |
-| `src/contexts/ImportContext.tsx` | team 필드, setFileTeam, insert/update에 team 포함 |
-| `src/pages/ImportPage.tsx` | 파일별 Team 선택 UI + team 필수 검증 |
-| `src/pages/SubtestList.tsx` | Team 컬럼 + 필터 추가 |
-| `src/pages/SubtestDetail.tsx` | Team 표시 (읽기 전용 또는 편집 가능) |
+| `src/lib/dashboard-utils.ts` | `SubtestForDashboard`에 `team` 필드 추가 |
+| `src/lib/schedule-utils.ts` | `ScheduleGroupBy`에 `'team'` 추가, `getGroupKey` 업데이트 |
+| `src/pages/DashboardPage.tsx` | Team 필터 드롭다운 + "By Team" 탭 추가, select에 team 포함 |
+| `src/pages/SchedulePage.tsx` | Team 필터 드롭다운 + Group By Team 탭 추가, select에 team 포함 |
 
