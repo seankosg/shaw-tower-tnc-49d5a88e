@@ -151,6 +151,16 @@ export default function ImportPage() {
                         </span>
                       )}
                     </div>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">Data Date:</span>
+                      <Input
+                        type="date"
+                        value={f.dataDate || ''}
+                        onChange={(e) => setFileDataDate(f.id, e.target.value)}
+                        disabled={isRunning || f.status === 'done' || f.status === 'failed'}
+                        className="h-7 w-[150px] text-xs"
+                      />
+                    </div>
                     {f.unmappedHeaders && f.unmappedHeaders.length > 0 && (
                       <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950 px-2 py-1.5">
                         <AlertTriangle className="h-3.5 w-3.5 text-yellow-700 dark:text-yellow-300 shrink-0 mt-0.5" />
