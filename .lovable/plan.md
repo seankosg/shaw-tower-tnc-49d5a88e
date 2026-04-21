@@ -1,57 +1,65 @@
 
 
-# 모바일 레이아웃 개선 계획
+# Plan vs Actual Breakdown — Excel 내보내기 (스타일 최적화)
 
-## 발견된 문제점
+## 요약
 
-### 1. Dashboard KPI 카드 (심각)
-- `grid-cols-3`으로 375px 화면에서 6개 카드가 3열로 표시
-- 라벨이 "Sy...", "Tot...", "Re...", "Ov..."로 잘림
-- **수정**: 모바일에서 `grid-cols-2`, 태블릿에서 `grid-cols-3`, 데스크탑에서 `grid-cols-6`
+대시보드의 "Plan vs Actual — Breakdown" 테이블을 현재 선택된 탭(System/Subcontractor/Sub-Sub/HDEC PIC/Team) 기준으로 스타일링된 Excel 파일로 내보내는 기능을 구현합니다.
 
-### 2. S-Curve 카드 헤더 (심각)
-- `flex-row`로 타이틀 + 날짜 피커 2개 + Daily/Weekly 토글이 한 줄에 배치
-- 375px에서 버튼들이 넘치거나 잘림
-- **수정**: 모바일에서 타이틀/컨트롤을 세로 스택으로 변경, 날짜 피커와 토글을 `flex-wrap`
+## Excel 시트 레이아웃
 
-### 3. Plan vs Actual Breakdown 탭 (중간)
-- 5개 탭(System, Subcontractor, Sub-Sub, HDEC PIC, Team)이 한 줄에 배치
-- 모바일에서 탭이 잘리거나 스크롤 불가
-- **수정**: `TabsList`에 `flex-wrap` 또는 가로 스크롤 적용
+```text
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Row 1  │ SHAW T&C — Plan vs Actual (By System)          [Title: navy bg]    │
+│ Row 2  │ Exported: 2026-04-21 14:30                     [Meta: light gray]  │
+│ Row 3  │ (blank spacer)                                                     │
+├────────┼──────────────────────────────────────────────────────────────────── │
+│ Row 4  │ [Group] │ Total │ Stage │ To-Yesterday(Cum)│ Yesterday  │ Today    │
+│        │         │       │       │ Plan│Act │ Δ     │ Plan│Act│Δ │Plan│Act│Δ│
+│ Row 5  │         │       │       │ (2nd header row — sub-columns)           │
+├────────┼──────────────────────────────────────────────────────────────────── │
+│ Row 6+ │ SYS-01  │  120  │ Pred  │  30 │ 28 │  -2  │  5 │ 4│-1│ 3 │ 2│-1  │
+│        │         │       │ T1    │  40 │ 38 │  -2  │  8 │ 7│-1│ 5 │ 4│-1  │
+│        │         │       │ T2    │  20 │ 15 │  -5  │  3 │ 2│-1│ 2 │ 1│-1  │
+│        │─────────│───────│───────│──────────────────│──────────│────────── │
+│        │ SYS-02  │   85  │ Pred  │ ...                                      │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
 
-### 4. Schedule 페이지 툴바 (중간)
-- 5개 ToolbarGroup(Group, Team, Bucket, Stage, Range, Lookup)이 `flex-wrap`이지만, 개별 그룹 내 탭/버튼이 모바일에서 여전히 밀집
-- **수정**: 모바일에서 2열 그리드 또는 수직 스택으로 변경
+## 스타일링 상세
 
-### 5. AppLayout 헤더 (경미)
-- 브레드크럼 + Import 인디케이터가 `h-12` 안에 배치 — 모바일에서 텍스트가 잘릴 수 있음
-- **수정**: Import 인디케이터 텍스트를 모바일에서 축약
+기존 `excel-export.ts`의 디자인 시스템을 확장합니다.
 
-## 변경 파일 및 내용
+| 영역 | 배경색 | 폰트 | 특이사항 |
+|------|--------|------|----------|
+| **Title** (Row 1) | Navy `#1E3A5F` | Calibri 14pt Bold 흰색 | 전체 열 병합 |
+| **Meta** (Row 2) | Light Gray `#F3F4F6` | Calibri 10pt 회색 | 전체 열 병합 |
+| **Group Header** (Row 4) | Slate `#334155` | Calibri 11pt Bold 흰색 | "To-Yesterday", "Yesterday", "Today" 3열씩 병합 |
+| **Sub Header** (Row 5) | Slate `#475569` | Calibri 10pt Bold 흰색 | Plan / Actual / Δ |
+| **Group Name 셀** | `#F8FAFC` 연한배경 | Calibri 10pt Bold 검정 | 3행 세로병합 (Pred/T1/T2) |
+| **Stage Badge** | 없음 | Calibri 10pt | Pred=회색, T1=파랑, T2=초록 폰트색 |
+| **Δ 음수** | 없음 | 빨간 폰트 `#DC2626` | 지연 강조 |
+| **Δ 양수** | 없음 | 초록 폰트 `#16A34A` | 초과달성 표시 |
+| **Δ 0** | 없음 | 회색 폰트 `#9CA3AF` | "—" 표시 |
+| **Progress %** | 마지막 열 | Calibri 10pt | 숫자 + "%" |
+| **그룹 구분선** | — | — | 각 그룹 첫 행 상단에 두꺼운 border |
 
-### `src/pages/DashboardPage.tsx`
+## 변경 파일
 
-| 영역 | 변경 |
-|------|------|
-| KPI 그리드 (line 222) | `grid-cols-3 md:grid-cols-6` → `grid-cols-2 sm:grid-cols-3 md:grid-cols-6` |
-| S-Curve 카드 헤더 (line 268) | `flex-row` → `flex-col sm:flex-row`, 컨트롤 영역에 `flex-wrap gap-2` |
-| Breakdown 탭 (line 363) | `TabsList`에 `flex-wrap h-auto` 추가 |
+### 1. `src/lib/dashboard-excel-export.ts` (신규 생성)
 
-### `src/pages/SchedulePage.tsx`
+- `xlsx-js-style` 사용 (이미 설치됨)
+- `exportPlanActualToExcel(rows, groupHeader, today, yesterday)` 함수
+- 2-row merged header 구조 (Group Header + Sub Header)
+- 그룹당 3행 (Pred/T1/T2), 그룹명·Total 셀 세로병합
+- Δ 값에 조건부 색상 (음수=빨강, 양수=초록, 0=대시)
+- Progress % 열 추가
+- 파일명: `SHAW_PlanVsActual_{GroupHeader}_{YYYYMMDD_HHmm}.xlsx`
 
-| 영역 | 변경 |
-|------|------|
-| 툴바 카드 (line 239) | `flex-wrap` 유지하되 모바일에서 각 ToolbarGroup이 `w-full sm:w-auto`로 전체 너비 사용 |
+### 2. `src/pages/DashboardPage.tsx` (수정)
 
-### `src/components/layout/AppLayout.tsx`
-
-| 영역 | 변경 |
-|------|------|
-| Import 인디케이터 (line 55-63) | 파일명 `max-w-[180px]`을 모바일에서 `max-w-[100px] sm:max-w-[180px]`으로 축소 |
-
-## 변경하지 않는 부분
-
-- **사이드바**: 이미 모바일에서 Sheet(오버레이)로 동작 — 정상
-- **로그인 페이지**: 모바일에서 적절히 표시됨
-- **MobileUpdatePage**: 이미 모바일 전용으로 설계됨 — 카드 기반 레이아웃
+- `Tabs` 컴포넌트의 `value`를 state로 관리 (`activeBreakdownTab`)
+- CardHeader에 Download 아이콘 버튼 추가
+- 버튼 클릭 시 현재 탭에 해당하는 `PlanActualRow[]` 데이터로 export 함수 호출
+- `Download` 아이콘 lucide import 추가
 
