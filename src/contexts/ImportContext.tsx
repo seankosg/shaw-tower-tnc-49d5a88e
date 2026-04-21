@@ -60,6 +60,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addFiles = useCallback(async (newFiles: File[]) => {
+    const today = new Date().toISOString().slice(0, 10);
     const items: ImportFileItem[] = newFiles.map(file => ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       file,
@@ -68,6 +69,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       status: 'parsing',
       parsedCount: 0,
       progress: 0,
+      dataDate: today,
     }));
     setFiles(prev => [...prev, ...items]);
 
@@ -94,6 +96,10 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   const clearAll = () => {
     setFiles([]);
     setCurrentIndex(-1);
+  };
+
+  const setFileDataDate = (id: string, date: string) => {
+    updateFile(id, { dataDate: date });
   };
 
   const processFile = async (item: ImportFileItem): Promise<{ inserted: number; updated: number; skipped: number; rejected: number } | null> => {
