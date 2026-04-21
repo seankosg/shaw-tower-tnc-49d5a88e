@@ -1101,12 +1101,12 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
         setPendingToggle({ row: r, linkedCount: count ?? 0 });
       } else {
         // Just deactivate master directly
-        await supabase.from(table).update({ is_active: false }).eq('id', r.id);
+        await (supabase.from(table) as any).update({ is_active: false }).eq('id', r.id);
         toast({ title: 'Deactivated' });
         load();
       }
     } else {
-      await supabase.from(table).update({ is_active: true }).eq('id', r.id);
+      await (supabase.from(table) as any).update({ is_active: true }).eq('id', r.id);
       toast({ title: 'Activated' });
       load();
     }
