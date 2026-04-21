@@ -241,33 +241,56 @@ export type SCurveBucket = 'day' | 'week';
 
 export interface SCurvePoint {
   bucket: string;
+  bucketLabel: string;
   t1Planned: number;
-  t1Actual: number;
+  t1Actual: number | null;
   t2Planned: number;
-  t2Actual: number;
+  t2Actual: number | null;
+  t1BarPlan: number;
+  t1BarActual: number | null;
+  t2BarPlan: number;
+  t2BarActual: number | null;
+}
+
+const MONTH_ABBR_SC = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function labelDdMmm(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  return `${m[3]}-${MONTH_ABBR_SC[parseInt(m[2], 10) - 1]}`;
 }
 
 function bucketize(iso: string, granularity: SCurveBucket): string {
   if (granularity === 'day') return iso;
-  // ISO week start (Monday)
   const d = new Date(iso + 'T00:00:00Z');
   const day = d.getUTCDay() || 7;
   if (day !== 1) d.setUTCDate(d.getUTCDate() - (day - 1));
   return d.toISOString().slice(0, 10);
 }
 
+function generateBuckets(startDate: string, endDate: string, granularity: SCurveBucket): string[] {
+  const result: string[] = [];
+  const d = new Date(bucketize(startDate, granularity) + 'T00:00:00Z');
+  const end = new Date(endDate + 'T00:00:00Z');
+  const step = granularity === 'day' ? 1 : 7;
+  while (d <= end) {
+    result.push(d.toISOString().slice(0, 10));
+    d.setUTCDate(d.getUTCDate() + step);
+  }
+  return result;
+}
+
 export function buildSCurve(
   subs: SubtestForDashboard[],
   granularity: SCurveBucket,
-  rangeDays?: number
+  startDate: string,
+  endDate: string,
+  today: string,
 ): SCurvePoint[] {
   const counts = new Map<string, { t1p: number; t1a: number; t2p: number; t2a: number }>();
   const ensure = (b: string) => {
     let v = counts.get(b);
-    if (!v) {
-      v = { t1p: 0, t1a: 0, t2p: 0, t2a: 0 };
-      counts.set(b, v);
-    }
+    if (!v) { v = { t1p: 0, t1a: 0, t2p: 0, t2a: 0 }; counts.set(b, v); }
     return v;
   };
   for (const s of subs) {
@@ -277,37 +300,33 @@ export function buildSCurve(
     if (s.t2_actual_date) ensure(bucketize(s.t2_actual_date, granularity)).t2a++;
   }
 
-  let buckets = Array.from(counts.keys()).sort();
-  if (rangeDays && buckets.length) {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - rangeDays);
-    const cutoffIso = cutoff.toISOString().slice(0, 10);
-    buckets = buckets.filter(b => b >= cutoffIso);
-  }
+  const buckets = generateBuckets(startDate, endDate, granularity);
+  if (buckets.length === 0) return [];
 
-  let cT1p = 0,
-    cT1a = 0,
-    cT2p = 0,
-    cT2a = 0;
-  // include all buckets before range for cumulative carry-over
-  const all = Array.from(counts.keys()).sort();
-  const carrySet = new Set(buckets);
-  for (const b of all) {
-    const v = counts.get(b)!;
-    if (!carrySet.has(b)) {
-      cT1p += v.t1p;
-      cT1a += v.t1a;
-      cT2p += v.t2p;
-      cT2a += v.t2a;
+  let cT1p = 0, cT1a = 0, cT2p = 0, cT2a = 0;
+  for (const [b, v] of counts) {
+    if (b < buckets[0]) {
+      cT1p += v.t1p; cT1a += v.t1a; cT2p += v.t2p; cT2a += v.t2a;
     }
   }
 
+  const todayBucket = bucketize(today, granularity);
+
   return buckets.map(b => {
-    const v = counts.get(b)!;
-    cT1p += v.t1p;
-    cT1a += v.t1a;
-    cT2p += v.t2p;
-    cT2a += v.t2a;
-    return { bucket: b, t1Planned: cT1p, t1Actual: cT1a, t2Planned: cT2p, t2Actual: cT2a };
+    const v = counts.get(b) ?? { t1p: 0, t1a: 0, t2p: 0, t2a: 0 };
+    cT1p += v.t1p; cT1a += v.t1a; cT2p += v.t2p; cT2a += v.t2a;
+    const isFuture = b > todayBucket;
+    return {
+      bucket: b,
+      bucketLabel: labelDdMmm(b),
+      t1Planned: cT1p,
+      t1Actual: isFuture ? null : cT1a,
+      t2Planned: cT2p,
+      t2Actual: isFuture ? null : cT2a,
+      t1BarPlan: v.t1p,
+      t1BarActual: isFuture ? null : v.t1a,
+      t2BarPlan: v.t2p,
+      t2BarActual: isFuture ? null : v.t2a,
+    };
   });
 }
