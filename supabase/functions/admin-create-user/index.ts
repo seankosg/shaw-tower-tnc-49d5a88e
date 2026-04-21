@@ -38,12 +38,9 @@ Deno.serve(async (req) => {
     });
     const admin = createClient(SUPABASE_URL, SERVICE);
 
-    const { data: { user: caller }, error: userErr } = await admin.auth.admin.getUserById(token);
-    // fallback: resolve caller from their JWT by getting session
-    const { data: sessionData } = await userClient.auth.getUser();
-    const callerUser = sessionData?.user;
-    if (!callerUser) return json({ error: 'Unauthorized' }, 401);
-    const callerId = callerUser.id;
+    const { data: { user: caller }, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !caller) return json({ error: 'Unauthorized' }, 401);
+    const callerId = caller.id;
 
     const { data: isAdmin } = await admin.rpc('has_role', {
       _user_id: callerId,
