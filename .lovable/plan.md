@@ -1,32 +1,49 @@
 
 
-# S-Curve 차트 기본 X축 단위 변경 — Daily 기본값
+# S-Curve 미래 날짜 계획 막대 표시 수정
 
-## 요약
+## 문제
 
-현재 S-Curve 차트의 기본 granularity가 `'week'`(Weekly)으로 설정되어 있는 것을 **`'day'`(Daily)로 변경**합니다. 기존 로직은 이미 Daily/Weekly 토글에 따라 올바르게 동작하므로 기본값만 수정합니다.
+`buildSCurve` 함수에서 `isFuture`일 때 모든 막대 세그먼트(`t1Met`, `t1Shortfall`, `t1Excess` 등)를 0으로 설정하고 있어, 미래 날짜의 **계획 막대도 표시되지 않는 버그**가 있습니다.
 
-## 변경 내용
+## 수정 내용
 
-### `src/pages/DashboardPage.tsx` — 1줄 변경
+### `src/lib/dashboard-utils.ts` — 미래 날짜 막대 로직 수정
+
+미래 날짜에서는:
+- **Plan 막대**: `t1p`/`t2p` 값 그대로 표시 (Shortfall로 표현 — actual이 0이므로 plan 전체가 shortfall 색이 아닌 plan 색으로)
+- **Actual 관련**: 0 유지
+
+미래 날짜의 계획은 "아직 실적이 없는 상태"이므로, shortfall이 아닌 **plan 자체**로 표현해야 합니다. 이를 위해 미래 날짜용 새 필드 또는 조건부 처리를 추가합니다:
 
 ```typescript
-// 변경 전
-const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>('week');
+// 변경 전 (lines 334-339)
+t1Met: isFuture ? 0 : Math.min(t1p, t1a),
+t1Shortfall: isFuture ? 0 : Math.max(0, t1p - t1a),
+t1Excess: isFuture ? 0 : Math.max(0, t1a - t1p),
+t2Met: isFuture ? 0 : Math.min(t2p, t2a),
+t2Shortfall: isFuture ? 0 : Math.max(0, t2p - t2a),
+t2Excess: isFuture ? 0 : Math.max(0, t2a - t2p),
 
 // 변경 후
-const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>('day');
+t1Met: isFuture ? t1p : Math.min(t1p, t1a),
+t1Shortfall: isFuture ? 0 : Math.max(0, t1p - t1a),
+t1Excess: isFuture ? 0 : Math.max(0, t1a - t1p),
+t2Met: isFuture ? t2p : Math.min(t2p, t2a),
+t2Shortfall: isFuture ? 0 : Math.max(0, t2p - t2a),
+t2Excess: isFuture ? 0 : Math.max(0, t2a - t2p),
 ```
 
-## 동작 확인
+미래 날짜에서 `t1Met = t1p`로 설정하면 계획 수량이 진한 파랑/초록(Met 색상)으로 표시됩니다. Shortfall과 Excess는 0이므로 빨강/남색은 나타나지 않습니다.
 
-- **Daily (기본)**: 각 일별로 막대 + 누적 라인 표시
-- **Weekly 클릭 시**: 주간 누계로 자동 집계 (월요일 기준 버킷)
-- 날짜 범위 변경 시에도 선택된 granularity에 따라 정상 동작
+## 결과
+
+- **과거/오늘**: 기존대로 Met + Shortfall/Excess 조건부 색상
+- **미래**: 계획 막대만 표시 (Met 색상), 실적 관련 없음
 
 ## 수정 파일
 
 | 파일 | 변경 |
 |------|------|
-| `src/pages/DashboardPage.tsx` | `scurveBucket` 초기값 `'week'` → `'day'` |
+| `src/lib/dashboard-utils.ts` | lines 334, 337: `isFuture ? 0` → `isFuture ? t1p` / `isFuture ? t2p` |
 
