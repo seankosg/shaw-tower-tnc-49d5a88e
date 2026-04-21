@@ -75,6 +75,7 @@ export default function AdminPage() {
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="fields">Field Config</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
         </TabsList>
 
@@ -84,6 +85,7 @@ export default function AdminPage() {
         <TabsContent value="permissions"><PermissionsTab /></TabsContent>
         <TabsContent value="fields"><FieldConfigTab /></TabsContent>
         <TabsContent value="settings"><SettingsTab /></TabsContent>
+        <TabsContent value="backup"><BackupTab /></TabsContent>
         <TabsContent value="audit"><AuditTab /></TabsContent>
       </Tabs>
     </div>
