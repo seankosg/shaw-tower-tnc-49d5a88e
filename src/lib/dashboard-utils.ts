@@ -331,10 +331,10 @@ export function buildSCurve(
       t1Actual: isFuture ? null : cT1a,
       t2Planned: cT2p,
       t2Actual: isFuture ? null : cT2a,
-      t1Met: isFuture ? 0 : Math.min(t1p, t1a),
+      t1Met: isFuture ? t1p : Math.min(t1p, t1a),
       t1Shortfall: isFuture ? 0 : Math.max(0, t1p - t1a),
       t1Excess: isFuture ? 0 : Math.max(0, t1a - t1p),
-      t2Met: isFuture ? 0 : Math.min(t2p, t2a),
+      t2Met: isFuture ? t2p : Math.min(t2p, t2a),
       t2Shortfall: isFuture ? 0 : Math.max(0, t2p - t2a),
       t2Excess: isFuture ? 0 : Math.max(0, t2a - t2p),
     };
