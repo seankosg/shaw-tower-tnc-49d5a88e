@@ -17,6 +17,7 @@ export interface SubtestForDashboard {
   pred_status?: TcStatus | null;
   pred_planned_date?: string | null;
   pred_actual_date?: string | null;
+  team?: string | null;
 }
 
 export const NONE_LABEL = '(None)';
