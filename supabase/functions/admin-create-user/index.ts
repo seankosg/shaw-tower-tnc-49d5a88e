@@ -12,7 +12,7 @@ const DEFAULT_PASSWORD = 'SHAW00';
 interface Body {
   login_id: string;
   name: string;
-  user_type: 'subcontractor' | 'hdec' | 'pm_pd' | 'admin';
+  user_type: 'subcontractor' | 'subsub' | 'hdec' | 'pm_pd' | 'admin';
   role: 'guest' | 'super_guest' | 'user' | 'senior_user' | 'superuser' | 'admin';
   subcontractor_name?: string | null;
   subsub_name?: string | null;

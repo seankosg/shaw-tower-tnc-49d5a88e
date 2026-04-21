@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
     }
 
     const base = suggestBase(trimmedName, body.master_type);
-    const userType = body.master_type === 'hdec_pic' ? 'hdec' : 'subcontractor';
+    const userType = body.master_type === 'hdec_pic' ? 'hdec' : body.master_type === 'subsub' ? 'subsub' : 'subcontractor';
 
     let loginId = '';
     let createdUser: any = null;
