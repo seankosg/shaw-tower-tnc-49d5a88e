@@ -8,6 +8,8 @@ import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { APP_NAME } from '@/lib/constants';
+import { useAuth } from '@/contexts/AuthContext';
+import { filterNavItems } from '@/lib/role-permissions';
 
 const mainNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/dashboard' },
@@ -24,6 +26,10 @@ const adminNav = [
 export function AppSidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const { roles } = useAuth();
+
+  const visibleMain = filterNavItems(mainNav, roles);
+  const visibleAdmin = filterNavItems(adminNav, roles);
 
   return (
     <Sidebar>
@@ -41,7 +47,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNav.map((item) => (
+              {visibleMain.map((item) => (
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
                     isActive={pathname === item.path}
@@ -57,25 +63,27 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Administration</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {adminNav.map((item) => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton
-                    isActive={pathname.startsWith(item.path)}
-                    onClick={() => navigate(item.path)}
-                    tooltip={item.label}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {visibleAdmin.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Administration</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleAdmin.map((item) => (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={pathname.startsWith(item.path)}
+                      onClick={() => navigate(item.path)}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
     </Sidebar>
   );
