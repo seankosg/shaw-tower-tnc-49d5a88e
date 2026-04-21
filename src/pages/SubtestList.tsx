@@ -12,7 +12,7 @@ import { useFieldConfig } from '@/hooks/useFieldConfig';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { DataSourceTag } from '@/components/shared/DataSourceTag';
 import { StageProgress, StageProgressLegend } from '@/components/shared/StageProgress';
-import { Check } from 'lucide-react';
+import { Check, Filter, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -54,50 +54,88 @@ interface SubtestRow {
   system_code: string;
 }
 
+// ---- Filter functions ----
+
+const EMPTY_TOKEN = '__EMPTY__';
+
 const multiSelectFilterFn = (row: any, columnId: string, filterValue: string[]) => {
   if (!filterValue || filterValue.length === 0) return true;
   const val = row.getValue(columnId);
+  const isEmpty = val == null || val === '';
+  if (filterValue.includes(EMPTY_TOKEN) && isEmpty) return true;
+  if (isEmpty) return false;
   return filterValue.includes(val);
 };
 
-const textFilterFn = (row: any, columnId: string, filterValue: string) => {
+const textFilterFn = (row: any, columnId: string, filterValue: any) => {
   if (!filterValue) return true;
+  // Support object shape { text, emptyOnly }
+  const text = typeof filterValue === 'string' ? filterValue : filterValue?.text;
+  const emptyOnly = typeof filterValue === 'object' ? filterValue?.emptyOnly : false;
   const val = row.getValue(columnId);
+  if (emptyOnly) return val == null || String(val).trim() === '';
+  if (!text) return true;
   if (val == null) return false;
-  return String(val).toLowerCase().includes(filterValue.toLowerCase());
+  return String(val).toLowerCase().includes(text.toLowerCase());
 };
 
-function MultiSelectFilter({ column, options }: {
+const dateRangeFilterFn = (row: any, columnId: string, filterValue: any) => {
+  if (!filterValue) return true;
+  const { from, to, emptyOnly } = filterValue;
+  const val = row.getValue(columnId) as string | null;
+  if (emptyOnly) return val == null || val === '';
+  if (!from && !to) return true;
+  if (!val) return false;
+  if (from && val < from) return false;
+  if (to && val > to) return false;
+  return true;
+};
+
+// ---- Filter dropdown components ----
+
+function MultiSelectDropdown({ column, options }: {
   column: any;
   options: { value: string; label: string }[];
 }) {
   const selected: string[] = (column.getFilterValue() as string[]) ?? [];
+  const isActive = selected.length > 0;
 
   const toggle = (value: string) => {
     const next = selected.includes(value)
-      ? selected.filter(v => v !== value)
+      ? selected.filter((v: string) => v !== value)
       : [...selected, value];
     column.setFilterValue(next.length ? next : undefined);
   };
 
+  const allOptions = [{ value: EMPTY_TOKEN, label: '(Empty)' }, ...options];
+
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-7 text-[11px] w-full min-w-0 border-muted justify-between font-normal">
-          <span className="truncate">
-            {selected.length === 0 ? 'All' : `${selected.length} selected`}
-          </span>
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-        </Button>
+        <button
+          className={cn(
+            'inline-flex items-center justify-center h-4 w-4 rounded hover:bg-muted/80',
+            isActive ? 'text-primary' : 'text-muted-foreground/50'
+          )}
+          onClick={(e) => e.stopPropagation()}
+          title="Filter"
+        >
+          <Filter className="h-3 w-3" />
+        </button>
       </PopoverTrigger>
-      <PopoverContent className="w-48 p-2 max-h-60 overflow-auto" align="start">
+      <PopoverContent
+        className="w-48 p-2 max-h-60 overflow-auto"
+        align="start"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDownOutside={(e) => e.stopPropagation()}
+      >
         <button
           className="text-[11px] text-muted-foreground hover:underline mb-1 px-1"
           onClick={() => column.setFilterValue(undefined)}
         >
           Clear all
         </button>
-        {options.map(o => (
+        {allOptions.map(o => (
           <label key={o.value} className="flex items-center gap-2 px-1 py-1 text-xs cursor-pointer hover:bg-muted/50 rounded">
             <Checkbox
               checked={selected.includes(o.value)}
@@ -112,22 +150,154 @@ function MultiSelectFilter({ column, options }: {
   );
 }
 
-function ColumnFilter({ column, type, options }: {
-  column: any;
-  type: 'text' | 'multi-select';
-  options?: { value: string; label: string }[];
-}) {
-  if (type === 'multi-select' && options) {
-    return <MultiSelectFilter column={column} options={options} />;
-  }
+function DateRangeDropdown({ column }: { column: any }) {
+  const filterValue = column.getFilterValue() as { from?: string; to?: string; emptyOnly?: boolean } | undefined;
+  const isActive = !!(filterValue?.from || filterValue?.to || filterValue?.emptyOnly);
+
+  const update = (patch: Partial<{ from: string; to: string; emptyOnly: boolean }>) => {
+    const current = filterValue ?? {};
+    const next = { ...current, ...patch };
+    if (!next.from && !next.to && !next.emptyOnly) {
+      column.setFilterValue(undefined);
+    } else {
+      column.setFilterValue(next);
+    }
+  };
+
   return (
-    <Input
-      value={(column.getFilterValue() as string) ?? ''}
-      onChange={(e) => column.setFilterValue(e.target.value || undefined)}
-      placeholder="Filter..."
-      className="h-7 text-[11px] w-full min-w-0 border-muted"
-    />
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          className={cn(
+            'inline-flex items-center justify-center h-4 w-4 rounded hover:bg-muted/80',
+            isActive ? 'text-primary' : 'text-muted-foreground/50'
+          )}
+          onClick={(e) => e.stopPropagation()}
+          title="Filter"
+        >
+          <Filter className="h-3 w-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-56 p-3 space-y-2"
+        align="start"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDownOutside={(e) => e.stopPropagation()}
+      >
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">From</label>
+          <Input
+            type="date"
+            value={filterValue?.from ?? ''}
+            onChange={(e) => update({ from: e.target.value || undefined })}
+            className="h-7 text-xs"
+            disabled={!!filterValue?.emptyOnly}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">To</label>
+          <Input
+            type="date"
+            value={filterValue?.to ?? ''}
+            onChange={(e) => update({ to: e.target.value || undefined })}
+            className="h-7 text-xs"
+            disabled={!!filterValue?.emptyOnly}
+          />
+        </div>
+        <label className="flex items-center gap-2 text-xs cursor-pointer pt-1">
+          <Checkbox
+            checked={!!filterValue?.emptyOnly}
+            onCheckedChange={(checked) => update({ emptyOnly: !!checked, from: undefined, to: undefined })}
+            className="h-3.5 w-3.5"
+          />
+          Empty only
+        </label>
+        <button
+          className="text-[11px] text-muted-foreground hover:underline"
+          onClick={() => column.setFilterValue(undefined)}
+        >
+          Clear
+        </button>
+      </PopoverContent>
+    </Popover>
   );
+}
+
+function TextFilterDropdown({ column }: { column: any }) {
+  const filterValue = column.getFilterValue() as { text?: string; emptyOnly?: boolean } | string | undefined;
+  const text = typeof filterValue === 'string' ? filterValue : filterValue?.text ?? '';
+  const emptyOnly = typeof filterValue === 'object' ? filterValue?.emptyOnly ?? false : false;
+  const isActive = !!(text || emptyOnly);
+
+  const update = (patch: Partial<{ text: string; emptyOnly: boolean }>) => {
+    const current = typeof filterValue === 'string'
+      ? { text: filterValue, emptyOnly: false }
+      : filterValue ?? { text: '', emptyOnly: false };
+    const next = { ...current, ...patch };
+    if (!next.text && !next.emptyOnly) {
+      column.setFilterValue(undefined);
+    } else {
+      column.setFilterValue(next);
+    }
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          className={cn(
+            'inline-flex items-center justify-center h-4 w-4 rounded hover:bg-muted/80',
+            isActive ? 'text-primary' : 'text-muted-foreground/50'
+          )}
+          onClick={(e) => e.stopPropagation()}
+          title="Filter"
+        >
+          <Filter className="h-3 w-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-52 p-3 space-y-2"
+        align="start"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDownOutside={(e) => e.stopPropagation()}
+      >
+        <Input
+          placeholder="Search..."
+          value={text}
+          onChange={(e) => update({ text: e.target.value || undefined })}
+          className="h-7 text-xs"
+          disabled={emptyOnly}
+        />
+        <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <Checkbox
+            checked={emptyOnly}
+            onCheckedChange={(checked) => update({ emptyOnly: !!checked, text: undefined })}
+            className="h-3.5 w-3.5"
+          />
+          Empty only
+        </label>
+        <button
+          className="text-[11px] text-muted-foreground hover:underline"
+          onClick={() => column.setFilterValue(undefined)}
+        >
+          Clear
+        </button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ColumnFilterDropdown({ column }: { column: any }) {
+  const meta = column.columnDef.meta as any;
+  const filterType = meta?.filterType;
+
+  if (filterType === 'multi-select') {
+    return <MultiSelectDropdown column={column} options={meta?.filterOptions ?? []} />;
+  }
+  if (filterType === 'date-range') {
+    return <DateRangeDropdown column={column} />;
+  }
+  return <TextFilterDropdown column={column} />;
 }
 
 const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
@@ -147,14 +317,12 @@ export default function SubtestList() {
   const [loading, setLoading] = useState(() => getSubtestCache().data === null);
   const [stateLoaded, setStateLoaded] = useState(false);
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
-  // Debounced filter: searchInput is what the user types; globalFilter is what react-table sees
   const [searchInput, setSearchInput] = useState('');
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
-  // status URL filter (overdue / at_risk) — applied client-side
-  const urlStatusFilter = searchParams.get('status'); // 'overdue' | 'at_risk' | null
+  const urlStatusFilter = searchParams.get('status');
   const urlAtRiskDays = Number(searchParams.get('at_risk_days') ?? '2');
   const tableRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -176,7 +344,6 @@ export default function SubtestList() {
     setColumnSizing(prev => ({ ...prev, [columnId]: finalWidth }));
   };
 
-  // Load persisted state when user/storageKey changes; URL params override per-column filters
   useEffect(() => {
     setStateLoaded(false);
     let baseFilters: ColumnFiltersState = [];
@@ -196,7 +363,6 @@ export default function SubtestList() {
       // ignore
     }
 
-    // URL-driven filters take precedence (replace any prior filter on these columns)
     const urlMap: Record<string, string> = {
       system: 'system_code',
       subcon: 'subcontractor_name',
@@ -209,8 +375,8 @@ export default function SubtestList() {
     for (const [param, col] of Object.entries(urlMap)) {
       const v = searchParams.get(param);
       if (v) {
-        // multi-select columns expect string[]
-        if (col === 'system_code' || col === 't1_status' || col === 't2_status') {
+        if (col === 'system_code' || col === 't1_status' || col === 't2_status'
+          || col === 'subcontractor_name' || col === 'subsub_name' || col === 'hdec_pic_name') {
           next.push({ id: col, value: [v] });
         } else {
           next.push({ id: col, value: v });
@@ -226,14 +392,11 @@ export default function SubtestList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, searchParams]);
 
-  // Debounce: searchInput → globalFilter (300ms). Prevents re-filter on every keystroke.
   useEffect(() => {
     const t = setTimeout(() => setGlobalFilter(searchInput), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  // Persist on change (only after initial load to avoid overwriting). Debounced 500ms so
-  // column resize drag does not stringify on every pixel.
   useEffect(() => {
     if (!stateLoaded) return;
     const t = setTimeout(() => {
@@ -257,7 +420,6 @@ export default function SubtestList() {
   };
 
   const fetchData = async () => {
-    // If cache present, render immediately and refresh in background.
     const cached = getSubtestCache();
     if (cached.data) {
       setData(cached.data as SubtestRow[]);
@@ -317,15 +479,31 @@ export default function SubtestList() {
     []
   );
 
+  // Dynamic options from data for subcontractor, subsub, hdec_pic
+  const subcontractorOptions = useMemo(() => {
+    const unique = [...new Set(data.map(r => r.subcontractor_name).filter(Boolean))] as string[];
+    return unique.sort().map(v => ({ value: v, label: v }));
+  }, [data]);
+
+  const subsubOptions = useMemo(() => {
+    const unique = [...new Set(data.map(r => r.subsub_name).filter(Boolean))] as string[];
+    return unique.sort().map(v => ({ value: v, label: v }));
+  }, [data]);
+
+  const hdecPicOptions = useMemo(() => {
+    const unique = [...new Set(data.map(r => r.hdec_pic_name).filter(Boolean))] as string[];
+    return unique.sort().map(v => ({ value: v, label: v }));
+  }, [data]);
+
   const columns = useMemo<ColumnDef<SubtestRow>[]>(() => [
-    { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn },
+    { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn,
+      meta: { filterType: 'text' } },
     {
       id: 'stage_progress',
       header: 'Progress',
       size: 110,
       enableColumnFilter: false,
       enableSorting: true,
-      // Sort by stage completion score: pred(1) + t1Done(2) + t2Done(4) so T2-done rows last (asc) or first (desc)
       accessorFn: (r) => {
         const t1Done = r.t1_status === 'Done';
         const t2Done = r.t2_status === 'Done';
@@ -348,21 +526,28 @@ export default function SubtestList() {
       ),
     },
     { accessorKey: 'system_code', header: 'System', size: 100, filterFn: multiSelectFilterFn,
-      meta: { filterType: 'multi-select' as const, filterOptions: systemOptions } },
+      meta: { filterType: 'multi-select', filterOptions: systemOptions } },
     { accessorKey: 'equipment', header: 'Equipment', size: 120, filterFn: textFilterFn,
+      meta: { filterType: 'text' },
       cell: ({ getValue }) => (
         <span className="truncate block max-w-[120px]">{getValue() as string || '—'}</span>
       )},
-    { accessorKey: 'subtest_id', header: 'Subtest ID', size: 160, filterFn: textFilterFn },
-    { accessorKey: 'mos_code', header: 'MOS Code', size: 100, filterFn: textFilterFn },
+    { accessorKey: 'subtest_id', header: 'Subtest ID', size: 160, filterFn: textFilterFn,
+      meta: { filterType: 'text' } },
+    { accessorKey: 'mos_code', header: 'MOS Code', size: 100, filterFn: textFilterFn,
+      meta: { filterType: 'text' } },
     { accessorKey: 'description', header: 'Description', size: 200, filterFn: textFilterFn,
+      meta: { filterType: 'text' },
       cell: ({ getValue }) => (
         <span className="truncate block max-w-[200px]">{getValue() as string || '—'}</span>
       )},
-    { accessorKey: 'predecessor_status_raw', header: 'Predecessor', size: 110, filterFn: textFilterFn },
-    { accessorKey: 't1_planned_date', header: 'T1 Planned', size: 100, enableColumnFilter: false,
+    { accessorKey: 'predecessor_status_raw', header: 'Predecessor', size: 110, filterFn: textFilterFn,
+      meta: { filterType: 'text' } },
+    { accessorKey: 't1_planned_date', header: 'T1 Planned', size: 100, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
-    { accessorKey: 't1_actual_date', header: 'T1 Actual', size: 100, enableColumnFilter: false,
+    { accessorKey: 't1_actual_date', header: 'T1 Actual', size: 100, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
       cell: ({ row }) => {
         const actual = row.original.t1_actual_date;
         const planned = row.original.t1_planned_date;
@@ -375,11 +560,13 @@ export default function SubtestList() {
         );
       }},
     { accessorKey: 't1_status', header: 'T1 Status', size: 90, filterFn: multiSelectFilterFn,
-      meta: { filterType: 'multi-select' as const, filterOptions: statusOptions },
+      meta: { filterType: 'multi-select', filterOptions: statusOptions },
       cell: ({ getValue }) => <StatusBadge status={getValue() as TcStatus | null} /> },
-    { accessorKey: 't2_planned_date', header: 'T2 Planned', size: 100, enableColumnFilter: false,
+    { accessorKey: 't2_planned_date', header: 'T2 Planned', size: 100, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
-    { accessorKey: 't2_actual_date', header: 'T2 Actual', size: 100, enableColumnFilter: false,
+    { accessorKey: 't2_actual_date', header: 'T2 Actual', size: 100, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
       cell: ({ row }) => {
         const actual = row.original.t2_actual_date;
         const planned = row.original.t2_planned_date;
@@ -392,17 +579,27 @@ export default function SubtestList() {
         );
       }},
     { accessorKey: 't2_status', header: 'T2 Status', size: 90, filterFn: multiSelectFilterFn,
-      meta: { filterType: 'multi-select' as const, filterOptions: statusOptions },
+      meta: { filterType: 'multi-select', filterOptions: statusOptions },
       cell: ({ getValue }) => <StatusBadge status={getValue() as TcStatus | null} /> },
-    { accessorKey: 'subcontractor_name', header: 'Subcontractor', size: 120, filterFn: textFilterFn },
-    { accessorKey: 'subsub_name', header: 'Sub-Sub', size: 120, filterFn: textFilterFn },
-    { accessorKey: 'hdec_pic_name', header: 'HDEC PIC', size: 110, filterFn: textFilterFn },
-    { accessorKey: 'data_source_type', header: 'Source', size: 110, filterFn: multiSelectFilterFn,
-      meta: { filterType: 'multi-select' as const, filterOptions: sourceOptions },
-      cell: ({ getValue }) => <DataSourceTag source={getValue() as DataSource | null} /> },
-    { accessorKey: 'updated_at', header: 'Updated', size: 140, enableColumnFilter: false,
+    { accessorKey: 'pred_planned_date', header: 'Pred Planned', size: 100, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
-  ], [systemOptions, statusOptions, sourceOptions]);
+    { accessorKey: 'pred_actual_date', header: 'Pred Actual', size: 100, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
+      cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
+    { accessorKey: 'subcontractor_name', header: 'Subcontractor', size: 120, filterFn: multiSelectFilterFn,
+      meta: { filterType: 'multi-select', filterOptions: subcontractorOptions } },
+    { accessorKey: 'subsub_name', header: 'Sub-Sub', size: 120, filterFn: multiSelectFilterFn,
+      meta: { filterType: 'multi-select', filterOptions: subsubOptions } },
+    { accessorKey: 'hdec_pic_name', header: 'HDEC PIC', size: 110, filterFn: multiSelectFilterFn,
+      meta: { filterType: 'multi-select', filterOptions: hdecPicOptions } },
+    { accessorKey: 'data_source_type', header: 'Source', size: 110, filterFn: multiSelectFilterFn,
+      meta: { filterType: 'multi-select', filterOptions: sourceOptions },
+      cell: ({ getValue }) => <DataSourceTag source={getValue() as DataSource | null} /> },
+    { accessorKey: 'updated_at', header: 'Updated', size: 140, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
+      cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
+  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions]);
 
   // Apply status (overdue / at_risk) + date URL filters at data level
   const urlT1PlannedTo = searchParams.get('t1_planned_to');
@@ -414,7 +611,6 @@ export default function SubtestList() {
   const urlT1ActualOn = searchParams.get('t1_actual_on');
   const urlT2ActualOn = searchParams.get('t2_actual_on');
 
-  // Schedule cell click → bucket range + stage + planned|actual + status
   const urlDateFrom = searchParams.get('date_from');
   const urlDateTo = searchParams.get('date_to');
   const urlDateField = searchParams.get('date_field') as 'planned' | 'actual' | null;
@@ -433,7 +629,6 @@ export default function SubtestList() {
       !!d && (!urlDateFrom || d >= urlDateFrom) && (!urlDateTo || d <= urlDateTo);
 
     return data.filter(r => {
-      // status filter
       if (urlStatusFilter) {
         const overdue =
           (r.t1_planned_date && r.t1_planned_date < today && r.t1_status !== 'Done') ||
@@ -449,18 +644,15 @@ export default function SubtestList() {
           if (!within(r.t1_planned_date, r.t1_status) && !within(r.t2_planned_date, r.t2_status)) return false;
         }
       }
-      // date <= filters
       if (urlT1PlannedTo && !(r.t1_planned_date && r.t1_planned_date <= urlT1PlannedTo)) return false;
       if (urlT2PlannedTo && !(r.t2_planned_date && r.t2_planned_date <= urlT2PlannedTo)) return false;
       if (urlT1ActualTo && !(r.t1_actual_date && r.t1_actual_date <= urlT1ActualTo)) return false;
       if (urlT2ActualTo && !(r.t2_actual_date && r.t2_actual_date <= urlT2ActualTo)) return false;
-      // date == filters
       if (urlT1PlannedOn && r.t1_planned_date !== urlT1PlannedOn) return false;
       if (urlT2PlannedOn && r.t2_planned_date !== urlT2PlannedOn) return false;
       if (urlT1ActualOn && r.t1_actual_date !== urlT1ActualOn) return false;
       if (urlT2ActualOn && r.t2_actual_date !== urlT2ActualOn) return false;
 
-      // Schedule cell range filter (date_from / date_to + date_field + stage + cell_status)
       if (urlDateFrom || urlDateTo) {
         const stages: Array<'pred' | 't1' | 't2'> = urlStage ? [urlStage] : ['pred', 't1', 't2'];
         const fieldKey = urlDateField === 'actual' ? 'actual_date' : 'planned_date';
@@ -485,19 +677,15 @@ export default function SubtestList() {
       urlT1PlannedOn, urlT2PlannedOn, urlT1ActualOn, urlT2ActualOn,
       urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus]);
 
-  // Map react-table column id → field_config.field_name
   const columnIdToFieldName: Record<string, string> = {
     system_code: 'system',
-    // others map by identical key (e.g. item_no, mos_code, t1_status, ...)
   };
-  // Reverse map: field_name → react-table column id
   const fieldNameToColumnId: Record<string, string> = { system: 'system_code' };
   const columnVisibility = useMemo<VisibilityState>(() => {
     const visibility: VisibilityState = {};
     for (const col of columns) {
       const id = (col as any).id ?? (col as any).accessorKey;
       if (!id) continue;
-      // stage_progress is a synthetic UI column — always show
       if (id === 'stage_progress') continue;
       const fieldName = columnIdToFieldName[id] ?? id;
       visibility[id] = isFieldVisible(fieldName);
@@ -506,8 +694,6 @@ export default function SubtestList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columns, isFieldVisible]);
 
-  // Compute column order from field_config sort_order.
-  // Pinned identity columns stay at the front; stage_progress stays right after item_no.
   const columnOrder = useMemo<string[]>(() => {
     const allIds = columns
       .map(c => (c as any).id ?? (c as any).accessorKey)
@@ -523,7 +709,6 @@ export default function SubtestList() {
         remaining.delete(colId);
       }
     }
-    // Append any leftover columns (no config row) at the end, preserving original order.
     for (const id of allIds) {
       if (remaining.has(id)) {
         ordered.push(id);
@@ -569,7 +754,6 @@ export default function SubtestList() {
       const v = searchParams.get(k);
       if (v) out.push({ label: `${lbl} ${v}`, param: k });
     }
-    // Combined date_from/date_to/date_field chip
     const df = searchParams.get('date_from');
     const dt = searchParams.get('date_to');
     const fld = searchParams.get('date_field');
@@ -593,6 +777,9 @@ export default function SubtestList() {
     setSearchParams(next, { replace: true });
   };
   const clearAllUrlFilters = () => setSearchParams(new URLSearchParams(), { replace: true });
+
+  // Count active column filters for display
+  const activeColumnFilterCount = columnFilters.length;
 
   return (
     <div className="space-y-4">
@@ -669,8 +856,19 @@ export default function SubtestList() {
         <span className="text-sm text-muted-foreground self-center">
           {table.getFilteredRowModel().rows.length} records
         </span>
+        {activeColumnFilterCount > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 text-xs"
+            onClick={() => setColumnFilters([])}
+          >
+            <X className="h-3 w-3 mr-1" />
+            Clear filters ({activeColumnFilterCount})
+          </Button>
+        )}
         <span className="text-xs text-muted-foreground self-center hidden md:inline">
-          Tip: Shift+Click headers for multi-sort
+          Tip: Shift+Click headers for multi-sort · Click <Filter className="inline h-3 w-3" /> to filter columns
         </span>
         {sorting.length > 0 && (
           <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setSorting([])}>
@@ -694,7 +892,7 @@ export default function SubtestList() {
   );
 }
 
-// ---------- Virtualized table view (extracted to keep memo logic isolated) ----------
+// ---------- Virtualized table view ----------
 
 interface SubtestTableViewProps {
   table: ReturnType<typeof useReactTable<SubtestRow>>;
@@ -725,7 +923,6 @@ function SubtestTableView({
   );
 
   const frozenPaneRef = useRef<HTMLDivElement>(null);
-  // tableRef is used as the scroll pane (source of truth for vertical scroll & virtualizer)
   const scrollPaneRef = tableRef;
 
   const rows = table.getRowModel().rows;
@@ -745,28 +942,23 @@ function SubtestTableView({
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // Sync vertical scroll: scroll pane → frozen pane
   const handleScroll = useCallback(() => {
     if (frozenPaneRef.current && scrollPaneRef.current) {
       frozenPaneRef.current.scrollTop = scrollPaneRef.current.scrollTop;
     }
   }, [scrollPaneRef]);
 
-  // Delegate wheel events on frozen pane to scroll pane (vertical scroll)
   const handleFrozenWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     if (scrollPaneRef.current && e.deltaY !== 0) {
       scrollPaneRef.current.scrollTop += e.deltaY;
     }
   }, [scrollPaneRef]);
 
-  // Header groups (last group has the leaf columns)
   const headerGroups = table.getHeaderGroups();
   const lastHeaderGroup = headerGroups[headerGroups.length - 1];
-  const filterHeaders = headerGroups[0]?.headers ?? [];
-  const frozenFilterHeaders = filterHeaders.slice(0, FROZEN_COUNT);
-  const scrollFilterHeaders = filterHeaders.slice(FROZEN_COUNT);
-  const frozenSortHeaders = lastHeaderGroup ? lastHeaderGroup.headers.slice(0, FROZEN_COUNT) : [];
-  const scrollSortHeaders = lastHeaderGroup ? lastHeaderGroup.headers.slice(FROZEN_COUNT) : [];
+  const allHeaders = lastHeaderGroup ? lastHeaderGroup.headers : [];
+  const frozenHeaders = allHeaders.slice(0, FROZEN_COUNT);
+  const scrollHeaders = allHeaders.slice(FROZEN_COUNT);
 
   const renderRowBgClass = (r: SubtestRow) => {
     const delayed = isDelayed(r.t1_planned_date, r.t1_actual_date) ||
@@ -775,9 +967,54 @@ function SubtestTableView({
     return { delayed, t2Done };
   };
 
+  const renderHeader = (header: any) => {
+    const canFilter = header.column.getCanFilter();
+    return (
+      <TableHead
+        key={header.id}
+        data-column-id={header.column.id}
+        style={{ width: header.getSize() }}
+        className="relative text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b"
+        onClick={header.column.getToggleSortingHandler()}
+      >
+        <span className="inline-flex items-center gap-1">
+          {flexRender(header.column.columnDef.header, header.getContext())}
+          {header.column.getIsSorted() && (
+            <span className="ml-0.5">
+              {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
+              {sorting.length > 1 && (
+                <sup className="ml-0.5 text-[9px] text-muted-foreground">
+                  {header.column.getSortIndex() + 1}
+                </sup>
+              )}
+            </span>
+          )}
+          {canFilter && (
+            <span onClick={(e) => e.stopPropagation()}>
+              <ColumnFilterDropdown column={header.column} />
+            </span>
+          )}
+        </span>
+        {header.column.getCanResize() && (
+          <div
+            onMouseDown={header.getResizeHandler()}
+            onTouchStart={header.getResizeHandler()}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => { e.stopPropagation(); autoSizeColumn(header.column.id); }}
+            title="Drag to resize, double-click to auto-fit"
+            className={cn(
+              'absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40',
+              header.column.getIsResizing() && 'bg-primary/60'
+            )}
+          />
+        )}
+      </TableHead>
+    );
+  };
+
   return (
     <div className="rounded-md border max-h-[calc(100vh-220px)] flex overflow-hidden bg-background">
-      {/* Frozen pane: NO horizontal scrollbar */}
+      {/* Frozen pane */}
       <div
         ref={frozenPaneRef}
         onWheel={handleFrozenWheel}
@@ -786,63 +1023,8 @@ function SubtestTableView({
       >
         <Table style={{ width: frozenWidth, tableLayout: 'fixed' }}>
           <TableHeader className="sticky top-0 z-20 bg-background">
-            {/* Filter row */}
-            <TableRow className="border-b-0 bg-muted/30">
-              {frozenFilterHeaders.map(header => {
-                const meta = header.column.columnDef.meta as any;
-                const canFilter = header.column.getCanFilter();
-                return (
-                  <TableHead
-                    key={`filter-${header.id}`}
-                    style={{ width: header.getSize() }}
-                    className="py-1 px-1 bg-muted/30"
-                  >
-                    {canFilter ? (
-                      <ColumnFilter
-                        column={header.column}
-                        type={meta?.filterType === 'multi-select' ? 'multi-select' : 'text'}
-                        options={meta?.filterOptions}
-                      />
-                    ) : null}
-                  </TableHead>
-                );
-              })}
-            </TableRow>
             <TableRow className="border-b bg-background">
-              {frozenSortHeaders.map(header => (
-                <TableHead
-                  key={header.id}
-                  data-column-id={header.column.id}
-                  style={{ width: header.getSize() }}
-                  className="relative text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b"
-                  onClick={header.column.getToggleSortingHandler()}
-                >
-                  {flexRender(header.column.columnDef.header, header.getContext())}
-                  {header.column.getIsSorted() && (
-                    <span className="ml-0.5">
-                      {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
-                      {sorting.length > 1 && (
-                        <sup className="ml-0.5 text-[9px] text-muted-foreground">
-                          {header.column.getSortIndex() + 1}
-                        </sup>
-                      )}
-                    </span>
-                  )}
-                  {header.column.getCanResize() && (
-                    <div
-                      onMouseDown={header.getResizeHandler()}
-                      onTouchStart={header.getResizeHandler()}
-                      onClick={(e) => e.stopPropagation()}
-                      onDoubleClick={(e) => { e.stopPropagation(); autoSizeColumn(header.column.id); }}
-                      title="Drag to resize, double-click to auto-fit"
-                      className={cn(
-                        'absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40',
-                        header.column.getIsResizing() && 'bg-primary/60'
-                      )}
-                    />
-                  )}
-                </TableHead>
-              ))}
+              {frozenHeaders.map(renderHeader)}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -902,7 +1084,7 @@ function SubtestTableView({
         </Table>
       </div>
 
-      {/* Scroll pane: horizontal scrollbar lives ONLY here */}
+      {/* Scroll pane */}
       <div
         ref={scrollPaneRef}
         onScroll={handleScroll}
@@ -910,63 +1092,8 @@ function SubtestTableView({
       >
         <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
           <TableHeader className="sticky top-0 z-20 bg-background">
-            {/* Filter row */}
-            <TableRow className="border-b-0 bg-muted/30">
-              {scrollFilterHeaders.map(header => {
-                const meta = header.column.columnDef.meta as any;
-                const canFilter = header.column.getCanFilter();
-                return (
-                  <TableHead
-                    key={`filter-${header.id}`}
-                    style={{ width: header.getSize() }}
-                    className="py-1 px-1 bg-muted/30"
-                  >
-                    {canFilter ? (
-                      <ColumnFilter
-                        column={header.column}
-                        type={meta?.filterType === 'multi-select' ? 'multi-select' : 'text'}
-                        options={meta?.filterOptions}
-                      />
-                    ) : null}
-                  </TableHead>
-                );
-              })}
-            </TableRow>
             <TableRow className="border-b bg-background">
-              {scrollSortHeaders.map(header => (
-                <TableHead
-                  key={header.id}
-                  data-column-id={header.column.id}
-                  style={{ width: header.getSize() }}
-                  className="relative text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b"
-                  onClick={header.column.getToggleSortingHandler()}
-                >
-                  {flexRender(header.column.columnDef.header, header.getContext())}
-                  {header.column.getIsSorted() && (
-                    <span className="ml-0.5">
-                      {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
-                      {sorting.length > 1 && (
-                        <sup className="ml-0.5 text-[9px] text-muted-foreground">
-                          {header.column.getSortIndex() + 1}
-                        </sup>
-                      )}
-                    </span>
-                  )}
-                  {header.column.getCanResize() && (
-                    <div
-                      onMouseDown={header.getResizeHandler()}
-                      onTouchStart={header.getResizeHandler()}
-                      onClick={(e) => e.stopPropagation()}
-                      onDoubleClick={(e) => { e.stopPropagation(); autoSizeColumn(header.column.id); }}
-                      title="Drag to resize, double-click to auto-fit"
-                      className={cn(
-                        'absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40',
-                        header.column.getIsResizing() && 'bg-primary/60'
-                      )}
-                    />
-                  )}
-                </TableHead>
-              ))}
+              {scrollHeaders.map(renderHeader)}
             </TableRow>
           </TableHeader>
           <TableBody>
