@@ -8,6 +8,7 @@ import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTr
 import { useNavigate } from 'react-router-dom';
 import { useImport, type FileStatus } from '@/contexts/ImportContext';
 import { Input } from '@/components/ui/input';
+import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 
 const statusBadge: Record<FileStatus, { label: string; cls: string }> = {
   pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
