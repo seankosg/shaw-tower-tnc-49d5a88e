@@ -19,6 +19,7 @@ export interface ImportFileItem {
   parsed?: ParsedSubtest[];
   unmappedHeaders?: string[];
   dataDate?: string;
+  team?: string;
 }
 
 interface ImportContextValue {
