@@ -1056,6 +1056,29 @@ function SubcontractorMasterTable() {
         </div>
       </CardContent>
     </Card>
+
+    <AlertDialog open={!!pendingToggle} onOpenChange={(open) => !open && setPendingToggle(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Deactivate {pendingToggle?.row.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {pendingToggle?.linkedCount
+              ? `${pendingToggle.linkedCount} linked user(s) found. Do you also want to deactivate them?`
+              : 'No linked users found. Proceed with deactivation?'}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          {(pendingToggle?.linkedCount ?? 0) > 0 && (
+            <Button variant="outline" onClick={() => confirmToggle(false)}>Master Only</Button>
+          )}
+          <AlertDialogAction onClick={() => confirmToggle(true)}>
+            {(pendingToggle?.linkedCount ?? 0) > 0 ? 'Deactivate All' : 'Deactivate'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
@@ -1207,6 +1230,29 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
         )}
       </CardContent>
     </Card>
+
+    <AlertDialog open={!!pendingToggle} onOpenChange={(open) => !open && setPendingToggle(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Deactivate {pendingToggle?.row.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {pendingToggle?.linkedCount
+              ? `${pendingToggle.linkedCount} linked user(s) found. Do you also want to deactivate them?`
+              : 'No linked users found. Proceed with deactivation?'}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          {(pendingToggle?.linkedCount ?? 0) > 0 && (
+            <Button variant="outline" onClick={() => confirmToggle(false)}>Master Only</Button>
+          )}
+          <AlertDialogAction onClick={() => confirmToggle(true)}>
+            {(pendingToggle?.linkedCount ?? 0) > 0 ? 'Deactivate All' : 'Deactivate'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
