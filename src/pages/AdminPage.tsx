@@ -1745,6 +1745,7 @@ function BackupTab() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead className="text-right">Rows</TableHead>
                   <TableHead>Note</TableHead>
@@ -1755,6 +1756,11 @@ function BackupTab() {
                 {snapshots.map(s => (
                   <TableRow key={s.id}>
                     <TableCell className="text-xs">{new Date(s.created_at).toLocaleString('ko-KR')}</TableCell>
+                    <TableCell>
+                      <Badge variant={s.snapshot_type === 'auto' ? 'secondary' : 'outline'} className="text-xs">
+                        {s.snapshot_type === 'auto' ? 'Auto' : 'Manual'}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-sm">{s.snapshot_name}</TableCell>
                     <TableCell className="text-right text-sm">{s.row_count?.toLocaleString()}</TableCell>
                     <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{s.note || '—'}</TableCell>
