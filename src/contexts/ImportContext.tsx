@@ -244,7 +244,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
 
       const dataSourceType = importTypeRef.current === 'legacy' ? 'legacy_import_inherited' : 'standard_import';
-      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      const autoFillDate = item.dataDate || new Date().toISOString().slice(0, 10);
 
       if (existing) {
         const updates: Record<string, any> = {};
