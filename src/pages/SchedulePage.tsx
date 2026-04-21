@@ -26,6 +26,7 @@ const GROUP_LABELS: Record<ScheduleGroupBy, string> = {
   system: 'System',
   subcon: 'Subcontractor',
   subsub: 'Sub-Sub',
+  team: 'Team',
 };
 
 export default function SchedulePage() {
@@ -36,6 +37,7 @@ export default function SchedulePage() {
   const [groupBy, setGroupBy] = useState<ScheduleGroupBy>('system');
   const [bucket, setBucket] = useState<ScheduleBucket>('day');
   const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>('all');
+  const [teamFilter, setTeamFilter] = useState<string>('all');
   const [rangeDays, setRangeDays] = useState<number>(60);
   const [hidePast, setHidePast] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -64,7 +66,7 @@ export default function SchedulePage() {
       while (true) {
         const { data } = await supabase
           .from('subtests')
-          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date' as any)
+          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, team' as any)
           .eq('is_active', true)
           .range(from, from + PAGE - 1);
         if (!data || data.length === 0) break;
