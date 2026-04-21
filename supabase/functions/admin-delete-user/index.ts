@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
     });
     const admin = createClient(SUPABASE_URL, SERVICE);
 
-    const { data: { user: caller }, error: userErr } = await userClient.auth.getUser();
+    const { data: { user: caller }, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !caller) return json({ error: 'Unauthorized' }, 401);
     const callerId = caller.id;
 
