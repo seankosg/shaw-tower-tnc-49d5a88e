@@ -31,6 +31,7 @@ interface ImportContextValue {
   removeFile: (id: string) => void;
   clearAll: () => void;
   startImport: () => Promise<void>;
+  setFileDataDate: (id: string, date: string) => void;
 }
 
 const ImportContext = createContext<ImportContextValue | null>(null);
