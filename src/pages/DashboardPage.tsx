@@ -478,6 +478,54 @@ function ClickNum({ value, onClick }: { value: number; onClick?: () => void }) {
     </button>
   );
 }
+function StageCard({
+  stage, total, done, remaining, pct, overdue, onClick,
+}: {
+  stage: string;
+  total: number;
+  done: number;
+  remaining: number;
+  pct: number;
+  overdue: number;
+  onClick?: () => void;
+}) {
+  return (
+    <Card
+      onClick={onClick}
+      className={`${onClick ? 'cursor-pointer hover:bg-muted/40 transition-colors' : ''} ${overdue > 0 ? 'border-destructive/30' : ''}`}
+    >
+      <CardContent className="p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-foreground">{stage}</p>
+          {overdue > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
+              <AlertTriangle className="h-3 w-3" />
+              {overdue} OD
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div>
+            <p className="text-[11px] text-muted-foreground">Total</p>
+            <p className="text-sm font-semibold text-foreground">{total.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Done</p>
+            <p className="text-sm font-semibold text-foreground">{done.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Remaining</p>
+            <p className="text-sm font-semibold text-foreground">{remaining.toLocaleString()}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Progress value={pct} className="h-2 flex-1" />
+          <span className="text-xs font-medium text-muted-foreground w-12 text-right">{pct}%</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function ClickVariance({ value, onClick }: { value: number; onClick?: () => void }) {
   if (!onClick) return <VarianceCell value={value} />;
