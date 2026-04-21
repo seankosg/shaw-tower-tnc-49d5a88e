@@ -79,20 +79,25 @@ export default function DashboardPage() {
     return m;
   }, [systems]);
 
+  const filteredSubtests = useMemo(
+    () => teamFilter === 'all' ? subtests : subtests.filter(s => s.team === teamFilter),
+    [subtests, teamFilter],
+  );
+
   // ───── Top KPIs
   const kpis = useMemo(() => {
-    const tests = aggregateTests(subtests);
+    const tests = aggregateTests(filteredSubtests);
     let testsDone = 0, testsWip = 0, testsNot = 0;
     for (const v of tests.values()) {
       if (v === 'done') testsDone++;
       else if (v === 'in_progress') testsWip++;
       else testsNot++;
     }
-    const total = subtests.length;
-    const t1Done = subtests.filter(s => s.t1_status === 'Done').length;
-    const t2Done = subtests.filter(s => s.t2_status === 'Done').length;
-    const overdueCount = subtests.filter(s => isOverdue(s, today)).length;
-    const atRiskCount = subtests.filter(s => isAtRisk(s, today, atRiskDays)).length;
+    const total = filteredSubtests.length;
+    const t1Done = filteredSubtests.filter(s => s.t1_status === 'Done').length;
+    const t2Done = filteredSubtests.filter(s => s.t2_status === 'Done').length;
+    const overdueCount = filteredSubtests.filter(s => isOverdue(s, today)).length;
+    const atRiskCount = filteredSubtests.filter(s => isAtRisk(s, today, atRiskDays)).length;
     return {
       totalTests: tests.size,
       testsDone, testsWip, testsNot,
@@ -101,24 +106,28 @@ export default function DashboardPage() {
       t2Pct: total ? Math.round((t2Done / total) * 100) : 0,
       overdueCount, atRiskCount,
     };
-  }, [subtests, today, atRiskDays]);
+  }, [filteredSubtests, today, atRiskDays]);
 
   // ───── Group aggregates per tab — Plan vs Actual rows
   const bySystem = useMemo(
-    () => aggregatePlanActualByGroup(subtests, today, s => s.system_id, k => sysCodeById.get(k) ?? '—'),
-    [subtests, today, sysCodeById]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.system_id, k => sysCodeById.get(k) ?? '—'),
+    [filteredSubtests, today, sysCodeById]
   );
   const bySubcon = useMemo(
-    () => aggregatePlanActualByGroup(subtests, today, s => s.subcontractor_name ?? NONE_LABEL, k => k),
-    [subtests, today]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.subcontractor_name ?? NONE_LABEL, k => k),
+    [filteredSubtests, today]
   );
   const bySubsub = useMemo(
-    () => aggregatePlanActualByGroup(subtests, today, s => s.subsub_name ?? NONE_LABEL, k => k),
-    [subtests, today]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.subsub_name ?? NONE_LABEL, k => k),
+    [filteredSubtests, today]
   );
   const byHdec = useMemo(
-    () => aggregatePlanActualByGroup(subtests, today, s => s.hdec_pic_name ?? NONE_LABEL, k => k),
-    [subtests, today]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.hdec_pic_name ?? NONE_LABEL, k => k),
+    [filteredSubtests, today]
+  );
+  const byTeam = useMemo(
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.team ?? NONE_LABEL, k => k),
+    [filteredSubtests, today]
   );
   // bySystem uses system_id as key; URL filter expects system_code
   const systemKeyResolver = useMemo(
@@ -128,22 +137,22 @@ export default function DashboardPage() {
 
   // ───── S-Curve
   const scurve = useMemo(
-    () => buildSCurve(subtests, scurveBucket, scurveBucket === 'day' ? 90 : undefined),
-    [subtests, scurveBucket]
+    () => buildSCurve(filteredSubtests, scurveBucket, scurveBucket === 'day' ? 90 : undefined),
+    [filteredSubtests, scurveBucket]
   );
 
   // ───── Top Overdue
   const topOverdue = useMemo(() => {
-    return subtests
+    return filteredSubtests
       .filter(s => isOverdue(s, today))
       .map(s => ({ s, delay: maxDelayDays(s, today) }))
       .sort((a, b) => b.delay - a.delay)
       .slice(0, 10);
-  }, [subtests, today]);
+  }, [filteredSubtests, today]);
 
   // ───── Pie data
-  const t1Pie = useMemo(() => buildPie(subtests, 't1_status'), [subtests]);
-  const t2Pie = useMemo(() => buildPie(subtests, 't2_status'), [subtests]);
+  const t1Pie = useMemo(() => buildPie(filteredSubtests, 't1_status'), [filteredSubtests]);
+  const t2Pie = useMemo(() => buildPie(filteredSubtests, 't2_status'), [filteredSubtests]);
 
   if (loading) {
     return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading dashboard...</div>;
