@@ -229,7 +229,7 @@ export function ScheduleMatrix({
             <div className="px-4 py-8 text-center text-sm text-muted-foreground">No data in selected range.</div>
           )}
           {data.rows.map(row => {
-            const isExp = expanded.has(row.key) && stageFilter === 'all';
+            const showStageRows = stageFilter === 'all';
             return (
               <Fragment key={row.key}>
                 {/* Group summary row */}
