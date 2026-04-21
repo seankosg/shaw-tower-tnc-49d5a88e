@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.auto-create-master-user]
 verify_jwt = false
+
+[functions.restore-snapshot]
+verify_jwt = false
