@@ -1,13 +1,13 @@
 project_id = "cvlabumgabmpjtoryita"
 
 [functions.admin-create-user]
-verify_jwt = true
+verify_jwt = false
 
 [functions.admin-reset-password]
-verify_jwt = true
+verify_jwt = false
 
 [functions.admin-update-login-id]
-verify_jwt = true
+verify_jwt = false
 
 [functions.auto-create-master-user]
 verify_jwt = false
