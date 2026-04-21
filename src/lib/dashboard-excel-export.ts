@@ -179,8 +179,9 @@ export function exportPlanActualToExcel(
         setNum(ws, cr, 1, r.totalSubtests, S_TOTAL);
       }
 
-      // Stage
-      set(ws, cr, 2, st.label, S_STAGE(st.label));
+      // Stage with counts
+      const remaining = r.totalSubtests - m.cumActual;
+      set(ws, cr, 2, `${st.label}  ${m.cumActual}/${r.totalSubtests} (${remaining})`, S_STAGE(st.label));
 
       // Cumulative
       setNum(ws, cr, 3, m.cumPlan, S_NUM);
