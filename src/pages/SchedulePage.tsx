@@ -150,25 +150,25 @@ export default function SchedulePage() {
     const variance = cumPlan ? ((cumActual - cumPlan) / cumPlan) * 100 : 0;
     // Done-vs-Total progress across all T1+T2 stages
     let totalStages = 0, doneStages = 0;
-    for (const s of subtests) {
+    for (const s of filteredSubtests) {
       totalStages += 2;
       if (s.t1_status === 'Done') doneStages++;
       if (s.t2_status === 'Done') doneStages++;
     }
     const progressPct = totalStages ? (doneStages / totalStages) * 100 : 0;
-    const overdue = subtests.filter(s =>
+    const overdue = filteredSubtests.filter(s =>
       (s.t1_planned_date && s.t1_planned_date < today && s.t1_status !== 'Done') ||
       (s.t2_planned_date && s.t2_planned_date < today && s.t2_status !== 'Done')
     ).length;
     // Upcoming 7-day plan: count planned T1/T2 dates in [today, today+7]
     const upcomingEnd = addDays(today, 7);
     let upcoming7Plan = 0;
-    for (const s of subtests) {
+    for (const s of filteredSubtests) {
       if (s.t1_planned_date && s.t1_planned_date >= today && s.t1_planned_date <= upcomingEnd) upcoming7Plan++;
       if (s.t2_planned_date && s.t2_planned_date >= today && s.t2_planned_date <= upcomingEnd) upcoming7Plan++;
     }
     return { cumPlan, cumActual, variance, progressPct, doneStages, totalStages, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
-  }, [aggregate.rows, today, subtests, critical.highRisk.length]);
+  }, [aggregate.rows, today, filteredSubtests, critical.highRisk.length]);
 
   // ───── Navigation handlers ─────
   const filterParamForGroup = (label: string): { key: string; value: string } => {
