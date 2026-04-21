@@ -609,13 +609,19 @@ export default function SubtestList() {
       meta: { filterType: 'multi-select', filterOptions: subsubOptions } },
     { accessorKey: 'hdec_pic_name', header: 'HDEC PIC', size: 110, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select', filterOptions: hdecPicOptions } },
+    { accessorKey: 'team', header: 'Team', size: 90, filterFn: multiSelectFilterFn,
+      meta: { filterType: 'multi-select', filterOptions: teamOptions },
+      cell: ({ getValue }) => {
+        const v = getValue() as TeamType | null;
+        return v ? TEAM_LABELS[v] : '—';
+      }},
     { accessorKey: 'data_source_type', header: 'Source', size: 110, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select', filterOptions: sourceOptions },
       cell: ({ getValue }) => <DataSourceTag source={getValue() as DataSource | null} /> },
     { accessorKey: 'updated_at', header: 'Updated', size: 140, filterFn: dateRangeFilterFn,
       meta: { filterType: 'date-range' },
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
-  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions]);
+  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions]);
 
   // Apply status (overdue / at_risk) + date URL filters at data level
   const urlT1PlannedTo = searchParams.get('t1_planned_to');
