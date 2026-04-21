@@ -1,68 +1,69 @@
 
 
-## 1번: Anon RLS 정책 제거 + Import 파이프라인 보안 강화
+# Team(공종) 분류 필드 추가
 
-### 제거 대상 Anon 정책 (총 17개)
+## 요약
+`subtests` 테이블에 `team` 컬럼(Mech/Elec/Arch/Supp)을 추가하고, Import 시 파일별로 공종을 선택하여 모든 subtest에 해당 값을 저장합니다.
 
-| 테이블 | 정책명 | 명령 |
-|--------|--------|------|
-| projects | Anon can read projects | SELECT |
-| subtest_change_log | Anon can insert change logs | INSERT |
-| subtest_change_log | Anon can read change logs | SELECT |
-| subtests | Anon can insert subtests | INSERT |
-| subtests | Anon can read subtests | SELECT |
-| subtests | Anon can update subtests | UPDATE |
-| subtests | DEV anon can delete subtests | DELETE |
-| system_alias_map | Anon can read aliases | SELECT |
-| system_master | Anon can insert systems | INSERT |
-| system_master | Anon can read systems | SELECT |
-| upload_batches | Anon can insert uploads | INSERT |
-| upload_batches | Anon can read uploads | SELECT |
-| upload_batches | Anon can update uploads | UPDATE |
-| upload_batches | DEV anon can delete upload batches | DELETE |
-| upload_row_logs | Anon can insert upload logs | INSERT |
-| upload_row_logs | Anon can read upload logs | SELECT |
-| upload_row_logs | DEV anon can delete upload row logs | DELETE |
+---
 
-### 추가할 Authenticated 정책
+## 1. DB 마이그레이션
 
-Anon 정책 제거 시 Import 파이프라인이 깨지지 않도록, 기존에 authenticated 정책이 없는 작업에 대해 새 정책 추가:
+`subtests` 테이블에 `team` 컬럼 추가:
 
-| 테이블 | 새 정책 | 조건 |
-|--------|---------|------|
-| system_master | Authenticated can insert systems | `is_admin_or_superuser(auth.uid())` |
-| subcontractor_master | Authenticated can insert subcontractors | `is_admin_or_superuser(auth.uid())` |
-| hdec_pic_master | Authenticated can insert hdec pics | `is_admin_or_superuser(auth.uid())` |
-| upload_batches | Authenticated can update own uploads | `uploaded_by = auth.uid() OR is_admin_or_superuser(auth.uid())` |
+```sql
+CREATE TYPE public.team_type AS ENUM ('Mech', 'Elec', 'Arch', 'Supp');
 
-### ImportContext.tsx 수정
-
-Import 시 `upload_batches` INSERT에 `uploaded_by` 필드 누락 -- RLS `uploaded_by = auth.uid()` 정책이 동작하려면 반드시 설정 필요:
-
-```typescript
-// processFile 함수 내 upload_batches insert 부분
-const { data: { user } } = await supabase.auth.getUser();
-
-await supabase.from('upload_batches').insert({
-  ...existing fields,
-  uploaded_by: user?.id,  // ← 추가
-});
+ALTER TABLE public.subtests
+  ADD COLUMN team public.team_type NULL;
 ```
 
-### 수정 파일
-- `supabase/migrations/` -- DROP POLICY x17, CREATE POLICY x4
-- `src/contexts/ImportContext.tsx` -- `uploaded_by` 필드 추가
+---
+
+## 2. Import 흐름에 Team 선택 추가
+
+### ImportContext.tsx
+- `ImportFileItem` 인터페이스에 `team?: string` 필드 추가
+- `ImportContextValue`에 `setFileTeam(id: string, team: string)` 함수 추가
+- `processFile()` 내 insert/update 시 `team` 값을 파일의 `team` 설정값으로 포함
+
+### ImportPage.tsx
+- 파일별 "Data Date" 입력 옆에 **Team 선택 드롭다운** 추가 (Mech / Elec / Arch / Supp)
+- 파일이 `ready` 상태이고 team이 미선택이면 Import 실행 불가 (readyCount 조건에 team 필수 체크 추가)
 
 ---
 
-## 2번: Publish Visibility를 Private으로 변경
+## 3. types/enums.ts 업데이트
 
-`publish_settings--update_visibility` 도구로 `private` 설정. 내부 시스템이므로 워크스페이스 멤버만 접근 가능하도록 변경.
+```typescript
+export type TeamType = 'Mech' | 'Elec' | 'Arch' | 'Supp';
+export const ALL_TEAMS: TeamType[] = ['Mech', 'Elec', 'Arch', 'Supp'];
+export const TEAM_LABELS: Record<TeamType, string> = {
+  Mech: '설비 (Mechanical)',
+  Elec: '전기 (Electrical)',
+  Arch: '건축 (Architecture)',
+  Supp: '지원 (Support)',
+};
+```
 
 ---
 
-### 실행 순서
-1. DB 마이그레이션: Anon 정책 제거 + Authenticated 정책 추가
-2. ImportContext.tsx: `uploaded_by` 설정 추가
-3. Publish visibility: private 변경
+## 4. Raw Data (SubtestList) 컬럼 추가
+
+- `SubtestRow`에 `team` 필드 추가
+- 테이블 columns에 "Team" 컬럼 추가 (multi-select 필터 지원)
+- Supabase 쿼리의 select에 `team` 포함
+
+---
+
+## 수정 파일 목록
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `supabase/migrations/` | team_type enum + subtests.team 컬럼 |
+| `src/types/enums.ts` | TeamType, ALL_TEAMS, TEAM_LABELS 추가 |
+| `src/contexts/ImportContext.tsx` | team 필드, setFileTeam, insert/update에 team 포함 |
+| `src/pages/ImportPage.tsx` | 파일별 Team 선택 UI + team 필수 검증 |
+| `src/pages/SubtestList.tsx` | Team 컬럼 + 필터 추가 |
+| `src/pages/SubtestDetail.tsx` | Team 표시 (읽기 전용 또는 편집 가능) |
 
