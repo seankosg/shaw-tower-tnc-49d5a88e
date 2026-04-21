@@ -182,10 +182,14 @@ export default function DashboardPage() {
   };
 
   const chartConfig = {
-    t1Planned: { label: 'T1 Planned', color: 'hsl(220, 65%, 55%)' },
-    t1Actual: { label: 'T1 Actual', color: 'hsl(220, 65%, 36%)' },
-    t2Planned: { label: 'T2 Planned', color: 'hsl(142, 50%, 55%)' },
-    t2Actual: { label: 'T2 Actual', color: 'hsl(0, 72%, 50%)' },
+    t1Planned: { label: 'T1 Planned (cum)', color: 'hsl(220, 65%, 55%)' },
+    t1Actual: { label: 'T1 Actual (cum)', color: 'hsl(220, 65%, 36%)' },
+    t2Planned: { label: 'T2 Planned (cum)', color: 'hsl(142, 50%, 55%)' },
+    t2Actual: { label: 'T2 Actual (cum)', color: 'hsl(0, 72%, 50%)' },
+    t1BarPlan: { label: 'T1 Plan (bar)', color: 'hsl(220, 70%, 75%)' },
+    t1BarActual: { label: 'T1 Actual (bar)', color: 'hsl(220, 70%, 40%)' },
+    t2BarPlan: { label: 'T2 Plan (bar)', color: 'hsl(30, 90%, 75%)' },
+    t2BarActual: { label: 'T2 Actual (bar)', color: 'hsl(30, 90%, 45%)' },
     Done: { label: 'Done', color: STATUS_COLORS.Done },
     WIP: { label: 'WIP', color: STATUS_COLORS.WIP },
     Planned: { label: 'Planned', color: STATUS_COLORS.Planned },
