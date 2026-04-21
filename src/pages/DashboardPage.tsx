@@ -186,10 +186,12 @@ export default function DashboardPage() {
     t1Actual: { label: 'T1 Actual (cum)', color: 'hsl(220, 65%, 36%)' },
     t2Planned: { label: 'T2 Planned (cum)', color: 'hsl(142, 50%, 55%)' },
     t2Actual: { label: 'T2 Actual (cum)', color: 'hsl(0, 72%, 50%)' },
-    t1BarPlan: { label: 'T1 Plan (bar)', color: 'hsl(220, 70%, 75%)' },
-    t1BarActual: { label: 'T1 Actual (bar)', color: 'hsl(220, 70%, 40%)' },
-    t2BarPlan: { label: 'T2 Plan (bar)', color: 'hsl(30, 90%, 75%)' },
-    t2BarActual: { label: 'T2 Actual (bar)', color: 'hsl(30, 90%, 45%)' },
+    t1Met: { label: 'T1 Actual', color: 'hsl(220, 70%, 40%)' },
+    t1Shortfall: { label: 'T1 Shortfall', color: 'hsl(0, 72%, 50%)' },
+    t1Excess: { label: 'T1 Excess', color: 'hsl(220, 80%, 25%)' },
+    t2Met: { label: 'T2 Actual', color: 'hsl(142, 60%, 40%)' },
+    t2Shortfall: { label: 'T2 Shortfall', color: 'hsl(0, 72%, 50%)' },
+    t2Excess: { label: 'T2 Excess', color: 'hsl(142, 70%, 20%)' },
     Done: { label: 'Done', color: STATUS_COLORS.Done },
     WIP: { label: 'WIP', color: STATUS_COLORS.WIP },
     Planned: { label: 'Planned', color: STATUS_COLORS.Planned },
@@ -330,11 +332,14 @@ export default function DashboardPage() {
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <ReferenceLine yAxisId="left" x={formatDdMmm(today)} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} />
-                {/* Bars — non-cumulative (right axis) */}
-                <Bar yAxisId="right" dataKey="t1BarPlan" fill="hsl(220, 70%, 75%)" name="T1 Plan (bar)" barSize={6} />
-                <Bar yAxisId="right" dataKey="t1BarActual" fill="hsl(220, 70%, 40%)" name="T1 Actual (bar)" barSize={6} />
-                <Bar yAxisId="right" dataKey="t2BarPlan" fill="hsl(30, 90%, 75%)" name="T2 Plan (bar)" barSize={6} />
-                <Bar yAxisId="right" dataKey="t2BarActual" fill="hsl(30, 90%, 45%)" name="T2 Actual (bar)" barSize={6} />
+                {/* T1 stacked bar */}
+                <Bar yAxisId="right" dataKey="t1Met" stackId="t1" fill="hsl(220, 70%, 40%)" name="T1 Actual" barSize={10} />
+                <Bar yAxisId="right" dataKey="t1Shortfall" stackId="t1" fill="hsl(0, 72%, 50%)" name="T1 Shortfall" barSize={10} />
+                <Bar yAxisId="right" dataKey="t1Excess" stackId="t1" fill="hsl(220, 80%, 25%)" name="T1 Excess" barSize={10} />
+                {/* T2 stacked bar */}
+                <Bar yAxisId="right" dataKey="t2Met" stackId="t2" fill="hsl(142, 60%, 40%)" name="T2 Actual" barSize={10} />
+                <Bar yAxisId="right" dataKey="t2Shortfall" stackId="t2" fill="hsl(0, 72%, 50%)" name="T2 Shortfall" barSize={10} />
+                <Bar yAxisId="right" dataKey="t2Excess" stackId="t2" fill="hsl(142, 70%, 20%)" name="T2 Excess" barSize={10} />
                 {/* Lines — cumulative S-Curve (left axis) */}
                 <Line yAxisId="left" type="monotone" dataKey="t1Planned" stroke="hsl(220, 65%, 55%)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="T1 Planned (cum)" connectNulls={false} />
                 <Line yAxisId="left" type="monotone" dataKey="t1Actual" stroke="hsl(220, 65%, 36%)" strokeWidth={2} dot={false} name="T1 Actual (cum)" connectNulls={false} />

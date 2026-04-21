@@ -246,10 +246,14 @@ export interface SCurvePoint {
   t1Actual: number | null;
   t2Planned: number;
   t2Actual: number | null;
-  t1BarPlan: number;
-  t1BarActual: number | null;
-  t2BarPlan: number;
-  t2BarActual: number | null;
+  // T1 stacked bar segments
+  t1Met: number;            // min(plan, actual)
+  t1Shortfall: number;      // max(0, plan - actual)
+  t1Excess: number;         // max(0, actual - plan)
+  // T2 stacked bar segments
+  t2Met: number;
+  t2Shortfall: number;
+  t2Excess: number;
 }
 
 const MONTH_ABBR_SC = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -316,6 +320,10 @@ export function buildSCurve(
     const v = counts.get(b) ?? { t1p: 0, t1a: 0, t2p: 0, t2a: 0 };
     cT1p += v.t1p; cT1a += v.t1a; cT2p += v.t2p; cT2a += v.t2a;
     const isFuture = b > todayBucket;
+    const t1p = v.t1p;
+    const t1a = isFuture ? 0 : v.t1a;
+    const t2p = v.t2p;
+    const t2a = isFuture ? 0 : v.t2a;
     return {
       bucket: b,
       bucketLabel: labelDdMmm(b),
@@ -323,10 +331,12 @@ export function buildSCurve(
       t1Actual: isFuture ? null : cT1a,
       t2Planned: cT2p,
       t2Actual: isFuture ? null : cT2a,
-      t1BarPlan: v.t1p,
-      t1BarActual: isFuture ? null : v.t1a,
-      t2BarPlan: v.t2p,
-      t2BarActual: isFuture ? null : v.t2a,
+      t1Met: isFuture ? 0 : Math.min(t1p, t1a),
+      t1Shortfall: isFuture ? 0 : Math.max(0, t1p - t1a),
+      t1Excess: isFuture ? 0 : Math.max(0, t1a - t1p),
+      t2Met: isFuture ? 0 : Math.min(t2p, t2a),
+      t2Shortfall: isFuture ? 0 : Math.max(0, t2p - t2a),
+      t2Excess: isFuture ? 0 : Math.max(0, t2a - t2p),
     };
   });
 }
