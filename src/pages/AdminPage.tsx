@@ -417,7 +417,7 @@ function CreateUserDialog({
         subcontractor_name: payloadSubconName,
         subsub_name: payloadSubsubName,
         hdec_pic_name: (userType === 'hdec' || userType === 'pm_pd') ? (hdecPicName || null) : null,
-        team: team || null,
+        team: team === '__none' || team === '' ? null : team,
       },
     });
     setSubmitting(false);
