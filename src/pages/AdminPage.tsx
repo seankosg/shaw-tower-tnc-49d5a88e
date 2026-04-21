@@ -989,7 +989,7 @@ function SubcontractorMasterTable() {
                     <TableRow key={r.id}>
                       <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
                       <TableCell className="text-center">
-                        <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
+                        <Switch checked={r.is_active} onCheckedChange={() => startToggleActive(r)} />
                       </TableCell>
                       <TableCell>
                         <Button size="icon" variant="ghost" onClick={() => remove(r)}>
@@ -1036,7 +1036,7 @@ function SubcontractorMasterTable() {
                         <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
                         <TableCell className="text-xs text-muted-foreground">{parent?.name ?? '—'}</TableCell>
                         <TableCell className="text-center">
-                          <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
+                          <Switch checked={r.is_active} onCheckedChange={() => startToggleActive(r)} />
                         </TableCell>
                         <TableCell>
                           <Button size="icon" variant="ghost" onClick={() => remove(r)}>
@@ -1192,7 +1192,7 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
                   <TableRow key={r.id}>
                     <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameRow(r, v)} /></TableCell>
                     <TableCell className="text-center">
-                      <Switch checked={r.is_active} onCheckedChange={() => toggleActive(r)} />
+                      <Switch checked={r.is_active} onCheckedChange={() => startToggleActive(r)} />
                     </TableCell>
                     <TableCell>
                       <Button size="icon" variant="ghost" onClick={() => remove(r)}>
