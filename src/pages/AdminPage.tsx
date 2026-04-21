@@ -885,20 +885,38 @@ function SubcontractorMasterTable() {
     setNewSubSubName(''); setNewSubSubParent(''); load();
   };
 
-  const toggleActive = async (r: MasterRow) => {
-    const newActive = !r.is_active;
-    await supabase.from('subcontractor_master').update({ is_active: newActive }).eq('id', r.id);
-    // Cascade to linked profiles
-    const col = (r.type ?? 'sub') === 'sub' ? 'subcontractor_name' : 'subsub_name';
-    const { data: linked } = await supabase
-      .from('profiles')
-      .update({ is_active: newActive } as any)
-      .eq(col, r.name)
-      .select('id');
-    toast({
-      title: newActive ? 'Activated' : 'Deactivated',
-      description: linked?.length ? `${linked.length} linked user(s) ${newActive ? 'activated' : 'deactivated'}` : undefined,
-    });
+  const [pendingToggle, setPendingToggle] = useState<{ row: MasterRow; linkedCount: number } | null>(null);
+
+  const startToggleActive = async (r: MasterRow) => {
+    if (r.is_active) {
+      // Deactivating — check linked users
+      const col = (r.type ?? 'sub') === 'sub' ? 'subcontractor_name' : 'subsub_name';
+      const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq(col, r.name).eq('is_active', true);
+      setPendingToggle({ row: r, linkedCount: count ?? 0 });
+    } else {
+      // Activating — just activate the master, no cascade
+      await supabase.from('subcontractor_master').update({ is_active: true }).eq('id', r.id);
+      toast({ title: 'Activated' });
+      load();
+    }
+  };
+
+  const confirmToggle = async (cascade: boolean) => {
+    if (!pendingToggle) return;
+    const r = pendingToggle.row;
+    await supabase.from('subcontractor_master').update({ is_active: false }).eq('id', r.id);
+    if (cascade) {
+      const col = (r.type ?? 'sub') === 'sub' ? 'subcontractor_name' : 'subsub_name';
+      const { data: linked } = await supabase
+        .from('profiles')
+        .update({ is_active: false } as any)
+        .eq(col, r.name)
+        .select('id');
+      toast({ title: 'Deactivated', description: `${linked?.length ?? 0} linked user(s) also deactivated` });
+    } else {
+      toast({ title: 'Deactivated', description: 'Linked users were NOT affected' });
+    }
+    setPendingToggle(null);
     load();
   };
 
@@ -1073,22 +1091,42 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
     setNewName(''); load();
   };
 
-  const toggleActive = async (r: MasterRow) => {
-    const newActive = !r.is_active;
-    await supabase.from(table).update({ is_active: newActive }).eq('id', r.id);
-    let linkedCount = 0;
-    if (table === 'hdec_pic_master') {
+  const [pendingToggle, setPendingToggle] = useState<{ row: MasterRow; linkedCount: number } | null>(null);
+
+  const startToggleActive = async (r: MasterRow) => {
+    if (r.is_active) {
+      // Deactivating — check linked users
+      if (table === 'hdec_pic_master') {
+        const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name).eq('is_active', true);
+        setPendingToggle({ row: r, linkedCount: count ?? 0 });
+      } else {
+        // Just deactivate master directly
+        await supabase.from(table).update({ is_active: false }).eq('id', r.id);
+        toast({ title: 'Deactivated' });
+        load();
+      }
+    } else {
+      await supabase.from(table).update({ is_active: true }).eq('id', r.id);
+      toast({ title: 'Activated' });
+      load();
+    }
+  };
+
+  const confirmToggle = async (cascade: boolean) => {
+    if (!pendingToggle) return;
+    const r = pendingToggle.row;
+    await supabase.from(table).update({ is_active: false }).eq('id', r.id);
+    if (cascade && table === 'hdec_pic_master') {
       const { data: linked } = await supabase
         .from('profiles')
-        .update({ is_active: newActive } as any)
+        .update({ is_active: false } as any)
         .eq('hdec_pic_name', r.name)
         .select('id');
-      linkedCount = linked?.length ?? 0;
+      toast({ title: 'Deactivated', description: `${linked?.length ?? 0} linked user(s) also deactivated` });
+    } else {
+      toast({ title: 'Deactivated', description: 'Linked users were NOT affected' });
     }
-    toast({
-      title: newActive ? 'Activated' : 'Deactivated',
-      description: linkedCount ? `${linkedCount} linked user(s) ${newActive ? 'activated' : 'deactivated'}` : undefined,
-    });
+    setPendingToggle(null);
     load();
   };
 
