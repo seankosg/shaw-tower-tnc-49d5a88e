@@ -15,7 +15,8 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import {
   ALL_ROLES, ALL_USER_TYPES, ROLE_LABELS, USER_TYPE_LABELS,
-  type AppRole, type UserType,
+  ALL_TEAMS, TEAM_LABELS,
+  type AppRole, type UserType, type TeamType,
 } from '@/types/enums';
 import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown } from 'lucide-react';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
@@ -30,6 +31,7 @@ interface Profile {
   login_id: string | null; user_type: UserType;
   subcontractor_name: string | null; subsub_name: string | null; hdec_pic_name: string | null;
   must_change_password: boolean; is_active: boolean;
+  team: TeamType | null;
 }
 interface UserRole { id: string; user_id: string; role: AppRole; }
 interface SystemRow {
@@ -265,6 +267,7 @@ function UsersTab() {
                 <TableHead>Login ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Team</TableHead>
                 <TableHead>Linked Master</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Active</TableHead>
@@ -290,6 +293,7 @@ function UsersTab() {
                     </TableCell>
                     <TableCell className="font-medium">{p.name ?? '—'}</TableCell>
                     <TableCell><Badge variant="outline" className="text-xs">{USER_TYPE_LABELS[p.user_type]}</Badge></TableCell>
+                    <TableCell className="text-xs">{p.team ? TEAM_LABELS[p.team] : '—'}</TableCell>
                     <TableCell className="text-xs">{linked ?? '—'}</TableCell>
                     <TableCell>
                       <Select value={role ?? ''} onValueChange={(v) => setUserRole(p.user_id, v as AppRole)}>
@@ -376,6 +380,7 @@ function CreateUserDialog({
   const [subconName, setSubconName] = useState<string>('');
   const [subsubId, setSubsubId] = useState<string>('');
   const [hdecPicName, setHdecPicName] = useState<string>('');
+  const [team, setTeam] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
   const selectedSubsub = subsubs.find(s => s.id === subsubId);
@@ -412,6 +417,7 @@ function CreateUserDialog({
         subcontractor_name: payloadSubconName,
         subsub_name: payloadSubsubName,
         hdec_pic_name: (userType === 'hdec' || userType === 'pm_pd') ? (hdecPicName || null) : null,
+        team: team === '__none' || team === '' ? null : team,
       },
     });
     setSubmitting(false);
@@ -420,7 +426,7 @@ function CreateUserDialog({
       return;
     }
     toast({ title: 'User created', description: `Initial password: SHAW00` });
-    setLoginId(''); setName(''); setSubconName(''); setSubsubId(''); setHdecPicName('');
+    setLoginId(''); setName(''); setSubconName(''); setSubsubId(''); setHdecPicName(''); setTeam('');
     onCreated();
   };
 
@@ -518,6 +524,17 @@ function CreateUserDialog({
             </Select>
           </div>
         )}
+        <div className="space-y-1.5">
+          <Label>Team (optional)</Label>
+          <Select value={team} onValueChange={setTeam}>
+            <SelectTrigger><SelectValue placeholder="No team" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none">No team</SelectItem>
+              {ALL_TEAMS.map(t => <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">Senior Users can edit/delete all subtests in their assigned team.</p>
+        </div>
         <DialogFooter>
           <Button type="submit" disabled={submitting}>{submitting ? 'Creating...' : 'Create'}</Button>
         </DialogFooter>
@@ -545,6 +562,7 @@ function EditUserDialog({
   const initialSubsubId = subsubs.find(s => s.name === profile.subsub_name)?.id ?? '';
   const [subsubId, setSubsubId] = useState<string>(initialSubsubId);
   const [hdecPicName, setHdecPicName] = useState<string>(profile.hdec_pic_name ?? '');
+  const [team, setTeam] = useState<string>(profile.team ?? '');
   const [saving, setSaving] = useState(false);
 
   const selectedSubsub = subsubs.find(s => s.id === subsubId);
@@ -583,6 +601,7 @@ function EditUserDialog({
         subcontractor_name: payloadSubconName,
         subsub_name: payloadSubsubName,
         hdec_pic_name: payloadHdecPicName,
+        team: team === '__none' || team === '' ? null : team,
       },
     });
     setSaving(false);
@@ -674,6 +693,17 @@ function EditUserDialog({
               </Select>
             </div>
           )}
+          <div className="space-y-1.5">
+            <Label>Team (optional)</Label>
+            <Select value={team || '__none'} onValueChange={setTeam}>
+              <SelectTrigger><SelectValue placeholder="No team" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">No team</SelectItem>
+                {ALL_TEAMS.map(t => <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Senior Users can edit/delete all subtests in their assigned team.</p>
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
