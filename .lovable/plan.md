@@ -1,49 +1,57 @@
 
 
-# S-Curve 미래 날짜 계획 막대 표시 수정
+# 모바일 레이아웃 개선 계획
 
-## 문제
+## 발견된 문제점
 
-`buildSCurve` 함수에서 `isFuture`일 때 모든 막대 세그먼트(`t1Met`, `t1Shortfall`, `t1Excess` 등)를 0으로 설정하고 있어, 미래 날짜의 **계획 막대도 표시되지 않는 버그**가 있습니다.
+### 1. Dashboard KPI 카드 (심각)
+- `grid-cols-3`으로 375px 화면에서 6개 카드가 3열로 표시
+- 라벨이 "Sy...", "Tot...", "Re...", "Ov..."로 잘림
+- **수정**: 모바일에서 `grid-cols-2`, 태블릿에서 `grid-cols-3`, 데스크탑에서 `grid-cols-6`
 
-## 수정 내용
+### 2. S-Curve 카드 헤더 (심각)
+- `flex-row`로 타이틀 + 날짜 피커 2개 + Daily/Weekly 토글이 한 줄에 배치
+- 375px에서 버튼들이 넘치거나 잘림
+- **수정**: 모바일에서 타이틀/컨트롤을 세로 스택으로 변경, 날짜 피커와 토글을 `flex-wrap`
 
-### `src/lib/dashboard-utils.ts` — 미래 날짜 막대 로직 수정
+### 3. Plan vs Actual Breakdown 탭 (중간)
+- 5개 탭(System, Subcontractor, Sub-Sub, HDEC PIC, Team)이 한 줄에 배치
+- 모바일에서 탭이 잘리거나 스크롤 불가
+- **수정**: `TabsList`에 `flex-wrap` 또는 가로 스크롤 적용
 
-미래 날짜에서는:
-- **Plan 막대**: `t1p`/`t2p` 값 그대로 표시 (Shortfall로 표현 — actual이 0이므로 plan 전체가 shortfall 색이 아닌 plan 색으로)
-- **Actual 관련**: 0 유지
+### 4. Schedule 페이지 툴바 (중간)
+- 5개 ToolbarGroup(Group, Team, Bucket, Stage, Range, Lookup)이 `flex-wrap`이지만, 개별 그룹 내 탭/버튼이 모바일에서 여전히 밀집
+- **수정**: 모바일에서 2열 그리드 또는 수직 스택으로 변경
 
-미래 날짜의 계획은 "아직 실적이 없는 상태"이므로, shortfall이 아닌 **plan 자체**로 표현해야 합니다. 이를 위해 미래 날짜용 새 필드 또는 조건부 처리를 추가합니다:
+### 5. AppLayout 헤더 (경미)
+- 브레드크럼 + Import 인디케이터가 `h-12` 안에 배치 — 모바일에서 텍스트가 잘릴 수 있음
+- **수정**: Import 인디케이터 텍스트를 모바일에서 축약
 
-```typescript
-// 변경 전 (lines 334-339)
-t1Met: isFuture ? 0 : Math.min(t1p, t1a),
-t1Shortfall: isFuture ? 0 : Math.max(0, t1p - t1a),
-t1Excess: isFuture ? 0 : Math.max(0, t1a - t1p),
-t2Met: isFuture ? 0 : Math.min(t2p, t2a),
-t2Shortfall: isFuture ? 0 : Math.max(0, t2p - t2a),
-t2Excess: isFuture ? 0 : Math.max(0, t2a - t2p),
+## 변경 파일 및 내용
 
-// 변경 후
-t1Met: isFuture ? t1p : Math.min(t1p, t1a),
-t1Shortfall: isFuture ? 0 : Math.max(0, t1p - t1a),
-t1Excess: isFuture ? 0 : Math.max(0, t1a - t1p),
-t2Met: isFuture ? t2p : Math.min(t2p, t2a),
-t2Shortfall: isFuture ? 0 : Math.max(0, t2p - t2a),
-t2Excess: isFuture ? 0 : Math.max(0, t2a - t2p),
-```
+### `src/pages/DashboardPage.tsx`
 
-미래 날짜에서 `t1Met = t1p`로 설정하면 계획 수량이 진한 파랑/초록(Met 색상)으로 표시됩니다. Shortfall과 Excess는 0이므로 빨강/남색은 나타나지 않습니다.
-
-## 결과
-
-- **과거/오늘**: 기존대로 Met + Shortfall/Excess 조건부 색상
-- **미래**: 계획 막대만 표시 (Met 색상), 실적 관련 없음
-
-## 수정 파일
-
-| 파일 | 변경 |
+| 영역 | 변경 |
 |------|------|
-| `src/lib/dashboard-utils.ts` | lines 334, 337: `isFuture ? 0` → `isFuture ? t1p` / `isFuture ? t2p` |
+| KPI 그리드 (line 222) | `grid-cols-3 md:grid-cols-6` → `grid-cols-2 sm:grid-cols-3 md:grid-cols-6` |
+| S-Curve 카드 헤더 (line 268) | `flex-row` → `flex-col sm:flex-row`, 컨트롤 영역에 `flex-wrap gap-2` |
+| Breakdown 탭 (line 363) | `TabsList`에 `flex-wrap h-auto` 추가 |
+
+### `src/pages/SchedulePage.tsx`
+
+| 영역 | 변경 |
+|------|------|
+| 툴바 카드 (line 239) | `flex-wrap` 유지하되 모바일에서 각 ToolbarGroup이 `w-full sm:w-auto`로 전체 너비 사용 |
+
+### `src/components/layout/AppLayout.tsx`
+
+| 영역 | 변경 |
+|------|------|
+| Import 인디케이터 (line 55-63) | 파일명 `max-w-[180px]`을 모바일에서 `max-w-[100px] sm:max-w-[180px]`으로 축소 |
+
+## 변경하지 않는 부분
+
+- **사이드바**: 이미 모바일에서 Sheet(오버레이)로 동작 — 정상
+- **로그인 페이지**: 모바일에서 적절히 표시됨
+- **MobileUpdatePage**: 이미 모바일 전용으로 설계됨 — 카드 기반 레이아웃
 
