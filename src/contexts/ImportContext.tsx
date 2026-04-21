@@ -108,6 +108,9 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     const res = { inserted: 0, updated: 0, skipped: 0, rejected: 0 };
     const userCreateFails: string[] = [];
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data: projects } = await supabase.from('projects').select('id').eq('is_active', true).limit(1);
     const projectId = projects?.[0]?.id;
     if (!projectId) throw new Error('No active project found');
@@ -119,6 +122,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       total_rows: parsed.length,
       status: 'processing' as any,
       data_date: item.dataDate || null,
+      uploaded_by: user.id,
     } as any).select('id').single();
     if (batchErr || !batch) throw new Error(batchErr?.message || 'Failed to create batch');
     const uploadId = batch.id;
