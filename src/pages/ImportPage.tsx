@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useImport, type FileStatus } from '@/contexts/ImportContext';
+import { Input } from '@/components/ui/input';
 
 const statusBadge: Record<FileStatus, { label: string; cls: string }> = {
   pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
@@ -26,7 +27,7 @@ function formatSize(bytes: number) {
 export default function ImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { files, importType, isRunning, setImportType, addFiles, removeFile, clearAll, startImport } = useImport();
+  const { files, importType, isRunning, setImportType, addFiles, removeFile, clearAll, startImport, setFileDataDate } = useImport();
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
