@@ -8,15 +8,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import {
   ChartContainer, ChartTooltip, ChartTooltipContent,
 } from '@/components/ui/chart';
 import {
-  PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine,
+  PieChart, Pie, Cell, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine,
 } from 'recharts';
 import {
-  AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight,
+  AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight, CalendarIcon,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { formatDdMmm } from '@/lib/format';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import {
   type SubtestForDashboard, type PlanActualRow, type PlanActualMetrics,
@@ -146,9 +150,12 @@ export default function DashboardPage() {
   );
 
   // ───── S-Curve
+  const [scurveStart, setScurveStart] = useState('2026-04-15');
+  const [scurveEnd, setScurveEnd] = useState('2026-06-07');
+
   const scurve = useMemo(
-    () => buildSCurve(filteredSubtests, scurveBucket, scurveBucket === 'day' ? 90 : undefined),
-    [filteredSubtests, scurveBucket]
+    () => buildSCurve(filteredSubtests, scurveBucket, scurveStart, scurveEnd, today),
+    [filteredSubtests, scurveBucket, scurveStart, scurveEnd, today]
   );
 
   // ───── Top Overdue
@@ -175,10 +182,14 @@ export default function DashboardPage() {
   };
 
   const chartConfig = {
-    t1Planned: { label: 'T1 Planned', color: 'hsl(220, 65%, 55%)' },
-    t1Actual: { label: 'T1 Actual', color: 'hsl(220, 65%, 36%)' },
-    t2Planned: { label: 'T2 Planned', color: 'hsl(142, 50%, 55%)' },
-    t2Actual: { label: 'T2 Actual', color: 'hsl(0, 72%, 50%)' },
+    t1Planned: { label: 'T1 Planned (cum)', color: 'hsl(220, 65%, 55%)' },
+    t1Actual: { label: 'T1 Actual (cum)', color: 'hsl(220, 65%, 36%)' },
+    t2Planned: { label: 'T2 Planned (cum)', color: 'hsl(142, 50%, 55%)' },
+    t2Actual: { label: 'T2 Actual (cum)', color: 'hsl(0, 72%, 50%)' },
+    t1BarPlan: { label: 'T1 Plan (bar)', color: 'hsl(220, 70%, 75%)' },
+    t1BarActual: { label: 'T1 Actual (bar)', color: 'hsl(220, 70%, 40%)' },
+    t2BarPlan: { label: 'T2 Plan (bar)', color: 'hsl(30, 90%, 75%)' },
+    t2BarActual: { label: 'T2 Actual (bar)', color: 'hsl(30, 90%, 45%)' },
     Done: { label: 'Done', color: STATUS_COLORS.Done },
     WIP: { label: 'WIP', color: STATUS_COLORS.WIP },
     Planned: { label: 'Planned', color: STATUS_COLORS.Planned },
@@ -250,42 +261,86 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* ─── S-Curve ─── */}
+      {/* ─── S-Curve Combo Chart ─── */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-base">Plan vs Actual — Cumulative S-Curve</CardTitle>
-          <div className="flex gap-1 rounded-md border p-0.5">
-            <button
-              onClick={() => setScurveBucket('day')}
-              className={`px-3 py-1 text-xs rounded ${scurveBucket === 'day' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
-            >
-              Daily (90d)
-            </button>
-            <button
-              onClick={() => setScurveBucket('week')}
-              className={`px-3 py-1 text-xs rounded ${scurveBucket === 'week' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
-            >
-              Weekly
-            </button>
+          <CardTitle className="text-base">Plan vs Actual — S-Curve</CardTitle>
+          <div className="flex items-center gap-2">
+            {/* Date range pickers */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  {formatDdMmm(scurveStart)}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="single"
+                  selected={new Date(scurveStart + 'T00:00:00')}
+                  onSelect={(d) => d && setScurveStart(d.toISOString().slice(0, 10))}
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+            <span className="text-xs text-muted-foreground">~</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  {formatDdMmm(scurveEnd)}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="single"
+                  selected={new Date(scurveEnd + 'T00:00:00')}
+                  onSelect={(d) => d && setScurveEnd(d.toISOString().slice(0, 10))}
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+            {/* Day / Week toggle */}
+            <div className="flex gap-1 rounded-md border p-0.5">
+              <button
+                onClick={() => setScurveBucket('day')}
+                className={`px-3 py-1 text-xs rounded ${scurveBucket === 'day' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+              >
+                Daily
+              </button>
+              <button
+                onClick={() => setScurveBucket('week')}
+                className={`px-3 py-1 text-xs rounded ${scurveBucket === 'week' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+              >
+                Weekly
+              </button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
           {scurve.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p>
           ) : (
-            <ChartContainer config={chartConfig} className="h-[320px] w-full">
-              <LineChart data={scurve} margin={{ left: 12, right: 16, top: 8, bottom: 0 }}>
+            <ChartContainer config={chartConfig} className="h-[360px] w-full">
+              <ComposedChart data={scurve} margin={{ left: 12, right: 16, top: 8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="bucket" tick={{ fontSize: 10 }} minTickGap={20} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} />
+                <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <ReferenceLine x={today} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} />
-                <Line type="monotone" dataKey="t1Planned" stroke="hsl(220, 65%, 55%)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="T1 Planned" />
-                <Line type="monotone" dataKey="t1Actual" stroke="hsl(220, 65%, 36%)" strokeWidth={2} dot={false} name="T1 Actual" />
-                <Line type="monotone" dataKey="t2Planned" stroke="hsl(142, 50%, 55%)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="T2 Planned" />
-                <Line type="monotone" dataKey="t2Actual" stroke="hsl(0, 72%, 50%)" strokeWidth={2} dot={false} name="T2 Actual" />
-              </LineChart>
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <ReferenceLine yAxisId="left" x={formatDdMmm(today)} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} />
+                {/* Bars — non-cumulative (right axis) */}
+                <Bar yAxisId="right" dataKey="t1BarPlan" fill="hsl(220, 70%, 75%)" name="T1 Plan (bar)" barSize={6} />
+                <Bar yAxisId="right" dataKey="t1BarActual" fill="hsl(220, 70%, 40%)" name="T1 Actual (bar)" barSize={6} />
+                <Bar yAxisId="right" dataKey="t2BarPlan" fill="hsl(30, 90%, 75%)" name="T2 Plan (bar)" barSize={6} />
+                <Bar yAxisId="right" dataKey="t2BarActual" fill="hsl(30, 90%, 45%)" name="T2 Actual (bar)" barSize={6} />
+                {/* Lines — cumulative S-Curve (left axis) */}
+                <Line yAxisId="left" type="monotone" dataKey="t1Planned" stroke="hsl(220, 65%, 55%)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="T1 Planned (cum)" connectNulls={false} />
+                <Line yAxisId="left" type="monotone" dataKey="t1Actual" stroke="hsl(220, 65%, 36%)" strokeWidth={2} dot={false} name="T1 Actual (cum)" connectNulls={false} />
+                <Line yAxisId="left" type="monotone" dataKey="t2Planned" stroke="hsl(142, 50%, 55%)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="T2 Planned (cum)" connectNulls={false} />
+                <Line yAxisId="left" type="monotone" dataKey="t2Actual" stroke="hsl(0, 72%, 50%)" strokeWidth={2} dot={false} name="T2 Actual (cum)" connectNulls={false} />
+              </ComposedChart>
             </ChartContainer>
           )}
         </CardContent>
