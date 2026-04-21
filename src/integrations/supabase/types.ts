@@ -45,6 +45,7 @@ export type Database = {
           snapshot_data: Json
           snapshot_date: string
           snapshot_name: string
+          snapshot_type: string
         }
         Insert: {
           created_at?: string
@@ -55,6 +56,7 @@ export type Database = {
           snapshot_data: Json
           snapshot_date?: string
           snapshot_name: string
+          snapshot_type?: string
         }
         Update: {
           created_at?: string
@@ -65,6 +67,7 @@ export type Database = {
           snapshot_data?: Json
           snapshot_date?: string
           snapshot_name?: string
+          snapshot_type?: string
         }
         Relationships: []
       }

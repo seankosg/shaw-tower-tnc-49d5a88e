@@ -1635,7 +1635,7 @@ function BackupTab() {
   const load = async () => {
     setLoading(true);
     const { data } = await supabase.from('database_snapshots' as any)
-      .select('id, snapshot_name, snapshot_date, row_count, created_at, note')
+      .select('id, snapshot_name, snapshot_date, row_count, created_at, note, snapshot_type')
       .order('created_at', { ascending: false });
     setSnapshots(data || []);
     setLoading(false);
@@ -1671,6 +1671,7 @@ function BackupTab() {
         row_count: allRows.length,
         created_by: user?.id,
         note: note || null,
+        snapshot_type: 'manual',
       });
       if (error) throw error;
       toast({ title: 'Snapshot created', description: `${allRows.length} rows saved` });
@@ -1745,6 +1746,7 @@ function BackupTab() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead className="text-right">Rows</TableHead>
                   <TableHead>Note</TableHead>
@@ -1755,6 +1757,11 @@ function BackupTab() {
                 {snapshots.map(s => (
                   <TableRow key={s.id}>
                     <TableCell className="text-xs">{new Date(s.created_at).toLocaleString('ko-KR')}</TableCell>
+                    <TableCell>
+                      <Badge variant={s.snapshot_type === 'auto' ? 'secondary' : 'outline'} className="text-xs">
+                        {s.snapshot_type === 'auto' ? 'Auto' : 'Manual'}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-sm">{s.snapshot_name}</TableCell>
                     <TableCell className="text-right text-sm">{s.row_count?.toLocaleString()}</TableCell>
                     <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{s.note || '—'}</TableCell>
