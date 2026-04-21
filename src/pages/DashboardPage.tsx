@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -38,6 +40,7 @@ export default function DashboardPage() {
   const [systems, setSystems] = useState<SystemRef[]>([]);
   const [loading, setLoading] = useState(true);
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>('week');
+  const [teamFilter, setTeamFilter] = useState<string>('all');
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +52,7 @@ export default function DashboardPage() {
       while (true) {
         const { data } = await supabase
           .from('subtests')
-          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, pred_status, pred_planned_date, pred_actual_date' as any)
+          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, pred_status, pred_planned_date, pred_actual_date, team' as any)
           .eq('is_active', true)
           .range(from, from + PAGE - 1);
         if (!data || data.length === 0) break;
@@ -76,20 +79,25 @@ export default function DashboardPage() {
     return m;
   }, [systems]);
 
+  const filteredSubtests = useMemo(
+    () => teamFilter === 'all' ? subtests : subtests.filter(s => s.team === teamFilter),
+    [subtests, teamFilter],
+  );
+
   // ───── Top KPIs
   const kpis = useMemo(() => {
-    const tests = aggregateTests(subtests);
+    const tests = aggregateTests(filteredSubtests);
     let testsDone = 0, testsWip = 0, testsNot = 0;
     for (const v of tests.values()) {
       if (v === 'done') testsDone++;
       else if (v === 'in_progress') testsWip++;
       else testsNot++;
     }
-    const total = subtests.length;
-    const t1Done = subtests.filter(s => s.t1_status === 'Done').length;
-    const t2Done = subtests.filter(s => s.t2_status === 'Done').length;
-    const overdueCount = subtests.filter(s => isOverdue(s, today)).length;
-    const atRiskCount = subtests.filter(s => isAtRisk(s, today, atRiskDays)).length;
+    const total = filteredSubtests.length;
+    const t1Done = filteredSubtests.filter(s => s.t1_status === 'Done').length;
+    const t2Done = filteredSubtests.filter(s => s.t2_status === 'Done').length;
+    const overdueCount = filteredSubtests.filter(s => isOverdue(s, today)).length;
+    const atRiskCount = filteredSubtests.filter(s => isAtRisk(s, today, atRiskDays)).length;
     return {
       totalTests: tests.size,
       testsDone, testsWip, testsNot,
@@ -98,24 +106,28 @@ export default function DashboardPage() {
       t2Pct: total ? Math.round((t2Done / total) * 100) : 0,
       overdueCount, atRiskCount,
     };
-  }, [subtests, today, atRiskDays]);
+  }, [filteredSubtests, today, atRiskDays]);
 
   // ───── Group aggregates per tab — Plan vs Actual rows
   const bySystem = useMemo(
-    () => aggregatePlanActualByGroup(subtests, today, s => s.system_id, k => sysCodeById.get(k) ?? '—'),
-    [subtests, today, sysCodeById]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.system_id, k => sysCodeById.get(k) ?? '—'),
+    [filteredSubtests, today, sysCodeById]
   );
   const bySubcon = useMemo(
-    () => aggregatePlanActualByGroup(subtests, today, s => s.subcontractor_name ?? NONE_LABEL, k => k),
-    [subtests, today]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.subcontractor_name ?? NONE_LABEL, k => k),
+    [filteredSubtests, today]
   );
   const bySubsub = useMemo(
-    () => aggregatePlanActualByGroup(subtests, today, s => s.subsub_name ?? NONE_LABEL, k => k),
-    [subtests, today]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.subsub_name ?? NONE_LABEL, k => k),
+    [filteredSubtests, today]
   );
   const byHdec = useMemo(
-    () => aggregatePlanActualByGroup(subtests, today, s => s.hdec_pic_name ?? NONE_LABEL, k => k),
-    [subtests, today]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.hdec_pic_name ?? NONE_LABEL, k => k),
+    [filteredSubtests, today]
+  );
+  const byTeam = useMemo(
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.team ?? NONE_LABEL, k => k),
+    [filteredSubtests, today]
   );
   // bySystem uses system_id as key; URL filter expects system_code
   const systemKeyResolver = useMemo(
@@ -125,22 +137,22 @@ export default function DashboardPage() {
 
   // ───── S-Curve
   const scurve = useMemo(
-    () => buildSCurve(subtests, scurveBucket, scurveBucket === 'day' ? 90 : undefined),
-    [subtests, scurveBucket]
+    () => buildSCurve(filteredSubtests, scurveBucket, scurveBucket === 'day' ? 90 : undefined),
+    [filteredSubtests, scurveBucket]
   );
 
   // ───── Top Overdue
   const topOverdue = useMemo(() => {
-    return subtests
+    return filteredSubtests
       .filter(s => isOverdue(s, today))
       .map(s => ({ s, delay: maxDelayDays(s, today) }))
       .sort((a, b) => b.delay - a.delay)
       .slice(0, 10);
-  }, [subtests, today]);
+  }, [filteredSubtests, today]);
 
   // ───── Pie data
-  const t1Pie = useMemo(() => buildPie(subtests, 't1_status'), [subtests]);
-  const t2Pie = useMemo(() => buildPie(subtests, 't2_status'), [subtests]);
+  const t1Pie = useMemo(() => buildPie(filteredSubtests, 't1_status'), [filteredSubtests]);
+  const t2Pie = useMemo(() => buildPie(filteredSubtests, 't2_status'), [filteredSubtests]);
 
   if (loading) {
     return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading dashboard...</div>;
@@ -167,9 +179,20 @@ export default function DashboardPage() {
     <div className="space-y-6 p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-foreground">T&C Executive Dashboard</h1>
-        <p className="text-xs text-muted-foreground">
-          At-Risk threshold: ≤ {atRiskDays} day{atRiskDays === 1 ? '' : 's'} (configurable in Admin → Settings)
-        </p>
+        <div className="flex items-center gap-3">
+          <Select value={teamFilter} onValueChange={setTeamFilter}>
+            <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Teams</SelectItem>
+              {ALL_TEAMS.map(t => (
+                <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            At-Risk threshold: ≤ {atRiskDays} day{atRiskDays === 1 ? '' : 's'}
+          </p>
+        </div>
       </div>
 
       {/* ─── KPI Strip ─── */}
@@ -261,6 +284,7 @@ export default function DashboardPage() {
               <TabsTrigger value="subcon">By Subcontractor</TabsTrigger>
               <TabsTrigger value="subsub">By Sub-Sub</TabsTrigger>
               <TabsTrigger value="hdec">By HDEC PIC</TabsTrigger>
+              <TabsTrigger value="team">By Team</TabsTrigger>
             </TabsList>
             <TabsContent value="system">
               <PlanActualTable rows={bySystem} groupParam="system" groupHeader="System" today={today} yesterday={yesterday} navigate={navigate} keyToFilterValue={systemKeyResolver} />
@@ -273,6 +297,9 @@ export default function DashboardPage() {
             </TabsContent>
             <TabsContent value="hdec">
               <PlanActualTable rows={byHdec} groupParam="hdec_pic" groupHeader="HDEC PIC" today={today} yesterday={yesterday} navigate={navigate} />
+            </TabsContent>
+            <TabsContent value="team">
+              <PlanActualTable rows={byTeam} groupParam="team" groupHeader="Team" today={today} yesterday={yesterday} navigate={navigate} />
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -450,7 +477,7 @@ function PlanActualTable({
   rows, groupParam, groupHeader, today, yesterday, navigate, keyToFilterValue,
 }: {
   rows: PlanActualRow[];
-  groupParam: 'system' | 'subcon' | 'subsub' | 'hdec_pic';
+  groupParam: 'system' | 'subcon' | 'subsub' | 'hdec_pic' | 'team';
   groupHeader: string;
   today: string;
   yesterday: string;

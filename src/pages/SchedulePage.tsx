@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, AlertTriangle, TrendingUp, ChevronsLeft, ChevronsRight, CalendarSearch } from 'lucide-react';
@@ -26,6 +27,7 @@ const GROUP_LABELS: Record<ScheduleGroupBy, string> = {
   system: 'System',
   subcon: 'Subcontractor',
   subsub: 'Sub-Sub',
+  team: 'Team',
 };
 
 export default function SchedulePage() {
@@ -36,6 +38,7 @@ export default function SchedulePage() {
   const [groupBy, setGroupBy] = useState<ScheduleGroupBy>('system');
   const [bucket, setBucket] = useState<ScheduleBucket>('day');
   const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>('all');
+  const [teamFilter, setTeamFilter] = useState<string>('all');
   const [rangeDays, setRangeDays] = useState<number>(60);
   const [hidePast, setHidePast] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -64,7 +67,7 @@ export default function SchedulePage() {
       while (true) {
         const { data } = await supabase
           .from('subtests')
-          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date' as any)
+          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, team' as any)
           .eq('is_active', true)
           .range(from, from + PAGE - 1);
         if (!data || data.length === 0) break;
@@ -100,17 +103,22 @@ export default function SchedulePage() {
   const rangeStart = useMemo(() => addDays(today, -14), [today]);
   const rangeEnd = useMemo(() => addDays(today, rangeDays), [today, rangeDays]);
 
+  const filteredSubtests = useMemo(
+    () => teamFilter === 'all' ? subtests : subtests.filter(s => s.team === teamFilter),
+    [subtests, teamFilter],
+  );
+
   const aggregate = useMemo(
-    () => aggregateSchedule(subtests, {
+    () => aggregateSchedule(filteredSubtests, {
       groupBy, bucket, stageFilter,
       rangeStart, rangeEnd, today, sysCodeById,
     }),
-    [subtests, groupBy, bucket, stageFilter, rangeStart, rangeEnd, today, sysCodeById],
+    [filteredSubtests, groupBy, bucket, stageFilter, rangeStart, rangeEnd, today, sysCodeById],
   );
 
   const critical = useMemo(
-    () => findCritical(subtests, today, 7, sysCodeById, groupBy),
-    [subtests, today, sysCodeById, groupBy],
+    () => findCritical(filteredSubtests, today, 7, sysCodeById, groupBy),
+    [filteredSubtests, today, sysCodeById, groupBy],
   );
 
   const lagging = useMemo(() => findLaggingGroups(aggregate.rows, 5), [aggregate.rows]);
@@ -142,29 +150,29 @@ export default function SchedulePage() {
     const variance = cumPlan ? ((cumActual - cumPlan) / cumPlan) * 100 : 0;
     // Done-vs-Total progress across all T1+T2 stages
     let totalStages = 0, doneStages = 0;
-    for (const s of subtests) {
+    for (const s of filteredSubtests) {
       totalStages += 2;
       if (s.t1_status === 'Done') doneStages++;
       if (s.t2_status === 'Done') doneStages++;
     }
     const progressPct = totalStages ? (doneStages / totalStages) * 100 : 0;
-    const overdue = subtests.filter(s =>
+    const overdue = filteredSubtests.filter(s =>
       (s.t1_planned_date && s.t1_planned_date < today && s.t1_status !== 'Done') ||
       (s.t2_planned_date && s.t2_planned_date < today && s.t2_status !== 'Done')
     ).length;
     // Upcoming 7-day plan: count planned T1/T2 dates in [today, today+7]
     const upcomingEnd = addDays(today, 7);
     let upcoming7Plan = 0;
-    for (const s of subtests) {
+    for (const s of filteredSubtests) {
       if (s.t1_planned_date && s.t1_planned_date >= today && s.t1_planned_date <= upcomingEnd) upcoming7Plan++;
       if (s.t2_planned_date && s.t2_planned_date >= today && s.t2_planned_date <= upcomingEnd) upcoming7Plan++;
     }
     return { cumPlan, cumActual, variance, progressPct, doneStages, totalStages, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
-  }, [aggregate.rows, today, subtests, critical.highRisk.length]);
+  }, [aggregate.rows, today, filteredSubtests, critical.highRisk.length]);
 
   // ───── Navigation handlers ─────
   const filterParamForGroup = (label: string): { key: string; value: string } => {
-    const key = groupBy === 'system' ? 'system' : groupBy === 'subcon' ? 'subcon' : 'subsub';
+    const key = groupBy === 'system' ? 'system' : groupBy === 'subcon' ? 'subcon' : groupBy === 'team' ? 'team' : 'subsub';
     return { key, value: label };
   };
 
@@ -235,8 +243,21 @@ export default function SchedulePage() {
                 <TabsTrigger value="system" className="h-6 px-2 text-xs">System</TabsTrigger>
                 <TabsTrigger value="subcon" className="h-6 px-2 text-xs">Subcon</TabsTrigger>
                 <TabsTrigger value="subsub" className="h-6 px-2 text-xs">Sub-Sub</TabsTrigger>
+                <TabsTrigger value="team" className="h-6 px-2 text-xs">Team</TabsTrigger>
               </TabsList>
             </Tabs>
+          </ToolbarGroup>
+
+          <ToolbarGroup label="Team">
+            <Select value={teamFilter} onValueChange={setTeamFilter}>
+              <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Teams</SelectItem>
+                {ALL_TEAMS.map(t => (
+                  <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </ToolbarGroup>
 
           <ToolbarGroup label="Bucket">
