@@ -21,7 +21,7 @@ import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import {
   type SubtestForDashboard, type PlanActualRow, type PlanActualMetrics,
   todayIso, yesterdayIso, isOverdue, isAtRisk, maxDelayDays,
-  aggregateTests, aggregatePlanActualByGroup, buildSCurve, NONE_LABEL,
+  aggregatePlanActualByGroup, buildSCurve, NONE_LABEL,
 } from '@/lib/dashboard-utils';
 
 const STATUS_COLORS: Record<string, string> = {
