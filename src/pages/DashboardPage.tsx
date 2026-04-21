@@ -336,10 +336,12 @@ export default function DashboardPage() {
                 <Bar yAxisId="right" dataKey="t1Met" stackId="t1" fill="hsl(220, 70%, 40%)" name="T1 Actual" barSize={10} />
                 <Bar yAxisId="right" dataKey="t1Shortfall" stackId="t1" fill="hsl(0, 72%, 50%)" name="T1 Shortfall" barSize={10} />
                 <Bar yAxisId="right" dataKey="t1Excess" stackId="t1" fill="hsl(220, 80%, 25%)" name="T1 Excess" barSize={10} />
+                <Bar yAxisId="right" dataKey="t1FuturePlan" stackId="t1" fill="hsl(220, 70%, 75%)" name="T1 Plan (Future)" barSize={10} />
                 {/* T2 stacked bar */}
                 <Bar yAxisId="right" dataKey="t2Met" stackId="t2" fill="hsl(142, 60%, 40%)" name="T2 Actual" barSize={10} />
                 <Bar yAxisId="right" dataKey="t2Shortfall" stackId="t2" fill="hsl(0, 72%, 50%)" name="T2 Shortfall" barSize={10} />
                 <Bar yAxisId="right" dataKey="t2Excess" stackId="t2" fill="hsl(142, 70%, 20%)" name="T2 Excess" barSize={10} />
+                <Bar yAxisId="right" dataKey="t2FuturePlan" stackId="t2" fill="hsl(142, 60%, 75%)" name="T2 Plan (Future)" barSize={10} />
                 {/* Lines — cumulative S-Curve (left axis) */}
                 <Line yAxisId="left" type="monotone" dataKey="t1Planned" stroke="hsl(220, 65%, 55%)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="T1 Planned (cum)" connectNulls={false} />
                 <Line yAxisId="left" type="monotone" dataKey="t1Actual" stroke="hsl(220, 65%, 36%)" strokeWidth={2} dot={false} name="T1 Actual (cum)" connectNulls={false} />
