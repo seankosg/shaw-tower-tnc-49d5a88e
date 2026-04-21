@@ -17,8 +17,10 @@ import {
   PieChart, Pie, Cell, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine,
 } from 'recharts';
 import {
-  AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight, CalendarIcon,
+  AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight, CalendarIcon, Download,
 } from 'lucide-react';
+import { exportPlanActualToExcel } from '@/lib/dashboard-excel-export';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
@@ -148,6 +150,28 @@ export default function DashboardPage() {
     () => (key: string) => sysCodeById.get(key) ?? key,
     [sysCodeById]
   );
+
+  // ───── Breakdown tab & export
+  const [breakdownTab, setBreakdownTab] = useState('system');
+  const { toast } = useToast();
+
+  const breakdownDataMap: Record<string, { rows: PlanActualRow[]; header: string }> = {
+    system: { rows: bySystem, header: 'System' },
+    subcon: { rows: bySubcon, header: 'Subcontractor' },
+    subsub: { rows: bySubsub, header: 'Sub-Sub' },
+    hdec: { rows: byHdec, header: 'HDEC PIC' },
+    team: { rows: byTeam, header: 'Team' },
+  };
+
+  const handleBreakdownExport = () => {
+    const { rows, header } = breakdownDataMap[breakdownTab] ?? breakdownDataMap.system;
+    if (!rows.length) {
+      toast({ title: 'No data to export', variant: 'destructive' });
+      return;
+    }
+    const { rowCount, fileName } = exportPlanActualToExcel(rows, header, today, yesterday);
+    toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
+  };
 
   // ───── S-Curve
   const [scurveStart, setScurveStart] = useState('2026-04-15');
@@ -355,11 +379,15 @@ export default function DashboardPage() {
 
       {/* ─── 4 Tabs ─── */}
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-base">Plan vs Actual — Breakdown</CardTitle>
+          <Button variant="outline" size="sm" onClick={handleBreakdownExport}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Excel
+          </Button>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="system">
+          <Tabs value={breakdownTab} onValueChange={setBreakdownTab}>
             <TabsList className="flex-wrap h-auto">
               <TabsTrigger value="system">By System</TabsTrigger>
               <TabsTrigger value="subcon">By Subcontractor</TabsTrigger>
