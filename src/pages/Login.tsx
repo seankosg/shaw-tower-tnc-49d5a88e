@@ -20,10 +20,12 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    const { error } = await signIn(loginId, password);
+    const { error, profile } = await signIn(loginId, password);
     setIsLoading(false);
     if (error) {
       toast({ title: 'Login Failed', description: error.message, variant: 'destructive' });
+    } else if (profile && !profile.is_active) {
+      toast({ title: 'Login Failed', description: 'Your account has been deactivated. Please contact an administrator.', variant: 'destructive' });
     } else {
       navigate('/');
     }

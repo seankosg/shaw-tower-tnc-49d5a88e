@@ -84,7 +84,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (loginId: string, password: string) => {
     const email = loginIdToEmail(loginId);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
+    if (error) return { error: error as Error | null, profile: null };
+    // Fetch profile to check is_active
+    const { data: sess } = await supabase.auth.getSession();
+    if (sess?.session?.user) {
+      const { data: p } = await supabase.from('profiles').select('is_active').eq('user_id', sess.session.user.id).single();
+      if (p && !p.is_active) {
+        await supabase.auth.signOut();
+        return { error: null, profile: { is_active: false } };
+      }
+    }
+    return { error: null, profile: null };
   };
 
   const signOut = async () => {
