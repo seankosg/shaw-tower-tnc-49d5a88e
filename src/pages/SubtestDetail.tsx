@@ -281,6 +281,7 @@ export default function SubtestDetailPage() {
           {isFieldVisible('description') && (
             <div className="col-span-2"><Label className="text-xs text-muted-foreground">Description</Label><div>{record.description || '—'}</div></div>
           )}
+          <div><Label className="text-xs text-muted-foreground">Team</Label><div>{record.team ? TEAM_LABELS[record.team] : '—'}</div></div>
         </CardContent>
       </Card>
 
