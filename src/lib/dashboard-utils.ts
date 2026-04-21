@@ -250,10 +250,12 @@ export interface SCurvePoint {
   t1Met: number;            // min(plan, actual)
   t1Shortfall: number;      // max(0, plan - actual)
   t1Excess: number;         // max(0, actual - plan)
+  t1FuturePlan: number;     // future: plan value (light color)
   // T2 stacked bar segments
   t2Met: number;
   t2Shortfall: number;
   t2Excess: number;
+  t2FuturePlan: number;     // future: plan value (light color)
 }
 
 const MONTH_ABBR_SC = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -331,12 +333,14 @@ export function buildSCurve(
       t1Actual: isFuture ? null : cT1a,
       t2Planned: cT2p,
       t2Actual: isFuture ? null : cT2a,
-      t1Met: isFuture ? t1p : Math.min(t1p, t1a),
+      t1Met: isFuture ? 0 : Math.min(t1p, t1a),
       t1Shortfall: isFuture ? 0 : Math.max(0, t1p - t1a),
       t1Excess: isFuture ? 0 : Math.max(0, t1a - t1p),
-      t2Met: isFuture ? t2p : Math.min(t2p, t2a),
+      t1FuturePlan: isFuture ? t1p : 0,
+      t2Met: isFuture ? 0 : Math.min(t2p, t2a),
       t2Shortfall: isFuture ? 0 : Math.max(0, t2p - t2a),
       t2Excess: isFuture ? 0 : Math.max(0, t2a - t2p),
+      t2FuturePlan: isFuture ? t2p : 0,
     };
   });
 }
