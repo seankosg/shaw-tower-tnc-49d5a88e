@@ -1635,7 +1635,7 @@ function BackupTab() {
   const load = async () => {
     setLoading(true);
     const { data } = await supabase.from('database_snapshots' as any)
-      .select('id, snapshot_name, snapshot_date, row_count, created_at, note')
+      .select('id, snapshot_name, snapshot_date, row_count, created_at, note, snapshot_type')
       .order('created_at', { ascending: false });
     setSnapshots(data || []);
     setLoading(false);
