@@ -21,7 +21,7 @@ import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import {
   type SubtestForDashboard, type PlanActualRow, type PlanActualMetrics,
   todayIso, yesterdayIso, isOverdue, isAtRisk, maxDelayDays,
-  aggregateTests, aggregatePlanActualByGroup, buildSCurve, NONE_LABEL,
+  aggregatePlanActualByGroup, buildSCurve, NONE_LABEL,
 } from '@/lib/dashboard-utils';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -86,25 +86,36 @@ export default function DashboardPage() {
 
   // ───── Top KPIs
   const kpis = useMemo(() => {
-    const tests = aggregateTests(filteredSubtests);
-    let testsDone = 0, testsWip = 0, testsNot = 0;
-    for (const v of tests.values()) {
-      if (v === 'done') testsDone++;
-      else if (v === 'in_progress') testsWip++;
-      else testsNot++;
-    }
     const total = filteredSubtests.length;
-    const t1Done = filteredSubtests.filter(s => s.t1_status === 'Done').length;
-    const t2Done = filteredSubtests.filter(s => s.t2_status === 'Done').length;
+    const systemCount = new Set(filteredSubtests.map(s => s.system_id)).size;
+
+    // Overall done = T2 Done (final completion)
+    const totalDone = filteredSubtests.filter(s => s.t2_status === 'Done').length;
+    const remaining = total - totalDone;
+    const progressPct = total ? Math.round((totalDone / total) * 1000) / 10 : 0;
+
+    // Overdue (any stage)
     const overdueCount = filteredSubtests.filter(s => isOverdue(s, today)).length;
     const atRiskCount = filteredSubtests.filter(s => isAtRisk(s, today, atRiskDays)).length;
+
+    // Stage-specific
+    const predDone = filteredSubtests.filter(s => s.pred_status === 'Done').length;
+    const predOverdue = filteredSubtests.filter(s => s.pred_planned_date && s.pred_planned_date < today && s.pred_status !== 'Done').length;
+    const predPct = total ? Math.round((predDone / total) * 1000) / 10 : 0;
+
+    const t1Done = filteredSubtests.filter(s => s.t1_status === 'Done').length;
+    const t1Overdue = filteredSubtests.filter(s => s.t1_planned_date && s.t1_planned_date < today && s.t1_status !== 'Done').length;
+    const t1Pct = total ? Math.round((t1Done / total) * 1000) / 10 : 0;
+
+    const t2Done = totalDone;
+    const t2Overdue = filteredSubtests.filter(s => s.t2_planned_date && s.t2_planned_date < today && s.t2_status !== 'Done').length;
+    const t2Pct = progressPct;
+
     return {
-      totalTests: tests.size,
-      testsDone, testsWip, testsNot,
-      totalSubtests: total,
-      t1Pct: total ? Math.round((t1Done / total) * 100) : 0,
-      t2Pct: total ? Math.round((t2Done / total) * 100) : 0,
-      overdueCount, atRiskCount,
+      systemCount, total, totalDone, remaining, progressPct, overdueCount, atRiskCount,
+      predDone, predOverdue, predPct,
+      t1Done, t1Overdue, t1Pct,
+      t2Done, t2Overdue, t2Pct,
     };
   }, [filteredSubtests, today, atRiskDays]);
 
@@ -129,7 +140,6 @@ export default function DashboardPage() {
     () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.team ?? NONE_LABEL, k => k),
     [filteredSubtests, today]
   );
-  // bySystem uses system_id as key; URL filter expects system_code
   const systemKeyResolver = useMemo(
     () => (key: string) => sysCodeById.get(key) ?? key,
     [sysCodeById]
@@ -195,17 +205,19 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ─── KPI Strip ─── */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiCard icon={<ListChecks className="h-7 w-7 text-primary" />} label="Total Tests" value={kpis.totalTests} onClick={() => navigate('/')} />
-        <KpiCard icon={<CheckCircle2 className="h-7 w-7" style={{ color: STATUS_COLORS.Done }} />} label="Tests Done" value={kpis.testsDone} sub={kpis.totalTests ? `${Math.round(kpis.testsDone / kpis.totalTests * 100)}%` : undefined} />
-        <KpiCard icon={<TrendingUp className="h-7 w-7" style={{ color: STATUS_COLORS.WIP }} />} label="Tests In Progress" value={kpis.testsWip} />
-        <KpiCard icon={<Clock className="h-7 w-7 text-muted-foreground" />} label="Tests Not Started" value={kpis.testsNot} />
-        <KpiCard icon={<ListChecks className="h-7 w-7 text-muted-foreground" />} label="Total Subtests" value={kpis.totalSubtests} onClick={() => navigate('/')} />
-        <KpiCard icon={<CheckCircle2 className="h-7 w-7 text-primary" />} label="T1 Done %" value={`${kpis.t1Pct}%`} onClick={() => goSubtests({ t1_status: 'Done' })} />
-        <KpiCard icon={<CheckCircle2 className="h-7 w-7 text-primary" />} label="T2 Done %" value={`${kpis.t2Pct}%`} onClick={() => goSubtests({ t2_status: 'Done' })} />
+      {/* ─── Tier 1: Overall Summary ─── */}
+      <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
+        <KpiCard icon={<ListChecks className="h-6 w-6 text-primary" />} label="Systems" value={kpis.systemCount} onClick={() => navigate('/')} />
+        <KpiCard icon={<ListChecks className="h-6 w-6 text-muted-foreground" />} label="Total Subtests" value={kpis.total.toLocaleString()} onClick={() => navigate('/')} />
+        <KpiCard icon={<CheckCircle2 className="h-6 w-6" style={{ color: STATUS_COLORS.Done }} />} label="Done" value={kpis.totalDone.toLocaleString()} sub="T2 completed" />
+        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Remaining" value={kpis.remaining.toLocaleString()} />
+        <Card className="flex flex-col justify-center p-4">
+          <p className="text-xs text-muted-foreground mb-1">Progress</p>
+          <p className="text-xl font-bold text-foreground">{kpis.progressPct}%</p>
+          <Progress value={kpis.progressPct} className="mt-1 h-2" />
+        </Card>
         <KpiCard
-          icon={<AlertTriangle className="h-7 w-7 text-destructive" />}
+          icon={<AlertTriangle className="h-6 w-6 text-destructive" />}
           label="Overdue"
           value={kpis.overdueCount}
           accent="destructive"
@@ -213,7 +225,14 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* ─── Alert Banners ─── */}
+      {/* ─── Tier 2: Stage Cards (Pred / T1 / T2) ─── */}
+      <div className="grid gap-3 md:grid-cols-3">
+        <StageCard stage="Predecessor" total={kpis.total} done={kpis.predDone} remaining={kpis.total - kpis.predDone} pct={kpis.predPct} overdue={kpis.predOverdue} onClick={() => goSubtests({ pred_status: 'Done' })} />
+        <StageCard stage="T1" total={kpis.total} done={kpis.t1Done} remaining={kpis.total - kpis.t1Done} pct={kpis.t1Pct} overdue={kpis.t1Overdue} onClick={() => goSubtests({ t1_status: 'Done' })} />
+        <StageCard stage="T2" total={kpis.total} done={kpis.t2Done} remaining={kpis.total - kpis.t2Done} pct={kpis.t2Pct} overdue={kpis.t2Overdue} onClick={() => goSubtests({ t2_status: 'Done' })} />
+      </div>
+
+
       <div className="grid gap-3 md:grid-cols-2">
         <AlertBanner
           tone="destructive"
@@ -457,6 +476,54 @@ function ClickNum({ value, onClick }: { value: number; onClick?: () => void }) {
     >
       {value}
     </button>
+  );
+}
+function StageCard({
+  stage, total, done, remaining, pct, overdue, onClick,
+}: {
+  stage: string;
+  total: number;
+  done: number;
+  remaining: number;
+  pct: number;
+  overdue: number;
+  onClick?: () => void;
+}) {
+  return (
+    <Card
+      onClick={onClick}
+      className={`${onClick ? 'cursor-pointer hover:bg-muted/40 transition-colors' : ''} ${overdue > 0 ? 'border-destructive/30' : ''}`}
+    >
+      <CardContent className="p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-foreground">{stage}</p>
+          {overdue > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
+              <AlertTriangle className="h-3 w-3" />
+              {overdue} OD
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div>
+            <p className="text-[11px] text-muted-foreground">Total</p>
+            <p className="text-sm font-semibold text-foreground">{total.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Done</p>
+            <p className="text-sm font-semibold text-foreground">{done.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Remaining</p>
+            <p className="text-sm font-semibold text-foreground">{remaining.toLocaleString()}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Progress value={pct} className="h-2 flex-1" />
+          <span className="text-xs font-medium text-muted-foreground w-12 text-right">{pct}%</span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
