@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, AlertTriangle, TrendingUp, ChevronsLeft, ChevronsRight, CalendarSearch } from 'lucide-react';
@@ -102,17 +103,22 @@ export default function SchedulePage() {
   const rangeStart = useMemo(() => addDays(today, -14), [today]);
   const rangeEnd = useMemo(() => addDays(today, rangeDays), [today, rangeDays]);
 
+  const filteredSubtests = useMemo(
+    () => teamFilter === 'all' ? subtests : subtests.filter(s => s.team === teamFilter),
+    [subtests, teamFilter],
+  );
+
   const aggregate = useMemo(
-    () => aggregateSchedule(subtests, {
+    () => aggregateSchedule(filteredSubtests, {
       groupBy, bucket, stageFilter,
       rangeStart, rangeEnd, today, sysCodeById,
     }),
-    [subtests, groupBy, bucket, stageFilter, rangeStart, rangeEnd, today, sysCodeById],
+    [filteredSubtests, groupBy, bucket, stageFilter, rangeStart, rangeEnd, today, sysCodeById],
   );
 
   const critical = useMemo(
-    () => findCritical(subtests, today, 7, sysCodeById, groupBy),
-    [subtests, today, sysCodeById, groupBy],
+    () => findCritical(filteredSubtests, today, 7, sysCodeById, groupBy),
+    [filteredSubtests, today, sysCodeById, groupBy],
   );
 
   const lagging = useMemo(() => findLaggingGroups(aggregate.rows, 5), [aggregate.rows]);
@@ -166,7 +172,7 @@ export default function SchedulePage() {
 
   // ───── Navigation handlers ─────
   const filterParamForGroup = (label: string): { key: string; value: string } => {
-    const key = groupBy === 'system' ? 'system' : groupBy === 'subcon' ? 'subcon' : 'subsub';
+    const key = groupBy === 'system' ? 'system' : groupBy === 'subcon' ? 'subcon' : groupBy === 'team' ? 'team' : 'subsub';
     return { key, value: label };
   };
 
@@ -237,6 +243,7 @@ export default function SchedulePage() {
                 <TabsTrigger value="system" className="h-6 px-2 text-xs">System</TabsTrigger>
                 <TabsTrigger value="subcon" className="h-6 px-2 text-xs">Subcon</TabsTrigger>
                 <TabsTrigger value="subsub" className="h-6 px-2 text-xs">Sub-Sub</TabsTrigger>
+                <TabsTrigger value="team" className="h-6 px-2 text-xs">Team</TabsTrigger>
               </TabsList>
             </Tabs>
           </ToolbarGroup>
