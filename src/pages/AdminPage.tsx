@@ -963,6 +963,7 @@ function SubcontractorMasterTable() {
 
   return (
     <>
+    <Card>
       <CardHeader><CardTitle className="text-base">Subcontractor Master</CardTitle></CardHeader>
       <CardContent className="space-y-5">
         {/* Subcontractors */}
@@ -1192,6 +1193,7 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
 
   return (
     <>
+    <Card>
       <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
       <CardContent className="space-y-3">
         <form onSubmit={add} className="flex gap-2">
