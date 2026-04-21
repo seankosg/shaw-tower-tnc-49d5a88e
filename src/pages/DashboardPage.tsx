@@ -43,7 +43,7 @@ export default function DashboardPage() {
   const [subtests, setSubtests] = useState<SubtestForDashboard[]>([]);
   const [systems, setSystems] = useState<SystemRef[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>('week');
+  const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>('day');
   const [teamFilter, setTeamFilter] = useState<string>('all');
 
   useEffect(() => {
