@@ -248,6 +248,18 @@ export default function SchedulePage() {
             </Tabs>
           </ToolbarGroup>
 
+          <ToolbarGroup label="Team">
+            <Select value={teamFilter} onValueChange={setTeamFilter}>
+              <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Teams</SelectItem>
+                {ALL_TEAMS.map(t => (
+                  <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </ToolbarGroup>
+
           <ToolbarGroup label="Bucket">
             <Tabs value={bucket} onValueChange={(v) => setBucket(v as ScheduleBucket)}>
               <TabsList className="h-8">
