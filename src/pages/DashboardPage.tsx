@@ -119,10 +119,120 @@ export default function DashboardPage() {
     };
   }, [filteredSubtests, today, atRiskDays]);
 
-  // ... (rest of memos unchanged)
+  // ───── Group aggregates per tab — Plan vs Actual rows
+  const bySystem = useMemo(
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.system_id, k => sysCodeById.get(k) ?? '—'),
+    [filteredSubtests, today, sysCodeById]
+  );
+  const bySubcon = useMemo(
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.subcontractor_name ?? NONE_LABEL, k => k),
+    [filteredSubtests, today]
+  );
+  const bySubsub = useMemo(
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.subsub_name ?? NONE_LABEL, k => k),
+    [filteredSubtests, today]
+  );
+  const byHdec = useMemo(
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.hdec_pic_name ?? NONE_LABEL, k => k),
+    [filteredSubtests, today]
+  );
+  const byTeam = useMemo(
+    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.team ?? NONE_LABEL, k => k),
+    [filteredSubtests, today]
+  );
+  const systemKeyResolver = useMemo(
+    () => (key: string) => sysCodeById.get(key) ?? key,
+    [sysCodeById]
+  );
+
+  // ───── S-Curve
+  const scurve = useMemo(
+    () => buildSCurve(filteredSubtests, scurveBucket, scurveBucket === 'day' ? 90 : undefined),
+    [filteredSubtests, scurveBucket]
+  );
+
+  // ───── Top Overdue
+  const topOverdue = useMemo(() => {
+    return filteredSubtests
+      .filter(s => isOverdue(s, today))
+      .map(s => ({ s, delay: maxDelayDays(s, today) }))
+      .sort((a, b) => b.delay - a.delay)
+      .slice(0, 10);
+  }, [filteredSubtests, today]);
+
+  // ───── Pie data
+  const t1Pie = useMemo(() => buildPie(filteredSubtests, 't1_status'), [filteredSubtests]);
+  const t2Pie = useMemo(() => buildPie(filteredSubtests, 't2_status'), [filteredSubtests]);
+
+  if (loading) {
+    return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading dashboard...</div>;
+  }
+
+  // Navigation helpers
+  const goSubtests = (params: Record<string, string>) => {
+    const q = new URLSearchParams(params).toString();
+    navigate(`/?${q}`);
+  };
+
+  const chartConfig = {
+    t1Planned: { label: 'T1 Planned', color: 'hsl(220, 65%, 55%)' },
+    t1Actual: { label: 'T1 Actual', color: 'hsl(220, 65%, 36%)' },
+    t2Planned: { label: 'T2 Planned', color: 'hsl(142, 50%, 55%)' },
+    t2Actual: { label: 'T2 Actual', color: 'hsl(0, 72%, 50%)' },
+    Done: { label: 'Done', color: STATUS_COLORS.Done },
+    WIP: { label: 'WIP', color: STATUS_COLORS.WIP },
+    Planned: { label: 'Planned', color: STATUS_COLORS.Planned },
+    Hold: { label: 'Hold', color: STATUS_COLORS.Hold },
+  };
+
+  return (
+    <div className="space-y-6 p-4 md:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-foreground">T&C Executive Dashboard</h1>
+        <div className="flex items-center gap-3">
+          <Select value={teamFilter} onValueChange={setTeamFilter}>
+            <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Teams</SelectItem>
+              {ALL_TEAMS.map(t => (
+                <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            At-Risk threshold: ≤ {atRiskDays} day{atRiskDays === 1 ? '' : 's'}
+          </p>
+        </div>
+      </div>
+
+      {/* ─── Tier 1: Overall Summary ─── */}
+      <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
+        <KpiCard icon={<ListChecks className="h-6 w-6 text-primary" />} label="Systems" value={kpis.systemCount} onClick={() => navigate('/')} />
+        <KpiCard icon={<ListChecks className="h-6 w-6 text-muted-foreground" />} label="Total Subtests" value={kpis.total.toLocaleString()} onClick={() => navigate('/')} />
+        <KpiCard icon={<CheckCircle2 className="h-6 w-6" style={{ color: STATUS_COLORS.Done }} />} label="Done" value={kpis.totalDone.toLocaleString()} sub="T2 completed" />
+        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Remaining" value={kpis.remaining.toLocaleString()} />
+        <Card className="flex flex-col justify-center p-4">
+          <p className="text-xs text-muted-foreground mb-1">Progress</p>
+          <p className="text-xl font-bold text-foreground">{kpis.progressPct}%</p>
+          <Progress value={kpis.progressPct} className="mt-1 h-2" />
+        </Card>
+        <KpiCard
+          icon={<AlertTriangle className="h-6 w-6 text-destructive" />}
+          label="Overdue"
+          value={kpis.overdueCount}
+          accent="destructive"
+          onClick={() => goSubtests({ status: 'overdue' })}
+        />
+      </div>
+
+      {/* ─── Tier 2: Stage Cards (Pred / T1 / T2) ─── */}
+      <div className="grid gap-3 md:grid-cols-3">
+        <StageCard stage="Predecessor" total={kpis.total} done={kpis.predDone} remaining={kpis.total - kpis.predDone} pct={kpis.predPct} overdue={kpis.predOverdue} onClick={() => goSubtests({ pred_status: 'Done' })} />
+        <StageCard stage="T1" total={kpis.total} done={kpis.t1Done} remaining={kpis.total - kpis.t1Done} pct={kpis.t1Pct} overdue={kpis.t1Overdue} onClick={() => goSubtests({ t1_status: 'Done' })} />
+        <StageCard stage="T2" total={kpis.total} done={kpis.t2Done} remaining={kpis.total - kpis.t2Done} pct={kpis.t2Pct} overdue={kpis.t2Overdue} onClick={() => goSubtests({ t2_status: 'Done' })} />
+      </div>
 
 
-      {/* ─── Alert Banners ─── */}
       <div className="grid gap-3 md:grid-cols-2">
         <AlertBanner
           tone="destructive"
