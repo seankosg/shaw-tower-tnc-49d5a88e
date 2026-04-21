@@ -357,11 +357,15 @@ export default function DashboardPage() {
 
       {/* ─── 4 Tabs ─── */}
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-base">Plan vs Actual — Breakdown</CardTitle>
+          <Button variant="outline" size="sm" onClick={handleBreakdownExport}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Excel
+          </Button>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="system">
+          <Tabs value={breakdownTab} onValueChange={setBreakdownTab}>
             <TabsList className="flex-wrap h-auto">
               <TabsTrigger value="system">By System</TabsTrigger>
               <TabsTrigger value="subcon">By Subcontractor</TabsTrigger>
