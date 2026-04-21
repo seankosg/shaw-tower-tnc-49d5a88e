@@ -196,7 +196,11 @@ function UsersTab() {
   };
 
   const toggleActive = async (profile: Profile) => {
-    await supabase.from('profiles').update({ is_active: !profile.is_active }).eq('id', profile.id);
+    const { error } = await supabase.from('profiles').update({ is_active: !profile.is_active }).eq('id', profile.id);
+    if (error) {
+      toast({ title: 'Failed to update', description: error.message, variant: 'destructive' });
+      return;
+    }
     toast({ title: profile.is_active ? 'User deactivated' : 'User activated' });
     load();
   };
@@ -904,15 +908,24 @@ function SubcontractorMasterTable() {
   const confirmToggle = async (cascade: boolean) => {
     if (!pendingToggle) return;
     const r = pendingToggle.row;
-    await supabase.from('subcontractor_master').update({ is_active: false }).eq('id', r.id);
+    const { error } = await supabase.from('subcontractor_master').update({ is_active: false }).eq('id', r.id);
+    if (error) {
+      toast({ title: 'Failed to deactivate', description: error.message, variant: 'destructive' });
+      setPendingToggle(null);
+      return;
+    }
     if (cascade) {
       const col = (r.type ?? 'sub') === 'sub' ? 'subcontractor_name' : 'subsub_name';
-      const { data: linked } = await supabase
+      const { data: linked, error: cascadeErr } = await supabase
         .from('profiles')
         .update({ is_active: false } as any)
         .eq(col, r.name)
         .select('id');
-      toast({ title: 'Deactivated', description: `${linked?.length ?? 0} linked user(s) also deactivated` });
+      if (cascadeErr) {
+        toast({ title: 'Master deactivated, but cascade failed', description: cascadeErr.message, variant: 'destructive' });
+      } else {
+        toast({ title: 'Deactivated', description: `${linked?.length ?? 0} linked user(s) also deactivated` });
+      }
     } else {
       toast({ title: 'Deactivated', description: 'Linked users were NOT affected' });
     }
@@ -1139,14 +1152,23 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
   const confirmToggle = async (cascade: boolean) => {
     if (!pendingToggle) return;
     const r = pendingToggle.row;
-    await (supabase.from(table) as any).update({ is_active: false }).eq('id', r.id);
+    const { error } = await (supabase.from(table) as any).update({ is_active: false }).eq('id', r.id);
+    if (error) {
+      toast({ title: 'Failed to deactivate', description: error.message, variant: 'destructive' });
+      setPendingToggle(null);
+      return;
+    }
     if (cascade && table === 'hdec_pic_master') {
-      const { data: linked } = await supabase
+      const { data: linked, error: cascadeErr } = await supabase
         .from('profiles')
         .update({ is_active: false } as any)
         .eq('hdec_pic_name', r.name)
         .select('id');
-      toast({ title: 'Deactivated', description: `${linked?.length ?? 0} linked user(s) also deactivated` });
+      if (cascadeErr) {
+        toast({ title: 'Master deactivated, but cascade failed', description: cascadeErr.message, variant: 'destructive' });
+      } else {
+        toast({ title: 'Deactivated', description: `${linked?.length ?? 0} linked user(s) also deactivated` });
+      }
     } else {
       toast({ title: 'Deactivated', description: 'Linked users were NOT affected' });
     }
