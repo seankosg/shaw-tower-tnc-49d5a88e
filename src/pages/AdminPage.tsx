@@ -18,7 +18,8 @@ import {
   ALL_TEAMS, TEAM_LABELS,
   type AppRole, type UserType, type TeamType,
 } from '@/types/enums';
-import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown } from 'lucide-react';
+import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -247,10 +248,33 @@ function UsersTab() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">User Management</CardTitle>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm"><Plus className="mr-1 h-4 w-4" /> New User</Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => {
+            const rows = profiles.map(p => ({
+              'Login ID': p.login_id ?? '',
+              'Name': p.name ?? '',
+              'User Type': USER_TYPE_LABELS[p.user_type] ?? p.user_type,
+              'Team': p.team ? TEAM_LABELS[p.team] : '',
+              'Linked Master': p.user_type === 'subcontractor' ? (p.subcontractor_name ?? '') :
+                p.user_type === 'subsub' ? (p.subcontractor_name ?? '') :
+                (p.user_type === 'hdec' || p.user_type === 'pm_pd') ? (p.hdec_pic_name ?? '') : '',
+              'Role': ROLE_LABELS[getUserRole(p.user_id) as AppRole] ?? '',
+              'Active': p.is_active ? 'Yes' : 'No',
+            }));
+            const ws = XLSX.utils.json_to_sheet(rows);
+            ws['!cols'] = Object.keys(rows[0] || {}).map(k => ({ wch: Math.max(k.length + 2, 12) }));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Users');
+            const d = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            XLSX.writeFile(wb, `SHAW_Users_${d}.xlsx`);
+            toast({ title: 'Export complete', description: `${rows.length} users exported` });
+          }}>
+            <Download className="mr-1 h-4 w-4" /> Export
+          </Button>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm"><Plus className="mr-1 h-4 w-4" /> New User</Button>
+            </DialogTrigger>
           <CreateUserDialog
             subcons={subcons}
             subsubs={subsubs}
@@ -258,6 +282,7 @@ function UsersTab() {
             onCreated={() => { setCreateOpen(false); load(); }}
           />
         </Dialog>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="overflow-auto">
