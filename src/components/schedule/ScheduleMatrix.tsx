@@ -229,35 +229,25 @@ export function ScheduleMatrix({
             <div className="px-4 py-8 text-center text-sm text-muted-foreground">No data in selected range.</div>
           )}
           {data.rows.map(row => {
-            const isExp = expanded.has(row.key) && stageFilter === 'all';
+            const showStageRows = stageFilter === 'all';
             return (
               <Fragment key={row.key}>
                 {/* Group summary row */}
-                <div className="flex border-b border-border text-xs hover:bg-accent/30">
+                <div className={cn("flex border-b border-border text-xs h-10", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
                   <div className="sticky left-0 z-20 flex bg-card shadow-[2px_0_4px_-2px_hsl(var(--border))]">
-                    <button
-                      type="button"
-                      onClick={() => stageFilter === 'all' && toggle(row.key)}
-                      className={cn(
-                        'flex items-center gap-1 px-2 py-2 text-left',
-                        stageFilter === 'all' ? 'cursor-pointer hover:bg-accent/40' : 'cursor-default',
-                      )}
+                    <div
+                      className="flex items-center gap-1 px-2 text-left cursor-default"
                       style={{ width: W_GROUP }}
                     >
-                      {stageFilter === 'all' && (
-                        isExp
-                          ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      )}
                       <span className="truncate font-medium" title={row.label}>{row.label}</span>
-                    </button>
+                    </div>
 
                     <div className="flex bg-muted/40">
                       <TotalDoneCells
                         total={row.total}
                         done={row.doneCount}
                         bold
-                        py="py-2"
+                        py="py-0"
                       />
                     </div>
                     <div className="flex bg-secondary/20">
@@ -265,7 +255,7 @@ export function ScheduleMatrix({
                         plan={row.cumPlan}
                         actual={row.cumActual}
                         bold
-                        py="py-2"
+                        py="py-0"
                       />
                     </div>
                   </div>
@@ -290,13 +280,13 @@ export function ScheduleMatrix({
                 </div>
 
                 {/* Stage sub-rows when expanded */}
-                {isExp && stagesToShow.map(st => {
+                {showStageRows && stagesToShow.map(st => {
                   const sr = row.stages[st];
                   return (
-                    <div key={st} className="flex border-b border-border bg-muted/20 text-[11px] hover:bg-accent/20">
+                    <div key={st} className="flex border-b border-border bg-muted/20 text-[11px] h-10 hover:bg-accent/20">
                       <div className="sticky left-0 z-20 flex bg-card shadow-[2px_0_4px_-2px_hsl(var(--border))]">
                         <div
-                          className="flex items-center gap-2 px-2 py-1.5 pl-8 text-muted-foreground"
+                          className="flex items-center gap-2 px-2 pl-8 text-muted-foreground"
                           style={{ width: W_GROUP }}
                         >
                           <span className={cn(
@@ -312,14 +302,14 @@ export function ScheduleMatrix({
                           <TotalDoneCells
                             total={sr.total}
                             done={sr.totalDone}
-                            py="py-1.5"
+                            py="py-0"
                           />
                         </div>
                         <div className="flex bg-secondary/20">
                           <PlanActualCells
                             plan={sr.cumPlan}
                             actual={sr.cumActual}
-                            py="py-1.5"
+                            py="py-0"
                           />
                         </div>
                       </div>
