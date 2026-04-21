@@ -1,100 +1,93 @@
 
 
-## 요청 1: Admin — Raw Database 날짜별 스냅샷 저장/복원
+## 3가지 요청 재정리 (실행 순서 반영)
 
-### 개요
-Admin 탭에 "Backup & Restore" 탭을 추가하여, `subtests` 테이블 전체를 특정 시점의 스냅샷으로 저장하고 필요 시 복원할 수 있도록 합니다.
+### 요청 1: Predecessor 컬럼 날짜 포맷 + Date 필터 적용
 
-### DB 변경
+**현재**: `predecessor_status_raw` 컬럼 ("Predecessor")은 text 필터만 적용, raw 텍스트 그대로 표시
+**변경**:
+- **Cell 렌더링**: 값이 날짜 패턴(ISO, dd-MMM 등)이면 `formatDdMmm()`으로 변환 표시, 아니면 원본 텍스트 표시
+- **필터 유형**: `textFilterFn` → `dateRangeFilterFn`으로 변경, `meta.filterType: 'date-range'`로 변경하여 From/To + Empty only 날짜 필터 드롭다운 제공
 
-새 테이블 `database_snapshots` 생성:
+```typescript
+// 변경 전
+{ accessorKey: 'predecessor_status_raw', header: 'Predecessor', size: 110,
+  filterFn: textFilterFn, meta: { filterType: 'text' } },
 
-```sql
-CREATE TABLE public.database_snapshots (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  snapshot_name text NOT NULL,
-  snapshot_date date NOT NULL DEFAULT CURRENT_DATE,
-  snapshot_data jsonb NOT NULL,
-  row_count integer NOT NULL DEFAULT 0,
-  created_by uuid,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  note text
-);
-ALTER TABLE public.database_snapshots ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Admins can manage snapshots" ON public.database_snapshots
-  FOR ALL TO authenticated USING (is_admin_or_superuser(auth.uid()))
-  WITH CHECK (is_admin_or_superuser(auth.uid()));
+// 변경 후
+{ accessorKey: 'predecessor_status_raw', header: 'Predecessor', size: 110,
+  filterFn: dateRangeFilterFn, meta: { filterType: 'date-range' },
+  cell: ({ getValue }) => {
+    const v = getValue() as string | null;
+    if (!v) return '—';
+    // 날짜 패턴이면 dd-MMM으로 변환
+    if (/^\d{4}-\d{2}-\d{2}/.test(v) || /^\d{1,2}-[A-Za-z]{3}/.test(v))
+      return formatDdMmm(v);
+    return v;
+  }
+},
 ```
 
-### 구현 상세
-
-#### Admin 탭 추가: `BackupTab`
-
-- **저장**: 버튼 클릭 → `subtests` 전체 SELECT → JSON으로 `database_snapshots.snapshot_data`에 저장. 스냅샷 이름은 `YYYY-MM-DD HH:mm` 자동생성 + 메모 입력 가능.
-- **목록**: 저장된 스냅샷을 테이블로 표시 (날짜, 이름, row 수, 메모).
-- **복원**: 선택한 스냅샷의 데이터로 현재 `subtests`를 교체.
-  - 복원 프로세스: ① 현재 `subtests` 전체 DELETE → ② 스냅샷 JSON에서 INSERT.
-  - 확인 다이얼로그 필수 ("현재 데이터가 모두 교체됩니다").
-- **삭제**: 불필요한 스냅샷 삭제.
-
-#### 주의사항
-- `subtests` 테이블이 1000행 이상일 경우 Supabase 기본 limit을 고려하여 페이지네이션으로 전체 데이터를 가져옵니다.
-- 복원 시 `upload_batches`, `upload_row_logs`, `subtest_change_log` 등 연관 테이블은 건드리지 않습니다 (subtests만 복원).
-- Edge function으로 복원 로직을 구현하여 트랜잭션 안전성을 확보합니다.
-
-### 수정/생성 파일
-- `supabase/migrations/` — `database_snapshots` 테이블 생성
-- `supabase/functions/restore-snapshot/index.ts` — 복원 Edge Function (DELETE + INSERT 트랜잭션)
-- `src/pages/AdminPage.tsx` — `BackupTab` 추가 + TabsTrigger 추가
+**수정 파일**: `src/pages/SubtestList.tsx`
 
 ---
 
-## 요청 2: Import 시 파일별 기준날짜(Data Date) 지정
+### 요청 2: Import 시 T1/T2 Status 자동 채움 (요청 3보다 먼저 실행)
 
-### 개요
-현재 Import 시 status가 `Done`인데 actual_date가 비어있으면 **어제 날짜(`yesterday`)**를 자동 채웁니다. 이 "어제"를 파일별로 사용자가 지정한 **Data Date**로 교체합니다.
+**현재**: `t1_planned_date`에 값이 있어도 `t1_status`가 비어있으면 null로 저장
+**변경**: Import 파싱/처리 시:
+- `t1_planned_date`에 값이 있고 `t1_status`가 null → `t1_status = 'Planned'`
+- `t2_planned_date`에 값이 있고 `t2_status`가 null → `t2_status = 'Planned'`
+- 신규 insert와 기존 update 모두에 적용
 
-### 기존 로직과의 충돌/변경점
+적용 위치 (`src/contexts/ImportContext.tsx`):
+1. **신규 insert 직전** (약 315행): planned_date 있고 status null이면 'Planned' 설정
+2. **기존 update 직전** (약 260행): updates 객체에 status가 null이고 planned_date가 존재하면 'Planned' 설정
 
-| 항목 | 현재 | 변경 후 |
-|---|---|---|
-| **Auto-fill 기준일** | `new Date(Date.now() - 86400000)` (어제) | 사용자 지정 Data Date (기본값: 오늘) |
-| **upload_batches 기록** | `uploaded_at`만 기록 | `data_date` 컬럼 추가 저장 |
-| **updated_at** | Supabase trigger로 `now()` 자동 설정 — **변경 없음** | 동일 (updated_at은 레코드 수정 시점 유지) |
-| **subtest_change_log** | `changed_at = now()` — **변경 없음** | 동일 |
+**수정 파일**: `src/contexts/ImportContext.tsx`
 
-**핵심**: `updated_at`과 `changed_at`은 실제 DB 수정 시각이므로 변경하지 않습니다. Data Date는 오직 **actual_date 자동 채움**에만 사용됩니다.
+---
 
-영향 받는 코드 (ImportContext.tsx):
-- 239행: `const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);` → 파일별 `dataDate` 파라미터로 대체
-- 319-321행: 신규 insert 시 actual_date auto-fill도 동일하게 `dataDate` 사용
+### 요청 3: Hold → Delay 표현 + 자동 Delay 감지 (요청 2 완료 후 진행)
 
-### DB 변경
+요청 2에서 Planned 자동 채움이 완료된 후, Delay 감지 로직이 정확히 동작할 수 있습니다.
 
-```sql
-ALTER TABLE public.upload_batches ADD COLUMN data_date date;
+**변경 1 — 용어**: Legend와 Tooltip에서 "Hold" → "Delay"
+```typescript
+// StageProgressLegend
+<Pip state="hold" label="Delay" /> Delay
+
+// stateLabel 함수
+s === 'hold' ? 'Delay' : ...
 ```
 
-### UI 변경 (ImportPage.tsx)
+**변경 2 — 자동 Delay 감지**: `classifyStatus()`와 `classifyPred()`에 planned date 파라미터 추가:
+- status가 `Planned` 또는 `WIP`이고, `planned_date < today`이면 → `'hold'` (Delay) 반환
+- 붉은 아이콘(⊘)은 기존 hold 스타일 그대로 유지
 
-각 파일 카드에 **Data Date** 입력 필드 추가:
-- `<input type="date" />` — 기본값: 오늘
-- 파일별로 독립적으로 설정 가능
-- Import 실행 중에는 비활성화
+```typescript
+function classifyStatus(s: TcStatus | null, plannedDate?: string | null): StageState {
+  if (s === 'Done') return 'done';
+  if (s === 'Hold') return 'hold';
+  const today = new Date().toISOString().slice(0, 10);
+  if ((s === 'Planned' || s === 'WIP') && plannedDate && plannedDate < today) return 'hold';
+  if (s === 'WIP') return 'wip';
+  if (s === 'Planned') return 'planned';
+  return 'empty';
+}
+```
 
-### 코드 변경
+**변경 3 — StageProgress props 확장**: `t1PlannedDate`, `t2PlannedDate`, `predPlannedDate` props 추가
+**변경 4 — SubtestList.tsx**: StageProgress 호출 시 planned date props 전달
 
-1. **ImportFileItem 인터페이스** — `dataDate?: string` 필드 추가
-2. **ImportContext** — `addFiles` 시 `dataDate: new Date().toISOString().slice(0,10)` 기본값 설정
-3. **ImportContext** — `setFileDataDate(id, date)` 함수 추가
-4. **processFile** — `yesterday` 변수를 `item.dataDate || today`로 교체
-5. **upload_batches insert** — `data_date: item.dataDate` 추가 저장
-6. **ImportPage.tsx** — 파일 목록에 날짜 선택 UI 추가
+**수정 파일**:
+- `src/components/shared/StageProgress.tsx` — classify 함수, Legend, Tooltip 텍스트
+- `src/pages/SubtestList.tsx` — StageProgress에 planned date props 전달
 
-### 수정/생성 파일
-- `supabase/migrations/` — `upload_batches`에 `data_date` 컬럼 추가
-- `src/contexts/ImportContext.tsx` — dataDate 로직, processFile 수정
-- `src/pages/ImportPage.tsx` — 파일별 Data Date 입력 UI
-- `supabase/functions/restore-snapshot/index.ts` — 스냅샷 복원 함수
+---
+
+### 실행 순서
+1. **요청 1** — Predecessor 컬럼 포맷 + 날짜 필터 (`SubtestList.tsx`)
+2. **요청 2** — Import T1/T2 Status 자동 Planned 채움 (`ImportContext.tsx`)
+3. **요청 3** — Hold→Delay + 자동 Delay 감지 (`StageProgress.tsx`, `SubtestList.tsx`)
 
