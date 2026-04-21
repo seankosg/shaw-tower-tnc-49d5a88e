@@ -25,9 +25,9 @@ Deno.serve(async (req) => {
     });
     const admin = createClient(SUPABASE_URL, SERVICE);
 
-    const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
-    if (claimsErr || !claims?.claims) return json({ error: 'Unauthorized' }, 401);
-    const callerId = claims.claims.sub;
+    const { data: { user: caller }, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !caller) return json({ error: 'Unauthorized' }, 401);
+    const callerId = caller.id;
 
     const { data: isAdmin } = await admin.rpc('has_role', { _user_id: callerId, _role: 'admin' });
     if (!isAdmin) return json({ error: 'Admin role required' }, 403);
