@@ -27,6 +27,7 @@ const GROUP_LABELS: Record<ScheduleGroupBy, string> = {
   system: 'System',
   subcon: 'Subcontractor',
   subsub: 'Sub-Sub',
+  hdec: 'PIC',
   team: 'Team',
 };
 
@@ -172,7 +173,7 @@ export default function SchedulePage() {
 
   // ───── Navigation handlers ─────
   const filterParamForGroup = (label: string): { key: string; value: string } => {
-    const key = groupBy === 'system' ? 'system' : groupBy === 'subcon' ? 'subcon' : groupBy === 'team' ? 'team' : 'subsub';
+    const key = groupBy === 'system' ? 'system' : groupBy === 'subcon' ? 'subcon' : groupBy === 'hdec' ? 'hdec_pic' : groupBy === 'team' ? 'team' : 'subsub';
     return { key, value: label };
   };
 
@@ -243,6 +244,7 @@ export default function SchedulePage() {
                 <TabsTrigger value="system" className="h-6 px-2 text-xs">System</TabsTrigger>
                 <TabsTrigger value="subcon" className="h-6 px-2 text-xs">Subcon</TabsTrigger>
                 <TabsTrigger value="subsub" className="h-6 px-2 text-xs">Sub-Sub</TabsTrigger>
+                <TabsTrigger value="hdec" className="h-6 px-2 text-xs">PIC</TabsTrigger>
                 <TabsTrigger value="team" className="h-6 px-2 text-xs">Team</TabsTrigger>
               </TabsList>
             </Tabs>
