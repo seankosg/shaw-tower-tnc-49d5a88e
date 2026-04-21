@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useImport, type FileStatus } from '@/contexts/ImportContext';
+import { Input } from '@/components/ui/input';
 
 const statusBadge: Record<FileStatus, { label: string; cls: string }> = {
   pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
@@ -26,7 +27,7 @@ function formatSize(bytes: number) {
 export default function ImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { files, importType, isRunning, setImportType, addFiles, removeFile, clearAll, startImport } = useImport();
+  const { files, importType, isRunning, setImportType, addFiles, removeFile, clearAll, startImport, setFileDataDate } = useImport();
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -149,6 +150,16 @@ export default function ImportPage() {
                           · {f.result.inserted} ins, {f.result.updated} upd, {f.result.skipped} skp, {f.result.rejected} rej
                         </span>
                       )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">Data Date:</span>
+                      <Input
+                        type="date"
+                        value={f.dataDate || ''}
+                        onChange={(e) => setFileDataDate(f.id, e.target.value)}
+                        disabled={isRunning || f.status === 'done' || f.status === 'failed'}
+                        className="h-7 w-[150px] text-xs"
+                      />
                     </div>
                     {f.unmappedHeaders && f.unmappedHeaders.length > 0 && (
                       <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950 px-2 py-1.5">

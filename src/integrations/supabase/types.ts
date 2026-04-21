@@ -35,6 +35,39 @@ export type Database = {
         }
         Relationships: []
       }
+      database_snapshots: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string | null
+          row_count: number
+          snapshot_data: Json
+          snapshot_date: string
+          snapshot_name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          row_count?: number
+          snapshot_data: Json
+          snapshot_date?: string
+          snapshot_name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          row_count?: number
+          snapshot_data?: Json
+          snapshot_date?: string
+          snapshot_name?: string
+        }
+        Relationships: []
+      }
       field_config: {
         Row: {
           display_name: string
@@ -524,6 +557,7 @@ export type Database = {
       }
       upload_batches: {
         Row: {
+          data_date: string | null
           id: string
           import_type: Database["public"]["Enums"]["import_type"] | null
           note: string | null
@@ -541,6 +575,7 @@ export type Database = {
           uploaded_file_name: string
         }
         Insert: {
+          data_date?: string | null
           id?: string
           import_type?: Database["public"]["Enums"]["import_type"] | null
           note?: string | null
@@ -558,6 +593,7 @@ export type Database = {
           uploaded_file_name: string
         }
         Update: {
+          data_date?: string | null
           id?: string
           import_type?: Database["public"]["Enums"]["import_type"] | null
           note?: string | null

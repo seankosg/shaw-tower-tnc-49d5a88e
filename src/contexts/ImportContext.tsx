@@ -18,6 +18,7 @@ export interface ImportFileItem {
   error?: string;
   parsed?: ParsedSubtest[];
   unmappedHeaders?: string[];
+  dataDate?: string;
 }
 
 interface ImportContextValue {
@@ -30,6 +31,7 @@ interface ImportContextValue {
   removeFile: (id: string) => void;
   clearAll: () => void;
   startImport: () => Promise<void>;
+  setFileDataDate: (id: string, date: string) => void;
 }
 
 const ImportContext = createContext<ImportContextValue | null>(null);
@@ -58,6 +60,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addFiles = useCallback(async (newFiles: File[]) => {
+    const today = new Date().toISOString().slice(0, 10);
     const items: ImportFileItem[] = newFiles.map(file => ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       file,
@@ -66,6 +69,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       status: 'parsing',
       parsedCount: 0,
       progress: 0,
+      dataDate: today,
     }));
     setFiles(prev => [...prev, ...items]);
 
@@ -94,6 +98,10 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     setCurrentIndex(-1);
   };
 
+  const setFileDataDate = (id: string, date: string) => {
+    updateFile(id, { dataDate: date });
+  };
+
   const processFile = async (item: ImportFileItem): Promise<{ inserted: number; updated: number; skipped: number; rejected: number } | null> => {
     if (!item.parsed) return null;
     const parsed = item.parsed;
@@ -110,7 +118,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       import_type: importTypeRef.current,
       total_rows: parsed.length,
       status: 'processing' as any,
-    }).select('id').single();
+      data_date: item.dataDate || null,
+    } as any).select('id').single();
     if (batchErr || !batch) throw new Error(batchErr?.message || 'Failed to create batch');
     const uploadId = batch.id;
 
@@ -236,7 +245,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
 
       const dataSourceType = importTypeRef.current === 'legacy' ? 'legacy_import_inherited' : 'standard_import';
-      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      const autoFillDate = item.dataDate || new Date().toISOString().slice(0, 10);
 
       if (existing) {
         const updates: Record<string, any> = {};
@@ -285,17 +294,17 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         const finalT1Status = updates.t1_status !== undefined ? updates.t1_status : ed?.t1_status;
         const finalT1Actual = updates.t1_actual_date !== undefined ? updates.t1_actual_date : ed?.t1_actual_date;
         if (finalT1Status === 'Done' && !finalT1Actual) {
-          updates.t1_actual_date = yesterday;
+          updates.t1_actual_date = autoFillDate;
         }
         const finalT2Status = updates.t2_status !== undefined ? updates.t2_status : ed?.t2_status;
         const finalT2Actual = updates.t2_actual_date !== undefined ? updates.t2_actual_date : ed?.t2_actual_date;
         if (finalT2Status === 'Done' && !finalT2Actual) {
-          updates.t2_actual_date = yesterday;
+          updates.t2_actual_date = autoFillDate;
         }
         const finalPredStatus = updates.pred_status !== undefined ? updates.pred_status : ed?.pred_status;
         const finalPredActual = updates.pred_actual_date !== undefined ? updates.pred_actual_date : ed?.pred_actual_date;
         if (finalPredStatus === 'Done' && !finalPredActual) {
-          updates.pred_actual_date = yesterday;
+          updates.pred_actual_date = autoFillDate;
         }
 
         const { error } = await supabase.from('subtests').update(updates as any).eq('id', existing.id);
@@ -316,9 +325,9 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         // Auto-fill actual_date for new inserts when status is Done
-        const insertT1Actual = row.t1_status === 'Done' ? yesterday : null;
-        const insertT2Actual = row.t2_status === 'Done' ? yesterday : null;
-        const insertPredActual = row.pred_status === 'Done' ? yesterday : (row.pred_actual_date ?? null);
+        const insertT1Actual = row.t1_status === 'Done' ? autoFillDate : null;
+        const insertT2Actual = row.t2_status === 'Done' ? autoFillDate : null;
+        const insertPredActual = row.pred_status === 'Done' ? autoFillDate : (row.pred_actual_date ?? null);
         const { error } = await supabase.from('subtests').insert({
           project_id: projectId!, system_id: systemId,
           item_no: row.item_no, mos_code: row.mos_code, subtest_id: row.subtest_id,
@@ -418,7 +427,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   return (
     <ImportContext.Provider value={{
       files, importType, isRunning, currentIndex,
-      setImportType, addFiles, removeFile, clearAll, startImport,
+      setImportType, addFiles, removeFile, clearAll, startImport, setFileDataDate,
     }}>
       {children}
     </ImportContext.Provider>
