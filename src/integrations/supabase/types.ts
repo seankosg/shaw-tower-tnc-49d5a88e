@@ -307,6 +307,7 @@ export type Database = {
           t2_actual_date: string | null
           t2_planned_date: string | null
           t2_status: Database["public"]["Enums"]["tc_status"] | null
+          team: Database["public"]["Enums"]["team_type"] | null
           test_id: string | null
           updated_at: string
           updated_by: string | null
@@ -344,6 +345,7 @@ export type Database = {
           t2_actual_date?: string | null
           t2_planned_date?: string | null
           t2_status?: Database["public"]["Enums"]["tc_status"] | null
+          team?: Database["public"]["Enums"]["team_type"] | null
           test_id?: string | null
           updated_at?: string
           updated_by?: string | null
@@ -381,6 +383,7 @@ export type Database = {
           t2_actual_date?: string | null
           t2_planned_date?: string | null
           t2_status?: Database["public"]["Enums"]["tc_status"] | null
+          team?: Database["public"]["Enums"]["team_type"] | null
           test_id?: string | null
           updated_at?: string
           updated_by?: string | null
@@ -818,6 +821,7 @@ export type Database = {
         | "admin_edit"
       import_type: "legacy" | "standard"
       tc_status: "Planned" | "WIP" | "Done" | "Hold"
+      team_type: "Mech" | "Elec" | "Arch" | "Supp"
       upload_status: "pending" | "processing" | "completed" | "failed"
       user_type: "subcontractor" | "hdec" | "pm_pd" | "admin"
     }
@@ -971,6 +975,7 @@ export const Constants = {
       ],
       import_type: ["legacy", "standard"],
       tc_status: ["Planned", "WIP", "Done", "Hold"],
+      team_type: ["Mech", "Elec", "Arch", "Supp"],
       upload_status: ["pending", "processing", "completed", "failed"],
       user_type: ["subcontractor", "hdec", "pm_pd", "admin"],
     },
