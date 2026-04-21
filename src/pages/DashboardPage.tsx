@@ -151,6 +151,28 @@ export default function DashboardPage() {
     [sysCodeById]
   );
 
+  // ───── Breakdown tab & export
+  const [breakdownTab, setBreakdownTab] = useState('system');
+  const { toast } = useToast();
+
+  const breakdownDataMap: Record<string, { rows: PlanActualRow[]; header: string }> = {
+    system: { rows: bySystem, header: 'System' },
+    subcon: { rows: bySubcon, header: 'Subcontractor' },
+    subsub: { rows: bySubsub, header: 'Sub-Sub' },
+    hdec: { rows: byHdec, header: 'HDEC PIC' },
+    team: { rows: byTeam, header: 'Team' },
+  };
+
+  const handleBreakdownExport = () => {
+    const { rows, header } = breakdownDataMap[breakdownTab] ?? breakdownDataMap.system;
+    if (!rows.length) {
+      toast({ title: 'No data to export', variant: 'destructive' });
+      return;
+    }
+    const { rowCount, fileName } = exportPlanActualToExcel(rows, header, today, yesterday);
+    toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
+  };
+
   // ───── S-Curve
   const [scurveStart, setScurveStart] = useState('2026-04-15');
   const [scurveEnd, setScurveEnd] = useState('2026-06-07');
