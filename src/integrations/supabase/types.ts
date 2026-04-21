@@ -830,7 +830,7 @@ export type Database = {
       tc_status: "Planned" | "WIP" | "Done" | "Hold"
       team_type: "Mech" | "Elec" | "Arch" | "Supp"
       upload_status: "pending" | "processing" | "completed" | "failed"
-      user_type: "subcontractor" | "hdec" | "pm_pd" | "admin"
+      user_type: "subcontractor" | "hdec" | "pm_pd" | "admin" | "subsub"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -984,7 +984,7 @@ export const Constants = {
       tc_status: ["Planned", "WIP", "Done", "Hold"],
       team_type: ["Mech", "Elec", "Arch", "Supp"],
       upload_status: ["pending", "processing", "completed", "failed"],
-      user_type: ["subcontractor", "hdec", "pm_pd", "admin"],
+      user_type: ["subcontractor", "hdec", "pm_pd", "admin", "subsub"],
     },
   },
 } as const

@@ -1,5 +1,5 @@
 export type AppRole = 'guest' | 'super_guest' | 'user' | 'senior_user' | 'superuser' | 'admin';
-export type UserType = 'subcontractor' | 'hdec' | 'pm_pd' | 'admin';
+export type UserType = 'subcontractor' | 'subsub' | 'hdec' | 'pm_pd' | 'admin';
 export type TcStatus = 'Planned' | 'WIP' | 'Done' | 'Hold';
 export type DataSource = 'legacy_import_inherited' | 'app_direct_input' | 'mobile_input' | 'standard_import' | 'admin_edit';
 export type ChangeSource = 'app_direct_input' | 'mobile_input' | 'excel_import' | 'admin_edit';
@@ -7,7 +7,7 @@ export type ChangeSource = 'app_direct_input' | 'mobile_input' | 'excel_import' 
 export const TC_STATUS_OPTIONS: TcStatus[] = ['Planned', 'WIP', 'Done', 'Hold'];
 
 export const ALL_ROLES: AppRole[] = ['guest', 'super_guest', 'user', 'senior_user', 'superuser', 'admin'];
-export const ALL_USER_TYPES: UserType[] = ['subcontractor', 'hdec', 'pm_pd', 'admin'];
+export const ALL_USER_TYPES: UserType[] = ['subcontractor', 'subsub', 'hdec', 'pm_pd', 'admin'];
 
 export type TeamType = 'Mech' | 'Elec' | 'Arch' | 'Supp';
 export const ALL_TEAMS: TeamType[] = ['Mech', 'Elec', 'Arch', 'Supp'];
@@ -29,6 +29,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
 
 export const USER_TYPE_LABELS: Record<UserType, string> = {
   subcontractor: 'Subcontractor',
+  subsub: 'Sub-Sub',
   hdec: 'HDEC',
   pm_pd: 'PM/PD',
   admin: 'Administrator',

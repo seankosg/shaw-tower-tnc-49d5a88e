@@ -9,7 +9,7 @@ const corsHeaders = {
 interface Body {
   user_id: string;
   name?: string;
-  user_type?: 'subcontractor' | 'hdec' | 'pm_pd' | 'admin';
+  user_type?: 'subcontractor' | 'subsub' | 'hdec' | 'pm_pd' | 'admin';
   subcontractor_name?: string | null;
   subsub_name?: string | null;
   hdec_pic_name?: string | null;
