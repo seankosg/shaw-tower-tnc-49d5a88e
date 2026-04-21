@@ -84,7 +84,7 @@ async function findExistingMasterUser(
   admin: ReturnType<typeof createClient>,
   body: Body,
 ): Promise<{ user_id: string; login_id: string } | null> {
-  let query = admin.from('profiles').select('user_id, login_id').eq('user_type', body.master_type === 'hdec_pic' ? 'hdec' : 'subcontractor').limit(1);
+  let query = admin.from('profiles').select('user_id, login_id').eq('user_type', body.master_type === 'hdec_pic' ? 'hdec' : body.master_type === 'subsub' ? 'subsub' : 'subcontractor').limit(1);
 
   if (body.master_type === 'subcontractor') {
     query = query.eq('subcontractor_name', body.name.trim()).is('subsub_name', null);
