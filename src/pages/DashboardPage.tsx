@@ -17,8 +17,10 @@ import {
   PieChart, Pie, Cell, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine,
 } from 'recharts';
 import {
-  AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight, CalendarIcon,
+  AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight, CalendarIcon, Download,
 } from 'lucide-react';
+import { exportPlanActualToExcel } from '@/lib/dashboard-excel-export';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
