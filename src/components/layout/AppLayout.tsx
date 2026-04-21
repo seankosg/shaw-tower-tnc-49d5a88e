@@ -53,7 +53,7 @@ function GlobalImportIndicator() {
       className="flex items-center gap-2 rounded-md border bg-card px-3 py-1.5 text-xs hover:bg-accent transition-colors"
     >
       <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-      <span className="font-medium truncate max-w-[180px]">
+      <span className="font-medium truncate max-w-[100px] sm:max-w-[180px]">
         {current ? `Importing ${current.name}` : 'Importing...'}
       </span>
       <span className="text-muted-foreground">{done}/{total}</span>

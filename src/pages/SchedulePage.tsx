@@ -436,7 +436,7 @@ export default function SchedulePage() {
 
 function ToolbarGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex w-full sm:w-auto items-center gap-1.5">
       <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
       {children}
     </div>

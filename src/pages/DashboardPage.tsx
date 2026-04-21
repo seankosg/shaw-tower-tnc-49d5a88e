@@ -219,7 +219,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ─── Tier 1: Overall Summary ─── */}
-      <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
         <KpiCard icon={<ListChecks className="h-6 w-6 text-primary" />} label="Systems" value={kpis.systemCount} onClick={() => navigate('/')} />
         <KpiCard icon={<ListChecks className="h-6 w-6 text-muted-foreground" />} label="Total Subtests" value={kpis.total.toLocaleString()} onClick={() => navigate('/')} />
         <KpiCard icon={<CheckCircle2 className="h-6 w-6" style={{ color: STATUS_COLORS.Done }} />} label="Done" value={kpis.totalDone.toLocaleString()} sub="T2 completed" />
@@ -265,9 +265,9 @@ export default function DashboardPage() {
 
       {/* ─── S-Curve Combo Chart ─── */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0 pb-2">
           <CardTitle className="text-base">Plan vs Actual — S-Curve</CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Date range pickers */}
             <Popover>
               <PopoverTrigger asChild>
@@ -360,7 +360,7 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="system">
-            <TabsList>
+            <TabsList className="flex-wrap h-auto">
               <TabsTrigger value="system">By System</TabsTrigger>
               <TabsTrigger value="subcon">By Subcontractor</TabsTrigger>
               <TabsTrigger value="subsub">By Sub-Sub</TabsTrigger>
