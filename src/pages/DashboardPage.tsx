@@ -734,7 +734,15 @@ function PlanActualTable({
                       <TableCell rowSpan={3} className="text-right tabular-nums align-top px-2 py-1.5">{r.totalSubtests}</TableCell>
                     </>
                   )}
-                  <TableCell className="px-2 py-1.5"><StageBadge stage={st.stage} label={st.label} /></TableCell>
+                  <TableCell className="px-2 py-1.5">
+                    <span className="inline-flex items-center gap-1.5">
+                      <StageBadge stage={st.stage} label={st.label} />
+                      <span className="text-[10px] tabular-nums text-muted-foreground">
+                        {m.cumActual}<span className="opacity-50">/{r.totalSubtests}</span>
+                        <span className="ml-0.5 opacity-70">({r.totalSubtests - m.cumActual})</span>
+                      </span>
+                    </span>
+                  </TableCell>
                   {/* Cumulative (to yesterday) */}
                   <TableCell className="text-right border-l border-border text-xs px-2 py-1.5">
                     <ClickNum value={m.cumPlan} onClick={st.planTo ? () => go(r.key, { [st.planTo!]: yesterday }) : undefined} />
