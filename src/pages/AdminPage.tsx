@@ -1619,3 +1619,191 @@ function InlineNameEdit({ value, onSave }: { value: string; onSave: (v: string) 
     />
   );
 }
+
+/* ═══════ Tab: Backup & Restore ═══════ */
+function BackupTab() {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const [snapshots, setSnapshots] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [note, setNote] = useState('');
+  const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('database_snapshots' as any)
+      .select('id, snapshot_name, snapshot_date, row_count, created_at, note')
+      .order('created_at', { ascending: false });
+    setSnapshots(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const fetchAllSubtests = async () => {
+    const allRows: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data, error } = await supabase.from('subtests')
+        .select('*')
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      allRows.push(...data);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+    return allRows;
+  };
+
+  const createSnapshot = async () => {
+    setSaving(true);
+    try {
+      const allRows = await fetchAllSubtests();
+      const name = new Date().toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const { error } = await supabase.from('database_snapshots' as any).insert({
+        snapshot_name: name,
+        snapshot_data: allRows,
+        row_count: allRows.length,
+        created_by: user?.id,
+        note: note || null,
+      });
+      if (error) throw error;
+      toast({ title: 'Snapshot created', description: `${allRows.length} rows saved` });
+      setNote('');
+      load();
+    } catch (e: any) {
+      toast({ title: 'Failed to create snapshot', description: e.message, variant: 'destructive' });
+    }
+    setSaving(false);
+  };
+
+  const restoreSnapshot = async (id: string) => {
+    setRestoring(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('restore-snapshot', {
+        body: { snapshot_id: id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: 'Restore complete', description: `${data.restored} rows restored` });
+    } catch (e: any) {
+      toast({ title: 'Restore failed', description: e.message, variant: 'destructive' });
+    }
+    setRestoring(false);
+    setConfirmRestore(null);
+  };
+
+  const deleteSnapshot = async (id: string) => {
+    const { error } = await supabase.from('database_snapshots' as any).delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Snapshot deleted' });
+      load();
+    }
+    setConfirmDelete(null);
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Create Snapshot</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <label className="text-sm text-muted-foreground">Note (optional)</label>
+              <Input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Before weekly import" />
+            </div>
+            <Button onClick={createSnapshot} disabled={saving || restoring}>
+              {saving ? 'Saving...' : 'Save Current Data'}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Saves all subtests data as a snapshot. You can restore it later to rollback changes.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Saved Snapshots</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          ) : snapshots.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No snapshots yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead className="text-right">Rows</TableHead>
+                  <TableHead>Note</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {snapshots.map(s => (
+                  <TableRow key={s.id}>
+                    <TableCell className="text-xs">{new Date(s.created_at).toLocaleString('ko-KR')}</TableCell>
+                    <TableCell className="text-sm">{s.snapshot_name}</TableCell>
+                    <TableCell className="text-right text-sm">{s.row_count?.toLocaleString()}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{s.note || '—'}</TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button size="sm" variant="outline" onClick={() => setConfirmRestore(s.id)} disabled={restoring}>
+                        Restore
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(s.id)} disabled={restoring}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={!!confirmRestore} onOpenChange={() => setConfirmRestore(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore Snapshot?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will DELETE all current subtests data and replace it with the snapshot.
+              This action cannot be undone. Upload logs and change history will remain intact.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => confirmRestore && restoreSnapshot(confirmRestore)}>
+              {restoring ? 'Restoring...' : 'Restore'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={() => setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Snapshot?</AlertDialogTitle>
+            <AlertDialogDescription>This snapshot will be permanently deleted.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => confirmDelete && deleteSnapshot(confirmDelete)}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
