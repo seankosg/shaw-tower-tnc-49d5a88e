@@ -476,9 +476,9 @@ function CreateUserDialog({
         )}
         {userType === 'subsub' && (
           <div className="space-y-1.5">
-            <Label>Sub-Sub Company</Label>
+            <Label>Subcontractor</Label>
             <Select value={subsubId} onValueChange={setSubsubId}>
-              <SelectTrigger><SelectValue placeholder="Select Sub-Sub" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select sub-sub company" /></SelectTrigger>
               <SelectContent>
                 {subsubs.map(s => {
                   const parent = subcons.find(p => p.id === s.parent_subcontractor_id);
@@ -491,7 +491,7 @@ function CreateUserDialog({
               </SelectContent>
             </Select>
             {subsubParent && (
-              <p className="text-xs text-muted-foreground">Parent Subcontractor: <strong>{subsubParent.name}</strong> (auto-linked)</p>
+              <p className="text-xs text-muted-foreground">Subcontractor (parent): <strong>{subsubParent.name}</strong> — auto-assigned</p>
             )}
           </div>
         )}
@@ -626,9 +626,9 @@ function EditUserDialog({
         )}
         {userType === 'subsub' && (
           <div className="space-y-1.5">
-            <Label>Sub-Sub Company</Label>
+            <Label>Subcontractor</Label>
             <Select value={subsubId} onValueChange={setSubsubId}>
-              <SelectTrigger><SelectValue placeholder="Select Sub-Sub" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select sub-sub company" /></SelectTrigger>
               <SelectContent>
                 {subsubs.map(s => {
                   const parent = subcons.find(p => p.id === s.parent_subcontractor_id);
@@ -641,7 +641,7 @@ function EditUserDialog({
               </SelectContent>
             </Select>
             {subsubParent && (
-              <p className="text-xs text-muted-foreground">Parent: <strong>{subsubParent.name}</strong></p>
+              <p className="text-xs text-muted-foreground">Subcontractor (parent): <strong>{subsubParent.name}</strong> — auto-assigned</p>
             )}
           </div>
         )}
