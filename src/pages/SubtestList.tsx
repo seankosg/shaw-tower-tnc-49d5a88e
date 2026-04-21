@@ -496,6 +496,11 @@ export default function SubtestList() {
     return unique.sort().map(v => ({ value: v, label: v }));
   }, [data]);
 
+  const teamOptions = useMemo(() =>
+    ALL_TEAMS.map(t => ({ value: t, label: TEAM_LABELS[t] })),
+    []
+  );
+
   const columns = useMemo<ColumnDef<SubtestRow>[]>(() => [
     { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn,
       meta: { filterType: 'text' } },
