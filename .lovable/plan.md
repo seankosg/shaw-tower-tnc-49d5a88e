@@ -1,33 +1,24 @@
 
 
-# Admin Create User Edge Function 수정
+# Admin Edge Functions JWT 검증 수정
 
 ## 문제
-`admin-create-user` edge function에서 `userClient.auth.getClaims(token)`을 호출하고 있으나, supabase-js v2.95.0에 `getClaims` 메서드가 존재하지 않아 런타임 에러가 발생합니다.
+`supabase/config.toml`에서 admin 관련 edge function들이 `verify_jwt = true`로 설정되어 있습니다. Lovable Cloud는 ES256 알고리즘으로 JWT를 서명하지만, gateway의 JWT 검증은 이를 지원하지 않아 함수 코드에 도달하기 전에 401 에러가 발생합니다.
 
 ## 해결
 
-**파일**: `supabase/functions/admin-create-user/index.ts`
+**파일**: `supabase/config.toml`
 
-`getClaims` 호출을 `getUser`로 교체:
+`verify_jwt = true`로 설정된 admin 함수들을 `verify_jwt = false`로 변경합니다. JWT 인증은 이미 각 edge function 코드 내부에서 `admin.auth.getUser(token)` + `has_role` RPC로 수행하고 있으므로, gateway 레벨의 검증은 불필요합니다.
 
-```typescript
-// 변경 전 (line 41-43)
-const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
-if (claimsErr || !claims?.claims) return json({ error: 'Unauthorized' }, 401);
-const callerId = claims.claims.sub;
-
-// 변경 후
-const { data: { user: caller }, error: userErr } = await admin.auth.admin.getUser(token);
-if (userErr || !caller) return json({ error: 'Unauthorized' }, 401);
-const callerId = caller.id;
-```
-
-서비스 역할 클라이언트(`admin`)의 `auth.admin.getUser()`를 사용하여 토큰에서 사용자 정보를 가져옵니다.
+변경 대상:
+- `admin-create-user`: `verify_jwt = true` → `false`
+- `admin-reset-password`: `verify_jwt = true` → `false`
+- `admin-update-login-id`: `verify_jwt = true` → `false`
 
 ## 수정 파일
 
 | 파일 | 변경 |
 |------|------|
-| `supabase/functions/admin-create-user/index.ts` | `getClaims` → `admin.auth.admin.getUser` |
+| `supabase/config.toml` | 3개 admin 함수의 `verify_jwt`를 `false`로 변경 |
 
