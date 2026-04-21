@@ -536,6 +536,12 @@ export default function SubtestList() {
     },
     { accessorKey: 'system_code', header: 'System', size: 100, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select', filterOptions: systemOptions } },
+    { accessorKey: 'team', header: 'Team', size: 80, filterFn: multiSelectFilterFn,
+      meta: { filterType: 'multi-select', filterOptions: teamOptions },
+      cell: ({ getValue }) => {
+        const v = getValue() as TeamType | null;
+        return v ? TEAM_LABELS[v] : '—';
+      }},
     { accessorKey: 'equipment', header: 'Equipment', size: 120, filterFn: textFilterFn,
       meta: { filterType: 'text' },
       cell: ({ getValue }) => (
@@ -609,12 +615,6 @@ export default function SubtestList() {
       meta: { filterType: 'multi-select', filterOptions: subsubOptions } },
     { accessorKey: 'hdec_pic_name', header: 'HDEC PIC', size: 110, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select', filterOptions: hdecPicOptions } },
-    { accessorKey: 'team', header: 'Team', size: 90, filterFn: multiSelectFilterFn,
-      meta: { filterType: 'multi-select', filterOptions: teamOptions },
-      cell: ({ getValue }) => {
-        const v = getValue() as TeamType | null;
-        return v ? TEAM_LABELS[v] : '—';
-      }},
     { accessorKey: 'data_source_type', header: 'Source', size: 110, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select', filterOptions: sourceOptions },
       cell: ({ getValue }) => <DataSourceTag source={getValue() as DataSource | null} /> },
@@ -930,7 +930,7 @@ interface SubtestTableViewProps {
 function SubtestTableView({
   table, loading, columns, sorting, autoSizeColumn, isDelayed, navigate, tableRef,
 }: SubtestTableViewProps) {
-  const FROZEN_COUNT = 3;
+  const FROZEN_COUNT = 4;
   const leafCols = table.getVisibleLeafColumns();
   const frozenCols = useMemo(() => leafCols.slice(0, FROZEN_COUNT), [leafCols]);
   const scrollCols = useMemo(() => leafCols.slice(FROZEN_COUNT), [leafCols]);
