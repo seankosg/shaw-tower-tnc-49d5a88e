@@ -280,7 +280,7 @@ export function ScheduleMatrix({
                 </div>
 
                 {/* Stage sub-rows when expanded */}
-                {isExp && stagesToShow.map(st => {
+                {showStageRows && stagesToShow.map(st => {
                   const sr = row.stages[st];
                   return (
                     <div key={st} className="flex border-b border-border bg-muted/20 text-[11px] hover:bg-accent/20">
