@@ -18,6 +18,7 @@ export interface ImportFileItem {
   error?: string;
   parsed?: ParsedSubtest[];
   unmappedHeaders?: string[];
+  dataDate?: string;
 }
 
 interface ImportContextValue {
