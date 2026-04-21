@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -38,6 +40,7 @@ export default function DashboardPage() {
   const [systems, setSystems] = useState<SystemRef[]>([]);
   const [loading, setLoading] = useState(true);
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>('week');
+  const [teamFilter, setTeamFilter] = useState<string>('all');
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +52,7 @@ export default function DashboardPage() {
       while (true) {
         const { data } = await supabase
           .from('subtests')
-          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, pred_status, pred_planned_date, pred_actual_date' as any)
+          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, pred_status, pred_planned_date, pred_actual_date, team' as any)
           .eq('is_active', true)
           .range(from, from + PAGE - 1);
         if (!data || data.length === 0) break;
