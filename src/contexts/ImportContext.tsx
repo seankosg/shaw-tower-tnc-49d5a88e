@@ -118,7 +118,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       import_type: importTypeRef.current,
       total_rows: parsed.length,
       status: 'processing' as any,
-    }).select('id').single();
+      data_date: item.dataDate || null,
+    } as any).select('id').single();
     if (batchErr || !batch) throw new Error(batchErr?.message || 'Failed to create batch');
     const uploadId = batch.id;
 
