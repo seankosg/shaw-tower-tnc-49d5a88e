@@ -1139,7 +1139,7 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
   const confirmToggle = async (cascade: boolean) => {
     if (!pendingToggle) return;
     const r = pendingToggle.row;
-    await supabase.from(table).update({ is_active: false }).eq('id', r.id);
+    await (supabase.from(table) as any).update({ is_active: false }).eq('id', r.id);
     if (cascade && table === 'hdec_pic_master') {
       const { data: linked } = await supabase
         .from('profiles')
