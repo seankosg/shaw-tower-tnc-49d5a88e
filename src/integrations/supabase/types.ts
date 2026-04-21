@@ -137,6 +137,7 @@ export type Database = {
           name: string | null
           subcontractor_name: string | null
           subsub_name: string | null
+          team: Database["public"]["Enums"]["team_type"] | null
           user_id: string
           user_type: Database["public"]["Enums"]["user_type"]
         }
@@ -151,6 +152,7 @@ export type Database = {
           name?: string | null
           subcontractor_name?: string | null
           subsub_name?: string | null
+          team?: Database["public"]["Enums"]["team_type"] | null
           user_id: string
           user_type?: Database["public"]["Enums"]["user_type"]
         }
@@ -165,6 +167,7 @@ export type Database = {
           name?: string | null
           subcontractor_name?: string | null
           subsub_name?: string | null
+          team?: Database["public"]["Enums"]["team_type"] | null
           user_id?: string
           user_type?: Database["public"]["Enums"]["user_type"]
         }
@@ -773,6 +776,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      get_user_team: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["team_type"]
       }
       has_any_role: {
         Args: {
