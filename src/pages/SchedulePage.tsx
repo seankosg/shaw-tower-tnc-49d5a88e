@@ -221,6 +221,20 @@ export default function SchedulePage() {
     const { key, value } = filterParamForGroup(label);
     goSubtests({ [key]: value });
   };
+  const { toast } = useToast();
+  const handleScheduleExport = () => {
+    if (!visibleData.rows.length) {
+      toast({ title: 'No data to export', variant: 'destructive' });
+      return;
+    }
+    const { rowCount, fileName } = exportScheduleToExcel(visibleData, {
+      groupHeader: GROUP_LABELS[groupBy],
+      stageFilter,
+      bucket,
+      today,
+    });
+    toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
+  };
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -235,6 +249,10 @@ export default function SchedulePage() {
             Track planned vs actual progress by {GROUP_LABELS[groupBy]} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Today {today}
           </p>
         </div>
+        <Button variant="outline" size="sm" onClick={handleScheduleExport}>
+          <Download className="mr-1.5 h-4 w-4" />
+          Excel
+        </Button>
       </div>
 
       {/* Toolbar */}
