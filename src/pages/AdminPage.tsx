@@ -250,24 +250,84 @@ function UsersTab() {
         <CardTitle className="text-base">User Management</CardTitle>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => {
-            const rows = profiles.map(p => ({
-              'Login ID': p.login_id ?? '',
-              'Name': p.name ?? '',
-              'User Type': USER_TYPE_LABELS[p.user_type] ?? p.user_type,
-              'Team': p.team ? TEAM_LABELS[p.team] : '',
-              'Linked Master': p.user_type === 'subcontractor' ? (p.subcontractor_name ?? '') :
-                p.user_type === 'subsub' ? (p.subcontractor_name ?? '') :
-                (p.user_type === 'hdec' || p.user_type === 'pm_pd') ? (p.hdec_pic_name ?? '') : '',
-              'Role': ROLE_LABELS[getUserRole(p.user_id) as AppRole] ?? '',
-              'Active': p.is_active ? 'Yes' : 'No',
-            }));
-            const ws = XLSX.utils.json_to_sheet(rows);
-            ws['!cols'] = Object.keys(rows[0] || {}).map(k => ({ wch: Math.max(k.length + 2, 12) }));
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Users');
-            const d = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-            XLSX.writeFile(wb, `SHAW_Users_${d}.xlsx`);
-            toast({ title: 'Export complete', description: `${rows.length} users exported` });
+            import('xlsx-js-style').then(XLSX => {
+              const headers = ['Login ID', 'Name', 'User Type', 'Team', 'Linked Master', 'Role', 'Active'];
+              const rows = profiles.map(p => [
+                p.login_id ?? '',
+                p.name ?? '',
+                USER_TYPE_LABELS[p.user_type] ?? p.user_type,
+                p.team ? TEAM_LABELS[p.team] : '',
+                p.user_type === 'subcontractor' ? (p.subcontractor_name ?? '') :
+                  p.user_type === 'subsub' ? (p.subcontractor_name ?? '') :
+                  (p.user_type === 'hdec' || p.user_type === 'pm_pd') ? (p.hdec_pic_name ?? '') : '',
+                ROLE_LABELS[getUserRole(p.user_id) as AppRole] ?? '',
+                p.is_active ? 'Yes' : 'No',
+              ]);
+
+              const aoa = [headers, ...rows];
+              const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+              // Header styling
+              const headerStyle = {
+                font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFFFFFFF' } },
+                fill: { fgColor: { rgb: 'FF334155' } },
+                alignment: { vertical: 'center', horizontal: 'center', wrapText: true },
+                border: {
+                  top: { style: 'thin', color: { rgb: 'FF1F2937' } },
+                  bottom: { style: 'thin', color: { rgb: 'FF1F2937' } },
+                  left: { style: 'thin', color: { rgb: 'FF1F2937' } },
+                  right: { style: 'thin', color: { rgb: 'FF1F2937' } },
+                },
+              };
+
+              // Data styling
+              const dataStyle = {
+                font: { name: 'Calibri', sz: 10, color: { rgb: 'FF111827' } },
+                alignment: { vertical: 'center', horizontal: 'left' },
+                border: {
+                  top: { style: 'thin', color: { rgb: 'FFE5E7EB' } },
+                  bottom: { style: 'thin', color: { rgb: 'FFE5E7EB' } },
+                  left: { style: 'thin', color: { rgb: 'FFE5E7EB' } },
+                  right: { style: 'thin', color: { rgb: 'FFE5E7EB' } },
+                },
+              };
+
+              // Apply header styles
+              for (let c = 0; c < headers.length; c++) {
+                const addr = XLSX.utils.encode_cell({ r: 0, c });
+                ws[addr] = { t: 's', v: headers[c], s: headerStyle };
+              }
+
+              // Apply data styles
+              for (let r = 0; r < rows.length; r++) {
+                for (let c = 0; c < headers.length; c++) {
+                  const addr = XLSX.utils.encode_cell({ r: r + 1, c });
+                  ws[addr] = { t: 's', v: String(rows[r][c]), s: dataStyle };
+                }
+              }
+
+              // Column widths
+              ws['!cols'] = headers.map((h, i) => ({
+                wch: Math.max(
+                  h.length + 2,
+                  ...rows.map(r => String(r[i]).length),
+                  12
+                ),
+              }));
+
+              // Row heights
+              ws['!rows'] = [{ hpt: 28 }, ...rows.map(() => ({ hpt: 20 }))];
+
+              // Freeze header row
+              ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+              (ws as any)['!views'] = [{ state: 'frozen', ySplit: 1 }];
+
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, 'Users');
+              const d = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+              XLSX.writeFile(wb, `SHAW_Users_${d}.xlsx`);
+              toast({ title: 'Export complete', description: `${rows.length} users exported` });
+            });
           }}>
             <Download className="mr-1 h-4 w-4" /> Export
           </Button>
