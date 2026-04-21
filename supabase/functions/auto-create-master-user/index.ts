@@ -121,9 +121,26 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return json({ error: 'Unauthorized' }, 401);
+    }
+    const token = authHeader.replace('Bearer ', '');
+
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+    const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
     const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
     const admin = createClient(SUPABASE_URL, SERVICE);
+
+    const { data: { user: caller }, error: userErr } = await admin.auth.getUser(token);
+    if (userErr || !caller) return json({ error: 'Unauthorized' }, 401);
+
+    const { data: isAdmin } = await admin.rpc('has_role', {
+      _user_id: caller.id,
+      _role: 'admin',
+    });
+    if (!isAdmin) return json({ error: 'Admin role required' }, 403);
 
     const body = (await req.json()) as Body;
     if (!body.name?.trim() || !body.master_type) {
