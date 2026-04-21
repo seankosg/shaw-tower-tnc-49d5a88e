@@ -753,6 +753,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_view_subtest: {
+        Args: {
+          _subcontractor_name: string
+          _subsub_name: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
       has_any_role: {
         Args: {
           _roles: Database["public"]["Enums"]["app_role"][]
