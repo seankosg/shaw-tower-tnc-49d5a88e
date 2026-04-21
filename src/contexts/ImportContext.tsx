@@ -295,6 +295,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         updates.source_upload_id = uploadId;
         updates.row_version = (existing.row_version || 1) + 1;
         updates.subtest_id = row.subtest_id;
+        if (item.team) updates.team = item.team;
 
         // Auto-fill t1/t2 status to 'Planned' when planned_date exists but status is null
         const finalT1PlannedForAutoFill = updates.t1_planned_date !== undefined ? updates.t1_planned_date : null;
@@ -379,6 +380,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           remarks: row.remarks,
           punchlist_comments: row.punchlist_comments,
           data_source_type: dataSourceType as any, source_upload_id: uploadId,
+          team: (item.team || null) as any,
         } as any);
         if (error) {
           res.rejected++;
