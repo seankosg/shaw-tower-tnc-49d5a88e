@@ -283,10 +283,10 @@ export function ScheduleMatrix({
                 {showStageRows && stagesToShow.map(st => {
                   const sr = row.stages[st];
                   return (
-                    <div key={st} className="flex border-b border-border bg-muted/20 text-[11px] hover:bg-accent/20">
+                    <div key={st} className="flex border-b border-border bg-muted/20 text-[11px] h-10 hover:bg-accent/20">
                       <div className="sticky left-0 z-20 flex bg-card shadow-[2px_0_4px_-2px_hsl(var(--border))]">
                         <div
-                          className="flex items-center gap-2 px-2 py-1.5 pl-8 text-muted-foreground"
+                          className="flex items-center gap-2 px-2 pl-8 text-muted-foreground"
                           style={{ width: W_GROUP }}
                         >
                           <span className={cn(
@@ -302,14 +302,14 @@ export function ScheduleMatrix({
                           <TotalDoneCells
                             total={sr.total}
                             done={sr.totalDone}
-                            py="py-1.5"
+                            py="py-0"
                           />
                         </div>
                         <div className="flex bg-secondary/20">
                           <PlanActualCells
                             plan={sr.cumPlan}
                             actual={sr.cumActual}
-                            py="py-1.5"
+                            py="py-0"
                           />
                         </div>
                       </div>
