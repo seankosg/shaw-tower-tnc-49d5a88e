@@ -171,27 +171,30 @@ export default function SchedulePage() {
       cumActual += r.cumActual;
     }
     const variance = cumPlan ? ((cumActual - cumPlan) / cumPlan) * 100 : 0;
-    // Done-vs-Total progress across all T1+T2 stages
+    const stages = getStageKeys(stageFilter);
     let totalStages = 0, doneStages = 0;
     for (const s of filteredSubtests) {
-      totalStages += 2;
-      if (s.t1_status === 'Done') doneStages++;
-      if (s.t2_status === 'Done') doneStages++;
+      totalStages += stages.length;
+      for (const st of stages) {
+        if (isStageDone(s, st)) doneStages++;
+      }
     }
     const progressPct = totalStages ? (doneStages / totalStages) * 100 : 0;
-    const overdue = filteredSubtests.filter(s =>
-      (s.t1_planned_date && s.t1_planned_date < today && s.t1_status !== 'Done') ||
-      (s.t2_planned_date && s.t2_planned_date < today && s.t2_status !== 'Done')
-    ).length;
-    // Upcoming 7-day plan: count planned T1/T2 dates in [today, today+7]
+    const overdue = filteredSubtests.reduce(
+      (count, s) => count + stages.filter(st => isStageDelayedAsOf(s, st, asOfDate)).length,
+      0,
+    );
     const upcomingEnd = addDays(today, 7);
     let upcoming7Plan = 0;
     for (const s of filteredSubtests) {
-      if (s.t1_planned_date && s.t1_planned_date >= today && s.t1_planned_date <= upcomingEnd) upcoming7Plan++;
-      if (s.t2_planned_date && s.t2_planned_date >= today && s.t2_planned_date <= upcomingEnd) upcoming7Plan++;
+      for (const st of stages) {
+        for (let d = today; d <= upcomingEnd; d = addDays(d, 1)) {
+          if (isStagePlannedOn(s, st, d)) upcoming7Plan++;
+        }
+      }
     }
     return { cumPlan, cumActual, variance, progressPct, doneStages, totalStages, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
-  }, [aggregate.rows, today, filteredSubtests, critical.highRisk.length]);
+  }, [aggregate.rows, stageFilter, filteredSubtests, critical.highRisk.length, asOfDate, today]);
 
   // ───── Navigation handlers ─────
   const filterParamForGroup = (label: string): { key: string; value: string } => {
