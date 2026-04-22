@@ -34,6 +34,7 @@ import {
   getStagePlannedDate,
   isStageDelayedAsOf,
   isStageDone,
+  todayIso,
   type StageKey,
 } from '@/lib/stage-metrics';
 
@@ -668,10 +669,11 @@ export default function SubtestList() {
   const urlStage = searchParams.get('stage') as 'pred' | 't1' | 't2' | null;
   const urlCellStatus = searchParams.get('cell_status') as TcStatus | null;
   const urlAsOf = searchParams.get('as_of');
-  const delayAsOfDate = urlAsOf || dataDate || new Date().toISOString().slice(0, 10);
+  const localToday = todayIso();
+  const delayAsOfDate = urlAsOf || dataDate || localToday;
 
   const filteredData = useMemo(() => {
-    const atRiskBaseDate = new Date().toISOString().slice(0, 10);
+    const atRiskBaseDate = localToday;
     const daysFromToday = (iso: string) => {
       const a = new Date(iso + 'T00:00:00Z').getTime();
       const b = new Date(atRiskBaseDate + 'T00:00:00Z').getTime();
@@ -734,7 +736,7 @@ export default function SubtestList() {
       urlPredPlannedTo, urlT1PlannedTo, urlT2PlannedTo, urlPredActualTo, urlT1ActualTo, urlT2ActualTo,
       urlPredPlannedOn, urlT1PlannedOn, urlT2PlannedOn, urlPredActualOn, urlT1ActualOn, urlT2ActualOn,
       urlPredDelayAsOf, urlT1DelayAsOf, urlT2DelayAsOf,
-      urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, delayAsOfDate]);
+      urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, delayAsOfDate, localToday]);
 
   const columnIdToFieldName: Record<string, string> = {
     system_code: 'system',
