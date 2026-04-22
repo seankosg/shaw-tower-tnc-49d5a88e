@@ -27,6 +27,16 @@ import { getSubtestCache, setSubtestCache } from '@/lib/subtest-cache';
 import { exportSubtestsToExcel } from '@/lib/excel-export';
 import { useToast } from '@/hooks/use-toast';
 import { USER_TYPE_LABELS } from '@/types/enums';
+import {
+  daysBetween,
+  getAnyStageDelayedAsOf,
+  getStageActualDate,
+  getStageKeys,
+  getStagePlannedDate,
+  isStageDelayedAsOf,
+  isStageDone,
+  type StageKey,
+} from '@/lib/stage-metrics';
 
 interface SubtestRow {
   id: string;
@@ -459,11 +469,6 @@ export default function SubtestList() {
     setData(mapped as SubtestRow[]);
     setSubtestCache(mapped as any);
     setLoading(false);
-  };
-
-  const isDelayed = (planned: string | null, actual: string | null) => {
-    if (!planned || !actual) return false;
-    return new Date(actual) > new Date(planned);
   };
 
   const systemOptions = useMemo(() =>
