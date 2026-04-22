@@ -428,7 +428,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   };
 
   const startImport = async () => {
-    const queue = files.filter(f => f.status === 'ready');
+    const queue = files.filter(f => f.status === 'ready' && (f.detectedImportType === 'standard' || (f.detectedImportType === 'legacy' && f.team)));
     if (queue.length === 0) return;
     setIsRunning(true);
 
