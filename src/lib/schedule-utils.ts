@@ -2,7 +2,6 @@
 import type { TcStatus } from '@/types/enums';
 import type { SubtestForDashboard } from '@/lib/dashboard-utils';
 import {
-  daysBetween as stageDaysBetween,
   getStageActualDate,
   getStageKeys,
   getStagePlannedDate,
