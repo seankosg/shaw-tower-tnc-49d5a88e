@@ -55,4 +55,29 @@ describe('Plan vs Actual stage date aggregation', () => {
     expect(row.t2.dataDatePlan).toBe(1);
     expect(row.t2.todayPlan).toBe(1);
   });
+
+  it('counts Today Delay only for items planned today and not done', () => {
+    const rows = aggregatePlanActualByGroup([
+      makeSubtest('t1-past-open', { t1_status: 'Planned', t1_planned_date: '2026-04-19' }),
+      makeSubtest('t1-today-open', { t1_status: 'Planned', t1_planned_date: '2026-04-22' }),
+      makeSubtest('t1-today-done', { t1_status: 'Done', t1_planned_date: '2026-04-22', t1_actual_date: '2026-04-22' }),
+    ], '2026-04-22', '2026-04-21', s => s.system_id, k => k);
+
+    const row = rows[0];
+    expect(row.t1.todayPlan).toBe(2);
+    expect(row.t1.todayDelay).toBe(1);
+    expect(row.t1.dataDateDelay).toBe(1);
+  });
+
+  it('keeps Today Delay at zero when Today Plan is zero', () => {
+    const rows = aggregatePlanActualByGroup([
+      makeSubtest('t1-past-open-1', { t1_status: 'Planned', t1_planned_date: '2026-04-19' }),
+      makeSubtest('t1-past-open-2', { t1_status: 'Planned', t1_planned_date: '2026-04-20' }),
+    ], '2026-04-22', '2026-04-21', s => s.system_id, k => k);
+
+    const row = rows[0];
+    expect(row.t1.todayPlan).toBe(0);
+    expect(row.t1.todayDelay).toBe(0);
+    expect(row.t1.dataDateDelay).toBe(2);
+  });
 });
