@@ -820,7 +820,8 @@ export default function SubtestList() {
 
   const activeUrlFilters = useMemo(() => {
     const out: { label: string; param: string; clears?: string[] }[] = [];
-    const isScheduleCell = searchParams.get('source') === 'schedule_cell';
+    const source = searchParams.get('source');
+    const isScheduleCell = source === 'schedule_cell';
     const formatValue = (v: string) => v === EMPTY_TOKEN ? '(Empty)' : v;
     const map: Record<string, string> = {
       system: 'System', subcon: 'Subcon', subsub: 'Sub-Sub',
@@ -859,6 +860,13 @@ export default function SubtestList() {
     }
     return out;
   }, [searchParams]);
+
+  const filterSourceLabel = useMemo(() => {
+    const source = searchParams.get('source');
+    if (source?.startsWith('schedule')) return 'Filtered from Progress:';
+    if (source === 'dashboard' || activeUrlFilters.length > 0) return 'Filtered from Dashboard:';
+    return 'Active URL filters:';
+  }, [searchParams, activeUrlFilters.length]);
 
   const clearUrlFilter = (param: string, clears?: string[]) => {
     const next = new URLSearchParams(searchParams);
@@ -917,7 +925,7 @@ export default function SubtestList() {
 
       {activeUrlFilters.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
-          <span className="text-xs font-medium text-primary">Filtered from Dashboard:</span>
+          <span className="text-xs font-medium text-primary">{filterSourceLabel}</span>
           {activeUrlFilters.map(f => (
             <button
               key={f.param}
