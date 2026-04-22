@@ -146,8 +146,17 @@ export interface PlanActualMetrics {
   cumPlan: number;
   /** Cumulative as of Data Date (actual_date <= dataDate) */
   cumActual: number;
+  /** Planned exactly on Data Date (planned_date === dataDate) */
+  dataDatePlan: number;
+  /** Actual exactly on Data Date (actual_date === dataDate) */
+  dataDateActual: number;
+  /** Delayed as of Data Date (planned_date <= dataDate and not Done) */
+  dataDateDelay: number;
+  /** @deprecated Use dataDatePlan. */
   yesterdayPlan: number;
+  /** @deprecated Use dataDateActual. */
   yesterdayActual: number;
+  /** @deprecated Use dataDateDelay. */
   yesterdayDelay: number;
   todayPlan: number;
   todayActual: number;
@@ -189,18 +198,30 @@ export function aggregatePlanActualByGroup(
   const out: PlanActualRow[] = [];
   for (const [k, items] of buckets) {
     const calc = (stage: 'pred' | 't1' | 't2'): PlanActualMetrics => {
-      let cumPlan = 0, cumActual = 0, yPlan = 0, yActual = 0, yDelay = 0, tPlan = 0, tActual = 0, tDelay = 0;
+      let cumPlan = 0, cumActual = 0, dataDatePlan = 0, dataDateActual = 0, dataDateDelay = 0, tPlan = 0, tActual = 0, tDelay = 0;
       for (const i of items) {
         if (isStagePlannedUpTo(i, stage, dataDate)) cumPlan++;
         if (isStageActualUpTo(i, stage, dataDate)) cumActual++;
-        if (isStagePlannedOn(i, stage, dataDate)) yPlan++;
-        if (isStageActualOn(i, stage, dataDate)) yActual++;
-        if (isStageDelayedAsOf(i, stage, dataDate)) yDelay++;
+        if (isStagePlannedOn(i, stage, dataDate)) dataDatePlan++;
+        if (isStageActualOn(i, stage, dataDate)) dataDateActual++;
+        if (isStageDelayedAsOf(i, stage, dataDate)) dataDateDelay++;
         if (isStagePlannedOn(i, stage, today)) tPlan++;
         if (isStageActualOn(i, stage, today)) tActual++;
         if (isStageDelayedAsOf(i, stage, today)) tDelay++;
       }
-      return { cumPlan, cumActual, yesterdayPlan: yPlan, yesterdayActual: yActual, yesterdayDelay: yDelay, todayPlan: tPlan, todayActual: tActual, todayDelay: tDelay };
+      return {
+        cumPlan,
+        cumActual,
+        dataDatePlan,
+        dataDateActual,
+        dataDateDelay,
+        yesterdayPlan: dataDatePlan,
+        yesterdayActual: dataDateActual,
+        yesterdayDelay: dataDateDelay,
+        todayPlan: tPlan,
+        todayActual: tActual,
+        todayDelay: tDelay,
+      };
     };
     out.push({
       key: k,
