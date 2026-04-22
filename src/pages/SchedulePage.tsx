@@ -190,7 +190,6 @@ export default function SchedulePage() {
 
   const kpis = useMemo(() => {
     let cumPlan = 0, cumActual = 0;
-    const variance = cumPlan ? ((cumActual - cumPlan) / cumPlan) * 100 : 0;
     const stages = getStageKeys(stageFilter);
     let totalStages = 0, doneStages = 0;
     for (const s of filteredSubtests) {
