@@ -289,7 +289,7 @@ export function ScheduleMatrix({
               const showStageRows = stageFilter === 'all';
               return (
                 <Fragment key={row.key}>
-                  <div className={cn("flex border-b border-border text-xs h-10", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
+                  <div className={cn("flex border-b border-border text-xs h-14", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
                     {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
                     {virtualCols.map(vc => {
                       const c = row.combined[vc.index];
