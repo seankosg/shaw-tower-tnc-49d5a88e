@@ -230,7 +230,7 @@ export default function DashboardPage() {
 
   // Navigation helpers
   const goSubtests = (params: Record<string, string>) => {
-    const q = new URLSearchParams(params).toString();
+    const q = new URLSearchParams({ source: 'dashboard', ...params }).toString();
     navigate(`/?${q}`);
   };
 
@@ -797,7 +797,7 @@ function PlanActualTable({
   const filterValue = (key: string) => (keyToFilterValue ? keyToFilterValue(key) : key);
   const go = (groupKey: string, extra?: Record<string, string>) => {
     const value = filterValue(groupKey);
-    const params: Record<string, string> = { ...extra };
+    const params: Record<string, string> = { source: 'dashboard', ...extra };
     if (value && value !== NONE_LABEL) params[groupParam] = value;
     navigate(`/?${new URLSearchParams(params).toString()}`);
   };

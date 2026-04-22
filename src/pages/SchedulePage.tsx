@@ -242,12 +242,12 @@ export default function SchedulePage() {
   };
 
   const handleCriticalClick = (item: CriticalItem) => {
-    goSubtests({ system: item.systemCode, [`${item.stage}_status`]: item.status ?? 'Planned' });
+    goSubtests({ source: 'schedule_critical', system: item.systemCode, [`${item.stage}_status`]: item.status ?? 'Planned' });
   };
 
   const handleGroupClick = (label: string) => {
     const { key, value } = filterParamForGroup(label);
-    goSubtests({ [key]: value });
+    goSubtests({ source: 'schedule_group', [key]: value });
   };
   const { toast } = useToast();
   const handleScheduleExport = () => {
@@ -399,6 +399,7 @@ export default function SchedulePage() {
                 if (!pickedDate) return;
                 const iso = format(pickedDate, 'yyyy-MM-dd');
                 const params: Record<string, string> = {
+                  source: 'schedule_lookup',
                   date_from: iso,
                   date_to: iso,
                   date_field: pickedField,
@@ -444,14 +445,14 @@ export default function SchedulePage() {
           value={kpis.overdue}
           accent={kpis.overdue > 0 ? 'short' : undefined}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
-          onClick={kpis.overdue > 0 ? () => navigate(`/?status=overdue&as_of=${asOfDate}`) : undefined}
+          onClick={kpis.overdue > 0 ? () => navigate(`/?source=schedule_kpi&status=overdue&as_of=${asOfDate}`) : undefined}
         />
         <Kpi
           label="Critical (≤7d)"
           value={kpis.criticalCount}
           accent={kpis.criticalCount > 0 ? 'short' : undefined}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
-          onClick={kpis.criticalCount > 0 ? () => navigate('/?status=at_risk&at_risk_days=7') : undefined}
+          onClick={kpis.criticalCount > 0 ? () => navigate('/?source=schedule_kpi&status=at_risk&at_risk_days=7') : undefined}
         />
         <Kpi
           label="Upcoming 7d Plan"
@@ -459,7 +460,7 @@ export default function SchedulePage() {
           icon={<CalendarIcon className="h-3.5 w-3.5" />}
           onClick={
             kpis.upcoming7Plan > 0
-              ? () => navigate(`/?date_from=${today}&date_to=${kpis.upcomingEnd}&date_field=planned`)
+              ? () => navigate(`/?source=schedule_kpi&date_from=${today}&date_to=${kpis.upcomingEnd}&date_field=planned`)
               : undefined
           }
         />

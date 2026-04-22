@@ -385,7 +385,19 @@ export default function SubtestList() {
       t1_status: 't1_status',
       t2_status: 't2_status',
     };
-    const next = baseFilters.filter(f => !Object.values(urlMap).includes(f.id));
+    const dataUrlFilterKeys = [
+      ...Object.keys(urlMap),
+      'source', 'status', 'at_risk_days', 'as_of',
+      'date_from', 'date_to', 'date_field', 'stage', 'cell_status',
+      'pred_planned_to', 't1_planned_to', 't2_planned_to',
+      'pred_actual_to', 't1_actual_to', 't2_actual_to',
+      'pred_planned_on', 't1_planned_on', 't2_planned_on',
+      'pred_actual_on', 't1_actual_on', 't2_actual_on',
+      'pred_delay_asof', 't1_delay_asof', 't2_delay_asof',
+      'pred_delay_on', 't1_delay_on', 't2_delay_on',
+    ];
+    const hasDataUrlFilters = dataUrlFilterKeys.some(k => searchParams.has(k));
+    const next = hasDataUrlFilters ? [] : baseFilters.filter(f => !Object.values(urlMap).includes(f.id));
     for (const [param, col] of Object.entries(urlMap)) {
       const v = searchParams.get(param);
       if (v) {
@@ -399,8 +411,8 @@ export default function SubtestList() {
     }
     setSorting(baseSorting);
     setColumnFilters(next);
-    setGlobalFilter(baseGlobal);
-    setSearchInput(baseGlobal);
+    setGlobalFilter(hasDataUrlFilters ? '' : baseGlobal);
+    setSearchInput(hasDataUrlFilters ? '' : baseGlobal);
     setColumnSizing(baseSizing);
     setStateLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -808,7 +820,8 @@ export default function SubtestList() {
 
   const activeUrlFilters = useMemo(() => {
     const out: { label: string; param: string; clears?: string[] }[] = [];
-    const isScheduleCell = searchParams.get('source') === 'schedule_cell';
+    const source = searchParams.get('source');
+    const isScheduleCell = source === 'schedule_cell';
     const formatValue = (v: string) => v === EMPTY_TOKEN ? '(Empty)' : v;
     const map: Record<string, string> = {
       system: 'System', subcon: 'Subcon', subsub: 'Sub-Sub',
@@ -847,6 +860,13 @@ export default function SubtestList() {
     }
     return out;
   }, [searchParams]);
+
+  const filterSourceLabel = useMemo(() => {
+    const source = searchParams.get('source');
+    if (source?.startsWith('schedule')) return 'Filtered from Progress:';
+    if (source === 'dashboard' || activeUrlFilters.length > 0) return 'Filtered from Dashboard:';
+    return 'Active URL filters:';
+  }, [searchParams, activeUrlFilters.length]);
 
   const clearUrlFilter = (param: string, clears?: string[]) => {
     const next = new URLSearchParams(searchParams);
@@ -905,7 +925,7 @@ export default function SubtestList() {
 
       {activeUrlFilters.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
-          <span className="text-xs font-medium text-primary">Filtered from Dashboard:</span>
+          <span className="text-xs font-medium text-primary">{filterSourceLabel}</span>
           {activeUrlFilters.map(f => (
             <button
               key={f.param}
