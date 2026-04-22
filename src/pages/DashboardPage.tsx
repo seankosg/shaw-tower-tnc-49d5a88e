@@ -816,7 +816,7 @@ function PlanActualTable({
     const value = filterValue(groupKey);
     const params: Record<string, string> = { source: 'dashboard', ...extra };
     if (value && value !== NONE_LABEL) params[groupParam] = value;
-    navigate(`/?${new URLSearchParams(params).toString()}`);
+    navigate(`/raw-data?${new URLSearchParams(params).toString()}`);
   };
 
   const headerTotals = useMemo(() => {
