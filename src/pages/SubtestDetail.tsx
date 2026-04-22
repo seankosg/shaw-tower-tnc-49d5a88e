@@ -21,6 +21,8 @@ import { invalidateSubtestCache } from '@/lib/subtest-cache';
 
 interface SubtestDetail {
   id: string;
+  project_id: string;
+  system_id: string;
   subtest_id: string;
   item_no: string;
   mos_code: string;
@@ -68,11 +70,12 @@ export default function SubtestDetailPage() {
   const navigate = useNavigate();
   
   const { toast } = useToast();
-  const { isAdminOrSuperuser } = useAuth();
+  const { isAdminOrSuperuser, user } = useAuth();
   const { isFieldVisible } = useFieldConfig();
   const [record, setRecord] = useState<SubtestDetail | null>(null);
   const [form, setForm] = useState<Partial<SubtestDetail>>({});
   const [changeLogs, setChangeLogs] = useState<ChangeLog[]>([]);
+  const [canEditRecord, setCanEditRecord] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -82,7 +85,7 @@ export default function SubtestDetailPage() {
       fetchRecord();
       fetchChangeLogs();
     }
-  }, [id]);
+  }, [id, user?.id]);
 
   const fetchRecord = async () => {
     setLoading(true);
@@ -94,6 +97,18 @@ export default function SubtestDetailPage() {
     if (data) {
       const d = data as any;
       setRecord(d);
+      if (user?.id) {
+        const { data: editable } = await supabase.rpc('can_edit_subtest', {
+          _user_id: user.id,
+          _project_id: d.project_id,
+          _system_id: d.system_id,
+          _subcontractor_name: d.subcontractor_name ?? '',
+          _subsub_name: d.subsub_name ?? '',
+        });
+        setCanEditRecord(Boolean(editable));
+      } else {
+        setCanEditRecord(false);
+      }
       setForm({
         t1_planned_date: d.t1_planned_date,
         t1_actual_date: d.t1_actual_date,
@@ -129,7 +144,7 @@ export default function SubtestDetailPage() {
   };
 
   const handleSave = async () => {
-    if (!record) return;
+    if (!record || !user?.id || !canEditRecord) return;
     setSaving(true);
 
     // Build change log entries
@@ -170,7 +185,7 @@ export default function SubtestDetailPage() {
       subcontractor_name: form.subcontractor_name || null,
       subsub_name: form.subsub_name || null,
       hdec_pic_name: form.hdec_pic_name || null,
-      updated_by: null,
+      updated_by: user.id,
       data_source_type: 'app_direct_input' as DataSource,
       row_version: record.row_version + 1,
     };
@@ -191,7 +206,7 @@ export default function SubtestDetailPage() {
             changed_field: c.field,
             old_value: c.old_val,
             new_value: c.new_val,
-            changed_by: null,
+            changed_by: user.id,
             change_source: 'app_direct_input' as ChangeSource,
           }))
         );
@@ -436,30 +451,32 @@ export default function SubtestDetailPage() {
       </Card>
       )}
 
-      {isAdminOrSuperuser && (
+      {(isAdminOrSuperuser || canEditRecord) && (
         <div className="flex justify-between">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" disabled={deleting}>
-                <Trash2 className="mr-1.5 h-4 w-4" />
-                {deleting ? 'Deleting...' : 'Delete Subtest'}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Subtest</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete <strong>{record.subtest_id}</strong>? This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {isAdminOrSuperuser ? (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={deleting}>
+                  <Trash2 className="mr-1.5 h-4 w-4" />
+                  {deleting ? 'Deleting...' : 'Delete Subtest'}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Subtest</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete <strong>{record.subtest_id}</strong>? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : <div />}
           <Button onClick={handleSave} disabled={saving}>
             <Save className="mr-1.5 h-4 w-4" />
             {saving ? 'Saving...' : 'Save Changes'}
