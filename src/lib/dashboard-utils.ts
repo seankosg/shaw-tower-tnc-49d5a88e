@@ -1,4 +1,18 @@
 import type { TcStatus } from '@/types/enums';
+import {
+  daysBetween,
+  getMaxDelayDaysAsOf,
+  getStageActualDate,
+  getStageKeys,
+  getStagePlannedDate,
+  isStageActualOn,
+  isStageActualUpTo,
+  isStageDelayedAsOf,
+  isStageDone,
+  isStagePlannedOn,
+  isStagePlannedUpTo,
+  todayIso,
+} from '@/lib/stage-metrics';
 
 export interface SubtestForDashboard {
   id: string;
@@ -22,49 +36,31 @@ export interface SubtestForDashboard {
 
 export const NONE_LABEL = '(None)';
 
-export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-export function daysBetween(fromIso: string, toIso: string): number {
-  const a = new Date(fromIso + 'T00:00:00Z').getTime();
-  const b = new Date(toIso + 'T00:00:00Z').getTime();
-  return Math.round((b - a) / 86400000);
-}
+export { todayIso, daysBetween };
 
 /** True if subtest has any Pred/T1/T2 planned date past today and not Done. */
 export function isOverdue(s: SubtestForDashboard, today: string): boolean {
-  return (
-    (s.pred_planned_date != null && s.pred_planned_date < today && s.pred_status !== 'Done') ||
-    (s.t1_planned_date != null && s.t1_planned_date < today && s.t1_status !== 'Done') ||
-    (s.t2_planned_date != null && s.t2_planned_date < today && s.t2_status !== 'Done')
-  );
+  return getStageKeys('all').some(stage => {
+    const planned = getStagePlannedDate(s, stage);
+    return !!planned && planned < today && !isStageDone(s, stage);
+  });
 }
 
 /** True if not overdue but a planned date is within `thresholdDays` (inclusive). */
 export function isAtRisk(s: SubtestForDashboard, today: string, thresholdDays: number): boolean {
   if (isOverdue(s, today)) return false;
-  const within = (planned: string | null, status: TcStatus | null) => {
-    if (!planned || status === 'Done') return false;
+  const within = (stage: 'pred' | 't1' | 't2') => {
+    const planned = getStagePlannedDate(s, stage);
+    if (!planned || isStageDone(s, stage)) return false;
     const d = daysBetween(today, planned);
     return d >= 0 && d <= thresholdDays;
   };
-  return within(s.t1_planned_date, s.t1_status) || within(s.t2_planned_date, s.t2_status);
+  return within('pred') || within('t1') || within('t2');
 }
 
 /** Worst delay days across Pred/T1/T2 (positive = days late). */
 export function maxDelayDays(s: SubtestForDashboard, today: string): number {
-  let worst = 0;
-  if (s.pred_planned_date && s.pred_status !== 'Done' && s.pred_planned_date < today) {
-    worst = Math.max(worst, daysBetween(s.pred_planned_date, today));
-  }
-  if (s.t1_planned_date && s.t1_status !== 'Done' && s.t1_planned_date < today) {
-    worst = Math.max(worst, daysBetween(s.t1_planned_date, today));
-  }
-  if (s.t2_planned_date && s.t2_status !== 'Done' && s.t2_planned_date < today) {
-    worst = Math.max(worst, daysBetween(s.t2_planned_date, today));
-  }
-  return worst;
+  return getMaxDelayDaysAsOf(s, getStageKeys('all'), today);
 }
 
 export type TestStatus = 'done' | 'in_progress' | 'not_started';
