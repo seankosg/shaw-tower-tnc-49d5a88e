@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -44,15 +44,16 @@ interface SystemRef { id: string; system_code: string; }
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { value: atRiskDays } = useAtRiskThreshold();
   const [subtests, setSubtests] = useState<SubtestForDashboard[]>([]);
   const [systems, setSystems] = useState<SystemRef[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>('day');
-  const [teamFilter, setTeamFilter] = useState<string>('all');
+  const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>((searchParams.get('bucket') as 'day' | 'week') || 'day');
+  const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');
   const [dataDate, setDataDate] = useState(() => yesterdayIso(todayIso()));
-  const [systemTextFilter, setSystemTextFilter] = useState('');
-  const [selectedSystemFilters, setSelectedSystemFilters] = useState<string[]>([]);
+  const [systemTextFilter, setSystemTextFilter] = useState(searchParams.get('system_text') || '');
+  const [selectedSystemFilters, setSelectedSystemFilters] = useState<string[]>(searchParams.get('systems')?.split(',').filter(Boolean) || []);
 
   useEffect(() => {
     let cancelled = false;
@@ -181,7 +182,7 @@ export default function DashboardPage() {
   );
 
   // ───── Breakdown tab & export
-  const [breakdownTab, setBreakdownTab] = useState('system');
+  const [breakdownTab, setBreakdownTab] = useState(searchParams.get('tab') || 'system');
   const { toast } = useToast();
 
   const breakdownDataMap: Record<string, { rows: PlanActualRow[]; header: string }> = {
@@ -203,8 +204,24 @@ export default function DashboardPage() {
   };
 
   // ───── S-Curve
-  const [scurveStart, setScurveStart] = useState('2026-04-15');
-  const [scurveEnd, setScurveEnd] = useState('2026-06-07');
+  const [scurveStart, setScurveStart] = useState(searchParams.get('scurve_start') || '2026-04-15');
+  const [scurveEnd, setScurveEnd] = useState(searchParams.get('scurve_end') || '2026-06-07');
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    const setOrDelete = (key: string, value: string, defaultValue: string) => {
+      if (!value || value === defaultValue) next.delete(key);
+      else next.set(key, value);
+    };
+    setOrDelete('team', teamFilter, 'all');
+    setOrDelete('bucket', scurveBucket, 'day');
+    setOrDelete('tab', breakdownTab, 'system');
+    setOrDelete('system_text', systemTextFilter, '');
+    setOrDelete('systems', selectedSystemFilters.join(','), '');
+    setOrDelete('scurve_start', scurveStart, '2026-04-15');
+    setOrDelete('scurve_end', scurveEnd, '2026-06-07');
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [teamFilter, scurveBucket, breakdownTab, systemTextFilter, selectedSystemFilters, scurveStart, scurveEnd, searchParams, setSearchParams]);
 
   const scurve = useMemo(
     () => buildSCurve(filteredSubtests, scurveBucket, scurveStart, scurveEnd, today),
