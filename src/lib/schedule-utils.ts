@@ -184,7 +184,7 @@ export function aggregateSchedule(
             stageData[st].cells[i].plan++;
             stageData[st].totalPlan++;
           }
-          if (plan <= opts.asOfDate) stageData[st].cumPlan++;
+          if (isStagePlannedUpTo(s, st, opts.asOfDate)) stageData[st].cumPlan++;
         }
         if (actual) {
           const b = bucketize(actual, opts.bucket);
@@ -193,9 +193,9 @@ export function aggregateSchedule(
             stageData[st].cells[i].actual++;
             stageData[st].totalActual++;
           }
-          if (actual <= opts.asOfDate) stageData[st].cumActual++;
+          if (isStageActualUpTo(s, st, opts.asOfDate)) stageData[st].cumActual++;
         }
-        if (done) stageData[st].totalDone++;
+        if (isStageActualUpTo(s, st, opts.asOfDate)) stageData[st].totalDone++;
       }
     }
 
