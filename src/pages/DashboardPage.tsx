@@ -852,7 +852,7 @@ function PlanActualTable({
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={15} className="py-8 text-center text-sm text-muted-foreground">
+              <TableCell colSpan={17} className="py-8 text-center text-sm text-muted-foreground">
                 {emptyMessage ?? 'No data.'}
               </TableCell>
             </TableRow>
@@ -890,6 +890,7 @@ function PlanActualTable({
               const dataDateD = m.dataDateActual - m.dataDatePlan;
               const todayD = m.todayActual - m.todayPlan;
               const pct = r.totalSubtests ? Math.round((m.cumActual / r.totalSubtests) * 100) : 0;
+              const remain = r.totalSubtests - m.cumActual;
               const isFirst = i === 0;
               const groupBorder = idx > 0 && isFirst ? 'border-t-2 border-t-border' : '';
               return (
@@ -901,17 +902,19 @@ function PlanActualTable({
                   {isFirst && (
                     <>
                       <TableCell rowSpan={3} className="font-medium align-top px-2 py-1.5">{r.label}</TableCell>
-                      <TableCell rowSpan={3} className="text-right tabular-nums align-top px-2 py-1.5">{r.totalSubtests}</TableCell>
                     </>
                   )}
-                  <TableCell className="px-2 py-1.5">
-                    <span className="inline-flex items-center gap-1.5">
-                      <StageBadge stage={st.stage} label={st.label} />
-                      <span className="text-[10px] tabular-nums text-muted-foreground">
-                        {m.cumActual}<span className="opacity-50">/{r.totalSubtests}</span>
-                        <span className="ml-0.5 opacity-70">({r.totalSubtests - m.cumActual})</span>
-                      </span>
-                    </span>
+                  <TableCell className="px-2 py-1.5 bg-muted/10">
+                    <StageBadge stage={st.stage} label={st.label} />
+                  </TableCell>
+                  <TableCell className="text-right text-xs px-2 py-1.5 bg-muted/10">
+                    <span className={summaryNumberClass(r.totalSubtests)}>{r.totalSubtests}</span>
+                  </TableCell>
+                  <TableCell className="text-right text-xs px-2 py-1.5 bg-muted/10">
+                    <span className={summaryNumberClass(m.cumActual, 'done')}>{m.cumActual}</span>
+                  </TableCell>
+                  <TableCell className="text-right text-xs px-2 py-1.5 bg-muted/10 border-r border-border">
+                    <span className={summaryNumberClass(remain, 'remain')}>{remain}</span>
                   </TableCell>
                   {/* Cumulative (to Data Date) */}
                   <TableCell className="text-right border-l border-border text-xs px-2 py-1.5">
