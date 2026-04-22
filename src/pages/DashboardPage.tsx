@@ -696,7 +696,6 @@ function PlanActualTable({
             <TableHead className="text-right border-l border-border text-[11px]">Plan</TableHead>
             <TableHead className="text-right text-[11px]">Actual</TableHead>
             <TableHead className="text-right text-[11px]">Δ</TableHead>
-            <TableHead className="text-right text-[11px]">Delay</TableHead>
             <TableHead className="text-right border-l border-border text-[11px]">Plan</TableHead>
             <TableHead className="text-right text-[11px]">Actual</TableHead>
             <TableHead className="text-right text-[11px]">Δ</TableHead>
