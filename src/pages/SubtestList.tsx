@@ -808,6 +808,8 @@ export default function SubtestList() {
 
   const activeUrlFilters = useMemo(() => {
     const out: { label: string; param: string; clears?: string[] }[] = [];
+    const isScheduleCell = searchParams.get('source') === 'schedule_cell';
+    const formatValue = (v: string) => v === EMPTY_TOKEN ? '(Empty)' : v;
     const map: Record<string, string> = {
       system: 'System', subcon: 'Subcon', subsub: 'Sub-Sub',
       hdec_pic: 'HDEC PIC', pred_status: 'Pred', t1_status: 'T1', t2_status: 'T2', status: 'Status',
@@ -822,19 +824,25 @@ export default function SubtestList() {
       stage: 'Stage', cell_status: 'Cell Status',
     };
     for (const [k, lbl] of Object.entries(map)) {
+      if (isScheduleCell && (k === 'stage' || k === 'cell_status')) continue;
       const v = searchParams.get(k);
-      if (v) out.push({ label: `${lbl} ${v}`, param: k });
+      if (v) out.push({ label: `${lbl} ${formatValue(v)}`, param: k });
     }
     const df = searchParams.get('date_from');
     const dt = searchParams.get('date_to');
     const fld = searchParams.get('date_field');
     if (df || dt) {
-      const fldLbl = fld === 'actual' ? 'Actual' : 'Planned';
+      const fldLbl = fld === 'actual' ? 'Actual' : 'Plan';
       const range = df === dt || !dt ? df : `${df} → ${dt}`;
+      const stage = searchParams.get('stage');
+      const stageLbl = stage === 'pred' ? 'Pred' : stage === 't1' ? 'T1' : stage === 't2' ? 'T2' : 'All stages';
+      const statusLbl = searchParams.get('cell_status') === 'Done' ? ' · Done' : '';
       out.push({
-        label: `${fldLbl} ${range}`,
+        label: isScheduleCell ? `${fldLbl} · ${stageLbl} · ${range}${statusLbl}` : `${fldLbl} ${range}`,
         param: 'date_from',
-        clears: ['date_from', 'date_to', 'date_field'],
+        clears: isScheduleCell
+          ? ['date_from', 'date_to', 'date_field', 'stage', 'cell_status', 'source']
+          : ['date_from', 'date_to', 'date_field'],
       });
     }
     return out;
