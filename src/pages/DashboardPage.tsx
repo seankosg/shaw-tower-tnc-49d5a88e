@@ -693,9 +693,10 @@ function PlanActualTable({
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[1160px]">
-        <Table className="table-fixed">
-          {colgroup}
-        <TableHeader className="sticky top-0 bg-background z-10">
+        <div className="overflow-y-auto [scrollbar-gutter:stable]">
+          <Table className="table-fixed">
+            {colgroup}
+        <TableHeader className="bg-background">
           <TableRow>
             <TableHead rowSpan={2} className="align-bottom">{groupHeader}</TableHead>
             <TableHead rowSpan={2} className="text-right align-bottom">Total<br /><span className="text-[10px] font-normal text-muted-foreground">Subtests</span></TableHead>
@@ -719,8 +720,9 @@ function PlanActualTable({
             <TableHead className="text-right text-[11px]">Delay</TableHead>
           </TableRow>
         </TableHeader>
-        </Table>
-        <div className="max-h-[440px] overflow-y-auto">
+          </Table>
+        </div>
+        <div className="max-h-[440px] overflow-y-auto [scrollbar-gutter:stable]">
           <Table className="table-fixed">
             {colgroup}
         <TableBody>
