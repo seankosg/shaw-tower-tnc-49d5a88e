@@ -6,9 +6,9 @@ import { isStageDelayedAsOf, isStageDone, todayIso, type StageKey } from '@/lib/
 
 type StageState = 'done' | 'wip' | 'planned' | 'hold' | 'empty';
 
-function classifyStage(row: Parameters<typeof isStageDone>[0], stage: StageKey, status: TcStatus | null | undefined): StageState {
+function classifyStage(row: Parameters<typeof isStageDone>[0], stage: StageKey, status: TcStatus | null | undefined, asOfDate: string): StageState {
   if (isStageDone(row, stage)) return 'done';
-  if (isStageDelayedAsOf(row, stage, todayIso())) return 'hold';
+  if (isStageDelayedAsOf(row, stage, asOfDate)) return 'hold';
   if (status === 'Hold') return 'hold';
   if (status === 'WIP') return 'wip';
   if (status === 'Planned') return 'planned';
@@ -50,6 +50,7 @@ export interface StageProgressProps {
   t2Status: TcStatus | null;
   t2ActualDate: string | null;
   t2PlannedDate?: string | null;
+  asOfDate?: string | null;
 }
 
 export function StageProgress({
@@ -63,7 +64,9 @@ export function StageProgress({
   t2Status,
   t2ActualDate,
   t2PlannedDate = null,
+  asOfDate = null,
 }: StageProgressProps) {
+  const delayAsOfDate = asOfDate ?? todayIso();
   const row = {
     predecessor_status_raw: predecessorRaw,
     pred_status: predStatus,
@@ -76,9 +79,9 @@ export function StageProgress({
     t2_planned_date: t2PlannedDate,
     t2_actual_date: t2ActualDate,
   };
-  const pred = classifyStage(row, 'pred', predStatus);
-  const t1 = classifyStage(row, 't1', t1Status);
-  const t2 = classifyStage(row, 't2', t2Status);
+  const pred = classifyStage(row, 'pred', predStatus, delayAsOfDate);
+  const t1 = classifyStage(row, 't1', t1Status, delayAsOfDate);
+  const t2 = classifyStage(row, 't2', t2Status, delayAsOfDate);
 
   const stateLabel = (s: StageState) =>
     s === 'done' ? 'Done' : s === 'wip' ? 'WIP' : s === 'hold' ? 'Delay' : s === 'planned' ? 'Planned' : '—';
@@ -99,6 +102,7 @@ export function StageProgress({
       </TooltipTrigger>
       <TooltipContent side="right" className="text-xs">
         <div className="space-y-0.5">
+          <div className="text-muted-foreground">Delay as of {formatDdMmm(delayAsOfDate)}</div>
           <div>
             <span className="font-medium">Predecessor:</span> {stateLabel(pred)}
             {predActualDate ? <span className="text-muted-foreground"> · {formatDdMmm(predActualDate)}</span> : (predecessorRaw ? <span className="text-muted-foreground"> ({predecessorRaw})</span> : null)}

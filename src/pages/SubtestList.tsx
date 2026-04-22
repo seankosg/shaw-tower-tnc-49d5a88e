@@ -332,6 +332,7 @@ export default function SubtestList() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
+  const [dataDate, setDataDate] = useState<string | null>(null);
   const urlStatusFilter = searchParams.get('status');
   const urlAtRiskDays = Number(searchParams.get('at_risk_days') ?? '2');
   const tableRef = useRef<HTMLDivElement>(null);
@@ -423,7 +424,21 @@ export default function SubtestList() {
   useEffect(() => {
     fetchData();
     fetchSystems();
+    fetchDataDate();
   }, []);
+
+  const fetchDataDate = async () => {
+    const { data } = await supabase
+      .from('upload_batches')
+      .select('data_date')
+      .eq('status', 'completed')
+      .not('data_date', 'is', null)
+      .order('data_date', { ascending: false })
+      .order('uploaded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setDataDate(data?.data_date ?? null);
+  };
 
   const fetchSystems = async () => {
     const { data } = await supabase.from('system_master').select('id, system_code').eq('is_active', true);
@@ -536,6 +551,7 @@ export default function SubtestList() {
           t2Status={row.original.t2_status}
           t2ActualDate={row.original.t2_actual_date}
           t2PlannedDate={row.original.t2_planned_date}
+          asOfDate={dataDate}
         />
       ),
     },
@@ -626,7 +642,7 @@ export default function SubtestList() {
     { accessorKey: 'updated_at', header: 'Updated', size: 140, filterFn: dateRangeFilterFn,
       meta: { filterType: 'date-range' },
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
-  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions]);
+  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions, dataDate]);
 
   // Apply status (overdue / at_risk) + date URL filters at data level
   const urlT1PlannedTo = searchParams.get('t1_planned_to');
