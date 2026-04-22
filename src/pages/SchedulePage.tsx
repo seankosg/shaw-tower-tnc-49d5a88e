@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, AlertTriangle, TrendingUp, ChevronsLeft, ChevronsRight, CalendarSearch, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -37,25 +37,26 @@ const GROUP_LABELS: Record<ScheduleGroupBy, string> = {
 
 export default function SchedulePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   // Stabilize today across renders so memos don't re-run unnecessarily
   const today = useMemo(() => todayIso(), []);
 
-  const [groupBy, setGroupBy] = useState<ScheduleGroupBy>('system');
-  const [bucket, setBucket] = useState<ScheduleBucket>('day');
-  const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>('all');
-  const [asOfMode, setAsOfMode] = useState<'dataDate' | 'today'>('dataDate');
+  const [groupBy, setGroupBy] = useState<ScheduleGroupBy>((searchParams.get('group') as ScheduleGroupBy) || 'system');
+  const [bucket, setBucket] = useState<ScheduleBucket>((searchParams.get('bucket') as ScheduleBucket) || 'day');
+  const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>((searchParams.get('stage_view') as ScheduleStageFilter) || 'all');
+  const [asOfMode, setAsOfMode] = useState<'dataDate' | 'today'>((searchParams.get('asof_mode') as 'dataDate' | 'today') || 'dataDate');
   const [dataDate, setDataDate] = useState(() => yesterdayIso(today));
-  const [teamFilter, setTeamFilter] = useState<string>('all');
-  const [systemTextFilter, setSystemTextFilter] = useState('');
-  const [selectedSystemFilters, setSelectedSystemFilters] = useState<string[]>([]);
-  const [rangeDays, setRangeDays] = useState<number>(60);
+  const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');
+  const [systemTextFilter, setSystemTextFilter] = useState(searchParams.get('system_text') || '');
+  const [selectedSystemFilters, setSelectedSystemFilters] = useState<string[]>(searchParams.get('systems')?.split(',').filter(Boolean) || []);
+  const [rangeDays, setRangeDays] = useState<number>(Number(searchParams.get('range') || 60));
   const [hidePast, setHidePast] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    return localStorage.getItem('schedule_hide_past') === '1';
+    return searchParams.get('hide_past') === '1' || localStorage.getItem('schedule_hide_past') === '1';
   });
-  const [showRiskPanel, setShowRiskPanel] = useState(false);
-  const [pickedDate, setPickedDate] = useState<Date | undefined>(new Date());
-  const [pickedField, setPickedField] = useState<'planned' | 'actual'>('planned');
+  const [showRiskPanel, setShowRiskPanel] = useState(searchParams.get('risk_panel') === '1');
+  const [pickedDate, setPickedDate] = useState<Date | undefined>(() => searchParams.get('picked') ? new Date(`${searchParams.get('picked')}T00:00:00`) : new Date());
+  const [pickedField, setPickedField] = useState<'planned' | 'actual'>((searchParams.get('picked_field') as 'planned' | 'actual') || 'planned');
   const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
