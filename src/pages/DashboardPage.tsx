@@ -783,7 +783,7 @@ function PlanActualTable({
                   <TableCell className="text-right text-xs px-2 py-1.5">
                     <ClickVariance
                       value={cumD}
-                      onClick={cumD < 0 ? () => go(r.key, { status: 'overdue' }) : undefined}
+                      onClick={cumD < 0 ? () => go(r.key, { status: 'overdue', as_of: dataDate }) : undefined}
                     />
                   </TableCell>
                   {/* Data Date */}
