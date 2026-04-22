@@ -51,9 +51,21 @@ const S_GROUP_NAME = {
 const S_TOTAL = {
   font: { name: FONT, sz: 10, bold: true, color: { rgb: 'FF111827' } },
   fill: { fgColor: { rgb: 'FFF8FAFC' } },
-  alignment: { vertical: 'top', horizontal: 'center' },
+  alignment: { vertical: 'center', horizontal: 'right' },
   border: BORDERS_ALL,
 } as const;
+
+const summaryStyle = (v: number, tone?: 'done' | 'remain') => ({
+  font: {
+    name: FONT,
+    sz: 10,
+    bold: true,
+    color: { rgb: v === 0 ? 'FFD1D5DB' : tone === 'done' ? 'FF047857' : tone === 'remain' ? 'FFB45309' : 'FF111827' },
+  },
+  fill: { fgColor: { rgb: 'FFF8FAFC' } },
+  alignment: { vertical: 'center', horizontal: 'right' },
+  border: BORDERS_ALL,
+});
 
 const S_NUM = {
   font: { name: FONT, sz: 10, color: { rgb: 'FF111827' } },
@@ -117,7 +129,7 @@ export function exportPlanActualToExcel(
 
   const dataDateLabel = formatDdMmm(dataDate);
   const todayLabel = formatDdMmm(today);
-  const COL_COUNT = 15; // group, total, stage, cum(3), data date(4), today(4), progress%
+  const COL_COUNT = 17; // group, stage, total/done/remain, cum(3), data date(4), today(4), progress%
   const ws: XLSX.WorkSheet = {};
 
   // ── Row 0: Title ──
@@ -132,13 +144,13 @@ export function exportPlanActualToExcel(
 
   // ── Row 3: Group header (merged) ──
   const HR = 3;
-  const hdrLabels = [groupHeader, 'Total\nSubtests', 'Stage',
+  const hdrLabels = [groupHeader, 'Stage', 'Total', 'Done', 'Remain',
     'To Data Date (Cumulative)', '', '', `Data Date (${dataDateLabel})`, '', '', '', `Today (${todayLabel})`, '', '', '', 'Progress'];
   hdrLabels.forEach((l, c) => set(ws, HR, c, l, S_GROUP_HDR));
 
   // ── Row 4: Sub header ──
   const SHR = 4;
-  const subLabels = ['', '', '', 'Plan', 'Actual', 'Δ', 'Plan', 'Actual', 'Δ', 'Delay', 'Plan', 'Actual', 'Δ', 'Delay', '%'];
+  const subLabels = ['', '', '', '', '', 'Plan', 'Actual', 'Δ', 'Plan', 'Actual', 'Δ', 'Delay', 'Plan', 'Actual', 'Δ', 'Delay', '%'];
   subLabels.forEach((l, c) => set(ws, SHR, c, l, S_SUB_HDR));
 
   // Merges for header rows
@@ -149,12 +161,14 @@ export function exportPlanActualToExcel(
     { s: { r: 1, c: 0 }, e: { r: 1, c: COL_COUNT - 1 } },
     // Group header merges
     { s: { r: HR, c: 0 }, e: { r: SHR, c: 0 } },   // group name header
-    { s: { r: HR, c: 1 }, e: { r: SHR, c: 1 } },   // total header
-    { s: { r: HR, c: 2 }, e: { r: SHR, c: 2 } },   // stage header
-    { s: { r: HR, c: 3 }, e: { r: HR, c: 5 } },     // To Data Date
-    { s: { r: HR, c: 6 }, e: { r: HR, c: 9 } },     // Data Date
-    { s: { r: HR, c: 10 }, e: { r: HR, c: 13 } },   // Today
-    { s: { r: HR, c: 14 }, e: { r: SHR, c: 14 } },  // Progress
+    { s: { r: HR, c: 1 }, e: { r: SHR, c: 1 } },   // stage header
+    { s: { r: HR, c: 2 }, e: { r: SHR, c: 2 } },   // total header
+    { s: { r: HR, c: 3 }, e: { r: SHR, c: 3 } },   // done header
+    { s: { r: HR, c: 4 }, e: { r: SHR, c: 4 } },   // remain header
+    { s: { r: HR, c: 5 }, e: { r: HR, c: 7 } },     // To Data Date
+    { s: { r: HR, c: 8 }, e: { r: HR, c: 11 } },    // Data Date
+    { s: { r: HR, c: 12 }, e: { r: HR, c: 15 } },   // Today
+    { s: { r: HR, c: 16 }, e: { r: SHR, c: 16 } },  // Progress
   ];
 
   // ── Data rows ──
@@ -176,43 +190,44 @@ export function exportPlanActualToExcel(
 
       const cr = dataRow;
 
-      // Group name & total (only first stage row)
+      // Group name (only first stage row)
       if (i === 0) {
         set(ws, cr, 0, r.label, S_GROUP_NAME);
-        setNum(ws, cr, 1, r.totalSubtests, S_TOTAL);
       }
 
-      // Stage with counts
+      // Stage summary
       const remaining = r.totalSubtests - m.cumActual;
-      set(ws, cr, 2, `${st.label}  ${m.cumActual}/${r.totalSubtests} (${remaining})`, S_STAGE(st.label));
+      set(ws, cr, 1, st.label, S_STAGE(st.label));
+      setNum(ws, cr, 2, r.totalSubtests, summaryStyle(r.totalSubtests));
+      setNum(ws, cr, 3, m.cumActual, summaryStyle(m.cumActual, 'done'));
+      setNum(ws, cr, 4, remaining, summaryStyle(remaining, 'remain'));
 
       // Cumulative
-      setNum(ws, cr, 3, m.cumPlan, S_NUM);
-      setNum(ws, cr, 4, m.cumActual, S_NUM);
-      setNum(ws, cr, 5, cumD, deltaStyle(cumD));
+      setNum(ws, cr, 5, m.cumPlan, S_NUM);
+      setNum(ws, cr, 6, m.cumActual, S_NUM);
+      setNum(ws, cr, 7, cumD, deltaStyle(cumD));
 
       // Data Date
-      setNum(ws, cr, 6, m.dataDatePlan, S_NUM);
-      setNum(ws, cr, 7, m.dataDateActual, S_NUM);
-      setNum(ws, cr, 8, dataDateD, deltaStyle(dataDateD));
-      setNum(ws, cr, 9, m.dataDateDelay, S_NUM);
+      setNum(ws, cr, 8, m.dataDatePlan, S_NUM);
+      setNum(ws, cr, 9, m.dataDateActual, S_NUM);
+      setNum(ws, cr, 10, dataDateD, deltaStyle(dataDateD));
+      setNum(ws, cr, 11, m.dataDateDelay, S_NUM);
 
       // Today
-      setNum(ws, cr, 10, m.todayPlan, S_NUM);
-      setNum(ws, cr, 11, m.todayActual, S_NUM);
-      setNum(ws, cr, 12, tD, deltaStyle(tD));
-      setNum(ws, cr, 13, m.todayDelay, S_NUM);
+      setNum(ws, cr, 12, m.todayPlan, S_NUM);
+      setNum(ws, cr, 13, m.todayActual, S_NUM);
+      setNum(ws, cr, 14, tD, deltaStyle(tD));
+      setNum(ws, cr, 15, m.todayDelay, S_NUM);
 
       // Progress
-      set(ws, cr, 14, `${pct}%`, S_PCT);
+      set(ws, cr, 16, `${pct}%`, S_PCT);
 
       dataRow++;
     });
 
-    // Merge group name & total cells across 3 stage rows
+    // Merge group name cells across 3 stage rows
     merges.push(
       { s: { r: startRow, c: 0 }, e: { r: startRow + 2, c: 0 } },
-      { s: { r: startRow, c: 1 }, e: { r: startRow + 2, c: 1 } },
     );
   }
 
@@ -221,8 +236,8 @@ export function exportPlanActualToExcel(
   // Column widths
   ws['!cols'] = [
     { wch: 22 }, // group
-    { wch: 8 },  // total
-    { wch: 20 }, // stage + counts
+    { wch: 9 },  // stage
+    { wch: 8 }, { wch: 8 }, { wch: 8 }, // total / done / remain
     { wch: 8 }, { wch: 8 }, { wch: 7 },  // cum
     { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, // data date
     { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, // today
@@ -242,9 +257,9 @@ export function exportPlanActualToExcel(
   // Freeze panes
   (ws as any)['!views'] = [{
     state: 'frozen',
-    xSplit: 3,
+    xSplit: 5,
     ySplit: 5,
-    topLeftCell: XLSX.utils.encode_cell({ r: 5, c: 3 }),
+    topLeftCell: XLSX.utils.encode_cell({ r: 5, c: 5 }),
     activePane: 'bottomRight',
   }];
 
