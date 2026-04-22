@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   ALL_ROLES, ALL_USER_TYPES, ROLE_LABELS, USER_TYPE_LABELS,
   ALL_TEAMS, TEAM_LABELS,
+  DEFAULT_PASSWORD,
   type AppRole, type UserType, type TeamType,
 } from '@/types/enums';
 import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown, Download } from 'lucide-react';
@@ -206,12 +207,12 @@ function UsersTab() {
   };
 
   const resetPassword = async (profile: Profile) => {
-    if (!confirm(`Reset password for ${profile.login_id} to SHAW00?`)) return;
-    const { error } = await supabase.functions.invoke('admin-reset-password', {
+    if (!confirm(`Reset password for ${profile.login_id} to ${DEFAULT_PASSWORD}?`)) return;
+    const { data, error } = await supabase.functions.invoke('admin-reset-password', {
       body: { user_id: profile.user_id },
     });
-    if (error) toast({ title: 'Reset failed', description: error.message, variant: 'destructive' });
-    else toast({ title: 'Password reset to SHAW00' });
+    if (error || (data as any)?.error) toast({ title: 'Reset failed', description: (data as any)?.error ?? error?.message, variant: 'destructive' });
+    else toast({ title: `Password reset to ${DEFAULT_PASSWORD}` });
     load();
   };
 
