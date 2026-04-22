@@ -11,11 +11,12 @@ import { Badge } from '@/components/ui/badge';
 import { APP_NAME } from '@/lib/constants';
 import { useAuth } from '@/contexts/AuthContext';
 import { filterNavItems } from '@/lib/role-permissions';
+import { getRememberedRoute } from '@/hooks/useRouteMemory';
 
 const mainNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/dashboard' },
   { label: 'Progress',  icon: Calendar,  path: '/schedule' },
-  { label: 'Raw Data',  icon: Database,  path: '/' },
+  { label: 'Raw Data',  icon: Database,  path: '/raw-data' },
   { label: 'Import',    icon: Upload,    path: '/import' },
   { label: 'Export',    icon: Download,  path: '/export' },
 ];
@@ -76,7 +77,7 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
                     isActive={pathname === item.path}
-                    onClick={() => navigate(item.path)}
+                    onClick={() => navigate(getRememberedRoute(item.path))}
                     tooltip={item.label}
                   >
                     <item.icon className="h-4 w-4" />
@@ -97,7 +98,7 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={pathname.startsWith(item.path)}
-                      onClick={() => navigate(item.path)}
+                      onClick={() => navigate(getRememberedRoute(item.path))}
                       tooltip={item.label}
                     >
                       <item.icon className="h-4 w-4" />
