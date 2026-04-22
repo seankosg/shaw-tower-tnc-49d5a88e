@@ -1020,8 +1020,7 @@ function SubtestTableView({
   const scrollHeaders = allHeaders.slice(FROZEN_COUNT);
 
   const renderRowBgClass = (r: SubtestRow) => {
-    const today = new Date().toISOString().slice(0, 10);
-    const delayed = getAnyStageDelayedAsOf(r, getStageKeys('all'), today);
+    const delayed = getAnyStageDelayedAsOf(r, getStageKeys('all'), delayAsOfDate);
     const t2Done = isStageDone(r, 't2');
     return { delayed, t2Done };
   };
