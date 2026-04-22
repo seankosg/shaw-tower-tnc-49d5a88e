@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { detectImportType, parseExcelFile, parseLegacy, parseStandard, resolveValue, type DetectedImportType, type ParsedSubtest } from '@/lib/import-parser';
 import { useToast } from '@/hooks/use-toast';
+import { buildScheduleChangeImpact, hasScheduleChangeImpact } from '@/lib/schedule-change-utils';
 
 export type ImportType = 'legacy' | 'standard';
 export type FileStatus = 'pending' | 'parsing' | 'ready' | 'processing' | 'done' | 'failed';
@@ -249,7 +250,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       await ensureHdecPic(row.hdec_pic_name);
 
       const { data: existing } = await supabase.from('subtests')
-        .select('id, updated_at, row_version')
+        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date')
         .eq('project_id', projectId!).eq('system_id', systemId)
         .eq('item_no', row.item_no).eq('mos_code', row.mos_code).eq('is_active', true)
         .maybeSingle();
