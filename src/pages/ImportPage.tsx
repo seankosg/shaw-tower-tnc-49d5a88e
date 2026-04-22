@@ -28,7 +28,7 @@ function formatSize(bytes: number) {
 export default function ImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { files, importType, isRunning, setImportType, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam } = useImport();
+  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam } = useImport();
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -42,7 +42,7 @@ export default function ImportPage() {
     if (inputRef.current) inputRef.current.value = '';
   }, [addFiles]);
 
-  const readyCount = files.filter(f => f.status === 'ready' && f.team).length;
+  const readyCount = files.filter(f => f.status === 'ready' && (f.detectedImportType === 'standard' || (f.detectedImportType === 'legacy' && f.team))).length;
   const totals = files.reduce((acc, f) => {
     if (f.result) {
       acc.inserted += f.result.inserted;
@@ -62,26 +62,6 @@ export default function ImportPage() {
           View Import Logs
         </Button>
       </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Import Type</CardTitle>
-          <CardDescription>
-            Legacy: 1 row = 1 Test with MOS-1~5 columns. Standard: 1 row = 1 Subtest.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Select value={importType} onValueChange={(v) => setImportType(v as any)} disabled={isRunning}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="legacy">Legacy Import</SelectItem>
-              <SelectItem value="standard">Standard Import</SelectItem>
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardContent className="pt-6">
