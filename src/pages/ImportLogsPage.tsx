@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronLeft, Trash2, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,6 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { formatDdMmm, formatSignedDays } from '@/lib/format';
 
 interface UploadBatch {
   id: string;
@@ -34,6 +36,31 @@ interface RowLog {
   action_taken: string | null;
   reason_code: string | null;
   reason_detail: string | null;
+}
+
+interface ScheduleChangeAudit {
+  id: string;
+  raw_row_no: number | null;
+  item_no: string;
+  mos_code: string;
+  subtest_code: string | null;
+  subtest_id: string;
+  pred_old_date: string | null;
+  pred_new_date: string | null;
+  pred_diff_days: number | null;
+  pred_prev_gap_days: number | null;
+  pred_cur_gap_days: number | null;
+  t1_old_date: string | null;
+  t1_new_date: string | null;
+  t1_diff_days: number | null;
+  t1_prev_gap_days: number | null;
+  t1_cur_gap_days: number | null;
+  t2_old_date: string | null;
+  t2_new_date: string | null;
+  t2_diff_days: number | null;
+  t2_prev_gap_days: number | null;
+  t2_cur_gap_days: number | null;
+  system_master?: { system_code: string } | null;
 }
 
 const statusColor: Record<string, string> = {
