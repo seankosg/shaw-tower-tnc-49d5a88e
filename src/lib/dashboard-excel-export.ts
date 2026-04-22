@@ -1,5 +1,6 @@
 import XLSX from 'xlsx-js-style';
 import type { PlanActualRow, PlanActualMetrics } from './dashboard-utils';
+import { formatDdMmm } from './format';
 
 // ---------------------------------------------------------------------------
 // Style constants
@@ -107,14 +108,16 @@ export function exportPlanActualToExcel(
   rows: PlanActualRow[],
   groupHeader: string,
   today: string,
-  yesterday: string,
+  dataDate: string,
 ): { rowCount: number; fileName: string } {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
   const fileTs = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
 
-  const COL_COUNT = 14; // group, total, stage, 3×(plan,act,Δ), progress%
+  const dataDateLabel = formatDdMmm(dataDate);
+  const todayLabel = formatDdMmm(today);
+  const COL_COUNT = 15; // group, total, stage, cum(3), data date(4), today(4), progress%
   const ws: XLSX.WorkSheet = {};
 
   // ── Row 0: Title ──
@@ -122,7 +125,7 @@ export function exportPlanActualToExcel(
   for (let c = 1; c < COL_COUNT; c++) set(ws, 0, c, '', S_TITLE);
 
   // ── Row 1: Meta ──
-  set(ws, 1, 0, `Exported: ${ts}  ·  Base date: ${today}  ·  Yesterday: ${yesterday}`, S_META);
+  set(ws, 1, 0, `Exported: ${ts}  ·  Today: ${today}  ·  Data Date: ${dataDate}`, S_META);
   for (let c = 1; c < COL_COUNT; c++) set(ws, 1, c, '', S_META);
 
   // ── Row 2: spacer ──
@@ -130,12 +133,12 @@ export function exportPlanActualToExcel(
   // ── Row 3: Group header (merged) ──
   const HR = 3;
   const hdrLabels = [groupHeader, 'Total\nSubtests', 'Stage',
-    'To-Yesterday (Cumulative)', '', '', 'Yesterday', '', '', 'Today', '', '', 'Progress'];
+    'To Data Date (Cumulative)', '', '', `Data Date (${dataDateLabel})`, '', '', '', `Today (${todayLabel})`, '', '', '', 'Progress'];
   hdrLabels.forEach((l, c) => set(ws, HR, c, l, S_GROUP_HDR));
 
   // ── Row 4: Sub header ──
   const SHR = 4;
-  const subLabels = ['', '', '', 'Plan', 'Actual', 'Δ', 'Plan', 'Actual', 'Δ', 'Plan', 'Actual', 'Δ', '%'];
+  const subLabels = ['', '', '', 'Plan', 'Actual', 'Δ', 'Plan', 'Actual', 'Δ', 'Delay', 'Plan', 'Actual', 'Δ', 'Delay', '%'];
   subLabels.forEach((l, c) => set(ws, SHR, c, l, S_SUB_HDR));
 
   // Merges for header rows
@@ -148,10 +151,10 @@ export function exportPlanActualToExcel(
     { s: { r: HR, c: 0 }, e: { r: SHR, c: 0 } },   // group name header
     { s: { r: HR, c: 1 }, e: { r: SHR, c: 1 } },   // total header
     { s: { r: HR, c: 2 }, e: { r: SHR, c: 2 } },   // stage header
-    { s: { r: HR, c: 3 }, e: { r: HR, c: 5 } },     // To-Yesterday
-    { s: { r: HR, c: 6 }, e: { r: HR, c: 8 } },     // Yesterday
-    { s: { r: HR, c: 9 }, e: { r: HR, c: 11 } },    // Today
-    { s: { r: HR, c: 12 }, e: { r: SHR, c: 12 } },  // Progress
+    { s: { r: HR, c: 3 }, e: { r: HR, c: 5 } },     // To Data Date
+    { s: { r: HR, c: 6 }, e: { r: HR, c: 9 } },     // Data Date
+    { s: { r: HR, c: 10 }, e: { r: HR, c: 13 } },   // Today
+    { s: { r: HR, c: 14 }, e: { r: SHR, c: 14 } },  // Progress
   ];
 
   // ── Data rows ──
@@ -188,18 +191,20 @@ export function exportPlanActualToExcel(
       setNum(ws, cr, 4, m.cumActual, S_NUM);
       setNum(ws, cr, 5, cumD, deltaStyle(cumD));
 
-      // Yesterday
+      // Data Date
       setNum(ws, cr, 6, m.yesterdayPlan, S_NUM);
       setNum(ws, cr, 7, m.yesterdayActual, S_NUM);
       setNum(ws, cr, 8, yD, deltaStyle(yD));
+      setNum(ws, cr, 9, m.yesterdayDelay, S_NUM);
 
       // Today
-      setNum(ws, cr, 9, m.todayPlan, S_NUM);
-      setNum(ws, cr, 10, m.todayActual, S_NUM);
-      setNum(ws, cr, 11, tD, deltaStyle(tD));
+      setNum(ws, cr, 10, m.todayPlan, S_NUM);
+      setNum(ws, cr, 11, m.todayActual, S_NUM);
+      setNum(ws, cr, 12, tD, deltaStyle(tD));
+      setNum(ws, cr, 13, m.todayDelay, S_NUM);
 
       // Progress
-      set(ws, cr, 12, `${pct}%`, S_PCT);
+      set(ws, cr, 14, `${pct}%`, S_PCT);
 
       dataRow++;
     });
@@ -219,8 +224,8 @@ export function exportPlanActualToExcel(
     { wch: 8 },  // total
     { wch: 20 }, // stage + counts
     { wch: 8 }, { wch: 8 }, { wch: 7 },  // cum
-    { wch: 8 }, { wch: 8 }, { wch: 7 },  // yesterday
-    { wch: 8 }, { wch: 8 }, { wch: 7 },  // today
+    { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, // data date
+    { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, // today
     { wch: 10 }, // progress
   ];
 

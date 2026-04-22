@@ -369,6 +369,7 @@ export default function SubtestList() {
       subcon: 'subcontractor_name',
       subsub: 'subsub_name',
       hdec_pic: 'hdec_pic_name',
+      pred_status: 'pred_status',
       t1_status: 't1_status',
       t2_status: 't2_status',
     };
@@ -376,7 +377,7 @@ export default function SubtestList() {
     for (const [param, col] of Object.entries(urlMap)) {
       const v = searchParams.get(param);
       if (v) {
-        if (col === 'system_code' || col === 't1_status' || col === 't2_status'
+        if (col === 'system_code' || col === 'pred_status' || col === 't1_status' || col === 't2_status'
           || col === 'subcontractor_name' || col === 'subsub_name' || col === 'hdec_pic_name') {
           next.push({ id: col, value: [v] });
         } else {
@@ -626,12 +627,19 @@ export default function SubtestList() {
   // Apply status (overdue / at_risk) + date URL filters at data level
   const urlT1PlannedTo = searchParams.get('t1_planned_to');
   const urlT2PlannedTo = searchParams.get('t2_planned_to');
+  const urlPredPlannedTo = searchParams.get('pred_planned_to');
   const urlT1ActualTo = searchParams.get('t1_actual_to');
   const urlT2ActualTo = searchParams.get('t2_actual_to');
+  const urlPredActualTo = searchParams.get('pred_actual_to');
   const urlT1PlannedOn = searchParams.get('t1_planned_on');
   const urlT2PlannedOn = searchParams.get('t2_planned_on');
+  const urlPredPlannedOn = searchParams.get('pred_planned_on');
   const urlT1ActualOn = searchParams.get('t1_actual_on');
   const urlT2ActualOn = searchParams.get('t2_actual_on');
+  const urlPredActualOn = searchParams.get('pred_actual_on');
+  const urlPredDelayAsOf = searchParams.get('pred_delay_asof');
+  const urlT1DelayAsOf = searchParams.get('t1_delay_asof');
+  const urlT2DelayAsOf = searchParams.get('t2_delay_asof');
 
   const urlDateFrom = searchParams.get('date_from');
   const urlDateTo = searchParams.get('date_to');
@@ -667,14 +675,21 @@ export default function SubtestList() {
           if (!within(r.t1_planned_date, r.t1_status) && !within(r.t2_planned_date, r.t2_status)) return false;
         }
       }
+      if (urlPredPlannedTo && !(r.pred_planned_date && r.pred_planned_date <= urlPredPlannedTo)) return false;
       if (urlT1PlannedTo && !(r.t1_planned_date && r.t1_planned_date <= urlT1PlannedTo)) return false;
       if (urlT2PlannedTo && !(r.t2_planned_date && r.t2_planned_date <= urlT2PlannedTo)) return false;
+      if (urlPredActualTo && !(r.pred_actual_date && r.pred_actual_date <= urlPredActualTo)) return false;
       if (urlT1ActualTo && !(r.t1_actual_date && r.t1_actual_date <= urlT1ActualTo)) return false;
       if (urlT2ActualTo && !(r.t2_actual_date && r.t2_actual_date <= urlT2ActualTo)) return false;
+      if (urlPredPlannedOn && r.pred_planned_date !== urlPredPlannedOn) return false;
       if (urlT1PlannedOn && r.t1_planned_date !== urlT1PlannedOn) return false;
       if (urlT2PlannedOn && r.t2_planned_date !== urlT2PlannedOn) return false;
+      if (urlPredActualOn && r.pred_actual_date !== urlPredActualOn) return false;
       if (urlT1ActualOn && r.t1_actual_date !== urlT1ActualOn) return false;
       if (urlT2ActualOn && r.t2_actual_date !== urlT2ActualOn) return false;
+      if (urlPredDelayAsOf && !(r.pred_planned_date && r.pred_planned_date <= urlPredDelayAsOf && r.pred_status !== 'Done')) return false;
+      if (urlT1DelayAsOf && !(r.t1_planned_date && r.t1_planned_date <= urlT1DelayAsOf && r.t1_status !== 'Done')) return false;
+      if (urlT2DelayAsOf && !(r.t2_planned_date && r.t2_planned_date <= urlT2DelayAsOf && r.t2_status !== 'Done')) return false;
 
       if (urlDateFrom || urlDateTo) {
         const stages: Array<'pred' | 't1' | 't2'> = urlStage ? [urlStage] : ['pred', 't1', 't2'];
@@ -696,8 +711,9 @@ export default function SubtestList() {
       return true;
     });
   }, [data, urlStatusFilter, urlAtRiskDays,
-      urlT1PlannedTo, urlT2PlannedTo, urlT1ActualTo, urlT2ActualTo,
-      urlT1PlannedOn, urlT2PlannedOn, urlT1ActualOn, urlT2ActualOn,
+      urlPredPlannedTo, urlT1PlannedTo, urlT2PlannedTo, urlPredActualTo, urlT1ActualTo, urlT2ActualTo,
+      urlPredPlannedOn, urlT1PlannedOn, urlT2PlannedOn, urlPredActualOn, urlT1ActualOn, urlT2ActualOn,
+      urlPredDelayAsOf, urlT1DelayAsOf, urlT2DelayAsOf,
       urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus]);
 
   const columnIdToFieldName: Record<string, string> = {
@@ -766,11 +782,14 @@ export default function SubtestList() {
     const out: { label: string; param: string; clears?: string[] }[] = [];
     const map: Record<string, string> = {
       system: 'System', subcon: 'Subcon', subsub: 'Sub-Sub',
-      hdec_pic: 'HDEC PIC', t1_status: 'T1', t2_status: 'T2', status: 'Status',
+      hdec_pic: 'HDEC PIC', pred_status: 'Pred', t1_status: 'T1', t2_status: 'T2', status: 'Status',
+      pred_planned_to: 'Pred Plan ≤', pred_actual_to: 'Pred Actual ≤',
       t1_planned_to: 'T1 Plan ≤', t2_planned_to: 'T2 Plan ≤',
       t1_actual_to: 'T1 Actual ≤', t2_actual_to: 'T2 Actual ≤',
+      pred_planned_on: 'Pred Plan =', pred_actual_on: 'Pred Actual =',
       t1_planned_on: 'T1 Plan =', t2_planned_on: 'T2 Plan =',
       t1_actual_on: 'T1 Actual =', t2_actual_on: 'T2 Actual =',
+      pred_delay_asof: 'Pred Delay ≤', t1_delay_asof: 'T1 Delay ≤', t2_delay_asof: 'T2 Delay ≤',
       stage: 'Stage', cell_status: 'Cell Status',
     };
     for (const [k, lbl] of Object.entries(map)) {
