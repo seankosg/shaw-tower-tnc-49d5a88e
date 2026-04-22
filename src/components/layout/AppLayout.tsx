@@ -7,6 +7,7 @@ import { useImport } from '@/contexts/ImportContext';
 import { Progress } from '@/components/ui/progress';
 import { Loader2 } from 'lucide-react';
 import { APP_NAME } from '@/lib/constants';
+import { AppUpdateBanner } from './AppUpdateBanner';
 
 const ROUTE_TITLES: Array<{ match: (p: string) => boolean; label: string }> = [
   { match: (p) => p === '/dashboard', label: 'Dashboard' },
@@ -87,6 +88,7 @@ export function AppLayout() {
             <GlobalImportIndicator />
           </div>
         </header>
+        <AppUpdateBanner />
         <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4">
           <Outlet />
         </main>
