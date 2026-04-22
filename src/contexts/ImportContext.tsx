@@ -259,6 +259,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
 
       if (existing) {
         const updates: Record<string, any> = {};
+        const rowTeamValue = item.detectedImportType === 'standard' ? row.team : (item.team || null);
         const fields: [string, string | null][] = [
           ['description', row.description], ['equipment', row.equipment], ['level', row.level],
           ['t1_planned_date', row.t1_planned_date], ['t1_status', row.t1_status],
@@ -280,6 +281,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           const resolved = resolveValue(val, null);
           if (resolved !== undefined) updates[field] = resolved;
         }
+        const resolvedTeam = resolveValue(rowTeamValue, null);
+        if (resolvedTeam !== undefined) updates.team = resolvedTeam;
 
         if (Object.keys(updates).length === 0) {
           res.skipped++;
@@ -295,7 +298,6 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         updates.source_upload_id = uploadId;
         updates.row_version = (existing.row_version || 1) + 1;
         updates.subtest_id = row.subtest_id;
-        if (item.team) updates.team = item.team;
 
         // Auto-fill t1/t2 status to 'Planned' when planned_date exists but status is null
         const finalT1PlannedForAutoFill = updates.t1_planned_date !== undefined ? updates.t1_planned_date : null;
@@ -359,6 +361,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         const insertT1Actual = insertT1Status === 'Done' ? autoFillDate : null;
         const insertT2Actual = insertT2Status === 'Done' ? autoFillDate : null;
         const insertPredActual = insertPredStatus === 'Done' ? autoFillDate : (row.pred_actual_date ?? null);
+        const rowTeamValue = item.detectedImportType === 'standard' ? row.team : (item.team || null);
+        const resolvedTeam = resolveValue(rowTeamValue, null);
         const { error } = await supabase.from('subtests').insert({
           project_id: projectId!, system_id: systemId,
           item_no: row.item_no, mos_code: row.mos_code, subtest_id: row.subtest_id,
@@ -380,7 +384,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           remarks: row.remarks,
           punchlist_comments: row.punchlist_comments,
           data_source_type: dataSourceType as any, source_upload_id: uploadId,
-          team: (item.team || null) as any,
+          team: (resolvedTeam === undefined ? null : resolvedTeam) as any,
         } as any);
         if (error) {
           res.rejected++;
