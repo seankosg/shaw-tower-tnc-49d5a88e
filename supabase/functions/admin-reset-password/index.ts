@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const DEFAULT_PASSWORD = 'SHAW00';
+const DEFAULT_PASSWORD = 'Shaw@2026!';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -34,6 +34,9 @@ Deno.serve(async (req) => {
 
     const body = (await req.json()) as { user_id: string };
     if (!body.user_id) return json({ error: 'user_id required' }, 400);
+
+    const { data: targetUser, error: targetErr } = await admin.auth.admin.getUserById(body.user_id);
+    if (targetErr || !targetUser?.user) return json({ error: targetErr?.message ?? 'Target user not found' }, 404);
 
     const { error: updErr } = await admin.auth.admin.updateUserById(body.user_id, {
       password: DEFAULT_PASSWORD,
