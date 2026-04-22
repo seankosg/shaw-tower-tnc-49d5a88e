@@ -589,6 +589,25 @@ function VarianceCell({ value }: { value: number }) {
   return <span className="text-destructive font-semibold tabular-nums">{value}</span>;
 }
 
+function HeaderTotalNumber({ value, tone }: { value: number; tone?: 'done' | 'remain' | 'delay' }) {
+  const cls = value === 0
+    ? 'text-muted-foreground/40'
+    : tone === 'done'
+      ? 'text-emerald-700 dark:text-emerald-400'
+      : tone === 'remain'
+        ? 'text-amber-700 dark:text-amber-400'
+        : tone === 'delay'
+          ? 'text-destructive'
+          : 'text-foreground';
+  return <span className={cn('tabular-nums font-semibold', cls)}>{value.toLocaleString()}</span>;
+}
+
+function HeaderTotalVariance({ value }: { value: number }) {
+  if (value === 0) return <span className="tabular-nums font-semibold text-muted-foreground/40">0</span>;
+  if (value > 0) return <span className="tabular-nums font-semibold text-green-700 dark:text-green-400">+{value.toLocaleString()}</span>;
+  return <span className="tabular-nums font-semibold text-destructive">{value.toLocaleString()}</span>;
+}
+
 const STAGE_BADGE: Record<'pred' | 't1' | 't2', string> = {
   pred: 'bg-muted text-muted-foreground border-border',
   t1: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30',
@@ -783,6 +802,44 @@ function PlanActualTable({
     navigate(`/?${new URLSearchParams(params).toString()}`);
   };
 
+  const headerTotals = useMemo(() => {
+    const totals = rows.reduce((acc, row) => {
+      const stages = [row.predecessor, row.t1, row.t2];
+      stages.forEach((m) => {
+        acc.stageTotal += row.totalSubtests;
+        acc.stageDone += m.cumActual;
+        acc.cumPlan += m.cumPlan;
+        acc.cumActual += m.cumActual;
+        acc.dataDatePlan += m.dataDatePlan;
+        acc.dataDateActual += m.dataDateActual;
+        acc.dataDateDelay += m.dataDateDelay;
+        acc.todayPlan += m.todayPlan;
+        acc.todayActual += m.todayActual;
+        acc.todayDelay += m.todayDelay;
+      });
+      return acc;
+    }, {
+      stageTotal: 0,
+      stageDone: 0,
+      cumPlan: 0,
+      cumActual: 0,
+      dataDatePlan: 0,
+      dataDateActual: 0,
+      dataDateDelay: 0,
+      todayPlan: 0,
+      todayActual: 0,
+      todayDelay: 0,
+    });
+
+    return {
+      ...totals,
+      stageRemain: totals.stageTotal - totals.stageDone,
+      cumDelta: totals.cumActual - totals.cumPlan,
+      dataDateDelta: totals.dataDateActual - totals.dataDatePlan,
+      todayDelta: totals.todayActual - totals.todayPlan,
+    };
+  }, [rows]);
+
   type StageDef = {
     stage: 'pred' | 't1' | 't2';
     label: string;
@@ -816,33 +873,52 @@ function PlanActualTable({
             {colgroup}
         <TableHeader className="bg-background">
           <TableRow>
-            <TableHead rowSpan={2} className="align-bottom">
-              <div className="flex items-center gap-1.5">
+            <TableHead rowSpan={3} className="text-center align-middle">
+              <div className="flex items-center justify-center gap-1.5">
                 <span>{groupHeader}</span>
                 {systemFilter && <SystemHeaderFilter {...systemFilter} />}
               </div>
             </TableHead>
-            <TableHead rowSpan={2} className="align-bottom">Stage</TableHead>
-            <TableHead rowSpan={2} className="text-right align-bottom">Total</TableHead>
-            <TableHead rowSpan={2} className="text-right align-bottom">Done</TableHead>
-            <TableHead rowSpan={2} className="text-right align-bottom border-r border-border">Remain</TableHead>
+            <TableHead rowSpan={3} className="text-center align-middle">Stage</TableHead>
+            <TableHead className="text-center align-bottom">Total</TableHead>
+            <TableHead className="text-center align-bottom">Done</TableHead>
+            <TableHead className="text-center align-bottom border-r border-border">Remain</TableHead>
             <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">To Data Date (Cumulative)</TableHead>
             <TableHead colSpan={4} className="text-center border-l border-border bg-muted/30">Data Date ({dataDateLabel})</TableHead>
             <TableHead colSpan={4} className="text-center border-l border-border bg-muted/30">Today ({todayLabel})</TableHead>
-            <TableHead rowSpan={2} className="w-[140px] align-bottom border-l border-border">Progress</TableHead>
+            <TableHead rowSpan={3} className="w-[140px] text-center align-middle border-l border-border">Progress</TableHead>
           </TableRow>
           <TableRow>
-            <TableHead className="text-right border-l border-border text-[11px]">Plan</TableHead>
-            <TableHead className="text-right text-[11px]">Actual</TableHead>
-            <TableHead className="text-right text-[11px]">Δ</TableHead>
-            <TableHead className="text-right border-l border-border text-[11px]">Plan</TableHead>
-            <TableHead className="text-right text-[11px]">Actual</TableHead>
-            <TableHead className="text-right text-[11px]">Δ</TableHead>
-            <TableHead className="text-right text-[11px]">Delay</TableHead>
-            <TableHead className="text-right border-l border-border text-[11px]">Plan</TableHead>
-            <TableHead className="text-right text-[11px]">Actual</TableHead>
-            <TableHead className="text-right text-[11px]">Δ</TableHead>
-            <TableHead className="text-right text-[11px]">Delay</TableHead>
+            <TableHead className="text-center text-[11px] text-muted-foreground/70">All</TableHead>
+            <TableHead className="text-center text-[11px] text-muted-foreground/70">Done</TableHead>
+            <TableHead className="text-center border-r border-border text-[11px] text-muted-foreground/70">Open</TableHead>
+            <TableHead className="text-center border-l border-border text-[11px]">Plan</TableHead>
+            <TableHead className="text-center text-[11px]">Actual</TableHead>
+            <TableHead className="text-center text-[11px]">Δ</TableHead>
+            <TableHead className="text-center border-l border-border text-[11px]">Plan</TableHead>
+            <TableHead className="text-center text-[11px]">Actual</TableHead>
+            <TableHead className="text-center text-[11px]">Δ</TableHead>
+            <TableHead className="text-center text-[11px]">Delay</TableHead>
+            <TableHead className="text-center border-l border-border text-[11px]">Plan</TableHead>
+            <TableHead className="text-center text-[11px]">Actual</TableHead>
+            <TableHead className="text-center text-[11px]">Δ</TableHead>
+            <TableHead className="text-center text-[11px]">Delay</TableHead>
+          </TableRow>
+          <TableRow className="bg-muted/20 hover:bg-muted/20">
+            <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={headerTotals.stageTotal} /></TableHead>
+            <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={headerTotals.stageDone} tone="done" /></TableHead>
+            <TableHead className="h-8 px-2 text-center border-r border-border"><HeaderTotalNumber value={headerTotals.stageRemain} tone="remain" /></TableHead>
+            <TableHead className="h-8 px-2 text-center border-l border-border"><HeaderTotalNumber value={headerTotals.cumPlan} /></TableHead>
+            <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={headerTotals.cumActual} /></TableHead>
+            <TableHead className="h-8 px-2 text-center"><HeaderTotalVariance value={headerTotals.cumDelta} /></TableHead>
+            <TableHead className="h-8 px-2 text-center border-l border-border"><HeaderTotalNumber value={headerTotals.dataDatePlan} /></TableHead>
+            <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={headerTotals.dataDateActual} /></TableHead>
+            <TableHead className="h-8 px-2 text-center"><HeaderTotalVariance value={headerTotals.dataDateDelta} /></TableHead>
+            <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={headerTotals.dataDateDelay} tone="delay" /></TableHead>
+            <TableHead className="h-8 px-2 text-center border-l border-border"><HeaderTotalNumber value={headerTotals.todayPlan} /></TableHead>
+            <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={headerTotals.todayActual} /></TableHead>
+            <TableHead className="h-8 px-2 text-center"><HeaderTotalVariance value={headerTotals.todayDelta} /></TableHead>
+            <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={headerTotals.todayDelay} tone="delay" /></TableHead>
           </TableRow>
         </TableHeader>
           </Table>
