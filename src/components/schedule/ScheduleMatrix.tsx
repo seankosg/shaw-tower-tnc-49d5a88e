@@ -252,7 +252,7 @@ export function ScheduleMatrix({
                 {showStageRows && stagesToShow.map(st => {
                   const sr = row.stages[st];
                   return (
-                    <div key={`left-${row.key}-${st}`} className="flex border-b border-border bg-muted/20 text-[11px] h-10 hover:bg-accent/20">
+                    <div key={`left-${row.key}-${st}`} className="flex border-b border-border bg-muted/20 text-[11px] h-14 hover:bg-accent/20">
                       <div className="flex items-center gap-2 px-2 pl-8 text-muted-foreground" style={{ width: W_GROUP }}>
                         <span className={cn(
                           'inline-flex h-4 w-7 items-center justify-center rounded text-[9px] font-semibold',
