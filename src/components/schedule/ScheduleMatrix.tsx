@@ -118,7 +118,6 @@ export function ScheduleMatrix({
   };
 
   const timelineGridWidth = data.buckets.length * cellWidth;
-  const totalGridWidth = STICKY_LEFT_WIDTH + timelineGridWidth;
 
   const colVirtualizer = useVirtualizer({
     count: data.buckets.length,
@@ -144,62 +143,64 @@ export function ScheduleMatrix({
     <div className="rounded-md border border-border bg-card">
       {/* Sticky header section */}
       <div className="sticky top-0 z-30 bg-muted">
-        <div
-          ref={headerScrollRef}
-          className="overflow-x-auto overflow-y-hidden border-b border-border text-[11px] font-semibold [scrollbar-gutter:stable]"
-        >
-          <div className="flex flex-col" style={{ width: totalGridWidth, minWidth: totalGridWidth }}>
+        <div className="flex border-b border-border text-[11px] font-semibold">
+          <div className="z-40 flex shrink-0 flex-col bg-muted shadow-[2px_0_4px_-2px_hsl(var(--border))]" style={{ width: STICKY_LEFT_WIDTH }}>
             {/* Row 1: group headers */}
             <div className="flex border-b border-border">
-              <div className="sticky left-0 z-40 flex bg-muted">
-                <div className="flex items-center px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground" style={{ width: W_GROUP }}>
-                  {groupHeader}
-                </div>
-                <div
-                  className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide bg-muted text-foreground border-l border-border"
-                  style={{ width: W_TOTAL_BLOCK, minWidth: W_TOTAL_BLOCK }}
-                  title="Overall scope across full timeline"
-                >
-                  Total Scope
-                </div>
-                <div
-                  className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide bg-secondary/40 text-foreground border-l-2 border-border border-r border-border"
-                  style={{ width: W_PLAN_BLOCK, minWidth: W_PLAN_BLOCK }}
-                  title="Cumulative plan vs actual through today"
-                >
-                  Up to Today
-                </div>
+              <div className="flex items-center px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground" style={{ width: W_GROUP }}>
+                {groupHeader}
               </div>
               <div
-                className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground"
-                style={{ width: data.buckets.length * cellWidth, minWidth: data.buckets.length * cellWidth }}
+                className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide bg-muted text-foreground border-l border-border"
+                style={{ width: W_TOTAL_BLOCK, minWidth: W_TOTAL_BLOCK }}
+                title="Overall scope across full timeline"
               >
-                Timeline
+                Total Scope
+              </div>
+              <div
+                className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide bg-secondary/40 text-foreground border-l-2 border-border border-r border-border"
+                style={{ width: W_PLAN_BLOCK, minWidth: W_PLAN_BLOCK }}
+                title="Cumulative plan vs actual through today"
+              >
+                Up to Today
               </div>
             </div>
 
-            {/* Row 2: sub-column labels + bucket labels */}
+            {/* Row 2: sticky sub-column labels */}
             <div className="flex">
-              <div className="sticky left-0 z-40 flex bg-muted">
-                <div className="flex items-center px-3 py-2" style={{ width: W_GROUP }}></div>
-
-                {/* Total Scope block */}
-                <div className="flex bg-muted">
-                  <HeaderNum width={W_NUM} title={`${stageLabel} total scope`}>Total</HeaderNum>
-                  <HeaderNum width={W_NUM} title={`${stageLabel} done count`}>Done</HeaderNum>
-                  <HeaderNum width={W_PCT} title={totalBlockTitle}>%</HeaderNum>
-                  <HeaderNum width={W_NUM} title="Total - Done">Remain</HeaderNum>
-                </div>
-
-                {/* Up to Today block */}
-                <div className="flex bg-secondary/40">
-                  <HeaderNum width={W_NUM} borderLeft title="Plan up to today">Plan</HeaderNum>
-                  <HeaderNum width={W_NUM} title="Actual up to today">Actual</HeaderNum>
-                  <HeaderNum width={W_PCT} title="Actual / Plan up to today">%</HeaderNum>
-                  <HeaderNum width={W_NUM} borderRight title="Actual - Plan">Diff</HeaderNum>
-                </div>
+              <div className="flex items-center px-3 py-2" style={{ width: W_GROUP }}></div>
+              <div className="flex bg-muted">
+                <HeaderNum width={W_NUM} title={`${stageLabel} total scope`}>Total</HeaderNum>
+                <HeaderNum width={W_NUM} title={`${stageLabel} done count`}>Done</HeaderNum>
+                <HeaderNum width={W_PCT} title={totalBlockTitle}>%</HeaderNum>
+                <HeaderNum width={W_NUM} title="Total - Done">Remain</HeaderNum>
               </div>
-              {data.buckets.map((b, i) => {
+              <div className="flex bg-secondary/40">
+                <HeaderNum width={W_NUM} borderLeft title="Plan up to today">Plan</HeaderNum>
+                <HeaderNum width={W_NUM} title="Actual up to today">Actual</HeaderNum>
+                <HeaderNum width={W_PCT} title="Actual / Plan up to today">%</HeaderNum>
+                <HeaderNum width={W_NUM} borderRight title="Actual - Plan">Diff</HeaderNum>
+              </div>
+            </div>
+          </div>
+
+          <div
+            ref={headerScrollRef}
+            className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]"
+          >
+            <div className="flex flex-col" style={{ width: timelineGridWidth, minWidth: timelineGridWidth }}>
+              <div
+                className="flex items-center justify-center border-b border-border py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground"
+                style={{ width: timelineGridWidth, minWidth: timelineGridWidth }}
+              >
+                Timeline
+              </div>
+              <div className="flex">
+              <div
+                  className="flex"
+                  style={{ width: timelineGridWidth, minWidth: timelineGridWidth }}
+                >
+                {data.buckets.map((b, i) => {
                 const lbl = formatBucketLabel(b, bucket);
                 const isToday = i === todayBucketIdx;
                 return (
@@ -216,6 +217,8 @@ export function ScheduleMatrix({
                   </div>
                 );
               })}
+                </div>
+              </div>
             </div>
           </div>
         </div>
