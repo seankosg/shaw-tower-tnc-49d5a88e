@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { aggregatePlanActualByGroup, type SubtestForDashboard } from '@/lib/dashboard-utils';
+import { aggregateSchedule } from '@/lib/schedule-utils';
 import { getStagePlannedDate } from '@/lib/stage-metrics';
 
 const makeSubtest = (id: string, patch: Partial<SubtestForDashboard>): SubtestForDashboard => ({
@@ -79,5 +80,54 @@ describe('Plan vs Actual stage date aggregation', () => {
     expect(row.t1.todayPlan).toBe(0);
     expect(row.t1.todayDelay).toBe(0);
     expect(row.t1.dataDateDelay).toBe(2);
+  });
+
+  it('keeps Progress day buckets aligned with Dashboard daily Plan/Actual metrics', () => {
+    const subs = [
+      makeSubtest('t1-data-date-plan', { t1_planned_date: '2026-04-21' }),
+      makeSubtest('t1-data-date-actual', { t1_status: 'Done', t1_planned_date: '2026-04-20', t1_actual_date: '2026-04-21' }),
+      makeSubtest('t1-today-plan', { t1_planned_date: '2026-04-22' }),
+      makeSubtest('t1-today-actual', { t1_status: 'Done', t1_planned_date: '2026-04-19', t1_actual_date: '2026-04-22' }),
+    ];
+
+    const dashboard = aggregatePlanActualByGroup(subs, '2026-04-22', '2026-04-21', s => s.system_id, k => k)[0];
+    const progress = aggregateSchedule(subs, {
+      groupBy: 'system',
+      bucket: 'day',
+      stageFilter: 't1',
+      rangeStart: '2026-04-21',
+      rangeEnd: '2026-04-22',
+      asOfDate: '2026-04-21',
+      sysCodeById: new Map([['sys-a', 'sys-a']]),
+    }).rows[0];
+
+    expect(progress.stages.t1.cells[0].plan).toBe(dashboard.t1.dataDatePlan);
+    expect(progress.stages.t1.cells[0].actual).toBe(dashboard.t1.dataDateActual);
+    expect(progress.stages.t1.cells[1].plan).toBe(dashboard.t1.todayPlan);
+    expect(progress.stages.t1.cells[1].actual).toBe(dashboard.t1.todayActual);
+  });
+
+  it('uses Dashboard To Data Date semantics for Progress cumulative Plan/Actual and Done/Remain', () => {
+    const subs = [
+      makeSubtest('t1-past-actual', { t1_status: 'Done', t1_planned_date: '2026-04-19', t1_actual_date: '2026-04-20' }),
+      makeSubtest('t1-data-date-plan-open', { t1_status: 'Planned', t1_planned_date: '2026-04-21' }),
+      makeSubtest('t1-future-done', { t1_status: 'Done', t1_planned_date: '2026-04-22', t1_actual_date: '2026-04-22' }),
+    ];
+
+    const dashboard = aggregatePlanActualByGroup(subs, '2026-04-22', '2026-04-21', s => s.system_id, k => k)[0];
+    const progress = aggregateSchedule(subs, {
+      groupBy: 'system',
+      bucket: 'day',
+      stageFilter: 't1',
+      rangeStart: '2026-04-19',
+      rangeEnd: '2026-04-22',
+      asOfDate: '2026-04-21',
+      sysCodeById: new Map([['sys-a', 'sys-a']]),
+    }).rows[0];
+
+    expect(progress.cumPlan).toBe(dashboard.t1.cumPlan);
+    expect(progress.cumActual).toBe(dashboard.t1.cumActual);
+    expect(progress.doneCount).toBe(dashboard.t1.cumActual);
+    expect(progress.total - progress.doneCount).toBe(2);
   });
 });
