@@ -408,19 +408,19 @@ export default function DashboardPage() {
               <TabsTrigger value="team">By Team</TabsTrigger>
             </TabsList>
             <TabsContent value="system">
-              <PlanActualTable rows={bySystem} groupParam="system" groupHeader="System" today={today} yesterday={yesterday} navigate={navigate} keyToFilterValue={systemKeyResolver} />
+              <PlanActualTable rows={bySystem} groupParam="system" groupHeader="System" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} keyToFilterValue={systemKeyResolver} />
             </TabsContent>
             <TabsContent value="subcon">
-              <PlanActualTable rows={bySubcon} groupParam="subcon" groupHeader="Subcontractor" today={today} yesterday={yesterday} navigate={navigate} />
+              <PlanActualTable rows={bySubcon} groupParam="subcon" groupHeader="Subcontractor" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
             </TabsContent>
             <TabsContent value="subsub">
-              <PlanActualTable rows={bySubsub} groupParam="subsub" groupHeader="Sub-Sub" today={today} yesterday={yesterday} navigate={navigate} />
+              <PlanActualTable rows={bySubsub} groupParam="subsub" groupHeader="Sub-Sub" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
             </TabsContent>
             <TabsContent value="hdec">
-              <PlanActualTable rows={byHdec} groupParam="hdec_pic" groupHeader="HDEC PIC" today={today} yesterday={yesterday} navigate={navigate} />
+              <PlanActualTable rows={byHdec} groupParam="hdec_pic" groupHeader="HDEC PIC" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
             </TabsContent>
             <TabsContent value="team">
-              <PlanActualTable rows={byTeam} groupParam="team" groupHeader="Team" today={today} yesterday={yesterday} navigate={navigate} />
+              <PlanActualTable rows={byTeam} groupParam="team" groupHeader="Team" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
             </TabsContent>
           </Tabs>
         </CardContent>
