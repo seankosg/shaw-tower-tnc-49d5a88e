@@ -1,471 +1,438 @@
 
-# Revised Plan: Yesterday는 Data Date 기준, Today는 실제 오늘 기준 유지
+# 구현 계획: Raw Data 기반 공통 Stage Metrics 정합성 개선
 
-## 핵심 기준
+## 목표
 
-Dashboard의 Plan vs Actual 날짜 기준을 아래처럼 수정합니다.
+Dashboard, Schedule, Subtest List, Excel Export가 모두 동일한 Raw Data 필드를 기준으로 같은 숫자를 계산하도록 정리합니다.
 
 ```text
-Data Date = 최신 Import 자료의 Cutoff Date
+Raw Data Source of Truth:
+- pred_status / pred_planned_date / pred_actual_date / predecessor_status_raw
+- t1_status / t1_planned_date / t1_actual_date
+- t2_status / t2_planned_date / t2_actual_date
+```
+
+Delay 값은 DB에 별도 저장하지 않고, 공통 계산 함수에서 동일하게 계산합니다.
+
+```text
+Delay 조건:
+planned_date <= 기준일
+AND stage is not Done
+```
+
+기준일은 화면별로 명확히 분리합니다.
+
+```text
+Data Date = 최신 completed import의 data_date
 Today     = 실제 오늘 날짜
 ```
 
-예시:
-
-```text
-최신 Import Data Date = 2026-04-21
-실제 오늘 날짜         = 2026-04-22
-
-Dashboard 표시:
-Data Date (21-Apr)
-Today (22-Apr)
-```
-
-기존에 Cutoff Date 의미로 사용되던 `Yesterday` 명칭은 화면과 Excel에서 `Data Date`로 변경합니다.
-
 ---
 
-## 변경 목표
+## 1. 공통 Stage Metrics 유틸 생성
 
-현재 Dashboard의 `Yesterday`는 단순히 `Today - 1 day`로 계산되고 있습니다.
-
-이를 다음처럼 변경합니다.
+새 파일을 추가합니다.
 
 ```text
-기존:
-Yesterday = 실제 오늘 - 1일
-Today     = 실제 오늘
-
-변경:
-Data Date = 최신 완료 Import의 data_date
-Today     = 실제 오늘
+src/lib/stage-metrics.ts
 ```
 
-즉, 운영상 전일 마감 자료를 의미하는 부분은 더 이상 `Yesterday`라고 표시하지 않고, 명확하게 `Data Date`로 표시합니다.
+여기에 Pred / T1 / T2 공통 계산 로직을 모읍니다.
 
----
+구현할 주요 함수:
 
-## 1. Dashboard에서 최신 Import Data Date 조회
+```typescript
+type StageKey = 'pred' | 't1' | 't2';
 
-대상 파일:
-
-```text
-src/pages/DashboardPage.tsx
+getStageStatus(row, stage)
+getStagePlannedDate(row, stage)
+getStageActualDate(row, stage)
+isStageDone(row, stage)
+isStagePlannedOn(row, stage, date)
+isStageActualOn(row, stage, date)
+isStagePlannedUpTo(row, stage, asOfDate)
+isStageActualUpTo(row, stage, asOfDate)
+isStageDelayedAsOf(row, stage, asOfDate)
+getStageDelayDaysAsOf(row, stage, asOfDate)
+getAnyStageDelayedAsOf(row, stages, asOfDate)
+getMaxDelayDaysAsOf(row, stages, asOfDate)
 ```
 
-Dashboard 로딩 시 `upload_batches`에서 최신 완료 import의 `data_date`를 조회합니다.
-
-조회 기준:
+Predecessor Done 판단도 여기로 통합합니다.
 
 ```text
-status = completed
-data_date is not null
-order by data_date desc, uploaded_at desc
-limit 1
+Pred Done 판단:
+1. pred_status === 'Done'이면 Done
+2. pred_status가 null이고 predecessor_status_raw가 Done / Complete / 완료 계열이면 Done
+3. 그 외에는 Not Done
 ```
 
-조회 결과를 Plan vs Actual의 Data Date 기준일로 사용합니다.
+T1/T2는 status 기준으로 판단합니다.
 
 ```text
-dataDate = latest completed import data_date
-today    = todayIso()
-```
-
-예시:
-
-```text
-dataDate = 2026-04-21
-today    = 2026-04-22
-```
-
-만약 완료된 import의 `data_date`가 없으면 기존 방식으로 fallback합니다.
-
-```text
-dataDate = today - 1 day
+T1 Done = t1_status === 'Done'
+T2 Done = t2_status === 'Done'
 ```
 
 ---
 
-## 2. Plan vs Actual 계산 기준 변경
+## 2. Dashboard 집계 로직을 공통 함수로 변경
 
-대상 파일:
+수정 대상:
 
 ```text
 src/lib/dashboard-utils.ts
-```
-
-현재 `aggregatePlanActualByGroup()` 함수는 `today`만 받고 내부에서 `yesterdayIso(today)`를 계산합니다.
-
-기존 구조:
-
-```typescript
-aggregatePlanActualByGroup(subs, today, groupKey, groupLabel)
-```
-
-변경 후 구조:
-
-```typescript
-aggregatePlanActualByGroup(subs, today, dataDate, groupKey, groupLabel)
-```
-
-날짜 의미:
-
-```text
-dataDate = 최신 Import Data Date
-today    = 실제 오늘 날짜
-```
-
-계산 기준:
-
-```text
-To Data Date Cumulative:
-planned_date <= dataDate
-actual_date  <= dataDate
-
-Data Date:
-planned_date == dataDate
-actual_date  == dataDate
-
-Today:
-planned_date == today
-actual_date  == today
-```
-
----
-
-## 3. 화면 명칭 변경: Yesterday → Data Date
-
-대상 파일:
-
-```text
 src/pages/DashboardPage.tsx
-src/lib/dashboard-excel-export.ts
 ```
 
-Cutoff Date 의미로 쓰이던 `Yesterday` 명칭은 모두 `Data Date`로 변경합니다.
-
-기존 표시:
+현재 Dashboard 내부에 흩어져 있는 아래 로직을 공통 함수로 교체합니다.
 
 ```text
-To-Yesterday (Cumulative)
-Yesterday
-Today
+- Overdue 판단
+- At-Risk 판단
+- Max delay days 판단
+- Pred Done 판단
+- Pred / T1 / T2 Plan <= Data Date
+- Pred / T1 / T2 Actual <= Data Date
+- Pred / T1 / T2 Delay as of Data Date
+- Pred / T1 / T2 Delay as of Today
 ```
 
-변경 표시:
+변경 후 Dashboard 기준은 그대로 유지합니다.
 
 ```text
-To Data Date (Cumulative)
-Data Date (21-Apr)
-Today (22-Apr)
+Plan vs Actual Breakdown:
+- To Data Date = planned_date <= Data Date / actual_date <= Data Date
+- Data Date row = planned_date === Data Date / actual_date === Data Date
+- Data Date Delay = planned_date <= Data Date AND not Done
+- Today row = planned_date === Today / actual_date === Today
+- Today Delay = planned_date <= Today AND not Done
 ```
 
-날짜 표기는 `dd-mmm` 형식으로 표시합니다.
+단, 모든 판단은 `stage-metrics.ts`를 사용하게 합니다.
 
-예시:
+---
+
+## 3. Schedule 집계 로직을 공통 함수로 변경
+
+수정 대상:
 
 ```text
-2026-04-21 → 21-Apr
-2026-04-22 → 22-Apr
+src/lib/schedule-utils.ts
+src/pages/SchedulePage.tsx
+src/components/schedule/ScheduleMatrix.tsx
 ```
 
-이미 존재하는 `formatDdMmm()` 유틸리티를 활용합니다.
+현재 Schedule의 `isPredDone`, `getStageDates`, cumulative plan/actual 계산을 공통 함수 기반으로 변경합니다.
 
-대상 파일:
+Schedule에는 As-of 기준 선택을 추가합니다.
 
 ```text
-src/lib/format.ts
+Cumulative 기준:
+[Data Date] [Today]
+```
+
+기본값은 Today로 유지합니다.
+
+```text
+기본 Schedule:
+As-of Today
+
+Dashboard와 비교할 때:
+As-of Data Date 선택 가능
+```
+
+Schedule Matrix의 좌측 header도 동적으로 바꿉니다.
+
+```text
+Today 선택 시:
+Up to Today
+
+Data Date 선택 시:
+Up to Data Date
+```
+
+상단 설명도 명확히 표시합니다.
+
+```text
+Data Date: 21-Apr · Today: 22-Apr · Cumulative: Today
 ```
 
 ---
 
-## 4. Predecessor 지연 누락 문제 해결
+## 4. Schedule KPI와 Matrix 기준 통일
 
-사용자가 언급한 항목들은 Raw Data상 Predecessor stage에서 지연 상태입니다.
+수정 대상:
 
 ```text
-Elec-019-MST-048-2
-Elec-019-MST-062-2
-Elec-037
-Elec-038
-Elec-039
-Elec-040
+src/pages/SchedulePage.tsx
+src/lib/schedule-utils.ts
 ```
 
-이 항목들은 계획일이 Data Date보다 이전인데 아직 완료되지 않았기 때문에, 단순히 `planned_date == Data Date` 또는 `planned_date == Today` 조건으로는 Plan vs Actual에 표시되지 않을 수 있습니다.
+현재 Schedule Matrix는 `stageFilter = all`일 때 Pred + T1 + T2를 포함하지만, 상단 KPI 일부는 T1/T2만 계산하고 있습니다.
 
-이를 해결하기 위해 Plan vs Actual에 Delay / Backlog 값을 추가합니다.
-
-Predecessor Delay 조건:
+이를 Matrix와 같은 기준으로 통일합니다.
 
 ```text
-pred_planned_date <= 기준일
-AND pred_status != Done
+stageFilter = All:
+- KPI = Pred + T1 + T2 기준
+
+stageFilter = Pred:
+- KPI = Pred 기준
+
+stageFilter = T1:
+- KPI = T1 기준
+
+stageFilter = T2:
+- KPI = T2 기준
 ```
 
-Data Date Delay:
+다만 최종 완료율은 기존 의미가 중요하므로 별도 명칭으로 유지합니다.
 
 ```text
-pred_planned_date <= dataDate
-AND pred_status != Done
-```
+Overall Completion:
+T2 Done / Total Subtests
 
-Today Delay:
-
-```text
-pred_planned_date <= today
-AND pred_status != Done
-```
-
-예시:
-
-```text
-Data Date = 2026-04-21
-Today     = 2026-04-22
-
-pred_planned_date = 2026-04-19
-pred_status       = Planned
-```
-
-결과:
-
-```text
-Data Date Delay에 포함
-Today Delay에도 포함
+Stage Progress:
+현재 선택된 stageFilter 기준
 ```
 
 ---
 
-## 5. T1 / T2 Delay도 동일 기준 적용
+## 5. Subtest List URL 필터 정합성 개선
 
-Predecessor뿐 아니라 T1, T2도 동일한 방식으로 Delay를 계산합니다.
-
-T1 Delay:
+수정 대상:
 
 ```text
-t1_planned_date <= 기준일
-AND t1_status != Done
-```
-
-T2 Delay:
-
-```text
-t2_planned_date <= 기준일
-AND t2_status != Done
-```
-
-이렇게 하면 각 stage별 누적 지연 물량을 Plan vs Actual에서 확인할 수 있습니다.
-
----
-
-## 6. Plan vs Actual 컬럼 구성
-
-대상 파일:
-
-```text
-src/pages/DashboardPage.tsx
-src/lib/dashboard-utils.ts
-```
-
-기존 Plan / Actual / Δ 값은 유지하고, Data Date와 Today 영역에 Delay를 추가합니다.
-
-권장 구조:
-
-```text
-To Data Date (Cumulative)
-Plan | Actual | Δ
-
-Data Date (21-Apr)
-Plan | Actual | Δ | Delay
-
-Today (22-Apr)
-Plan | Actual | Δ | Delay
-```
-
-화면 폭이 너무 넓어지는 경우에는 `Δ` 옆에 Delay badge로 표시합니다.
-
-예시:
-
-```text
-Δ -2
-Delay 6
-```
-
-우선순위:
-
-```text
-1. 기존 Plan / Actual / Δ 값 유지
-2. 지연 backlog는 Delay로 별도 표시
-3. 화면 폭이 과도하게 넓어지지 않도록 compact layout 적용
-```
-
----
-
-## 7. Delay 클릭 시 Subtest List 필터 연결
-
-대상 파일:
-
-```text
-src/pages/DashboardPage.tsx
 src/pages/SubtestList.tsx
 ```
 
-Delay 숫자를 클릭하면 해당 기준일의 지연 항목만 Subtest List에서 확인할 수 있게 합니다.
+Dashboard / Schedule 클릭 시 Subtest List가 같은 row count를 보여야 하므로 URL 필터 판단도 공통 함수로 변경합니다.
 
-추가할 URL 필터:
+대상 필터:
 
 ```text
+status=overdue
+status=at_risk
+
 pred_delay_asof
 t1_delay_asof
 t2_delay_asof
+
+date_from
+date_to
+date_field
+stage
+cell_status
 ```
 
-Predecessor Data Date Delay 클릭 시:
+변경 후 예시:
 
 ```text
-/subtests?pred_delay_asof=2026-04-21
+Dashboard Pred Today Delay = 18
+→ 클릭 URL: ?pred_delay_asof=2026-04-22
+→ Subtest List count = 18
 ```
 
-필터 조건:
-
 ```text
-pred_planned_date <= 2026-04-21
-AND pred_status != Done
+Schedule Pred Plan on 2026-04-22 = N
+→ 클릭 URL: ?date_from=2026-04-22&date_to=2026-04-22&date_field=planned&stage=pred
+→ Subtest List count = N
 ```
 
-Predecessor Today Delay 클릭 시:
+Subtest List 상단 active filter label도 기준을 더 명확히 표시합니다.
 
 ```text
-/subtests?pred_delay_asof=2026-04-22
-```
-
-필터 조건:
-
-```text
-pred_planned_date <= 2026-04-22
-AND pred_status != Done
-```
-
-T1, T2도 동일하게 연결합니다.
-
-```text
-/subtests?t1_delay_asof=2026-04-21
-/subtests?t2_delay_asof=2026-04-21
+Pred Delay ≤ 22-Apr
+T1 Delay ≤ 21-Apr
+Planned 22-Apr
+Actual 22-Apr
 ```
 
 ---
 
-## 8. Excel Export 반영
+## 6. Stage Progress 표시 로직 통합
 
-대상 파일:
+수정 대상:
+
+```text
+src/components/shared/StageProgress.tsx
+```
+
+현재 StageProgress 내부에도 Pred Done / Delay 판단이 별도로 있습니다.
+
+이를 `stage-metrics.ts` 기반으로 변경합니다.
+
+표시 기준:
+
+```text
+Done:
+stage is Done
+
+Delay:
+planned_date < Today AND not Done
+
+WIP:
+status = WIP AND not Delay
+
+Planned:
+status = Planned AND not Delay
+
+Empty:
+status/date 없음
+```
+
+이렇게 하면 Subtest List의 progress pip와 Dashboard/Schedule의 delay 판단이 동일해집니다.
+
+---
+
+## 7. Import 로직 보강
+
+수정 대상:
+
+```text
+src/contexts/ImportContext.tsx
+```
+
+기존 row 업데이트 시 status 자동 보완에 필요한 planned_date 조회가 일부 누락되어 있습니다.
+
+현재 조회:
+
+```text
+t1_status
+t1_actual_date
+t2_status
+t2_actual_date
+pred_status
+pred_actual_date
+```
+
+추가 조회:
+
+```text
+t1_planned_date
+t2_planned_date
+pred_planned_date
+```
+
+이렇게 하면 기존 row에 planned_date가 있는데 status가 비어 있는 경우에도 일관되게 Planned로 보완됩니다.
+
+```text
+planned_date exists
+AND status is null
+→ status = Planned
+```
+
+Done import 시 actual_date 자동 입력은 유지합니다.
+
+```text
+status = Done
+AND actual_date is empty
+→ actual_date = Data Date
+```
+
+---
+
+## 8. Excel Export 정합성 반영
+
+수정 대상:
 
 ```text
 src/lib/dashboard-excel-export.ts
+src/lib/schedule-excel-export.ts
 ```
 
-Excel Export도 Dashboard와 동일한 날짜 기준 및 명칭을 사용합니다.
-
-기존 meta 예시:
+Dashboard Excel은 Dashboard 화면과 같은 공통 계산 결과를 그대로 export합니다.
 
 ```text
-Base date: 2026-04-22 · Yesterday: 2026-04-21
+Dashboard Excel:
+- To Data Date
+- Data Date
+- Today
+- Data Date Delay
+- Today Delay
 ```
 
-변경 meta 예시:
+Schedule Excel은 Schedule 화면의 As-of 선택을 반영합니다.
 
 ```text
-Today: 2026-04-22 · Data Date: 2026-04-21
+Today 선택 시:
+Up to Today
+
+Data Date 선택 시:
+Up to Data Date
 ```
 
-기존 컬럼:
+Excel meta row에도 기준일을 표시합니다.
 
 ```text
-To-Yesterday (Cumulative)
-Yesterday
-Today
-```
-
-변경 컬럼:
-
-```text
-To Data Date (Cumulative)
-Data Date (21-Apr)
-Today (22-Apr)
-```
-
-Excel에도 Delay 값을 포함합니다.
-
-```text
-Data Date Delay
-Today Delay
+Data Date: 2026-04-21 · Today: 2026-04-22 · Cumulative: Data Date
 ```
 
 ---
 
-## 예상 결과
+## 9. DB 변경 여부
 
-수정 후 Dashboard는 다음 기준으로 동작합니다.
-
-```text
-Data Date = 최신 Import data_date
-Today     = 실제 오늘 날짜
-```
-
-예시:
+이번 최종권장안에서는 DB schema 변경을 하지 않습니다.
 
 ```text
-Latest Import Data Date = 2026-04-21
-Actual Today            = 2026-04-22
+추가 컬럼 없음
+마이그레이션 없음
 ```
 
-Plan vs Actual 의미:
+이유:
 
 ```text
-To Data Date:
-2026-04-21까지의 누적 계획 / 실적
-
-Data Date (21-Apr):
-2026-04-21 Import 자료 기준 당일 계획 / 실적
-
-Today (22-Apr):
-2026-04-22 실제 오늘 계획 / 실적
+- Today 기준 delay는 매일 바뀌므로 DB 저장 시 stale data 위험이 있음
+- 수동 수정 / Import / Mobile Update 등 모든 entry point에서 재계산해야 하는 부담이 큼
+- planned/status/actual Raw Data만 source of truth로 유지하는 것이 가장 안전함
 ```
 
-지연 항목 의미:
-
-```text
-Data Date Delay:
-planned_date <= 2026-04-21
-AND status != Done
-
-Today Delay:
-planned_date <= 2026-04-22
-AND status != Done
-```
-
-따라서 사용자가 언급한 Predecessor 지연 항목들은 Plan vs Actual에서 누락되지 않고 Delay로 확인됩니다.
+다만 Import 당시 snapshot이 필요해지는 경우에는 별도 2단계로 검토할 수 있습니다.
 
 ---
 
-## 검증 항목
+## 10. 검증 항목
 
 구현 후 아래를 확인합니다.
 
 ```text
-- Dashboard의 Data Date가 최신 completed import의 data_date를 사용하는지
-- Dashboard의 Today가 실제 오늘 날짜를 사용하는지
-- Cutoff Date 의미의 Yesterday 명칭이 Data Date로 변경되었는지
-- Data Date 헤더에 dd-mmm 형식 날짜가 괄호로 표시되는지
-- Today 헤더에도 dd-mmm 형식 날짜가 괄호로 표시되는지
-- To-Yesterday가 To Data Date로 변경되었는지
-- Today 계획 KPI가 기존처럼 실제 오늘 기준으로 유지되는지
-- Elec-019-MST-048-2가 Pred Data Date Delay에 포함되는지
-- Elec-019-MST-062-2가 Pred Data Date Delay에 포함되는지
-- Elec-037, Elec-038, Elec-039, Elec-040이 Pred Data Date Delay에 포함되는지
-- 동일 항목들이 Pred Today Delay에도 포함되는지
-- Delay 클릭 시 Subtest List가 정확히 필터링되는지
-- T1 / T2 Delay도 동일한 기준으로 동작하는지
-- Excel Export의 날짜 기준, 명칭, Delay 값이 Dashboard와 일치하는지
-- Import 기록이 없는 경우 fallback이 정상 동작하는지
-- 빌드가 정상 통과하는지
+1. Dashboard
+- Pred / T1 / T2 To Data Date 숫자 확인
+- Pred / T1 / T2 Data Date Delay 숫자 확인
+- Pred / T1 / T2 Today Delay 숫자 확인
+- Top Overdue가 공통 로직 기준으로 계산되는지 확인
+
+2. Dashboard 클릭
+- Pred Data Date Delay 클릭 row count 일치
+- T1 Data Date Delay 클릭 row count 일치
+- T2 Data Date Delay 클릭 row count 일치
+- Pred Today Delay 클릭 row count 일치
+- T1 Today Delay 클릭 row count 일치
+- T2 Today Delay 클릭 row count 일치
+
+3. Schedule
+- As-of Today 기본값 확인
+- As-of Data Date 선택 시 Dashboard To Data Date와 비교 가능
+- Matrix의 Up to Today / Up to Data Date label 확인
+- stageFilter All / Pred / T1 / T2별 KPI와 Matrix 총계 일치
+
+4. Subtest List
+- Dashboard에서 넘어온 delay filter count 일치
+- Schedule cell 클릭 filter count 일치
+- Progress pip의 Delay/Done 표시가 Dashboard/Schedule 기준과 일치
+
+5. Import
+- 기존 row 업데이트 시 planned_date 기반 Planned 자동 보완 확인
+- Done status import 시 actual_date = Data Date 자동 입력 확인
+- Pred / T1 / T2 모두 동일하게 동작 확인
+
+6. Excel Export
+- Dashboard Excel 숫자 = Dashboard 화면 숫자
+- Schedule Excel 숫자 = Schedule 화면 숫자
+- Data Date / Today / As-of label 일치
+
+7. Build
+- TypeScript build 통과
 ```
+
