@@ -51,9 +51,21 @@ const S_GROUP_NAME = {
 const S_TOTAL = {
   font: { name: FONT, sz: 10, bold: true, color: { rgb: 'FF111827' } },
   fill: { fgColor: { rgb: 'FFF8FAFC' } },
-  alignment: { vertical: 'top', horizontal: 'center' },
+  alignment: { vertical: 'center', horizontal: 'right' },
   border: BORDERS_ALL,
 } as const;
+
+const summaryStyle = (v: number, tone?: 'done' | 'remain') => ({
+  font: {
+    name: FONT,
+    sz: 10,
+    bold: true,
+    color: { rgb: v === 0 ? 'FFD1D5DB' : tone === 'done' ? 'FF047857' : tone === 'remain' ? 'FFB45309' : 'FF111827' },
+  },
+  fill: { fgColor: { rgb: 'FFF8FAFC' } },
+  alignment: { vertical: 'center', horizontal: 'right' },
+  border: BORDERS_ALL,
+});
 
 const S_NUM = {
   font: { name: FONT, sz: 10, color: { rgb: 'FF111827' } },
@@ -117,7 +129,7 @@ export function exportPlanActualToExcel(
 
   const dataDateLabel = formatDdMmm(dataDate);
   const todayLabel = formatDdMmm(today);
-  const COL_COUNT = 15; // group, total, stage, cum(3), data date(4), today(4), progress%
+  const COL_COUNT = 17; // group, stage, total/done/remain, cum(3), data date(4), today(4), progress%
   const ws: XLSX.WorkSheet = {};
 
   // ── Row 0: Title ──
@@ -132,13 +144,13 @@ export function exportPlanActualToExcel(
 
   // ── Row 3: Group header (merged) ──
   const HR = 3;
-  const hdrLabels = [groupHeader, 'Total\nSubtests', 'Stage',
+  const hdrLabels = [groupHeader, 'Stage', 'Total', 'Done', 'Remain',
     'To Data Date (Cumulative)', '', '', `Data Date (${dataDateLabel})`, '', '', '', `Today (${todayLabel})`, '', '', '', 'Progress'];
   hdrLabels.forEach((l, c) => set(ws, HR, c, l, S_GROUP_HDR));
 
   // ── Row 4: Sub header ──
   const SHR = 4;
-  const subLabels = ['', '', '', 'Plan', 'Actual', 'Δ', 'Plan', 'Actual', 'Δ', 'Delay', 'Plan', 'Actual', 'Δ', 'Delay', '%'];
+  const subLabels = ['', '', '', '', '', 'Plan', 'Actual', 'Δ', 'Plan', 'Actual', 'Δ', 'Delay', 'Plan', 'Actual', 'Δ', 'Delay', '%'];
   subLabels.forEach((l, c) => set(ws, SHR, c, l, S_SUB_HDR));
 
   // Merges for header rows
