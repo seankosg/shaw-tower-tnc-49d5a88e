@@ -299,7 +299,7 @@ export default function ImportLogsPage() {
                       <TableRow>
                         {stageGroups.flatMap(stage => ['Old date', 'New date', 'Diff', 'Prev.Gap', 'Cur.Gap'].map(label => (
                           <TableHead key={`${stage}-${label}`} className="text-xs whitespace-nowrap border-l first:border-l-0">{label}</TableHead>
-                        ))}
+                        )))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
