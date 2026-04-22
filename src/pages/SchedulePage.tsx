@@ -15,7 +15,9 @@ import { Progress } from '@/components/ui/progress';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { todayIso, type SubtestForDashboard } from '@/lib/dashboard-utils';
+import { todayIso, yesterdayIso, type SubtestForDashboard } from '@/lib/dashboard-utils';
+import { formatDdMmm } from '@/lib/format';
+import { getStageKeys, isStageDelayedAsOf, isStageDone, isStagePlannedOn } from '@/lib/stage-metrics';
 import {
   aggregateSchedule, findCritical, findLaggingGroups, addDays,
   type ScheduleBucket, type ScheduleGroupBy, type ScheduleStageFilter,
@@ -41,6 +43,8 @@ export default function SchedulePage() {
   const [groupBy, setGroupBy] = useState<ScheduleGroupBy>('system');
   const [bucket, setBucket] = useState<ScheduleBucket>('day');
   const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>('all');
+  const [asOfMode, setAsOfMode] = useState<'dataDate' | 'today'>('today');
+  const [dataDate, setDataDate] = useState(() => yesterdayIso(today));
   const [teamFilter, setTeamFilter] = useState<string>('all');
   const [rangeDays, setRangeDays] = useState<number>(60);
   const [hidePast, setHidePast] = useState<boolean>(() => {
@@ -79,11 +83,23 @@ export default function SchedulePage() {
         if (data.length < PAGE) break;
         from += PAGE;
       }
-      const sysRes = await supabase.from('system_master').select('id, system_code').eq('is_active', true);
+      const [sysRes, latestImport] = await Promise.all([
+        supabase.from('system_master').select('id, system_code').eq('is_active', true),
+        supabase
+          .from('upload_batches')
+          .select('data_date')
+          .eq('status', 'completed')
+          .not('data_date', 'is', null)
+          .order('data_date', { ascending: false })
+          .order('uploaded_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
       if (!cancelled) {
         const sysList = sysRes.data ?? [];
         setSubtests(all);
         setSystems(sysList);
+        if (latestImport.data?.data_date) setDataDate(latestImport.data.data_date);
         setScheduleCache({ subtests: all, systems: sysList });
         setLoading(false);
       }
@@ -112,12 +128,15 @@ export default function SchedulePage() {
     [subtests, teamFilter],
   );
 
+  const asOfDate = asOfMode === 'dataDate' ? dataDate : today;
+  const asOfLabel = asOfMode === 'dataDate' ? 'Data Date' : 'Today';
+
   const aggregate = useMemo(
     () => aggregateSchedule(filteredSubtests, {
       groupBy, bucket, stageFilter,
-      rangeStart, rangeEnd, today, sysCodeById,
+      rangeStart, rangeEnd, asOfDate, sysCodeById,
     }),
-    [filteredSubtests, groupBy, bucket, stageFilter, rangeStart, rangeEnd, today, sysCodeById],
+    [filteredSubtests, groupBy, bucket, stageFilter, rangeStart, rangeEnd, asOfDate, sysCodeById],
   );
 
   const critical = useMemo(
@@ -152,27 +171,30 @@ export default function SchedulePage() {
       cumActual += r.cumActual;
     }
     const variance = cumPlan ? ((cumActual - cumPlan) / cumPlan) * 100 : 0;
-    // Done-vs-Total progress across all T1+T2 stages
+    const stages = getStageKeys(stageFilter);
     let totalStages = 0, doneStages = 0;
     for (const s of filteredSubtests) {
-      totalStages += 2;
-      if (s.t1_status === 'Done') doneStages++;
-      if (s.t2_status === 'Done') doneStages++;
+      totalStages += stages.length;
+      for (const st of stages) {
+        if (isStageDone(s, st)) doneStages++;
+      }
     }
     const progressPct = totalStages ? (doneStages / totalStages) * 100 : 0;
-    const overdue = filteredSubtests.filter(s =>
-      (s.t1_planned_date && s.t1_planned_date < today && s.t1_status !== 'Done') ||
-      (s.t2_planned_date && s.t2_planned_date < today && s.t2_status !== 'Done')
-    ).length;
-    // Upcoming 7-day plan: count planned T1/T2 dates in [today, today+7]
+    const overdue = filteredSubtests.reduce(
+      (count, s) => count + stages.filter(st => isStageDelayedAsOf(s, st, asOfDate)).length,
+      0,
+    );
     const upcomingEnd = addDays(today, 7);
     let upcoming7Plan = 0;
     for (const s of filteredSubtests) {
-      if (s.t1_planned_date && s.t1_planned_date >= today && s.t1_planned_date <= upcomingEnd) upcoming7Plan++;
-      if (s.t2_planned_date && s.t2_planned_date >= today && s.t2_planned_date <= upcomingEnd) upcoming7Plan++;
+      for (const st of stages) {
+        for (let d = today; d <= upcomingEnd; d = addDays(d, 1)) {
+          if (isStagePlannedOn(s, st, d)) upcoming7Plan++;
+        }
+      }
     }
     return { cumPlan, cumActual, variance, progressPct, doneStages, totalStages, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
-  }, [aggregate.rows, today, filteredSubtests, critical.highRisk.length]);
+  }, [aggregate.rows, stageFilter, filteredSubtests, critical.highRisk.length, asOfDate, today]);
 
   // ───── Navigation handlers ─────
   const filterParamForGroup = (label: string): { key: string; value: string } => {
@@ -233,6 +255,8 @@ export default function SchedulePage() {
       stageFilter,
       bucket,
       today,
+      dataDate,
+      asOfLabel,
     });
     toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
   };
@@ -247,7 +271,7 @@ export default function SchedulePage() {
             Progress Status
           </h1>
           <p className="text-xs text-muted-foreground">
-            Track planned vs actual progress by {GROUP_LABELS[groupBy]} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Today {today}
+            Track planned vs actual progress by {GROUP_LABELS[groupBy]} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Data Date {formatDdMmm(dataDate)} · Today {formatDdMmm(today)} · Cumulative: {asOfLabel}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={handleScheduleExport}>
@@ -309,6 +333,15 @@ export default function SchedulePage() {
                 <TabsTrigger value="pred" className="h-6 px-2 text-xs">Pred</TabsTrigger>
                 <TabsTrigger value="t1" className="h-6 px-2 text-xs">T1</TabsTrigger>
                 <TabsTrigger value="t2" className="h-6 px-2 text-xs">T2</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </ToolbarGroup>
+
+          <ToolbarGroup label="As-of">
+            <Tabs value={asOfMode} onValueChange={(v) => setAsOfMode(v as 'dataDate' | 'today')}>
+              <TabsList className="h-8">
+                <TabsTrigger value="dataDate" className="h-6 px-2 text-xs">Data Date</TabsTrigger>
+                <TabsTrigger value="today" className="h-6 px-2 text-xs">Today</TabsTrigger>
               </TabsList>
             </Tabs>
           </ToolbarGroup>
@@ -390,7 +423,7 @@ export default function SchedulePage() {
           value={`${kpis.progressPct.toFixed(0)}%`}
           subValue={
             kpis.totalStages > 0
-              ? `${kpis.doneStages}/${kpis.totalStages} stages done${kpis.cumPlan > 0 ? ` · Var ${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%` : ''}`
+              ? `${kpis.doneStages}/${kpis.totalStages} stages done · Up to ${asOfLabel}${kpis.cumPlan > 0 ? ` · Var ${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%` : ''}`
               : '0/0'
           }
           accent={
@@ -402,18 +435,18 @@ export default function SchedulePage() {
           icon={<TrendingUp className="h-3.5 w-3.5" />}
         />
         <Kpi
-          label="Overdue"
+          label={`${asOfLabel} Delay`}
           value={kpis.overdue}
           accent={kpis.overdue > 0 ? 'short' : undefined}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
-          onClick={kpis.overdue > 0 ? () => navigate('/?overdue=1') : undefined}
+          onClick={kpis.overdue > 0 ? () => navigate(`/?status=overdue&as_of=${asOfDate}`) : undefined}
         />
         <Kpi
           label="Critical (≤7d)"
           value={kpis.criticalCount}
           accent={kpis.criticalCount > 0 ? 'short' : undefined}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
-          onClick={kpis.criticalCount > 0 ? () => navigate('/?at_risk=1') : undefined}
+          onClick={kpis.criticalCount > 0 ? () => navigate('/?status=at_risk&at_risk_days=7') : undefined}
         />
         <Kpi
           label="Upcoming 7d Plan"
@@ -449,6 +482,7 @@ export default function SchedulePage() {
               bucket={bucket}
               stageFilter={stageFilter}
               today={today}
+              asOfLabel={asOfLabel}
               groupHeader={GROUP_LABELS[groupBy]}
               onCellClick={handleCellClick}
             />

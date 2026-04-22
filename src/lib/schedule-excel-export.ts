@@ -116,13 +116,15 @@ export interface ScheduleExportOpts {
   stageFilter: ScheduleStageFilter;
   bucket: ScheduleBucket;
   today: string;
+  dataDate?: string;
+  asOfLabel?: string;
 }
 
 export function exportScheduleToExcel(
   data: AggregateResult,
   opts: ScheduleExportOpts,
 ): { rowCount: number; fileName: string } {
-  const { groupHeader, stageFilter, bucket, today } = opts;
+  const { groupHeader, stageFilter, bucket, today, dataDate, asOfLabel = 'Today' } = opts;
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -154,7 +156,7 @@ export function exportScheduleToExcel(
   merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: COL_COUNT - 1 } });
 
   // ── Row 1: Meta ──
-  set(ws, 1, 0, `Exported: ${ts}  ·  Stage: ${stageLabel}  ·  Bucket: ${bucket === 'day' ? 'Daily' : 'Weekly'}  ·  Today: ${today}`, S_META);
+  set(ws, 1, 0, `Exported: ${ts}  ·  Stage: ${stageLabel}  ·  Bucket: ${bucket === 'day' ? 'Daily' : 'Weekly'}  ·  Data Date: ${dataDate ?? '—'}  ·  Today: ${today}  ·  Cumulative: ${asOfLabel}`, S_META);
   for (let c = 1; c < COL_COUNT; c++) set(ws, 1, c, '', S_META);
   merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: COL_COUNT - 1 } });
 
@@ -167,8 +169,8 @@ export function exportScheduleToExcel(
   set(ws, HR, 1, 'Total Scope', S_GRP_HDR);
   for (let c = 2; c <= 4; c++) set(ws, HR, c, '', S_GRP_HDR);
   merges.push({ s: { r: HR, c: 1 }, e: { r: HR, c: 4 } });
-  // Up to Today: cols 5-8
-  set(ws, HR, 5, 'Up to Today', S_GRP_HDR);
+  // Up to selected as-of date: cols 5-8
+  set(ws, HR, 5, `Up to ${asOfLabel}`, S_GRP_HDR);
   for (let c = 6; c <= 8; c++) set(ws, HR, c, '', S_GRP_HDR);
   merges.push({ s: { r: HR, c: 5 }, e: { r: HR, c: 8 } });
   // Timeline header
@@ -211,7 +213,7 @@ export function exportScheduleToExcel(
     const remain = row.total - row.doneCount;
     setNum(ws, cr, 4, remain, varStyle(remain > 0 ? -1 : 0, { fill: { fgColor: { rgb: 'FFF8FAFC' } } }));
 
-    // Up to Today
+    // Up to selected as-of date
     setNum(ws, cr, 5, row.cumPlan, S_GROUP_NUM);
     setNum(ws, cr, 6, row.cumActual, S_GROUP_NUM);
     const cumPct = row.cumPlan > 0 ? Math.round((row.cumActual / row.cumPlan) * 100) : 0;

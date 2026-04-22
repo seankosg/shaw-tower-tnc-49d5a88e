@@ -1,4 +1,18 @@
 import type { TcStatus } from '@/types/enums';
+import {
+  daysBetween,
+  getMaxDelayDaysAsOf,
+  getStageActualDate,
+  getStageKeys,
+  getStagePlannedDate,
+  isStageActualOn,
+  isStageActualUpTo,
+  isStageDelayedAsOf,
+  isStageDone,
+  isStagePlannedOn,
+  isStagePlannedUpTo,
+  todayIso,
+} from '@/lib/stage-metrics';
 
 export interface SubtestForDashboard {
   id: string;
@@ -17,54 +31,37 @@ export interface SubtestForDashboard {
   pred_status?: TcStatus | null;
   pred_planned_date?: string | null;
   pred_actual_date?: string | null;
+  predecessor_status_raw?: string | null;
   team?: string | null;
 }
 
 export const NONE_LABEL = '(None)';
 
-export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-export function daysBetween(fromIso: string, toIso: string): number {
-  const a = new Date(fromIso + 'T00:00:00Z').getTime();
-  const b = new Date(toIso + 'T00:00:00Z').getTime();
-  return Math.round((b - a) / 86400000);
-}
+export { todayIso, daysBetween };
 
 /** True if subtest has any Pred/T1/T2 planned date past today and not Done. */
 export function isOverdue(s: SubtestForDashboard, today: string): boolean {
-  return (
-    (s.pred_planned_date != null && s.pred_planned_date < today && s.pred_status !== 'Done') ||
-    (s.t1_planned_date != null && s.t1_planned_date < today && s.t1_status !== 'Done') ||
-    (s.t2_planned_date != null && s.t2_planned_date < today && s.t2_status !== 'Done')
-  );
+  return getStageKeys('all').some(stage => {
+    const planned = getStagePlannedDate(s, stage);
+    return !!planned && planned < today && !isStageDone(s, stage);
+  });
 }
 
 /** True if not overdue but a planned date is within `thresholdDays` (inclusive). */
 export function isAtRisk(s: SubtestForDashboard, today: string, thresholdDays: number): boolean {
   if (isOverdue(s, today)) return false;
-  const within = (planned: string | null, status: TcStatus | null) => {
-    if (!planned || status === 'Done') return false;
+  const within = (stage: 'pred' | 't1' | 't2') => {
+    const planned = getStagePlannedDate(s, stage);
+    if (!planned || isStageDone(s, stage)) return false;
     const d = daysBetween(today, planned);
     return d >= 0 && d <= thresholdDays;
   };
-  return within(s.t1_planned_date, s.t1_status) || within(s.t2_planned_date, s.t2_status);
+  return within('pred') || within('t1') || within('t2');
 }
 
 /** Worst delay days across Pred/T1/T2 (positive = days late). */
 export function maxDelayDays(s: SubtestForDashboard, today: string): number {
-  let worst = 0;
-  if (s.pred_planned_date && s.pred_status !== 'Done' && s.pred_planned_date < today) {
-    worst = Math.max(worst, daysBetween(s.pred_planned_date, today));
-  }
-  if (s.t1_planned_date && s.t1_status !== 'Done' && s.t1_planned_date < today) {
-    worst = Math.max(worst, daysBetween(s.t1_planned_date, today));
-  }
-  if (s.t2_planned_date && s.t2_status !== 'Done' && s.t2_planned_date < today) {
-    worst = Math.max(worst, daysBetween(s.t2_planned_date, today));
-  }
-  return worst;
+  return getMaxDelayDaysAsOf(s, getStageKeys('all'), today);
 }
 
 export type TestStatus = 'done' | 'in_progress' | 'not_started';
@@ -194,41 +191,17 @@ export function aggregatePlanActualByGroup(
 
   const out: PlanActualRow[] = [];
   for (const [k, items] of buckets) {
-    const calc = (
-      plannedField: 't1_planned_date' | 't2_planned_date',
-      actualField: 't1_actual_date' | 't2_actual_date',
-      statusField: 't1_status' | 't2_status'
-    ): PlanActualMetrics => {
+    const calc = (stage: 'pred' | 't1' | 't2'): PlanActualMetrics => {
       let cumPlan = 0, cumActual = 0, yPlan = 0, yActual = 0, yDelay = 0, tPlan = 0, tActual = 0, tDelay = 0;
       for (const i of items) {
-        const p = i[plannedField];
-        const a = i[actualField];
-        const st = i[statusField];
-        if (p && p <= dataDate) cumPlan++;
-        if (a && a <= dataDate) cumActual++;
-        if (p === dataDate) yPlan++;
-        if (a === dataDate) yActual++;
-        if (p && p <= dataDate && st !== 'Done') yDelay++;
-        if (p === today) tPlan++;
-        if (a === today) tActual++;
-        if (p && p <= today && st !== 'Done') tDelay++;
-      }
-      return { cumPlan, cumActual, yesterdayPlan: yPlan, yesterdayActual: yActual, yesterdayDelay: yDelay, todayPlan: tPlan, todayActual: tActual, todayDelay: tDelay };
-    };
-    // Predecessor: 정규 필드(pred_planned_date, pred_actual_date) 직접 사용
-    const calcPred = (): PlanActualMetrics => {
-      let cumPlan = 0, cumActual = 0, yPlan = 0, yActual = 0, yDelay = 0, tPlan = 0, tActual = 0, tDelay = 0;
-      for (const i of items) {
-        const p = i.pred_planned_date ?? null;
-        const a = i.pred_actual_date ?? null;
-        if (p && p <= dataDate) cumPlan++;
-        if (a && a <= dataDate) cumActual++;
-        if (p === dataDate) yPlan++;
-        if (a === dataDate) yActual++;
-        if (p && p <= dataDate && i.pred_status !== 'Done') yDelay++;
-        if (p === today) tPlan++;
-        if (a === today) tActual++;
-        if (p && p <= today && i.pred_status !== 'Done') tDelay++;
+        if (isStagePlannedUpTo(i, stage, dataDate)) cumPlan++;
+        if (isStageActualUpTo(i, stage, dataDate)) cumActual++;
+        if (isStagePlannedOn(i, stage, dataDate)) yPlan++;
+        if (isStageActualOn(i, stage, dataDate)) yActual++;
+        if (isStageDelayedAsOf(i, stage, dataDate)) yDelay++;
+        if (isStagePlannedOn(i, stage, today)) tPlan++;
+        if (isStageActualOn(i, stage, today)) tActual++;
+        if (isStageDelayedAsOf(i, stage, today)) tDelay++;
       }
       return { cumPlan, cumActual, yesterdayPlan: yPlan, yesterdayActual: yActual, yesterdayDelay: yDelay, todayPlan: tPlan, todayActual: tActual, todayDelay: tDelay };
     };
@@ -236,9 +209,9 @@ export function aggregatePlanActualByGroup(
       key: k,
       label: groupLabel(k),
       totalSubtests: items.length,
-      predecessor: calcPred(),
-      t1: calc('t1_planned_date', 't1_actual_date', 't1_status'),
-      t2: calc('t2_planned_date', 't2_actual_date', 't2_status'),
+      predecessor: calc('pred'),
+      t1: calc('t1'),
+      t2: calc('t2'),
     });
   }
   // default sort: most-delayed (largest negative cumulative variance T2 then T1) first
@@ -312,10 +285,14 @@ export function buildSCurve(
     return v;
   };
   for (const s of subs) {
-    if (s.t1_planned_date) ensure(bucketize(s.t1_planned_date, granularity)).t1p++;
-    if (s.t1_actual_date) ensure(bucketize(s.t1_actual_date, granularity)).t1a++;
-    if (s.t2_planned_date) ensure(bucketize(s.t2_planned_date, granularity)).t2p++;
-    if (s.t2_actual_date) ensure(bucketize(s.t2_actual_date, granularity)).t2a++;
+    const t1Plan = getStagePlannedDate(s, 't1');
+    const t1Actual = getStageActualDate(s, 't1');
+    const t2Plan = getStagePlannedDate(s, 't2');
+    const t2Actual = getStageActualDate(s, 't2');
+    if (t1Plan) ensure(bucketize(t1Plan, granularity)).t1p++;
+    if (t1Actual) ensure(bucketize(t1Actual, granularity)).t1a++;
+    if (t2Plan) ensure(bucketize(t2Plan, granularity)).t2p++;
+    if (t2Actual) ensure(bucketize(t2Actual, granularity)).t2a++;
   }
 
   const buckets = generateBuckets(startDate, endDate, granularity);

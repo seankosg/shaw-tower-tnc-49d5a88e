@@ -29,6 +29,7 @@ import {
   todayIso, yesterdayIso, isOverdue, isAtRisk, maxDelayDays,
   aggregatePlanActualByGroup, buildSCurve, NONE_LABEL,
 } from '@/lib/dashboard-utils';
+import { isStageDone } from '@/lib/stage-metrics';
 
 const STATUS_COLORS: Record<string, string> = {
   Done: 'hsl(142, 71%, 45%)',
@@ -59,7 +60,7 @@ export default function DashboardPage() {
       while (true) {
         const { data } = await supabase
           .from('subtests')
-          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, pred_status, pred_planned_date, pred_actual_date, team' as any)
+          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, team' as any)
           .eq('is_active', true)
           .range(from, from + PAGE - 1);
         if (!data || data.length === 0) break;
@@ -117,16 +118,16 @@ export default function DashboardPage() {
     const atRiskCount = filteredSubtests.filter(s => isAtRisk(s, today, atRiskDays)).length;
 
     // Stage-specific
-    const predDone = filteredSubtests.filter(s => s.pred_status === 'Done').length;
-    const predOverdue = filteredSubtests.filter(s => s.pred_planned_date && s.pred_planned_date < today && s.pred_status !== 'Done').length;
+    const predDone = filteredSubtests.filter(s => isStageDone(s, 'pred')).length;
+    const predOverdue = filteredSubtests.filter(s => s.pred_planned_date && s.pred_planned_date < today && !isStageDone(s, 'pred')).length;
     const predPct = total ? Math.round((predDone / total) * 1000) / 10 : 0;
 
-    const t1Done = filteredSubtests.filter(s => s.t1_status === 'Done').length;
-    const t1Overdue = filteredSubtests.filter(s => s.t1_planned_date && s.t1_planned_date < today && s.t1_status !== 'Done').length;
+    const t1Done = filteredSubtests.filter(s => isStageDone(s, 't1')).length;
+    const t1Overdue = filteredSubtests.filter(s => s.t1_planned_date && s.t1_planned_date < today && !isStageDone(s, 't1')).length;
     const t1Pct = total ? Math.round((t1Done / total) * 1000) / 10 : 0;
 
     const t2Done = totalDone;
-    const t2Overdue = filteredSubtests.filter(s => s.t2_planned_date && s.t2_planned_date < today && s.t2_status !== 'Done').length;
+    const t2Overdue = filteredSubtests.filter(s => s.t2_planned_date && s.t2_planned_date < today && !isStageDone(s, 't2')).length;
     const t2Pct = progressPct;
 
     return {

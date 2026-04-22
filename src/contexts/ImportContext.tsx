@@ -303,7 +303,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
 
         // Auto-fill actual_date when status becomes Done and actual_date is empty
         const { data: existingDates } = await supabase.from('subtests')
-          .select('t1_status, t1_actual_date, t2_status, t2_actual_date, pred_status, pred_actual_date' as any)
+          .select('t1_status, t1_planned_date, t1_actual_date, t2_status, t2_planned_date, t2_actual_date, pred_status, pred_planned_date, pred_actual_date' as any)
           .eq('id', existing.id).maybeSingle();
         const ed: any = existingDates;
         const finalT1Status = updates.t1_status !== undefined ? updates.t1_status : ed?.t1_status;

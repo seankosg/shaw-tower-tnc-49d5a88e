@@ -2,50 +2,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { TcStatus } from '@/types/enums';
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
+import { isStageDelayedAsOf, isStageDone, todayIso, type StageKey } from '@/lib/stage-metrics';
 
 type StageState = 'done' | 'wip' | 'planned' | 'hold' | 'empty';
 
-const PRED_DONE_TOKENS = ['done', '완료', 'complete', 'completed', 'finished'];
-
-const TODAY = () => new Date().toISOString().slice(0, 10);
-
-function isOverdue(plannedDate: string | null | undefined): boolean {
-  if (!plannedDate) return false;
-  return plannedDate < TODAY();
-}
-
-function classifyPred(
-  rawPred: string | null,
-  predStatus: TcStatus | null | undefined,
-  plannedDate?: string | null,
-): StageState {
-  if (predStatus === 'Done') return 'done';
-  if (predStatus === 'Hold') return 'hold';
-  if (predStatus === 'WIP') {
-    return isOverdue(plannedDate) ? 'hold' : 'wip';
-  }
-  if (predStatus === 'Planned') {
-    return isOverdue(plannedDate) ? 'hold' : 'planned';
-  }
-  // Fallback: raw text only when status is null (legacy rows)
-  if (rawPred) {
-    const v = rawPred.trim().toLowerCase();
-    if (!v) return 'empty';
-    if (PRED_DONE_TOKENS.some(t => v === t || v.includes(t))) return 'done';
-    return isOverdue(plannedDate) ? 'hold' : 'planned';
-  }
-  return 'empty';
-}
-
-function classifyStatus(s: TcStatus | null, plannedDate?: string | null): StageState {
-  if (s === 'Done') return 'done';
-  if (s === 'Hold') return 'hold';
-  if (s === 'WIP') {
-    return isOverdue(plannedDate) ? 'hold' : 'wip';
-  }
-  if (s === 'Planned') {
-    return isOverdue(plannedDate) ? 'hold' : 'planned';
-  }
+function classifyStage(row: Parameters<typeof isStageDone>[0], stage: StageKey, status: TcStatus | null | undefined): StageState {
+  if (isStageDone(row, stage)) return 'done';
+  if (isStageDelayedAsOf(row, stage, todayIso())) return 'hold';
+  if (status === 'Hold') return 'hold';
+  if (status === 'WIP') return 'wip';
+  if (status === 'Planned') return 'planned';
   return 'empty';
 }
 
@@ -98,9 +64,21 @@ export function StageProgress({
   t2ActualDate,
   t2PlannedDate = null,
 }: StageProgressProps) {
-  const pred = classifyPred(predecessorRaw, predStatus, predPlannedDate);
-  const t1 = classifyStatus(t1Status, t1PlannedDate);
-  const t2 = classifyStatus(t2Status, t2PlannedDate);
+  const row = {
+    predecessor_status_raw: predecessorRaw,
+    pred_status: predStatus,
+    pred_planned_date: predPlannedDate,
+    pred_actual_date: predActualDate,
+    t1_status: t1Status,
+    t1_planned_date: t1PlannedDate,
+    t1_actual_date: t1ActualDate,
+    t2_status: t2Status,
+    t2_planned_date: t2PlannedDate,
+    t2_actual_date: t2ActualDate,
+  };
+  const pred = classifyStage(row, 'pred', predStatus);
+  const t1 = classifyStage(row, 't1', t1Status);
+  const t2 = classifyStage(row, 't2', t2Status);
 
   const stateLabel = (s: StageState) =>
     s === 'done' ? 'Done' : s === 'wip' ? 'WIP' : s === 'hold' ? 'Delay' : s === 'planned' ? 'Planned' : '—';

@@ -1,8 +1,17 @@
 // Schedule page utilities — bucketization, group aggregation, critical detection.
 import type { TcStatus } from '@/types/enums';
 import type { SubtestForDashboard } from '@/lib/dashboard-utils';
+import {
+  daysBetween as stageDaysBetween,
+  getStageActualDate,
+  getStageKeys,
+  getStagePlannedDate,
+  isStageDelayedAsOf,
+  isStageDone,
+  type StageKey,
+} from '@/lib/stage-metrics';
 
-export type ScheduleStage = 'pred' | 't1' | 't2';
+export type ScheduleStage = StageKey;
 export type ScheduleStageFilter = 'all' | ScheduleStage;
 export type ScheduleBucket = 'day' | 'week';
 export type ScheduleGroupBy = 'system' | 'subcon' | 'subsub' | 'hdec' | 'team';
@@ -20,9 +29,9 @@ export interface StageRow {
   totalActual: number;
   totalDone: number; // # subtests for this stage marked Done
   total: number; // # subtests in group (denominator)
-  /** # of subtests with plan_date <= today (for this stage). */
+  /** # of subtests with plan_date <= selected as-of date (for this stage). */
   cumPlan: number;
-  /** # of subtests with actual_date <= today (for this stage). */
+  /** # of subtests with actual_date <= selected as-of date (for this stage). */
   cumActual: number;
 }
 
@@ -105,43 +114,18 @@ export function getGroupKey(s: SubtestForDashboard, by: ScheduleGroupBy, sysCode
   return s.subsub_name ?? '(None)';
 }
 
-// ───── Predecessor done check ─────
-// Single source of truth: pred_status field. Falls back to raw text only when status missing.
-const PRED_DONE_TOKENS = ['done', 'complete', 'completed', 'finished', '완료'];
-
 export function isPredDone(s: SubtestForDashboard & { predecessor_status_raw?: string | null }): boolean {
-  if (s.pred_status === 'Done') return true;
-  if (s.pred_status != null) return false; // status set but not Done
-  // Fallback: raw text (for legacy rows not yet normalized)
-  const raw = (s.predecessor_status_raw ?? '').toLowerCase().trim();
-  if (!raw) return false;
-  return PRED_DONE_TOKENS.some(t => raw === t || raw.includes(t));
+  return isStageDone(s, 'pred');
 }
 
 function getStageDates(
   s: SubtestForDashboard,
   stage: ScheduleStage
 ): { plan: string | null; actual: string | null; done: boolean } {
-  if (stage === 't1') {
-    return {
-      plan: s.t1_planned_date,
-      actual: s.t1_status === 'Done' ? s.t1_actual_date : null,
-      done: s.t1_status === 'Done',
-    };
-  }
-  if (stage === 't2') {
-    return {
-      plan: s.t2_planned_date,
-      actual: s.t2_status === 'Done' ? s.t2_actual_date : null,
-      done: s.t2_status === 'Done',
-    };
-  }
-  // pred — use normalized fields directly. No more T1-derived inference.
-  const done = isPredDone(s);
   return {
-    plan: s.pred_planned_date ?? null,
-    actual: done ? (s.pred_actual_date ?? null) : null,
-    done,
+    plan: getStagePlannedDate(s, stage),
+    actual: getStageActualDate(s, stage),
+    done: isStageDone(s, stage),
   };
 }
 
@@ -152,8 +136,8 @@ export interface AggregateOptions {
   stageFilter: ScheduleStageFilter;
   rangeStart: string;
   rangeEnd: string;
-  /** Today ISO date — used to compute cum Plan/Actual up-to-today. */
-  today: string;
+  /** Selected as-of ISO date — used to compute cumulative Plan/Actual. */
+  asOfDate: string;
   sysCodeById: Map<string, string>;
 }
 
@@ -178,8 +162,7 @@ export function aggregateSchedule(
     groupMap.set(k, arr);
   }
 
-  const stagesToShow: ScheduleStage[] =
-    opts.stageFilter === 'all' ? ['pred', 't1', 't2'] : [opts.stageFilter as ScheduleStage];
+  const stagesToShow = getStageKeys(opts.stageFilter);
 
   const rows: GroupRow[] = [];
   for (const [key, items] of groupMap) {
@@ -199,7 +182,7 @@ export function aggregateSchedule(
             stageData[st].cells[i].plan++;
             stageData[st].totalPlan++;
           }
-          if (plan <= opts.today) stageData[st].cumPlan++;
+          if (plan <= opts.asOfDate) stageData[st].cumPlan++;
         }
         if (actual) {
           const b = bucketize(actual, opts.bucket);
@@ -208,7 +191,7 @@ export function aggregateSchedule(
             stageData[st].cells[i].actual++;
             stageData[st].totalActual++;
           }
-          if (actual <= opts.today) stageData[st].cumActual++;
+          if (actual <= opts.asOfDate) stageData[st].cumActual++;
         }
         if (done) stageData[st].totalDone++;
       }
