@@ -595,6 +595,17 @@ const STAGE_BADGE: Record<'pred' | 't1' | 't2', string> = {
   t2: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30',
 };
 
+const summaryNumberClass = (value: number, tone?: 'done' | 'remain') => cn(
+  'tabular-nums font-semibold',
+  value === 0
+    ? 'text-muted-foreground/40'
+    : tone === 'done'
+      ? 'text-emerald-700 dark:text-emerald-400'
+      : tone === 'remain'
+        ? 'text-amber-700 dark:text-amber-400'
+        : 'text-foreground',
+);
+
 function StageBadge({ stage, label }: { stage: 'pred' | 't1' | 't2'; label: string }) {
   return (
     <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold ${STAGE_BADGE[stage]}`}>
