@@ -237,7 +237,7 @@ export function ScheduleMatrix({
             const showStageRows = stageFilter === 'all';
             return (
               <Fragment key={`left-${row.key}`}>
-                <div className={cn("flex border-b border-border text-xs h-10", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
+                <div className={cn("flex border-b border-border text-xs h-14", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
                   <div className="flex items-center gap-1 px-2 text-left cursor-default" style={{ width: W_GROUP }}>
                     <span className="truncate font-medium" title={row.label}>{row.label}</span>
                   </div>
@@ -252,7 +252,7 @@ export function ScheduleMatrix({
                 {showStageRows && stagesToShow.map(st => {
                   const sr = row.stages[st];
                   return (
-                    <div key={`left-${row.key}-${st}`} className="flex border-b border-border bg-muted/20 text-[11px] h-10 hover:bg-accent/20">
+                    <div key={`left-${row.key}-${st}`} className="flex border-b border-border bg-muted/20 text-[11px] h-14 hover:bg-accent/20">
                       <div className="flex items-center gap-2 px-2 pl-8 text-muted-foreground" style={{ width: W_GROUP }}>
                         <span className={cn(
                           'inline-flex h-4 w-7 items-center justify-center rounded text-[9px] font-semibold',
@@ -289,7 +289,7 @@ export function ScheduleMatrix({
               const showStageRows = stageFilter === 'all';
               return (
                 <Fragment key={row.key}>
-                  <div className={cn("flex border-b border-border text-xs h-10", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
+                  <div className={cn("flex border-b border-border text-xs h-14", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
                     {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
                     {virtualCols.map(vc => {
                       const c = row.combined[vc.index];
