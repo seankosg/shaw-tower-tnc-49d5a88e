@@ -148,14 +148,16 @@ export function aggregateByGroup(
 }
 
 export interface PlanActualMetrics {
-  /** Cumulative as of yesterday (planned_date <= yesterday) */
+  /** Cumulative as of Data Date (planned_date <= dataDate) */
   cumPlan: number;
-  /** Cumulative as of yesterday (actual_date <= yesterday) */
+  /** Cumulative as of Data Date (actual_date <= dataDate) */
   cumActual: number;
   yesterdayPlan: number;
   yesterdayActual: number;
+  yesterdayDelay: number;
   todayPlan: number;
   todayActual: number;
+  todayDelay: number;
 }
 
 /** Returns ISO date string for (today - 1 day). */
@@ -178,6 +180,7 @@ export interface PlanActualRow {
 export function aggregatePlanActualByGroup(
   subs: SubtestForDashboard[],
   today: string,
+  dataDate: string,
   groupKey: (s: SubtestForDashboard) => string,
   groupLabel: (key: string) => string
 ): PlanActualRow[] {
@@ -189,48 +192,53 @@ export function aggregatePlanActualByGroup(
     buckets.set(k, arr);
   }
 
-  const yesterday = yesterdayIso(today);
   const out: PlanActualRow[] = [];
   for (const [k, items] of buckets) {
     const calc = (
       plannedField: 't1_planned_date' | 't2_planned_date',
-      actualField: 't1_actual_date' | 't2_actual_date'
+      actualField: 't1_actual_date' | 't2_actual_date',
+      statusField: 't1_status' | 't2_status'
     ): PlanActualMetrics => {
-      let cumPlan = 0, cumActual = 0, yPlan = 0, yActual = 0, tPlan = 0, tActual = 0;
+      let cumPlan = 0, cumActual = 0, yPlan = 0, yActual = 0, yDelay = 0, tPlan = 0, tActual = 0, tDelay = 0;
       for (const i of items) {
         const p = i[plannedField];
         const a = i[actualField];
-        if (p && p <= yesterday) cumPlan++;
-        if (a && a <= yesterday) cumActual++;
-        if (p === yesterday) yPlan++;
-        if (a === yesterday) yActual++;
+        const st = i[statusField];
+        if (p && p <= dataDate) cumPlan++;
+        if (a && a <= dataDate) cumActual++;
+        if (p === dataDate) yPlan++;
+        if (a === dataDate) yActual++;
+        if (p && p <= dataDate && st !== 'Done') yDelay++;
         if (p === today) tPlan++;
         if (a === today) tActual++;
+        if (p && p <= today && st !== 'Done') tDelay++;
       }
-      return { cumPlan, cumActual, yesterdayPlan: yPlan, yesterdayActual: yActual, todayPlan: tPlan, todayActual: tActual };
+      return { cumPlan, cumActual, yesterdayPlan: yPlan, yesterdayActual: yActual, yesterdayDelay: yDelay, todayPlan: tPlan, todayActual: tActual, todayDelay: tDelay };
     };
     // Predecessor: 정규 필드(pred_planned_date, pred_actual_date) 직접 사용
     const calcPred = (): PlanActualMetrics => {
-      let cumPlan = 0, cumActual = 0, yPlan = 0, yActual = 0, tPlan = 0, tActual = 0;
+      let cumPlan = 0, cumActual = 0, yPlan = 0, yActual = 0, yDelay = 0, tPlan = 0, tActual = 0, tDelay = 0;
       for (const i of items) {
         const p = i.pred_planned_date ?? null;
         const a = i.pred_actual_date ?? null;
-        if (p && p <= yesterday) cumPlan++;
-        if (a && a <= yesterday) cumActual++;
-        if (p === yesterday) yPlan++;
-        if (a === yesterday) yActual++;
+        if (p && p <= dataDate) cumPlan++;
+        if (a && a <= dataDate) cumActual++;
+        if (p === dataDate) yPlan++;
+        if (a === dataDate) yActual++;
+        if (p && p <= dataDate && i.pred_status !== 'Done') yDelay++;
         if (p === today) tPlan++;
         if (a === today) tActual++;
+        if (p && p <= today && i.pred_status !== 'Done') tDelay++;
       }
-      return { cumPlan, cumActual, yesterdayPlan: yPlan, yesterdayActual: yActual, todayPlan: tPlan, todayActual: tActual };
+      return { cumPlan, cumActual, yesterdayPlan: yPlan, yesterdayActual: yActual, yesterdayDelay: yDelay, todayPlan: tPlan, todayActual: tActual, todayDelay: tDelay };
     };
     out.push({
       key: k,
       label: groupLabel(k),
       totalSubtests: items.length,
       predecessor: calcPred(),
-      t1: calc('t1_planned_date', 't1_actual_date'),
-      t2: calc('t2_planned_date', 't2_actual_date'),
+      t1: calc('t1_planned_date', 't1_actual_date', 't1_status'),
+      t2: calc('t2_planned_date', 't2_actual_date', 't2_status'),
     });
   }
   // default sort: most-delayed (largest negative cumulative variance T2 then T1) first
