@@ -271,7 +271,7 @@ export default function DashboardPage() {
           label="Overdue"
           value={kpis.overdueCount}
           accent="destructive"
-          onClick={() => goSubtests({ status: 'overdue' })}
+          onClick={() => goSubtests({ status: 'overdue', as_of: dataDate })}
         />
       </div>
 
@@ -288,8 +288,8 @@ export default function DashboardPage() {
           tone="destructive"
           icon={<AlertTriangle className="h-5 w-5" />}
           title={`${kpis.overdueCount} Overdue Subtest${kpis.overdueCount === 1 ? '' : 's'}`}
-          description="Planned date has passed and not yet Done."
-          onClick={() => goSubtests({ status: 'overdue' })}
+          description={`Planned date is on/before Data Date (${dataDateLabel}) and not yet Done.`}
+          onClick={() => goSubtests({ status: 'overdue', as_of: dataDate })}
         />
         <AlertBanner
           tone="warning"
