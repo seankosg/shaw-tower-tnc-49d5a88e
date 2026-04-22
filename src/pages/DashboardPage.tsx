@@ -425,7 +425,25 @@ export default function DashboardPage() {
               <TabsTrigger value="team">By Team</TabsTrigger>
             </TabsList>
             <TabsContent value="system">
-              <PlanActualTable rows={bySystem} groupParam="system" groupHeader="System" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} keyToFilterValue={systemKeyResolver} />
+              <PlanActualTable
+                rows={filteredBySystem}
+                groupParam="system"
+                groupHeader="System"
+                today={today}
+                dataDate={dataDate}
+                todayLabel={todayLabel}
+                dataDateLabel={dataDateLabel}
+                navigate={navigate}
+                keyToFilterValue={systemKeyResolver}
+                emptyMessage="No matching systems."
+                systemFilter={{
+                  text: systemTextFilter,
+                  selected: selectedSystemFilters,
+                  options: systemFilterOptions,
+                  onTextChange: setSystemTextFilter,
+                  onSelectedChange: setSelectedSystemFilters,
+                }}
+              />
             </TabsContent>
             <TabsContent value="subcon">
               <PlanActualTable rows={bySubcon} groupParam="subcon" groupHeader="Subcontractor" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
