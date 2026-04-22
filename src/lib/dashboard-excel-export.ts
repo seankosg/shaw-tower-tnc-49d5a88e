@@ -170,7 +170,7 @@ export function exportPlanActualToExcel(
     stages.forEach((st, i) => {
       const m: PlanActualMetrics = r[st.key];
       const cumD = m.cumActual - m.cumPlan;
-      const yD = m.yesterdayActual - m.yesterdayPlan;
+      const dataDateD = m.dataDateActual - m.dataDatePlan;
       const tD = m.todayActual - m.todayPlan;
       const pct = r.totalSubtests ? Math.round((m.cumActual / r.totalSubtests) * 100) : 0;
 
@@ -192,10 +192,10 @@ export function exportPlanActualToExcel(
       setNum(ws, cr, 5, cumD, deltaStyle(cumD));
 
       // Data Date
-      setNum(ws, cr, 6, m.yesterdayPlan, S_NUM);
-      setNum(ws, cr, 7, m.yesterdayActual, S_NUM);
-      setNum(ws, cr, 8, yD, deltaStyle(yD));
-      setNum(ws, cr, 9, m.yesterdayDelay, S_NUM);
+      setNum(ws, cr, 6, m.dataDatePlan, S_NUM);
+      setNum(ws, cr, 7, m.dataDateActual, S_NUM);
+      setNum(ws, cr, 8, dataDateD, deltaStyle(dataDateD));
+      setNum(ws, cr, 9, m.dataDateDelay, S_NUM);
 
       // Today
       setNum(ws, cr, 10, m.todayPlan, S_NUM);
