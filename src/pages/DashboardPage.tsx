@@ -584,7 +584,7 @@ function AlertBanner({
 }
 
 function VarianceCell({ value }: { value: number }) {
-  if (value === 0) return <span className="text-muted-foreground tabular-nums">0</span>;
+  if (value === 0) return <span className="text-muted-foreground/40 tabular-nums">0</span>;
   if (value > 0) return <span className="text-green-700 dark:text-green-400 tabular-nums">+{value}</span>;
   return <span className="text-destructive font-semibold tabular-nums">{value}</span>;
 }
@@ -604,12 +604,13 @@ function StageBadge({ stage, label }: { stage: 'pred' | 't1' | 't2'; label: stri
 }
 
 function ClickNum({ value, onClick, hideZero = false }: { value: number; onClick?: () => void; hideZero?: boolean }) {
-  if (hideZero && value === 0) return <span className="tabular-nums" aria-label="0" />;
-  if (!onClick) return <span className="tabular-nums">{value}</span>;
+  const zeroClass = value === 0 ? 'text-muted-foreground/40' : '';
+  if (hideZero && value === 0) return <span className="tabular-nums text-muted-foreground/40" aria-label="0" />;
+  if (!onClick) return <span className={cn('tabular-nums', zeroClass)}>{value}</span>;
   return (
     <button
       type="button"
-      className="tabular-nums hover:underline"
+      className={cn('tabular-nums hover:underline', zeroClass)}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
     >
       {value}
