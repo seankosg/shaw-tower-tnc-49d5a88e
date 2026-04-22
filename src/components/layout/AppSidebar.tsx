@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Database, BarChart3, Upload, Download, Shield, Settings, Calendar, LogOut,
+  Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -16,6 +16,7 @@ import { getRememberedRoute } from '@/hooks/useRouteMemory';
 const mainNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/dashboard' },
   { label: 'Progress',  icon: Calendar,  path: '/schedule' },
+  { label: 'Schedule Revision', icon: CalendarClock, path: '/schedule/revision' },
   { label: 'Raw Data',  icon: Database,  path: '/raw-data' },
   { label: 'Import',    icon: Upload,    path: '/import' },
   { label: 'Export',    icon: Download,  path: '/export' },
