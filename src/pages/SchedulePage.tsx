@@ -15,7 +15,9 @@ import { Progress } from '@/components/ui/progress';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { todayIso, type SubtestForDashboard } from '@/lib/dashboard-utils';
+import { todayIso, yesterdayIso, type SubtestForDashboard } from '@/lib/dashboard-utils';
+import { formatDdMmm } from '@/lib/format';
+import { getStageKeys, isStageDelayedAsOf, isStageDone, isStagePlannedOn } from '@/lib/stage-metrics';
 import {
   aggregateSchedule, findCritical, findLaggingGroups, addDays,
   type ScheduleBucket, type ScheduleGroupBy, type ScheduleStageFilter,
@@ -41,6 +43,8 @@ export default function SchedulePage() {
   const [groupBy, setGroupBy] = useState<ScheduleGroupBy>('system');
   const [bucket, setBucket] = useState<ScheduleBucket>('day');
   const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>('all');
+  const [asOfMode, setAsOfMode] = useState<'dataDate' | 'today'>('today');
+  const [dataDate, setDataDate] = useState(() => yesterdayIso(today));
   const [teamFilter, setTeamFilter] = useState<string>('all');
   const [rangeDays, setRangeDays] = useState<number>(60);
   const [hidePast, setHidePast] = useState<boolean>(() => {
@@ -79,11 +83,23 @@ export default function SchedulePage() {
         if (data.length < PAGE) break;
         from += PAGE;
       }
-      const sysRes = await supabase.from('system_master').select('id, system_code').eq('is_active', true);
+      const [sysRes, latestImport] = await Promise.all([
+        supabase.from('system_master').select('id, system_code').eq('is_active', true),
+        supabase
+          .from('upload_batches')
+          .select('data_date')
+          .eq('status', 'completed')
+          .not('data_date', 'is', null)
+          .order('data_date', { ascending: false })
+          .order('uploaded_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
       if (!cancelled) {
         const sysList = sysRes.data ?? [];
         setSubtests(all);
         setSystems(sysList);
+        if (latestImport.data?.data_date) setDataDate(latestImport.data.data_date);
         setScheduleCache({ subtests: all, systems: sysList });
         setLoading(false);
       }
@@ -112,12 +128,15 @@ export default function SchedulePage() {
     [subtests, teamFilter],
   );
 
+  const asOfDate = asOfMode === 'dataDate' ? dataDate : today;
+  const asOfLabel = asOfMode === 'dataDate' ? 'Data Date' : 'Today';
+
   const aggregate = useMemo(
     () => aggregateSchedule(filteredSubtests, {
       groupBy, bucket, stageFilter,
-      rangeStart, rangeEnd, today, sysCodeById,
+      rangeStart, rangeEnd, asOfDate, sysCodeById,
     }),
-    [filteredSubtests, groupBy, bucket, stageFilter, rangeStart, rangeEnd, today, sysCodeById],
+    [filteredSubtests, groupBy, bucket, stageFilter, rangeStart, rangeEnd, asOfDate, sysCodeById],
   );
 
   const critical = useMemo(
