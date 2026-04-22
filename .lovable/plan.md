@@ -1,288 +1,402 @@
 
 
-## 확인 결과
+## 제안 방향
 
-현재 코드 기준으로는 **완전히 안전하게 리셋된다고 보기 어렵습니다.**
+현재처럼 사용자가 앱을 사용 중인 상태에서 계속 Publish가 발생하는 운영 방식에서는, 이미 접속해 있는 브라우저가 자동으로 새 코드로 바뀌지는 않습니다.
 
-동작을 나누면 아래와 같습니다.
-
-```text
-1. Dashboard / Progress에서 URL로 넘긴 필터
-   → 대체로 새 URL로 교체되므로 기존 URL 필터는 사라집니다.
-
-2. Raw Data / Subtest List 화면 안에서 사용자가 걸었던 컬럼 필터, 검색어, 정렬 상태
-   → localStorage에 저장되어 다시 적용됩니다.
-
-3. 따라서 Dashboard 필터로 만들어진 Subtest list 상태에서
-   Progress로 이동해 새로운 Gantt 필터를 걸어 들어오면
-   URL 필터는 새 기준으로 바뀌지만,
-   기존 Raw Data의 검색어/컬럼 필터가 남아 결과를 추가로 좁힐 수 있습니다.
-```
-
-즉 사용자가 기대하는 동작인 아래 상태는 현재 보장되지 않습니다.
+React/Vite 앱은 보통 아래처럼 동작합니다.
 
 ```text
-Progress Gantt 클릭
-→ 기존 Dashboard/Raw Data 필터는 리셋
-→ Progress에서 클릭한 조건만으로 Subtest list 표시
+사용자가 접속
+→ index.html + JS/CSS 파일 로드
+→ 브라우저 메모리 안에서 앱 실행
+→ 그 후 새 Publish 발생
+→ 이미 열린 탭은 기존 JS 코드로 계속 실행
+→ 새로고침하거나 다시 접속해야 새 코드 적용
 ```
 
-현재는 아래처럼 될 가능성이 있습니다.
+따라서 개선 목표는 다음 두 가지입니다.
 
 ```text
-Progress Gantt 클릭 조건
-+ 이전 Raw Data 검색어
-+ 이전 Raw Data 컬럼 필터
-+ 이전 정렬/테이블 상태 일부
-= 사용자가 예상보다 적은 Subtest list를 보게 됨
+1. 새로 접속하는 사용자는 최신 Publish 버전을 받도록 보장
+2. 이미 접속 중인 사용자는 새 Publish를 감지하고 안전하게 새로고침하도록 안내
 ```
 
-## 개선 목표
+## 권장 구현안
 
-Progress, Dashboard, Critical, Lookup 등에서 Subtest List로 이동할 때는 **이동 출처에서 넘긴 필터를 기준으로 Raw Data 목록을 새로 구성**하도록 개선하겠습니다.
+앱에 “새 버전 감지 및 업데이트 안내” 기능을 추가하겠습니다.
 
-특히 이번 요청의 핵심인 Progress Gantt 클릭은 다음을 보장하겠습니다.
+### 1. Publish마다 고유한 Build ID 생성
+
+빌드할 때마다 고유한 버전 ID를 생성합니다.
+
+예시:
 
 ```text
-Progress Gantt Plan 클릭
-→ 기존 Dashboard/Raw Data 필터 제거
-→ planned date + stage + group 조건만 적용
-
-Progress Gantt Actual 클릭
-→ 기존 Dashboard/Raw Data 필터 제거
-→ actual date + Done + stage + group 조건만 적용
+Build ID: 2026-04-22T10:25:13.000Z
+또는
+Build ID: git commit hash
 ```
 
-## 개선 방향
-
-### 1. Subtest List 진입 출처를 명확히 구분
-
-현재 Progress Gantt 클릭은 이미 아래 파라미터를 사용합니다.
+그리고 Publish 결과물에 아래 파일을 자동 포함합니다.
 
 ```text
-source=schedule_cell
+/app-version.json
 ```
 
-이를 더 적극적으로 사용하겠습니다.
+내용 예시:
 
-추가로 Progress의 날짜 Lookup, KPI 클릭도 필요하면 출처를 명확히 붙입니다.
+```json
+{
+  "buildId": "2026-04-22T10:25:13.000Z",
+  "builtAt": "2026-04-22T10:25:13.000Z"
+}
+```
+
+동시에 현재 실행 중인 앱 코드 안에도 같은 Build ID를 포함시킵니다.
 
 ```text
-source=schedule_lookup
-source=schedule_kpi
+현재 열린 탭의 Build ID
+vs
+서버에 publish된 최신 Build ID
 ```
 
-Dashboard에서 들어오는 필터도 구분 가능하도록 정리합니다.
+이 두 값이 다르면 “새 버전이 Publish됨”으로 판단합니다.
+
+---
+
+### 2. 접속 중인 사용자의 새 버전 자동 감지
+
+앱 실행 중 일정 간격으로 최신 버전 파일을 확인합니다.
 
 ```text
-source=dashboard
+앱 실행 중
+→ 2분마다 /app-version.json 확인
+→ 현재 앱 buildId와 최신 buildId 비교
+→ 다르면 업데이트 안내 표시
 ```
 
-이렇게 하면 Raw Data 화면이 다음을 판단할 수 있습니다.
+추가로 아래 상황에서도 즉시 확인합니다.
 
 ```text
-사용자가 직접 Raw Data에서 필터링 중인가?
-Dashboard에서 넘어온 필터인가?
-Progress에서 넘어온 필터인가?
+- 사용자가 브라우저 탭을 다시 활성화했을 때
+- 사용자가 다른 화면으로 이동했을 때
+- 네트워크가 끊겼다가 다시 연결됐을 때
 ```
 
-### 2. 외부 화면에서 들어온 경우 기존 테이블 필터 초기화
+이렇게 하면 사용자가 오래 켜둔 탭에서도 새 Publish를 인지할 수 있습니다.
 
-`SubtestList.tsx`의 초기화 로직을 수정합니다.
+---
 
-현재는 localStorage에서 아래 상태를 불러옵니다.
+### 3. 사용자에게 강제 새로고침 대신 안전한 안내 표시
+
+작업 중인 사용자에게 갑자기 새로고침을 강제하면 입력 중인 데이터가 사라질 수 있습니다.
+
+따라서 기본 동작은 아래처럼 하겠습니다.
 
 ```text
-columnFilters
-globalFilter
-sorting
-columnSizing
+새 버전이 준비되었습니다.
+작업 중인 내용을 저장한 뒤 새로고침해 주세요.
+
+[지금 새로고침]
 ```
 
-개선 후에는 `source`가 있는 URL로 진입한 경우 다음처럼 처리합니다.
+표시는 앱 상단에 고정 배너로 두는 것을 권장합니다.
+
+예시 문구:
 
 ```text
-source=dashboard 또는 source=schedule_cell 또는 source=schedule_lookup 등
-→ 기존 columnFilters 제거
-→ 기존 globalFilter/searchInput 제거
-→ URL로 넘어온 필터만 적용
+A new version is available. Please refresh to update.
+[Refresh now]
 ```
 
-정렬과 컬럼 폭은 사용성 설정에 가까우므로 유지할 수 있습니다.
+또는 한국어 중심 운영이면:
 
 ```text
-유지:
-- sorting
-- columnSizing
-
-초기화:
-- columnFilters
-- globalFilter
-- searchInput
+새 버전이 배포되었습니다. 최신 기능을 사용하려면 새로고침해 주세요.
+[새로고침]
 ```
 
-### 3. Progress Gantt 클릭 시 필터 충돌 방지
+현재 앱의 사용자가 현장/관리 업무를 하는 상황이므로, 갑작스러운 자동 reload보다 명시적인 버튼 방식이 안전합니다.
 
-Progress Gantt 클릭으로 생성되는 URL은 다음만 포함되도록 유지/정리합니다.
+---
+
+### 4. 위험 상황에서는 자동 새로고침하지 않음
+
+다음 상황에서는 자동 새로고침을 하지 않고 안내만 표시합니다.
 
 ```text
-source=schedule_cell
-group filter:
-- system
-- subcon
-- subsub
-- hdec_pic
-- team
-
-date filter:
-- date_from
-- date_to
-- date_field
-
-stage filter:
-- stage
-
-actual filter:
-- cell_status=Done
+- Import 진행 중
+- Subtest Detail 저장 중
+- Mobile Update 저장 중
+- 사용자가 폼을 수정 중일 가능성이 있는 화면
 ```
 
-그리고 Raw Data에서 기존의 다음 필터들이 남지 않게 하겠습니다.
+특히 현재 앱에는 Import, Detail Edit, Mobile Update 같은 데이터 변경 화면이 있으므로 강제 새로고침은 피하겠습니다.
+
+기본 정책:
 
 ```text
-status=overdue
-status=at_risk
-pred_status
-t1_status
-t2_status
-이전 date filter
-이전 검색어
-이전 컬럼 필터
+조회 화면:
+- Dashboard
+- Progress
+- Raw Data
+- Export
+
+→ 새 버전 안내 배너 표시
+→ 사용자가 누르면 새로고침
+
+입력/저장 화면:
+- Import
+- Subtest Detail
+- Mobile Update
+- Admin 일부 화면
+
+→ 새 버전 안내 배너 표시
+→ 저장 후 새로고침하도록 안내
 ```
 
-### 4. Dashboard에서 넘어온 필터도 동일하게 정리
+---
 
-Dashboard의 KPI, Plan vs Actual, Pie chart, Alert 클릭도 Subtest List로 이동할 때 `source=dashboard`를 붙이겠습니다.
+### 5. 오래된 코드에서 새 파일을 못 찾는 오류 대응
 
-그러면 다음 흐름도 명확해집니다.
+Publish 직후 사용자가 기존 코드 상태에서 화면 이동을 하다가, 브라우저가 더 이상 존재하지 않는 JS chunk를 요청하는 경우가 있을 수 있습니다.
+
+예시 오류:
 
 ```text
-Dashboard 클릭
-→ Dashboard 조건만 적용
-
-이후 Progress 클릭
-→ Dashboard 조건 제거
-→ Progress 조건만 적용
-
-이후 Dashboard 다시 클릭
-→ Progress 조건 제거
-→ Dashboard 조건만 적용
+Failed to fetch dynamically imported module
+Loading chunk failed
 ```
 
-### 5. 필터 배너 문구 개선
-
-현재 Progress에서 넘어와도 Raw Data 상단에 다음처럼 표시될 수 있습니다.
+이 경우에도 앱이 멈추지 않도록 전역 오류 감지 로직을 추가하겠습니다.
 
 ```text
-Filtered from Dashboard:
+chunk 로딩 오류 발생
+→ 새 버전 가능성 판단
+→ “앱이 업데이트되었습니다. 새로고침해 주세요.” 안내
+→ [새로고침] 버튼 제공
 ```
 
-이를 출처에 따라 바꾸겠습니다.
+현재 코드에는 lazy route chunk가 많지는 않지만, 향후 코드 분할이나 빌드 결과에 따라 발생할 수 있으므로 함께 대비하는 것이 좋습니다.
+
+---
+
+## 운영 정책 제안
+
+코드 개선과 별도로 실제 운영에서는 아래 방식도 권장합니다.
+
+### 1. 큰 기능 변경은 사용량 적은 시간에 Publish
+
+예:
 
 ```text
-source=dashboard       → Filtered from Dashboard:
-source=schedule_cell   → Filtered from Progress:
-source=schedule_lookup → Filtered from Progress:
-기타 URL 필터          → Active URL filters:
+점심시간
+업무 종료 후
+현장 업데이트가 적은 시간대
 ```
 
-사용자 입장에서는 현재 목록이 어떤 화면에서 만들어졌는지 더 명확해집니다.
+특히 데이터 입력 화면이나 Import 로직이 바뀌는 경우에는 업무 중간 Publish를 줄이는 것이 좋습니다.
 
-### 6. Clear 동작 정리
+---
 
-현재 Gantt 날짜 필터 chip을 지우면 일부 관련 파라미터를 함께 제거합니다.
+### 2. 자주 Publish하는 개발 기간에는 사용자에게 안내
 
-이를 유지하면서, 출처별 clear 동작을 더 명확히 하겠습니다.
+예:
 
 ```text
-Progress 필터 chip 제거
-→ date_from
-→ date_to
-→ date_field
-→ stage
-→ cell_status
-→ source
-함께 제거
+현재 시스템 개선 작업 중입니다.
+새 버전 안내가 표시되면 작업 저장 후 새로고침해 주세요.
 ```
 
-`Clear all`은 URL 필터뿐 아니라 외부 진입으로 인해 적용된 column/global filter도 완전히 비워진 상태가 되도록 보정하겠습니다.
+이 안내는 앱 상단 배너 또는 공지 영역으로 나중에 확장할 수도 있습니다.
 
-## 수정 대상
+---
+
+### 3. 데이터베이스 변경과 화면 변경은 순서 주의
+
+현재 앱은 Lovable Cloud 기반의 데이터와 화면 코드가 함께 움직입니다.
+
+안전한 순서는 보통 아래와 같습니다.
 
 ```text
-src/pages/SubtestList.tsx
-src/pages/SchedulePage.tsx
-src/pages/DashboardPage.tsx
+1. 기존 화면과 호환되는 데이터 구조 변경
+2. 새 화면 코드 Publish
+3. 충분히 확인 후 오래된 호환 로직 제거
 ```
 
-필요 시 테스트 보강:
+즉, Publish 직후 기존 탭을 쓰는 사용자가 있어도 깨지지 않도록 “하위 호환”을 유지하는 방식이 좋습니다.
+
+---
+
+## 구현 대상 파일
+
+주요 수정 파일은 아래가 될 예정입니다.
 
 ```text
-src/test/dashboard-utils.test.ts
+vite.config.ts
+src/vite-env.d.ts
+src/lib/app-version.ts
+src/components/layout/AppUpdateBanner.tsx
+src/components/layout/AppLayout.tsx
+src/main.tsx
 ```
 
-또는 별도 테스트 추가:
+필요 시 새 파일을 추가합니다.
 
 ```text
-src/test/subtest-url-filter.test.ts
+src/hooks/useAppVersionCheck.ts
 ```
+
+---
+
+## 구현 상세
+
+### 1. Vite 빌드 설정에 Build ID 추가
+
+`vite.config.ts`에서 빌드 시점의 Build ID를 생성합니다.
+
+```text
+- __APP_BUILD_ID__ 전역 상수 주입
+- app-version.json 파일을 dist에 자동 생성
+```
+
+이렇게 하면 Publish마다 새로운 버전 파일이 만들어집니다.
+
+---
+
+### 2. 앱 버전 체크 Hook 추가
+
+`useAppVersionCheck`를 추가합니다.
+
+기능:
+
+```text
+- 현재 앱 Build ID 확인
+- /app-version.json fetch
+- cache: no-store 적용
+- 최신 Build ID와 비교
+- 다르면 updateAvailable = true 반환
+- 2분 간격 polling
+- visibilitychange 이벤트에서 재확인
+- online 이벤트에서 재확인
+```
+
+---
+
+### 3. 상단 업데이트 배너 추가
+
+`AppUpdateBanner` 컴포넌트를 추가합니다.
+
+표시 조건:
+
+```text
+updateAvailable === true
+```
+
+버튼:
+
+```text
+[새로고침]
+```
+
+동작:
+
+```text
+window.location.reload()
+```
+
+문구:
+
+```text
+새 버전이 배포되었습니다. 작업 중인 내용을 저장한 뒤 새로고침해 주세요.
+```
+
+---
+
+### 4. AppLayout에 배너 배치
+
+현재 `AppLayout` 구조는 상단 header와 main 영역이 있습니다.
+
+배너는 header 아래, main 위에 넣는 것이 좋습니다.
+
+```text
+SidebarInset
+ ├─ header
+ ├─ AppUpdateBanner
+ └─ main
+```
+
+이렇게 하면 모든 보호된 화면에서 공통으로 표시됩니다.
+
+---
+
+### 5. 전역 chunk 로딩 오류 처리
+
+`main.tsx` 또는 별도 helper에서 아래 오류를 감지합니다.
+
+```text
+Failed to fetch dynamically imported module
+Importing a module script failed
+Loading chunk failed
+```
+
+감지 시:
+
+```text
+- 새 버전 안내 상태 활성화
+- 또는 즉시 reload 안내 toast/banner 표시
+```
+
+강제 reload는 하지 않고 사용자가 선택하게 하겠습니다.
+
+---
+
+## 사용자 경험
+
+개선 후 사용자는 아래처럼 동작을 경험하게 됩니다.
+
+```text
+상황 1: 새 사용자가 접속
+→ 최신 Publish 버전으로 접속
+
+상황 2: 사용자가 이미 접속 중인데 새 Publish 발생
+→ 2분 이내 또는 탭 재활성화 시 새 버전 감지
+→ 상단에 새 버전 안내 표시
+→ 사용자가 작업 저장 후 새로고침
+
+상황 3: 오래된 코드 때문에 일부 파일 로딩 실패
+→ 앱이 멈추는 대신 새로고침 안내 표시
+```
+
+---
 
 ## 검증 항목
 
 구현 후 아래를 확인하겠습니다.
 
 ```text
-1. Dashboard에서 필터 클릭 후 Raw Data 진입
-   → Dashboard 조건만 표시
-
-2. 그 상태에서 Progress로 이동 후 Gantt Plan 클릭
-   → 기존 Dashboard URL 필터 제거
-   → 기존 Raw Data 검색어/컬럼 필터 제거
-   → Progress Plan 조건만 표시
-
-3. Progress Gantt Actual 클릭
-   → actual date + Done 조건만 적용
-   → 이전 Dashboard/Raw Data 필터 미적용
-
-4. Raw Data에서 직접 검색어 입력 후 Progress Gantt 클릭
-   → 기존 검색어 제거
-   → Progress 클릭 조건만 적용
-
-5. Raw Data에서 컬럼 필터 적용 후 Progress Gantt 클릭
-   → 기존 컬럼 필터 제거
-   → Progress 클릭 조건만 적용
-
-6. Progress에서 넘어온 경우 상단 배너가
-   “Filtered from Progress”로 표시
-
-7. Dashboard에서 넘어온 경우 상단 배너가
-   “Filtered from Dashboard”로 표시
-
-8. Clear all 클릭 시 URL 필터와 외부 진입 필터 상태가 깔끔하게 제거
-
-9. Progress Gantt Plan 셀 숫자와 Raw Data 결과 수가 일치
-
-10. Progress Gantt Actual 셀 숫자와 Raw Data 결과 수가 일치
+1. npm run build 성공
+2. 빌드 결과물에 app-version.json 생성 확인
+3. 앱 실행 중 app-version.json을 정상 fetch하는지 확인
+4. buildId가 같으면 배너가 표시되지 않는지 확인
+5. buildId가 다르면 배너가 표시되는지 확인
+6. 새로고침 버튼 클릭 시 최신 화면으로 reload되는지 확인
+7. Import 진행 중에도 강제 새로고침이 발생하지 않는지 확인
+8. Dashboard / Progress / Raw Data 어디서든 배너가 보이는지 확인
+9. 네트워크 오류 시 사용자에게 불필요한 에러가 표시되지 않는지 확인
+10. 기존 로그인/권한/라우팅 동작이 깨지지 않는지 확인
 ```
 
-## 최종 동작
+## 최종 목표
 
-개선 후 사용자는 다음 흐름을 기대할 수 있습니다.
+최종적으로 운영 방식은 아래처럼 정리됩니다.
 
 ```text
-Dashboard 필터 결과를 보고 있던 중
-→ Progress 이동
-→ Gantt의 다른 Plan/Actual 셀 클릭
-→ 기존 Dashboard/Raw Data 필터는 모두 리셋
-→ 새로 클릭한 Progress 조건 기준으로만 Subtest list 표시
+Publish를 계속하더라도
+- 새로 접속한 사용자는 최신 코드 사용
+- 이미 접속 중인 사용자는 새 버전 감지
+- 작업 중 데이터 손실 없이 사용자가 직접 새로고침
+- 오래된 코드/새 코드가 섞여 생기는 오류를 최소화
 ```
 
