@@ -28,7 +28,8 @@ const ROUTE_MIN_RANK: [RegExp, number][] = [
   [/^\/import/, 2],          // user+
   [/^\/export/, 2],          // user+
   [/^\/mobile/, 2],          // user+
-  [/^\/$/, 1],               // super_guest+ (Raw Data)
+  [/^\/$/, 0],               // redirects to Dashboard
+  [/^\/raw-data/, 1],        // super_guest+ (Raw Data)
   [/^\/subtests\//, 1],      // super_guest+ (SubtestDetail)
   [/^\/dashboard/, 0],       // everyone
   [/^\/schedule/, 0],        // everyone
