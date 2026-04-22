@@ -47,6 +47,7 @@ export function ScheduleMatrix({
 
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const leftBodyRef = useRef<HTMLDivElement>(null);
   const syncingRef = useRef(false);
 
   useEffect(() => {
@@ -64,6 +65,7 @@ export function ScheduleMatrix({
       if (syncingRef.current) return;
       syncingRef.current = true;
       header.scrollLeft = body.scrollLeft;
+      if (leftBodyRef.current) leftBodyRef.current.scrollTop = body.scrollTop;
       requestAnimationFrame(() => { syncingRef.current = false; });
     };
 
