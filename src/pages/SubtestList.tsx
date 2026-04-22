@@ -662,6 +662,9 @@ export default function SubtestList() {
   const urlPredDelayAsOf = searchParams.get('pred_delay_asof');
   const urlT1DelayAsOf = searchParams.get('t1_delay_asof');
   const urlT2DelayAsOf = searchParams.get('t2_delay_asof');
+  const urlPredDelayOn = searchParams.get('pred_delay_on');
+  const urlT1DelayOn = searchParams.get('t1_delay_on');
+  const urlT2DelayOn = searchParams.get('t2_delay_on');
 
   const urlDateFrom = searchParams.get('date_from');
   const urlDateTo = searchParams.get('date_to');
@@ -713,6 +716,9 @@ export default function SubtestList() {
       if (urlPredDelayAsOf && !isStageDelayedAsOf(r, 'pred', urlPredDelayAsOf)) return false;
       if (urlT1DelayAsOf && !isStageDelayedAsOf(r, 't1', urlT1DelayAsOf)) return false;
       if (urlT2DelayAsOf && !isStageDelayedAsOf(r, 't2', urlT2DelayAsOf)) return false;
+      if (urlPredDelayOn && !(r.pred_planned_date === urlPredDelayOn && !isStageDone(r, 'pred'))) return false;
+      if (urlT1DelayOn && !(r.t1_planned_date === urlT1DelayOn && !isStageDone(r, 't1'))) return false;
+      if (urlT2DelayOn && !(r.t2_planned_date === urlT2DelayOn && !isStageDone(r, 't2'))) return false;
 
       if (urlDateFrom || urlDateTo) {
         const stages: Array<'pred' | 't1' | 't2'> = urlStage ? [urlStage] : ['pred', 't1', 't2'];
@@ -735,7 +741,7 @@ export default function SubtestList() {
   }, [data, urlStatusFilter, urlAtRiskDays,
       urlPredPlannedTo, urlT1PlannedTo, urlT2PlannedTo, urlPredActualTo, urlT1ActualTo, urlT2ActualTo,
       urlPredPlannedOn, urlT1PlannedOn, urlT2PlannedOn, urlPredActualOn, urlT1ActualOn, urlT2ActualOn,
-      urlPredDelayAsOf, urlT1DelayAsOf, urlT2DelayAsOf,
+      urlPredDelayAsOf, urlT1DelayAsOf, urlT2DelayAsOf, urlPredDelayOn, urlT1DelayOn, urlT2DelayOn,
       urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, delayAsOfDate, localToday]);
 
   const columnIdToFieldName: Record<string, string> = {
@@ -812,6 +818,7 @@ export default function SubtestList() {
       t1_planned_on: 'T1 Plan =', t2_planned_on: 'T2 Plan =',
       t1_actual_on: 'T1 Actual =', t2_actual_on: 'T2 Actual =',
       pred_delay_asof: 'Pred Delay ≤', t1_delay_asof: 'T1 Delay ≤', t2_delay_asof: 'T2 Delay ≤',
+      pred_delay_on: 'Pred Delay =', t1_delay_on: 'T1 Delay =', t2_delay_on: 'T2 Delay =',
       stage: 'Stage', cell_status: 'Cell Status',
     };
     for (const [k, lbl] of Object.entries(map)) {

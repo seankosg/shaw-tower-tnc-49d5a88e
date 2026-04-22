@@ -792,6 +792,7 @@ function PlanActualTable({
     planOn?: string;
     actualOn?: string;
     delayAsOf?: string;
+    delayOn?: string;
     actualOverride?: { param: string; value: string };
   };
 
@@ -865,6 +866,7 @@ function PlanActualTable({
                 planOn: 'pred_planned_on',
                 actualOn: 'pred_actual_on',
                 delayAsOf: 'pred_delay_asof',
+                delayOn: 'pred_delay_on',
               },
               {
                 stage: 't1', label: 'T1', metrics: r.t1,
@@ -873,6 +875,7 @@ function PlanActualTable({
                 planOn: 't1_planned_on',
                 actualOn: 't1_actual_on',
                 delayAsOf: 't1_delay_asof',
+                delayOn: 't1_delay_on',
               },
               {
                 stage: 't2', label: 'T2', metrics: r.t2,
@@ -881,6 +884,7 @@ function PlanActualTable({
                 planOn: 't2_planned_on',
                 actualOn: 't2_actual_on',
                 delayAsOf: 't2_delay_asof',
+                delayOn: 't2_delay_on',
               },
             ];
 
@@ -962,7 +966,7 @@ function PlanActualTable({
                     <VarianceCell value={todayD} />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5 font-semibold text-destructive">
-                    <ClickNum value={m.todayDelay} hideZero onClick={st.delayAsOf ? () => go(r.key, { [st.delayAsOf!]: today }) : undefined} />
+                    <ClickNum value={m.todayDelay} hideZero onClick={st.delayOn ? () => go(r.key, { [st.delayOn!]: today }) : undefined} />
                   </TableCell>
                   <TableCell className="border-l border-border px-2 py-1.5">
                     <div className="flex items-center gap-1.5">
