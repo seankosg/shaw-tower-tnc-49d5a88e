@@ -679,9 +679,21 @@ function PlanActualTable({
     actualOverride?: { param: string; value: string };
   };
 
+  const colgroup = (
+    <colgroup>
+      <col className="w-[210px]" />
+      <col className="w-[72px]" />
+      <col className="w-[86px]" />
+      {Array.from({ length: 11 }).map((_, i) => <col key={i} className="w-[56px]" />)}
+      <col className="w-[140px]" />
+    </colgroup>
+  );
+
   return (
-    <div className="max-h-[520px] overflow-auto">
-      <Table>
+    <div className="overflow-x-auto">
+      <div className="min-w-[1160px]">
+        <Table className="table-fixed">
+          {colgroup}
         <TableHeader className="sticky top-0 bg-background z-10">
           <TableRow>
             <TableHead rowSpan={2} className="align-bottom">{groupHeader}</TableHead>
@@ -703,8 +715,13 @@ function PlanActualTable({
             <TableHead className="text-right border-l border-border text-[11px]">Plan</TableHead>
             <TableHead className="text-right text-[11px]">Actual</TableHead>
             <TableHead className="text-right text-[11px]">Δ</TableHead>
+            <TableHead className="text-right text-[11px]">Delay</TableHead>
           </TableRow>
         </TableHeader>
+        </Table>
+        <div className="max-h-[440px] overflow-y-auto">
+          <Table className="table-fixed">
+            {colgroup}
         <TableBody>
           {rows.map((r, idx) => {
             const stages: StageDef[] = [
@@ -823,6 +840,8 @@ function PlanActualTable({
           })}
         </TableBody>
       </Table>
+        </div>
+      </div>
     </div>
   );
 }
