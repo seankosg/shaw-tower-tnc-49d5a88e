@@ -589,6 +589,25 @@ function VarianceCell({ value }: { value: number }) {
   return <span className="text-destructive font-semibold tabular-nums">{value}</span>;
 }
 
+function HeaderTotalNumber({ value, tone }: { value: number; tone?: 'done' | 'remain' | 'delay' }) {
+  const cls = value === 0
+    ? 'text-muted-foreground/40'
+    : tone === 'done'
+      ? 'text-emerald-700 dark:text-emerald-400'
+      : tone === 'remain'
+        ? 'text-amber-700 dark:text-amber-400'
+        : tone === 'delay'
+          ? 'text-destructive'
+          : 'text-foreground';
+  return <span className={cn('tabular-nums font-semibold', cls)}>{value.toLocaleString()}</span>;
+}
+
+function HeaderTotalVariance({ value }: { value: number }) {
+  if (value === 0) return <span className="tabular-nums font-semibold text-muted-foreground/40">0</span>;
+  if (value > 0) return <span className="tabular-nums font-semibold text-green-700 dark:text-green-400">+{value.toLocaleString()}</span>;
+  return <span className="tabular-nums font-semibold text-destructive">{value.toLocaleString()}</span>;
+}
+
 const STAGE_BADGE: Record<'pred' | 't1' | 't2', string> = {
   pred: 'bg-muted text-muted-foreground border-border',
   t1: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30',
