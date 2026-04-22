@@ -316,6 +316,61 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* ─── 4 Tabs ─── */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-base">Plan vs Actual - Summary</CardTitle>
+          <Button variant="outline" size="sm" onClick={handleBreakdownExport}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Excel
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <Tabs value={breakdownTab} onValueChange={setBreakdownTab}>
+            <TabsList className="flex-wrap h-auto">
+              <TabsTrigger value="system">By System</TabsTrigger>
+              <TabsTrigger value="subcon">By Subcontractor</TabsTrigger>
+              <TabsTrigger value="subsub">By Sub-Sub</TabsTrigger>
+              <TabsTrigger value="hdec">By HDEC PIC</TabsTrigger>
+              <TabsTrigger value="team">By Team</TabsTrigger>
+            </TabsList>
+            <TabsContent value="system">
+              <PlanActualTable
+                rows={filteredBySystem}
+                groupParam="system"
+                groupHeader="System"
+                today={today}
+                dataDate={dataDate}
+                todayLabel={todayLabel}
+                dataDateLabel={dataDateLabel}
+                navigate={navigate}
+                keyToFilterValue={systemKeyResolver}
+                emptyMessage="No matching systems."
+                systemFilter={{
+                  text: systemTextFilter,
+                  selected: selectedSystemFilters,
+                  options: systemFilterOptions,
+                  onTextChange: setSystemTextFilter,
+                  onSelectedChange: setSelectedSystemFilters,
+                }}
+              />
+            </TabsContent>
+            <TabsContent value="subcon">
+              <PlanActualTable rows={bySubcon} groupParam="subcon" groupHeader="Subcontractor" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
+            </TabsContent>
+            <TabsContent value="subsub">
+              <PlanActualTable rows={bySubsub} groupParam="subsub" groupHeader="Sub-Sub" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
+            </TabsContent>
+            <TabsContent value="hdec">
+              <PlanActualTable rows={byHdec} groupParam="hdec_pic" groupHeader="HDEC PIC" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
+            </TabsContent>
+            <TabsContent value="team">
+              <PlanActualTable rows={byTeam} groupParam="team" groupHeader="Team" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+
       {/* ─── S-Curve Combo Chart ─── */}
       <Card>
         <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0 pb-2">
@@ -403,61 +458,6 @@ export default function DashboardPage() {
               </ComposedChart>
             </ChartContainer>
           )}
-        </CardContent>
-      </Card>
-
-      {/* ─── 4 Tabs ─── */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base">Plan vs Actual — Breakdown</CardTitle>
-          <Button variant="outline" size="sm" onClick={handleBreakdownExport}>
-            <Download className="mr-1.5 h-4 w-4" />
-            Excel
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={breakdownTab} onValueChange={setBreakdownTab}>
-            <TabsList className="flex-wrap h-auto">
-              <TabsTrigger value="system">By System</TabsTrigger>
-              <TabsTrigger value="subcon">By Subcontractor</TabsTrigger>
-              <TabsTrigger value="subsub">By Sub-Sub</TabsTrigger>
-              <TabsTrigger value="hdec">By HDEC PIC</TabsTrigger>
-              <TabsTrigger value="team">By Team</TabsTrigger>
-            </TabsList>
-            <TabsContent value="system">
-              <PlanActualTable
-                rows={filteredBySystem}
-                groupParam="system"
-                groupHeader="System"
-                today={today}
-                dataDate={dataDate}
-                todayLabel={todayLabel}
-                dataDateLabel={dataDateLabel}
-                navigate={navigate}
-                keyToFilterValue={systemKeyResolver}
-                emptyMessage="No matching systems."
-                systemFilter={{
-                  text: systemTextFilter,
-                  selected: selectedSystemFilters,
-                  options: systemFilterOptions,
-                  onTextChange: setSystemTextFilter,
-                  onSelectedChange: setSelectedSystemFilters,
-                }}
-              />
-            </TabsContent>
-            <TabsContent value="subcon">
-              <PlanActualTable rows={bySubcon} groupParam="subcon" groupHeader="Subcontractor" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
-            </TabsContent>
-            <TabsContent value="subsub">
-              <PlanActualTable rows={bySubsub} groupParam="subsub" groupHeader="Sub-Sub" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
-            </TabsContent>
-            <TabsContent value="hdec">
-              <PlanActualTable rows={byHdec} groupParam="hdec_pic" groupHeader="HDEC PIC" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
-            </TabsContent>
-            <TabsContent value="team">
-              <PlanActualTable rows={byTeam} groupParam="team" groupHeader="Team" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
-            </TabsContent>
-          </Tabs>
         </CardContent>
       </Card>
 
