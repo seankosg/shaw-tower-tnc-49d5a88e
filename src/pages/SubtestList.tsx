@@ -667,12 +667,13 @@ export default function SubtestList() {
   const urlStage = searchParams.get('stage') as 'pred' | 't1' | 't2' | null;
   const urlCellStatus = searchParams.get('cell_status') as TcStatus | null;
   const urlAsOf = searchParams.get('as_of');
+  const delayAsOfDate = urlAsOf || dataDate || new Date().toISOString().slice(0, 10);
 
   const filteredData = useMemo(() => {
-    const today = urlAsOf || new Date().toISOString().slice(0, 10);
+    const atRiskBaseDate = new Date().toISOString().slice(0, 10);
     const daysFromToday = (iso: string) => {
       const a = new Date(iso + 'T00:00:00Z').getTime();
-      const b = new Date(today + 'T00:00:00Z').getTime();
+      const b = new Date(atRiskBaseDate + 'T00:00:00Z').getTime();
       return Math.round((a - b) / 86400000);
     };
 
@@ -681,7 +682,7 @@ export default function SubtestList() {
 
     return data.filter(r => {
       if (urlStatusFilter) {
-        const overdue = getAnyStageDelayedAsOf(r, getStageKeys('all'), today);
+        const overdue = getAnyStageDelayedAsOf(r, getStageKeys('all'), delayAsOfDate);
         if (urlStatusFilter === 'overdue' && !overdue) return false;
         if (urlStatusFilter === 'at_risk') {
           if (overdue) return false;
@@ -732,7 +733,7 @@ export default function SubtestList() {
       urlPredPlannedTo, urlT1PlannedTo, urlT2PlannedTo, urlPredActualTo, urlT1ActualTo, urlT2ActualTo,
       urlPredPlannedOn, urlT1PlannedOn, urlT2PlannedOn, urlPredActualOn, urlT1ActualOn, urlT2ActualOn,
       urlPredDelayAsOf, urlT1DelayAsOf, urlT2DelayAsOf,
-      urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, urlAsOf]);
+      urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, delayAsOfDate]);
 
   const columnIdToFieldName: Record<string, string> = {
     system_code: 'system',
@@ -946,6 +947,7 @@ export default function SubtestList() {
         autoSizeColumn={autoSizeColumn}
         navigate={navigate}
         tableRef={tableRef}
+        delayAsOfDate={delayAsOfDate}
       />
     </div>
   );
@@ -961,10 +963,11 @@ interface SubtestTableViewProps {
   autoSizeColumn: (id: string) => void;
   navigate: (path: string) => void;
   tableRef: React.RefObject<HTMLDivElement>;
+  delayAsOfDate: string;
 }
 
 function SubtestTableView({
-  table, loading, columns, sorting, autoSizeColumn, navigate, tableRef,
+  table, loading, columns, sorting, autoSizeColumn, navigate, tableRef, delayAsOfDate,
 }: SubtestTableViewProps) {
   const FROZEN_COUNT = 4;
   const leafCols = table.getVisibleLeafColumns();
@@ -1019,8 +1022,7 @@ function SubtestTableView({
   const scrollHeaders = allHeaders.slice(FROZEN_COUNT);
 
   const renderRowBgClass = (r: SubtestRow) => {
-    const today = new Date().toISOString().slice(0, 10);
-    const delayed = getAnyStageDelayedAsOf(r, getStageKeys('all'), today);
+    const delayed = getAnyStageDelayedAsOf(r, getStageKeys('all'), delayAsOfDate);
     const t2Done = isStageDone(r, 't2');
     return { delayed, t2Done };
   };
