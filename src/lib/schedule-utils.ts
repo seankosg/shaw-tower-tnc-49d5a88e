@@ -1,8 +1,17 @@
 // Schedule page utilities — bucketization, group aggregation, critical detection.
 import type { TcStatus } from '@/types/enums';
 import type { SubtestForDashboard } from '@/lib/dashboard-utils';
+import {
+  daysBetween as stageDaysBetween,
+  getStageActualDate,
+  getStageKeys,
+  getStagePlannedDate,
+  isStageDelayedAsOf,
+  isStageDone,
+  type StageKey,
+} from '@/lib/stage-metrics';
 
-export type ScheduleStage = 'pred' | 't1' | 't2';
+export type ScheduleStage = StageKey;
 export type ScheduleStageFilter = 'all' | ScheduleStage;
 export type ScheduleBucket = 'day' | 'week';
 export type ScheduleGroupBy = 'system' | 'subcon' | 'subsub' | 'hdec' | 'team';
@@ -20,9 +29,9 @@ export interface StageRow {
   totalActual: number;
   totalDone: number; // # subtests for this stage marked Done
   total: number; // # subtests in group (denominator)
-  /** # of subtests with plan_date <= today (for this stage). */
+  /** # of subtests with plan_date <= selected as-of date (for this stage). */
   cumPlan: number;
-  /** # of subtests with actual_date <= today (for this stage). */
+  /** # of subtests with actual_date <= selected as-of date (for this stage). */
   cumActual: number;
 }
 
