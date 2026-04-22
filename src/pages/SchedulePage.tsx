@@ -62,6 +62,12 @@ export default function SchedulePage() {
     localStorage.setItem('schedule_hide_past', hidePast ? '1' : '0');
   }, [hidePast]);
 
+  useEffect(() => {
+    if (groupBy === 'system') return;
+    setSystemTextFilter('');
+    setSelectedSystemFilters([]);
+  }, [groupBy]);
+
   // Hydrate from cache for instant render
   const cached = useMemo(() => getScheduleCache(), []);
   const [subtests, setSubtests] = useState<SubtestForDashboard[]>(cached.data?.subtests ?? []);
@@ -509,6 +515,13 @@ export default function SchedulePage() {
               asOfLabel={asOfLabel}
               groupHeader={GROUP_LABELS[groupBy]}
               onCellClick={handleCellClick}
+              systemFilter={groupBy === 'system' ? {
+                text: systemTextFilter,
+                selected: selectedSystemFilters,
+                options: systemFilterOptions,
+                onTextChange: setSystemTextFilter,
+                onSelectedChange: setSelectedSystemFilters,
+              } : undefined}
             />
           )}
         </div>
