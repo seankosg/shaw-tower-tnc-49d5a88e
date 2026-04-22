@@ -2,12 +2,13 @@
 import type { TcStatus } from '@/types/enums';
 import type { SubtestForDashboard } from '@/lib/dashboard-utils';
 import {
-  daysBetween as stageDaysBetween,
   getStageActualDate,
   getStageKeys,
   getStagePlannedDate,
+  isStageActualUpTo,
   isStageDelayedAsOf,
   isStageDone,
+  isStagePlannedUpTo,
   type StageKey,
 } from '@/lib/stage-metrics';
 
@@ -27,7 +28,7 @@ export interface StageRow {
   cells: BucketCell[];
   totalPlan: number;
   totalActual: number;
-  totalDone: number; // # subtests for this stage marked Done
+  totalDone: number; // # subtests actual-completed up to the selected as-of date
   total: number; // # subtests in group (denominator)
   /** # of subtests with plan_date <= selected as-of date (for this stage). */
   cumPlan: number;
@@ -39,7 +40,7 @@ export interface GroupRow {
   key: string;
   label: string;
   total: number; // # subtests in group
-  doneCount: number; // T2 done count (overall progress)
+  doneCount: number; // # selected stages actual-completed up to the selected as-of date
   cumPlan: number;
   cumActual: number;
   stages: Record<ScheduleStage, StageRow>;
@@ -121,11 +122,10 @@ export function isPredDone(s: SubtestForDashboard & { predecessor_status_raw?: s
 function getStageDates(
   s: SubtestForDashboard,
   stage: ScheduleStage
-): { plan: string | null; actual: string | null; done: boolean } {
+): { plan: string | null; actual: string | null } {
   return {
     plan: getStagePlannedDate(s, stage),
     actual: getStageActualDate(s, stage),
-    done: isStageDone(s, stage),
   };
 }
 
@@ -174,7 +174,7 @@ export function aggregateSchedule(
 
     for (const s of items) {
       for (const st of ['pred', 't1', 't2'] as ScheduleStage[]) {
-        const { plan, actual, done } = getStageDates(s, st);
+        const { plan, actual } = getStageDates(s, st);
         if (plan) {
           const b = bucketize(plan, opts.bucket);
           const i = bucketIdx.get(b);
@@ -182,7 +182,7 @@ export function aggregateSchedule(
             stageData[st].cells[i].plan++;
             stageData[st].totalPlan++;
           }
-          if (plan <= opts.asOfDate) stageData[st].cumPlan++;
+          if (isStagePlannedUpTo(s, st, opts.asOfDate)) stageData[st].cumPlan++;
         }
         if (actual) {
           const b = bucketize(actual, opts.bucket);
@@ -191,9 +191,9 @@ export function aggregateSchedule(
             stageData[st].cells[i].actual++;
             stageData[st].totalActual++;
           }
-          if (actual <= opts.asOfDate) stageData[st].cumActual++;
+          if (isStageActualUpTo(s, st, opts.asOfDate)) stageData[st].cumActual++;
         }
-        if (done) stageData[st].totalDone++;
+        if (isStageActualUpTo(s, st, opts.asOfDate)) stageData[st].totalDone++;
       }
     }
 
