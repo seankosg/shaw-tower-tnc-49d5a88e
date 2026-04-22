@@ -21,8 +21,4 @@ window.addEventListener("unhandledrejection", (event) => {
   if (isChunkLoadError(message)) notifyAppVersionMismatch();
 });
 
-createRoot(document.getElementById("root")!).render(
-  <AuthProvider>
-    <App />
-  </AuthProvider>
-);
+createRoot(document.getElementById("root")!).render(<App />);
