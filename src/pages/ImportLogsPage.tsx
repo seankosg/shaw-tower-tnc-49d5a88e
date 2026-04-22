@@ -86,6 +86,7 @@ export default function ImportLogsPage() {
   const [batches, setBatches] = useState<UploadBatch[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
   const [rowLogs, setRowLogs] = useState<RowLog[]>([]);
+  const [scheduleChanges, setScheduleChanges] = useState<ScheduleChangeAudit[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -106,6 +107,10 @@ export default function ImportLogsPage() {
       .select('id, raw_row_no, raw_system_name, item_no, mos_code, action_taken, reason_code, reason_detail')
       .eq('upload_id', id).order('raw_row_no', { ascending: true }).limit(500);
     if (data) setRowLogs(data);
+    const { data: changes } = await supabase.from('schedule_change_audit')
+      .select('*, system_master(system_code)' as any)
+      .eq('upload_id', id).order('raw_row_no', { ascending: true }).limit(500);
+    setScheduleChanges((changes as any) || []);
   };
 
   const deleteBatch = async (batch: UploadBatch) => {
@@ -113,6 +118,8 @@ export default function ImportLogsPage() {
     try {
       const { error: e1 } = await supabase.from('subtests').delete().eq('source_upload_id', batch.id);
       if (e1) throw e1;
+      const { error: auditErr } = await supabase.from('schedule_change_audit').delete().eq('upload_id', batch.id);
+      if (auditErr) throw auditErr;
       const { error: e2 } = await supabase.from('upload_row_logs').delete().eq('upload_id', batch.id);
       if (e2) throw e2;
       const { error: e3 } = await supabase.from('upload_batches').delete().eq('id', batch.id);
