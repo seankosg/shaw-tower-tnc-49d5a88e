@@ -7,6 +7,7 @@ const HEADER_MAP: Record<string, string> = {
   itemno: 'item_no',
   'item no': 'item_no',
   'item_no': 'item_no',
+  team: 'team',
   level: 'level',
   lv: 'level',
   equipment: 'equipment',
@@ -93,6 +94,10 @@ const HEADER_MAP: Record<string, string> = {
   'punch list comments': 'punchlist_comments',
   'punchlist_comments': 'punchlist_comments',
   'punchlist comment': 'punchlist_comments',
+  source: 'source',
+  updated: 'updated_at',
+  'updated at': 'updated_at',
+  updated_at: 'updated_at',
 };
 
 function normalizeHeader(raw: string): string {
@@ -148,6 +153,20 @@ function normalizeStatus(val: any): string | null {
   const s = String(val).trim();
   const map: Record<string, string> = { planned: 'Planned', wip: 'WIP', done: 'Done', hold: 'Hold' };
   return map[s.toLowerCase()] || s;
+}
+
+function normalizeTeam(val: any): string | null {
+  if (val == null || val === '') return null;
+  const s = String(val).trim();
+  const key = s.toLowerCase();
+  if (key === 'clear') return 'clear';
+  const map: Record<string, string> = {
+    mech: 'Mech', mechanical: 'Mech',
+    elec: 'Elec', electrical: 'Elec',
+    arch: 'Arch', architecture: 'Arch', architectural: 'Arch',
+    supp: 'Supp', support: 'Supp',
+  };
+  return map[key] || null;
 }
 
 function normalizePredecessor(val: any): string | null {
