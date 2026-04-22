@@ -28,7 +28,6 @@ import { exportSubtestsToExcel } from '@/lib/excel-export';
 import { useToast } from '@/hooks/use-toast';
 import { USER_TYPE_LABELS } from '@/types/enums';
 import {
-  daysBetween,
   getAnyStageDelayedAsOf,
   getStageActualDate,
   getStageKeys,
@@ -929,7 +928,6 @@ export default function SubtestList() {
         columns={columns}
         sorting={sorting}
         autoSizeColumn={autoSizeColumn}
-        isDelayed={isDelayed}
         navigate={navigate}
         tableRef={tableRef}
       />
@@ -945,13 +943,12 @@ interface SubtestTableViewProps {
   columns: ColumnDef<SubtestRow>[];
   sorting: SortingState;
   autoSizeColumn: (id: string) => void;
-  isDelayed: (planned: string | null, actual: string | null) => boolean;
   navigate: (path: string) => void;
   tableRef: React.RefObject<HTMLDivElement>;
 }
 
 function SubtestTableView({
-  table, loading, columns, sorting, autoSizeColumn, isDelayed, navigate, tableRef,
+  table, loading, columns, sorting, autoSizeColumn, navigate, tableRef,
 }: SubtestTableViewProps) {
   const FROZEN_COUNT = 4;
   const leafCols = table.getVisibleLeafColumns();
@@ -1006,9 +1003,9 @@ function SubtestTableView({
   const scrollHeaders = allHeaders.slice(FROZEN_COUNT);
 
   const renderRowBgClass = (r: SubtestRow) => {
-    const delayed = isDelayed(r.t1_planned_date, r.t1_actual_date) ||
-                    isDelayed(r.t2_planned_date, r.t2_actual_date);
-    const t2Done = r.t2_status === 'Done';
+    const today = new Date().toISOString().slice(0, 10);
+    const delayed = getAnyStageDelayedAsOf(r, getStageKeys('all'), today);
+    const t2Done = isStageDone(r, 't2');
     return { delayed, t2Done };
   };
 
