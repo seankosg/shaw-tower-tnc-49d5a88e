@@ -653,6 +653,7 @@ export default function SubtestList() {
     return data.filter(r => {
       if (urlStatusFilter) {
         const overdue =
+          (r.pred_planned_date && r.pred_planned_date < today && r.pred_status !== 'Done') ||
           (r.t1_planned_date && r.t1_planned_date < today && r.t1_status !== 'Done') ||
           (r.t2_planned_date && r.t2_planned_date < today && r.t2_status !== 'Done');
         if (urlStatusFilter === 'overdue' && !overdue) return false;
