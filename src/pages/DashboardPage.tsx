@@ -47,6 +47,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>('day');
   const [teamFilter, setTeamFilter] = useState<string>('all');
+  const [dataDate, setDataDate] = useState(() => yesterdayIso(todayIso()));
 
   useEffect(() => {
     let cancelled = false;
@@ -67,9 +68,19 @@ export default function DashboardPage() {
         from += PAGE;
       }
       const sysRes = await supabase.from('system_master').select('id, system_code').eq('is_active', true);
+      const latestImport = await supabase
+        .from('upload_batches')
+        .select('data_date')
+        .eq('status', 'completed')
+        .not('data_date', 'is', null)
+        .order('data_date', { ascending: false })
+        .order('uploaded_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if (!cancelled) {
         setSubtests(all);
         setSystems(sysRes.data ?? []);
+        if (latestImport.data?.data_date) setDataDate(latestImport.data.data_date);
         setLoading(false);
       }
     }
@@ -78,7 +89,8 @@ export default function DashboardPage() {
   }, []);
 
   const today = todayIso();
-  const yesterday = yesterdayIso(today);
+  const dataDateLabel = formatDdMmm(dataDate);
+  const todayLabel = formatDdMmm(today);
   const sysCodeById = useMemo(() => {
     const m = new Map<string, string>();
     systems.forEach(s => m.set(s.id, s.system_code));
@@ -127,24 +139,24 @@ export default function DashboardPage() {
 
   // ───── Group aggregates per tab — Plan vs Actual rows
   const bySystem = useMemo(
-    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.system_id, k => sysCodeById.get(k) ?? '—'),
-    [filteredSubtests, today, sysCodeById]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.system_id, k => sysCodeById.get(k) ?? '—'),
+    [filteredSubtests, today, dataDate, sysCodeById]
   );
   const bySubcon = useMemo(
-    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.subcontractor_name ?? NONE_LABEL, k => k),
-    [filteredSubtests, today]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.subcontractor_name ?? NONE_LABEL, k => k),
+    [filteredSubtests, today, dataDate]
   );
   const bySubsub = useMemo(
-    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.subsub_name ?? NONE_LABEL, k => k),
-    [filteredSubtests, today]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.subsub_name ?? NONE_LABEL, k => k),
+    [filteredSubtests, today, dataDate]
   );
   const byHdec = useMemo(
-    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.hdec_pic_name ?? NONE_LABEL, k => k),
-    [filteredSubtests, today]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.hdec_pic_name ?? NONE_LABEL, k => k),
+    [filteredSubtests, today, dataDate]
   );
   const byTeam = useMemo(
-    () => aggregatePlanActualByGroup(filteredSubtests, today, s => s.team ?? NONE_LABEL, k => k),
-    [filteredSubtests, today]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.team ?? NONE_LABEL, k => k),
+    [filteredSubtests, today, dataDate]
   );
   const systemKeyResolver = useMemo(
     () => (key: string) => sysCodeById.get(key) ?? key,
@@ -169,7 +181,7 @@ export default function DashboardPage() {
       toast({ title: 'No data to export', variant: 'destructive' });
       return;
     }
-    const { rowCount, fileName } = exportPlanActualToExcel(rows, header, today, yesterday);
+    const { rowCount, fileName } = exportPlanActualToExcel(rows, header, today, dataDate);
     toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
   };
 
