@@ -1,8 +1,11 @@
 import { useState, Fragment, useMemo, useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScheduleCell } from './ScheduleCell';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   type AggregateResult,
   type ScheduleBucket,
@@ -25,6 +28,13 @@ interface ScheduleMatrixProps {
     stage: ScheduleStage | 'all',
     field: 'planned' | 'actual',
   ) => void;
+  systemFilter?: {
+    text: string;
+    selected: string[];
+    options: string[];
+    onTextChange: (value: string) => void;
+    onSelectedChange: (value: string[]) => void;
+  };
 }
 
 // Sub-column widths
@@ -43,6 +53,7 @@ export function ScheduleMatrix({
   asOfLabel,
   groupHeader,
   onCellClick,
+  systemFilter,
 }: ScheduleMatrixProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const cellWidth = bucket === 'day' ? 64 : 96;
@@ -149,8 +160,9 @@ export function ScheduleMatrix({
           <div className="z-40 flex shrink-0 flex-col bg-muted shadow-[2px_0_4px_-2px_hsl(var(--border))]" style={{ width: STICKY_LEFT_WIDTH }}>
             {/* Row 1: group headers */}
             <div className="flex border-b border-border">
-              <div className="flex items-center px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground" style={{ width: W_GROUP }}>
-                {groupHeader}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground" style={{ width: W_GROUP }}>
+                <span>{groupHeader}</span>
+                {systemFilter && <SystemHeaderFilter {...systemFilter} />}
               </div>
               <div
                 className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide bg-muted text-foreground border-l border-border"
