@@ -39,12 +39,9 @@ export const NONE_LABEL = '(None)';
 
 export { todayIso, daysBetween };
 
-/** True if subtest has any Pred/T1/T2 planned date past today and not Done. */
-export function isOverdue(s: SubtestForDashboard, today: string): boolean {
-  return getStageKeys('all').some(stage => {
-    const planned = getStagePlannedDate(s, stage);
-    return !!planned && planned < today && !isStageDone(s, stage);
-  });
+/** True if subtest has any Pred/T1/T2 planned date on/before as-of date and not Done. */
+export function isOverdue(s: SubtestForDashboard, asOfDate: string): boolean {
+  return getStageKeys('all').some(stage => isStageDelayedAsOf(s, stage, asOfDate));
 }
 
 /** True if not overdue but a planned date is within `thresholdDays` (inclusive). */
