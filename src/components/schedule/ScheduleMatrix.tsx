@@ -237,7 +237,7 @@ export function ScheduleMatrix({
             const showStageRows = stageFilter === 'all';
             return (
               <Fragment key={`left-${row.key}`}>
-                <div className={cn("flex border-b border-border text-xs h-10", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
+                <div className={cn("flex border-b border-border text-xs h-14", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
                   <div className="flex items-center gap-1 px-2 text-left cursor-default" style={{ width: W_GROUP }}>
                     <span className="truncate font-medium" title={row.label}>{row.label}</span>
                   </div>
