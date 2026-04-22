@@ -26,6 +26,7 @@ import { formatDdMmm } from '@/lib/format';
 import { getSubtestCache, setSubtestCache } from '@/lib/subtest-cache';
 import { exportSubtestsToExcel } from '@/lib/excel-export';
 import { useToast } from '@/hooks/use-toast';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { USER_TYPE_LABELS } from '@/types/enums';
 import {
   getAnyStageDelayedAsOf,
@@ -1028,7 +1029,8 @@ interface SubtestTableViewProps {
 function SubtestTableView({
   table, loading, columns, sorting, autoSizeColumn, navigate, tableRef, delayAsOfDate,
 }: SubtestTableViewProps) {
-  const FROZEN_COUNT = 4;
+  const isMobile = useIsMobile();
+  const FROZEN_COUNT = isMobile ? 1 : 4;
   const leafCols = table.getVisibleLeafColumns();
   const frozenCols = useMemo(() => leafCols.slice(0, FROZEN_COUNT), [leafCols]);
   const scrollCols = useMemo(() => leafCols.slice(FROZEN_COUNT), [leafCols]);
