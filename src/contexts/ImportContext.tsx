@@ -71,12 +71,19 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     for (const item of items) {
       try {
         const buf = await item.file.arrayBuffer();
-        const { rows, unmappedHeaders } = parseExcelFile(buf);
-        const subtests = importTypeRef.current === 'legacy' ? parseLegacy(rows) : parseStandard(rows);
+        const { rows, mappedHeaders, unmappedHeaders } = parseExcelFile(buf);
+        const detection = detectImportType(mappedHeaders);
+        const subtests = detection.type === 'legacy' ? parseLegacy(rows) : detection.type === 'standard' ? parseStandard(rows) : [];
         if (subtests.length === 0) {
-          updateFile(item.id, { status: 'failed', error: 'No valid rows found', unmappedHeaders });
+          updateFile(item.id, {
+            status: 'failed',
+            error: detection.type === 'unknown' ? 'Unknown import format' : 'No valid rows found',
+            unmappedHeaders,
+            detectedImportType: detection.type,
+            detectionReasons: detection.reasons,
+          });
         } else {
-          updateFile(item.id, { status: 'ready', parsedCount: subtests.length, parsed: subtests, unmappedHeaders });
+          updateFile(item.id, { status: 'ready', parsedCount: subtests.length, parsed: subtests, unmappedHeaders, detectedImportType: detection.type, detectionReasons: detection.reasons });
         }
       } catch (e: any) {
         updateFile(item.id, { status: 'failed', error: e.message });
@@ -117,7 +124,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     const { data: batch, error: batchErr } = await supabase.from('upload_batches').insert({
       project_id: projectId,
       uploaded_file_name: item.name,
-      import_type: importTypeRef.current,
+      import_type: item.detectedImportType === 'standard' ? 'standard' : 'legacy',
       total_rows: parsed.length,
       status: 'processing' as any,
       data_date: item.dataDate || null,
@@ -247,7 +254,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         .eq('item_no', row.item_no).eq('mos_code', row.mos_code).eq('is_active', true)
         .maybeSingle();
 
-      const dataSourceType = importTypeRef.current === 'legacy' ? 'legacy_import_inherited' : 'standard_import';
+      const dataSourceType = item.detectedImportType === 'legacy' ? 'legacy_import_inherited' : 'standard_import';
       const autoFillDate = item.dataDate || new Date().toISOString().slice(0, 10);
 
       if (existing) {
