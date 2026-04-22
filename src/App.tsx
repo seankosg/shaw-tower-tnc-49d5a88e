@@ -3,7 +3,6 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/contexts/AuthContext";
 import { ImportProvider } from "@/contexts/ImportContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
@@ -24,31 +23,29 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <ImportProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
-              <Route element={<ProtectedRoute><RoleGuard><AppLayout /></RoleGuard></ProtectedRoute>}>
-                <Route path="/" element={<SubtestList />} />
-                <Route path="/subtests/:id" element={<SubtestDetail />} />
-                <Route path="/import" element={<ImportPage />} />
-                <Route path="/import/logs" element={<ImportLogsPage />} />
-                <Route path="/export" element={<ExportPage />} />
-                <Route path="/mobile" element={<MobileUpdatePage />} />
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/schedule" element={<SchedulePage />} />
-                <Route path="/admin" element={<AdminPage />} />
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </ImportProvider>
-    </AuthProvider>
+    <ImportProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
+            <Route element={<ProtectedRoute><RoleGuard><AppLayout /></RoleGuard></ProtectedRoute>}>
+              <Route path="/" element={<SubtestList />} />
+              <Route path="/subtests/:id" element={<SubtestDetail />} />
+              <Route path="/import" element={<ImportPage />} />
+              <Route path="/import/logs" element={<ImportLogsPage />} />
+              <Route path="/export" element={<ExportPage />} />
+              <Route path="/mobile" element={<MobileUpdatePage />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/schedule" element={<SchedulePage />} />
+              <Route path="/admin" element={<AdminPage />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </ImportProvider>
   </QueryClientProvider>
 );
 
