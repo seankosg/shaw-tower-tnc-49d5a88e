@@ -245,7 +245,7 @@ export function ScheduleMatrix({
                     <TotalDoneCells total={row.total} done={row.doneCount} bold py="py-0" />
                   </div>
                   <div className="flex bg-secondary/20">
-                    <PlanActualCells plan={row.cumPlan} actual={row.cumActual} bold py="py-0" />
+                    <PlanActualCells plan={row.cumPlan} actual={row.cumActual} asOfLabel={asOfLabel} bold py="py-0" />
                   </div>
                 </div>
 
@@ -267,7 +267,7 @@ export function ScheduleMatrix({
                         <TotalDoneCells total={sr.total} done={sr.totalDone} py="py-0" />
                       </div>
                       <div className="flex bg-secondary/20">
-                        <PlanActualCells plan={sr.cumPlan} actual={sr.cumActual} py="py-0" />
+                        <PlanActualCells plan={sr.cumPlan} actual={sr.cumActual} asOfLabel={asOfLabel} py="py-0" />
                       </div>
                     </div>
                   );
@@ -426,10 +426,11 @@ function TotalDoneCells({
 }
 
 function PlanActualCells({
-  plan, actual, bold, py,
+  plan, actual, asOfLabel, bold, py,
 }: {
   plan: number;
   actual: number;
+  asOfLabel: string;
   bold?: boolean;
   py: string;
 }) {
@@ -441,11 +442,11 @@ function PlanActualCells({
     diff < 0 ? 'text-schedule-short' : diff > 0 ? 'text-schedule-over' : 'text-muted-foreground';
   return (
     <>
-      <NumCell width={W_NUM} py={py} borderLeft title="Plan up to today">{plan}</NumCell>
+      <NumCell width={W_NUM} py={py} borderLeft title={`Plan up to ${asOfLabel}`}>{plan}</NumCell>
       <NumCell
         width={W_NUM}
         py={py}
-        title="Actual up to today"
+        title={`Actual up to ${asOfLabel}`}
         className={cn(bold && 'font-semibold', accent)}
       >
         {actual}
