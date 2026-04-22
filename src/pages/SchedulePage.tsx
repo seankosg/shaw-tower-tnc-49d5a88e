@@ -253,7 +253,7 @@ export default function SchedulePage() {
 
   const goSubtests = (params: Record<string, string>) => {
     const sp = new URLSearchParams(params);
-    navigate(`/?${sp.toString()}`);
+    navigate(`/raw-data?${sp.toString()}`);
   };
 
   const handleCellClick = (
@@ -452,7 +452,7 @@ export default function SchedulePage() {
                 };
                 if (pickedField === 'actual') params.cell_status = 'Done';
                 if (stageFilter !== 'all') params.stage = stageFilter;
-                navigate(`/?${new URLSearchParams(params).toString()}`);
+                navigate(`/raw-data?${new URLSearchParams(params).toString()}`);
               }}
             >
               Go
@@ -491,14 +491,14 @@ export default function SchedulePage() {
           value={kpis.overdue}
           accent={kpis.overdue > 0 ? 'short' : undefined}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
-          onClick={kpis.overdue > 0 ? () => navigate(`/?source=schedule_kpi&status=overdue&as_of=${dataDate}`) : undefined}
+          onClick={kpis.overdue > 0 ? () => navigate(`/raw-data?source=schedule_kpi&status=overdue&as_of=${dataDate}`) : undefined}
         />
         <Kpi
           label="Critical (≤7d)"
           value={kpis.criticalCount}
           accent={kpis.criticalCount > 0 ? 'short' : undefined}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
-          onClick={kpis.criticalCount > 0 ? () => navigate('/?source=schedule_kpi&status=at_risk&at_risk_days=7') : undefined}
+          onClick={kpis.criticalCount > 0 ? () => navigate('/raw-data?source=schedule_kpi&status=at_risk&at_risk_days=7') : undefined}
         />
         <Kpi
           label="Upcoming 7d Plan"
@@ -506,7 +506,7 @@ export default function SchedulePage() {
           icon={<CalendarIcon className="h-3.5 w-3.5" />}
           onClick={
             kpis.upcoming7Plan > 0
-              ? () => navigate(`/?source=schedule_kpi&date_from=${today}&date_to=${kpis.upcomingEnd}&date_field=planned`)
+              ? () => navigate(`/raw-data?source=schedule_kpi&date_from=${today}&date_to=${kpis.upcomingEnd}&date_field=planned`)
               : undefined
           }
         />
