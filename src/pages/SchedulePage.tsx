@@ -255,6 +255,8 @@ export default function SchedulePage() {
       stageFilter,
       bucket,
       today,
+      dataDate,
+      asOfLabel,
     });
     toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
   };
