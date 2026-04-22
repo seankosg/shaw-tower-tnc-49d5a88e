@@ -269,7 +269,7 @@ export default function SchedulePage() {
             Progress Status
           </h1>
           <p className="text-xs text-muted-foreground">
-            Track planned vs actual progress by {GROUP_LABELS[groupBy]} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Today {today}
+            Track planned vs actual progress by {GROUP_LABELS[groupBy]} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Data Date {formatDdMmm(dataDate)} · Today {formatDdMmm(today)} · Cumulative: {asOfLabel}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={handleScheduleExport}>
@@ -331,6 +331,15 @@ export default function SchedulePage() {
                 <TabsTrigger value="pred" className="h-6 px-2 text-xs">Pred</TabsTrigger>
                 <TabsTrigger value="t1" className="h-6 px-2 text-xs">T1</TabsTrigger>
                 <TabsTrigger value="t2" className="h-6 px-2 text-xs">T2</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </ToolbarGroup>
+
+          <ToolbarGroup label="As-of">
+            <Tabs value={asOfMode} onValueChange={(v) => setAsOfMode(v as 'dataDate' | 'today')}>
+              <TabsList className="h-8">
+                <TabsTrigger value="dataDate" className="h-6 px-2 text-xs">Data Date</TabsTrigger>
+                <TabsTrigger value="today" className="h-6 px-2 text-xs">Today</TabsTrigger>
               </TabsList>
             </Tabs>
           </ToolbarGroup>
@@ -412,7 +421,7 @@ export default function SchedulePage() {
           value={`${kpis.progressPct.toFixed(0)}%`}
           subValue={
             kpis.totalStages > 0
-              ? `${kpis.doneStages}/${kpis.totalStages} stages done${kpis.cumPlan > 0 ? ` · Var ${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%` : ''}`
+              ? `${kpis.doneStages}/${kpis.totalStages} stages done · Up to ${asOfLabel}${kpis.cumPlan > 0 ? ` · Var ${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%` : ''}`
               : '0/0'
           }
           accent={
@@ -424,18 +433,18 @@ export default function SchedulePage() {
           icon={<TrendingUp className="h-3.5 w-3.5" />}
         />
         <Kpi
-          label="Overdue"
+          label={`${asOfLabel} Delay`}
           value={kpis.overdue}
           accent={kpis.overdue > 0 ? 'short' : undefined}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
-          onClick={kpis.overdue > 0 ? () => navigate('/?overdue=1') : undefined}
+          onClick={kpis.overdue > 0 ? () => navigate(`/?status=overdue&as_of=${asOfDate}`) : undefined}
         />
         <Kpi
           label="Critical (≤7d)"
           value={kpis.criticalCount}
           accent={kpis.criticalCount > 0 ? 'short' : undefined}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
-          onClick={kpis.criticalCount > 0 ? () => navigate('/?at_risk=1') : undefined}
+          onClick={kpis.criticalCount > 0 ? () => navigate('/?status=at_risk&at_risk_days=7') : undefined}
         />
         <Kpi
           label="Upcoming 7d Plan"
@@ -471,6 +480,7 @@ export default function SchedulePage() {
               bucket={bucket}
               stageFilter={stageFilter}
               today={today}
+              asOfLabel={asOfLabel}
               groupHeader={GROUP_LABELS[groupBy]}
               onCellClick={handleCellClick}
             />
