@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -17,7 +19,7 @@ import {
   PieChart, Pie, Cell, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine,
 } from 'recharts';
 import {
-  AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight, CalendarIcon, Download,
+  AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight, CalendarIcon, Download, Filter,
 } from 'lucide-react';
 import { exportPlanActualToExcel } from '@/lib/dashboard-excel-export';
 import { useToast } from '@/hooks/use-toast';
@@ -49,6 +51,8 @@ export default function DashboardPage() {
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>('day');
   const [teamFilter, setTeamFilter] = useState<string>('all');
   const [dataDate, setDataDate] = useState(() => yesterdayIso(todayIso()));
+  const [systemTextFilter, setSystemTextFilter] = useState('');
+  const [selectedSystemFilters, setSelectedSystemFilters] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,6 +163,18 @@ export default function DashboardPage() {
     () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.team ?? NONE_LABEL, k => k),
     [filteredSubtests, today, dataDate]
   );
+  const systemFilterOptions = useMemo(
+    () => Array.from(new Set(bySystem.map(r => r.label))).sort((a, b) => a.localeCompare(b)),
+    [bySystem]
+  );
+  const filteredBySystem = useMemo(() => {
+    const text = systemTextFilter.trim().toLowerCase();
+    return bySystem.filter(r => {
+      const matchesText = !text || r.label.toLowerCase().includes(text);
+      const matchesSelection = selectedSystemFilters.length === 0 || selectedSystemFilters.includes(r.label);
+      return matchesText && matchesSelection;
+    });
+  }, [bySystem, systemTextFilter, selectedSystemFilters]);
   const systemKeyResolver = useMemo(
     () => (key: string) => sysCodeById.get(key) ?? key,
     [sysCodeById]
@@ -169,7 +185,7 @@ export default function DashboardPage() {
   const { toast } = useToast();
 
   const breakdownDataMap: Record<string, { rows: PlanActualRow[]; header: string }> = {
-    system: { rows: bySystem, header: 'System' },
+    system: { rows: filteredBySystem, header: 'System' },
     subcon: { rows: bySubcon, header: 'Subcontractor' },
     subsub: { rows: bySubsub, header: 'Sub-Sub' },
     hdec: { rows: byHdec, header: 'HDEC PIC' },
