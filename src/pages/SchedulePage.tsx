@@ -64,6 +64,27 @@ export default function SchedulePage() {
   }, [hidePast]);
 
   useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    const setOrDelete = (key: string, value: string, defaultValue: string) => {
+      if (!value || value === defaultValue) next.delete(key);
+      else next.set(key, value);
+    };
+    setOrDelete('group', groupBy, 'system');
+    setOrDelete('bucket', bucket, 'day');
+    setOrDelete('stage_view', stageFilter, 'all');
+    setOrDelete('asof_mode', asOfMode, 'dataDate');
+    setOrDelete('team', teamFilter, 'all');
+    setOrDelete('system_text', systemTextFilter, '');
+    setOrDelete('systems', selectedSystemFilters.join(','), '');
+    setOrDelete('range', String(rangeDays), '60');
+    setOrDelete('hide_past', hidePast ? '1' : '', '');
+    setOrDelete('risk_panel', showRiskPanel ? '1' : '', '');
+    setOrDelete('picked', pickedDate ? format(pickedDate, 'yyyy-MM-dd') : '', format(new Date(), 'yyyy-MM-dd'));
+    setOrDelete('picked_field', pickedField, 'planned');
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [groupBy, bucket, stageFilter, asOfMode, teamFilter, systemTextFilter, selectedSystemFilters, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, searchParams, setSearchParams]);
+
+  useEffect(() => {
     if (groupBy === 'system') return;
     setSystemTextFilter('');
     setSelectedSystemFilters([]);
