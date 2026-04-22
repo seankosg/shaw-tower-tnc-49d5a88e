@@ -8,7 +8,7 @@ import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTr
 import { useNavigate } from 'react-router-dom';
 import { useImport, type FileStatus } from '@/contexts/ImportContext';
 import { Input } from '@/components/ui/input';
-import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
+import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 
 const statusBadge: Record<FileStatus, { label: string; cls: string }> = {
   pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
@@ -124,6 +124,7 @@ export default function ImportPage() {
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
                       {formatSize(f.size)}
+                      {f.detectedImportType && ` · ${f.detectedImportType === 'standard' ? 'Standard Import' : f.detectedImportType === 'legacy' ? 'Legacy Import' : 'Unknown Format'}`}
                       {f.parsedCount > 0 && ` · ${f.parsedCount} rows`}
                       {f.error && <span className="text-destructive"> · {f.error}</span>}
                       {f.result && (
@@ -141,21 +142,25 @@ export default function ImportPage() {
                         disabled={isRunning || f.status === 'done' || f.status === 'failed'}
                         className="h-7 w-[150px] text-xs"
                       />
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">Team:</span>
-                      <Select
-                        value={f.team || ''}
-                        onValueChange={(v) => setFileTeam(f.id, v)}
-                        disabled={isRunning || f.status === 'done' || f.status === 'failed'}
-                      >
-                        <SelectTrigger className="h-7 w-[140px] text-xs">
-                          <SelectValue placeholder="Select team" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ALL_TEAMS.map(t => (
-                            <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {f.detectedImportType === 'legacy' && (
+                        <>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">Team:</span>
+                          <Select
+                            value={f.team || ''}
+                            onValueChange={(v) => setFileTeam(f.id, v)}
+                            disabled={isRunning || f.status === 'done' || f.status === 'failed'}
+                          >
+                            <SelectTrigger className="h-7 w-[140px] text-xs">
+                              <SelectValue placeholder="Select team" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ALL_TEAMS.map(t => (
+                                <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </>
+                      )}
                     </div>
                     {f.unmappedHeaders && f.unmappedHeaders.length > 0 && (
                       <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950 px-2 py-1.5">
