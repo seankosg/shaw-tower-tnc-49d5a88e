@@ -381,6 +381,67 @@ function HeaderNum({
   );
 }
 
+function SystemHeaderFilter({
+  text, selected, options, onTextChange, onSelectedChange,
+}: {
+  text: string;
+  selected: string[];
+  options: string[];
+  onTextChange: (value: string) => void;
+  onSelectedChange: (value: string[]) => void;
+}) {
+  const isActive = text.trim().length > 0 || selected.length > 0;
+  const toggle = (value: string) => {
+    onSelectedChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value]);
+  };
+  const clear = () => {
+    onTextChange('');
+    onSelectedChange([]);
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'inline-flex h-5 w-5 items-center justify-center rounded hover:bg-muted/80',
+            isActive ? 'text-primary' : 'text-muted-foreground/60',
+          )}
+          onClick={(e) => e.stopPropagation()}
+          title="Filter System"
+        >
+          <Filter className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-3" align="start" onClick={(e) => e.stopPropagation()}>
+        <Input
+          placeholder="Filter systems..."
+          value={text}
+          onChange={(e) => onTextChange(e.target.value)}
+          className="mb-2 h-8 text-xs"
+        />
+        <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+          <span>{selected.length ? `${selected.length} selected` : 'All systems'}</span>
+          <button type="button" className="hover:underline" onClick={clear}>Clear</button>
+        </div>
+        <div className="max-h-64 space-y-0.5 overflow-y-auto pr-1">
+          {options.map(option => (
+            <label key={option} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50">
+              <Checkbox
+                checked={selected.includes(option)}
+                onCheckedChange={() => toggle(option)}
+                className="h-3.5 w-3.5"
+              />
+              <span className="min-w-0 truncate" title={option}>{option}</span>
+            </label>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function NumCell({
   width, children, className, py = 'py-2', borderLeft, borderRight, title,
 }: {
