@@ -457,6 +457,12 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     for (let i = 0; i < rowLogs.length; i += 100) {
       await supabase.from('upload_row_logs').insert(rowLogs.slice(i, i + 100));
     }
+    for (let i = 0; i < scheduleChangeAudits.length; i += 100) {
+      await supabase.from('schedule_change_audit').insert(scheduleChangeAudits.slice(i, i + 100) as any);
+    }
+    for (let i = 0; i < changeLogs.length; i += 100) {
+      await supabase.from('subtest_change_log').insert(changeLogs.slice(i, i + 100));
+    }
 
     await supabase.from('upload_batches').update({
       status: 'completed' as any,
