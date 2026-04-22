@@ -453,7 +453,7 @@ export default function SchedulePage() {
           value={`${kpis.progressPct.toFixed(0)}%`}
           subValue={
             kpis.totalStages > 0
-              ? `${kpis.doneStages}/${kpis.totalStages} stages done · Up to ${asOfLabel}${kpis.cumPlan > 0 ? ` · Var ${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%` : ''}`
+              ? `${kpis.doneStages}/${kpis.totalStages} stages done · Up to Data Date${kpis.cumPlan > 0 ? ` · Var ${kpis.variance >= 0 ? '+' : ''}${kpis.variance.toFixed(1)}%` : ''}`
               : '0/0'
           }
           accent={
@@ -465,11 +465,11 @@ export default function SchedulePage() {
           icon={<TrendingUp className="h-3.5 w-3.5" />}
         />
         <Kpi
-          label={`Delay up to ${asOfLabel}`}
+          label="Delay Up to Data Date"
           value={kpis.overdue}
           accent={kpis.overdue > 0 ? 'short' : undefined}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
-          onClick={kpis.overdue > 0 ? () => navigate(`/?source=schedule_kpi&status=overdue&as_of=${asOfDate}`) : undefined}
+          onClick={kpis.overdue > 0 ? () => navigate(`/?source=schedule_kpi&status=overdue&as_of=${dataDate}`) : undefined}
         />
         <Kpi
           label="Critical (≤7d)"
