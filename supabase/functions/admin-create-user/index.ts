@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const FAKE_EMAIL_DOMAIN = 'shaw.local';
-const DEFAULT_PASSWORD = 'SHAW00';
+const DEFAULT_PASSWORD = 'Shaw@2026!';
 
 interface Body {
   login_id: string;
