@@ -1,8 +1,11 @@
 import { useState, Fragment, useMemo, useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScheduleCell } from './ScheduleCell';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   type AggregateResult,
   type ScheduleBucket,
@@ -25,6 +28,13 @@ interface ScheduleMatrixProps {
     stage: ScheduleStage | 'all',
     field: 'planned' | 'actual',
   ) => void;
+  systemFilter?: {
+    text: string;
+    selected: string[];
+    options: string[];
+    onTextChange: (value: string) => void;
+    onSelectedChange: (value: string[]) => void;
+  };
 }
 
 // Sub-column widths
@@ -43,6 +53,7 @@ export function ScheduleMatrix({
   asOfLabel,
   groupHeader,
   onCellClick,
+  systemFilter,
 }: ScheduleMatrixProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const cellWidth = bucket === 'day' ? 64 : 96;
@@ -149,8 +160,9 @@ export function ScheduleMatrix({
           <div className="z-40 flex shrink-0 flex-col bg-muted shadow-[2px_0_4px_-2px_hsl(var(--border))]" style={{ width: STICKY_LEFT_WIDTH }}>
             {/* Row 1: group headers */}
             <div className="flex border-b border-border">
-              <div className="flex items-center px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground" style={{ width: W_GROUP }}>
-                {groupHeader}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground" style={{ width: W_GROUP }}>
+                <span>{groupHeader}</span>
+                {systemFilter && <SystemHeaderFilter {...systemFilter} />}
               </div>
               <div
                 className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide bg-muted text-foreground border-l border-border"
@@ -366,6 +378,67 @@ function HeaderNum({
     >
       {children}
     </div>
+  );
+}
+
+function SystemHeaderFilter({
+  text, selected, options, onTextChange, onSelectedChange,
+}: {
+  text: string;
+  selected: string[];
+  options: string[];
+  onTextChange: (value: string) => void;
+  onSelectedChange: (value: string[]) => void;
+}) {
+  const isActive = text.trim().length > 0 || selected.length > 0;
+  const toggle = (value: string) => {
+    onSelectedChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value]);
+  };
+  const clear = () => {
+    onTextChange('');
+    onSelectedChange([]);
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'inline-flex h-5 w-5 items-center justify-center rounded hover:bg-muted/80',
+            isActive ? 'text-primary' : 'text-muted-foreground/60',
+          )}
+          onClick={(e) => e.stopPropagation()}
+          title="Filter System"
+        >
+          <Filter className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-3" align="start" onClick={(e) => e.stopPropagation()}>
+        <Input
+          placeholder="Filter systems..."
+          value={text}
+          onChange={(e) => onTextChange(e.target.value)}
+          className="mb-2 h-8 text-xs"
+        />
+        <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+          <span>{selected.length ? `${selected.length} selected` : 'All systems'}</span>
+          <button type="button" className="hover:underline" onClick={clear}>Clear</button>
+        </div>
+        <div className="max-h-64 space-y-0.5 overflow-y-auto pr-1">
+          {options.map(option => (
+            <label key={option} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50">
+              <Checkbox
+                checked={selected.includes(option)}
+                onCheckedChange={() => toggle(option)}
+                className="h-3.5 w-3.5"
+              />
+              <span className="min-w-0 truncate" title={option}>{option}</span>
+            </label>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -46,6 +46,8 @@ export default function SchedulePage() {
   const [asOfMode, setAsOfMode] = useState<'dataDate' | 'today'>('today');
   const [dataDate, setDataDate] = useState(() => yesterdayIso(today));
   const [teamFilter, setTeamFilter] = useState<string>('all');
+  const [systemTextFilter, setSystemTextFilter] = useState('');
+  const [selectedSystemFilters, setSelectedSystemFilters] = useState<string[]>([]);
   const [rangeDays, setRangeDays] = useState<number>(60);
   const [hidePast, setHidePast] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -59,6 +61,12 @@ export default function SchedulePage() {
   useEffect(() => {
     localStorage.setItem('schedule_hide_past', hidePast ? '1' : '0');
   }, [hidePast]);
+
+  useEffect(() => {
+    if (groupBy === 'system') return;
+    setSystemTextFilter('');
+    setSelectedSystemFilters([]);
+  }, [groupBy]);
 
   // Hydrate from cache for instant render
   const cached = useMemo(() => getScheduleCache(), []);
@@ -139,20 +147,36 @@ export default function SchedulePage() {
     [filteredSubtests, groupBy, bucket, stageFilter, rangeStart, rangeEnd, asOfDate, sysCodeById],
   );
 
+  const systemFilterOptions = useMemo(
+    () => Array.from(new Set(aggregate.rows.map(r => r.label))).sort((a, b) => a.localeCompare(b)),
+    [aggregate.rows],
+  );
+
+  const filteredAggregate = useMemo(() => {
+    if (groupBy !== 'system') return aggregate;
+    const text = systemTextFilter.trim().toLowerCase();
+    const rows = aggregate.rows.filter(r => {
+      const matchesText = !text || r.label.toLowerCase().includes(text);
+      const matchesSelection = selectedSystemFilters.length === 0 || selectedSystemFilters.includes(r.label);
+      return matchesText && matchesSelection;
+    });
+    return { ...aggregate, rows };
+  }, [aggregate, groupBy, systemTextFilter, selectedSystemFilters]);
+
   const critical = useMemo(
     () => findCritical(filteredSubtests, today, 7, sysCodeById, groupBy),
     [filteredSubtests, today, sysCodeById, groupBy],
   );
 
-  const lagging = useMemo(() => findLaggingGroups(aggregate.rows, 5), [aggregate.rows]);
+  const lagging = useMemo(() => findLaggingGroups(filteredAggregate.rows, 5), [filteredAggregate.rows]);
 
   // Past-date hiding: slice buckets/cells to only today-and-future
   const visibleData = useMemo(() => {
-    if (!hidePast) return aggregate;
-    const startIdx = aggregate.buckets.findIndex(b => b >= today);
-    if (startIdx <= 0) return aggregate;
-    const buckets = aggregate.buckets.slice(startIdx);
-    const rows = aggregate.rows.map(r => ({
+    if (!hidePast) return filteredAggregate;
+    const startIdx = filteredAggregate.buckets.findIndex(b => b >= today);
+    if (startIdx <= 0) return filteredAggregate;
+    const buckets = filteredAggregate.buckets.slice(startIdx);
+    const rows = filteredAggregate.rows.map(r => ({
       ...r,
       combined: r.combined.slice(startIdx),
       stages: {
@@ -161,8 +185,8 @@ export default function SchedulePage() {
         t2:   { ...r.stages.t2,   cells: r.stages.t2.cells.slice(startIdx) },
       },
     }));
-    return { ...aggregate, buckets, rows };
-  }, [aggregate, hidePast, today]);
+    return { ...filteredAggregate, buckets, rows };
+  }, [filteredAggregate, hidePast, today]);
 
   const kpis = useMemo(() => {
     let cumPlan = 0, cumActual = 0;
@@ -491,6 +515,13 @@ export default function SchedulePage() {
               asOfLabel={asOfLabel}
               groupHeader={GROUP_LABELS[groupBy]}
               onCellClick={handleCellClick}
+              systemFilter={groupBy === 'system' ? {
+                text: systemTextFilter,
+                selected: selectedSystemFilters,
+                options: systemFilterOptions,
+                onTextChange: setSystemTextFilter,
+                onSelectedChange: setSelectedSystemFilters,
+              } : undefined}
             />
           )}
         </div>
