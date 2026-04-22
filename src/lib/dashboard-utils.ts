@@ -32,9 +32,10 @@ export function daysBetween(fromIso: string, toIso: string): number {
   return Math.round((b - a) / 86400000);
 }
 
-/** True if subtest has any T1 or T2 planned date past today and not Done. */
+/** True if subtest has any Pred/T1/T2 planned date past today and not Done. */
 export function isOverdue(s: SubtestForDashboard, today: string): boolean {
   return (
+    (s.pred_planned_date != null && s.pred_planned_date < today && s.pred_status !== 'Done') ||
     (s.t1_planned_date != null && s.t1_planned_date < today && s.t1_status !== 'Done') ||
     (s.t2_planned_date != null && s.t2_planned_date < today && s.t2_status !== 'Done')
   );
@@ -51,9 +52,12 @@ export function isAtRisk(s: SubtestForDashboard, today: string, thresholdDays: n
   return within(s.t1_planned_date, s.t1_status) || within(s.t2_planned_date, s.t2_status);
 }
 
-/** Worst delay days across T1/T2 (positive = days late). */
+/** Worst delay days across Pred/T1/T2 (positive = days late). */
 export function maxDelayDays(s: SubtestForDashboard, today: string): number {
   let worst = 0;
+  if (s.pred_planned_date && s.pred_status !== 'Done' && s.pred_planned_date < today) {
+    worst = Math.max(worst, daysBetween(s.pred_planned_date, today));
+  }
   if (s.t1_planned_date && s.t1_status !== 'Done' && s.t1_planned_date < today) {
     worst = Math.max(worst, daysBetween(s.t1_planned_date, today));
   }
