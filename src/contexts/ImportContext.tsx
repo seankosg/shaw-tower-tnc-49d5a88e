@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { parseExcelFile, parseLegacy, parseStandard, resolveValue, type ParsedSubtest } from '@/lib/import-parser';
+import { detectImportType, parseExcelFile, parseLegacy, parseStandard, resolveValue, type DetectedImportType, type ParsedSubtest } from '@/lib/import-parser';
 import { useToast } from '@/hooks/use-toast';
 
 export type ImportType = 'legacy' | 'standard';
@@ -18,16 +18,16 @@ export interface ImportFileItem {
   error?: string;
   parsed?: ParsedSubtest[];
   unmappedHeaders?: string[];
+  detectedImportType?: DetectedImportType;
+  detectionReasons?: string[];
   dataDate?: string;
   team?: string;
 }
 
 interface ImportContextValue {
   files: ImportFileItem[];
-  importType: ImportType;
   isRunning: boolean;
   currentIndex: number;
-  setImportType: (t: ImportType) => void;
   addFiles: (files: File[]) => Promise<void>;
   removeFile: (id: string) => void;
   clearAll: () => void;
@@ -47,15 +47,8 @@ export function useImport() {
 export function ImportProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   const [files, setFiles] = useState<ImportFileItem[]>([]);
-  const [importType, setImportTypeState] = useState<ImportType>('legacy');
   const [isRunning, setIsRunning] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(-1);
-  const importTypeRef = useRef<ImportType>('legacy');
-
-  const setImportType = (t: ImportType) => {
-    importTypeRef.current = t;
-    setImportTypeState(t);
-  };
 
   const updateFile = (id: string, patch: Partial<ImportFileItem>) => {
     setFiles(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f));
