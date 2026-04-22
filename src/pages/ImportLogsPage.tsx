@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronLeft, Trash2, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,6 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { formatDdMmm, formatSignedDays } from '@/lib/format';
 
 interface UploadBatch {
   id: string;
@@ -36,6 +38,31 @@ interface RowLog {
   reason_detail: string | null;
 }
 
+interface ScheduleChangeAudit {
+  id: string;
+  raw_row_no: number | null;
+  item_no: string;
+  mos_code: string;
+  subtest_code: string | null;
+  subtest_id: string;
+  pred_old_date: string | null;
+  pred_new_date: string | null;
+  pred_diff_days: number | null;
+  pred_prev_gap_days: number | null;
+  pred_cur_gap_days: number | null;
+  t1_old_date: string | null;
+  t1_new_date: string | null;
+  t1_diff_days: number | null;
+  t1_prev_gap_days: number | null;
+  t1_cur_gap_days: number | null;
+  t2_old_date: string | null;
+  t2_new_date: string | null;
+  t2_diff_days: number | null;
+  t2_prev_gap_days: number | null;
+  t2_cur_gap_days: number | null;
+  system_master?: { system_code: string } | null;
+}
+
 const statusColor: Record<string, string> = {
   completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
@@ -50,6 +77,30 @@ const actionColor: Record<string, string> = {
   rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
 };
 
+const stageGroups = ['pred', 't1', 't2'] as const;
+const stageLabels: Record<(typeof stageGroups)[number], string> = { pred: 'Pred', t1: 'T1', t2: 'T2' };
+
+const formatGap = (v: number | null | undefined) => v == null ? '—' : String(v);
+const diffClass = (v: number | null) => v == null ? '' : v > 0 ? 'text-destructive font-medium' : v < 0 ? 'text-primary font-medium' : 'text-muted-foreground';
+
+function StageCells({ row, stage }: { row: ScheduleChangeAudit; stage: (typeof stageGroups)[number] }) {
+  const oldDate = row[`${stage}_old_date` as keyof ScheduleChangeAudit] as string | null;
+  const newDate = row[`${stage}_new_date` as keyof ScheduleChangeAudit] as string | null;
+  const diff = row[`${stage}_diff_days` as keyof ScheduleChangeAudit] as number | null;
+  const prevGap = row[`${stage}_prev_gap_days` as keyof ScheduleChangeAudit] as number | null;
+  const curGap = row[`${stage}_cur_gap_days` as keyof ScheduleChangeAudit] as number | null;
+
+  return (
+    <>
+      <TableCell className="text-xs whitespace-nowrap">{formatDdMmm(oldDate)}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap">{formatDdMmm(newDate)}</TableCell>
+      <TableCell className={`text-xs text-right ${diffClass(diff)}`}>{formatSignedDays(diff)}</TableCell>
+      <TableCell className="text-xs text-right">{formatGap(prevGap)}</TableCell>
+      <TableCell className="text-xs text-right">{formatGap(curGap)}</TableCell>
+    </>
+  );
+}
+
 export default function ImportLogsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -59,6 +110,7 @@ export default function ImportLogsPage() {
   const [batches, setBatches] = useState<UploadBatch[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
   const [rowLogs, setRowLogs] = useState<RowLog[]>([]);
+  const [scheduleChanges, setScheduleChanges] = useState<ScheduleChangeAudit[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -79,6 +131,10 @@ export default function ImportLogsPage() {
       .select('id, raw_row_no, raw_system_name, item_no, mos_code, action_taken, reason_code, reason_detail')
       .eq('upload_id', id).order('raw_row_no', { ascending: true }).limit(500);
     if (data) setRowLogs(data);
+    const { data: changes } = await supabase.from('schedule_change_audit')
+      .select('*, system_master(system_code)' as any)
+      .eq('upload_id', id).order('raw_row_no', { ascending: true }).limit(500);
+    setScheduleChanges((changes as any) || []);
   };
 
   const deleteBatch = async (batch: UploadBatch) => {
@@ -86,6 +142,8 @@ export default function ImportLogsPage() {
     try {
       const { error: e1 } = await supabase.from('subtests').delete().eq('source_upload_id', batch.id);
       if (e1) throw e1;
+      const { error: auditErr } = await supabase.from('schedule_change_audit').delete().eq('upload_id', batch.id);
+      if (auditErr) throw auditErr;
       const { error: e2 } = await supabase.from('upload_row_logs').delete().eq('upload_id', batch.id);
       if (e2) throw e2;
       const { error: e3 } = await supabase.from('upload_batches').delete().eq('id', batch.id);
@@ -185,40 +243,83 @@ export default function ImportLogsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border max-h-[500px] overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Row</TableHead>
-                    <TableHead className="text-xs">System</TableHead>
-                    <TableHead className="text-xs">Item No</TableHead>
-                    <TableHead className="text-xs">MOS Code</TableHead>
-                    <TableHead className="text-xs">Action</TableHead>
-                    <TableHead className="text-xs">Reason</TableHead>
-                    <TableHead className="text-xs">Detail</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rowLogs.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No row logs</TableCell></TableRow>
-                  ) : rowLogs.map(r => (
-                    <TableRow key={r.id}>
-                      <TableCell className="text-xs">{r.raw_row_no}</TableCell>
-                      <TableCell className="text-xs">{r.raw_system_name || '—'}</TableCell>
-                      <TableCell className="text-xs">{r.item_no || '—'}</TableCell>
-                      <TableCell className="text-xs">{r.mos_code || '—'}</TableCell>
-                      <TableCell>
-                        {r.action_taken ? (
-                          <Badge variant="outline" className={`text-xs ${actionColor[r.action_taken] || ''}`}>{r.action_taken}</Badge>
-                        ) : '—'}
-                      </TableCell>
-                      <TableCell className="text-xs">{r.reason_code || '—'}</TableCell>
-                      <TableCell className="text-xs truncate max-w-[200px]">{r.reason_detail || '—'}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <Tabs defaultValue="rows">
+              <TabsList>
+                <TabsTrigger value="rows">Row Logs</TabsTrigger>
+                <TabsTrigger value="schedule">Schedule Changes</TabsTrigger>
+              </TabsList>
+              <TabsContent value="rows">
+                <div className="rounded-md border max-h-[500px] overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Row</TableHead>
+                        <TableHead className="text-xs">System</TableHead>
+                        <TableHead className="text-xs">Item No</TableHead>
+                        <TableHead className="text-xs">MOS Code</TableHead>
+                        <TableHead className="text-xs">Action</TableHead>
+                        <TableHead className="text-xs">Reason</TableHead>
+                        <TableHead className="text-xs">Detail</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rowLogs.length === 0 ? (
+                        <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No row logs</TableCell></TableRow>
+                      ) : rowLogs.map(r => (
+                        <TableRow key={r.id}>
+                          <TableCell className="text-xs">{r.raw_row_no}</TableCell>
+                          <TableCell className="text-xs">{r.raw_system_name || '—'}</TableCell>
+                          <TableCell className="text-xs">{r.item_no || '—'}</TableCell>
+                          <TableCell className="text-xs">{r.mos_code || '—'}</TableCell>
+                          <TableCell>
+                            {r.action_taken ? (
+                              <Badge variant="outline" className={`text-xs ${actionColor[r.action_taken] || ''}`}>{r.action_taken}</Badge>
+                            ) : '—'}
+                          </TableCell>
+                          <TableCell className="text-xs">{r.reason_code || '—'}</TableCell>
+                          <TableCell className="text-xs truncate max-w-[200px]">{r.reason_detail || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+              <TabsContent value="schedule">
+                <div className="rounded-md border max-h-[560px] overflow-auto">
+                  <Table className="min-w-[1500px]">
+                    <TableHeader className="sticky top-0 z-10 bg-background">
+                      <TableRow>
+                        <TableHead rowSpan={2} className="text-xs">Row</TableHead>
+                        <TableHead rowSpan={2} className="text-xs">System</TableHead>
+                        <TableHead rowSpan={2} className="text-xs">Item No</TableHead>
+                        <TableHead rowSpan={2} className="text-xs">MOS Code</TableHead>
+                        <TableHead rowSpan={2} className="text-xs">Subtest ID</TableHead>
+                        {stageGroups.map(stage => <TableHead key={stage} colSpan={5} className="text-center text-xs border-l">{stageLabels[stage]}</TableHead>)}
+                      </TableRow>
+                      <TableRow>
+                        {stageGroups.flatMap(stage => ['Old date', 'New date', 'Diff', 'Prev.Gap', 'Cur.Gap'].map(label => (
+                          <TableHead key={`${stage}-${label}`} className="text-xs whitespace-nowrap border-l first:border-l-0">{label}</TableHead>
+                        )))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {scheduleChanges.length === 0 ? (
+                        <TableRow><TableCell colSpan={20} className="text-center py-8 text-muted-foreground">No schedule changes</TableCell></TableRow>
+                      ) : scheduleChanges.map(r => (
+                        <TableRow key={r.id} className="cursor-pointer" onClick={() => navigate(`/subtests/${r.subtest_id}`)}>
+                          <TableCell className="text-xs">{r.raw_row_no ?? '—'}</TableCell>
+                          <TableCell className="text-xs">{r.system_master?.system_code || '—'}</TableCell>
+                          <TableCell className="text-xs">{r.item_no}</TableCell>
+                          <TableCell className="text-xs">{r.mos_code}</TableCell>
+                          <TableCell className="text-xs">{r.subtest_code || '—'}</TableCell>
+                          {stageGroups.map(stage => <StageCells key={stage} row={r} stage={stage} />)}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       )}

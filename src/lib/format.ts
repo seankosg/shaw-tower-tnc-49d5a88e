@@ -18,3 +18,9 @@ export const formatDdMmm = (v: string | null | undefined): string => {
   if (isNaN(d.getTime())) return v;
   return `${String(d.getDate()).padStart(2, '0')}-${MONTH_ABBR[d.getMonth()]}`;
 };
+
+export const formatSignedDays = (v: number | null | undefined): string => {
+  if (v == null) return '—';
+  if (v > 0) return `+${v}`;
+  return String(v);
+};

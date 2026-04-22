@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { detectImportType, parseExcelFile, parseLegacy, parseStandard, resolveValue, type DetectedImportType, type ParsedSubtest } from '@/lib/import-parser';
 import { useToast } from '@/hooks/use-toast';
+import { buildScheduleChangeImpact, hasScheduleChangeImpact } from '@/lib/schedule-change-utils';
 
 export type ImportType = 'legacy' | 'standard';
 export type FileStatus = 'pending' | 'parsing' | 'ready' | 'processing' | 'done' | 'failed';
@@ -227,6 +228,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     }
 
     const rowLogs: any[] = [];
+    const scheduleChangeAudits: any[] = [];
+    const changeLogs: any[] = [];
     for (let i = 0; i < parsed.length; i++) {
       const row = parsed[i];
       updateFile(item.id, { progress: Math.round(((i + 1) / parsed.length) * 100) });
@@ -249,7 +252,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       await ensureHdecPic(row.hdec_pic_name);
 
       const { data: existing } = await supabase.from('subtests')
-        .select('id, updated_at, row_version')
+        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date')
         .eq('project_id', projectId!).eq('system_id', systemId)
         .eq('item_no', row.item_no).eq('mos_code', row.mos_code).eq('is_active', true)
         .maybeSingle();
@@ -336,6 +339,12 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           updates.pred_status = 'Planned';
         }
 
+        const scheduleImpact = buildScheduleChangeImpact(existing as any, {
+          pred_planned_date: updates.pred_planned_date,
+          t1_planned_date: updates.t1_planned_date,
+          t2_planned_date: updates.t2_planned_date,
+        });
+
         const { error } = await supabase.from('subtests').update(updates as any).eq('id', existing.id);
         if (error) {
           res.rejected++;
@@ -346,6 +355,47 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           });
         } else {
           res.updated++;
+          if (hasScheduleChangeImpact(scheduleImpact)) {
+            scheduleChangeAudits.push({
+              upload_id: uploadId,
+              subtest_id: existing.id,
+              project_id: projectId,
+              system_id: systemId,
+              item_no: existing.item_no,
+              mos_code: existing.mos_code,
+              subtest_code: row.subtest_id || existing.subtest_id,
+              raw_row_no: row.raw_row_no,
+              pred_old_date: scheduleImpact.pred?.old_date ?? null,
+              pred_new_date: scheduleImpact.pred?.new_date ?? null,
+              pred_diff_days: scheduleImpact.pred?.diff_days ?? null,
+              pred_prev_gap_days: scheduleImpact.pred?.prev_gap_days ?? null,
+              pred_cur_gap_days: scheduleImpact.pred?.cur_gap_days ?? null,
+              t1_old_date: scheduleImpact.t1?.old_date ?? null,
+              t1_new_date: scheduleImpact.t1?.new_date ?? null,
+              t1_diff_days: scheduleImpact.t1?.diff_days ?? null,
+              t1_prev_gap_days: scheduleImpact.t1?.prev_gap_days ?? null,
+              t1_cur_gap_days: scheduleImpact.t1?.cur_gap_days ?? null,
+              t2_old_date: scheduleImpact.t2?.old_date ?? null,
+              t2_new_date: scheduleImpact.t2?.new_date ?? null,
+              t2_diff_days: scheduleImpact.t2?.diff_days ?? null,
+              t2_prev_gap_days: scheduleImpact.t2?.prev_gap_days ?? null,
+              t2_cur_gap_days: scheduleImpact.t2?.cur_gap_days ?? null,
+              created_by: user.id,
+            });
+            (['pred', 't1', 't2'] as const).forEach(stage => {
+              const change = scheduleImpact[stage];
+              if (!change) return;
+              changeLogs.push({
+                subtest_id: existing.id,
+                changed_field: `${stage}_planned_date`,
+                old_value: change.old_date,
+                new_value: change.new_date,
+                changed_by: user.id,
+                change_source: 'excel_import' as any,
+                upload_id: uploadId,
+              });
+            });
+          }
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
             item_no: row.item_no, mos_code: row.mos_code, action_taken: 'updated' as any,
@@ -406,6 +456,12 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
 
     for (let i = 0; i < rowLogs.length; i += 100) {
       await supabase.from('upload_row_logs').insert(rowLogs.slice(i, i + 100));
+    }
+    for (let i = 0; i < scheduleChangeAudits.length; i += 100) {
+      await supabase.from('schedule_change_audit').insert(scheduleChangeAudits.slice(i, i + 100) as any);
+    }
+    for (let i = 0; i < changeLogs.length; i += 100) {
+      await supabase.from('subtest_change_log').insert(changeLogs.slice(i, i + 100));
     }
 
     await supabase.from('upload_batches').update({

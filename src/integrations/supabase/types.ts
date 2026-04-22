@@ -197,6 +197,93 @@ export type Database = {
         }
         Relationships: []
       }
+      schedule_change_audit: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          item_no: string
+          mos_code: string
+          pred_cur_gap_days: number | null
+          pred_diff_days: number | null
+          pred_new_date: string | null
+          pred_old_date: string | null
+          pred_prev_gap_days: number | null
+          project_id: string
+          raw_row_no: number | null
+          subtest_code: string | null
+          subtest_id: string
+          system_id: string
+          t1_cur_gap_days: number | null
+          t1_diff_days: number | null
+          t1_new_date: string | null
+          t1_old_date: string | null
+          t1_prev_gap_days: number | null
+          t2_cur_gap_days: number | null
+          t2_diff_days: number | null
+          t2_new_date: string | null
+          t2_old_date: string | null
+          t2_prev_gap_days: number | null
+          upload_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          item_no: string
+          mos_code: string
+          pred_cur_gap_days?: number | null
+          pred_diff_days?: number | null
+          pred_new_date?: string | null
+          pred_old_date?: string | null
+          pred_prev_gap_days?: number | null
+          project_id: string
+          raw_row_no?: number | null
+          subtest_code?: string | null
+          subtest_id: string
+          system_id: string
+          t1_cur_gap_days?: number | null
+          t1_diff_days?: number | null
+          t1_new_date?: string | null
+          t1_old_date?: string | null
+          t1_prev_gap_days?: number | null
+          t2_cur_gap_days?: number | null
+          t2_diff_days?: number | null
+          t2_new_date?: string | null
+          t2_old_date?: string | null
+          t2_prev_gap_days?: number | null
+          upload_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          item_no?: string
+          mos_code?: string
+          pred_cur_gap_days?: number | null
+          pred_diff_days?: number | null
+          pred_new_date?: string | null
+          pred_old_date?: string | null
+          pred_prev_gap_days?: number | null
+          project_id?: string
+          raw_row_no?: number | null
+          subtest_code?: string | null
+          subtest_id?: string
+          system_id?: string
+          t1_cur_gap_days?: number | null
+          t1_diff_days?: number | null
+          t1_new_date?: string | null
+          t1_old_date?: string | null
+          t1_prev_gap_days?: number | null
+          t2_cur_gap_days?: number | null
+          t2_diff_days?: number | null
+          t2_new_date?: string | null
+          t2_old_date?: string | null
+          t2_prev_gap_days?: number | null
+          upload_id?: string
+        }
+        Relationships: []
+      }
       subcontractor_master: {
         Row: {
           created_at: string
