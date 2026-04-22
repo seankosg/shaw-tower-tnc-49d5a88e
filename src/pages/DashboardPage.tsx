@@ -699,7 +699,7 @@ function PlanActualTable({
     onSelectedChange: (value: string[]) => void;
   };
 }) {
-  if (rows.length === 0) {
+  if (rows.length === 0 && !systemFilter) {
     return <p className="py-8 text-center text-sm text-muted-foreground">{emptyMessage ?? 'No data.'}</p>;
   }
   const filterValue = (key: string) => (keyToFilterValue ? keyToFilterValue(key) : key);
@@ -740,7 +740,12 @@ function PlanActualTable({
             {colgroup}
         <TableHeader className="bg-background">
           <TableRow>
-            <TableHead rowSpan={2} className="align-bottom">{groupHeader}</TableHead>
+            <TableHead rowSpan={2} className="align-bottom">
+              <div className="flex items-center gap-1.5">
+                <span>{groupHeader}</span>
+                {systemFilter && <SystemHeaderFilter {...systemFilter} />}
+              </div>
+            </TableHead>
             <TableHead rowSpan={2} className="text-right align-bottom">Total<br /><span className="text-[10px] font-normal text-muted-foreground">Subtests</span></TableHead>
             <TableHead rowSpan={2} className="align-bottom">Stage</TableHead>
             <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">To Data Date (Cumulative)</TableHead>
@@ -768,7 +773,13 @@ function PlanActualTable({
           <Table className="table-fixed">
             {colgroup}
         <TableBody>
-          {rows.map((r, idx) => {
+          {rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={15} className="py-8 text-center text-sm text-muted-foreground">
+                {emptyMessage ?? 'No data.'}
+              </TableCell>
+            </TableRow>
+          ) : rows.map((r, idx) => {
             const stages: StageDef[] = [
               {
                 stage: 'pred', label: 'Pred', metrics: r.predecessor,
