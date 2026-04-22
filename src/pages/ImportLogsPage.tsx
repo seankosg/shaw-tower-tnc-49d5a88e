@@ -77,6 +77,30 @@ const actionColor: Record<string, string> = {
   rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
 };
 
+const stageGroups = ['pred', 't1', 't2'] as const;
+const stageLabels: Record<(typeof stageGroups)[number], string> = { pred: 'Pred', t1: 'T1', t2: 'T2' };
+
+const formatGap = (v: number | null | undefined) => v == null ? '—' : String(v);
+const diffClass = (v: number | null) => v == null ? '' : v > 0 ? 'text-destructive font-medium' : v < 0 ? 'text-primary font-medium' : 'text-muted-foreground';
+
+function StageCells({ row, stage }: { row: ScheduleChangeAudit; stage: (typeof stageGroups)[number] }) {
+  const oldDate = row[`${stage}_old_date` as keyof ScheduleChangeAudit] as string | null;
+  const newDate = row[`${stage}_new_date` as keyof ScheduleChangeAudit] as string | null;
+  const diff = row[`${stage}_diff_days` as keyof ScheduleChangeAudit] as number | null;
+  const prevGap = row[`${stage}_prev_gap_days` as keyof ScheduleChangeAudit] as number | null;
+  const curGap = row[`${stage}_cur_gap_days` as keyof ScheduleChangeAudit] as number | null;
+
+  return (
+    <>
+      <TableCell className="text-xs whitespace-nowrap">{formatDdMmm(oldDate)}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap">{formatDdMmm(newDate)}</TableCell>
+      <TableCell className={`text-xs text-right ${diffClass(diff)}`}>{formatSignedDays(diff)}</TableCell>
+      <TableCell className="text-xs text-right">{formatGap(prevGap)}</TableCell>
+      <TableCell className="text-xs text-right">{formatGap(curGap)}</TableCell>
+    </>
+  );
+}
+
 export default function ImportLogsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
