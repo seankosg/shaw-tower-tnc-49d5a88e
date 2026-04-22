@@ -3,11 +3,17 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useImport } from '@/contexts/ImportContext';
 import { Progress } from '@/components/ui/progress';
-import { Loader2 } from 'lucide-react';
+import { KeyRound, Loader2, LogOut, UserCircle } from 'lucide-react';
 import { APP_NAME } from '@/lib/constants';
 import { AppUpdateBanner } from './AppUpdateBanner';
+import { useAuth } from '@/contexts/AuthContext';
 
 const ROUTE_TITLES: Array<{ match: (p: string) => boolean; label: string }> = [
   { match: (p) => p === '/dashboard', label: 'Dashboard' },
@@ -65,6 +71,35 @@ function GlobalImportIndicator() {
   );
 }
 
+function AccountMenu() {
+  const navigate = useNavigate();
+  const { profile, signOut } = useAuth();
+  const label = profile?.name || profile?.login_id || 'Account';
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" className="max-w-[180px] px-2">
+          <UserCircle className="h-4 w-4" />
+          <span className="truncate">{label}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuLabel className="truncate">{label}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => navigate('/change-password')}>
+          <KeyRound className="mr-2 h-4 w-4" />
+          Change Password
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={signOut}>
+          <LogOut className="mr-2 h-4 w-4" />
+          Sign Out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function AppLayout() {
   const pageLabel = useCurrentPageLabel();
   useDocumentTitle(pageLabel);
@@ -84,8 +119,9 @@ export function AppLayout() {
               </>
             )}
           </nav>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
             <GlobalImportIndicator />
+            <AccountMenu />
           </div>
         </header>
         <AppUpdateBanner />
