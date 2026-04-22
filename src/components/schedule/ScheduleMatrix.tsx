@@ -115,7 +115,7 @@ export function ScheduleMatrix({
     });
   };
 
-  const totalGridWidth = STICKY_LEFT_WIDTH + data.buckets.length * cellWidth;
+  const timelineGridWidth = data.buckets.length * cellWidth;
 
   const colVirtualizer = useVirtualizer({
     count: data.buckets.length,
@@ -123,11 +123,10 @@ export function ScheduleMatrix({
     estimateSize: () => cellWidth,
     horizontal: true,
     overscan: 4,
-    paddingStart: STICKY_LEFT_WIDTH,
   });
 
   const virtualCols = colVirtualizer.getVirtualItems();
-  const leftPad = virtualCols.length > 0 ? virtualCols[0].start - STICKY_LEFT_WIDTH : 0;
+  const leftPad = virtualCols.length > 0 ? virtualCols[0].start : 0;
   const rightPad =
     virtualCols.length > 0
       ? colVirtualizer.getTotalSize() - virtualCols[virtualCols.length - 1].end
