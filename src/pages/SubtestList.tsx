@@ -599,6 +599,9 @@ export default function SubtestList() {
         const v = getValue() as TeamType | null;
         return v ? TEAM_LABELS[v] : '—';
       }},
+    { accessorKey: 'level', header: 'Level', size: 90, filterFn: textFilterFn,
+      meta: { filterType: 'text' },
+      cell: ({ getValue }) => getValue() as string || '—' },
     { accessorKey: 'equipment', header: 'Equipment', size: 120, filterFn: textFilterFn,
       meta: { filterType: 'text' },
       cell: ({ getValue }) => (
