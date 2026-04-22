@@ -651,9 +651,10 @@ export default function SubtestList() {
   const urlDateField = searchParams.get('date_field') as 'planned' | 'actual' | null;
   const urlStage = searchParams.get('stage') as 'pred' | 't1' | 't2' | null;
   const urlCellStatus = searchParams.get('cell_status') as TcStatus | null;
+  const urlAsOf = searchParams.get('as_of');
 
   const filteredData = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = urlAsOf || new Date().toISOString().slice(0, 10);
     const daysFromToday = (iso: string) => {
       const a = new Date(iso + 'T00:00:00Z').getTime();
       const b = new Date(today + 'T00:00:00Z').getTime();
@@ -665,19 +666,17 @@ export default function SubtestList() {
 
     return data.filter(r => {
       if (urlStatusFilter) {
-        const overdue =
-          (r.pred_planned_date && r.pred_planned_date < today && r.pred_status !== 'Done') ||
-          (r.t1_planned_date && r.t1_planned_date < today && r.t1_status !== 'Done') ||
-          (r.t2_planned_date && r.t2_planned_date < today && r.t2_status !== 'Done');
+        const overdue = getAnyStageDelayedAsOf(r, getStageKeys('all'), today);
         if (urlStatusFilter === 'overdue' && !overdue) return false;
         if (urlStatusFilter === 'at_risk') {
           if (overdue) return false;
-          const within = (planned: string | null, status: TcStatus | null) => {
-            if (!planned || status === 'Done') return false;
+          const within = (stage: StageKey) => {
+            const planned = getStagePlannedDate(r, stage);
+            if (!planned || isStageDone(r, stage)) return false;
             const d = daysFromToday(planned);
             return d >= 0 && d <= urlAtRiskDays;
           };
-          if (!within(r.t1_planned_date, r.t1_status) && !within(r.t2_planned_date, r.t2_status)) return false;
+          if (!within('pred') && !within('t1') && !within('t2')) return false;
         }
       }
       if (urlPredPlannedTo && !(r.pred_planned_date && r.pred_planned_date <= urlPredPlannedTo)) return false;
@@ -692,20 +691,19 @@ export default function SubtestList() {
       if (urlPredActualOn && r.pred_actual_date !== urlPredActualOn) return false;
       if (urlT1ActualOn && r.t1_actual_date !== urlT1ActualOn) return false;
       if (urlT2ActualOn && r.t2_actual_date !== urlT2ActualOn) return false;
-      if (urlPredDelayAsOf && !(r.pred_planned_date && r.pred_planned_date <= urlPredDelayAsOf && r.pred_status !== 'Done')) return false;
-      if (urlT1DelayAsOf && !(r.t1_planned_date && r.t1_planned_date <= urlT1DelayAsOf && r.t1_status !== 'Done')) return false;
-      if (urlT2DelayAsOf && !(r.t2_planned_date && r.t2_planned_date <= urlT2DelayAsOf && r.t2_status !== 'Done')) return false;
+      if (urlPredDelayAsOf && !isStageDelayedAsOf(r, 'pred', urlPredDelayAsOf)) return false;
+      if (urlT1DelayAsOf && !isStageDelayedAsOf(r, 't1', urlT1DelayAsOf)) return false;
+      if (urlT2DelayAsOf && !isStageDelayedAsOf(r, 't2', urlT2DelayAsOf)) return false;
 
       if (urlDateFrom || urlDateTo) {
         const stages: Array<'pred' | 't1' | 't2'> = urlStage ? [urlStage] : ['pred', 't1', 't2'];
         const fieldKey = urlDateField === 'actual' ? 'actual_date' : 'planned_date';
         let matchAny = false;
         for (const st of stages) {
-          const dateVal = r[`${st}_${fieldKey}` as keyof SubtestRow] as string | null;
+          const dateVal = urlDateField === 'actual' ? getStageActualDate(r, st) : getStagePlannedDate(r, st);
           if (!inRange(dateVal)) continue;
           if (urlCellStatus) {
-            const statusVal = r[`${st}_status` as keyof SubtestRow] as TcStatus | null;
-            if (statusVal !== urlCellStatus) continue;
+            if (urlCellStatus === 'Done' && !isStageDone(r, st)) continue;
           }
           matchAny = true;
           break;
@@ -719,7 +717,7 @@ export default function SubtestList() {
       urlPredPlannedTo, urlT1PlannedTo, urlT2PlannedTo, urlPredActualTo, urlT1ActualTo, urlT2ActualTo,
       urlPredPlannedOn, urlT1PlannedOn, urlT2PlannedOn, urlPredActualOn, urlT1ActualOn, urlT2ActualOn,
       urlPredDelayAsOf, urlT1DelayAsOf, urlT2DelayAsOf,
-      urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus]);
+      urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, urlAsOf]);
 
   const columnIdToFieldName: Record<string, string> = {
     system_code: 'system',
