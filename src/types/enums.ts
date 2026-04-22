@@ -46,7 +46,7 @@ export const DATA_SOURCE_LABELS: Record<DataSource, string> = {
 // Password policy: 6+ chars, must contain at least one letter and one digit; special chars optional
 export const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{6,}$/;
 export const PASSWORD_HINT = 'At least 6 characters; must include letters and numbers. Special characters are optional.';
-export const DEFAULT_PASSWORD = 'SHAW00';
+export const DEFAULT_PASSWORD = 'Shaw@2026!';
 
 // Login ID → fake email conversion (Supabase Auth requires email)
 export const FAKE_EMAIL_DOMAIN = 'shaw.local';

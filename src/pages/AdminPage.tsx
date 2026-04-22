@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   ALL_ROLES, ALL_USER_TYPES, ROLE_LABELS, USER_TYPE_LABELS,
   ALL_TEAMS, TEAM_LABELS,
+  DEFAULT_PASSWORD,
   type AppRole, type UserType, type TeamType,
 } from '@/types/enums';
 import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown, Download } from 'lucide-react';
@@ -206,12 +207,12 @@ function UsersTab() {
   };
 
   const resetPassword = async (profile: Profile) => {
-    if (!confirm(`Reset password for ${profile.login_id} to SHAW00?`)) return;
-    const { error } = await supabase.functions.invoke('admin-reset-password', {
+    if (!confirm(`Reset password for ${profile.login_id} to ${DEFAULT_PASSWORD}?`)) return;
+    const { data, error } = await supabase.functions.invoke('admin-reset-password', {
       body: { user_id: profile.user_id },
     });
-    if (error) toast({ title: 'Reset failed', description: error.message, variant: 'destructive' });
-    else toast({ title: 'Password reset to SHAW00' });
+    if (error || (data as any)?.error) toast({ title: 'Reset failed', description: (data as any)?.error ?? error?.message, variant: 'destructive' });
+    else toast({ title: `Password reset to ${DEFAULT_PASSWORD}` });
     load();
   };
 
@@ -512,7 +513,7 @@ function CreateUserDialog({
       toast({ title: 'Create failed', description: error?.message ?? (data as any)?.error, variant: 'destructive' });
       return;
     }
-    toast({ title: 'User created', description: `Initial password: SHAW00` });
+    toast({ title: 'User created', description: `Initial password: ${DEFAULT_PASSWORD}` });
     setLoginId(''); setName(''); setSubconName(''); setSubsubId(''); setHdecPicName(''); setTeam('');
     onCreated();
   };
@@ -521,7 +522,7 @@ function CreateUserDialog({
     <DialogContent className="max-w-md">
       <DialogHeader>
         <DialogTitle>Create User</DialogTitle>
-        <DialogDescription>Initial password is <code className="font-mono">SHAW00</code>. User must change on first login.</DialogDescription>
+        <DialogDescription>Initial password is <code className="font-mono">{DEFAULT_PASSWORD}</code>. User must change on first login.</DialogDescription>
       </DialogHeader>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="space-y-1.5">
@@ -865,7 +866,7 @@ function SubcontractorMasterTable() {
       body: { name, master_type: 'subcontractor', subcontractor_name: name },
     });
     if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
-    else toast({ title: 'Subcontractor added', description: 'User account created (PW: SHAW00)' });
+    else toast({ title: 'Subcontractor added', description: `User account created (PW: ${DEFAULT_PASSWORD})` });
     setNewSubName(''); load();
   };
 
@@ -885,7 +886,7 @@ function SubcontractorMasterTable() {
       body: { name, master_type: 'subsub', subcontractor_name: parentName, subsub_name: name },
     });
     if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
-    else toast({ title: 'Sub-Sub added', description: 'User account created (PW: SHAW00)' });
+    else toast({ title: 'Sub-Sub added', description: `User account created (PW: ${DEFAULT_PASSWORD})` });
     setNewSubSubName(''); setNewSubSubParent(''); load();
   };
 
@@ -1121,7 +1122,7 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
         body: { name, master_type: 'hdec_pic', hdec_pic_name: name },
       });
       if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
-      else toast({ title: 'Added', description: 'User account created (PW: SHAW00)' });
+      else toast({ title: 'Added', description: `User account created (PW: ${DEFAULT_PASSWORD})` });
     } else {
       toast({ title: 'Added' });
     }
