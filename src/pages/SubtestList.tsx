@@ -667,12 +667,13 @@ export default function SubtestList() {
   const urlStage = searchParams.get('stage') as 'pred' | 't1' | 't2' | null;
   const urlCellStatus = searchParams.get('cell_status') as TcStatus | null;
   const urlAsOf = searchParams.get('as_of');
+  const delayAsOfDate = urlAsOf || dataDate || new Date().toISOString().slice(0, 10);
 
   const filteredData = useMemo(() => {
-    const today = urlAsOf || new Date().toISOString().slice(0, 10);
+    const atRiskBaseDate = new Date().toISOString().slice(0, 10);
     const daysFromToday = (iso: string) => {
       const a = new Date(iso + 'T00:00:00Z').getTime();
-      const b = new Date(today + 'T00:00:00Z').getTime();
+      const b = new Date(atRiskBaseDate + 'T00:00:00Z').getTime();
       return Math.round((a - b) / 86400000);
     };
 
@@ -681,7 +682,7 @@ export default function SubtestList() {
 
     return data.filter(r => {
       if (urlStatusFilter) {
-        const overdue = getAnyStageDelayedAsOf(r, getStageKeys('all'), today);
+        const overdue = getAnyStageDelayedAsOf(r, getStageKeys('all'), delayAsOfDate);
         if (urlStatusFilter === 'overdue' && !overdue) return false;
         if (urlStatusFilter === 'at_risk') {
           if (overdue) return false;
@@ -732,7 +733,7 @@ export default function SubtestList() {
       urlPredPlannedTo, urlT1PlannedTo, urlT2PlannedTo, urlPredActualTo, urlT1ActualTo, urlT2ActualTo,
       urlPredPlannedOn, urlT1PlannedOn, urlT2PlannedOn, urlPredActualOn, urlT1ActualOn, urlT2ActualOn,
       urlPredDelayAsOf, urlT1DelayAsOf, urlT2DelayAsOf,
-      urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, urlAsOf]);
+      urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, delayAsOfDate]);
 
   const columnIdToFieldName: Record<string, string> = {
     system_code: 'system',
