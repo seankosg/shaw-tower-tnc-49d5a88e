@@ -66,6 +66,7 @@ export function ScheduleMatrix({
   useEffect(() => {
     const header = headerScrollRef.current;
     const body = bodyScrollRef.current;
+    const leftBody = leftBodyRef.current;
     if (!header || !body) return;
 
     const onHeader = () => {
@@ -78,15 +79,24 @@ export function ScheduleMatrix({
       if (syncingRef.current) return;
       syncingRef.current = true;
       header.scrollLeft = body.scrollLeft;
-      if (leftBodyRef.current) leftBodyRef.current.scrollTop = body.scrollTop;
+      if (leftBody) leftBody.scrollTop = body.scrollTop;
       requestAnimationFrame(() => { syncingRef.current = false; });
+    };
+    const onLeftWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      body.scrollTop += event.deltaY;
+      body.scrollLeft += event.deltaX;
+      if (leftBody) leftBody.scrollTop = body.scrollTop;
+      header.scrollLeft = body.scrollLeft;
     };
 
     header.addEventListener('scroll', onHeader);
     body.addEventListener('scroll', onBody);
+    leftBody?.addEventListener('wheel', onLeftWheel, { passive: false });
     return () => {
       header.removeEventListener('scroll', onHeader);
       body.removeEventListener('scroll', onBody);
+      leftBody?.removeEventListener('wheel', onLeftWheel);
     };
   }, []);
 
@@ -325,7 +335,7 @@ export function ScheduleMatrix({
                   {showStageRows && stagesToShow.map(st => {
                     const sr = row.stages[st];
                     return (
-                      <div key={st} className="flex border-b border-border bg-muted/20 text-[11px] h-10 hover:bg-accent/20">
+                      <div key={st} className="flex border-b border-border bg-muted/20 text-[11px] h-14 hover:bg-accent/20">
                         {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
                         {virtualCols.map(vc => {
                           const c = sr.cells[vc.index];
