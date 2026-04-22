@@ -162,8 +162,7 @@ export function aggregateSchedule(
     groupMap.set(k, arr);
   }
 
-  const stagesToShow: ScheduleStage[] =
-    opts.stageFilter === 'all' ? ['pred', 't1', 't2'] : [opts.stageFilter as ScheduleStage];
+  const stagesToShow = getStageKeys(opts.stageFilter);
 
   const rows: GroupRow[] = [];
   for (const [key, items] of groupMap) {
@@ -183,7 +182,7 @@ export function aggregateSchedule(
             stageData[st].cells[i].plan++;
             stageData[st].totalPlan++;
           }
-          if (plan <= opts.today) stageData[st].cumPlan++;
+          if (plan <= opts.asOfDate) stageData[st].cumPlan++;
         }
         if (actual) {
           const b = bucketize(actual, opts.bucket);
@@ -192,7 +191,7 @@ export function aggregateSchedule(
             stageData[st].cells[i].actual++;
             stageData[st].totalActual++;
           }
-          if (actual <= opts.today) stageData[st].cumActual++;
+          if (actual <= opts.asOfDate) stageData[st].cumActual++;
         }
         if (done) stageData[st].totalDone++;
       }
