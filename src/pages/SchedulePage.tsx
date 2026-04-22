@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { todayIso, yesterdayIso, type SubtestForDashboard } from '@/lib/dashboard-utils';
 import { formatDdMmm } from '@/lib/format';
-import { getStageKeys, isStageDelayedAsOf, isStageDone, isStagePlannedOn } from '@/lib/stage-metrics';
+import { getStageKeys, isStageActualUpTo, isStageDelayedAsOf, isStagePlannedOn, isStagePlannedUpTo } from '@/lib/stage-metrics';
 import {
   aggregateSchedule, findCritical, findLaggingGroups, addDays,
   type ScheduleBucket, type ScheduleGroupBy, type ScheduleStageFilter,
@@ -43,7 +43,7 @@ export default function SchedulePage() {
   const [groupBy, setGroupBy] = useState<ScheduleGroupBy>('system');
   const [bucket, setBucket] = useState<ScheduleBucket>('day');
   const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>('all');
-  const [asOfMode, setAsOfMode] = useState<'dataDate' | 'today'>('today');
+  const [asOfMode, setAsOfMode] = useState<'dataDate' | 'today'>('dataDate');
   const [dataDate, setDataDate] = useState(() => yesterdayIso(today));
   const [teamFilter, setTeamFilter] = useState<string>('all');
   const [systemTextFilter, setSystemTextFilter] = useState('');
@@ -190,22 +190,23 @@ export default function SchedulePage() {
 
   const kpis = useMemo(() => {
     let cumPlan = 0, cumActual = 0;
-    for (const r of aggregate.rows) {
-      cumPlan += r.cumPlan;
-      cumActual += r.cumActual;
-    }
     const variance = cumPlan ? ((cumActual - cumPlan) / cumPlan) * 100 : 0;
     const stages = getStageKeys(stageFilter);
     let totalStages = 0, doneStages = 0;
     for (const s of filteredSubtests) {
       totalStages += stages.length;
       for (const st of stages) {
-        if (isStageDone(s, st)) doneStages++;
+        if (isStagePlannedUpTo(s, st, dataDate)) cumPlan++;
+        if (isStageActualUpTo(s, st, dataDate)) {
+          cumActual++;
+          doneStages++;
+        }
       }
     }
+    const variance = cumPlan ? ((cumActual - cumPlan) / cumPlan) * 100 : 0;
     const progressPct = totalStages ? (doneStages / totalStages) * 100 : 0;
     const overdue = filteredSubtests.reduce(
-      (count, s) => count + stages.filter(st => isStageDelayedAsOf(s, st, asOfDate)).length,
+      (count, s) => count + stages.filter(st => isStageDelayedAsOf(s, st, dataDate)).length,
       0,
     );
     const upcomingEnd = addDays(today, 7);
@@ -218,7 +219,7 @@ export default function SchedulePage() {
       }
     }
     return { cumPlan, cumActual, variance, progressPct, doneStages, totalStages, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
-  }, [aggregate.rows, stageFilter, filteredSubtests, critical.highRisk.length, asOfDate, today]);
+  }, [stageFilter, filteredSubtests, critical.highRisk.length, dataDate, today]);
 
   // ───── Navigation handlers ─────
   const filterParamForGroup = (label: string): { key: string; value: string } => {
