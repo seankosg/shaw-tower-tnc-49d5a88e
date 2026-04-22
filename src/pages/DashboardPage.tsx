@@ -798,8 +798,10 @@ function PlanActualTable({
   const colgroup = (
     <colgroup>
       <col className="w-[210px]" />
-      <col className="w-[72px]" />
       <col className="w-[86px]" />
+      <col className="w-[58px]" />
+      <col className="w-[58px]" />
+      <col className="w-[64px]" />
       {Array.from({ length: 11 }).map((_, i) => <col key={i} className="w-[56px]" />)}
       <col className="w-[140px]" />
     </colgroup>
@@ -807,7 +809,7 @@ function PlanActualTable({
 
   return (
     <div className="overflow-x-auto">
-      <div className="min-w-[1160px]">
+      <div className="min-w-[1270px]">
         <div className="overflow-y-auto [scrollbar-gutter:stable]">
           <Table className="table-fixed">
             {colgroup}
@@ -819,8 +821,10 @@ function PlanActualTable({
                 {systemFilter && <SystemHeaderFilter {...systemFilter} />}
               </div>
             </TableHead>
-            <TableHead rowSpan={2} className="text-right align-bottom">Total<br /><span className="text-[10px] font-normal text-muted-foreground">Subtests</span></TableHead>
             <TableHead rowSpan={2} className="align-bottom">Stage</TableHead>
+            <TableHead rowSpan={2} className="text-right align-bottom">Total</TableHead>
+            <TableHead rowSpan={2} className="text-right align-bottom">Done</TableHead>
+            <TableHead rowSpan={2} className="text-right align-bottom border-r border-border">Remain</TableHead>
             <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">To Data Date (Cumulative)</TableHead>
             <TableHead colSpan={4} className="text-center border-l border-border bg-muted/30">Data Date ({dataDateLabel})</TableHead>
             <TableHead colSpan={4} className="text-center border-l border-border bg-muted/30">Today ({todayLabel})</TableHead>
