@@ -116,6 +116,7 @@ export function ScheduleMatrix({
   };
 
   const timelineGridWidth = data.buckets.length * cellWidth;
+  const totalGridWidth = STICKY_LEFT_WIDTH + timelineGridWidth;
 
   const colVirtualizer = useVirtualizer({
     count: data.buckets.length,
@@ -143,7 +144,7 @@ export function ScheduleMatrix({
       <div className="sticky top-0 z-30 bg-muted">
         <div
           ref={headerScrollRef}
-          className="overflow-x-auto overflow-y-hidden border-b border-border text-[11px] font-semibold"
+          className="overflow-x-auto overflow-y-hidden border-b border-border text-[11px] font-semibold [scrollbar-gutter:stable]"
         >
           <div className="flex flex-col" style={{ width: totalGridWidth, minWidth: totalGridWidth }}>
             {/* Row 1: group headers */}
@@ -221,7 +222,7 @@ export function ScheduleMatrix({
       {/* Body */}
       <div
         ref={bodyScrollRef}
-        className="overflow-y-auto overflow-x-hidden max-h-[calc(100vh-300px)]"
+        className="overflow-y-auto overflow-x-auto max-h-[calc(100vh-300px)] [scrollbar-gutter:stable]"
       >
         <div style={{ width: totalGridWidth, minWidth: totalGridWidth }}>
           {data.rows.length === 0 && (
