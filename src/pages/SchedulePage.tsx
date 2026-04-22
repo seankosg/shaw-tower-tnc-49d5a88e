@@ -365,16 +365,6 @@ export default function SchedulePage() {
                 <TabsTrigger value="week" className="h-6 px-2 text-xs">Week</TabsTrigger>
               </TabsList>
             </Tabs>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 px-2 text-xs"
-              onClick={() => setHidePast(p => !p)}
-              title={hidePast ? 'Show past dates' : 'Hide past dates'}
-            >
-              {hidePast ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
-              <span className="ml-1">{hidePast ? 'Show past' : 'Hide past'}</span>
-            </Button>
           </ToolbarGroup>
 
           <ToolbarGroup label="Stage">
@@ -513,7 +503,17 @@ export default function SchedulePage() {
       </div>
 
       {/* Matrix + Watchlist */}
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-2 text-xs"
+          onClick={() => setHidePast(p => !p)}
+          title={hidePast ? 'Show past dates' : 'Hide past dates'}
+        >
+          {hidePast ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
+          <span className="ml-1">{hidePast ? 'Show past' : 'Hide past'}</span>
+        </Button>
         <Button
           variant="outline"
           size="sm"
