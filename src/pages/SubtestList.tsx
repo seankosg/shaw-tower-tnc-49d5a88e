@@ -385,7 +385,19 @@ export default function SubtestList() {
       t1_status: 't1_status',
       t2_status: 't2_status',
     };
-    const next = baseFilters.filter(f => !Object.values(urlMap).includes(f.id));
+    const dataUrlFilterKeys = [
+      ...Object.keys(urlMap),
+      'source', 'status', 'at_risk_days', 'as_of',
+      'date_from', 'date_to', 'date_field', 'stage', 'cell_status',
+      'pred_planned_to', 't1_planned_to', 't2_planned_to',
+      'pred_actual_to', 't1_actual_to', 't2_actual_to',
+      'pred_planned_on', 't1_planned_on', 't2_planned_on',
+      'pred_actual_on', 't1_actual_on', 't2_actual_on',
+      'pred_delay_asof', 't1_delay_asof', 't2_delay_asof',
+      'pred_delay_on', 't1_delay_on', 't2_delay_on',
+    ];
+    const hasDataUrlFilters = dataUrlFilterKeys.some(k => searchParams.has(k));
+    const next = hasDataUrlFilters ? [] : baseFilters.filter(f => !Object.values(urlMap).includes(f.id));
     for (const [param, col] of Object.entries(urlMap)) {
       const v = searchParams.get(param);
       if (v) {
@@ -399,8 +411,8 @@ export default function SubtestList() {
     }
     setSorting(baseSorting);
     setColumnFilters(next);
-    setGlobalFilter(baseGlobal);
-    setSearchInput(baseGlobal);
+    setGlobalFilter(hasDataUrlFilters ? '' : baseGlobal);
+    setSearchInput(hasDataUrlFilters ? '' : baseGlobal);
     setColumnSizing(baseSizing);
     setStateLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
