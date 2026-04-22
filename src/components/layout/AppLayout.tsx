@@ -18,6 +18,7 @@ import { useRouteMemory } from '@/hooks/useRouteMemory';
 
 const ROUTE_TITLES: Array<{ match: (p: string) => boolean; label: string }> = [
   { match: (p) => p === '/dashboard', label: 'Dashboard' },
+  { match: (p) => p === '/schedule/revision', label: 'Schedule Revision' },
   { match: (p) => p === '/schedule', label: 'Progress' },
   { match: (p) => p === '/raw-data', label: 'Raw Data' },
   { match: (p) => p.startsWith('/subtests/'), label: 'Subtest Detail' },

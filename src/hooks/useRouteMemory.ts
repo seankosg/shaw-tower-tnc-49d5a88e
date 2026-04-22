@@ -6,6 +6,7 @@ const MEMORY_PREFIX = 'last-route:';
 const ROUTE_KEYS = [
   '/dashboard',
   '/raw-data',
+  '/schedule/revision',
   '/schedule',
   '/import',
   '/import/logs',
