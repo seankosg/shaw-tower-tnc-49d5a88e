@@ -113,21 +113,21 @@ export default function DashboardPage() {
     const remaining = total - totalDone;
     const progressPct = total ? Math.round((totalDone / total) * 1000) / 10 : 0;
 
-    // Overdue (any stage)
-    const overdueCount = filteredSubtests.filter(s => isOverdue(s, today)).length;
+    // Overdue (any stage) as of Data Date
+    const overdueCount = filteredSubtests.filter(s => isOverdue(s, dataDate)).length;
     const atRiskCount = filteredSubtests.filter(s => isAtRisk(s, today, atRiskDays)).length;
 
     // Stage-specific
     const predDone = filteredSubtests.filter(s => isStageDone(s, 'pred')).length;
-    const predOverdue = filteredSubtests.filter(s => s.pred_planned_date && s.pred_planned_date < today && !isStageDone(s, 'pred')).length;
+    const predOverdue = filteredSubtests.filter(s => s.pred_planned_date && s.pred_planned_date <= dataDate && !isStageDone(s, 'pred')).length;
     const predPct = total ? Math.round((predDone / total) * 1000) / 10 : 0;
 
     const t1Done = filteredSubtests.filter(s => isStageDone(s, 't1')).length;
-    const t1Overdue = filteredSubtests.filter(s => s.t1_planned_date && s.t1_planned_date < today && !isStageDone(s, 't1')).length;
+    const t1Overdue = filteredSubtests.filter(s => s.t1_planned_date && s.t1_planned_date <= dataDate && !isStageDone(s, 't1')).length;
     const t1Pct = total ? Math.round((t1Done / total) * 1000) / 10 : 0;
 
     const t2Done = totalDone;
-    const t2Overdue = filteredSubtests.filter(s => s.t2_planned_date && s.t2_planned_date < today && !isStageDone(s, 't2')).length;
+    const t2Overdue = filteredSubtests.filter(s => s.t2_planned_date && s.t2_planned_date <= dataDate && !isStageDone(s, 't2')).length;
     const t2Pct = progressPct;
 
     return {
@@ -136,7 +136,7 @@ export default function DashboardPage() {
       t1Done, t1Overdue, t1Pct,
       t2Done, t2Overdue, t2Pct,
     };
-  }, [filteredSubtests, today, atRiskDays]);
+  }, [filteredSubtests, today, dataDate, atRiskDays]);
 
   // ───── Group aggregates per tab — Plan vs Actual rows
   const bySystem = useMemo(
@@ -198,11 +198,11 @@ export default function DashboardPage() {
   // ───── Top Overdue
   const topOverdue = useMemo(() => {
     return filteredSubtests
-      .filter(s => isOverdue(s, today))
-      .map(s => ({ s, delay: maxDelayDays(s, today) }))
+      .filter(s => isOverdue(s, dataDate))
+      .map(s => ({ s, delay: maxDelayDays(s, dataDate) }))
       .sort((a, b) => b.delay - a.delay)
       .slice(0, 10);
-  }, [filteredSubtests, today]);
+  }, [filteredSubtests, dataDate]);
 
   // ───── Pie data
   const t1Pie = useMemo(() => buildPie(filteredSubtests, 't1_status'), [filteredSubtests]);
