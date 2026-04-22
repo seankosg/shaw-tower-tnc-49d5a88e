@@ -8,13 +8,22 @@ import { Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { TcStatus, DataSource } from '@/types/enums';
 import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS } from '@/types/enums';
+import { useSearchParams } from 'react-router-dom';
 
 export default function ExportPage() {
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
-  const [systemFilter, setSystemFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [systemFilter, setSystemFilter] = useState(searchParams.get('system') || 'all');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all');
   const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    if (systemFilter === 'all') next.delete('system'); else next.set('system', systemFilter);
+    if (statusFilter === 'all') next.delete('status'); else next.set('status', statusFilter);
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [systemFilter, statusFilter, searchParams, setSearchParams]);
 
   useEffect(() => {
     supabase.from('system_master').select('id, system_code').eq('is_active', true)
