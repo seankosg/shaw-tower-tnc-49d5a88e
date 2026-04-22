@@ -225,123 +225,118 @@ export function ScheduleMatrix({
       </div>
 
       {/* Body */}
-      <div
-        ref={bodyScrollRef}
-        className="overflow-y-auto overflow-x-auto max-h-[calc(100vh-300px)] [scrollbar-gutter:stable]"
-      >
-        <div style={{ width: totalGridWidth, minWidth: totalGridWidth }}>
-          {data.rows.length === 0 && (
-            <div className="px-4 py-8 text-center text-sm text-muted-foreground">No data in selected range.</div>
-          )}
+      <div className="flex">
+        <div
+          ref={leftBodyRef}
+          className="max-h-[calc(100vh-300px)] shrink-0 overflow-hidden bg-card shadow-[2px_0_4px_-2px_hsl(var(--border))]"
+          style={{ width: STICKY_LEFT_WIDTH }}
+        >
           {data.rows.map(row => {
             const showStageRows = stageFilter === 'all';
             return (
-              <Fragment key={row.key}>
-                {/* Group summary row */}
+              <Fragment key={`left-${row.key}`}>
                 <div className={cn("flex border-b border-border text-xs h-10", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
-                  <div className="sticky left-0 z-20 flex bg-card shadow-[2px_0_4px_-2px_hsl(var(--border))]">
-                    <div
-                      className="flex items-center gap-1 px-2 text-left cursor-default"
-                      style={{ width: W_GROUP }}
-                    >
-                      <span className="truncate font-medium" title={row.label}>{row.label}</span>
-                    </div>
-
-                    <div className="flex bg-muted/40">
-                      <TotalDoneCells
-                        total={row.total}
-                        done={row.doneCount}
-                        bold
-                        py="py-0"
-                      />
-                    </div>
-                    <div className="flex bg-secondary/20">
-                      <PlanActualCells
-                        plan={row.cumPlan}
-                        actual={row.cumActual}
-                        bold
-                        py="py-0"
-                      />
-                    </div>
+                  <div className="flex items-center gap-1 px-2 text-left cursor-default" style={{ width: W_GROUP }}>
+                    <span className="truncate font-medium" title={row.label}>{row.label}</span>
                   </div>
-                  {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
-                  {virtualCols.map(vc => {
-                    const c = row.combined[vc.index];
-                    if (!c) return null;
-                    return (
-                      <ScheduleCell
-                        key={c.bucket}
-                        plan={c.plan}
-                        actual={c.actual}
-                        isFuture={vc.index > todayBucketIdx}
-                        isToday={vc.index === todayBucketIdx}
-                        width={cellWidth}
-                        onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'planned') : undefined}
-                        onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'actual') : undefined}
-                      />
-                    );
-                  })}
-                  {rightPad > 0 && <div style={{ width: rightPad, minWidth: rightPad }} />}
+                  <div className="flex bg-muted/40">
+                    <TotalDoneCells total={row.total} done={row.doneCount} bold py="py-0" />
+                  </div>
+                  <div className="flex bg-secondary/20">
+                    <PlanActualCells plan={row.cumPlan} actual={row.cumActual} bold py="py-0" />
+                  </div>
                 </div>
 
-                {/* Stage sub-rows when expanded */}
                 {showStageRows && stagesToShow.map(st => {
                   const sr = row.stages[st];
                   return (
-                    <div key={st} className="flex border-b border-border bg-muted/20 text-[11px] h-10 hover:bg-accent/20">
-                      <div className="sticky left-0 z-20 flex bg-card shadow-[2px_0_4px_-2px_hsl(var(--border))]">
-                        <div
-                          className="flex items-center gap-2 px-2 pl-8 text-muted-foreground"
-                          style={{ width: W_GROUP }}
-                        >
-                          <span className={cn(
-                            'inline-flex h-4 w-7 items-center justify-center rounded text-[9px] font-semibold',
-                            st === 'pred' && 'bg-secondary text-secondary-foreground',
-                            st === 't1' && 'bg-primary/15 text-primary',
-                            st === 't2' && 'bg-primary/30 text-primary',
-                          )}>
-                            {STAGE_LABELS[st]}
-                          </span>
-                        </div>
-                        <div className="flex bg-muted/40">
-                          <TotalDoneCells
-                            total={sr.total}
-                            done={sr.totalDone}
-                            py="py-0"
-                          />
-                        </div>
-                        <div className="flex bg-secondary/20">
-                          <PlanActualCells
-                            plan={sr.cumPlan}
-                            actual={sr.cumActual}
-                            py="py-0"
-                          />
-                        </div>
+                    <div key={`left-${row.key}-${st}`} className="flex border-b border-border bg-muted/20 text-[11px] h-10 hover:bg-accent/20">
+                      <div className="flex items-center gap-2 px-2 pl-8 text-muted-foreground" style={{ width: W_GROUP }}>
+                        <span className={cn(
+                          'inline-flex h-4 w-7 items-center justify-center rounded text-[9px] font-semibold',
+                          st === 'pred' && 'bg-secondary text-secondary-foreground',
+                          st === 't1' && 'bg-primary/15 text-primary',
+                          st === 't2' && 'bg-primary/30 text-primary',
+                        )}>
+                          {STAGE_LABELS[st]}
+                        </span>
                       </div>
-                      {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
-                      {virtualCols.map(vc => {
-                        const c = sr.cells[vc.index];
-                        if (!c) return null;
-                        return (
-                          <ScheduleCell
-                            key={c.bucket}
-                            plan={c.plan}
-                            actual={c.actual}
-                            isFuture={vc.index > todayBucketIdx}
-                            isToday={vc.index === todayBucketIdx}
-                            width={cellWidth}
-                            onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, st, 'planned') : undefined}
-                            onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, st, 'actual') : undefined}
-                          />
-                        );
-                      })}
-                      {rightPad > 0 && <div style={{ width: rightPad, minWidth: rightPad }} />}
+                      <div className="flex bg-muted/40">
+                        <TotalDoneCells total={sr.total} done={sr.totalDone} py="py-0" />
+                      </div>
+                      <div className="flex bg-secondary/20">
+                        <PlanActualCells plan={sr.cumPlan} actual={sr.cumActual} py="py-0" />
+                      </div>
                     </div>
                   );
                 })}
               </Fragment>
             );
           })}
+        </div>
+
+        <div
+          ref={bodyScrollRef}
+          className="max-h-[calc(100vh-300px)] min-w-0 flex-1 overflow-auto [scrollbar-gutter:stable]"
+        >
+          <div style={{ width: timelineGridWidth, minWidth: timelineGridWidth }}>
+            {data.rows.length === 0 && (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">No data in selected range.</div>
+            )}
+            {data.rows.map(row => {
+              const showStageRows = stageFilter === 'all';
+              return (
+                <Fragment key={row.key}>
+                  <div className={cn("flex border-b border-border text-xs h-10", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
+                    {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
+                    {virtualCols.map(vc => {
+                      const c = row.combined[vc.index];
+                      if (!c) return null;
+                      return (
+                        <ScheduleCell
+                          key={c.bucket}
+                          plan={c.plan}
+                          actual={c.actual}
+                          isFuture={vc.index > todayBucketIdx}
+                          isToday={vc.index === todayBucketIdx}
+                          width={cellWidth}
+                          onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'planned') : undefined}
+                          onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'actual') : undefined}
+                        />
+                      );
+                    })}
+                    {rightPad > 0 && <div style={{ width: rightPad, minWidth: rightPad }} />}
+                  </div>
+
+                  {showStageRows && stagesToShow.map(st => {
+                    const sr = row.stages[st];
+                    return (
+                      <div key={st} className="flex border-b border-border bg-muted/20 text-[11px] h-10 hover:bg-accent/20">
+                        {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
+                        {virtualCols.map(vc => {
+                          const c = sr.cells[vc.index];
+                          if (!c) return null;
+                          return (
+                            <ScheduleCell
+                              key={c.bucket}
+                              plan={c.plan}
+                              actual={c.actual}
+                              isFuture={vc.index > todayBucketIdx}
+                              isToday={vc.index === todayBucketIdx}
+                              width={cellWidth}
+                              onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, st, 'planned') : undefined}
+                              onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, st, 'actual') : undefined}
+                            />
+                          );
+                        })}
+                        {rightPad > 0 && <div style={{ width: rightPad, minWidth: rightPad }} />}
+                      </div>
+                    );
+                  })}
+                </Fragment>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
