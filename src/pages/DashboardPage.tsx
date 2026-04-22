@@ -569,7 +569,8 @@ function StageBadge({ stage, label }: { stage: 'pred' | 't1' | 't2'; label: stri
   );
 }
 
-function ClickNum({ value, onClick }: { value: number; onClick?: () => void }) {
+function ClickNum({ value, onClick, hideZero = false }: { value: number; onClick?: () => void; hideZero?: boolean }) {
+  if (hideZero && value === 0) return <span className="tabular-nums" aria-label="0" />;
   if (!onClick) return <span className="tabular-nums">{value}</span>;
   return (
     <button
@@ -813,7 +814,7 @@ function PlanActualTable({
                     <VarianceCell value={yD} />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5 font-semibold text-destructive">
-                    <ClickNum value={m.yesterdayDelay} onClick={st.delayAsOf ? () => go(r.key, { [st.delayAsOf!]: dataDate }) : undefined} />
+                    <ClickNum value={m.yesterdayDelay} hideZero onClick={st.delayAsOf ? () => go(r.key, { [st.delayAsOf!]: dataDate }) : undefined} />
                   </TableCell>
                   {/* Today */}
                   <TableCell className="text-right border-l border-border text-xs px-2 py-1.5">
@@ -826,7 +827,7 @@ function PlanActualTable({
                     <VarianceCell value={todayD} />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5 font-semibold text-destructive">
-                    <ClickNum value={m.todayDelay} onClick={st.delayAsOf ? () => go(r.key, { [st.delayAsOf!]: today }) : undefined} />
+                    <ClickNum value={m.todayDelay} hideZero onClick={st.delayAsOf ? () => go(r.key, { [st.delayAsOf!]: today }) : undefined} />
                   </TableCell>
                   <TableCell className="border-l border-border px-2 py-1.5">
                     <div className="flex items-center gap-1.5">
