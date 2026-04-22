@@ -191,18 +191,20 @@ export function exportPlanActualToExcel(
       setNum(ws, cr, 4, m.cumActual, S_NUM);
       setNum(ws, cr, 5, cumD, deltaStyle(cumD));
 
-      // Yesterday
+      // Data Date
       setNum(ws, cr, 6, m.yesterdayPlan, S_NUM);
       setNum(ws, cr, 7, m.yesterdayActual, S_NUM);
       setNum(ws, cr, 8, yD, deltaStyle(yD));
+      setNum(ws, cr, 9, m.yesterdayDelay, S_NUM);
 
       // Today
-      setNum(ws, cr, 9, m.todayPlan, S_NUM);
-      setNum(ws, cr, 10, m.todayActual, S_NUM);
-      setNum(ws, cr, 11, tD, deltaStyle(tD));
+      setNum(ws, cr, 10, m.todayPlan, S_NUM);
+      setNum(ws, cr, 11, m.todayActual, S_NUM);
+      setNum(ws, cr, 12, tD, deltaStyle(tD));
+      setNum(ws, cr, 13, m.todayDelay, S_NUM);
 
       // Progress
-      set(ws, cr, 12, `${pct}%`, S_PCT);
+      set(ws, cr, 14, `${pct}%`, S_PCT);
 
       dataRow++;
     });
@@ -222,8 +224,8 @@ export function exportPlanActualToExcel(
     { wch: 8 },  // total
     { wch: 20 }, // stage + counts
     { wch: 8 }, { wch: 8 }, { wch: 7 },  // cum
-    { wch: 8 }, { wch: 8 }, { wch: 7 },  // yesterday
-    { wch: 8 }, { wch: 8 }, { wch: 7 },  // today
+    { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, // data date
+    { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, // today
     { wch: 10 }, // progress
   ];
 
