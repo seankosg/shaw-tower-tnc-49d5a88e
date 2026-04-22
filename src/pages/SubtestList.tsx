@@ -947,6 +947,7 @@ export default function SubtestList() {
         autoSizeColumn={autoSizeColumn}
         navigate={navigate}
         tableRef={tableRef}
+        delayAsOfDate={delayAsOfDate}
       />
     </div>
   );
@@ -962,10 +963,11 @@ interface SubtestTableViewProps {
   autoSizeColumn: (id: string) => void;
   navigate: (path: string) => void;
   tableRef: React.RefObject<HTMLDivElement>;
+  delayAsOfDate: string;
 }
 
 function SubtestTableView({
-  table, loading, columns, sorting, autoSizeColumn, navigate, tableRef,
+  table, loading, columns, sorting, autoSizeColumn, navigate, tableRef, delayAsOfDate,
 }: SubtestTableViewProps) {
   const FROZEN_COUNT = 4;
   const leafCols = table.getVisibleLeafColumns();
