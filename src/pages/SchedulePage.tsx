@@ -202,6 +202,9 @@ export default function SchedulePage() {
     return { key, value: label };
   };
 
+  const filterValueForGroup = (label: string) =>
+    label === '(None)' || label === '—' ? '__EMPTY__' : label;
+
   const goSubtests = (params: Record<string, string>) => {
     const sp = new URLSearchParams(params);
     navigate(`/?${sp.toString()}`);
@@ -214,7 +217,10 @@ export default function SchedulePage() {
     field: 'planned' | 'actual',
   ) => {
     const { key, value } = filterParamForGroup(groupKey);
-    const params: Record<string, string> = { [key]: value };
+    const params: Record<string, string> = {
+      [key]: filterValueForGroup(value),
+      source: 'schedule_cell',
+    };
 
     // Bucket date range: day = single day, week = 7-day window
     const dateFrom = bucketIso;
@@ -227,8 +233,7 @@ export default function SchedulePage() {
     if (stage === 't1' || stage === 't2' || stage === 'pred') {
       params.stage = stage;
     }
-    // Plan bar counts by planned_date regardless of status — don't constrain status.
-    // Actual bar implies completion — keep Done filter.
+    // Plan counts by planned_date regardless of status. Actual implies completed actual_date.
     if (field === 'actual') {
       params.cell_status = 'Done';
     }
