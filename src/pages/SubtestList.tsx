@@ -379,6 +379,7 @@ export default function SubtestList() {
       subcon: 'subcontractor_name',
       subsub: 'subsub_name',
       hdec_pic: 'hdec_pic_name',
+      team: 'team',
       pred_status: 'pred_status',
       t1_status: 't1_status',
       t2_status: 't2_status',
@@ -387,7 +388,7 @@ export default function SubtestList() {
     for (const [param, col] of Object.entries(urlMap)) {
       const v = searchParams.get(param);
       if (v) {
-        if (col === 'system_code' || col === 'pred_status' || col === 't1_status' || col === 't2_status'
+        if (col === 'system_code' || col === 'team' || col === 'pred_status' || col === 't1_status' || col === 't2_status'
           || col === 'subcontractor_name' || col === 'subsub_name' || col === 'hdec_pic_name') {
           next.push({ id: col, value: [v] });
         } else {
