@@ -643,13 +643,15 @@ function ClickVariance({ value, onClick }: { value: number; onClick?: () => void
 }
 
 function PlanActualTable({
-  rows, groupParam, groupHeader, today, yesterday, navigate, keyToFilterValue,
+  rows, groupParam, groupHeader, today, dataDate, todayLabel, dataDateLabel, navigate, keyToFilterValue,
 }: {
   rows: PlanActualRow[];
   groupParam: 'system' | 'subcon' | 'subsub' | 'hdec_pic' | 'team';
   groupHeader: string;
   today: string;
-  yesterday: string;
+  dataDate: string;
+  todayLabel: string;
+  dataDateLabel: string;
   navigate: (to: string) => void;
   keyToFilterValue?: (key: string) => string;
 }) {
@@ -672,6 +674,7 @@ function PlanActualTable({
     actualTo?: string;
     planOn?: string;
     actualOn?: string;
+    delayAsOf?: string;
     actualOverride?: { param: string; value: string };
   };
 
@@ -683,18 +686,20 @@ function PlanActualTable({
             <TableHead rowSpan={2} className="align-bottom">{groupHeader}</TableHead>
             <TableHead rowSpan={2} className="text-right align-bottom">Total<br /><span className="text-[10px] font-normal text-muted-foreground">Subtests</span></TableHead>
             <TableHead rowSpan={2} className="align-bottom">Stage</TableHead>
-            <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">To-Yesterday (Cumulative)</TableHead>
-            <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">Yesterday</TableHead>
-            <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">Today</TableHead>
+            <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">To Data Date (Cumulative)</TableHead>
+            <TableHead colSpan={4} className="text-center border-l border-border bg-muted/30">Data Date ({dataDateLabel})</TableHead>
+            <TableHead colSpan={4} className="text-center border-l border-border bg-muted/30">Today ({todayLabel})</TableHead>
             <TableHead rowSpan={2} className="w-[140px] align-bottom border-l border-border">Progress</TableHead>
           </TableRow>
           <TableRow>
             <TableHead className="text-right border-l border-border text-[11px]">Plan</TableHead>
             <TableHead className="text-right text-[11px]">Actual</TableHead>
             <TableHead className="text-right text-[11px]">Δ</TableHead>
+            <TableHead className="text-right text-[11px]">Delay</TableHead>
             <TableHead className="text-right border-l border-border text-[11px]">Plan</TableHead>
             <TableHead className="text-right text-[11px]">Actual</TableHead>
             <TableHead className="text-right text-[11px]">Δ</TableHead>
+            <TableHead className="text-right text-[11px]">Delay</TableHead>
             <TableHead className="text-right border-l border-border text-[11px]">Plan</TableHead>
             <TableHead className="text-right text-[11px]">Actual</TableHead>
             <TableHead className="text-right text-[11px]">Δ</TableHead>
@@ -705,10 +710,11 @@ function PlanActualTable({
             const stages: StageDef[] = [
               {
                 stage: 'pred', label: 'Pred', metrics: r.predecessor,
-                planTo: 't1_planned_to',
-                actualOverride: { param: 't1_status', value: 'WIP,Done' },
-                planOn: 't1_planned_on',
-                actualOn: 't1_actual_on',
+                planTo: 'pred_planned_to',
+                actualTo: 'pred_actual_to',
+                planOn: 'pred_planned_on',
+                actualOn: 'pred_actual_on',
+                delayAsOf: 'pred_delay_asof',
               },
               {
                 stage: 't1', label: 'T1', metrics: r.t1,
@@ -716,6 +722,7 @@ function PlanActualTable({
                 actualTo: 't1_actual_to',
                 planOn: 't1_planned_on',
                 actualOn: 't1_actual_on',
+                delayAsOf: 't1_delay_asof',
               },
               {
                 stage: 't2', label: 'T2', metrics: r.t2,
@@ -723,6 +730,7 @@ function PlanActualTable({
                 actualTo: 't2_actual_to',
                 planOn: 't2_planned_on',
                 actualOn: 't2_actual_on',
+                delayAsOf: 't2_delay_asof',
               },
             ];
 
@@ -755,16 +763,16 @@ function PlanActualTable({
                       </span>
                     </span>
                   </TableCell>
-                  {/* Cumulative (to yesterday) */}
+                  {/* Cumulative (to Data Date) */}
                   <TableCell className="text-right border-l border-border text-xs px-2 py-1.5">
-                    <ClickNum value={m.cumPlan} onClick={st.planTo ? () => go(r.key, { [st.planTo!]: yesterday }) : undefined} />
+                    <ClickNum value={m.cumPlan} onClick={st.planTo ? () => go(r.key, { [st.planTo!]: dataDate }) : undefined} />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5">
                     <ClickNum
                       value={m.cumActual}
                       onClick={
                         st.actualTo
-                          ? () => go(r.key, { [st.actualTo!]: yesterday })
+                          ? () => go(r.key, { [st.actualTo!]: dataDate })
                           : st.actualOverride
                             ? () => go(r.key, { [st.actualOverride!.param]: st.actualOverride!.value })
                             : undefined
@@ -777,15 +785,18 @@ function PlanActualTable({
                       onClick={cumD < 0 ? () => go(r.key, { status: 'overdue' }) : undefined}
                     />
                   </TableCell>
-                  {/* Yesterday */}
+                  {/* Data Date */}
                   <TableCell className="text-right border-l border-border text-xs px-2 py-1.5">
-                    <ClickNum value={m.yesterdayPlan} onClick={st.planOn ? () => go(r.key, { [st.planOn!]: yesterday }) : undefined} />
+                    <ClickNum value={m.yesterdayPlan} onClick={st.planOn ? () => go(r.key, { [st.planOn!]: dataDate }) : undefined} />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5">
-                    <ClickNum value={m.yesterdayActual} onClick={st.actualOn ? () => go(r.key, { [st.actualOn!]: yesterday }) : undefined} />
+                    <ClickNum value={m.yesterdayActual} onClick={st.actualOn ? () => go(r.key, { [st.actualOn!]: dataDate }) : undefined} />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5">
                     <VarianceCell value={yD} />
+                  </TableCell>
+                  <TableCell className="text-right text-xs px-2 py-1.5">
+                    <ClickNum value={m.yesterdayDelay} onClick={st.delayAsOf ? () => go(r.key, { [st.delayAsOf!]: dataDate }) : undefined} />
                   </TableCell>
                   {/* Today */}
                   <TableCell className="text-right border-l border-border text-xs px-2 py-1.5">
@@ -796,6 +807,9 @@ function PlanActualTable({
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5">
                     <VarianceCell value={todayD} />
+                  </TableCell>
+                  <TableCell className="text-right text-xs px-2 py-1.5">
+                    <ClickNum value={m.todayDelay} onClick={st.delayAsOf ? () => go(r.key, { [st.delayAsOf!]: today }) : undefined} />
                   </TableCell>
                   <TableCell className="border-l border-border px-2 py-1.5">
                     <div className="flex items-center gap-1.5">
