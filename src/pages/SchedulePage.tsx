@@ -435,7 +435,7 @@ export default function SchedulePage() {
           icon={<TrendingUp className="h-3.5 w-3.5" />}
         />
         <Kpi
-          label={`${asOfLabel} Delay`}
+          label={`Delay up to ${asOfLabel}`}
           value={kpis.overdue}
           accent={kpis.overdue > 0 ? 'short' : undefined}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
