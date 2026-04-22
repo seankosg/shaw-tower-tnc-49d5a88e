@@ -7,6 +7,7 @@ const HEADER_MAP: Record<string, string> = {
   itemno: 'item_no',
   'item no': 'item_no',
   'item_no': 'item_no',
+  team: 'team',
   level: 'level',
   lv: 'level',
   equipment: 'equipment',
@@ -93,6 +94,10 @@ const HEADER_MAP: Record<string, string> = {
   'punch list comments': 'punchlist_comments',
   'punchlist_comments': 'punchlist_comments',
   'punchlist comment': 'punchlist_comments',
+  source: 'source',
+  updated: 'updated_at',
+  'updated at': 'updated_at',
+  updated_at: 'updated_at',
 };
 
 function normalizeHeader(raw: string): string {
@@ -150,6 +155,20 @@ function normalizeStatus(val: any): string | null {
   return map[s.toLowerCase()] || s;
 }
 
+function normalizeTeam(val: any): string | null {
+  if (val == null || val === '') return null;
+  const s = String(val).trim();
+  const key = s.toLowerCase();
+  if (key === 'clear') return 'clear';
+  const map: Record<string, string> = {
+    mech: 'Mech', mechanical: 'Mech',
+    elec: 'Elec', electrical: 'Elec',
+    arch: 'Arch', architecture: 'Arch', architectural: 'Arch',
+    supp: 'Supp', support: 'Supp',
+  };
+  return map[key] || null;
+}
+
 function normalizePredecessor(val: any): string | null {
   if (val == null || val === '') return null;
   const s = String(val).trim();
@@ -203,6 +222,7 @@ export interface ParsedSubtest {
   raw_row_no: number;
   raw_system_name: string;
   item_no: string;
+  team: string | null;
   level: string | null;
   equipment: string | null;
   description: string | null;
@@ -228,13 +248,33 @@ export interface ParsedSubtest {
 
 // ── Known target field names (after normalization) ───────────────────
 export const KNOWN_FIELDS = new Set<string>([
-  'system', 'item_no', 'level', 'equipment', 'description',
+  'system', 'item_no', 'team', 'level', 'equipment', 'description',
   'mos_1', 'mos_2', 'mos_3', 'mos_4', 'mos_5', 'mos_code', 'subtest_id',
   't1_planned_date', 't1_status', 't2_planned_date', 't2_status',
   'predecessor_status_raw',
   'subcontractor_name', 'subsub_name', 'hdec_pic_name',
   'r1_status', 'r2_status', 'aconex_ref_no', 'remarks', 'punchlist_comments',
+  'source', 'updated_at',
 ]);
+
+export type DetectedImportType = 'legacy' | 'standard' | 'unknown';
+
+export function detectImportType(mappedHeaders: string[]): { type: DetectedImportType; reasons: string[] } {
+  const headers = new Set(mappedHeaders.filter(Boolean));
+  const hasLegacyMos = ['mos_1', 'mos_2', 'mos_3', 'mos_4', 'mos_5'].some(h => headers.has(h));
+  const hasMosCode = headers.has('mos_code');
+  const standardSignalCount = [
+    headers.has('subtest_id'),
+    headers.has('t1_planned_date') || headers.has('t1_status'),
+    headers.has('t2_planned_date') || headers.has('t2_status'),
+    headers.has('team'),
+    headers.has('source') || headers.has('updated_at'),
+  ].filter(Boolean).length;
+
+  if (hasLegacyMos) return { type: 'legacy', reasons: ['MOS-1~5'] };
+  if (hasMosCode && standardSignalCount > 0) return { type: 'standard', reasons: ['MOS Code', `${standardSignalCount} standard signal(s)`] };
+  return { type: 'unknown', reasons: hasMosCode ? ['MOS Code only'] : ['No MOS structure'] };
+}
 
 export interface ParseExcelResult {
   rows: Record<string, string>[];
@@ -282,6 +322,7 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
       raw_row_no: parseInt(row.__row_no) || 0,
       raw_system_name: system,
       item_no,
+      team: null,
       level: row.level?.trim() || null,
       equipment: row.equipment?.trim() || null,
       description: row.description?.trim() || null,
@@ -342,6 +383,7 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
       raw_row_no: parseInt(row.__row_no) || 0,
       raw_system_name: system,
       item_no,
+      team: normalizeTeam(row.team),
       level: row.level?.trim() || null,
       equipment: row.equipment?.trim() || null,
       description: row.description?.trim() || null,

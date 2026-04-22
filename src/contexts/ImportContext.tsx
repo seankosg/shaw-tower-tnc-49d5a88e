@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { parseExcelFile, parseLegacy, parseStandard, resolveValue, type ParsedSubtest } from '@/lib/import-parser';
+import { detectImportType, parseExcelFile, parseLegacy, parseStandard, resolveValue, type DetectedImportType, type ParsedSubtest } from '@/lib/import-parser';
 import { useToast } from '@/hooks/use-toast';
 
 export type ImportType = 'legacy' | 'standard';
@@ -18,16 +18,16 @@ export interface ImportFileItem {
   error?: string;
   parsed?: ParsedSubtest[];
   unmappedHeaders?: string[];
+  detectedImportType?: DetectedImportType;
+  detectionReasons?: string[];
   dataDate?: string;
   team?: string;
 }
 
 interface ImportContextValue {
   files: ImportFileItem[];
-  importType: ImportType;
   isRunning: boolean;
   currentIndex: number;
-  setImportType: (t: ImportType) => void;
   addFiles: (files: File[]) => Promise<void>;
   removeFile: (id: string) => void;
   clearAll: () => void;
@@ -47,15 +47,8 @@ export function useImport() {
 export function ImportProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   const [files, setFiles] = useState<ImportFileItem[]>([]);
-  const [importType, setImportTypeState] = useState<ImportType>('legacy');
   const [isRunning, setIsRunning] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(-1);
-  const importTypeRef = useRef<ImportType>('legacy');
-
-  const setImportType = (t: ImportType) => {
-    importTypeRef.current = t;
-    setImportTypeState(t);
-  };
 
   const updateFile = (id: string, patch: Partial<ImportFileItem>) => {
     setFiles(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f));
@@ -78,12 +71,19 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     for (const item of items) {
       try {
         const buf = await item.file.arrayBuffer();
-        const { rows, unmappedHeaders } = parseExcelFile(buf);
-        const subtests = importTypeRef.current === 'legacy' ? parseLegacy(rows) : parseStandard(rows);
+        const { rows, mappedHeaders, unmappedHeaders } = parseExcelFile(buf);
+        const detection = detectImportType(mappedHeaders);
+        const subtests = detection.type === 'legacy' ? parseLegacy(rows) : detection.type === 'standard' ? parseStandard(rows) : [];
         if (subtests.length === 0) {
-          updateFile(item.id, { status: 'failed', error: 'No valid rows found', unmappedHeaders });
+          updateFile(item.id, {
+            status: 'failed',
+            error: detection.type === 'unknown' ? 'Unknown import format' : 'No valid rows found',
+            unmappedHeaders,
+            detectedImportType: detection.type,
+            detectionReasons: detection.reasons,
+          });
         } else {
-          updateFile(item.id, { status: 'ready', parsedCount: subtests.length, parsed: subtests, unmappedHeaders });
+          updateFile(item.id, { status: 'ready', parsedCount: subtests.length, parsed: subtests, unmappedHeaders, detectedImportType: detection.type, detectionReasons: detection.reasons });
         }
       } catch (e: any) {
         updateFile(item.id, { status: 'failed', error: e.message });
@@ -124,7 +124,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     const { data: batch, error: batchErr } = await supabase.from('upload_batches').insert({
       project_id: projectId,
       uploaded_file_name: item.name,
-      import_type: importTypeRef.current,
+      import_type: item.detectedImportType === 'standard' ? 'standard' : 'legacy',
       total_rows: parsed.length,
       status: 'processing' as any,
       data_date: item.dataDate || null,
@@ -254,11 +254,12 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         .eq('item_no', row.item_no).eq('mos_code', row.mos_code).eq('is_active', true)
         .maybeSingle();
 
-      const dataSourceType = importTypeRef.current === 'legacy' ? 'legacy_import_inherited' : 'standard_import';
+      const dataSourceType = item.detectedImportType === 'legacy' ? 'legacy_import_inherited' : 'standard_import';
       const autoFillDate = item.dataDate || new Date().toISOString().slice(0, 10);
 
       if (existing) {
         const updates: Record<string, any> = {};
+        const rowTeamValue = item.detectedImportType === 'standard' ? row.team : (item.team || null);
         const fields: [string, string | null][] = [
           ['description', row.description], ['equipment', row.equipment], ['level', row.level],
           ['t1_planned_date', row.t1_planned_date], ['t1_status', row.t1_status],
@@ -280,6 +281,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           const resolved = resolveValue(val, null);
           if (resolved !== undefined) updates[field] = resolved;
         }
+        const resolvedTeam = resolveValue(rowTeamValue, null);
+        if (resolvedTeam !== undefined) updates.team = resolvedTeam;
 
         if (Object.keys(updates).length === 0) {
           res.skipped++;
@@ -295,7 +298,6 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         updates.source_upload_id = uploadId;
         updates.row_version = (existing.row_version || 1) + 1;
         updates.subtest_id = row.subtest_id;
-        if (item.team) updates.team = item.team;
 
         // Auto-fill t1/t2 status to 'Planned' when planned_date exists but status is null
         const finalT1PlannedForAutoFill = updates.t1_planned_date !== undefined ? updates.t1_planned_date : null;
@@ -359,6 +361,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         const insertT1Actual = insertT1Status === 'Done' ? autoFillDate : null;
         const insertT2Actual = insertT2Status === 'Done' ? autoFillDate : null;
         const insertPredActual = insertPredStatus === 'Done' ? autoFillDate : (row.pred_actual_date ?? null);
+        const rowTeamValue = item.detectedImportType === 'standard' ? row.team : (item.team || null);
+        const resolvedTeam = resolveValue(rowTeamValue, null);
         const { error } = await supabase.from('subtests').insert({
           project_id: projectId!, system_id: systemId,
           item_no: row.item_no, mos_code: row.mos_code, subtest_id: row.subtest_id,
@@ -380,7 +384,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           remarks: row.remarks,
           punchlist_comments: row.punchlist_comments,
           data_source_type: dataSourceType as any, source_upload_id: uploadId,
-          team: (item.team || null) as any,
+          team: (resolvedTeam === undefined ? null : resolvedTeam) as any,
         } as any);
         if (error) {
           res.rejected++;
@@ -424,7 +428,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   };
 
   const startImport = async () => {
-    const queue = files.filter(f => f.status === 'ready');
+    const queue = files.filter(f => f.status === 'ready' && (f.detectedImportType === 'standard' || (f.detectedImportType === 'legacy' && f.team)));
     if (queue.length === 0) return;
     setIsRunning(true);
 
@@ -458,8 +462,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ImportContext.Provider value={{
-      files, importType, isRunning, currentIndex,
-      setImportType, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam,
+      files, isRunning, currentIndex,
+      addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam,
     }}>
       {children}
     </ImportContext.Provider>
