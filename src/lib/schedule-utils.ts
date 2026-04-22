@@ -6,8 +6,10 @@ import {
   getStageActualDate,
   getStageKeys,
   getStagePlannedDate,
+  isStageActualUpTo,
   isStageDelayedAsOf,
   isStageDone,
+  isStagePlannedUpTo,
   type StageKey,
 } from '@/lib/stage-metrics';
 
@@ -27,7 +29,7 @@ export interface StageRow {
   cells: BucketCell[];
   totalPlan: number;
   totalActual: number;
-  totalDone: number; // # subtests for this stage marked Done
+  totalDone: number; // # subtests actual-completed up to the selected as-of date
   total: number; // # subtests in group (denominator)
   /** # of subtests with plan_date <= selected as-of date (for this stage). */
   cumPlan: number;
@@ -39,7 +41,7 @@ export interface GroupRow {
   key: string;
   label: string;
   total: number; // # subtests in group
-  doneCount: number; // T2 done count (overall progress)
+  doneCount: number; // # selected stages actual-completed up to the selected as-of date
   cumPlan: number;
   cumActual: number;
   stages: Record<ScheduleStage, StageRow>;
