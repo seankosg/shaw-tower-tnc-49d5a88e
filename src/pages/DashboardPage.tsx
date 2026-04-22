@@ -679,7 +679,7 @@ function ClickVariance({ value, onClick }: { value: number; onClick?: () => void
 }
 
 function PlanActualTable({
-  rows, groupParam, groupHeader, today, dataDate, todayLabel, dataDateLabel, navigate, keyToFilterValue,
+  rows, groupParam, groupHeader, today, dataDate, todayLabel, dataDateLabel, navigate, keyToFilterValue, emptyMessage, systemFilter,
 }: {
   rows: PlanActualRow[];
   groupParam: 'system' | 'subcon' | 'subsub' | 'hdec_pic' | 'team';
@@ -690,9 +690,17 @@ function PlanActualTable({
   dataDateLabel: string;
   navigate: (to: string) => void;
   keyToFilterValue?: (key: string) => string;
+  emptyMessage?: string;
+  systemFilter?: {
+    text: string;
+    selected: string[];
+    options: string[];
+    onTextChange: (value: string) => void;
+    onSelectedChange: (value: string[]) => void;
+  };
 }) {
   if (rows.length === 0) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">No data.</p>;
+    return <p className="py-8 text-center text-sm text-muted-foreground">{emptyMessage ?? 'No data.'}</p>;
   }
   const filterValue = (key: string) => (keyToFilterValue ? keyToFilterValue(key) : key);
   const go = (groupKey: string, extra?: Record<string, string>) => {
