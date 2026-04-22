@@ -802,6 +802,44 @@ function PlanActualTable({
     navigate(`/?${new URLSearchParams(params).toString()}`);
   };
 
+  const headerTotals = useMemo(() => {
+    const totals = rows.reduce((acc, row) => {
+      const stages = [row.predecessor, row.t1, row.t2];
+      stages.forEach((m) => {
+        acc.stageTotal += row.totalSubtests;
+        acc.stageDone += m.cumActual;
+        acc.cumPlan += m.cumPlan;
+        acc.cumActual += m.cumActual;
+        acc.dataDatePlan += m.dataDatePlan;
+        acc.dataDateActual += m.dataDateActual;
+        acc.dataDateDelay += m.dataDateDelay;
+        acc.todayPlan += m.todayPlan;
+        acc.todayActual += m.todayActual;
+        acc.todayDelay += m.todayDelay;
+      });
+      return acc;
+    }, {
+      stageTotal: 0,
+      stageDone: 0,
+      cumPlan: 0,
+      cumActual: 0,
+      dataDatePlan: 0,
+      dataDateActual: 0,
+      dataDateDelay: 0,
+      todayPlan: 0,
+      todayActual: 0,
+      todayDelay: 0,
+    });
+
+    return {
+      ...totals,
+      stageRemain: totals.stageTotal - totals.stageDone,
+      cumDelta: totals.cumActual - totals.cumPlan,
+      dataDateDelta: totals.dataDateActual - totals.dataDatePlan,
+      todayDelta: totals.todayActual - totals.todayPlan,
+    };
+  }, [rows]);
+
   type StageDef = {
     stage: 'pred' | 't1' | 't2';
     label: string;
