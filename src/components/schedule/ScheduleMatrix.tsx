@@ -47,6 +47,7 @@ export function ScheduleMatrix({
 
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const leftBodyRef = useRef<HTMLDivElement>(null);
   const syncingRef = useRef(false);
 
   useEffect(() => {
@@ -64,6 +65,7 @@ export function ScheduleMatrix({
       if (syncingRef.current) return;
       syncingRef.current = true;
       header.scrollLeft = body.scrollLeft;
+      if (leftBodyRef.current) leftBodyRef.current.scrollTop = body.scrollTop;
       requestAnimationFrame(() => { syncingRef.current = false; });
     };
 
@@ -115,7 +117,7 @@ export function ScheduleMatrix({
     });
   };
 
-  const totalGridWidth = STICKY_LEFT_WIDTH + data.buckets.length * cellWidth;
+  const timelineGridWidth = data.buckets.length * cellWidth;
 
   const colVirtualizer = useVirtualizer({
     count: data.buckets.length,
@@ -123,11 +125,10 @@ export function ScheduleMatrix({
     estimateSize: () => cellWidth,
     horizontal: true,
     overscan: 4,
-    paddingStart: STICKY_LEFT_WIDTH,
   });
 
   const virtualCols = colVirtualizer.getVirtualItems();
-  const leftPad = virtualCols.length > 0 ? virtualCols[0].start - STICKY_LEFT_WIDTH : 0;
+  const leftPad = virtualCols.length > 0 ? virtualCols[0].start : 0;
   const rightPad =
     virtualCols.length > 0
       ? colVirtualizer.getTotalSize() - virtualCols[virtualCols.length - 1].end
@@ -142,62 +143,64 @@ export function ScheduleMatrix({
     <div className="rounded-md border border-border bg-card">
       {/* Sticky header section */}
       <div className="sticky top-0 z-30 bg-muted">
-        <div
-          ref={headerScrollRef}
-          className="overflow-x-auto overflow-y-hidden border-b border-border text-[11px] font-semibold"
-        >
-          <div className="flex flex-col" style={{ width: totalGridWidth, minWidth: totalGridWidth }}>
+        <div className="flex border-b border-border text-[11px] font-semibold">
+          <div className="z-40 flex shrink-0 flex-col bg-muted shadow-[2px_0_4px_-2px_hsl(var(--border))]" style={{ width: STICKY_LEFT_WIDTH }}>
             {/* Row 1: group headers */}
             <div className="flex border-b border-border">
-              <div className="sticky left-0 z-40 flex bg-muted">
-                <div className="flex items-center px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground" style={{ width: W_GROUP }}>
-                  {groupHeader}
-                </div>
-                <div
-                  className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide bg-muted text-foreground border-l border-border"
-                  style={{ width: W_TOTAL_BLOCK, minWidth: W_TOTAL_BLOCK }}
-                  title="Overall scope across full timeline"
-                >
-                  Total Scope
-                </div>
-                <div
-                  className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide bg-secondary/40 text-foreground border-l-2 border-border border-r border-border"
-                  style={{ width: W_PLAN_BLOCK, minWidth: W_PLAN_BLOCK }}
-                  title="Cumulative plan vs actual through today"
-                >
-                  Up to Today
-                </div>
+              <div className="flex items-center px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground" style={{ width: W_GROUP }}>
+                {groupHeader}
               </div>
               <div
-                className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground"
-                style={{ width: data.buckets.length * cellWidth, minWidth: data.buckets.length * cellWidth }}
+                className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide bg-muted text-foreground border-l border-border"
+                style={{ width: W_TOTAL_BLOCK, minWidth: W_TOTAL_BLOCK }}
+                title="Overall scope across full timeline"
               >
-                Timeline
+                Total Scope
+              </div>
+              <div
+                className="flex items-center justify-center py-1.5 text-[10px] uppercase tracking-wide bg-secondary/40 text-foreground border-l-2 border-border border-r border-border"
+                style={{ width: W_PLAN_BLOCK, minWidth: W_PLAN_BLOCK }}
+                title="Cumulative plan vs actual through today"
+              >
+                Up to Today
               </div>
             </div>
 
-            {/* Row 2: sub-column labels + bucket labels */}
+            {/* Row 2: sticky sub-column labels */}
             <div className="flex">
-              <div className="sticky left-0 z-40 flex bg-muted">
-                <div className="flex items-center px-3 py-2" style={{ width: W_GROUP }}></div>
-
-                {/* Total Scope block */}
-                <div className="flex bg-muted">
-                  <HeaderNum width={W_NUM} title={`${stageLabel} total scope`}>Total</HeaderNum>
-                  <HeaderNum width={W_NUM} title={`${stageLabel} done count`}>Done</HeaderNum>
-                  <HeaderNum width={W_PCT} title={totalBlockTitle}>%</HeaderNum>
-                  <HeaderNum width={W_NUM} title="Total - Done">Remain</HeaderNum>
-                </div>
-
-                {/* Up to Today block */}
-                <div className="flex bg-secondary/40">
-                  <HeaderNum width={W_NUM} borderLeft title="Plan up to today">Plan</HeaderNum>
-                  <HeaderNum width={W_NUM} title="Actual up to today">Actual</HeaderNum>
-                  <HeaderNum width={W_PCT} title="Actual / Plan up to today">%</HeaderNum>
-                  <HeaderNum width={W_NUM} borderRight title="Actual - Plan">Diff</HeaderNum>
-                </div>
+              <div className="flex items-center px-3 py-2" style={{ width: W_GROUP }}></div>
+              <div className="flex bg-muted">
+                <HeaderNum width={W_NUM} title={`${stageLabel} total scope`}>Total</HeaderNum>
+                <HeaderNum width={W_NUM} title={`${stageLabel} done count`}>Done</HeaderNum>
+                <HeaderNum width={W_PCT} title={totalBlockTitle}>%</HeaderNum>
+                <HeaderNum width={W_NUM} title="Total - Done">Remain</HeaderNum>
               </div>
-              {data.buckets.map((b, i) => {
+              <div className="flex bg-secondary/40">
+                <HeaderNum width={W_NUM} borderLeft title="Plan up to today">Plan</HeaderNum>
+                <HeaderNum width={W_NUM} title="Actual up to today">Actual</HeaderNum>
+                <HeaderNum width={W_PCT} title="Actual / Plan up to today">%</HeaderNum>
+                <HeaderNum width={W_NUM} borderRight title="Actual - Plan">Diff</HeaderNum>
+              </div>
+            </div>
+          </div>
+
+          <div
+            ref={headerScrollRef}
+            className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]"
+          >
+            <div className="flex flex-col" style={{ width: timelineGridWidth, minWidth: timelineGridWidth }}>
+              <div
+                className="flex items-center justify-center border-b border-border py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground"
+                style={{ width: timelineGridWidth, minWidth: timelineGridWidth }}
+              >
+                Timeline
+              </div>
+              <div className="flex">
+              <div
+                  className="flex"
+                  style={{ width: timelineGridWidth, minWidth: timelineGridWidth }}
+                >
+                {data.buckets.map((b, i) => {
                 const lbl = formatBucketLabel(b, bucket);
                 const isToday = i === todayBucketIdx;
                 return (
@@ -214,129 +217,126 @@ export function ScheduleMatrix({
                   </div>
                 );
               })}
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Body */}
-      <div
-        ref={bodyScrollRef}
-        className="overflow-y-auto overflow-x-hidden max-h-[calc(100vh-300px)]"
-      >
-        <div style={{ width: totalGridWidth, minWidth: totalGridWidth }}>
-          {data.rows.length === 0 && (
-            <div className="px-4 py-8 text-center text-sm text-muted-foreground">No data in selected range.</div>
-          )}
+      <div className="flex">
+        <div
+          ref={leftBodyRef}
+          className="max-h-[calc(100vh-300px)] shrink-0 overflow-hidden bg-card shadow-[2px_0_4px_-2px_hsl(var(--border))]"
+          style={{ width: STICKY_LEFT_WIDTH }}
+        >
           {data.rows.map(row => {
             const showStageRows = stageFilter === 'all';
             return (
-              <Fragment key={row.key}>
-                {/* Group summary row */}
+              <Fragment key={`left-${row.key}`}>
                 <div className={cn("flex border-b border-border text-xs h-10", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
-                  <div className="sticky left-0 z-20 flex bg-card shadow-[2px_0_4px_-2px_hsl(var(--border))]">
-                    <div
-                      className="flex items-center gap-1 px-2 text-left cursor-default"
-                      style={{ width: W_GROUP }}
-                    >
-                      <span className="truncate font-medium" title={row.label}>{row.label}</span>
-                    </div>
-
-                    <div className="flex bg-muted/40">
-                      <TotalDoneCells
-                        total={row.total}
-                        done={row.doneCount}
-                        bold
-                        py="py-0"
-                      />
-                    </div>
-                    <div className="flex bg-secondary/20">
-                      <PlanActualCells
-                        plan={row.cumPlan}
-                        actual={row.cumActual}
-                        bold
-                        py="py-0"
-                      />
-                    </div>
+                  <div className="flex items-center gap-1 px-2 text-left cursor-default" style={{ width: W_GROUP }}>
+                    <span className="truncate font-medium" title={row.label}>{row.label}</span>
                   </div>
-                  {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
-                  {virtualCols.map(vc => {
-                    const c = row.combined[vc.index];
-                    if (!c) return null;
-                    return (
-                      <ScheduleCell
-                        key={c.bucket}
-                        plan={c.plan}
-                        actual={c.actual}
-                        isFuture={vc.index > todayBucketIdx}
-                        isToday={vc.index === todayBucketIdx}
-                        width={cellWidth}
-                        onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'planned') : undefined}
-                        onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'actual') : undefined}
-                      />
-                    );
-                  })}
-                  {rightPad > 0 && <div style={{ width: rightPad, minWidth: rightPad }} />}
+                  <div className="flex bg-muted/40">
+                    <TotalDoneCells total={row.total} done={row.doneCount} bold py="py-0" />
+                  </div>
+                  <div className="flex bg-secondary/20">
+                    <PlanActualCells plan={row.cumPlan} actual={row.cumActual} bold py="py-0" />
+                  </div>
                 </div>
 
-                {/* Stage sub-rows when expanded */}
                 {showStageRows && stagesToShow.map(st => {
                   const sr = row.stages[st];
                   return (
-                    <div key={st} className="flex border-b border-border bg-muted/20 text-[11px] h-10 hover:bg-accent/20">
-                      <div className="sticky left-0 z-20 flex bg-card shadow-[2px_0_4px_-2px_hsl(var(--border))]">
-                        <div
-                          className="flex items-center gap-2 px-2 pl-8 text-muted-foreground"
-                          style={{ width: W_GROUP }}
-                        >
-                          <span className={cn(
-                            'inline-flex h-4 w-7 items-center justify-center rounded text-[9px] font-semibold',
-                            st === 'pred' && 'bg-secondary text-secondary-foreground',
-                            st === 't1' && 'bg-primary/15 text-primary',
-                            st === 't2' && 'bg-primary/30 text-primary',
-                          )}>
-                            {STAGE_LABELS[st]}
-                          </span>
-                        </div>
-                        <div className="flex bg-muted/40">
-                          <TotalDoneCells
-                            total={sr.total}
-                            done={sr.totalDone}
-                            py="py-0"
-                          />
-                        </div>
-                        <div className="flex bg-secondary/20">
-                          <PlanActualCells
-                            plan={sr.cumPlan}
-                            actual={sr.cumActual}
-                            py="py-0"
-                          />
-                        </div>
+                    <div key={`left-${row.key}-${st}`} className="flex border-b border-border bg-muted/20 text-[11px] h-10 hover:bg-accent/20">
+                      <div className="flex items-center gap-2 px-2 pl-8 text-muted-foreground" style={{ width: W_GROUP }}>
+                        <span className={cn(
+                          'inline-flex h-4 w-7 items-center justify-center rounded text-[9px] font-semibold',
+                          st === 'pred' && 'bg-secondary text-secondary-foreground',
+                          st === 't1' && 'bg-primary/15 text-primary',
+                          st === 't2' && 'bg-primary/30 text-primary',
+                        )}>
+                          {STAGE_LABELS[st]}
+                        </span>
                       </div>
-                      {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
-                      {virtualCols.map(vc => {
-                        const c = sr.cells[vc.index];
-                        if (!c) return null;
-                        return (
-                          <ScheduleCell
-                            key={c.bucket}
-                            plan={c.plan}
-                            actual={c.actual}
-                            isFuture={vc.index > todayBucketIdx}
-                            isToday={vc.index === todayBucketIdx}
-                            width={cellWidth}
-                            onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, st, 'planned') : undefined}
-                            onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, st, 'actual') : undefined}
-                          />
-                        );
-                      })}
-                      {rightPad > 0 && <div style={{ width: rightPad, minWidth: rightPad }} />}
+                      <div className="flex bg-muted/40">
+                        <TotalDoneCells total={sr.total} done={sr.totalDone} py="py-0" />
+                      </div>
+                      <div className="flex bg-secondary/20">
+                        <PlanActualCells plan={sr.cumPlan} actual={sr.cumActual} py="py-0" />
+                      </div>
                     </div>
                   );
                 })}
               </Fragment>
             );
           })}
+        </div>
+
+        <div
+          ref={bodyScrollRef}
+          className="max-h-[calc(100vh-300px)] min-w-0 flex-1 overflow-auto [scrollbar-gutter:stable]"
+        >
+          <div style={{ width: timelineGridWidth, minWidth: timelineGridWidth }}>
+            {data.rows.length === 0 && (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">No data in selected range.</div>
+            )}
+            {data.rows.map(row => {
+              const showStageRows = stageFilter === 'all';
+              return (
+                <Fragment key={row.key}>
+                  <div className={cn("flex border-b border-border text-xs h-10", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
+                    {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
+                    {virtualCols.map(vc => {
+                      const c = row.combined[vc.index];
+                      if (!c) return null;
+                      return (
+                        <ScheduleCell
+                          key={c.bucket}
+                          plan={c.plan}
+                          actual={c.actual}
+                          isFuture={vc.index > todayBucketIdx}
+                          isToday={vc.index === todayBucketIdx}
+                          width={cellWidth}
+                          onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'planned') : undefined}
+                          onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'actual') : undefined}
+                        />
+                      );
+                    })}
+                    {rightPad > 0 && <div style={{ width: rightPad, minWidth: rightPad }} />}
+                  </div>
+
+                  {showStageRows && stagesToShow.map(st => {
+                    const sr = row.stages[st];
+                    return (
+                      <div key={st} className="flex border-b border-border bg-muted/20 text-[11px] h-10 hover:bg-accent/20">
+                        {leftPad > 0 && <div style={{ width: leftPad, minWidth: leftPad }} />}
+                        {virtualCols.map(vc => {
+                          const c = sr.cells[vc.index];
+                          if (!c) return null;
+                          return (
+                            <ScheduleCell
+                              key={c.bucket}
+                              plan={c.plan}
+                              actual={c.actual}
+                              isFuture={vc.index > todayBucketIdx}
+                              isToday={vc.index === todayBucketIdx}
+                              width={cellWidth}
+                              onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, st, 'planned') : undefined}
+                              onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, st, 'actual') : undefined}
+                            />
+                          );
+                        })}
+                        {rightPad > 0 && <div style={{ width: rightPad, minWidth: rightPad }} />}
+                      </div>
+                    );
+                  })}
+                </Fragment>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
