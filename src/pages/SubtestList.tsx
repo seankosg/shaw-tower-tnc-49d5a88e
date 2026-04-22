@@ -782,11 +782,14 @@ export default function SubtestList() {
     const out: { label: string; param: string; clears?: string[] }[] = [];
     const map: Record<string, string> = {
       system: 'System', subcon: 'Subcon', subsub: 'Sub-Sub',
-      hdec_pic: 'HDEC PIC', t1_status: 'T1', t2_status: 'T2', status: 'Status',
+      hdec_pic: 'HDEC PIC', pred_status: 'Pred', t1_status: 'T1', t2_status: 'T2', status: 'Status',
+      pred_planned_to: 'Pred Plan ≤', pred_actual_to: 'Pred Actual ≤',
       t1_planned_to: 'T1 Plan ≤', t2_planned_to: 'T2 Plan ≤',
       t1_actual_to: 'T1 Actual ≤', t2_actual_to: 'T2 Actual ≤',
+      pred_planned_on: 'Pred Plan =', pred_actual_on: 'Pred Actual =',
       t1_planned_on: 'T1 Plan =', t2_planned_on: 'T2 Plan =',
       t1_actual_on: 'T1 Actual =', t2_actual_on: 'T2 Actual =',
+      pred_delay_asof: 'Pred Delay ≤', t1_delay_asof: 'T1 Delay ≤', t2_delay_asof: 'T2 Delay ≤',
       stage: 'Stage', cell_status: 'Cell Status',
     };
     for (const [k, lbl] of Object.entries(map)) {
