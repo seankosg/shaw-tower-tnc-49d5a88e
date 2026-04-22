@@ -284,10 +284,14 @@ export function buildSCurve(
     return v;
   };
   for (const s of subs) {
-    if (s.t1_planned_date) ensure(bucketize(s.t1_planned_date, granularity)).t1p++;
-    if (s.t1_actual_date) ensure(bucketize(s.t1_actual_date, granularity)).t1a++;
-    if (s.t2_planned_date) ensure(bucketize(s.t2_planned_date, granularity)).t2p++;
-    if (s.t2_actual_date) ensure(bucketize(s.t2_actual_date, granularity)).t2a++;
+    const t1Plan = getStagePlannedDate(s, 't1');
+    const t1Actual = getStageActualDate(s, 't1');
+    const t2Plan = getStagePlannedDate(s, 't2');
+    const t2Actual = getStageActualDate(s, 't2');
+    if (t1Plan) ensure(bucketize(t1Plan, granularity)).t1p++;
+    if (t1Actual) ensure(bucketize(t1Actual, granularity)).t1a++;
+    if (t2Plan) ensure(bucketize(t2Plan, granularity)).t2p++;
+    if (t2Actual) ensure(bucketize(t2Actual, granularity)).t2a++;
   }
 
   const buckets = generateBuckets(startDate, endDate, granularity);
