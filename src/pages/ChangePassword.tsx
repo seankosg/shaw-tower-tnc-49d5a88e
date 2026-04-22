@@ -13,12 +13,18 @@ export default function ChangePassword() {
   const { profile, refreshProfile, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [currentPw, setCurrentPw] = useState('');
   const [pw1, setPw1] = useState('');
   const [pw2, setPw2] = useState('');
   const [loading, setLoading] = useState(false);
+  const isForcedChange = Boolean(profile?.must_change_password);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentPw) {
+      toast({ title: 'Current password is required', variant: 'destructive' });
+      return;
+    }
     if (pw1 !== pw2) {
       toast({ title: 'Passwords do not match', variant: 'destructive' });
       return;
@@ -28,6 +34,17 @@ export default function ChangePassword() {
       return;
     }
     setLoading(true);
+    if (!profile?.email) {
+      setLoading(false);
+      toast({ title: 'Update failed', description: 'Unable to verify current user.', variant: 'destructive' });
+      return;
+    }
+    const { error: verifyErr } = await supabase.auth.signInWithPassword({ email: profile.email, password: currentPw });
+    if (verifyErr) {
+      setLoading(false);
+      toast({ title: 'Current password is incorrect', variant: 'destructive' });
+      return;
+    }
     const { error: authErr } = await supabase.auth.updateUser({ password: pw1 });
     if (authErr) {
       setLoading(false);
@@ -40,7 +57,7 @@ export default function ChangePassword() {
     await refreshProfile();
     setLoading(false);
     toast({ title: 'Password updated' });
-    navigate('/');
+    navigate('/dashboard');
   };
 
   return (
@@ -48,10 +65,14 @@ export default function ChangePassword() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <CardTitle className="text-xl font-bold tracking-tight">Change Password</CardTitle>
-          <CardDescription>You must set a new password before continuing.</CardDescription>
+          <CardDescription>{isForcedChange ? 'You must set a new password before continuing.' : 'Update your login password.'}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="currentPw">Current Password</Label>
+              <Input id="currentPw" type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} required />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="pw1">New Password</Label>
               <Input id="pw1" type="password" value={pw1} onChange={(e) => setPw1(e.target.value)} required />
