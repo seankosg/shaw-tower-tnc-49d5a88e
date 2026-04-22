@@ -225,10 +225,9 @@ export function exportPlanActualToExcel(
       dataRow++;
     });
 
-    // Merge group name & total cells across 3 stage rows
+    // Merge group name cells across 3 stage rows
     merges.push(
       { s: { r: startRow, c: 0 }, e: { r: startRow + 2, c: 0 } },
-      { s: { r: startRow, c: 1 }, e: { r: startRow + 2, c: 1 } },
     );
   }
 
@@ -237,8 +236,8 @@ export function exportPlanActualToExcel(
   // Column widths
   ws['!cols'] = [
     { wch: 22 }, // group
-    { wch: 8 },  // total
-    { wch: 20 }, // stage + counts
+    { wch: 9 },  // stage
+    { wch: 8 }, { wch: 8 }, { wch: 8 }, // total / done / remain
     { wch: 8 }, { wch: 8 }, { wch: 7 },  // cum
     { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, // data date
     { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, // today
@@ -258,9 +257,9 @@ export function exportPlanActualToExcel(
   // Freeze panes
   (ws as any)['!views'] = [{
     state: 'frozen',
-    xSplit: 3,
+    xSplit: 5,
     ySplit: 5,
-    topLeftCell: XLSX.utils.encode_cell({ r: 5, c: 3 }),
+    topLeftCell: XLSX.utils.encode_cell({ r: 5, c: 5 }),
     activePane: 'bottomRight',
   }];
 
