@@ -47,6 +47,7 @@ export default function SchedulePage() {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('schedule_hide_past') === '1';
   });
+  const [showRiskPanel, setShowRiskPanel] = useState(false);
   const [pickedDate, setPickedDate] = useState<Date | undefined>(new Date());
   const [pickedField, setPickedField] = useState<'planned' | 'actual'>('planned');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -427,6 +428,17 @@ export default function SchedulePage() {
       </div>
 
       {/* Matrix + Watchlist */}
+      <div className="flex items-center justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-2 text-xs"
+          onClick={() => setShowRiskPanel(prev => !prev)}
+        >
+          {showRiskPanel ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
+          <span className="ml-1">{showRiskPanel ? 'Hide Risk Panel' : 'Show Risk Panel'}</span>
+        </Button>
+      </div>
       <div className="flex gap-4">
         <div className="min-w-0 flex-1">
           {loading ? (
@@ -442,7 +454,7 @@ export default function SchedulePage() {
             />
           )}
         </div>
-        {!loading && (
+        {!loading && showRiskPanel && (
           <CriticalWatchlist
             highRisk={critical.highRisk}
             t1Bottleneck={critical.t1Bottleneck}
