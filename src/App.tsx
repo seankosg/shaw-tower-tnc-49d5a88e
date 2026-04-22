@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -34,7 +34,8 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
               <Route element={<ProtectedRoute><RoleGuard><AppLayout /></RoleGuard></ProtectedRoute>}>
-                <Route path="/" element={<SubtestList />} />
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/raw-data" element={<SubtestList />} />
                 <Route path="/subtests/:id" element={<SubtestDetail />} />
                 <Route path="/import" element={<ImportPage />} />
                 <Route path="/import/logs" element={<ImportLogsPage />} />

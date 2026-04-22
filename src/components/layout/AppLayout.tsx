@@ -14,11 +14,12 @@ import { KeyRound, Loader2, LogOut, UserCircle } from 'lucide-react';
 import { APP_NAME } from '@/lib/constants';
 import { AppUpdateBanner } from './AppUpdateBanner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouteMemory } from '@/hooks/useRouteMemory';
 
 const ROUTE_TITLES: Array<{ match: (p: string) => boolean; label: string }> = [
   { match: (p) => p === '/dashboard', label: 'Dashboard' },
   { match: (p) => p === '/schedule', label: 'Progress' },
-  { match: (p) => p === '/', label: 'Raw Data' },
+  { match: (p) => p === '/raw-data', label: 'Raw Data' },
   { match: (p) => p.startsWith('/subtests/'), label: 'Subtest Detail' },
   { match: (p) => p === '/import', label: 'Import' },
   { match: (p) => p === '/import/logs', label: 'Import Logs' },
@@ -102,6 +103,7 @@ function AccountMenu() {
 
 export function AppLayout() {
   const pageLabel = useCurrentPageLabel();
+  useRouteMemory();
   useDocumentTitle(pageLabel);
   return (
     <SidebarProvider>

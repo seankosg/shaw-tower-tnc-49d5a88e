@@ -436,6 +436,27 @@ export default function SubtestList() {
   }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter, columnSizing]);
 
   useEffect(() => {
+    if (!stateLoaded) return;
+    const el = tableRef.current;
+    if (!el) return;
+    const raw = localStorage.getItem(`${storageKey}:scroll`);
+    if (raw) {
+      try {
+        const saved = JSON.parse(raw);
+        el.scrollTop = Number(saved.top) || 0;
+        el.scrollLeft = Number(saved.left) || 0;
+      } catch {
+        // ignore
+      }
+    }
+    const save = () => {
+      localStorage.setItem(`${storageKey}:scroll`, JSON.stringify({ top: el.scrollTop, left: el.scrollLeft }));
+    };
+    el.addEventListener('scroll', save, { passive: true });
+    return () => el.removeEventListener('scroll', save);
+  }, [stateLoaded, storageKey]);
+
+  useEffect(() => {
     fetchData();
     fetchSystems();
     fetchDataDate();

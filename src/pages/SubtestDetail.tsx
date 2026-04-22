@@ -231,7 +231,7 @@ export default function SubtestDetailPage() {
     } else {
       toast({ title: 'Deleted', description: `Subtest ${record.subtest_id} has been deleted.` });
       invalidateSubtestCache();
-      navigate('/');
+      navigate('/raw-data');
     }
     setDeleting(false);
   };
@@ -271,7 +271,7 @@ export default function SubtestDetailPage() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
         <h1 className="text-lg font-semibold">{record.subtest_id}</h1>

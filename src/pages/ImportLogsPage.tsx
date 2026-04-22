@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronLeft, Trash2, Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -103,18 +103,33 @@ function StageCells({ row, stage }: { row: ScheduleChangeAudit; stage: (typeof s
 
 export default function ImportLogsPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const { isAdminOrSuperuser } = useAuth();
   const canDelete = isAdminOrSuperuser || import.meta.env.DEV;
 
   const [batches, setBatches] = useState<UploadBatch[]>([]);
-  const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
+  const [selectedBatch, setSelectedBatch] = useState<string | null>(searchParams.get('batch'));
+  const [detailTab, setDetailTab] = useState(searchParams.get('tab') || 'rows');
   const [rowLogs, setRowLogs] = useState<RowLog[]>([]);
   const [scheduleChanges, setScheduleChanges] = useState<ScheduleChangeAudit[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => { fetchBatches(); }, []);
+
+  useEffect(() => {
+    if (selectedBatch) void loadBatchDetails(selectedBatch);
+  }, []);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    if (selectedBatch) next.set('batch', selectedBatch);
+    else next.delete('batch');
+    if (selectedBatch && detailTab !== 'rows') next.set('tab', detailTab);
+    else next.delete('tab');
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [selectedBatch, detailTab, searchParams, setSearchParams]);
 
   const fetchBatches = async () => {
     setLoading(true);
@@ -127,6 +142,10 @@ export default function ImportLogsPage() {
 
   const selectBatch = async (id: string) => {
     setSelectedBatch(id);
+    await loadBatchDetails(id);
+  };
+
+  const loadBatchDetails = async (id: string) => {
     const { data } = await supabase.from('upload_row_logs')
       .select('id, raw_row_no, raw_system_name, item_no, mos_code, action_taken, reason_code, reason_detail')
       .eq('upload_id', id).order('raw_row_no', { ascending: true }).limit(500);
@@ -243,7 +262,7 @@ export default function ImportLogsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="rows">
+            <Tabs value={detailTab} onValueChange={setDetailTab}>
               <TabsList>
                 <TabsTrigger value="rows">Row Logs</TabsTrigger>
                 <TabsTrigger value="schedule">Schedule Changes</TabsTrigger>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, AlertTriangle, TrendingUp, ChevronsLeft, ChevronsRight, CalendarSearch, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -37,30 +37,52 @@ const GROUP_LABELS: Record<ScheduleGroupBy, string> = {
 
 export default function SchedulePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   // Stabilize today across renders so memos don't re-run unnecessarily
   const today = useMemo(() => todayIso(), []);
 
-  const [groupBy, setGroupBy] = useState<ScheduleGroupBy>('system');
-  const [bucket, setBucket] = useState<ScheduleBucket>('day');
-  const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>('all');
-  const [asOfMode, setAsOfMode] = useState<'dataDate' | 'today'>('dataDate');
+  const [groupBy, setGroupBy] = useState<ScheduleGroupBy>((searchParams.get('group') as ScheduleGroupBy) || 'system');
+  const [bucket, setBucket] = useState<ScheduleBucket>((searchParams.get('bucket') as ScheduleBucket) || 'day');
+  const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>((searchParams.get('stage_view') as ScheduleStageFilter) || 'all');
+  const [asOfMode, setAsOfMode] = useState<'dataDate' | 'today'>((searchParams.get('asof_mode') as 'dataDate' | 'today') || 'dataDate');
   const [dataDate, setDataDate] = useState(() => yesterdayIso(today));
-  const [teamFilter, setTeamFilter] = useState<string>('all');
-  const [systemTextFilter, setSystemTextFilter] = useState('');
-  const [selectedSystemFilters, setSelectedSystemFilters] = useState<string[]>([]);
-  const [rangeDays, setRangeDays] = useState<number>(60);
+  const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');
+  const [systemTextFilter, setSystemTextFilter] = useState(searchParams.get('system_text') || '');
+  const [selectedSystemFilters, setSelectedSystemFilters] = useState<string[]>(searchParams.get('systems')?.split(',').filter(Boolean) || []);
+  const [rangeDays, setRangeDays] = useState<number>(Number(searchParams.get('range') || 60));
   const [hidePast, setHidePast] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    return localStorage.getItem('schedule_hide_past') === '1';
+    return searchParams.get('hide_past') === '1' || localStorage.getItem('schedule_hide_past') === '1';
   });
-  const [showRiskPanel, setShowRiskPanel] = useState(false);
-  const [pickedDate, setPickedDate] = useState<Date | undefined>(new Date());
-  const [pickedField, setPickedField] = useState<'planned' | 'actual'>('planned');
+  const [showRiskPanel, setShowRiskPanel] = useState(searchParams.get('risk_panel') === '1');
+  const [pickedDate, setPickedDate] = useState<Date | undefined>(() => searchParams.get('picked') ? new Date(`${searchParams.get('picked')}T00:00:00`) : new Date());
+  const [pickedField, setPickedField] = useState<'planned' | 'actual'>((searchParams.get('picked_field') as 'planned' | 'actual') || 'planned');
   const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('schedule_hide_past', hidePast ? '1' : '0');
   }, [hidePast]);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    const setOrDelete = (key: string, value: string, defaultValue: string) => {
+      if (!value || value === defaultValue) next.delete(key);
+      else next.set(key, value);
+    };
+    setOrDelete('group', groupBy, 'system');
+    setOrDelete('bucket', bucket, 'day');
+    setOrDelete('stage_view', stageFilter, 'all');
+    setOrDelete('asof_mode', asOfMode, 'dataDate');
+    setOrDelete('team', teamFilter, 'all');
+    setOrDelete('system_text', systemTextFilter, '');
+    setOrDelete('systems', selectedSystemFilters.join(','), '');
+    setOrDelete('range', String(rangeDays), '60');
+    setOrDelete('hide_past', hidePast ? '1' : '', '');
+    setOrDelete('risk_panel', showRiskPanel ? '1' : '', '');
+    setOrDelete('picked', pickedDate ? format(pickedDate, 'yyyy-MM-dd') : '', format(new Date(), 'yyyy-MM-dd'));
+    setOrDelete('picked_field', pickedField, 'planned');
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [groupBy, bucket, stageFilter, asOfMode, teamFilter, systemTextFilter, selectedSystemFilters, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (groupBy === 'system') return;
@@ -231,7 +253,7 @@ export default function SchedulePage() {
 
   const goSubtests = (params: Record<string, string>) => {
     const sp = new URLSearchParams(params);
-    navigate(`/?${sp.toString()}`);
+    navigate(`/raw-data?${sp.toString()}`);
   };
 
   const handleCellClick = (
@@ -430,7 +452,7 @@ export default function SchedulePage() {
                 };
                 if (pickedField === 'actual') params.cell_status = 'Done';
                 if (stageFilter !== 'all') params.stage = stageFilter;
-                navigate(`/?${new URLSearchParams(params).toString()}`);
+                navigate(`/raw-data?${new URLSearchParams(params).toString()}`);
               }}
             >
               Go
@@ -469,14 +491,14 @@ export default function SchedulePage() {
           value={kpis.overdue}
           accent={kpis.overdue > 0 ? 'short' : undefined}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
-          onClick={kpis.overdue > 0 ? () => navigate(`/?source=schedule_kpi&status=overdue&as_of=${dataDate}`) : undefined}
+          onClick={kpis.overdue > 0 ? () => navigate(`/raw-data?source=schedule_kpi&status=overdue&as_of=${dataDate}`) : undefined}
         />
         <Kpi
           label="Critical (≤7d)"
           value={kpis.criticalCount}
           accent={kpis.criticalCount > 0 ? 'short' : undefined}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
-          onClick={kpis.criticalCount > 0 ? () => navigate('/?source=schedule_kpi&status=at_risk&at_risk_days=7') : undefined}
+          onClick={kpis.criticalCount > 0 ? () => navigate('/raw-data?source=schedule_kpi&status=at_risk&at_risk_days=7') : undefined}
         />
         <Kpi
           label="Upcoming 7d Plan"
@@ -484,7 +506,7 @@ export default function SchedulePage() {
           icon={<CalendarIcon className="h-3.5 w-3.5" />}
           onClick={
             kpis.upcoming7Plan > 0
-              ? () => navigate(`/?source=schedule_kpi&date_from=${today}&date_to=${kpis.upcomingEnd}&date_field=planned`)
+              ? () => navigate(`/raw-data?source=schedule_kpi&date_from=${today}&date_to=${kpis.upcomingEnd}&date_field=planned`)
               : undefined
           }
         />
