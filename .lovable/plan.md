@@ -1,94 +1,81 @@
 
+# Plan: Dashboard Overdue에 Predecessor 포함
 
-# Progress Status — PIC 그룹 필터 추가 + Gantt-lite Excel 내보내기
+## 목표
 
-## 1. PIC 그룹 필터 추가
-
-### `src/lib/schedule-utils.ts`
-
-- **Line 8**: `ScheduleGroupBy` 타입에 `'hdec'` 추가
-  ```ts
-  export type ScheduleGroupBy = 'system' | 'subcon' | 'subsub' | 'hdec' | 'team';
-  ```
-- **Line 100-105**: `getGroupKey`에 hdec 분기 추가
-  ```ts
-  if (by === 'hdec') return s.hdec_pic_name ?? '(None)';
-  ```
-
-### `src/pages/SchedulePage.tsx`
-
-- **Line 27-31** `GROUP_LABELS`: `hdec: 'PIC'` 추가
-- **Line 245-246** Group Tabs: `<TabsTrigger value="hdec">PIC</TabsTrigger>` 추가 (Team 앞에)
-- **Line 175** `filterParamForGroup`: `groupBy === 'hdec' ? 'hdec_pic'` 분기 추가
-
----
-
-## 2. Gantt-lite 테이블 Excel 내보내기
-
-### `src/lib/schedule-excel-export.ts` (신규 생성)
-
-`xlsx-js-style`을 사용하여 현재 화면의 Schedule Matrix 데이터를 스타일링된 Excel로 내보냅니다.
-
-**함수**: `exportScheduleToExcel(data, opts)`
-
-**Excel 레이아웃:**
+Dashboard 상단 헤더 카드의 **Overdue** 집계가 현재 T1/T2만 기준으로 계산되는 것을 수정하여, 아래 조건의 **Predecessor Overdue**도 포함되도록 변경합니다.
 
 ```text
-Row 0: Title — "SHAW T&C — Progress Status (By System)"  [Navy #1E3A5F, 흰색 14pt Bold]
-Row 1: Meta — "Exported: ... · Stage: All · Range: ..."   [Light Gray #F3F4F6]
-Row 2: (spacer)
-Row 3: Group headers — [Group] | Total Scope (4열 병합) | Up to Today (4열 병합) | Timeline bucket labels
-Row 4: Sub headers — | Total | Done | % | Remain | Plan | Actual | % | Diff | Apr 21 | Apr 22 | ...
-Row 5+: Data
+Predecessor Planned Date < Today
+AND Predecessor Status != Done
 ```
 
-**데이터 행 구조:**
+즉 한 Subtest가 Predecessor, T1, T2 중 하나라도 overdue이면 Dashboard의 Overdue Subtests에 포함됩니다.
 
-| 구분 | 스타일 |
-|------|--------|
-| 그룹 요약행 | `#F8FAFC` 배경, Bold |
-| Stage 서브행 (stageFilter=all일 때) | 들여쓰기 `├ Pred`, `├ T1`, `└ T2` |
-| Timeline 셀 | `{plan}/{actual}` 형태, 값 0이면 빈 셀 |
-| Today 열 | 연한 파란 배경 `#DBEAFE` |
-| Diff/Remain 음수 | 빨간 폰트 `#DC2626` |
-| Diff/Remain 양수 | 초록 폰트 `#16A34A` |
+## 변경 범위
 
-**기타:**
-- Freeze panes: 좌측 고정열(Group + Total Scope + Up to Today) + 헤더 2행 고정
-- 파일명: `SHAW_Schedule_{GroupHeader}_{Stage}_{YYYYMMDD_HHmm}.xlsx`
+### 1. Dashboard 공통 overdue 판정 로직 수정
 
-### `src/pages/SchedulePage.tsx`
+`src/lib/dashboard-utils.ts`
 
-- **Import 추가**: `Download` lucide 아이콘, `exportScheduleToExcel`, `useToast`
-- **Header 영역** (line 225-234): Download 버튼 추가
-- **핸들러**: `handleScheduleExport()` — `visibleData` + 현재 필터 옵션 전달
+현재 `isOverdue()`는 T1/T2만 검사합니다.
 
----
+변경 후:
 
-## 3. 이전 미적용 플랜 반영 (Stage별 수량 표시)
-
-### `src/pages/DashboardPage.tsx` — Line 737
-
-Stage 배지 옆에 `cumActual/totalSubtests (remaining)` 표시:
-```
-[Pred]  28/120 (92)
-[T1]    38/120 (82)
-[T2]    15/120 (105)
+```text
+Pred overdue OR T1 overdue OR T2 overdue
 ```
 
-### `src/lib/dashboard-excel-export.ts` — Line 183-184
+으로 계산되도록 수정합니다.
 
-Stage 셀 값에 동일 수량 정보 포함: `"Pred  28/120 (92)"`
+또한 `maxDelayDays()`도 Predecessor 지연일을 포함하도록 수정합니다.  
+이 함수는 Dashboard의 Top Overdue 정렬에 사용되므로, Predecessor가 가장 오래 지연된 경우에도 상단에 올바르게 표시됩니다.
 
----
+## 2. Dashboard UI 반영
 
-## 변경 파일 요약
+`src/pages/DashboardPage.tsx`
 
-| 파일 | 작업 |
-|------|------|
-| `src/lib/schedule-utils.ts` | `ScheduleGroupBy`에 `'hdec'` 추가, `getGroupKey`에 hdec 분기 |
-| `src/pages/SchedulePage.tsx` | PIC 탭 추가, filterParamForGroup hdec 분기, Excel 다운로드 버튼 + 핸들러 |
-| `src/lib/schedule-excel-export.ts` | 신규 — Schedule Matrix Excel 내보내기 |
-| `src/pages/DashboardPage.tsx` | Stage 셀에 cumActual/total (remaining) 표시 |
-| `src/lib/dashboard-excel-export.ts` | Stage 셀 값에 수량 정보 추가 |
+Dashboard의 Overdue 카드와 Overdue Alert Banner는 이미 `isOverdue()` 기반으로 계산하고 있으므로, 공통 함수 수정만으로 아래 영역에 자동 반영됩니다.
 
+- 상단 Header KPI 카드: `Overdue`
+- Alert Banner: `N Overdue Subtests`
+- Top Overdue 목록
+- Breakdown 테이블 내 overdue 기반 클릭/집계 중 `isOverdue()`를 사용하는 부분
+
+이미 Stage Card에는 `predOverdue`가 별도로 계산되어 있으므로, Predecessor 카드의 overdue 수치는 유지됩니다.
+
+## 3. Overdue 카드 클릭 후 Subtest List 필터도 동일하게 수정
+
+`src/pages/SubtestList.tsx`
+
+Dashboard의 Overdue 카드를 클릭하면 `/?status=overdue`로 이동합니다.
+
+현재 Subtest List의 `status=overdue` 필터도 T1/T2만 검사하고 있으므로, Dashboard 숫자와 실제 목록이 불일치하지 않도록 아래 조건을 추가합니다.
+
+```text
+Pred Planned < Today AND Pred Status != Done
+```
+
+따라서 Dashboard Overdue 카드 숫자와 클릭 후 표시되는 Subtest 목록이 일치하게 됩니다.
+
+## 4. At-Risk는 이번 변경에 포함하지 않음
+
+요청 범위는 **Overdue Subtests 카드에 Predecessor Overdue 포함**이므로, At-Risk 계산은 기존 T1/T2 기준을 유지합니다.
+
+필요하면 다음 단계에서 At-Risk도 Predecessor 포함으로 확장할 수 있습니다.
+
+## 예상 결과
+
+변경 후 Dashboard Overdue는 다음과 같이 계산됩니다.
+
+```text
+Overdue Subtests =
+Subtests where any of the following is true:
+
+1. pred_planned_date < today AND pred_status != Done
+2. t1_planned_date < today AND t1_status != Done
+3. t2_planned_date < today AND t2_status != Done
+```
+
+중복 카운트는 하지 않습니다.  
+하나의 Subtest가 Pred/T1/T2 모두 overdue여도 Overdue Subtests에는 1건으로 계산됩니다.
