@@ -795,7 +795,7 @@ function PlanActualTable({
                   <TableCell className="text-right text-xs px-2 py-1.5">
                     <VarianceCell value={yD} />
                   </TableCell>
-                  <TableCell className="text-right text-xs px-2 py-1.5">
+                  <TableCell className="text-right text-xs px-2 py-1.5 font-semibold text-destructive">
                     <ClickNum value={m.yesterdayDelay} onClick={st.delayAsOf ? () => go(r.key, { [st.delayAsOf!]: dataDate }) : undefined} />
                   </TableCell>
                   {/* Today */}
@@ -808,7 +808,7 @@ function PlanActualTable({
                   <TableCell className="text-right text-xs px-2 py-1.5">
                     <VarianceCell value={todayD} />
                   </TableCell>
-                  <TableCell className="text-right text-xs px-2 py-1.5">
+                  <TableCell className="text-right text-xs px-2 py-1.5 font-semibold text-destructive">
                     <ClickNum value={m.todayDelay} onClick={st.delayAsOf ? () => go(r.key, { [st.delayAsOf!]: today }) : undefined} />
                   </TableCell>
                   <TableCell className="border-l border-border px-2 py-1.5">
