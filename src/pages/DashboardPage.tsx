@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -17,7 +19,7 @@ import {
   PieChart, Pie, Cell, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine,
 } from 'recharts';
 import {
-  AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight, CalendarIcon, Download,
+  AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight, CalendarIcon, Download, Filter,
 } from 'lucide-react';
 import { exportPlanActualToExcel } from '@/lib/dashboard-excel-export';
 import { useToast } from '@/hooks/use-toast';
@@ -49,6 +51,8 @@ export default function DashboardPage() {
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>('day');
   const [teamFilter, setTeamFilter] = useState<string>('all');
   const [dataDate, setDataDate] = useState(() => yesterdayIso(todayIso()));
+  const [systemTextFilter, setSystemTextFilter] = useState('');
+  const [selectedSystemFilters, setSelectedSystemFilters] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,6 +163,18 @@ export default function DashboardPage() {
     () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.team ?? NONE_LABEL, k => k),
     [filteredSubtests, today, dataDate]
   );
+  const systemFilterOptions = useMemo(
+    () => Array.from(new Set(bySystem.map(r => r.label))).sort((a, b) => a.localeCompare(b)),
+    [bySystem]
+  );
+  const filteredBySystem = useMemo(() => {
+    const text = systemTextFilter.trim().toLowerCase();
+    return bySystem.filter(r => {
+      const matchesText = !text || r.label.toLowerCase().includes(text);
+      const matchesSelection = selectedSystemFilters.length === 0 || selectedSystemFilters.includes(r.label);
+      return matchesText && matchesSelection;
+    });
+  }, [bySystem, systemTextFilter, selectedSystemFilters]);
   const systemKeyResolver = useMemo(
     () => (key: string) => sysCodeById.get(key) ?? key,
     [sysCodeById]
@@ -169,7 +185,7 @@ export default function DashboardPage() {
   const { toast } = useToast();
 
   const breakdownDataMap: Record<string, { rows: PlanActualRow[]; header: string }> = {
-    system: { rows: bySystem, header: 'System' },
+    system: { rows: filteredBySystem, header: 'System' },
     subcon: { rows: bySubcon, header: 'Subcontractor' },
     subsub: { rows: bySubsub, header: 'Sub-Sub' },
     hdec: { rows: byHdec, header: 'HDEC PIC' },
@@ -409,7 +425,25 @@ export default function DashboardPage() {
               <TabsTrigger value="team">By Team</TabsTrigger>
             </TabsList>
             <TabsContent value="system">
-              <PlanActualTable rows={bySystem} groupParam="system" groupHeader="System" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} keyToFilterValue={systemKeyResolver} />
+              <PlanActualTable
+                rows={filteredBySystem}
+                groupParam="system"
+                groupHeader="System"
+                today={today}
+                dataDate={dataDate}
+                todayLabel={todayLabel}
+                dataDateLabel={dataDateLabel}
+                navigate={navigate}
+                keyToFilterValue={systemKeyResolver}
+                emptyMessage="No matching systems."
+                systemFilter={{
+                  text: systemTextFilter,
+                  selected: selectedSystemFilters,
+                  options: systemFilterOptions,
+                  onTextChange: setSystemTextFilter,
+                  onSelectedChange: setSelectedSystemFilters,
+                }}
+              />
             </TabsContent>
             <TabsContent value="subcon">
               <PlanActualTable rows={bySubcon} groupParam="subcon" groupHeader="Subcontractor" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} />
@@ -644,8 +678,69 @@ function ClickVariance({ value, onClick }: { value: number; onClick?: () => void
   );
 }
 
+function SystemHeaderFilter({
+  text, selected, options, onTextChange, onSelectedChange,
+}: {
+  text: string;
+  selected: string[];
+  options: string[];
+  onTextChange: (value: string) => void;
+  onSelectedChange: (value: string[]) => void;
+}) {
+  const isActive = text.trim().length > 0 || selected.length > 0;
+  const toggle = (value: string) => {
+    onSelectedChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value]);
+  };
+  const clear = () => {
+    onTextChange('');
+    onSelectedChange([]);
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'inline-flex h-5 w-5 items-center justify-center rounded hover:bg-muted/80',
+            isActive ? 'text-primary' : 'text-muted-foreground/60'
+          )}
+          onClick={(e) => e.stopPropagation()}
+          title="Filter System"
+        >
+          <Filter className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-3" align="start" onClick={(e) => e.stopPropagation()}>
+        <Input
+          placeholder="Filter systems..."
+          value={text}
+          onChange={(e) => onTextChange(e.target.value)}
+          className="mb-2 h-8 text-xs"
+        />
+        <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+          <span>{selected.length ? `${selected.length} selected` : 'All systems'}</span>
+          <button type="button" className="hover:underline" onClick={clear}>Clear</button>
+        </div>
+        <div className="max-h-64 space-y-0.5 overflow-y-auto pr-1">
+          {options.map(option => (
+            <label key={option} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50">
+              <Checkbox
+                checked={selected.includes(option)}
+                onCheckedChange={() => toggle(option)}
+                className="h-3.5 w-3.5"
+              />
+              <span className="min-w-0 truncate" title={option}>{option}</span>
+            </label>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function PlanActualTable({
-  rows, groupParam, groupHeader, today, dataDate, todayLabel, dataDateLabel, navigate, keyToFilterValue,
+  rows, groupParam, groupHeader, today, dataDate, todayLabel, dataDateLabel, navigate, keyToFilterValue, emptyMessage, systemFilter,
 }: {
   rows: PlanActualRow[];
   groupParam: 'system' | 'subcon' | 'subsub' | 'hdec_pic' | 'team';
@@ -656,9 +751,17 @@ function PlanActualTable({
   dataDateLabel: string;
   navigate: (to: string) => void;
   keyToFilterValue?: (key: string) => string;
+  emptyMessage?: string;
+  systemFilter?: {
+    text: string;
+    selected: string[];
+    options: string[];
+    onTextChange: (value: string) => void;
+    onSelectedChange: (value: string[]) => void;
+  };
 }) {
-  if (rows.length === 0) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">No data.</p>;
+  if (rows.length === 0 && !systemFilter) {
+    return <p className="py-8 text-center text-sm text-muted-foreground">{emptyMessage ?? 'No data.'}</p>;
   }
   const filterValue = (key: string) => (keyToFilterValue ? keyToFilterValue(key) : key);
   const go = (groupKey: string, extra?: Record<string, string>) => {
@@ -698,7 +801,12 @@ function PlanActualTable({
             {colgroup}
         <TableHeader className="bg-background">
           <TableRow>
-            <TableHead rowSpan={2} className="align-bottom">{groupHeader}</TableHead>
+            <TableHead rowSpan={2} className="align-bottom">
+              <div className="flex items-center gap-1.5">
+                <span>{groupHeader}</span>
+                {systemFilter && <SystemHeaderFilter {...systemFilter} />}
+              </div>
+            </TableHead>
             <TableHead rowSpan={2} className="text-right align-bottom">Total<br /><span className="text-[10px] font-normal text-muted-foreground">Subtests</span></TableHead>
             <TableHead rowSpan={2} className="align-bottom">Stage</TableHead>
             <TableHead colSpan={3} className="text-center border-l border-border bg-muted/30">To Data Date (Cumulative)</TableHead>
@@ -726,7 +834,13 @@ function PlanActualTable({
           <Table className="table-fixed">
             {colgroup}
         <TableBody>
-          {rows.map((r, idx) => {
+          {rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={15} className="py-8 text-center text-sm text-muted-foreground">
+                {emptyMessage ?? 'No data.'}
+              </TableCell>
+            </TableRow>
+          ) : rows.map((r, idx) => {
             const stages: StageDef[] = [
               {
                 stage: 'pred', label: 'Pred', metrics: r.predecessor,
