@@ -190,41 +190,17 @@ export function aggregatePlanActualByGroup(
 
   const out: PlanActualRow[] = [];
   for (const [k, items] of buckets) {
-    const calc = (
-      plannedField: 't1_planned_date' | 't2_planned_date',
-      actualField: 't1_actual_date' | 't2_actual_date',
-      statusField: 't1_status' | 't2_status'
-    ): PlanActualMetrics => {
+    const calc = (stage: 'pred' | 't1' | 't2'): PlanActualMetrics => {
       let cumPlan = 0, cumActual = 0, yPlan = 0, yActual = 0, yDelay = 0, tPlan = 0, tActual = 0, tDelay = 0;
       for (const i of items) {
-        const p = i[plannedField];
-        const a = i[actualField];
-        const st = i[statusField];
-        if (p && p <= dataDate) cumPlan++;
-        if (a && a <= dataDate) cumActual++;
-        if (p === dataDate) yPlan++;
-        if (a === dataDate) yActual++;
-        if (p && p <= dataDate && st !== 'Done') yDelay++;
-        if (p === today) tPlan++;
-        if (a === today) tActual++;
-        if (p && p <= today && st !== 'Done') tDelay++;
-      }
-      return { cumPlan, cumActual, yesterdayPlan: yPlan, yesterdayActual: yActual, yesterdayDelay: yDelay, todayPlan: tPlan, todayActual: tActual, todayDelay: tDelay };
-    };
-    // Predecessor: 정규 필드(pred_planned_date, pred_actual_date) 직접 사용
-    const calcPred = (): PlanActualMetrics => {
-      let cumPlan = 0, cumActual = 0, yPlan = 0, yActual = 0, yDelay = 0, tPlan = 0, tActual = 0, tDelay = 0;
-      for (const i of items) {
-        const p = i.pred_planned_date ?? null;
-        const a = i.pred_actual_date ?? null;
-        if (p && p <= dataDate) cumPlan++;
-        if (a && a <= dataDate) cumActual++;
-        if (p === dataDate) yPlan++;
-        if (a === dataDate) yActual++;
-        if (p && p <= dataDate && i.pred_status !== 'Done') yDelay++;
-        if (p === today) tPlan++;
-        if (a === today) tActual++;
-        if (p && p <= today && i.pred_status !== 'Done') tDelay++;
+        if (isStagePlannedUpTo(i, stage, dataDate)) cumPlan++;
+        if (isStageActualUpTo(i, stage, dataDate)) cumActual++;
+        if (isStagePlannedOn(i, stage, dataDate)) yPlan++;
+        if (isStageActualOn(i, stage, dataDate)) yActual++;
+        if (isStageDelayedAsOf(i, stage, dataDate)) yDelay++;
+        if (isStagePlannedOn(i, stage, today)) tPlan++;
+        if (isStageActualOn(i, stage, today)) tActual++;
+        if (isStageDelayedAsOf(i, stage, today)) tDelay++;
       }
       return { cumPlan, cumActual, yesterdayPlan: yPlan, yesterdayActual: yActual, yesterdayDelay: yDelay, todayPlan: tPlan, todayActual: tActual, todayDelay: tDelay };
     };
@@ -232,9 +208,9 @@ export function aggregatePlanActualByGroup(
       key: k,
       label: groupLabel(k),
       totalSubtests: items.length,
-      predecessor: calcPred(),
-      t1: calc('t1_planned_date', 't1_actual_date', 't1_status'),
-      t2: calc('t2_planned_date', 't2_actual_date', 't2_status'),
+      predecessor: calc('pred'),
+      t1: calc('t1'),
+      t2: calc('t2'),
     });
   }
   // default sort: most-delayed (largest negative cumulative variance T2 then T1) first
