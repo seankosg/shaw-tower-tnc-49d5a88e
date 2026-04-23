@@ -20,6 +20,15 @@ import DashboardPage from "./pages/DashboardPage";
 import SchedulePage from "./pages/SchedulePage";
 import ScheduleRevisionPage from "./pages/ScheduleRevisionPage";
 import AdminPage from "./pages/AdminPage";
+import DefectDashboardPage from "./pages/DefectDashboardPage";
+import DefectProgressPage from "./pages/DefectProgressPage";
+import DefectRawDataPage from "./pages/DefectRawDataPage";
+import DefectDetailPage from "./pages/DefectDetailPage";
+import DefectImportPage from "./pages/DefectImportPage";
+import DefectImportLogsPage from "./pages/DefectImportLogsPage";
+import DefectExportPage from "./pages/DefectExportPage";
+import DefectQuickUpdatePage from "./pages/DefectQuickUpdatePage";
+import DefectScheduleRevisionPage from "./pages/DefectScheduleRevisionPage";
 
 const queryClient = new QueryClient();
 
@@ -35,7 +44,23 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
               <Route element={<ProtectedRoute><RoleGuard><AppLayout /></RoleGuard></ProtectedRoute>}>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/" element={<Navigate to="/tc/dashboard" replace />} />
+                <Route path="/dashboard" element={<Navigate to="/tc/dashboard" replace />} />
+                <Route path="/schedule" element={<Navigate to="/tc/progress" replace />} />
+                <Route path="/schedule/revision" element={<Navigate to="/tc/schedule-revision" replace />} />
+                <Route path="/raw-data" element={<Navigate to="/tc/raw-data" replace />} />
+                <Route path="/import" element={<Navigate to="/tc/import" replace />} />
+                <Route path="/import/logs" element={<Navigate to="/tc/import/logs" replace />} />
+                <Route path="/export" element={<Navigate to="/tc/export" replace />} />
+                <Route path="/mobile" element={<Navigate to="/tc/quick-update" replace />} />
+                <Route path="/tc/dashboard" element={<DashboardPage />} />
+                <Route path="/tc/progress" element={<SchedulePage />} />
+                <Route path="/tc/schedule-revision" element={<ScheduleRevisionPage />} />
+                <Route path="/tc/raw-data" element={<SubtestList />} />
+                <Route path="/tc/import" element={<ImportPage />} />
+                <Route path="/tc/import/logs" element={<ImportLogsPage />} />
+                <Route path="/tc/export" element={<ExportPage />} />
+                <Route path="/tc/quick-update" element={<MobileUpdatePage />} />
                 <Route path="/raw-data" element={<SubtestList />} />
                 <Route path="/subtests/:id" element={<SubtestDetail />} />
                 <Route path="/import" element={<ImportPage />} />
@@ -45,6 +70,15 @@ const App = () => (
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/schedule" element={<SchedulePage />} />
                 <Route path="/schedule/revision" element={<ScheduleRevisionPage />} />
+                <Route path="/defects/dashboard" element={<DefectDashboardPage />} />
+                <Route path="/defects/progress" element={<DefectProgressPage />} />
+                <Route path="/defects/schedule-revision" element={<DefectScheduleRevisionPage />} />
+                <Route path="/defects/raw-data" element={<DefectRawDataPage />} />
+                <Route path="/defects/:id" element={<DefectDetailPage />} />
+                <Route path="/defects/import" element={<DefectImportPage />} />
+                <Route path="/defects/import/logs" element={<DefectImportLogsPage />} />
+                <Route path="/defects/export" element={<DefectExportPage />} />
+                <Route path="/defects/quick-update" element={<DefectQuickUpdatePage />} />
                 <Route path="/admin" element={<AdminPage />} />
               </Route>
             </Routes>
