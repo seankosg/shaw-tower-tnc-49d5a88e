@@ -66,7 +66,21 @@ function getLinkedOwnerCode(profile: Profile, masters: MasterRow[]): string | nu
   return target?.owner_code ?? null;
 }
 
-export default function AdminPage() {
+type UsersSortField = 'login_id' | 'name' | 'user_type' | 'team' | 'linked' | 'owner_code' | 'role' | 'is_active';
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+function compareSortValues(a: string | number | boolean | null | undefined, b: string | number | boolean | null | undefined): number {
+  const aEmpty = a === null || a === undefined || a === '';
+  const bEmpty = b === null || b === undefined || b === '';
+  if (aEmpty && bEmpty) return 0;
+  if (aEmpty) return 1;
+  if (bEmpty) return -1;
+  if (typeof a === 'boolean' && typeof b === 'boolean') return a === b ? 0 : a ? -1 : 1;
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  return collator.compare(String(a), String(b));
+}
+
+
   const { isAdminOrSuperuser } = useAuth();
   const isDev = import.meta.env.DEV;
   const hasAccess = isDev || isAdminOrSuperuser;
