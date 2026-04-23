@@ -420,7 +420,7 @@ export default function DefectImportPage() {
                       {file.headerCount != null && ` · ${file.headerCount} headers`}
                       {file.parsedCount > 0 && ` · ${file.parsedCount} rows`}
                       {file.error && <span className="text-destructive"> · {file.error}</span>}
-                      {file.result && <span className="ml-1">· {file.result.inserted} ins, {file.result.updated} upd, {file.result.skipped} skp, {file.result.rejected} rej</span>}
+                      {file.result && <span className="ml-1">· {file.result.inserted} ins, {file.result.updated} upd, {file.result.skipped} skp, {file.result.rejected} rej{file.result.teamUnresolved > 0 ? ` · ${file.result.teamUnresolved} team unresolved` : ''}</span>}
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
                       <span className="whitespace-nowrap text-xs text-muted-foreground">Data Date:</span>
@@ -467,11 +467,12 @@ export default function DefectImportPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid gap-4 sm:grid-cols-5">
               <SummaryBox label="Inserted" value={totals.inserted} />
               <SummaryBox label="Updated" value={totals.updated} />
               <SummaryBox label="Skipped" value={totals.skipped} />
               <SummaryBox label="Rejected" value={totals.rejected} />
+              <SummaryBox label="Team Unresolved" value={totals.teamUnresolved} />
             </div>
           </CardContent>
         </Card>
