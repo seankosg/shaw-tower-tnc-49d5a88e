@@ -856,6 +856,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      can_update_subtest: {
+        Args: { _subtest_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_view_subtest: {
         Args: {
           _subcontractor_name: string
@@ -863,6 +867,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      get_subtest_edit_scope: {
+        Args: { _subtest_id: string; _user_id: string }
+        Returns: string
       }
       get_user_team: {
         Args: { _user_id: string }

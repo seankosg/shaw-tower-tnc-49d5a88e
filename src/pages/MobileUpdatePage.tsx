@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Search, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import type { TcStatus } from '@/types/enums';
 import { TC_STATUS_OPTIONS } from '@/types/enums';
 
@@ -34,12 +35,17 @@ interface SubtestCard {
   system_code: string;
 }
 
+type EditScope = 'none' | 'assigned' | 'team' | 'full';
+const RESPONSIBILITY_FIELDS = ['subcontractor_name', 'subsub_name', 'hdec_pic_name'] as const;
+
 export default function MobileUpdatePage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SubtestCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [edits, setEdits] = useState<Record<string, Partial<SubtestCard>>>({});
+  const [editScopes, setEditScopes] = useState<Record<string, EditScope>>({});
   const [saving, setSaving] = useState<string | null>(null);
 
   const search = async () => {
@@ -54,7 +60,20 @@ export default function MobileUpdatePage() {
       .limit(20);
 
     if (data) {
-      setResults(data.map((r: any) => ({ ...r, system_code: r.system_master?.system_code ?? '' })));
+      const mapped = data.map((r: any) => ({ ...r, system_code: r.system_master?.system_code ?? '' }));
+      setResults(mapped);
+      if (user?.id) {
+        const scopeEntries = await Promise.all(mapped.map(async (r: SubtestCard) => {
+          const { data: scope } = await (supabase as any).rpc('get_subtest_edit_scope', {
+            _user_id: user.id,
+            _subtest_id: r.id,
+          });
+          return [r.id, (scope || 'none') as EditScope] as const;
+        }));
+        setEditScopes(Object.fromEntries(scopeEntries));
+      } else {
+        setEditScopes({});
+      }
     }
     setLoading(false);
   };
@@ -69,9 +88,14 @@ export default function MobileUpdatePage() {
   const saveCard = async (card: SubtestCard) => {
     const changes = edits[card.id];
     if (!changes || Object.keys(changes).length === 0) return;
+    const scope = editScopes[card.id] || 'none';
+    if (scope === 'none') return;
     setSaving(card.id);
 
     const updates: Record<string, any> = { ...changes };
+    if (scope === 'assigned') {
+      RESPONSIBILITY_FIELDS.forEach(field => delete updates[field]);
+    }
     updates.data_source_type = 'mobile_input';
     updates.row_version = card.row_version + 1;
 
@@ -126,15 +150,20 @@ export default function MobileUpdatePage() {
       <div className="space-y-3">
         {results.map(card => {
           const hasChanges = edits[card.id] && Object.keys(edits[card.id]).length > 0;
+          const scope = editScopes[card.id] || 'none';
+          const canSave = scope !== 'none';
+          const canEditResponsibility = scope === 'team' || scope === 'full';
           return (
             <Card key={card.id}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center justify-between">
                   <span>{card.subtest_id} <span className="text-muted-foreground font-normal">({card.system_code})</span></span>
-                  <Button size="sm" disabled={!hasChanges || saving === card.id} onClick={() => saveCard(card)}>
-                    <Save className="mr-1 h-3.5 w-3.5" />
-                    {saving === card.id ? 'Saving...' : 'Save'}
-                  </Button>
+                  {canSave && (
+                    <Button size="sm" disabled={!hasChanges || saving === card.id} onClick={() => saveCard(card)}>
+                      <Save className="mr-1 h-3.5 w-3.5" />
+                      {saving === card.id ? 'Saving...' : 'Save'}
+                    </Button>
+                  )}
                 </CardTitle>
                 {card.description && <p className="text-xs text-muted-foreground">{card.description}</p>}
               </CardHeader>
@@ -214,6 +243,7 @@ export default function MobileUpdatePage() {
                     <Input
                       className="h-8 text-xs"
                       value={(getVal(card, 'subcontractor_name') as string) || ''}
+                      disabled={!canEditResponsibility}
                       onChange={e => updateField(card.id, 'subcontractor_name', e.target.value || null)}
                     />
                   </div>
@@ -222,6 +252,7 @@ export default function MobileUpdatePage() {
                     <Input
                       className="h-8 text-xs"
                       value={(getVal(card, 'subsub_name') as string) || ''}
+                      disabled={!canEditResponsibility}
                       onChange={e => updateField(card.id, 'subsub_name', e.target.value || null)}
                     />
                   </div>
@@ -230,6 +261,7 @@ export default function MobileUpdatePage() {
                     <Input
                       className="h-8 text-xs"
                       value={(getVal(card, 'hdec_pic_name') as string) || ''}
+                      disabled={!canEditResponsibility}
                       onChange={e => updateField(card.id, 'hdec_pic_name', e.target.value || null)}
                     />
                   </div>

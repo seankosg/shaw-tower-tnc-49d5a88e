@@ -65,6 +65,9 @@ interface ChangeLog {
   change_source: ChangeSource | null;
 }
 
+type EditScope = 'none' | 'assigned' | 'team' | 'full';
+const RESPONSIBILITY_FIELDS = ['subcontractor_name', 'subsub_name', 'hdec_pic_name'] as const;
+
 export default function SubtestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -76,6 +79,7 @@ export default function SubtestDetailPage() {
   const [form, setForm] = useState<Partial<SubtestDetail>>({});
   const [changeLogs, setChangeLogs] = useState<ChangeLog[]>([]);
   const [canEditRecord, setCanEditRecord] = useState(false);
+  const [editScope, setEditScope] = useState<EditScope>('none');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -98,15 +102,15 @@ export default function SubtestDetailPage() {
       const d = data as any;
       setRecord(d);
       if (user?.id) {
-        const { data: editable } = await supabase.rpc('can_edit_subtest', {
+        const { data: scope } = await (supabase as any).rpc('get_subtest_edit_scope', {
           _user_id: user.id,
-          _project_id: d.project_id,
-          _system_id: d.system_id,
-          _subcontractor_name: d.subcontractor_name ?? '',
-          _subsub_name: d.subsub_name ?? '',
+          _subtest_id: d.id,
         });
-        setCanEditRecord(Boolean(editable));
+        const nextScope = (scope || 'none') as EditScope;
+        setEditScope(nextScope);
+        setCanEditRecord(nextScope !== 'none');
       } else {
+        setEditScope('none');
         setCanEditRecord(false);
       }
       setForm({
@@ -146,6 +150,7 @@ export default function SubtestDetailPage() {
   const handleSave = async () => {
     if (!record || !user?.id || !canEditRecord) return;
     setSaving(true);
+    const canEditResponsibility = editScope === 'team' || editScope === 'full';
 
     // Build change log entries
     const changes: { field: string; old_val: string | null; new_val: string | null }[] = [];
@@ -159,6 +164,7 @@ export default function SubtestDetailPage() {
     ] as const;
 
     for (const field of editableFields) {
+      if (!canEditResponsibility && RESPONSIBILITY_FIELDS.includes(field as any)) continue;
       const oldVal = (record as any)[field];
       const newVal = (form as any)[field];
       if (oldVal !== newVal) {
@@ -166,7 +172,7 @@ export default function SubtestDetailPage() {
       }
     }
 
-    const updatePayload = {
+    const updatePayload: Record<string, any> = {
       t1_planned_date: form.t1_planned_date || null,
       t1_actual_date: form.t1_actual_date || null,
       t1_status: form.t1_status || null,
@@ -182,17 +188,20 @@ export default function SubtestDetailPage() {
       pred_status: form.pred_status || null,
       pred_planned_date: form.pred_planned_date || null,
       pred_actual_date: form.pred_actual_date || null,
-      subcontractor_name: form.subcontractor_name || null,
-      subsub_name: form.subsub_name || null,
-      hdec_pic_name: form.hdec_pic_name || null,
       updated_by: user.id,
       data_source_type: 'app_direct_input' as DataSource,
       row_version: record.row_version + 1,
     };
 
+    if (canEditResponsibility) {
+      updatePayload.subcontractor_name = form.subcontractor_name || null;
+      updatePayload.subsub_name = form.subsub_name || null;
+      updatePayload.hdec_pic_name = form.hdec_pic_name || null;
+    }
+
     const { error } = await supabase
       .from('subtests')
-      .update(updatePayload)
+      .update(updatePayload as any)
       .eq('id', record.id);
 
     if (error) {
@@ -259,6 +268,8 @@ export default function SubtestDetailPage() {
       return updated;
     });
   };
+
+  const canEditResponsibility = editScope === 'team' || editScope === 'full';
 
   if (loading) {
     return <div className="flex items-center justify-center py-12 text-muted-foreground">Loading...</div>;
@@ -432,19 +443,19 @@ export default function SubtestDetailPage() {
           {isFieldVisible('subcontractor_name') && (
           <div className="space-y-1.5">
             <Label className="text-xs">Subcontractor</Label>
-            <Input className="h-9" value={form.subcontractor_name || ''} onChange={e => updateField('subcontractor_name', e.target.value)} />
+            <Input className="h-9" value={form.subcontractor_name || ''} disabled={!canEditResponsibility} onChange={e => updateField('subcontractor_name', e.target.value)} />
           </div>
           )}
           {isFieldVisible('subsub_name') && (
           <div className="space-y-1.5">
             <Label className="text-xs">Sub-Sub</Label>
-            <Input className="h-9" value={form.subsub_name || ''} onChange={e => updateField('subsub_name', e.target.value)} />
+            <Input className="h-9" value={form.subsub_name || ''} disabled={!canEditResponsibility} onChange={e => updateField('subsub_name', e.target.value)} />
           </div>
           )}
           {isFieldVisible('hdec_pic_name') && (
           <div className="space-y-1.5 md:col-span-2">
             <Label className="text-xs">HDEC PIC</Label>
-            <Input className="h-9" value={form.hdec_pic_name || ''} onChange={e => updateField('hdec_pic_name', e.target.value)} />
+            <Input className="h-9" value={form.hdec_pic_name || ''} disabled={!canEditResponsibility} onChange={e => updateField('hdec_pic_name', e.target.value)} />
           </div>
           )}
         </CardContent>
