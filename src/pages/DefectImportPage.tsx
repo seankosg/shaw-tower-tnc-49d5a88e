@@ -431,24 +431,7 @@ export default function DefectImportPage() {
                         disabled={isRunning || file.status === 'done' || file.status === 'failed'}
                         className="h-7 w-[150px] text-xs"
                       />
-                      <span className="whitespace-nowrap text-xs text-muted-foreground">Team:</span>
-                      <Select
-                        value={file.team || ''}
-                        onValueChange={(value) => setFileTeam(file.id, value as TeamType)}
-                        disabled={isRunning || file.status === 'done' || file.status === 'failed'}
-                      >
-                        <SelectTrigger className="h-7 w-[140px] text-xs">
-                          <SelectValue placeholder="Select team" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ALL_TEAMS.map((team) => (
-                            <SelectItem key={team} value={team}>{TEAM_LABELS[team]}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {file.status === 'ready' && !file.team && (
-                        <span className="text-xs text-destructive">Team is required before import.</span>
-                      )}
+                      <span className="text-xs text-muted-foreground">Team will be resolved from Field Discipline.</span>
                     </div>
                     {file.parsed?.some((row) => !row.issue_no) && (
                       <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-border bg-muted px-2 py-1.5">
