@@ -14,9 +14,23 @@ export const ALL_TEAMS: TeamType[] = ['Mech', 'Elec', 'Arch', 'Supp'];
 export const TEAM_LABELS: Record<TeamType, string> = {
   Mech: 'Mechanical',
   Elec: 'Electrical',
-  Arch: 'Architecture',
+  Arch: 'Architectural',
   Supp: 'Support',
 };
+
+const normalizeTeamToken = (value: unknown) => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+export function normalizeTeamValue(value: unknown): TeamType | null {
+  const token = normalizeTeamToken(value);
+  if (!token) return null;
+
+  if (['arch', 'architectural', 'architecture', 'archtectural', 'landscaping', 'facade', 'structural'].includes(token)) return 'Arch';
+  if (['elec', 'electrical', 'ict', 'sbt', 'verticaltransport'].includes(token)) return 'Elec';
+  if (['mech', 'mechanical', 'acmv', 'bms', 'plumbing', 'sanitary', 'santary', 'gas', 'fireprotection'].includes(token)) return 'Mech';
+  if (['supp', 'support'].includes(token)) return 'Supp';
+
+  return null;
+}
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   guest: 'Guest',
