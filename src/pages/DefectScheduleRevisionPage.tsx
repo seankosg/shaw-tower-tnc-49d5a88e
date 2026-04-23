@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { formatPct } from '@/lib/defect-utils';
+import { formatDateTimeDdMmmYyyy, formatDdMmm } from '@/lib/format';
 
 interface RevisionRow {
   id: string;
@@ -78,7 +79,7 @@ export default function DefectScheduleRevisionPage() {
               <TableCell><Delta oldValue={formatPct(row.progress_old_pct)} newValue={formatPct(row.progress_new_pct)} diff={row.progress_diff_pct} suffix="%" /></TableCell>
               <TableCell>{row.closure_status_old || row.closure_status_new ? `${row.closure_status_old ?? '—'} → ${row.closure_status_new ?? '—'}` : '—'}</TableCell>
               <TableCell><Badge variant="outline">{row.change_source || '—'}</Badge></TableCell>
-              <TableCell>{new Date(row.created_at).toLocaleString()}</TableCell>
+              <TableCell>{formatDateTimeDdMmmYyyy(row.created_at)}</TableCell>
             </TableRow>
           ))}</TableBody>
         </Table>
@@ -89,5 +90,5 @@ export default function DefectScheduleRevisionPage() {
 
 function Delta({ oldValue, newValue, diff, suffix = 'd' }: { oldValue?: string | null; newValue?: string | null; diff?: number | null; suffix?: string }) {
   if (!oldValue && !newValue) return <span className="text-muted-foreground">—</span>;
-  return <div className="text-xs"><div>{oldValue || '—'} → {newValue || '—'}</div>{diff != null && <div className="text-muted-foreground">{diff > 0 ? '+' : ''}{diff}{suffix}</div>}</div>;
+  return <div className="text-xs"><div>{formatDdMmm(oldValue)} → {formatDdMmm(newValue)}</div>{diff != null && <div className="text-muted-foreground">{diff > 0 ? '+' : ''}{diff}{suffix}</div>}</div>;
 }

@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { TcStatus, DataSource } from '@/types/enums';
 import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS } from '@/types/enums';
 import { useSearchParams } from 'react-router-dom';
+import { formatDdMmmYyyy } from '@/lib/format';
 
 export default function ExportPage() {
   const { toast } = useToast();
@@ -71,7 +72,7 @@ export default function ExportPage() {
         'Sub-Sub': r.subsub_name || '',
         'HDEC PIC': r.hdec_pic_name || '',
         'Source': r.data_source_type ? (DATA_SOURCE_LABELS[r.data_source_type as DataSource] || r.data_source_type) : '',
-        'Updated': r.updated_at ? new Date(r.updated_at).toLocaleDateString() : '',
+        'Updated': formatDdMmmYyyy(r.updated_at),
       }));
 
       const ws = XLSX.utils.json_to_sheet(rows);
