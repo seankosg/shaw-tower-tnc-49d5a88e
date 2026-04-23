@@ -1,29 +1,333 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  type ColumnDef,
+  type ColumnFiltersState,
+  type ColumnSizingState,
+  type SortingState,
+  type VisibilityState,
+  useReactTable,
+} from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { Download, Filter, Search, Upload, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DefectStatusBadge } from '@/components/defects/DefectStatusBadge';
-import { type DefectItem, formatPct } from '@/lib/defect-utils';
+import { type DefectItem, formatPct, isOverdueDefect } from '@/lib/defect-utils';
+import { formatDdMmm } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
+import { useIsMobile } from '@/hooks/use-mobile';
 
-const RAW_FIELDS = ['issue_no', 'subcontractor_issue_no', 'subcontractor_issue_source', 'area_type', 'area_level', 'area_location', 'main_trade', 'sub_trade', 'closure_status', 'actual_progress_pct', 'subcontractor_name', 'hdec_pic_name'];
+const EMPTY_TOKEN = '__EMPTY__';
+const DEFAULT_SORTING: SortingState = [{ id: 'issue_no', desc: false }];
+
+const DEFECT_RAW_FIELDS = [
+  'issue_no',
+  'subcontractor_issue_no',
+  'closure_status',
+  'team',
+  'subcontractor_issue_source',
+  'status',
+  'actual_progress_pct',
+  'area_type',
+  'area_level',
+  'area_location',
+  'main_trade',
+  'sub_trade',
+  'trade_detail',
+  'description',
+  'defect_type',
+  'priority',
+  'subcontractor_name',
+  'subsub_name',
+  'hdec_pic_name',
+  'planned_date',
+  'target_date',
+  'closed_date',
+  'remarks',
+  'hdec_comments',
+  'updated_at',
+  'created_at',
+] as const;
+
+const TEXT_FILTER_FIELDS = new Set([
+  'issue_no',
+  'subcontractor_issue_no',
+  'subcontractor_issue_source',
+  'area_location',
+  'description',
+  'remarks',
+  'hdec_comments',
+  'trade_detail',
+]);
+
+const DATE_FILTER_FIELDS = new Set(['planned_date', 'target_date', 'closed_date', 'updated_at', 'created_at']);
+const PROGRESS_FIELD = 'actual_progress_pct';
+
+const RAW_SEARCH_FIELDS = [
+  'issue_no',
+  'subcontractor_issue_no',
+  'subcontractor_issue_source',
+  'team',
+  'area_type',
+  'area_level',
+  'area_location',
+  'main_trade',
+  'sub_trade',
+  'trade_detail',
+  'description',
+  'defect_type',
+  'status',
+  'priority',
+  'subcontractor_name',
+  'subsub_name',
+  'hdec_pic_name',
+  'closure_status',
+  'remarks',
+  'hdec_comments',
+] as const;
+
+type DefectRawRow = DefectItem & { created_at?: string | null };
+
+const multiSelectFilterFn = (row: any, columnId: string, filterValue: string[]) => {
+  if (!filterValue || filterValue.length === 0) return true;
+  const val = row.getValue(columnId);
+  const isEmpty = val == null || val === '';
+  if (filterValue.includes(EMPTY_TOKEN) && isEmpty) return true;
+  if (isEmpty) return false;
+  return filterValue.includes(String(val));
+};
+
+const textFilterFn = (row: any, columnId: string, filterValue: any) => {
+  if (!filterValue) return true;
+  const text = typeof filterValue === 'string' ? filterValue : filterValue?.text;
+  const emptyOnly = typeof filterValue === 'object' ? filterValue?.emptyOnly : false;
+  const val = row.getValue(columnId);
+  if (emptyOnly) return val == null || String(val).trim() === '';
+  if (!text) return true;
+  if (val == null) return false;
+  return String(val).toLowerCase().includes(String(text).toLowerCase());
+};
+
+const dateRangeFilterFn = (row: any, columnId: string, filterValue: any) => {
+  if (!filterValue) return true;
+  const { from, to, emptyOnly } = filterValue;
+  const val = row.getValue(columnId) as string | null;
+  if (emptyOnly) return val == null || val === '';
+  if (!from && !to) return true;
+  if (!val) return false;
+  const iso = String(val).slice(0, 10);
+  if (from && iso < from) return false;
+  if (to && iso > to) return false;
+  return true;
+};
+
+const progressFilterFn = (row: any, columnId: string, filterValue: any) => {
+  if (!filterValue) return true;
+  const { text, emptyOnly } = filterValue;
+  const val = row.getValue(columnId);
+  if (emptyOnly) return val == null || val === '';
+  if (!text) return true;
+  return formatPct(val).toLowerCase().includes(String(text).toLowerCase());
+};
+
+const globalDefectFilterFn = (row: any, _columnId: string, filterValue: string) => {
+  const text = String(filterValue ?? '').trim().toLowerCase();
+  if (!text) return true;
+  const original = row.original as DefectRawRow;
+  return RAW_SEARCH_FIELDS.some((field) => String((original as any)[field] ?? '').toLowerCase().includes(text));
+};
+
+function uniqueOptions(data: DefectRawRow[], field: keyof DefectRawRow) {
+  return [...new Set(data.map((row) => row[field]).filter((value): value is string => Boolean(value)))]
+    .sort((a, b) => a.localeCompare(b))
+    .map((value) => ({ value, label: value }));
+}
+
+function MultiSelectDropdown({ column, options }: { column: any; options: { value: string; label: string }[] }) {
+  const selected: string[] = (column.getFilterValue() as string[]) ?? [];
+  const isActive = selected.length > 0;
+  const toggle = (value: string) => {
+    const next = selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value];
+    column.setFilterValue(next.length ? next : undefined);
+  };
+  const allOptions = [{ value: EMPTY_TOKEN, label: '(Empty)' }, ...options];
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          className={cn('inline-flex h-4 w-4 items-center justify-center rounded hover:bg-muted/80', isActive ? 'text-primary' : 'text-muted-foreground/50')}
+          onClick={(event) => event.stopPropagation()}
+          title="Filter"
+        >
+          <Filter className="h-3 w-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="max-h-60 w-52 overflow-auto p-2" align="start" onClick={(event) => event.stopPropagation()}>
+        <button className="mb-1 px-1 text-[11px] text-muted-foreground hover:underline" onClick={() => column.setFilterValue(undefined)}>
+          Clear all
+        </button>
+        {allOptions.map((option) => (
+          <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50">
+            <Checkbox checked={selected.includes(option.value)} onCheckedChange={() => toggle(option.value)} className="h-3.5 w-3.5" />
+            <span className="truncate">{option.label}</span>
+          </label>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function TextFilterDropdown({ column }: { column: any }) {
+  const filterValue = column.getFilterValue() as { text?: string; emptyOnly?: boolean } | string | undefined;
+  const text = typeof filterValue === 'string' ? filterValue : filterValue?.text ?? '';
+  const emptyOnly = typeof filterValue === 'object' ? filterValue?.emptyOnly ?? false : false;
+  const isActive = !!(text || emptyOnly);
+  const update = (patch: Partial<{ text: string; emptyOnly: boolean }>) => {
+    const current = typeof filterValue === 'string' ? { text: filterValue, emptyOnly: false } : filterValue ?? { text: '', emptyOnly: false };
+    const next = { ...current, ...patch };
+    column.setFilterValue(next.text || next.emptyOnly ? next : undefined);
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          className={cn('inline-flex h-4 w-4 items-center justify-center rounded hover:bg-muted/80', isActive ? 'text-primary' : 'text-muted-foreground/50')}
+          onClick={(event) => event.stopPropagation()}
+          title="Filter"
+        >
+          <Filter className="h-3 w-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-52 space-y-2 p-3" align="start" onClick={(event) => event.stopPropagation()}>
+        <Input placeholder="Search..." value={text} onChange={(event) => update({ text: event.target.value || undefined })} className="h-7 text-xs" disabled={emptyOnly} />
+        <label className="flex cursor-pointer items-center gap-2 text-xs">
+          <Checkbox checked={emptyOnly} onCheckedChange={(checked) => update({ emptyOnly: !!checked, text: undefined })} className="h-3.5 w-3.5" />
+          Empty only
+        </label>
+        <button className="text-[11px] text-muted-foreground hover:underline" onClick={() => column.setFilterValue(undefined)}>
+          Clear
+        </button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function DateRangeDropdown({ column }: { column: any }) {
+  const filterValue = column.getFilterValue() as { from?: string; to?: string; emptyOnly?: boolean } | undefined;
+  const isActive = !!(filterValue?.from || filterValue?.to || filterValue?.emptyOnly);
+  const update = (patch: Partial<{ from: string; to: string; emptyOnly: boolean }>) => {
+    const next = { ...(filterValue ?? {}), ...patch };
+    column.setFilterValue(next.from || next.to || next.emptyOnly ? next : undefined);
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          className={cn('inline-flex h-4 w-4 items-center justify-center rounded hover:bg-muted/80', isActive ? 'text-primary' : 'text-muted-foreground/50')}
+          onClick={(event) => event.stopPropagation()}
+          title="Filter"
+        >
+          <Filter className="h-3 w-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 space-y-2 p-3" align="start" onClick={(event) => event.stopPropagation()}>
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">From</label>
+          <Input type="date" value={filterValue?.from ?? ''} onChange={(event) => update({ from: event.target.value || undefined })} className="h-7 text-xs" disabled={!!filterValue?.emptyOnly} />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">To</label>
+          <Input type="date" value={filterValue?.to ?? ''} onChange={(event) => update({ to: event.target.value || undefined })} className="h-7 text-xs" disabled={!!filterValue?.emptyOnly} />
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 pt-1 text-xs">
+          <Checkbox checked={!!filterValue?.emptyOnly} onCheckedChange={(checked) => update({ emptyOnly: !!checked, from: undefined, to: undefined })} className="h-3.5 w-3.5" />
+          Empty only
+        </label>
+        <button className="text-[11px] text-muted-foreground hover:underline" onClick={() => column.setFilterValue(undefined)}>
+          Clear
+        </button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ColumnFilterDropdown({ column }: { column: any }) {
+  const meta = column.columnDef.meta as any;
+  if (meta?.filterType === 'multi-select') return <MultiSelectDropdown column={column} options={meta.filterOptions ?? []} />;
+  if (meta?.filterType === 'date-range') return <DateRangeDropdown column={column} />;
+  return <TextFilterDropdown column={column} />;
+}
 
 export default function DefectRawDataPage() {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const [items, setItems] = useState<DefectItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState(params.get('q') ?? '');
+  const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const storageKey = user?.id ? `defect-raw-data-state:${user.id}` : 'defect-raw-data-state:anon';
   const { isFieldVisible, getLabel, sortFieldNames } = useDefectFieldConfig();
+  const [items, setItems] = useState<DefectRawRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stateLoaded, setStateLoaded] = useState(false);
+  const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
+  const [searchInput, setSearchInput] = useState('');
+  const [globalFilter, setGlobalFilter] = useState('');
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  const autoSizeColumn = (columnId: string) => {
+    const container = tableRef.current;
+    if (!container) return;
+    const cells = container.querySelectorAll<HTMLElement>(`[data-column-id="${columnId}"]`);
+    let max = 72;
+    cells.forEach((cell) => {
+      const clone = cell.cloneNode(true) as HTMLElement;
+      clone.style.cssText = 'position:absolute; visibility:hidden; width:auto; white-space:nowrap; max-width:none; left:-9999px; top:0;';
+      document.body.appendChild(clone);
+      max = Math.max(max, clone.getBoundingClientRect().width);
+      document.body.removeChild(clone);
+    });
+    setColumnSizing((prev) => ({ ...prev, [columnId]: Math.min(Math.ceil(max) + 18, 640) }));
+  };
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const { data } = await (supabase as any).from('defect_items').select('*').eq('is_active', true).order('issue_no', { ascending: false }).limit(5000);
+      setLoading(true);
+      let allRows: DefectRawRow[] = [];
+      const pageSize = 1000;
+      let from = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const { data } = await (supabase as any)
+          .from('defect_items')
+          .select('*')
+          .eq('is_active', true)
+          .order('issue_no', { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (data?.length) {
+          allRows = allRows.concat(data as DefectRawRow[]);
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
       if (!cancelled) {
-        setItems(data ?? []);
+        setItems(allRows);
         setLoading(false);
       }
     }
@@ -31,30 +335,234 @@ export default function DefectRawDataPage() {
     return () => { cancelled = true; };
   }, []);
 
-  const filtered = useMemo(() => {
-    const text = query.trim().toLowerCase();
-    return items.filter((item) => {
-      const matchesQuery = !text || [item.issue_no, item.subcontractor_issue_no, item.subcontractor_issue_source, item.area_type, item.area_level, item.area_location, item.main_trade, item.sub_trade, item.description, item.subcontractor_name, item.subsub_name, item.hdec_pic_name]
-        .some((value) => String(value ?? '').toLowerCase().includes(text));
-      return matchesQuery
-        && (!params.get('team') || item.team === params.get('team'))
-        && (!params.get('subcontractor') || item.subcontractor_name === params.get('subcontractor'))
-        && (!params.get('subsub') || item.subsub_name === params.get('subsub'))
-        && (!params.get('hdecPic') || item.hdec_pic_name === params.get('hdecPic'))
-        && (!params.get('level') || item.area_level === params.get('level'))
-        && (!params.get('mainTrade') || item.main_trade === params.get('mainTrade'))
-        && (!params.get('subTrade') || item.sub_trade === params.get('subTrade'))
-        && (!params.get('dateStart') || (item.target_date ?? item.planned_date ?? '') >= params.get('dateStart')!)
-        && (!params.get('dateEnd') || (item.target_date ?? item.planned_date ?? '') <= params.get('dateEnd')!);
-    });
-  }, [items, query, params]);
+  useEffect(() => {
+    setStateLoaded(false);
+    let baseFilters: ColumnFiltersState = [];
+    let baseSorting: SortingState = DEFAULT_SORTING;
+    let baseGlobal = '';
+    let baseSizing: ColumnSizingState = {};
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        baseSorting = Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING;
+        baseFilters = Array.isArray(parsed.columnFilters) ? parsed.columnFilters : [];
+        baseGlobal = typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '';
+        baseSizing = parsed.columnSizing && typeof parsed.columnSizing === 'object' ? parsed.columnSizing : {};
+      }
+    } catch {
+      // ignore invalid saved state
+    }
 
-  const fields = sortFieldNames(RAW_FIELDS).filter(isFieldVisible);
-  const renderValue = (item: DefectItem, field: string) => {
-    if (field === 'closure_status') return <DefectStatusBadge status={item.closure_status ?? item.status} />;
-    if (field === 'actual_progress_pct') return formatPct(item.actual_progress_pct);
-    return String((item as any)[field] ?? '—');
+    const urlMap: Record<string, string> = {
+      team: 'team',
+      subcontractor: 'subcontractor_name',
+      subsub: 'subsub_name',
+      hdecPic: 'hdec_pic_name',
+      level: 'area_level',
+      mainTrade: 'main_trade',
+      subTrade: 'sub_trade',
+      status: 'status',
+      closureStatus: 'closure_status',
+      issueNo: 'issue_no',
+      subcontractorIssueNo: 'subcontractor_issue_no',
+    };
+    const hasUrlFilters = ['q', 'dateStart', 'dateEnd', 'dateField', ...Object.keys(urlMap)].some((key) => searchParams.has(key));
+    const nextFilters = hasUrlFilters ? [] : baseFilters.filter((filter) => !Object.values(urlMap).includes(filter.id));
+
+    for (const [param, col] of Object.entries(urlMap)) {
+      const value = searchParams.get(param);
+      if (!value) continue;
+      if (TEXT_FILTER_FIELDS.has(col)) nextFilters.push({ id: col, value: { text: value } });
+      else nextFilters.push({ id: col, value: [value] });
+    }
+
+    const dateStart = searchParams.get('dateStart');
+    const dateEnd = searchParams.get('dateEnd');
+    const urlDateField = searchParams.get('dateField');
+    if ((dateStart || dateEnd) && urlDateField && DATE_FILTER_FIELDS.has(urlDateField)) {
+      nextFilters.push({ id: urlDateField, value: { from: dateStart || undefined, to: dateEnd || undefined } });
+    }
+
+    const q = searchParams.get('q') ?? '';
+    setSorting(baseSorting);
+    setColumnFilters(nextFilters);
+    setGlobalFilter(hasUrlFilters ? q : baseGlobal);
+    setSearchInput(hasUrlFilters ? q : baseGlobal);
+    setColumnSizing(baseSizing);
+    setStateLoaded(true);
+  }, [storageKey, searchParams]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setGlobalFilter(searchInput), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    if (!stateLoaded) return;
+    const timer = window.setTimeout(() => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify({ sorting: sorting.length ? sorting : DEFAULT_SORTING, columnFilters, globalFilter, columnSizing }));
+      } catch {
+        // ignore quota errors
+      }
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter, columnSizing]);
+
+  useEffect(() => {
+    if (!stateLoaded) return;
+    const element = tableRef.current;
+    if (!element) return;
+    const raw = localStorage.getItem(`${storageKey}:scroll`);
+    if (raw) {
+      try {
+        const saved = JSON.parse(raw);
+        element.scrollTop = Number(saved.top) || 0;
+        element.scrollLeft = Number(saved.left) || 0;
+      } catch {
+        // ignore invalid saved scroll
+      }
+    }
+    const save = () => localStorage.setItem(`${storageKey}:scroll`, JSON.stringify({ top: element.scrollTop, left: element.scrollLeft }));
+    element.addEventListener('scroll', save, { passive: true });
+    return () => element.removeEventListener('scroll', save);
+  }, [stateLoaded, storageKey]);
+
+  const filteredBaseData = useMemo(() => {
+    const dateStart = searchParams.get('dateStart');
+    const dateEnd = searchParams.get('dateEnd');
+    const dateField = searchParams.get('dateField');
+    if ((!dateStart && !dateEnd) || (dateField && DATE_FILTER_FIELDS.has(dateField))) return items;
+    return items.filter((item) => {
+      const dateValue = item.target_date ?? item.planned_date ?? '';
+      return (!dateStart || dateValue >= dateStart) && (!dateEnd || dateValue <= dateEnd);
+    });
+  }, [items, searchParams]);
+
+  const optionFields = useMemo(() => ({
+    team: uniqueOptions(items, 'team'),
+    closure_status: uniqueOptions(items, 'closure_status'),
+    status: uniqueOptions(items, 'status'),
+    subcontractor_name: uniqueOptions(items, 'subcontractor_name'),
+    subsub_name: uniqueOptions(items, 'subsub_name'),
+    hdec_pic_name: uniqueOptions(items, 'hdec_pic_name'),
+    area_type: uniqueOptions(items, 'area_type'),
+    area_level: uniqueOptions(items, 'area_level'),
+    main_trade: uniqueOptions(items, 'main_trade'),
+    sub_trade: uniqueOptions(items, 'sub_trade'),
+    defect_type: uniqueOptions(items, 'defect_type'),
+    priority: uniqueOptions(items, 'priority'),
+  }), [items]);
+
+  const columns = useMemo<ColumnDef<DefectRawRow>[]>(() => DEFECT_RAW_FIELDS.map((field) => {
+    const sizeByField: Record<string, number> = {
+      issue_no: 120,
+      subcontractor_issue_no: 170,
+      closure_status: 130,
+      team: 80,
+      subcontractor_issue_source: 170,
+      description: 260,
+      area_location: 220,
+      remarks: 220,
+      hdec_comments: 220,
+      updated_at: 130,
+      created_at: 130,
+    };
+    const base: ColumnDef<DefectRawRow> = {
+      accessorKey: field,
+      header: getLabel(field),
+      size: sizeByField[field] ?? 130,
+      filterFn: DATE_FILTER_FIELDS.has(field) ? dateRangeFilterFn : PROGRESS_FIELD === field ? progressFilterFn : TEXT_FILTER_FIELDS.has(field) ? textFilterFn : multiSelectFilterFn,
+      meta: {
+        filterType: DATE_FILTER_FIELDS.has(field) ? 'date-range' : TEXT_FILTER_FIELDS.has(field) || PROGRESS_FIELD === field ? 'text' : 'multi-select',
+        filterOptions: (optionFields as any)[field] ?? [],
+      },
+      cell: ({ row, getValue }) => {
+        const value = getValue() as any;
+        if (field === 'closure_status') return <DefectStatusBadge status={row.original.closure_status ?? row.original.status} />;
+        if (field === 'status') return <DefectStatusBadge status={row.original.status} />;
+        if (field === 'actual_progress_pct') return formatPct(value);
+        if (DATE_FILTER_FIELDS.has(field)) return formatDdMmm(value ? String(value).slice(0, 10) : null);
+        const text = String(value ?? '—');
+        if (['description', 'area_location', 'remarks', 'hdec_comments'].includes(field)) return <span className="block truncate">{text}</span>;
+        return text;
+      },
+    };
+    return base;
+  }), [getLabel, optionFields]);
+
+  const columnVisibility = useMemo<VisibilityState>(() => {
+    const visibility: VisibilityState = {};
+    for (const field of DEFECT_RAW_FIELDS) visibility[field] = field === 'issue_no' ? true : isFieldVisible(field);
+    return visibility;
+  }, [isFieldVisible]);
+
+  const columnOrder = useMemo(() => {
+    const allIds = [...DEFECT_RAW_FIELDS] as string[];
+    const pinned = ['issue_no', 'subcontractor_issue_no', 'closure_status', 'team'].filter((id) => allIds.includes(id));
+    const remaining = allIds.filter((id) => !pinned.includes(id));
+    return [...pinned, ...sortFieldNames(remaining)];
+  }, [sortFieldNames]);
+
+  const table = useReactTable({
+    data: filteredBaseData,
+    columns,
+    state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder },
+    onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
+    onColumnFiltersChange: setColumnFilters,
+    onColumnSizingChange: setColumnSizing,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    globalFilterFn: globalDefectFilterFn,
+    enableMultiSort: true,
+    enableSortingRemoval: true,
+    isMultiSortEvent: (event) => (event as unknown as MouseEvent).shiftKey,
+    maxMultiSortColCount: 5,
+    enableColumnResizing: true,
+    columnResizeMode: 'onEnd',
+    defaultColumn: { minSize: 64, maxSize: 640 },
+  });
+
+  const activeUrlFilters = useMemo(() => {
+    const labels: Record<string, string> = {
+      q: 'Search',
+      team: 'Team',
+      subcontractor: 'Subcontractor',
+      subsub: 'Sub-Sub',
+      hdecPic: 'HDEC PIC',
+      level: 'Level',
+      mainTrade: 'Main Trade',
+      subTrade: 'Sub Trade',
+      status: 'Status',
+      closureStatus: 'Closure',
+      issueNo: 'Issue No',
+      subcontractorIssueNo: 'Subcontractor Issue No',
+    };
+    const out: { label: string; param: string; clears?: string[] }[] = [];
+    for (const [param, label] of Object.entries(labels)) {
+      const value = searchParams.get(param);
+      if (value) out.push({ label: `${label} ${value}`, param });
+    }
+    const from = searchParams.get('dateStart');
+    const to = searchParams.get('dateEnd');
+    if (from || to) {
+      const dateField = searchParams.get('dateField');
+      out.push({ label: `${dateField ? getLabel(dateField) : 'Date'} ${from || ''}${from && to ? ' → ' : ''}${to || ''}`, param: 'dateStart', clears: ['dateStart', 'dateEnd', 'dateField'] });
+    }
+    return out;
+  }, [searchParams, getLabel]);
+
+  const clearUrlFilter = (param: string, clears?: string[]) => {
+    const next = new URLSearchParams(searchParams);
+    for (const key of clears?.length ? clears : [param]) next.delete(key);
+    setSearchParams(next, { replace: true });
   };
+
+  const clearAllUrlFilters = () => setSearchParams(new URLSearchParams(), { replace: true });
+  const activeColumnFilterCount = columnFilters.length;
 
   return (
     <div className="space-y-4">
@@ -64,24 +572,174 @@ export default function DefectRawDataPage() {
           <p className="text-sm text-muted-foreground">Issue No and subcontractor issue tracking data.</p>
         </div>
         <div className="flex gap-2">
-          <Input placeholder="Search issue, subcontractor issue no..." value={query} onChange={(e) => setQuery(e.target.value)} className="w-80" />
-          <Button variant="outline" onClick={() => navigate('/defects/import')}>Import</Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/defects/import')}>
+            <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/defects/export')}>
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export
+          </Button>
         </div>
       </div>
-      {loading ? <div className="text-sm text-muted-foreground">Loading defects...</div> : (
-        <div className="overflow-auto rounded-md border">
-          <Table>
-            <TableHeader><TableRow>{fields.map((field) => <TableHead key={field}>{getLabel(field)}</TableHead>)}</TableRow></TableHeader>
-            <TableBody>
-              {filtered.map((item) => (
-                <TableRow key={item.id} className="cursor-pointer" onClick={() => navigate(`/defects/${item.id}`)}>
-                  {fields.map((field) => <TableCell key={field} className={field === 'issue_no' ? 'font-medium' : field === 'area_location' ? 'max-w-[220px] truncate' : ''}>{renderValue(item, field)}</TableCell>)}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+
+      {activeUrlFilters.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+          <span className="text-xs font-medium text-primary">Active URL filters:</span>
+          {activeUrlFilters.map((filter) => (
+            <button key={filter.param} onClick={() => clearUrlFilter(filter.param, filter.clears)} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary hover:bg-primary/20" title="Click to remove">
+              {filter.label} ✕
+            </button>
+          ))}
+          <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs" onClick={clearAllUrlFilters}>Clear all</Button>
         </div>
       )}
+
+      <div className="flex flex-wrap gap-3">
+        <div className="relative min-w-[220px] max-w-sm flex-1">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Search defects..." value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="h-9 pl-8" />
+        </div>
+        <span className="self-center text-sm text-muted-foreground">{table.getFilteredRowModel().rows.length} records</span>
+        {activeColumnFilterCount > 0 && (
+          <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setColumnFilters([])}>
+            <X className="mr-1 h-3 w-3" /> Clear filters ({activeColumnFilterCount})
+          </Button>
+        )}
+        {sorting.length > 0 && (
+          <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setSorting(DEFAULT_SORTING)}>
+            Clear sort ({sorting.length})
+          </Button>
+        )}
+        <span className="hidden self-center text-xs text-muted-foreground md:inline">
+          Tip: Shift+Click headers for multi-sort · Click <Filter className="inline h-3 w-3" /> to filter columns
+        </span>
+      </div>
+
+      <DefectRawTableView table={table} loading={loading} sorting={sorting.length ? sorting : DEFAULT_SORTING} autoSizeColumn={autoSizeColumn} navigate={navigate} tableRef={tableRef} />
+    </div>
+  );
+}
+
+interface DefectRawTableViewProps {
+  table: ReturnType<typeof useReactTable<DefectRawRow>>;
+  loading: boolean;
+  sorting: SortingState;
+  autoSizeColumn: (id: string) => void;
+  navigate: (path: string) => void;
+  tableRef: React.RefObject<HTMLDivElement>;
+}
+
+function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate, tableRef }: DefectRawTableViewProps) {
+  const isMobile = useIsMobile();
+  const frozenCount = isMobile ? 1 : 4;
+  const leafColumns = table.getVisibleLeafColumns();
+  const frozenColumns = useMemo(() => leafColumns.slice(0, frozenCount), [leafColumns, frozenCount]);
+  const scrollColumns = useMemo(() => leafColumns.slice(frozenCount), [leafColumns, frozenCount]);
+  const frozenWidth = useMemo(() => frozenColumns.reduce((sum, column) => sum + column.getSize(), 0), [frozenColumns, table.getState().columnSizing]);
+  const scrollWidth = useMemo(() => scrollColumns.reduce((sum, column) => sum + column.getSize(), 0), [scrollColumns, table.getState().columnSizing]);
+  const frozenPaneRef = useRef<HTMLDivElement>(null);
+  const rows = table.getRowModel().rows;
+  const rowVirtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => tableRef.current, estimateSize: () => 36, overscan: 12 });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const totalSize = rowVirtualizer.getTotalSize();
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const paddingBottom = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  const handleScroll = useCallback(() => {
+    if (frozenPaneRef.current && tableRef.current) frozenPaneRef.current.scrollTop = tableRef.current.scrollTop;
+  }, [tableRef]);
+
+  const handleFrozenWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    if (tableRef.current && event.deltaY !== 0) tableRef.current.scrollTop += event.deltaY;
+  }, [tableRef]);
+
+  const headerGroup = table.getHeaderGroups().at(-1);
+  const allHeaders = headerGroup?.headers ?? [];
+  const frozenHeaders = allHeaders.slice(0, frozenCount);
+  const scrollHeaders = allHeaders.slice(frozenCount);
+
+  const renderHeader = (header: any) => (
+    <TableHead
+      key={header.id}
+      data-column-id={header.column.id}
+      style={{ width: header.getSize() }}
+      className="relative cursor-pointer select-none whitespace-nowrap border-b bg-background text-xs font-medium"
+      onClick={header.column.getToggleSortingHandler()}
+    >
+      <span className="inline-flex items-center gap-1">
+        {flexRender(header.column.columnDef.header, header.getContext())}
+        {header.column.getIsSorted() && (
+          <span className="ml-0.5">
+            {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
+            {sorting.length > 1 && <sup className="ml-0.5 text-[9px] text-muted-foreground">{header.column.getSortIndex() + 1}</sup>}
+          </span>
+        )}
+        {header.column.getCanFilter() && <span onClick={(event) => event.stopPropagation()}><ColumnFilterDropdown column={header.column} /></span>}
+      </span>
+      {header.column.getCanResize() && (
+        <div
+          onMouseDown={header.getResizeHandler()}
+          onTouchStart={header.getResizeHandler()}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => { event.stopPropagation(); autoSizeColumn(header.column.id); }}
+          title="Drag to resize, double-click to auto-fit"
+          className={cn('absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40', header.column.getIsResizing() && 'bg-primary/60')}
+        />
+      )}
+    </TableHead>
+  );
+
+  const renderRowClass = (row: DefectRawRow, index: number) => {
+    const closed = Boolean(row.closed_date) || /closed|complete|done/i.test(`${row.closure_status ?? ''} ${row.status ?? ''}`);
+    const overdue = isOverdueDefect(row);
+    return cn('cursor-pointer', closed && 'bg-muted/30 text-muted-foreground', overdue && !closed && 'bg-destructive/5', hoveredIndex === index && 'bg-muted/50');
+  };
+
+  return (
+    <div className="flex max-h-[calc(100vh-220px)] overflow-hidden rounded-md border bg-background">
+      <div ref={frozenPaneRef} onWheel={handleFrozenWheel} className="overflow-hidden border-r border-border bg-background shadow-[2px_0_4px_-2px_hsl(var(--border))]" style={{ width: frozenWidth, flexShrink: 0 }}>
+        <Table style={{ width: frozenWidth, tableLayout: 'fixed' }}>
+          <TableHeader className="sticky top-0 z-20 bg-background"><TableRow className="border-b bg-background">{frozenHeaders.map(renderHeader)}</TableRow></TableHeader>
+          <TableBody>
+            {loading || rows.length === 0 ? <TableRow><TableCell colSpan={frozenColumns.length} className="py-8 text-center text-muted-foreground">&nbsp;</TableCell></TableRow> : (
+              <>
+                {paddingTop > 0 && <tr style={{ height: paddingTop }} aria-hidden><td colSpan={frozenColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
+                {virtualRows.map((virtualRow) => {
+                  const row = rows[virtualRow.index];
+                  return (
+                    <TableRow key={row.id} data-index={virtualRow.index} style={{ height: virtualRow.size }} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}`)}>
+                      {row.getVisibleCells().slice(0, frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize() }} className="truncate py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
+                    </TableRow>
+                  );
+                })}
+                {paddingBottom > 0 && <tr style={{ height: paddingBottom }} aria-hidden><td colSpan={frozenColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
+              </>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div ref={tableRef} onScroll={handleScroll} className="min-w-0 flex-1 overflow-auto">
+        <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
+          <TableHeader className="sticky top-0 z-20 bg-background"><TableRow className="border-b bg-background">{scrollHeaders.map(renderHeader)}</TableRow></TableHeader>
+          <TableBody>
+            {loading ? <TableRow><TableCell colSpan={scrollColumns.length} className="py-8 text-center text-muted-foreground">Loading...</TableCell></TableRow> : rows.length === 0 ? <TableRow><TableCell colSpan={scrollColumns.length} className="py-8 text-center text-muted-foreground">No defects found. Import data to get started.</TableCell></TableRow> : (
+              <>
+                {paddingTop > 0 && <tr style={{ height: paddingTop }} aria-hidden><td colSpan={scrollColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
+                {virtualRows.map((virtualRow) => {
+                  const row = rows[virtualRow.index];
+                  return (
+                    <TableRow key={row.id} data-index={virtualRow.index} ref={(element) => element && rowVirtualizer.measureElement(element)} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}`)}>
+                      {row.getVisibleCells().slice(frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize() }} className="truncate py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
+                    </TableRow>
+                  );
+                })}
+                {paddingBottom > 0 && <tr style={{ height: paddingBottom }} aria-hidden><td colSpan={scrollColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
+              </>
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
