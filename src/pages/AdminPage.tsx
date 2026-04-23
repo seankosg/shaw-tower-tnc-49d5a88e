@@ -393,19 +393,19 @@ function UsersTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Login ID</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Team</TableHead>
-                <TableHead>Linked Master</TableHead>
-                <TableHead>Owner Code</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Active</TableHead>
+                <SortableHead field="login_id" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Login ID</SortableHead>
+                <SortableHead field="name" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Name</SortableHead>
+                <SortableHead field="user_type" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Type</SortableHead>
+                <SortableHead field="team" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Team</SortableHead>
+                <SortableHead field="linked" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Linked Master</SortableHead>
+                <SortableHead field="owner_code" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Owner Code</SortableHead>
+                <SortableHead field="role" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Role</SortableHead>
+                <SortableHead field="is_active" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Active</SortableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {profiles.map(p => {
+              {sortedProfiles.map(p => {
                 const role = getUserRole(p.user_id);
                 const linked =
                   p.user_type === 'subcontractor' ? p.subcontractor_name :
