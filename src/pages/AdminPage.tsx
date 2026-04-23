@@ -80,7 +80,7 @@ function compareSortValues(a: string | number | boolean | null | undefined, b: s
   return collator.compare(String(a), String(b));
 }
 
-
+export default function AdminPage() {
   const { isAdminOrSuperuser } = useAuth();
   const isDev = import.meta.env.DEV;
   const hasAccess = isDev || isAdminOrSuperuser;
