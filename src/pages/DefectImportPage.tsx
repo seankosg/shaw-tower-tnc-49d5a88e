@@ -168,6 +168,124 @@ function reserveSubcontractorIssueNo(row: ParsedDefectRow, projectId: string | n
   return { subcontractor_issue_no: generated, subcontractor_issue_source: 'auto_generated', duplicate: false };
 }
 
+// Natural sort collator for Issue No (handles numeric segments correctly: 2 < 10, D-2 < D-10)
+const issueNoCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+export function compareIssueNoAsc(a: string | null | undefined, b: string | null | undefined): number {
+  const aStr = String(a ?? '').trim();
+  const bStr = String(b ?? '').trim();
+  // Empty values sort to the end
+  if (!aStr && !bStr) return 0;
+  if (!aStr) return 1;
+  if (!bStr) return -1;
+  return issueNoCollator.compare(aStr, bStr);
+}
+
+/**
+ * Detects whether the imported rows are predominantly sorted ascending or descending by issue_no.
+ * Compares adjacent non-empty issue_no pairs and returns the majority direction.
+ */
+export function detectIssueNoSortDirection(rows: Pick<ParsedDefectRow, 'issue_no'>[]): 'asc' | 'desc' {
+  const issueNos = rows.map((row) => String(row.issue_no ?? '').trim()).filter((value) => value.length > 0);
+  if (issueNos.length < 2) return 'asc';
+  let asc = 0;
+  let desc = 0;
+  for (let i = 1; i < issueNos.length; i++) {
+    const cmp = issueNoCollator.compare(issueNos[i - 1], issueNos[i]);
+    if (cmp < 0) asc++;
+    else if (cmp > 0) desc++;
+  }
+  return desc > asc ? 'desc' : 'asc';
+}
+
+export interface IssueAssignment {
+  subcontractor_issue_no: string | null;
+  subcontractor_issue_source: string | null;
+  duplicate: boolean;
+}
+
+/**
+ * Pre-computes Subcontractor Issue No assignments for a list of rows so that auto-generated
+ * sequences increase in the same visual direction as the imported Issue No order.
+ *
+ * Rules:
+ * - Existing defect's subcontractor_issue_no is preserved.
+ * - Imported subcontractor_issue_no is preserved (or marked duplicate if it collides).
+ * - Auto-generated rows are assigned by sorting Issue No in the detected direction first,
+ *   so the first row of that sorted set gets the lowest available SEQ per owner code.
+ * - Per-owner-code sequencing is preserved.
+ *
+ * Returns a Map keyed by ParsedDefectRow.rawRowNo.
+ */
+export function buildSubcontractorIssueAssignments(
+  rows: ParsedDefectRow[],
+  projectId: string | null,
+  registry: IssueRegistry,
+  existingByIssueNo: Map<string, { subcontractor_issue_no?: string | null; subcontractor_issue_source?: string | null }>,
+): Map<number, IssueAssignment> {
+  const assignments = new Map<number, IssueAssignment>();
+
+  // Pass 1: handle rows that already have a fixed value (existing DB or imported value).
+  // Also collect rows that need auto-generation.
+  const autoGenRows: ParsedDefectRow[] = [];
+  for (const row of rows) {
+    if (!row.issue_no) continue;
+    const existing = existingByIssueNo.get(row.issue_no);
+    if (existing?.subcontractor_issue_no) {
+      assignments.set(row.rawRowNo, {
+        subcontractor_issue_no: normalizeSubcontractorIssueNo(existing.subcontractor_issue_no),
+        subcontractor_issue_source: existing.subcontractor_issue_source ?? null,
+        duplicate: false,
+      });
+      continue;
+    }
+    const imported = normalizeSubcontractorIssueNo(row.subcontractor_issue_no);
+    if (imported) {
+      const key = issueKey(projectId, imported);
+      const duplicate = !!key && (registry.existingKeys.has(key) || registry.reservedKeys.has(key));
+      if (!duplicate && key) registry.reservedKeys.add(key);
+      assignments.set(row.rawRowNo, {
+        subcontractor_issue_no: imported,
+        subcontractor_issue_source: 'imported',
+        duplicate,
+      });
+      continue;
+    }
+    autoGenRows.push(row);
+  }
+
+  // Pass 2: sort auto-gen rows by Issue No in the detected direction, then assign SEQ per owner code.
+  // This way the row that appears first visually in the import (e.g., the highest Issue No when desc)
+  // receives the lowest available SEQ.
+  const direction = detectIssueNoSortDirection(rows);
+  const sortedAutoGen = [...autoGenRows].sort((a, b) =>
+    direction === 'desc'
+      ? compareIssueNoAsc(b.issue_no, a.issue_no)
+      : compareIssueNoAsc(a.issue_no, b.issue_no),
+  );
+
+  for (const row of sortedAutoGen) {
+    const ownerCode = resolveOwnerCode(row, registry.masters) || suggestOwnerCode(row.subsub_name ?? row.subcontractor_name ?? row.team);
+    let sequence = registry.nextSeqByOwner.get(ownerCode) ?? 1;
+    let generated = generateSubcontractorIssueNo(ownerCode, sequence);
+    let key = issueKey(projectId, generated)!;
+    while (registry.existingKeys.has(key) || registry.reservedKeys.has(key)) {
+      sequence += 1;
+      generated = generateSubcontractorIssueNo(ownerCode, sequence);
+      key = issueKey(projectId, generated)!;
+    }
+    registry.reservedKeys.add(key);
+    registry.nextSeqByOwner.set(ownerCode, sequence + 1);
+    assignments.set(row.rawRowNo, {
+      subcontractor_issue_no: generated,
+      subcontractor_issue_source: 'auto_generated',
+      duplicate: false,
+    });
+  }
+
+  return assignments;
+}
+
 export default function DefectImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
