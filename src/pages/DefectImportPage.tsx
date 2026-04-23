@@ -6,14 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
 import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
-import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
+import { normalizeTeamValue, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 
 const trackedFields = ['planned_date', 'target_date', 'closed_date', 'actual_progress_pct', 'closure_status'] as const;
@@ -31,8 +30,7 @@ interface DefectImportFile {
   error?: string;
   headerCount?: number;
   dataDate?: string;
-  team?: TeamType;
-  result?: { inserted: number; updated: number; skipped: number; rejected: number };
+  result?: { inserted: number; updated: number; skipped: number; rejected: number; teamUnresolved: number };
 }
 
 type SimilarDecisionAction = 'use_existing' | 'register_new';
@@ -69,6 +67,37 @@ function changed(a: unknown, b: unknown) {
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+type ProfileTeamMap = Map<string, TeamType>;
+
+async function buildProfileTeamMap(): Promise<ProfileTeamMap> {
+  const { data } = await (supabase as any)
+    .from('profiles')
+    .select('subcontractor_name, subsub_name, team')
+    .eq('is_active', true);
+  const buckets = new Map<string, Set<TeamType>>();
+
+  for (const profile of data ?? []) {
+    const team = normalizeTeamValue(profile.team);
+    if (!team) continue;
+    for (const name of [profile.subcontractor_name, profile.subsub_name]) {
+      const key = masterNameKey(name);
+      if (!key) continue;
+      if (!buckets.has(key)) buckets.set(key, new Set<TeamType>());
+      buckets.get(key)!.add(team);
+    }
+  }
+
+  return new Map([...buckets.entries()].filter(([, teams]) => teams.size === 1).map(([key, teams]) => [key, [...teams][0]]));
+}
+
+function resolveDefectTeam(row: ParsedDefectRow, profileTeamMap: ProfileTeamMap): TeamType | null {
+  return normalizeTeamValue(row.trade_detail)
+    ?? normalizeTeamValue(row.team)
+    ?? profileTeamMap.get(masterNameKey(row.subcontractor_name))
+    ?? profileTeamMap.get(masterNameKey(row.subsub_name))
+    ?? null;
 }
 
 export default function DefectImportPage() {
@@ -126,8 +155,7 @@ export default function DefectImportPage() {
   const removeFile = (id: string) => setFiles((current) => current.filter((file) => file.id !== id));
   const clearAll = () => setFiles([]);
   const setFileDataDate = (id: string, dataDate: string) => setFiles((current) => current.map((file) => file.id === id ? { ...file, dataDate } : file));
-  const setFileTeam = (id: string, team: TeamType) => setFiles((current) => current.map((file) => file.id === id ? { ...file, team } : file));
-  const readyCount = files.filter((file) => file.status === 'ready' && file.team).length;
+  const readyCount = files.filter((file) => file.status === 'ready').length;
   const hasResults = files.some((file) => file.result);
   const totals = files.reduce((acc, file) => {
     if (file.result) {
@@ -135,9 +163,10 @@ export default function DefectImportPage() {
       acc.updated += file.result.updated;
       acc.skipped += file.result.skipped;
       acc.rejected += file.result.rejected;
+      acc.teamUnresolved += file.result.teamUnresolved;
     }
     return acc;
-  }, { inserted: 0, updated: 0, skipped: 0, rejected: 0 });
+  }, { inserted: 0, updated: 0, skipped: 0, rejected: 0, teamUnresolved: 0 });
 
   const applyMasterDecisions = (row: ParsedDefectRow, decisions: MasterNameDecisions): ParsedDefectRow => {
     const subKey = `sub:${masterNameKey(row.subcontractor_name)}`;
@@ -209,8 +238,9 @@ export default function DefectImportPage() {
   };
 
   const importOneFile = async (item: DefectImportFile, decisions: MasterNameDecisions) => {
-    if (!user || !item.parsed) return { inserted: 0, updated: 0, skipped: 0, rejected: 0 };
+    if (!user || !item.parsed) return { inserted: 0, updated: 0, skipped: 0, rejected: 0, teamUnresolved: 0 };
     const dataDate = item.dataDate || todayIso();
+    const profileTeamMap = await buildProfileTeamMap();
     const masterEnsurer = await createDefectMasterEnsurer(supabase as any);
     const batchRes = await (supabase as any).from('defect_upload_batches').insert({ uploaded_file_name: item.name, uploaded_by: user.id, status: 'processing', total_rows: item.parsed.length, data_date: dataDate }).select('id').single();
     const uploadId = batchRes.data?.id;
@@ -218,6 +248,7 @@ export default function DefectImportPage() {
     let updatedCount = 0;
     let skipped = 0;
     let rejected = 0;
+    let teamUnresolved = 0;
 
     for (let index = 0; index < item.parsed.length; index++) {
       const row = applyMasterDecisions(item.parsed[index], decisions);
@@ -232,13 +263,16 @@ export default function DefectImportPage() {
 
       const existingRes = await (supabase as any).from('defect_items').select('*').eq('issue_no', row.issue_no).maybeSingle();
       const existing = existingRes.data;
-      const payload = { ...row, team: item.team || row.team || null, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
+      const resolvedTeam = resolveDefectTeam(row, profileTeamMap);
+      const logReason = resolvedTeam ? {} : { reason_code: 'team_unresolved', reason_detail: 'Team could not be resolved from Field Discipline or User Management profile.' };
+      if (!resolvedTeam) teamUnresolved++;
+      const payload = { ...row, team: resolvedTeam, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
 
       if (existing) {
         const hasAnyChange = Object.entries(payload).some(([key, value]) => key !== 'raw_payload' && key !== 'row_version' && key !== 'updated_by' && key !== 'source_upload_id' && changed(existing[key], value));
         if (!hasAnyChange) {
           skipped++;
-          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'skipped' });
+          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'skipped', ...logReason });
           continue;
         }
         await (supabase as any).from('defect_items').update(payload).eq('id', existing.id);
@@ -256,11 +290,11 @@ export default function DefectImportPage() {
           }
         }
         updatedCount++;
-        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated' });
+        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', ...logReason });
       } else {
         const inserted = await (supabase as any).from('defect_items').insert(payload).select('id').single();
         insertedCount++;
-        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'inserted' });
+        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'inserted', ...logReason });
         if (inserted.data?.id) await (supabase as any).from('defect_daily_snapshots').insert({ defect_id: inserted.data.id, issue_no: row.issue_no, snapshot_date: dataDate, planned_date: row.planned_date, actual_progress_pct: row.actual_progress_pct, closure_status: row.closure_status, closed_date: row.closed_date, created_by: user.id });
       }
     }
@@ -273,7 +307,7 @@ export default function DefectImportPage() {
         variant: 'destructive',
       });
     }
-    return { inserted: insertedCount, updated: updatedCount, skipped, rejected };
+    return { inserted: insertedCount, updated: updatedCount, skipped, rejected, teamUnresolved };
   };
 
   const runImport = async (items: DefectImportFile[], decisions: MasterNameDecisions) => {
@@ -292,7 +326,7 @@ export default function DefectImportPage() {
   };
 
   const startImport = async () => {
-    const readyFiles = files.filter((file) => file.status === 'ready' && file.team);
+    const readyFiles = files.filter((file) => file.status === 'ready');
     setIsRunning(true);
     try {
       const decisions = await preflightSimilarMasterDecisions(readyFiles);
@@ -386,7 +420,7 @@ export default function DefectImportPage() {
                       {file.headerCount != null && ` · ${file.headerCount} headers`}
                       {file.parsedCount > 0 && ` · ${file.parsedCount} rows`}
                       {file.error && <span className="text-destructive"> · {file.error}</span>}
-                      {file.result && <span className="ml-1">· {file.result.inserted} ins, {file.result.updated} upd, {file.result.skipped} skp, {file.result.rejected} rej</span>}
+                      {file.result && <span className="ml-1">· {file.result.inserted} ins, {file.result.updated} upd, {file.result.skipped} skp, {file.result.rejected} rej{file.result.teamUnresolved > 0 ? ` · ${file.result.teamUnresolved} team unresolved` : ''}</span>}
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
                       <span className="whitespace-nowrap text-xs text-muted-foreground">Data Date:</span>
@@ -397,24 +431,7 @@ export default function DefectImportPage() {
                         disabled={isRunning || file.status === 'done' || file.status === 'failed'}
                         className="h-7 w-[150px] text-xs"
                       />
-                      <span className="whitespace-nowrap text-xs text-muted-foreground">Team:</span>
-                      <Select
-                        value={file.team || ''}
-                        onValueChange={(value) => setFileTeam(file.id, value as TeamType)}
-                        disabled={isRunning || file.status === 'done' || file.status === 'failed'}
-                      >
-                        <SelectTrigger className="h-7 w-[140px] text-xs">
-                          <SelectValue placeholder="Select team" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ALL_TEAMS.map((team) => (
-                            <SelectItem key={team} value={team}>{TEAM_LABELS[team]}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {file.status === 'ready' && !file.team && (
-                        <span className="text-xs text-destructive">Team is required before import.</span>
-                      )}
+                      <span className="text-xs text-muted-foreground">Team will be resolved from Field Discipline.</span>
                     </div>
                     {file.parsed?.some((row) => !row.issue_no) && (
                       <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-border bg-muted px-2 py-1.5">
@@ -450,11 +467,12 @@ export default function DefectImportPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid gap-4 sm:grid-cols-5">
               <SummaryBox label="Inserted" value={totals.inserted} />
               <SummaryBox label="Updated" value={totals.updated} />
               <SummaryBox label="Skipped" value={totals.skipped} />
               <SummaryBox label="Rejected" value={totals.rejected} />
+              <SummaryBox label="Team Unresolved" value={totals.teamUnresolved} />
             </div>
           </CardContent>
         </Card>

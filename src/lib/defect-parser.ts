@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { TeamType } from '@/types/enums';
+import { normalizeTeamValue, type TeamType } from '@/types/enums';
 
 export type DefectFieldOrigin = 'll_original' | 'hdec_added' | 'system' | 'derived';
 
@@ -138,13 +138,7 @@ export function parseArea(area: string | null): Pick<ParsedDefectRow, 'area_type
 }
 
 function normalizeTeam(value: unknown): TeamType | null {
-  const text = toText(value)?.toLowerCase();
-  if (!text) return null;
-  if (text.startsWith('mech')) return 'Mech';
-  if (text.startsWith('elec')) return 'Elec';
-  if (text.startsWith('arch')) return 'Arch';
-  if (text.startsWith('supp')) return 'Supp';
-  return null;
+  return normalizeTeamValue(value);
 }
 
 function getMapped(row: Record<string, unknown>, field: string): unknown {
