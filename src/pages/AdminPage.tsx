@@ -268,7 +268,8 @@ function UsersTab() {
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => {
             import('xlsx-js-style').then(XLSX => {
-              const headers = ['Login ID', 'Name', 'User Type', 'Team', 'Linked Master', 'Role', 'Active'];
+              const allMasters = [...subcons, ...subsubs];
+              const headers = ['Login ID', 'Name', 'User Type', 'Team', 'Linked Master', 'Owner Code', 'Role', 'Active'];
               const rows = profiles.map(p => [
                 p.login_id ?? '',
                 p.name ?? '',
@@ -277,6 +278,7 @@ function UsersTab() {
                 p.user_type === 'subcontractor' ? (p.subcontractor_name ?? '') :
                   p.user_type === 'subsub' ? (p.subcontractor_name ?? '') :
                   (p.user_type === 'hdec' || p.user_type === 'pm_pd') ? (p.hdec_pic_name ?? '') : '',
+                getLinkedOwnerCode(p, allMasters) ?? '',
                 ROLE_LABELS[getUserRole(p.user_id) as AppRole] ?? '',
                 p.is_active ? 'Yes' : 'No',
               ]);
@@ -371,6 +373,7 @@ function UsersTab() {
                 <TableHead>Type</TableHead>
                 <TableHead>Team</TableHead>
                 <TableHead>Linked Master</TableHead>
+                <TableHead>Owner Code</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Active</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -383,6 +386,7 @@ function UsersTab() {
                   p.user_type === 'subcontractor' ? p.subcontractor_name :
                   p.user_type === 'subsub' ? p.subcontractor_name :
                   p.user_type === 'hdec' || p.user_type === 'pm_pd' ? p.hdec_pic_name : null;
+                const ownerCode = getLinkedOwnerCode(p, [...subcons, ...subsubs]);
                 return (
                   <TableRow key={p.id}>
                     <TableCell className="font-mono text-xs">
@@ -398,6 +402,7 @@ function UsersTab() {
                     <TableCell><Badge variant="outline" className="text-xs">{USER_TYPE_LABELS[p.user_type]}</Badge></TableCell>
                     <TableCell className="text-xs">{p.team ? TEAM_LABELS[p.team] : '—'}</TableCell>
                     <TableCell className="text-xs">{linked ?? '—'}</TableCell>
+                    <TableCell className="font-mono text-xs">{ownerCode ?? '—'}</TableCell>
                     <TableCell>
                       <Select value={role ?? ''} onValueChange={(v) => setUserRole(p.user_id, v as AppRole)}>
                         <SelectTrigger className="h-8 w-[140px]"><SelectValue placeholder="—" /></SelectTrigger>
