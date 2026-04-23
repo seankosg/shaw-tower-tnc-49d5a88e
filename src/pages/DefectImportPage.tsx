@@ -78,6 +78,9 @@ export default function DefectImportPage() {
   const { toast } = useToast();
   const [files, setFiles] = useState<DefectImportFile[]>([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [similarDecisions, setSimilarDecisions] = useState<SimilarMasterDecision[]>([]);
+  const [pendingImportFiles, setPendingImportFiles] = useState<DefectImportFile[] | null>(null);
+  const [confirmedDecisions, setConfirmedDecisions] = useState<MasterNameDecisions>({});
 
   const parseFiles = useCallback(async (selected: File[]) => {
     const excelFiles = selected.filter((file) => /\.(xlsx|xls)$/i.test(file.name));
@@ -135,6 +138,60 @@ export default function DefectImportPage() {
     }
     return acc;
   }, { inserted: 0, updated: 0, skipped: 0, rejected: 0 });
+
+  const applyMasterDecisions = (row: ParsedDefectRow, decisions: MasterNameDecisions): ParsedDefectRow => {
+    const subKey = `sub:${masterNameKey(row.subcontractor_name)}`;
+    const mappedSub = decisions[subKey]?.action === 'use_existing' ? decisions[subKey].existingName : row.subcontractor_name;
+    const subsubKey = `subsub:${masterNameKey(mappedSub)}::${masterNameKey(row.subsub_name)}`;
+    const mappedSubsub = decisions[subsubKey]?.action === 'use_existing' ? decisions[subsubKey].existingName : row.subsub_name;
+
+    return {
+      ...row,
+      subcontractor_name: mappedSub,
+      subsub_name: mappedSubsub,
+    };
+  };
+
+  const preflightSimilarMasterDecisions = async (items: DefectImportFile[]) => {
+    const { data } = await (supabase as any)
+      .from('subcontractor_master')
+      .select('id, name, type, parent_subcontractor_id');
+    const masters = (data ?? []) as Array<{ id: string; name: string; type: string; parent_subcontractor_id: string | null }>;
+    const subMasters = masters.filter((master) => (master.type ?? 'sub') === 'sub');
+    const subIdToName = new Map(subMasters.map((master) => [master.id, master.name]));
+    const exactSubs = new Set(subMasters.map((master) => masterNameKey(master.name)));
+    const subsubMasters = masters
+      .filter((master) => master.type === 'subsub')
+      .map((master) => ({ ...master, parentName: master.parent_subcontractor_id ? subIdToName.get(master.parent_subcontractor_id) ?? null : null }));
+    const exactSubsubs = new Set(subsubMasters.map((master) => `${masterNameKey(master.parentName)}::${masterNameKey(master.name)}`));
+    const decisions = new Map<string, SimilarMasterDecision>();
+
+    for (const item of items) {
+      for (const row of item.parsed ?? []) {
+        const subName = row.subcontractor_name?.trim();
+        if (subName && !exactSubs.has(masterNameKey(subName))) {
+          const key = `sub:${masterNameKey(subName)}`;
+          const match = findSimilarMasterName(subName, subMasters);
+          if (match && !decisions.has(key)) {
+            decisions.set(key, { key, kind: 'subcontractor', importedName: subName, existingName: match.candidate.name, score: match.score });
+          }
+        }
+
+        const parentName = (decisions.get(`sub:${masterNameKey(subName)}`)?.existingName ?? subName)?.trim();
+        const subsubName = row.subsub_name?.trim();
+        if (parentName && subsubName && !exactSubsubs.has(`${masterNameKey(parentName)}::${masterNameKey(subsubName)}`)) {
+          const key = `subsub:${masterNameKey(parentName)}::${masterNameKey(subsubName)}`;
+          const candidates = subsubMasters.filter((master) => masterNameKey(master.parentName) === masterNameKey(parentName));
+          const match = findSimilarMasterName(subsubName, candidates);
+          if (match && !decisions.has(key)) {
+            decisions.set(key, { key, kind: 'subsub', importedName: subsubName, existingName: match.candidate.name, parentName, score: match.score });
+          }
+        }
+      }
+    }
+
+    return [...decisions.values()];
+  };
 
   const importOneFile = async (item: DefectImportFile) => {
     if (!user || !item.parsed) return { inserted: 0, updated: 0, skipped: 0, rejected: 0 };
