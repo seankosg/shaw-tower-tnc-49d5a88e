@@ -311,6 +311,7 @@ export default function DefectImportPage() {
     const dataDate = item.dataDate || todayIso();
     const profileTeamMap = await buildProfileTeamMap();
     const masterEnsurer = await createDefectMasterEnsurer(supabase as any);
+    const issueRegistry = await buildIssueRegistry(null);
     const batchRes = await (supabase as any).from('defect_upload_batches').insert({ uploaded_file_name: item.name, uploaded_by: user.id, status: 'processing', total_rows: item.parsed.length, data_date: dataDate }).select('id').single();
     const uploadId = batchRes.data?.id;
     let insertedCount = 0;
@@ -332,11 +333,17 @@ export default function DefectImportPage() {
 
       const existingRes = await (supabase as any).from('defect_items').select('*').eq('issue_no', row.issue_no).maybeSingle();
       const existing = existingRes.data;
+      const issueAssignment = reserveSubcontractorIssueNo(row, existing?.project_id ?? row.project_id ?? null, issueRegistry, existing);
+      if (issueAssignment.duplicate) {
+        rejected++;
+        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `${issueAssignment.subcontractor_issue_no} already exists in this project.` });
+        continue;
+      }
       const resolvedTeam = resolveDefectTeam(row, profileTeamMap);
       const logReason = resolvedTeam ? {} : { reason_code: 'team_unresolved', reason_detail: 'Team could not be resolved from Field Discipline or User Management profile.' };
       if (!resolvedTeam) teamUnresolved++;
       const actualDate = Number(row.actual_progress_pct ?? 0) >= 100 ? (existing?.actual_date ?? dataDate) : null;
-      const payload = { ...row, actual_date: actualDate, team: resolvedTeam, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
+      const payload = { ...row, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_date: actualDate, team: resolvedTeam, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
 
       if (existing) {
         const hasAnyChange = Object.entries(payload).some(([key, value]) => key !== 'raw_payload' && key !== 'row_version' && key !== 'updated_by' && key !== 'source_upload_id' && changed(existing[key], value));
@@ -349,7 +356,7 @@ export default function DefectImportPage() {
         for (const field of trackedFields) {
           if (changed(existing[field], (row as any)[field])) {
             await (supabase as any).from('defect_schedule_change_audit').insert({
-              upload_id: uploadId, defect_id: existing.id, project_id: existing.project_id, issue_no: row.issue_no, subcontractor_issue_no: row.subcontractor_issue_no, raw_row_no: row.rawRowNo,
+              upload_id: uploadId, defect_id: existing.id, project_id: existing.project_id, issue_no: row.issue_no, subcontractor_issue_no: payload.subcontractor_issue_no, raw_row_no: row.rawRowNo,
               planned_old_date: field === 'planned_date' ? existing.planned_date : null, planned_new_date: field === 'planned_date' ? row.planned_date : null, planned_diff_days: field === 'planned_date' ? daysDiff(existing.planned_date, row.planned_date) : null,
               target_old_date: field === 'target_date' ? existing.target_date : null, target_new_date: field === 'target_date' ? row.target_date : null, target_diff_days: field === 'target_date' ? daysDiff(existing.target_date, row.target_date) : null,
               closed_old_date: field === 'closed_date' ? existing.closed_date : null, closed_new_date: field === 'closed_date' ? row.closed_date : null, closed_diff_days: field === 'closed_date' ? daysDiff(existing.closed_date, row.closed_date) : null,
