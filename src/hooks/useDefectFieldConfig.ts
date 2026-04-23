@@ -35,6 +35,7 @@ export const DEFECT_DEFAULT_FIELD_LABELS: Record<string, string> = {
   hdec_pic_name: 'HDEC PIC',
   planned_date: 'Planned Date',
   target_date: 'Target Date',
+  actual_date: 'Actual Date',
   closed_date: 'Closed Date',
   actual_progress_pct: 'Actual Progress %',
   closure_status: 'Closure Status',
