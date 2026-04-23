@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
+import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 
@@ -123,6 +124,7 @@ export default function DefectImportPage() {
   const importOneFile = async (item: DefectImportFile) => {
     if (!user || !item.parsed) return { inserted: 0, updated: 0, skipped: 0, rejected: 0 };
     const dataDate = item.dataDate || todayIso();
+    const masterEnsurer = await createDefectMasterEnsurer(supabase as any);
     const batchRes = await (supabase as any).from('defect_upload_batches').insert({ uploaded_file_name: item.name, uploaded_by: user.id, status: 'processing', total_rows: item.parsed.length, data_date: dataDate }).select('id').single();
     const uploadId = batchRes.data?.id;
     let insertedCount = 0;
@@ -138,6 +140,8 @@ export default function DefectImportPage() {
         await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, action_taken: 'rejected', reason_code: 'missing_issue_no', reason_detail: 'Issue No is required' });
         continue;
       }
+
+      await masterEnsurer.ensureForRow(row);
 
       const existingRes = await (supabase as any).from('defect_items').select('*').eq('issue_no', row.issue_no).maybeSingle();
       const existing = existingRes.data;
@@ -175,6 +179,13 @@ export default function DefectImportPage() {
     }
 
     await (supabase as any).from('defect_upload_batches').update({ status: 'completed', processed_rows: item.parsed.length, success_rows: insertedCount + updatedCount, skipped_rows: skipped, rejected_rows: rejected }).eq('id', uploadId);
+    if (masterEnsurer.warnings.length > 0) {
+      toast({
+        title: `${masterEnsurer.warnings.length} master user warning(s)`,
+        description: masterEnsurer.warnings.slice(0, 3).join('; ') + (masterEnsurer.warnings.length > 3 ? '...' : ''),
+        variant: 'destructive',
+      });
+    }
     return { inserted: insertedCount, updated: updatedCount, skipped, rejected };
   };
 
