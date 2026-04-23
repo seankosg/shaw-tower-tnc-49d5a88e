@@ -13,7 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { formatDdMmm, formatSignedDays } from '@/lib/format';
+import { formatDateTimeDdMmmYyyy, formatDdMmm, formatSignedDays } from '@/lib/format';
 
 interface UploadBatch {
   id: string;
@@ -214,7 +214,7 @@ export default function ImportLogsPage() {
                     <TableRow key={b.id} className="hover:bg-muted/50">
                       <TableCell className="text-xs font-medium cursor-pointer" onClick={() => selectBatch(b.id)}>{b.uploaded_file_name}</TableCell>
                       <TableCell className="text-xs capitalize cursor-pointer" onClick={() => selectBatch(b.id)}>{b.import_type || '—'}</TableCell>
-                      <TableCell className="text-xs cursor-pointer" onClick={() => selectBatch(b.id)}>{new Date(b.uploaded_at).toLocaleString()}</TableCell>
+                      <TableCell className="text-xs cursor-pointer" onClick={() => selectBatch(b.id)}>{formatDateTimeDdMmmYyyy(b.uploaded_at)}</TableCell>
                       <TableCell className="cursor-pointer" onClick={() => selectBatch(b.id)}>
                         <Badge variant="outline" className={`text-xs ${statusColor[b.status] || ''}`}>{b.status}</Badge>
                       </TableCell>

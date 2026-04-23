@@ -1775,7 +1775,7 @@ function AuditTab() {
               <TableBody>
                 {logs.map(l => (
                   <TableRow key={l.id}>
-                    <TableCell className="whitespace-nowrap text-xs">{new Date(l.changed_at).toLocaleString()}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs">{formatDateTimeDdMmmYyyy(l.changed_at)}</TableCell>
                     <TableCell className="font-mono text-xs">{l.changed_field}</TableCell>
                     <TableCell className="max-w-[120px] truncate text-xs">{l.old_value ?? '—'}</TableCell>
                     <TableCell className="max-w-[120px] truncate text-xs">{l.new_value ?? '—'}</TableCell>
@@ -1803,7 +1803,7 @@ function AuditTab() {
               <TableBody>
                 {uploads.map((u: any) => (
                   <TableRow key={u.id}>
-                    <TableCell className="whitespace-nowrap text-xs">{new Date(u.uploaded_at).toLocaleString()}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs">{formatDateTimeDdMmmYyyy(u.uploaded_at)}</TableCell>
                     <TableCell className="max-w-[160px] truncate text-xs">{u.uploaded_file_name}</TableCell>
                     <TableCell><Badge variant="outline" className="text-xs">{u.import_type ?? '—'}</Badge></TableCell>
                     <TableCell><Badge variant="secondary" className="text-xs">{u.status}</Badge></TableCell>
@@ -1992,7 +1992,7 @@ function BackupTab() {
               <TableBody>
                 {snapshots.map(s => (
                   <TableRow key={s.id}>
-                    <TableCell className="text-xs">{new Date(s.created_at).toLocaleString('ko-KR')}</TableCell>
+                    <TableCell className="text-xs">{formatDateTimeDdMmmYyyy(s.created_at)}</TableCell>
                     <TableCell>
                       <Badge variant={s.snapshot_type === 'auto' ? 'secondary' : 'outline'} className="text-xs">
                         {s.snapshot_type === 'auto' ? 'Auto' : 'Manual'}

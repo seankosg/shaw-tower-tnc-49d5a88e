@@ -242,6 +242,11 @@ function toDateInput(value: unknown) {
   return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
 }
 
+function formatMaybeDate(value: unknown) {
+  if (typeof value !== 'string') return value == null || value === '' ? '—' : String(value);
+  return /^\d{4}-\d{2}-\d{2}/.test(value) ? formatDdMmmYyyy(value) : (value || '—');
+}
+
 function parseProgress(value: unknown) {
   if (value == null || value === '') return null;
   const parsed = Number(String(value).replace('%', '').trim());
