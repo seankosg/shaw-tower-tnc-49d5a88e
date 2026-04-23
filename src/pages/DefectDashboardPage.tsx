@@ -247,13 +247,285 @@ function ClickNum({ value, onClick, hideZero = false }: { value: number; onClick
 function StageBadge({ stage, label }: { stage: string; label: string }) { const cls = stage === 'planned' ? 'bg-muted text-muted-foreground border-border' : stage === 'target' ? 'bg-primary/10 text-primary border-primary/30' : 'bg-destructive/10 text-destructive border-destructive/30'; return <span className={cn('inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold', cls)}>{label}</span>; }
 function FilterDropdown({ text, selected, options, onTextChange, onSelectedChange }: { text: string; selected: string[]; options: string[]; onTextChange: (v: string) => void; onSelectedChange: (v: string[]) => void }) { const toggle = (value: string) => onSelectedChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value]); return <Popover><PopoverTrigger asChild><button type="button" className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted/80" onClick={(e) => e.stopPropagation()}><Filter className="h-3.5 w-3.5" /></button></PopoverTrigger><PopoverContent className="w-64 p-3" align="start" onClick={(e) => e.stopPropagation()}><Input placeholder="Filter sub trades..." value={text} onChange={(e) => onTextChange(e.target.value)} className="mb-2 h-8 text-xs" /><button type="button" className="mb-2 text-[11px] text-muted-foreground hover:underline" onClick={() => { onTextChange(''); onSelectedChange([]); }}>Clear</button><div className="max-h-64 space-y-0.5 overflow-y-auto pr-1">{options.map(option => <label key={option} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50"><Checkbox checked={selected.includes(option)} onCheckedChange={() => toggle(option)} className="h-3.5 w-3.5" /><span className="min-w-0 truncate">{option}</span></label>)}</div></PopoverContent></Popover>; }
 
-function PlanActualTable({ rows, groupParam, groupHeader, today, dataDate, todayLabel, dataDateLabel, navigate, filter }: { rows: DefectPlanActualRow[]; groupParam: GroupParam; groupHeader: string; today: string; dataDate: string; todayLabel: string; dataDateLabel: string; navigate: (to: string) => void; filter?: { text: string; selected: string[]; options: string[]; onTextChange: (v: string) => void; onSelectedChange: (v: string[]) => void } }) {
-  const go = (groupKey: string, extra?: Record<string, string>) => { const params: Record<string, string> = { source: 'dashboard', ...extra }; if (groupKey && groupKey !== NONE_LABEL) params[groupParam] = groupKey; navigate(`/defects/raw-data?${new URLSearchParams(params).toString()}`); };
-  const totals = rows.reduce((acc, row) => { [row.planned, row.target, row.closure].forEach(m => { acc.stageTotal += row.totalDefects; acc.stageDone += m.cumActual; acc.cumPlan += m.cumPlan; acc.cumActual += m.cumActual; acc.dataDatePlan += m.dataDatePlan; acc.dataDateActual += m.dataDateActual; acc.dataDateDelay += m.dataDateDelay; acc.todayPlan += m.todayPlan; acc.todayActual += m.todayActual; acc.todayDelay += m.todayDelay; }); return acc; }, { stageTotal: 0, stageDone: 0, cumPlan: 0, cumActual: 0, dataDatePlan: 0, dataDateActual: 0, dataDateDelay: 0, todayPlan: 0, todayActual: 0, todayDelay: 0 });
-  const header = { ...totals, stageRemain: totals.stageTotal - totals.stageDone, cumDelta: totals.cumActual - totals.cumPlan, dataDateDelta: totals.dataDateActual - totals.dataDatePlan, todayDelta: totals.todayActual - totals.todayPlan };
-  const colgroup = <colgroup><col className="w-[210px]" /><col className="w-[86px]" /><col className="w-[58px]" /><col className="w-[58px]" /><col className="w-[64px]" />{Array.from({ length: 11 }).map((_, i) => <col key={i} className="w-[56px]" />)}<col className="w-[140px]" /></colgroup>;
-  const stageDefs = (row: DefectPlanActualRow) => [{ stage: 'planned', label: 'Planned', metrics: row.planned, planField: 'planned_date', actualField: 'actual_date', doneParam: 'actualComplete' }, { stage: 'target', label: 'Target', metrics: row.target, planField: 'target_date', actualField: 'actual_date', doneParam: 'actualComplete' }, { stage: 'closure', label: 'Closure', metrics: row.closure, planField: 'target_date', actualField: 'closed_date', doneParam: 'closureComplete' }];
-  return <div className="overflow-x-auto"><div className="min-w-[1270px]"><Table className="table-fixed">{colgroup}<TableHeader><TableRow><TableHead rowSpan={3} className="text-center align-middle"><div className="flex items-center justify-center gap-1.5"><span>{groupHeader}</span>{filter && <FilterDropdown {...filter} />}</div></TableHead><TableHead rowSpan={3} className="text-center align-middle">Stage</TableHead><TableHead className="text-center align-bottom">Total</TableHead><TableHead className="text-center align-bottom">Done</TableHead><TableHead className="border-r border-border text-center align-bottom">Remain</TableHead><TableHead colSpan={3} className="border-l border-border bg-muted/30 text-center">To Data Date (Cumulative)</TableHead><TableHead colSpan={4} className="border-l border-border bg-muted/30 text-center">Data Date ({dataDateLabel})</TableHead><TableHead colSpan={4} className="border-l border-border bg-muted/30 text-center">Today ({todayLabel})</TableHead><TableHead rowSpan={3} className="w-[140px] border-l border-border text-center align-middle">Progress</TableHead></TableRow><TableRow><TableHead className="text-center text-[11px]">All</TableHead><TableHead className="text-center text-[11px]">Done</TableHead><TableHead className="border-r border-border text-center text-[11px]">Open</TableHead>{['Plan','Actual','Δ','Plan','Actual','Δ','Delay','Plan','Actual','Δ','Delay'].map((h, i) => <TableHead key={i} className={cn('text-center text-[11px]', [0,3,7].includes(i) && 'border-l border-border')}>{h}</TableHead>)}</TableRow><TableRow className="bg-muted/20"><TableHead className="text-center"><HeaderTotalNumber value={header.stageTotal} /></TableHead><TableHead className="text-center"><HeaderTotalNumber value={header.stageDone} tone="done" /></TableHead><TableHead className="border-r border-border text-center"><HeaderTotalNumber value={header.stageRemain} tone="remain" /></TableHead><TableHead className="border-l border-border text-center"><HeaderTotalNumber value={header.cumPlan} /></TableHead><TableHead className="text-center"><HeaderTotalNumber value={header.cumActual} /></TableHead><TableHead className="text-center"><VarianceCell value={header.cumDelta} /></TableHead><TableHead className="border-l border-border text-center"><HeaderTotalNumber value={header.dataDatePlan} /></TableHead><TableHead className="text-center"><HeaderTotalNumber value={header.dataDateActual} /></TableHead><TableHead className="text-center"><VarianceCell value={header.dataDateDelta} /></TableHead><TableHead className="text-center"><HeaderTotalNumber value={header.dataDateDelay} tone="delay" /></TableHead><TableHead className="border-l border-border text-center"><HeaderTotalNumber value={header.todayPlan} /></TableHead><TableHead className="text-center"><HeaderTotalNumber value={header.todayActual} /></TableHead><TableHead className="text-center"><VarianceCell value={header.todayDelta} /></TableHead><TableHead className="text-center"><HeaderTotalNumber value={header.todayDelay} tone="delay" /></TableHead></TableRow></TableHeader><TableBody>{rows.length === 0 ? <TableRow><TableCell colSpan={17} className="py-8 text-center text-sm text-muted-foreground">No data.</TableCell></TableRow> : rows.map((row, idx) => stageDefs(row).map((st, i) => { const m: DefectPlanActualMetrics = st.metrics; const pct = row.totalDefects ? Math.round((m.cumActual / row.totalDefects) * 100) : 0; const remain = row.totalDefects - m.cumActual; const cumD = m.cumActual - m.cumPlan; const dataD = m.dataDateActual - m.dataDatePlan; const todayD = m.todayActual - m.todayPlan; return <TableRow key={`${row.key}-${st.stage}`} className={cn('cursor-pointer', idx > 0 && i === 0 && 'border-t-2 border-t-border')} onClick={() => go(row.key)}>{i === 0 && <TableCell rowSpan={3} className="px-2 py-1.5 align-top font-medium">{row.label}</TableCell>}<TableCell className="bg-muted/10 px-2 py-1.5"><StageBadge stage={st.stage} label={st.label} /></TableCell><TableCell className="bg-muted/10 px-2 py-1.5 text-right text-xs">{row.totalDefects}</TableCell><TableCell className="bg-muted/10 px-2 py-1.5 text-right text-xs font-semibold text-primary">{m.cumActual}</TableCell><TableCell className="border-r border-border bg-muted/10 px-2 py-1.5 text-right text-xs font-semibold text-muted-foreground">{remain}</TableCell><TableCell className="border-l border-border px-2 py-1.5 text-right text-xs"><ClickNum value={m.cumPlan} onClick={() => go(row.key, { dateField: st.planField, dateEnd: dataDate })} /></TableCell><TableCell className="px-2 py-1.5 text-right text-xs"><ClickNum value={m.cumActual} onClick={() => go(row.key, { dateField: st.actualField, dateEnd: dataDate, [st.doneParam]: 'true' })} /></TableCell><TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={cumD} /></TableCell><TableCell className="border-l border-border px-2 py-1.5 text-right text-xs"><ClickNum value={m.dataDatePlan} onClick={() => go(row.key, { dateField: st.planField, dateStart: dataDate, dateEnd: dataDate })} /></TableCell><TableCell className="px-2 py-1.5 text-right text-xs"><ClickNum value={m.dataDateActual} onClick={() => go(row.key, { dateField: st.actualField, dateStart: dataDate, dateEnd: dataDate })} /></TableCell><TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={dataD} /></TableCell><TableCell className="px-2 py-1.5 text-right text-xs font-semibold text-destructive"><ClickNum value={m.dataDateDelay} hideZero onClick={() => go(row.key, { overdue: 'true', asOf: dataDate })} /></TableCell><TableCell className="border-l border-border px-2 py-1.5 text-right text-xs"><ClickNum value={m.todayPlan} onClick={() => go(row.key, { dateField: st.planField, dateStart: today, dateEnd: today })} /></TableCell><TableCell className="px-2 py-1.5 text-right text-xs"><ClickNum value={m.todayActual} onClick={() => go(row.key, { dateField: st.actualField, dateStart: today, dateEnd: today })} /></TableCell><TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={todayD} /></TableCell><TableCell className="px-2 py-1.5 text-right text-xs font-semibold text-destructive"><ClickNum value={m.todayDelay} hideZero onClick={() => go(row.key, { overdue: 'true', asOf: today })} /></TableCell><TableCell className="border-l border-border px-2 py-1.5"><div className="flex items-center gap-1.5"><Progress value={pct} className="h-1.5 flex-1" /><span className="w-9 text-right text-[10px] text-muted-foreground tabular-nums">{pct}%</span></div></TableCell></TableRow>; }))}</TableBody></Table></div></div>;
+function PlanActualTable({
+  rows,
+  groupParam,
+  groupHeader,
+  today,
+  dataDate,
+  todayLabel,
+  dataDateLabel,
+  navigate,
+  filter,
+}: {
+  rows: DefectPlanActualRow[];
+  groupParam: GroupParam;
+  groupHeader: string;
+  today: string;
+  dataDate: string;
+  todayLabel: string;
+  dataDateLabel: string;
+  navigate: (to: string) => void;
+  filter?: {
+    text: string;
+    selected: string[];
+    options: string[];
+    onTextChange: (v: string) => void;
+    onSelectedChange: (v: string[]) => void;
+  };
+}) {
+  const go = (groupKey: string, extra?: Record<string, string>) => {
+    const params: Record<string, string> = { source: 'dashboard', ...extra };
+    if (groupKey && groupKey !== NONE_LABEL) params[groupParam] = groupKey;
+    navigate(`/defects/raw-data?${new URLSearchParams(params).toString()}`);
+  };
+
+  const totals = rows.reduce(
+    (acc, row) => {
+      [row.planned, row.target, row.closure].forEach((metrics) => {
+        acc.stageTotal += row.totalDefects;
+        acc.stageDone += metrics.cumActual;
+        acc.cumPlan += metrics.cumPlan;
+        acc.cumActual += metrics.cumActual;
+        acc.dataDatePlan += metrics.dataDatePlan;
+        acc.dataDateActual += metrics.dataDateActual;
+        acc.dataDateDelay += metrics.dataDateDelay;
+        acc.todayPlan += metrics.todayPlan;
+        acc.todayActual += metrics.todayActual;
+        acc.todayDelay += metrics.todayDelay;
+      });
+      return acc;
+    },
+    {
+      stageTotal: 0,
+      stageDone: 0,
+      cumPlan: 0,
+      cumActual: 0,
+      dataDatePlan: 0,
+      dataDateActual: 0,
+      dataDateDelay: 0,
+      todayPlan: 0,
+      todayActual: 0,
+      todayDelay: 0,
+    },
+  );
+
+  const header = {
+    ...totals,
+    stageRemain: totals.stageTotal - totals.stageDone,
+    cumDelta: totals.cumActual - totals.cumPlan,
+    dataDateDelta: totals.dataDateActual - totals.dataDatePlan,
+    todayDelta: totals.todayActual - totals.todayPlan,
+  };
+
+  const colgroup = (
+    <colgroup>
+      <col className="w-[210px]" />
+      <col className="w-[86px]" />
+      <col className="w-[58px]" />
+      <col className="w-[58px]" />
+      <col className="w-[64px]" />
+      {Array.from({ length: 11 }).map((_, i) => (
+        <col key={i} className="w-[56px]" />
+      ))}
+      <col className="w-[140px]" />
+    </colgroup>
+  );
+
+  const stageDefs = (row: DefectPlanActualRow) => [
+    {
+      stage: 'planned',
+      label: 'Planned',
+      metrics: row.planned,
+      planField: 'planned_date',
+      actualField: 'actual_date',
+      doneParam: 'actualComplete',
+    },
+    {
+      stage: 'target',
+      label: 'Target',
+      metrics: row.target,
+      planField: 'target_date',
+      actualField: 'actual_date',
+      doneParam: 'actualComplete',
+    },
+    {
+      stage: 'closure',
+      label: 'Closure',
+      metrics: row.closure,
+      planField: 'target_date',
+      actualField: 'closed_date',
+      doneParam: 'closureComplete',
+    },
+  ];
+
+  const subheads = ['Plan', 'Actual', 'Δ', 'Plan', 'Actual', 'Δ', 'Delay', 'Plan', 'Actual', 'Δ', 'Delay'];
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-[1270px]">
+        <div className="rounded-t-md border border-b-0 bg-background">
+          <Table className="table-fixed">
+            {colgroup}
+            <TableHeader className="bg-background">
+              <TableRow className="hover:bg-transparent">
+                <TableHead rowSpan={3} className="h-8 text-center align-middle">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span>{groupHeader}</span>
+                    {filter && <FilterDropdown {...filter} />}
+                  </div>
+                </TableHead>
+                <TableHead rowSpan={3} className="h-8 text-center align-middle">
+                  Stage
+                </TableHead>
+                <TableHead className="h-8 text-center align-bottom">Total</TableHead>
+                <TableHead className="h-8 text-center align-bottom">Done</TableHead>
+                <TableHead className="h-8 border-r border-border text-center align-bottom">Remain</TableHead>
+                <TableHead colSpan={3} className="h-8 border-l border-border bg-muted/30 text-center">
+                  To Data Date (Cumulative)
+                </TableHead>
+                <TableHead colSpan={4} className="h-8 border-l border-border bg-muted/30 text-center">
+                  Data Date ({dataDateLabel})
+                </TableHead>
+                <TableHead colSpan={4} className="h-8 border-l border-border bg-muted/30 text-center">
+                  Today ({todayLabel})
+                </TableHead>
+                <TableHead rowSpan={3} className="h-8 border-l border-border text-center align-middle">
+                  Progress
+                </TableHead>
+              </TableRow>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="h-8 text-center text-[11px]">All</TableHead>
+                <TableHead className="h-8 text-center text-[11px]">Done</TableHead>
+                <TableHead className="h-8 border-r border-border text-center text-[11px]">Open</TableHead>
+                {subheads.map((label, i) => (
+                  <TableHead
+                    key={`${label}-${i}`}
+                    className={cn('h-8 text-center text-[11px]', [0, 3, 7].includes(i) && 'border-l border-border')}
+                  >
+                    {label}
+                  </TableHead>
+                ))}
+              </TableRow>
+              <TableRow className="bg-muted/20 hover:bg-muted/20">
+                <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={header.stageTotal} /></TableHead>
+                <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={header.stageDone} tone="done" /></TableHead>
+                <TableHead className="h-8 border-r border-border px-2 text-center"><HeaderTotalNumber value={header.stageRemain} tone="remain" /></TableHead>
+                <TableHead className="h-8 border-l border-border px-2 text-center"><HeaderTotalNumber value={header.cumPlan} /></TableHead>
+                <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={header.cumActual} /></TableHead>
+                <TableHead className="h-8 px-2 text-center"><VarianceCell value={header.cumDelta} /></TableHead>
+                <TableHead className="h-8 border-l border-border px-2 text-center"><HeaderTotalNumber value={header.dataDatePlan} /></TableHead>
+                <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={header.dataDateActual} /></TableHead>
+                <TableHead className="h-8 px-2 text-center"><VarianceCell value={header.dataDateDelta} /></TableHead>
+                <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={header.dataDateDelay} tone="delay" /></TableHead>
+                <TableHead className="h-8 border-l border-border px-2 text-center"><HeaderTotalNumber value={header.todayPlan} /></TableHead>
+                <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={header.todayActual} /></TableHead>
+                <TableHead className="h-8 px-2 text-center"><VarianceCell value={header.todayDelta} /></TableHead>
+                <TableHead className="h-8 px-2 text-center"><HeaderTotalNumber value={header.todayDelay} tone="delay" /></TableHead>
+              </TableRow>
+            </TableHeader>
+          </Table>
+        </div>
+
+        <div className="max-h-[440px] overflow-y-auto rounded-b-md border" style={{ scrollbarGutter: 'stable' }}>
+          <Table className="table-fixed">
+            {colgroup}
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={17} className="py-8 text-center text-sm text-muted-foreground">
+                    No data.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((row, rowIndex) =>
+                  stageDefs(row).map((stage, stageIndex) => {
+                    const metrics: DefectPlanActualMetrics = stage.metrics;
+                    const progress = row.totalDefects ? Math.round((metrics.cumActual / row.totalDefects) * 100) : 0;
+                    const remain = row.totalDefects - metrics.cumActual;
+                    const cumDelta = metrics.cumActual - metrics.cumPlan;
+                    const dataDateDelta = metrics.dataDateActual - metrics.dataDatePlan;
+                    const todayDelta = metrics.todayActual - metrics.todayPlan;
+
+                    return (
+                      <TableRow
+                        key={`${row.key}-${stage.stage}`}
+                        className={cn(
+                          'cursor-pointer hover:bg-muted/40',
+                          rowIndex > 0 && stageIndex === 0 && 'border-t-2 border-t-border',
+                        )}
+                        onClick={() => go(row.key)}
+                      >
+                        {stageIndex === 0 && (
+                          <TableCell rowSpan={3} className="px-2 py-2 align-top font-medium">
+                            <button
+                              type="button"
+                              className="max-w-full truncate text-left hover:underline"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                go(row.key);
+                              }}
+                            >
+                              {row.label}
+                            </button>
+                          </TableCell>
+                        )}
+                        <TableCell className="bg-muted/10 px-2 py-1.5">
+                          <StageBadge stage={stage.stage} label={stage.label} />
+                        </TableCell>
+                        <TableCell className="bg-muted/10 px-2 py-1.5 text-right text-xs tabular-nums">
+                          {row.totalDefects.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="bg-muted/10 px-2 py-1.5 text-right text-xs font-semibold text-primary tabular-nums">
+                          {metrics.cumActual.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="border-r border-border bg-muted/10 px-2 py-1.5 text-right text-xs font-semibold text-muted-foreground tabular-nums">
+                          {remain.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="border-l border-border px-2 py-1.5 text-right text-xs">
+                          <ClickNum value={metrics.cumPlan} onClick={() => go(row.key, { dateField: stage.planField, dateEnd: dataDate })} />
+                        </TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs">
+                          <ClickNum value={metrics.cumActual} onClick={() => go(row.key, { dateField: stage.actualField, dateEnd: dataDate, [stage.doneParam]: 'true' })} />
+                        </TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={cumDelta} /></TableCell>
+                        <TableCell className="border-l border-border px-2 py-1.5 text-right text-xs">
+                          <ClickNum value={metrics.dataDatePlan} onClick={() => go(row.key, { dateField: stage.planField, dateStart: dataDate, dateEnd: dataDate })} />
+                        </TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs">
+                          <ClickNum value={metrics.dataDateActual} onClick={() => go(row.key, { dateField: stage.actualField, dateStart: dataDate, dateEnd: dataDate, [stage.doneParam]: 'true' })} />
+                        </TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={dataDateDelta} /></TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs font-semibold text-destructive">
+                          <ClickNum value={metrics.dataDateDelay} hideZero onClick={() => go(row.key, { overdue: 'true', asOf: dataDate })} />
+                        </TableCell>
+                        <TableCell className="border-l border-border px-2 py-1.5 text-right text-xs">
+                          <ClickNum value={metrics.todayPlan} onClick={() => go(row.key, { dateField: stage.planField, dateStart: today, dateEnd: today })} />
+                        </TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs">
+                          <ClickNum value={metrics.todayActual} onClick={() => go(row.key, { dateField: stage.actualField, dateStart: today, dateEnd: today, [stage.doneParam]: 'true' })} />
+                        </TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={todayDelta} /></TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs font-semibold text-destructive">
+                          <ClickNum value={metrics.todayDelay} hideZero onClick={() => go(row.key, { overdue: 'true', asOf: today })} />
+                        </TableCell>
+                        <TableCell className="border-l border-border px-2 py-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <Progress value={progress} className="h-1.5 flex-1" />
+                            <span className="w-9 text-right text-[10px] text-muted-foreground tabular-nums">{progress}%</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }),
+                )
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function buildActualPie(items: DefectForDashboard[]) { const complete = items.filter(isActualComplete).length; const inProgress = items.filter(item => !isActualComplete(item) && Number(item.actual_progress_pct ?? 0) > 0).length; const notStarted = items.length - complete - inProgress; return [{ name: 'Complete', value: complete }, { name: 'In Progress', value: inProgress }, { name: 'Not Started', value: notStarted }].filter(item => item.value > 0); }
