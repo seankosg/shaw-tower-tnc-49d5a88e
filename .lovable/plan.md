@@ -1,255 +1,129 @@
 
-## 구현 계획: Defect Dashboard를 T&C Dashboard와 동일한 구조/UX로 개편
+## 구현 계획: Defect Dashboard Plan vs Actual table을 T&C Dashboard layout과 동일하게 재구성
 
-Defect Management Dashboard의 내용, UI, 로직을 T&C Management Dashboard와 최대한 동일하게 적용하되, Defect 데이터 구조에 맞춰 아래 기준으로 변환하겠습니다.
+현재 `DefectDashboardPage.tsx`의 `PlanActualTable`은 기능은 들어가 있지만, T&C Dashboard와 달리 header/body가 한 개 table 안에 압축되어 있어 긴 데이터에서 header 고정/스크롤 UX가 제대로 맞지 않습니다. T&C의 `PlanActualTable` 구조를 기준으로 Defect table을 재작성하겠습니다.
 
-## 확정 기준
+## 1. `PlanActualTable` 구조를 T&C 방식으로 분리
 
-사용자 답변 기준으로 Defect Dashboard의 T&C 대응 기준은 다음과 같이 적용합니다.
-
-```text
-T&C By System        → Defect By Sub Trade
-T&C Pred stage       → Defect Planned Date
-T&C T1 stage         → Defect Target Date
-T&C T2 stage         → Defect Closed Date
-
-Defect Actual        → actual_progress_pct = 100%
-Defect Closure       → closed_date가 있는 항목
-Data Date            → 최신 Defect import batch의 data_date
-```
-
-중요하게, Defect에서는 `Actual`과 `Closure`를 별개로 집계합니다.
+현재 구조:
 
 ```text
-Actual  = 작업 종료, actual_progress_pct = 100%
-Closure = Closed Date가 있는 항목
+overflow-x-auto
+  min-w-[1270px]
+    Table
+      TableHeader
+      TableBody
 ```
 
-## 1. DB schema 보강: `actual_date` 추가
-
-Defect Actual을 날짜별/누적 대시보드에서 정확히 집계하기 위해 `defect_items`에 신규 컬럼을 추가합니다.
+변경 구조:
 
 ```text
-defect_items.actual_date date null
+overflow-x-auto
+  min-w-[1270px]
+    header wrapper
+      Table
+        TableHeader
+    body wrapper max-h-[440px] overflow-y-auto
+      Table
+        TableBody
 ```
 
-용도:
+적용 포인트:
 
 ```text
-- actual_progress_pct가 100%가 된 날짜
-- Dashboard의 Actual 누적/일별 집계 기준 날짜
-- Raw Data / Detail / Export에서도 표시 가능
+- header table과 body table을 분리
+- 동일한 colgroup을 양쪽 table에 적용
+- body만 vertical scroll
+- horizontal scroll은 전체 wrapper가 담당
+- scrollbar-gutter: stable 적용
 ```
 
-기존 데이터 backfill 기준:
+이렇게 해서 T&C Dashboard처럼 table body가 길어져도 header가 고정된 것처럼 유지됩니다.
+
+## 2. T&C와 동일한 column width / min-width 유지
+
+Defect table도 T&C와 같은 17-column layout을 유지합니다.
 
 ```text
-actual_progress_pct >= 100 인 기존 항목:
-actual_date = coalesce(
-  actual_date,
-  closed_date,
-  updated_at::date
-)
+Group                 210px
+Stage                  86px
+Total                  58px
+Done                   58px
+Remain                 64px
+Plan/Actual/Δ/Delay    56px each
+Progress              140px
 ```
 
-신규 import/update 기준:
+최소 너비:
 
 ```text
-- Import 중 progress가 100%이고 actual_date가 비어 있으면 batch data_date를 actual_date로 저장
-- 기존 progress가 100 미만/null → 신규 progress가 100 이상으로 변경되면 batch data_date를 actual_date로 저장
-- progress가 100 미만으로 내려가면 actual_date는 null 처리
+min-w-[1270px]
 ```
 
-Manual Detail / Quick Update 기준:
+이 값은 T&C Dashboard와 동일하게 유지해 컬럼 정렬과 horizontal scroll behavior를 맞춥니다.
+
+## 3. Header 3-row 구성을 T&C와 동일하게 정리
+
+Defect table header를 다음 3단 구조로 유지하되, T&C와 동일한 spacing/class 구조로 정리합니다.
 
 ```text
-- progress가 100 이상으로 저장되고 actual_date가 비어 있으면 오늘 날짜로 저장
-- progress가 100 미만으로 변경되면 actual_date를 null 처리
+Row 1:
+Group | Stage | Total/Done/Remain | To Data Date | Data Date | Today | Progress
+
+Row 2:
+All | Done | Open | Plan | Actual | Δ | Plan | Actual | Δ | Delay | ...
+
+Row 3:
+Header totals
 ```
 
-## 2. Defect 타입/필드 설정 업데이트
-
-다음 파일/설정을 업데이트합니다.
+수정 사항:
 
 ```text
-src/lib/defect-utils.ts
-src/hooks/useDefectFieldConfig.ts
-Defect field config seed/migration
+- TableHeader에 bg-background 적용
+- total row에 h-8 / px-2 적용
+- muted total row hover 방지
+- border-l / border-r 위치를 T&C와 동일하게 맞춤
+- "Open" 표기는 T&C와 동일하게 유지하거나 Defect 의미상 "Remain"과 혼용되지 않도록 header만 정리
 ```
 
-추가 표시명:
+## 4. Body table을 T&C row rendering 방식으로 재작성
+
+현재 한 줄로 압축된 row rendering을 T&C처럼 읽기 쉬운 구조로 풀어 작성합니다.
+
+Defect stage mapping은 유지합니다.
 
 ```text
-actual_date → Actual Date
+Planned:
+- Plan: planned_date
+- Actual: actual_date
+- Done filter: actualComplete=true
+
+Target:
+- Plan: target_date
+- Actual: actual_date
+- Done filter: actualComplete=true
+
+Closure:
+- Plan: target_date
+- Actual: closed_date
+- Done filter: closureComplete=true
 ```
 
-Raw Data, Detail, Export에서 날짜 필드로 처리되도록 반영합니다.
+Row 구성:
 
 ```text
-DATE_FILTER_FIELDS에 actual_date 추가
-Export date field option에 Actual Date 추가
-Defect detail form에 Actual Date 표시
+- group rowSpan=3
+- Planned / Target / Closure stage rows
+- group 간 border-t-2
+- StageBadge 유지
+- summary cells는 bg-muted/10
+- Progress column은 bar + percent
 ```
 
-## 3. Defect Dashboard 전용 utility 추가
+## 5. Clickable drill-down 동작 유지 및 정리
 
-T&C Dashboard의 `dashboard-utils.ts`와 동일한 구조를 Defect용으로 만듭니다.
-
-예상 파일:
-
-```text
-src/lib/defect-dashboard-utils.ts
-```
-
-주요 타입:
-
-```text
-DefectForDashboard
-DefectPlanActualMetrics
-DefectPlanActualRow
-DefectSCurvePoint
-```
-
-Stage mapping:
-
-```text
-planned  = Planned Date stage
-target   = Target Date stage
-closure  = Closed Date stage
-```
-
-집계 로직:
-
-```text
-Planned Date stage:
-- Plan: planned_date 기준
-- Actual: actual_date 기준
-- Delay: planned_date <= Data Date 이고 actual_progress_pct < 100
-
-Target Date stage:
-- Plan: target_date 기준
-- Actual: actual_date 기준
-- Delay: target_date <= Data Date 이고 actual_progress_pct < 100
-
-Closed Date stage:
-- Plan: target_date 또는 planned_date 기준
-- Actual: closed_date 기준
-- Delay: target_date/planned_date <= Data Date 이고 closed_date 없음
-```
-
-이렇게 해서 `Actual`과 `Closure`를 분리합니다.
-
-```text
-Planned/Target stages의 Actual = progress 100% completion
-Closed stage의 Actual = closed_date completion
-```
-
-## 4. Defect Dashboard UI를 T&C Dashboard와 동일하게 재구성
-
-`src/pages/DefectDashboardPage.tsx`를 T&C Dashboard 구조로 개편합니다.
-
-적용 UI:
-
-```text
-- Page title/header
-- Team filter
-- At-Risk threshold text
-- Tier 1 KPI cards
-- Stage cards
-- Overdue / At-Risk alert banners
-- Plan vs Actual - Summary tabs
-- Plan vs Actual S-Curve chart
-- Top 10 Overdue table
-- Status Distribution pie chart
-```
-
-Defect용 label만 조정합니다.
-
-```text
-T&C Executive Dashboard → Defect Executive Dashboard
-Total Subtests          → Total Defects
-Done                    → Actual Complete
-Remaining               → Remaining
-Overdue Subtests        → Overdue Defects
-Top 10 Overdue Subtests → Top 10 Overdue Defects
-```
-
-Stage labels:
-
-```text
-Planned
-Target
-Closure
-```
-
-## 5. Plan vs Actual Summary tabs 구성
-
-T&C Dashboard의 tabs를 Defect 기준으로 동일하게 구성합니다.
-
-```text
-By Sub Trade
-By Subcontractor
-By Sub-Sub
-By HDEC PIC
-By Team
-```
-
-`By Sub Trade`가 T&C의 `By System` 역할을 합니다.
-
-테이블 컬럼 구조는 T&C와 동일하게 유지합니다.
-
-```text
-Group
-Stage
-Total / Done / Remain
-To Data Date (Cumulative): Plan / Actual / Δ
-Data Date: Plan / Actual / Δ / Delay
-Today: Plan / Actual / Δ / Delay
-Progress
-```
-
-단, Defect 의미는 다음과 같이 적용합니다.
-
-```text
-Done:
-- Planned/Target stage: actual_progress_pct = 100 and actual_date counted
-- Closure stage: closed_date counted
-
-Progress:
-- Planned/Target stage: actual_date 기준 완료율
-- Closure stage: closed_date 기준 완료율
-```
-
-## 6. S-Curve Chart를 T&C와 같은 형태로 적용
-
-T&C의 composed chart 구조를 Defect Dashboard에도 적용합니다.
-
-구성:
-
-```text
-- cumulative line: Planned Plan / Planned Actual
-- cumulative line: Target Plan / Target Actual
-- cumulative line: Closure Plan / Closure Actual
-- stacked bar: daily/weekly met, shortfall, excess, future plan
-- Daily / Weekly toggle
-- date range picker
-- Today reference line
-```
-
-Defect에 맞춰 chart legend는 다음처럼 표시합니다.
-
-```text
-Planned Plan (cum)
-Planned Actual (cum)
-Target Plan (cum)
-Target Actual (cum)
-Closure Plan (cum)
-Closure Actual (cum)
-```
-
-## 7. Dashboard drill-down navigation
-
-T&C Dashboard처럼 숫자/행 클릭 시 Raw Data로 이동하도록 구성합니다.
+기존 Defect table의 클릭 이동은 유지합니다.
 
 대상:
 
@@ -257,178 +131,104 @@ T&C Dashboard처럼 숫자/행 클릭 시 Raw Data로 이동하도록 구성합�
 /defects/raw-data
 ```
 
-Query param mapping:
+유지할 query behavior:
 
 ```text
-team        → team
-subTrade    → sub_trade
-subcontractor → subcontractor_name
-subsub      → subsub_name
-hdecPic     → hdec_pic_name
-dateStart/dateEnd/dateField
-progress/status/closureStatus 관련 filter
+group filter:
+- subTrade
+- subcontractor
+- subsub
+- hdecPic
+- team
+
+date filters:
+- dateField
+- dateStart
+- dateEnd
+
+status filters:
+- actualComplete=true
+- closureComplete=true
+- overdue=true
+- asOf
 ```
 
-필요 시 `DefectRawDataPage`에 다음 URL filter를 추가 보강합니다.
+추가로 T&C table과 동일하게 다음 요소도 클릭 가능 상태를 명확히 유지합니다.
 
 ```text
-actualDate / actual_date
-actualComplete
-closureComplete
-overdue
-atRisk
+- cumulative plan / actual
+- data date plan / actual / delay
+- today plan / actual / delay
+- row click for group-level drill-down
 ```
 
-## 8. Top Overdue와 Status Distribution 조정
+## 6. Sub Trade filter dropdown 유지
 
-Top Overdue 기준:
+`By Sub Trade` tab의 header filter는 유지하되 T&C의 `SystemHeaderFilter`와 동일한 위치/동작으로 정리합니다.
+
+적용:
 
 ```text
-- Planned Date 또는 Target Date가 Data Date 이전/당일
-- actual_progress_pct < 100
-- delay days가 큰 순서
+Group header cell 안에:
+Sub Trade + filter icon
 ```
 
-표시 컬럼:
+기능:
 
 ```text
-Sub Trade
-Issue No
-Level
-Subcontractor
-Days Late
+- text search
+- multi-select
+- clear
+- selected count 또는 clear action
 ```
 
-행 클릭:
+## 7. 보조 helper 정리
+
+`DefectDashboardPage.tsx` 하단의 table helper들을 정리합니다.
+
+대상:
 
 ```text
-/defects/{id}
+HeaderTotalNumber
+VarianceCell
+ClickNum
+StageBadge
+FilterDropdown
+PlanActualTable
 ```
 
-Status Distribution:
+정리 내용:
 
 ```text
-- Actual Progress distribution
-  - 100%
-  - 1~99%
-  - 0% / blank
-
-- Closure distribution
-  - Closed Date exists
-  - Not Closed
+- T&C와 동일한 naming/style에 맞춤
+- 너무 긴 single-line JSX를 multi-line JSX로 변경
+- table 구조가 유지보수 가능하도록 분리
+- stray "TS" 텍스트 제거
 ```
 
-T&C의 T1/T2 pie block 위치와 UI를 유지하되, Defect 의미에 맞게 label을 변경합니다.
+## 8. 검증 항목
 
-## 9. Excel export 적용
-
-T&C Dashboard의 “Plan vs Actual - Summary” Excel export 기능을 Defect에도 적용합니다.
-
-예상 신규/수정 파일:
+구현 후 다음을 확인합니다.
 
 ```text
-src/lib/defect-dashboard-excel-export.ts
+1. /defects/dashboard에서 Plan vs Actual - Summary table이 표시됨
+2. table header와 body가 분리되어 body만 vertical scroll됨
+3. horizontal scroll 시 header/body column alignment가 유지됨
+4. header totals가 표시됨
+5. By Sub Trade / By Subcontractor / By Sub-Sub / By HDEC PIC / By Team tab 모두 동일 layout 사용
+6. Sub Trade filter dropdown이 header 안에서 동작함
+7. Planned / Target / Closure rows가 각 group마다 3줄로 표시됨
+8. Data Date / Today labels가 header에 표시됨
+9. 숫자 클릭 시 /defects/raw-data로 drill-down됨
+10. empty state가 body 영역에 표시됨
+11. T&C Dashboard에는 영향 없음
+12. build가 성공함
 ```
 
-Export title:
+## 수정 대상
 
 ```text
-SHAW Defect — Plan vs Actual (Sub Trade/Subcontractor/Sub-Sub/HDEC PIC/Team)
-```
-
-컬럼 구조는 T&C export와 동일하게 유지하되 Stage label은 Defect 기준으로 표시합니다.
-
-```text
-Planned
-Target
-Closure
-```
-
-## 10. Import / Detail / Quick Update의 `actual_date` 유지 로직
-
-`actual_date`가 안정적으로 유지되도록 관련 update 로직도 함께 반영합니다.
-
-수정 대상:
-
-```text
-src/pages/DefectImportPage.tsx
-src/pages/DefectDetailPage.tsx
-src/pages/DefectQuickUpdatePage.tsx
-```
-
-규칙:
-
-```text
-if actual_progress_pct >= 100:
-  actual_date = existing actual_date || dataDate/importDate/today
-else:
-  actual_date = null
-```
-
-변경 이력/audit에도 필요하면 `actual_date` 변경을 기록합니다.
-
-```text
-defect_change_log
-defect_schedule_change_audit 또는 별도 log 표시
-```
-
-단, 기존 schedule audit 구조가 planned/target/closed/progress 중심이므로, actual_date는 change_log에는 남기고 dashboard 집계용으로 우선 사용합니다.
-
-## 11. 대량 데이터 로딩 개선
-
-현재 Defect Dashboard는 `.limit(1000)`으로 제한되어 있습니다.
-
-T&C Dashboard처럼 page range loading으로 변경합니다.
-
-```text
-range(0, 999)
-range(1000, 1999)
-...
-```
-
-이를 통해 1,000건 초과 defect item도 Dashboard에 모두 반영되도록 합니다.
-
-## 12. 수정 대상 파일
-
-예상 수정/추가 대상:
-
-```text
-supabase/migrations/[new]_add_defect_actual_date.sql
-
 src/pages/DefectDashboardPage.tsx
-src/lib/defect-dashboard-utils.ts
-src/lib/defect-dashboard-excel-export.ts
-
-src/lib/defect-utils.ts
-src/hooks/useDefectFieldConfig.ts
-src/pages/DefectRawDataPage.tsx
-src/pages/DefectImportPage.tsx
-src/pages/DefectDetailPage.tsx
-src/pages/DefectQuickUpdatePage.tsx
-src/pages/DefectExportPage.tsx
-src/lib/defect-export-utils.ts
 ```
 
-필요 시 기존 `DefectDailyCumulativeChart`는 Dashboard용으로 대체하거나, Progress page 전용으로 유지합니다.
-
-## 13. 검증 항목
-
-```text
-1. /defects/dashboard가 T&C Dashboard와 동일한 레이아웃/카드/탭/차트 구조로 표시됨
-2. Team filter가 full label 기준으로 표시됨
-3. 최신 defect_upload_batches.data_date가 Data Date로 적용됨
-4. By Sub Trade / Subcontractor / Sub-Sub / HDEC PIC / Team 탭이 동작함
-5. Plan vs Actual table의 Planned/Target/Closure stage 집계가 표시됨
-6. Actual은 actual_progress_pct = 100 기준으로 집계됨
-7. Closure는 closed_date 기준으로 별도 집계됨
-8. S-Curve가 daily/weekly toggle과 date range picker로 동작함
-9. KPI/alert/table 숫자 클릭 시 /defects/raw-data로 drill-down됨
-10. Top 10 Overdue Defects row 클릭 시 /defects/{id}로 이동함
-11. Excel export가 Defect Dashboard 기준으로 생성됨
-12. 1,000건 초과 defect item도 Dashboard에 모두 반영됨
-13. Import 시 progress 100% 항목에 actual_date가 자동 저장됨
-14. Detail/Quick Update에서 progress가 100%가 되면 actual_date가 저장되고, 100% 미만이면 null 처리됨
-15. Raw Data/Detail/Export에서 Actual Date가 표시 및 필터링됨
-16. 기존 T&C Dashboard에는 영향 없음
-17. build가 성공함
-```
+필요 시 table helper만 같은 파일 안에서 정리하고, 별도 컴포넌트 파일은 만들지 않겠습니다. 이번 작업의 범위는 Defect Dashboard의 Plan vs Actual table layout parity에 집중합니다.
