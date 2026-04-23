@@ -1015,6 +1015,7 @@ function SubcontractorMasterTable() {
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subcontractors</h3>
           <form onSubmit={addSub} className="flex gap-2">
             <Input value={newSubName} onChange={(e) => setNewSubName(e.target.value)} placeholder="Add Subcontractor..." />
+            <Input value={newSubOwnerCode} onChange={(e) => setNewSubOwnerCode(e.target.value)} placeholder={suggestOwnerCode(newSubName)} className="w-32 font-mono" />
             <Button type="submit" size="sm"><Plus className="h-4 w-4" /></Button>
           </form>
           {loading ? (
@@ -1025,6 +1026,7 @@ function SubcontractorMasterTable() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead className="w-32">Owner Code</TableHead>
                     <TableHead className="w-20 text-center">Active</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
@@ -1033,6 +1035,7 @@ function SubcontractorMasterTable() {
                   {subs.map(r => (
                     <TableRow key={r.id}>
                       <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
+                      <TableCell><InlineNameEdit value={r.owner_code ?? suggestOwnerCode(r.name)} onSave={(v) => updateOwnerCode(r, v)} /></TableCell>
                       <TableCell className="text-center">
                         <Switch checked={r.is_active} onCheckedChange={() => startToggleActive(r)} />
                       </TableCell>
@@ -1054,6 +1057,7 @@ function SubcontractorMasterTable() {
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sub-Subs (재하도)</h3>
           <form onSubmit={addSubSub} className="flex gap-2">
             <Input value={newSubSubName} onChange={(e) => setNewSubSubName(e.target.value)} placeholder="Sub-Sub name..." className="flex-1" />
+            <Input value={newSubSubOwnerCode} onChange={(e) => setNewSubSubOwnerCode(e.target.value)} placeholder={suggestOwnerCode(newSubSubName)} className="w-32 font-mono" />
             <Select value={newSubSubParent} onValueChange={setNewSubSubParent}>
               <SelectTrigger className="w-[160px]"><SelectValue placeholder="Parent Sub" /></SelectTrigger>
               <SelectContent>
@@ -1068,6 +1072,7 @@ function SubcontractorMasterTable() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Owner Code</TableHead>
                     <TableHead>Parent</TableHead>
                     <TableHead className="w-20 text-center">Active</TableHead>
                     <TableHead className="w-12"></TableHead>
@@ -1079,6 +1084,7 @@ function SubcontractorMasterTable() {
                     return (
                       <TableRow key={r.id}>
                         <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
+                        <TableCell className="font-mono text-xs"><InlineNameEdit value={r.owner_code ?? suggestOwnerCode(r.name)} onSave={(v) => updateOwnerCode(r, v)} /></TableCell>
                         <TableCell className="text-xs text-muted-foreground">{parent?.name ?? '—'}</TableCell>
                         <TableCell className="text-center">
                           <Switch checked={r.is_active} onCheckedChange={() => startToggleActive(r)} />
