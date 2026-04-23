@@ -6,14 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
 import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
-import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
+import { normalizeTeamValue, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 
 const trackedFields = ['planned_date', 'target_date', 'closed_date', 'actual_progress_pct', 'closure_status'] as const;
@@ -31,8 +30,7 @@ interface DefectImportFile {
   error?: string;
   headerCount?: number;
   dataDate?: string;
-  team?: TeamType;
-  result?: { inserted: number; updated: number; skipped: number; rejected: number };
+  result?: { inserted: number; updated: number; skipped: number; rejected: number; teamUnresolved: number };
 }
 
 type SimilarDecisionAction = 'use_existing' | 'register_new';
@@ -69,6 +67,37 @@ function changed(a: unknown, b: unknown) {
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+type ProfileTeamMap = Map<string, TeamType>;
+
+async function buildProfileTeamMap(): Promise<ProfileTeamMap> {
+  const { data } = await (supabase as any)
+    .from('profiles')
+    .select('subcontractor_name, subsub_name, team')
+    .eq('is_active', true);
+  const buckets = new Map<string, Set<TeamType>>();
+
+  for (const profile of data ?? []) {
+    const team = normalizeTeamValue(profile.team);
+    if (!team) continue;
+    for (const name of [profile.subcontractor_name, profile.subsub_name]) {
+      const key = masterNameKey(name);
+      if (!key) continue;
+      if (!buckets.has(key)) buckets.set(key, new Set<TeamType>());
+      buckets.get(key)!.add(team);
+    }
+  }
+
+  return new Map([...buckets.entries()].filter(([, teams]) => teams.size === 1).map(([key, teams]) => [key, [...teams][0]]));
+}
+
+function resolveDefectTeam(row: ParsedDefectRow, profileTeamMap: ProfileTeamMap): TeamType | null {
+  return normalizeTeamValue(row.trade_detail)
+    ?? normalizeTeamValue(row.team)
+    ?? profileTeamMap.get(masterNameKey(row.subcontractor_name))
+    ?? profileTeamMap.get(masterNameKey(row.subsub_name))
+    ?? null;
 }
 
 export default function DefectImportPage() {
