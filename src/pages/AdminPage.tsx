@@ -1546,13 +1546,25 @@ function PermissionsTab() {
 
 /* ═══════ Tab 4: Field Config ═══════ */
 function FieldConfigTab() {
+  const [scope, setScope] = useState<'tc' | 'defect'>('tc');
+
+  return (
+    <Tabs value={scope} onValueChange={(value) => setScope(value as 'tc' | 'defect')}>
+      <TabsList><TabsTrigger value="tc">T&C Fields</TabsTrigger><TabsTrigger value="defect">Defect Fields</TabsTrigger></TabsList>
+      <TabsContent value="tc"><FieldConfigTable table="field_config" title="T&C Field Configuration" /></TabsContent>
+      <TabsContent value="defect"><FieldConfigTable table="defect_field_config" title="Defect Field Configuration" showOrigin /></TabsContent>
+    </Tabs>
+  );
+}
+
+function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_config' | 'defect_field_config'; title: string; showOrigin?: boolean }) {
   const { toast } = useToast();
   const [fields, setFields] = useState<FieldCfg[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from('field_config').select('*').order('sort_order');
+    const { data } = await (supabase as any).from(table).select('*').order('sort_order');
     if (data) {
       let rows = data as FieldCfg[];
       // Normalize sort_order if all zero (initial seed) so swap works predictably.
@@ -1560,7 +1572,7 @@ function FieldConfigTab() {
       if (allZero && rows.length > 0) {
         await Promise.all(
           rows.map((r, idx) =>
-            supabase.from('field_config').update({ sort_order: (idx + 1) * 10 }).eq('id', r.id)
+            (supabase as any).from(table).update({ sort_order: (idx + 1) * 10 }).eq('id', r.id)
           )
         );
         rows = rows.map((r, idx) => ({ ...r, sort_order: (idx + 1) * 10 }));
@@ -1569,7 +1581,7 @@ function FieldConfigTab() {
     }
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [table]);
 
   const toggle = async (f: FieldCfg, key: 'is_enabled' | 'is_required') => {
     const update = { is_enabled: f.is_enabled, is_required: f.is_required };
