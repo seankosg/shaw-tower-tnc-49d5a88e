@@ -24,6 +24,7 @@ export interface DefectItem {
   planned_date: string | null;
   target_date: string | null;
   actual_progress_pct: number | null;
+  actual_date: string | null;
   closed_date: string | null;
   closure_status: string | null;
   remarks: string | null;
