@@ -252,6 +252,34 @@ export default function DefectImportPage() {
                       {file.error && <span className="text-destructive"> · {file.error}</span>}
                       {file.result && <span className="ml-1">· {file.result.inserted} ins, {file.result.updated} upd, {file.result.skipped} skp, {file.result.rejected} rej</span>}
                     </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <span className="whitespace-nowrap text-xs text-muted-foreground">Data Date:</span>
+                      <Input
+                        type="date"
+                        value={file.dataDate || ''}
+                        onChange={(event) => setFileDataDate(file.id, event.target.value)}
+                        disabled={isRunning || file.status === 'done' || file.status === 'failed'}
+                        className="h-7 w-[150px] text-xs"
+                      />
+                      <span className="whitespace-nowrap text-xs text-muted-foreground">Team:</span>
+                      <Select
+                        value={file.team || ''}
+                        onValueChange={(value) => setFileTeam(file.id, value as TeamType)}
+                        disabled={isRunning || file.status === 'done' || file.status === 'failed'}
+                      >
+                        <SelectTrigger className="h-7 w-[140px] text-xs">
+                          <SelectValue placeholder="Select team" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ALL_TEAMS.map((team) => (
+                            <SelectItem key={team} value={team}>{TEAM_LABELS[team]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {file.status === 'ready' && !file.team && (
+                        <span className="text-xs text-destructive">Team is required before import.</span>
+                      )}
+                    </div>
                     {file.parsed?.some((row) => !row.issue_no) && (
                       <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-border bg-muted px-2 py-1.5">
                         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
