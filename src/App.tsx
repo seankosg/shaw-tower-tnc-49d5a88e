@@ -75,6 +75,14 @@ const App = () => (
                 <Route path="/defects/import/logs" element={<DefectImportLogsPage />} />
                 <Route path="/defects/export" element={<DefectExportPage />} />
                 <Route path="/defects/quick-update" element={<DefectQuickUpdatePage />} />
+                <Route path="/defect/dashboard" element={<RedirectPreserveSearch to="/defects/dashboard" />} />
+                <Route path="/defect/progress" element={<RedirectPreserveSearch to="/defects/progress" />} />
+                <Route path="/defect/schedule-revision" element={<RedirectPreserveSearch to="/defects/schedule-revision" />} />
+                <Route path="/defect/raw-data" element={<RedirectPreserveSearch to="/defects/raw-data" />} />
+                <Route path="/defect/import" element={<RedirectPreserveSearch to="/defects/import" />} />
+                <Route path="/defect/import/logs" element={<RedirectPreserveSearch to="/defects/import/logs" />} />
+                <Route path="/defect/export" element={<RedirectPreserveSearch to="/defects/export" />} />
+                <Route path="/defect/quick-update" element={<RedirectPreserveSearch to="/defects/quick-update" />} />
                 <Route path="/defects/:id" element={<DefectDetailPage />} />
                 <Route path="/admin" element={<AdminPage />} />
               </Route>
