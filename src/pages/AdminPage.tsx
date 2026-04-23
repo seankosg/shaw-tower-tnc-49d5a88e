@@ -22,6 +22,7 @@ import {
 import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
+import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
