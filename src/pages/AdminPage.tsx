@@ -499,11 +499,6 @@ function CreateUserDialog({
     : userType === 'subsub'
       ? selectedSubsub?.owner_code
       : null;
-  const selectedOwnerCode = userType === 'subcontractor'
-    ? subcons.find(s => s.name === subconName)?.owner_code
-    : userType === 'subsub'
-      ? selectedSubsub?.owner_code
-      : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -669,6 +664,11 @@ function EditUserDialog({
   const subsubParent = selectedSubsub
     ? subcons.find(s => s.id === selectedSubsub.parent_subcontractor_id)
     : null;
+  const selectedOwnerCode = userType === 'subcontractor'
+    ? subcons.find(s => s.name === subconName)?.owner_code
+    : userType === 'subsub'
+      ? selectedSubsub?.owner_code
+      : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
