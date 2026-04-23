@@ -31,8 +31,8 @@ export default function DefectImportLogsPage() {
       <Card>
         <CardHeader><CardTitle>Row Logs</CardTitle></CardHeader>
         <CardContent>
-          <Table><TableHeader><TableRow><TableHead>Row</TableHead><TableHead>Issue No</TableHead><TableHead>Action</TableHead><TableHead>Reason</TableHead></TableRow></TableHeader><TableBody>
-            {logs.map((log) => <TableRow key={log.id}><TableCell>{log.raw_row_no}</TableCell><TableCell>{log.issue_no}</TableCell><TableCell>{log.action_taken}</TableCell><TableCell>{log.reason_code || log.reason_detail || '—'}</TableCell></TableRow>)}
+          <Table><TableHeader><TableRow><TableHead>Row</TableHead><TableHead>Issue No</TableHead><TableHead>Action</TableHead><TableHead>Reason Code</TableHead><TableHead>Reason Detail</TableHead></TableRow></TableHeader><TableBody>
+            {logs.map((log) => <TableRow key={log.id}><TableCell>{log.raw_row_no}</TableCell><TableCell>{log.issue_no}</TableCell><TableCell>{log.action_taken}</TableCell><TableCell>{log.reason_code || '—'}</TableCell><TableCell>{log.reason_detail || '—'}</TableCell></TableRow>)}
           </TableBody></Table>
         </CardContent>
       </Card>
