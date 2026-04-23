@@ -1710,6 +1710,20 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
   );
 }
 
+function RoleChecks({ field, fieldKey, onToggle }: { field: FieldCfg; fieldKey: 'visible_to_roles' | 'editable_to_roles'; onToggle: (field: FieldCfg, key: 'visible_to_roles' | 'editable_to_roles', role: AppRole) => void }) {
+  const selected = new Set(field[fieldKey] ?? []);
+  return (
+    <div className="grid min-w-[220px] grid-cols-2 gap-1">
+      {ALL_ROLES.map((role) => (
+        <label key={role} className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Checkbox checked={selected.has(role)} onCheckedChange={() => onToggle(field, fieldKey, role)} />
+          {ROLE_LABELS[role]}
+        </label>
+      ))}
+    </div>
+  );
+}
+
 /* ═══════ Tab 5: Audit Logs ═══════ */
 function AuditTab() {
   const [logs, setLogs] = useState<ChangeLogRow[]>([]);
