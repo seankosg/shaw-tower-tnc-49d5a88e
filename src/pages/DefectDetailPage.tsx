@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { daysDiff } from '@/lib/defect-parser';
 import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct } from '@/lib/defect-utils';
+import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
 
 export default function DefectDetailPage() {
   const { id } = useParams();
@@ -59,11 +60,12 @@ export default function DefectDetailPage() {
     if (!record || !user || !canEdit) return;
     setSaving(true);
 
+    const rawFieldKeys = ['item_description', 'work_type', 'captured_on', 'start_date', 'finish_date', 'actual_start_date', 'actual_finish_date', 'planned_progress'] as const;
     const editableFields = [
       'subcontractor_issue_no', 'subcontractor_issue_source',
       'area_type', 'area_level', 'area_location',
-      'main_trade', 'sub_trade',
-      'closed_date', 'actual_progress_pct', 'closure_status',
+      'main_trade', 'sub_trade', 'trade_detail',
+      'planned_date', 'target_date', 'closed_date', 'actual_progress_pct', 'closure_status',
       'description', 'remarks',
       'subcontractor_name', 'subsub_name', 'hdec_pic_name',
     ] as const;
@@ -81,6 +83,9 @@ export default function DefectDetailPage() {
       area_location: form.area_location || null,
       main_trade: form.main_trade || null,
       sub_trade: form.sub_trade || null,
+      trade_detail: form.trade_detail || null,
+      planned_date: form.planned_date || null,
+      target_date: form.target_date || null,
       closed_date: form.closed_date || null,
       actual_progress_pct: form.actual_progress_pct ?? null,
       closure_status: form.closure_status || null,
@@ -90,6 +95,13 @@ export default function DefectDetailPage() {
       data_source_type: 'app_direct_input',
       row_version: record.row_version + 1,
     };
+    const rawPayload = { ...(record.raw_payload ?? {}) };
+    for (const key of rawFieldKeys) {
+      const value = (form as any)[key];
+      if (value == null || value === '') delete rawPayload[RAW_FIELD_LABELS[key]];
+      else rawPayload[RAW_FIELD_LABELS[key]] = value;
+    }
+    payload.raw_payload = rawPayload;
     if (canEditResponsibility) {
       payload.subcontractor_name = form.subcontractor_name || null;
       payload.subsub_name = form.subsub_name || null;
@@ -119,14 +131,14 @@ export default function DefectDetailPage() {
   const rawEntries = useMemo(() => Object.entries(record?.raw_payload ?? {}).slice(0, 80), [record]);
   if (!record) return <div className="text-sm text-muted-foreground">Loading defect...</div>;
 
-  const workType = getRawValue(record.raw_payload, ['Work Type', 'WorkType', 'Type of Work']) ?? record.trade_detail ?? record.defect_type;
-  const itemDescription = getRawValue(record.raw_payload, ['Issue Description', 'IssueDescription', 'Item Description', 'Description']) ?? record.description;
-  const capturedOn = getRawValue(record.raw_payload, ['Captured on', 'Captured On', 'Captured Date', 'Capture Date']) ?? record.created_at;
-  const startDate = getRawValue(record.raw_payload, ['Start', 'Start Date', 'Planned Start', 'Plan Start']);
-  const finishDate = getRawValue(record.raw_payload, ['Finish', 'Finish Date', 'Planned Finish', 'Plan Finish']);
-  const actualStartDate = getRawValue(record.raw_payload, ['Actual Start', 'Actual Start Date']);
-  const actualFinishDate = getRawValue(record.raw_payload, ['Actual Finish', 'Actual Finish Date']);
-  const plannedProgressRaw = getRawValue(record.raw_payload, ['Planned Progress', 'Planned Progress %', 'Plan Progress', 'Plan %']);
+  const workType = form.trade_detail ?? getRawValue(record.raw_payload, ['Work Type', 'WorkType', 'Type of Work']) ?? record.defect_type;
+  const itemDescription = (form as any).item_description ?? getRawValue(record.raw_payload, ['Issue Description', 'IssueDescription', 'Item Description', 'Description']) ?? record.description;
+  const capturedOn = (form as any).captured_on ?? getRawValue(record.raw_payload, ['Captured on', 'Captured On', 'Captured Date', 'Capture Date']) ?? record.created_at;
+  const startDate = (form as any).start_date ?? form.planned_date ?? getRawValue(record.raw_payload, ['Start', 'Start Date', 'Planned Start', 'Plan Start']);
+  const finishDate = (form as any).finish_date ?? form.target_date ?? getRawValue(record.raw_payload, ['Finish', 'Finish Date', 'Planned Finish', 'Plan Finish']);
+  const actualStartDate = (form as any).actual_start_date ?? getRawValue(record.raw_payload, ['Actual Start', 'Actual Start Date']);
+  const actualFinishDate = (form as any).actual_finish_date ?? getRawValue(record.raw_payload, ['Actual Finish', 'Actual Finish Date']);
+  const plannedProgressRaw = (form as any).planned_progress ?? getRawValue(record.raw_payload, ['Planned Progress', 'Planned Progress %', 'Plan Progress', 'Plan %']);
   const plannedProgress = parseProgress(plannedProgressRaw);
   const actualProgress = form.actual_progress_pct == null ? null : Number(form.actual_progress_pct);
   const progressDifference = plannedProgress == null || actualProgress == null ? null : actualProgress - plannedProgress;
