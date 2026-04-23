@@ -1,183 +1,344 @@
 
-## 수정 목표
+## 구현 목표
 
-`Schedule Revision` 화면에 다음 3가지를 반영하겠습니다.
+요청하신 2단계 권한 구조를 적용하겠습니다.
 
 ```text
-1. Subcontractor 표시
-2. Sub-Sub 표시
-3. Team 표시
-4. 헤더 정렬 / 필터 기능 추가
+1단계
+HDEC PIC / Subcontractor / Sub-Sub 담당자 기반 수정·저장 권한 부여
+단, 책임자명(Subcontractor, Sub-Sub, HDEC PIC) 변경 권한 없음
+
+2단계
+Senior User는 본인 소속 Team의 Subtest 수정·저장 권한 부여
+소속 Team 내에서는 책임자명 변경 가능
+
+Detail 화면 Save 버튼은 실제 저장 권한이 있을 때만 표시
 ```
 
-## 구현 방식
+## 현재 문제
 
-### 1. Schedule Revision 데이터에 Subtest 정보 연결
-
-현재 `Schedule Revision`은 `schedule_change_audit` 기준으로 아래 정보만 표시합니다.
+현재 권한 구조는 일부 불일치가 있습니다.
 
 ```text
-Project
-System
-Row
-Item No
-MOS Code
-Subtest ID
-Pred / T1 / T2 변경 정보
+DB UPDATE 권한:
+- 기존 can_edit_subtest
+- senior_user + same team 조건 일부 존재
+
+Detail 화면 Save 표시:
+- can_edit_subtest RPC만 기준으로 판단
+- senior_user same team 권한이 UI에 정확히 반영되지 않을 수 있음
+- HDEC PIC 담당자명 기준 권한 없음
 ```
 
-요청하신 `Subcontractor`, `Sub-Sub`, `Team`은 `schedule_change_audit` 테이블에 직접 저장되어 있지 않고, 현재 Subtest Master DB의 `subtests` 데이터에 있습니다.
+또한 현재 저장 가능한 사용자는 책임자명 필드도 같이 수정할 수 있는 구조라서, 요청하신 “담당자는 저장 가능하지만 책임자명 변경은 불가” 규칙이 분리되어 있지 않습니다.
 
-따라서 `schedule_change_audit` 조회 후, 해당 이력의 `subtest_id`를 기준으로 `subtests`에서 아래 값을 추가로 조회해 매핑하겠습니다.
+## 권한 정책 설계
+
+### 1. 담당자 기반 권한
+
+아래 조건 중 하나가 맞으면 해당 Subtest 저장 권한을 부여합니다.
 
 ```text
-subtests.id
-subtests.subcontractor_name
-subtests.subsub_name
-subtests.team
+Subcontractor 사용자:
+profile.user_type = 'subcontractor'
+AND profile.subcontractor_name = subtests.subcontractor_name
+
+Sub-Sub 사용자:
+profile.user_type = 'subsub'
+AND profile.subsub_name = subtests.subsub_name
+
+HDEC PIC 사용자:
+profile.user_type = 'hdec'
+AND profile.hdec_pic_name = subtests.hdec_pic_name
 ```
 
-최종 표시 컬럼은 다음처럼 확장합니다.
+비교는 공백/대소문자 차이로 막히지 않도록 정규화합니다.
 
 ```text
-Changed At
-Project
-System
-Team
+lower(trim(value))
+```
+
+Subcontractor가 본인 하위 Sub-Sub 항목을 편집할 수 있는 기존 parent-subsub 로직은 유지합니다.
+
+### 2. 담당자 기반 사용자의 수정 가능 필드
+
+담당자 기반 권한자는 상태 및 진행 관련 자료를 저장할 수 있습니다.
+
+```text
+Pred Status
+Pred Planned Date
+Pred Actual Date
+Predecessor Raw
+
+T1 Status
+T1 Planned Date
+T1 Actual Date
+
+T2 Status
+T2 Planned Date
+T2 Actual Date
+
+R1 Status
+Aconex Ref No
+R2 Status
+Remarks
+Punchlist Comments
+```
+
+하지만 책임자명은 변경할 수 없습니다.
+
+```text
 Subcontractor
 Sub-Sub
-Row
-Item No
-MOS Code
-Subtest ID
-Pred ...
-T1 ...
-T2 ...
+HDEC PIC
 ```
 
-### 2. Team 표시 포맷 적용
+### 3. Senior User 권한
 
-Team 값은 Raw Data와 동일하게 enum label을 사용하겠습니다.
-
-예:
+Senior User는 본인 profile.team과 Subtest.team이 같으면 저장 권한을 부여합니다.
 
 ```text
-EL
-MECH
-ARCH
-...
+has_role(user, 'senior_user')
+AND profiles.team = subtests.team
 ```
 
-값이 없으면 기존 화면 규칙과 동일하게 `—`로 표시합니다.
-
-### 3. 헤더 정렬 기능 추가
-
-`Schedule Revision` 테이블을 `@tanstack/react-table` 기반으로 전환하거나, 현재 테이블 구조에 동일한 정렬 상태 로직을 추가하겠습니다.
-
-정렬 가능한 주요 컬럼:
+Senior User는 본인 팀 Subtest에 대해 책임자명 변경도 가능합니다.
 
 ```text
-Changed At
-Project
-System
-Team
-Subcontractor
-Sub-Sub
-Row
-Item No
-MOS Code
-Subtest ID
-Pred Diff
-T1 Diff
-T2 Diff
-Pred Prev.Gap / Cur.Gap
-T1 Prev.Gap / Cur.Gap
-T2 Prev.Gap / Cur.Gap
+Subcontractor 변경 가능
+Sub-Sub 변경 가능
+HDEC PIC 변경 가능
 ```
 
-헤더 클릭 시 동작:
+### 4. Admin / Superuser 권한
+
+기존처럼 전체 권한을 유지합니다.
 
 ```text
-1회 클릭: 오름차순
-2회 클릭: 내림차순
-3회 클릭: 정렬 해제
+Admin / Superuser:
+- 모든 Subtest 저장 가능
+- 책임자명 변경 가능
+- Delete 가능
 ```
 
-Raw Data와 동일하게 정렬 방향을 `▲ / ▼`로 표시하겠습니다.
+## Backend 변경 계획
 
-### 4. 헤더 필터 기능 추가
+### 1. 권한 판정 함수 추가
 
-각 컬럼 헤더에 필터 아이콘을 추가합니다.
-
-필터 방식은 컬럼 타입별로 나눕니다.
+담당자/팀 기반 권한을 일관되게 판단하기 위해 backend 함수들을 추가 또는 갱신합니다.
 
 ```text
-Text filter:
-Project, System, Subcontractor, Sub-Sub, Item No, MOS Code, Subtest ID
-
-Multi-select filter:
-Team
-
-Date range filter:
-Changed At
-Pred Old/New date
-T1 Old/New date
-T2 Old/New date
-
-Numeric/text filter:
-Row
-Diff
-Prev.Gap
-Cur.Gap
+can_update_subtest(...)
 ```
 
-필터가 적용된 컬럼은 필터 아이콘 색상을 활성 상태로 표시합니다.
-
-상단에는 현재 필터 개수와 초기화 버튼을 추가합니다.
+역할:
 
 ```text
-Clear filters (N)
-Clear sort
+Admin / Superuser → true
+Senior User + same team → true
+기존 system edit permission 보유자 → true
+Subcontractor 담당 매칭 → true
+Sub-Sub 담당 매칭 → true
+HDEC PIC 담당 매칭 → true
+그 외 → false
 ```
 
-### 5. 기존 행 클릭 동작 유지
-
-기존 동작은 유지합니다.
+UI에서 권한 범위를 알 수 있도록 별도 함수도 추가합니다.
 
 ```text
-Schedule Revision 행 클릭
-→ /subtests/{subtest_id}
+get_subtest_edit_scope(user_id, subtest_id)
 ```
 
-### 6. 기존 Import Logs 화면은 변경하지 않음
-
-이번 수정은 별도 탭인 `Schedule Revision` 화면만 대상으로 합니다.
+반환 예시:
 
 ```text
-src/pages/ScheduleRevisionPage.tsx
+none
+assigned
+team
+full
 ```
 
-`Import Logs > Schedule Changes` 화면은 기존 구조 그대로 유지합니다.
-
-## 수정 대상 파일
+의미:
 
 ```text
-src/pages/ScheduleRevisionPage.tsx
+none     → 저장 불가
+assigned → 담당자 기반 저장 가능, 책임자명 변경 불가
+team     → Senior User team 권한, 책임자명 변경 가능
+full     → Admin/Superuser 또는 기존 full edit 권한
 ```
 
-필요 시 Raw Data에서 이미 사용 중인 필터 UI 패턴을 참고하되, 공통 컴포넌트로 분리하지 않고 우선 Schedule Revision 화면 안에 적용하겠습니다.
+### 2. subtests UPDATE RLS 정책 갱신
+
+현재 `subtests` UPDATE 정책을 새 권한 함수 기준으로 갱신합니다.
+
+```text
+Users can update permitted subtests
+```
+
+변경 후 DB 자체에서 아래 사용자의 update를 허용합니다.
+
+```text
+Admin / Superuser
+기존 system edit permission 사용자
+Senior User + same team
+담당 Subcontractor
+담당 Sub-Sub
+담당 HDEC PIC
+```
+
+### 3. 책임자명 변경 방지 Trigger 추가
+
+RLS만으로는 “수정 전 값과 수정 후 값을 비교해서 특정 컬럼 변경을 막는 것”이 제한적이므로, `subtests`에 `BEFORE UPDATE` validation trigger를 추가합니다.
+
+담당자 기반 권한자가 아래 필드를 바꾸려고 하면 저장을 차단합니다.
+
+```text
+subcontractor_name
+subsub_name
+hdec_pic_name
+```
+
+허용되는 경우:
+
+```text
+Admin / Superuser
+Senior User + same team
+기존 full edit 권한 사용자
+```
+
+차단 메시지는 사용자가 이해할 수 있게 처리합니다.
+
+```text
+You do not have permission to change responsibility fields.
+```
+
+## Frontend 변경 계획
+
+### 1. Subtest Detail 권한 범위 적용
+
+수정 파일:
+
+```text
+src/pages/SubtestDetail.tsx
+```
+
+현재는 `canEditRecord: boolean`만 사용하고 있으므로, 이를 권한 범위 기반으로 바꿉니다.
+
+```text
+editScope = none | assigned | team | full
+```
+
+Save 버튼 표시 조건:
+
+```text
+editScope !== 'none'
+```
+
+즉, 권한이 없으면 Save 버튼을 아예 표시하지 않습니다.
+
+### 2. 책임자명 입력 필드 제어
+
+Detail 화면의 책임자명 필드는 권한 범위에 따라 제어합니다.
+
+```text
+assigned:
+- Subcontractor disabled
+- Sub-Sub disabled
+- HDEC PIC disabled
+
+team:
+- Subcontractor editable
+- Sub-Sub editable
+- HDEC PIC editable
+
+full:
+- Subcontractor editable
+- Sub-Sub editable
+- HDEC PIC editable
+```
+
+### 3. 저장 Payload 정리
+
+`assigned` 권한 사용자가 저장할 때는 책임자명 필드를 update payload에서 제외합니다.
+
+```text
+assigned 권한:
+updatePayload에서 subcontractor_name 제외
+updatePayload에서 subsub_name 제외
+updatePayload에서 hdec_pic_name 제외
+```
+
+따라서 UI 조작이나 브라우저 조작이 있어도 backend trigger와 함께 이중으로 보호됩니다.
+
+### 4. Change History 유지
+
+변경 로그는 기존처럼 유지합니다.
+
+```text
+changed_by = 현재 사용자
+change_source = app_direct_input
+```
+
+단, 권한상 저장하지 않는 책임자명 필드는 change log에도 남기지 않습니다.
+
+## Mobile Quick Update 반영
+
+수정 파일:
+
+```text
+src/pages/MobileUpdatePage.tsx
+```
+
+Mobile Quick Update도 동일 권한을 반영합니다.
+
+```text
+담당자 기반 권한:
+- 상태/날짜/remarks 성격 필드 저장 가능
+- 책임자명 변경 불가
+
+Senior User same team:
+- 책임자명 변경 가능
+```
+
+현재 Mobile 화면에는 책임자명 입력란이 있으므로, 권한에 따라 disabled 처리하거나 숨김 처리합니다.
+
+```text
+assigned → 책임자명 입력 disabled
+team/full → 책임자명 입력 가능
+none → Save 버튼 미표시 또는 비활성
+```
+
+## 수정 대상
+
+```text
+Backend database migration
+src/pages/SubtestDetail.tsx
+src/pages/MobileUpdatePage.tsx
+```
+
+필요 시 권한 helper를 별도 파일로 분리할 수 있습니다.
+
+```text
+src/lib/subtest-permissions.ts
+```
 
 ## 검증 항목
 
 구현 후 다음을 확인하겠습니다.
 
 ```text
-1. Schedule Revision에 Team 컬럼 표시
-2. Schedule Revision에 Subcontractor 컬럼 표시
-3. Schedule Revision에 Sub-Sub 컬럼 표시
-4. 각 컬럼 헤더 클릭 시 정렬 동작
-5. 필터 아이콘으로 컬럼별 필터 동작
-6. Clear filters / Clear sort 동작
-7. 행 클릭 시 기존처럼 Subtest Detail로 이동
-8. 기존 Import Logs 화면 영향 없음
+1. HDEC PIC가 본인 hdec_pic_name과 일치하는 Subtest 저장 가능
+2. HDEC PIC가 책임자명 변경 시도 시 저장 차단
+3. Subcontractor가 본인 담당 Subtest 저장 가능
+4. Subcontractor가 책임자명 변경 시도 시 저장 차단
+5. Sub-Sub가 본인 담당 Subtest 저장 가능
+6. Sub-Sub가 책임자명 변경 시도 시 저장 차단
+7. Senior User가 본인 Team Subtest 저장 가능
+8. Senior User가 본인 Team Subtest의 책임자명 변경 가능
+9. Senior User가 타 Team Subtest 저장 불가
+10. Detail 화면 Save 버튼이 권한 없을 때 미표시
+11. Detail 화면 Save 버튼이 권한 있을 때 표시
+12. Mobile Quick Update도 동일 권한 적용
+13. Admin / Superuser 기존 권한 유지
+14. 기존 change log 기록 유지
 ```
