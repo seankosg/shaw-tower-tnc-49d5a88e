@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -32,6 +32,11 @@ import DefectScheduleRevisionPage from "./pages/DefectScheduleRevisionPage";
 
 const queryClient = new QueryClient();
 
+function RedirectPreserveSearch({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={`${to}${location.search}`} replace />;
+}
+
 const App = () => (
   <AuthProvider>
     <QueryClientProvider client={queryClient}>
@@ -45,14 +50,14 @@ const App = () => (
               <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
               <Route element={<ProtectedRoute><RoleGuard><AppLayout /></RoleGuard></ProtectedRoute>}>
                 <Route path="/" element={<Navigate to="/tc/dashboard" replace />} />
-                <Route path="/dashboard" element={<Navigate to="/tc/dashboard" replace />} />
-                <Route path="/schedule" element={<Navigate to="/tc/progress" replace />} />
-                <Route path="/schedule/revision" element={<Navigate to="/tc/schedule-revision" replace />} />
-                <Route path="/raw-data" element={<Navigate to="/tc/raw-data" replace />} />
-                <Route path="/import" element={<Navigate to="/tc/import" replace />} />
-                <Route path="/import/logs" element={<Navigate to="/tc/import/logs" replace />} />
-                <Route path="/export" element={<Navigate to="/tc/export" replace />} />
-                <Route path="/mobile" element={<Navigate to="/tc/quick-update" replace />} />
+                <Route path="/dashboard" element={<RedirectPreserveSearch to="/tc/dashboard" />} />
+                <Route path="/schedule" element={<RedirectPreserveSearch to="/tc/progress" />} />
+                <Route path="/schedule/revision" element={<RedirectPreserveSearch to="/tc/schedule-revision" />} />
+                <Route path="/raw-data" element={<RedirectPreserveSearch to="/tc/raw-data" />} />
+                <Route path="/import" element={<RedirectPreserveSearch to="/tc/import" />} />
+                <Route path="/import/logs" element={<RedirectPreserveSearch to="/tc/import/logs" />} />
+                <Route path="/export" element={<RedirectPreserveSearch to="/tc/export" />} />
+                <Route path="/mobile" element={<RedirectPreserveSearch to="/tc/quick-update" />} />
                 <Route path="/tc/dashboard" element={<DashboardPage />} />
                 <Route path="/tc/progress" element={<SchedulePage />} />
                 <Route path="/tc/schedule-revision" element={<ScheduleRevisionPage />} />

@@ -248,7 +248,7 @@ export default function DashboardPage() {
   // Navigation helpers
   const goSubtests = (params: Record<string, string>) => {
     const q = new URLSearchParams({ source: 'dashboard', ...params }).toString();
-    navigate(`/raw-data?${q}`);
+    navigate(`/tc/raw-data?${q}`);
   };
 
   const chartConfig = {
@@ -290,8 +290,8 @@ export default function DashboardPage() {
 
       {/* ─── Tier 1: Overall Summary ─── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
-        <KpiCard icon={<ListChecks className="h-6 w-6 text-primary" />} label="Systems" value={kpis.systemCount} onClick={() => navigate('/raw-data')} />
-        <KpiCard icon={<ListChecks className="h-6 w-6 text-muted-foreground" />} label="Total Subtests" value={kpis.total.toLocaleString()} onClick={() => navigate('/raw-data')} />
+        <KpiCard icon={<ListChecks className="h-6 w-6 text-primary" />} label="Systems" value={kpis.systemCount} onClick={() => navigate('/tc/raw-data')} />
+        <KpiCard icon={<ListChecks className="h-6 w-6 text-muted-foreground" />} label="Total Subtests" value={kpis.total.toLocaleString()} onClick={() => navigate('/tc/raw-data')} />
         <KpiCard icon={<CheckCircle2 className="h-6 w-6" style={{ color: STATUS_COLORS.Done }} />} label="Done" value={kpis.totalDone.toLocaleString()} sub="T2 completed" />
         <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Remaining" value={kpis.remaining.toLocaleString()} />
         <Card className="flex flex-col justify-center p-4">
@@ -816,7 +816,7 @@ function PlanActualTable({
     const value = filterValue(groupKey);
     const params: Record<string, string> = { source: 'dashboard', ...extra };
     if (value && value !== NONE_LABEL) params[groupParam] = value;
-    navigate(`/raw-data?${new URLSearchParams(params).toString()}`);
+    navigate(`/tc/raw-data?${new URLSearchParams(params).toString()}`);
   };
 
   const headerTotals = useMemo(() => {
