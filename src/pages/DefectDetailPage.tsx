@@ -129,3 +129,31 @@ export default function DefectDetailPage() {
 function Field({ label, value, onChange, disabled, type = 'text', required }: { field?: string; label: string; value: any; onChange: (value: string) => void; disabled?: boolean; type?: string; required?: boolean }) {
   return <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">{label}{required ? ' *' : ''}</label><Input className="h-9" type={type} value={value ?? ''} disabled={disabled} onChange={(e) => onChange(e.target.value)} /></div>;
 }
+
+function ReadonlyField({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-foreground">
+        {value == null || value === '' ? '—' : String(value)}
+      </div>
+    </div>
+  );
+}
+
+function normalizeRawKey(value: string) {
+  return value.replace(/\s*\(H\)\s*$/i, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+function getRawValue(payload: Record<string, unknown> | undefined, aliases: string[]) {
+  if (!payload) return null;
+  const aliasSet = new Set(aliases.map(normalizeRawKey));
+  const key = Object.keys(payload).find((item) => aliasSet.has(normalizeRawKey(item)));
+  return key ? payload[key] : null;
+}
+
+function parseProgress(value: unknown) {
+  if (value == null || value === '') return null;
+  const parsed = Number(String(value).replace('%', '').trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
