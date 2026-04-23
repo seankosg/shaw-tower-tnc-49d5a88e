@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut,
+  Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut, ClipboardList,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -14,12 +14,23 @@ import { filterNavItems } from '@/lib/role-permissions';
 import { getRememberedRoute } from '@/hooks/useRouteMemory';
 
 const mainNav = [
-  { label: 'Dashboard', icon: BarChart3, path: '/dashboard' },
-  { label: 'Progress',  icon: Calendar,  path: '/schedule' },
-  { label: 'Schedule Revision', icon: CalendarClock, path: '/schedule/revision' },
-  { label: 'Raw Data',  icon: Database,  path: '/raw-data' },
-  { label: 'Import',    icon: Upload,    path: '/import' },
-  { label: 'Export',    icon: Download,  path: '/export' },
+  { label: 'Dashboard', icon: BarChart3, path: '/tc/dashboard' },
+  { label: 'Progress',  icon: Calendar,  path: '/tc/progress' },
+  { label: 'Schedule Revision', icon: CalendarClock, path: '/tc/schedule-revision' },
+  { label: 'Raw Data',  icon: Database,  path: '/tc/raw-data' },
+  { label: 'Import',    icon: Upload,    path: '/tc/import' },
+  { label: 'Export',    icon: Download,  path: '/tc/export' },
+  { label: 'Quick Update', icon: ClipboardList, path: '/tc/quick-update' },
+];
+
+const defectNav = [
+  { label: 'Dashboard', icon: BarChart3, path: '/defects/dashboard' },
+  { label: 'Progress', icon: Calendar, path: '/defects/progress' },
+  { label: 'Schedule Revision', icon: CalendarClock, path: '/defects/schedule-revision' },
+  { label: 'Raw Data', icon: Database, path: '/defects/raw-data' },
+  { label: 'Import', icon: Upload, path: '/defects/import' },
+  { label: 'Export', icon: Download, path: '/defects/export' },
+  { label: 'Quick Update', icon: ClipboardList, path: '/defects/quick-update' },
 ];
 
 const adminNav = [
@@ -33,6 +44,7 @@ export function AppSidebar() {
   const userName = profile?.name || profile?.login_id || 'User';
 
   const visibleMain = filterNavItems(mainNav, roles);
+  const visibleDefects = filterNavItems(defectNav, roles);
   const visibleAdmin = filterNavItems(adminNav, roles);
 
   return (
@@ -71,13 +83,33 @@ export function AppSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel>T&amp;C Management</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {visibleMain.map((item) => (
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
-                    isActive={pathname === item.path}
+                    isActive={pathname === item.path || (item.path === '/tc/raw-data' && pathname.startsWith('/subtests/'))}
+                    onClick={() => navigate(getRememberedRoute(item.path))}
+                    tooltip={item.label}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Defect Management</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {visibleDefects.map((item) => (
+                <SidebarMenuItem key={item.path}>
+                  <SidebarMenuButton
+                    isActive={pathname === item.path || (item.path === '/defects/raw-data' && /^\/defects\/[^/]+$/.test(pathname))}
                     onClick={() => navigate(getRememberedRoute(item.path))}
                     tooltip={item.label}
                   >
