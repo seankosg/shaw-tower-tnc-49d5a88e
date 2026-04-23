@@ -61,15 +61,7 @@ const App = () => (
                 <Route path="/tc/import/logs" element={<ImportLogsPage />} />
                 <Route path="/tc/export" element={<ExportPage />} />
                 <Route path="/tc/quick-update" element={<MobileUpdatePage />} />
-                <Route path="/raw-data" element={<SubtestList />} />
                 <Route path="/subtests/:id" element={<SubtestDetail />} />
-                <Route path="/import" element={<ImportPage />} />
-                <Route path="/import/logs" element={<ImportLogsPage />} />
-                <Route path="/export" element={<ExportPage />} />
-                <Route path="/mobile" element={<MobileUpdatePage />} />
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/schedule" element={<SchedulePage />} />
-                <Route path="/schedule/revision" element={<ScheduleRevisionPage />} />
                 <Route path="/defects/dashboard" element={<DefectDashboardPage />} />
                 <Route path="/defects/progress" element={<DefectProgressPage />} />
                 <Route path="/defects/schedule-revision" element={<DefectScheduleRevisionPage />} />
