@@ -6,9 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
+import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 
 const trackedFields = ['planned_date', 'target_date', 'closed_date', 'actual_progress_pct', 'closure_status'] as const;
@@ -25,6 +27,8 @@ interface DefectImportFile {
   progress: number;
   error?: string;
   headerCount?: number;
+  dataDate?: string;
+  team?: TeamType;
   result?: { inserted: number; updated: number; skipped: number; rejected: number };
 }
 
@@ -47,6 +51,10 @@ function changed(a: unknown, b: unknown) {
   return String(a ?? '') !== String(b ?? '');
 }
 
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function DefectImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -65,6 +73,7 @@ export default function DefectImportPage() {
       status: 'parsing',
       parsedCount: 0,
       progress: 0,
+      dataDate: todayIso(),
     }));
     setFiles((current) => [...current, ...nextFiles]);
 
