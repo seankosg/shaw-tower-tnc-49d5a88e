@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TEAM_LABELS, type TeamType } from '@/types/enums';
-import { formatDdMmm, formatSignedDays } from '@/lib/format';
+import { formatDateTimeDdMmmYyyy, formatDdMmm, formatSignedDays } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 type Stage = 'pred' | 't1' | 't2';
@@ -430,7 +430,7 @@ export default function ScheduleRevisionPage() {
                     const original = row.original;
                     return (
                       <TableRow key={original.id} className="cursor-pointer" onClick={() => navigate(`/subtests/${original.subtest_id}`)}>
-                        <TableCell className="text-xs whitespace-nowrap">{new Date(original.created_at).toLocaleString()}</TableCell>
+                        <TableCell className="text-xs whitespace-nowrap">{formatDateTimeDdMmmYyyy(original.created_at)}</TableCell>
                         <TableCell className="text-xs">{original.project_name}</TableCell>
                         <TableCell className="text-xs">{original.system_code}</TableCell>
                         <TableCell className="text-xs whitespace-nowrap">{original.team_label || '—'}</TableCell>

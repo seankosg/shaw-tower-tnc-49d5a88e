@@ -18,6 +18,7 @@ import { useFieldConfig } from '@/hooks/useFieldConfig';
 import { TC_STATUS_OPTIONS, TEAM_LABELS } from '@/types/enums';
 import type { TcStatus, DataSource, ChangeSource, TeamType } from '@/types/enums';
 import { invalidateSubtestCache } from '@/lib/subtest-cache';
+import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 
 interface SubtestDetail {
   id: string;
@@ -522,7 +523,7 @@ export default function SubtestDetailPage() {
                       <TableCell className="text-xs text-muted-foreground">{log.old_value || '—'}</TableCell>
                       <TableCell className="text-xs">{log.new_value || '—'}</TableCell>
                       <TableCell className="text-xs">{log.change_source || '—'}</TableCell>
-                      <TableCell className="text-xs">{new Date(log.changed_at).toLocaleString()}</TableCell>
+                      <TableCell className="text-xs">{formatDateTimeDdMmmYyyy(log.changed_at)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
