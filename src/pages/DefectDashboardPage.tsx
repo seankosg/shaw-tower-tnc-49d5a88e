@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { DefectKpiCard } from '@/components/defects/DefectKpiCard';
+import { DefectDailyCumulativeChart } from '@/components/defects/DefectDailyCumulativeChart';
 import { DefectStatusBadge } from '@/components/defects/DefectStatusBadge';
+import { defaultDefectDateRange } from '@/lib/defect-progress-utils';
 import { type DefectItem, formatPct, isClosedDefect, isOverdueDefect } from '@/lib/defect-utils';
 
 export default function DefectDashboardPage() {
@@ -53,6 +55,8 @@ export default function DefectDashboardPage() {
     return Array.from(map.entries()).map(([level, row]) => ({ level, ...row })).sort((a, b) => b.total - a.total).slice(0, 10);
   }, [items]);
 
+  const range = useMemo(() => defaultDefectDateRange(items), [items]);
+
   if (loading) return <div className="text-sm text-muted-foreground">Loading defect dashboard...</div>;
 
   return (
@@ -72,6 +76,10 @@ export default function DefectDashboardPage() {
         <DefectKpiCard title="Due This Week" value={metrics.dueThisWeek} />
         <DefectKpiCard title="Progress" value={formatPct(metrics.progress)} hint={`Avg ${formatPct(metrics.avgProgress)}`} />
       </div>
+      <Card>
+        <CardHeader><CardTitle>Daily / Cumulative Progress</CardTitle></CardHeader>
+        <CardContent><DefectDailyCumulativeChart items={items} start={range.start} end={range.end} bucket="week" dateField="planned_date" cumulative /></CardContent>
+      </Card>
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Top Levels</CardTitle></CardHeader>
