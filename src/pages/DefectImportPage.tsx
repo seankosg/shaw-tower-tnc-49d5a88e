@@ -103,6 +103,72 @@ function resolveDefectTeam(row: ParsedDefectRow, profileTeamMap: ProfileTeamMap)
     ?? null;
 }
 
+function issueKey(projectId: string | null | undefined, issueNo: string | null | undefined) {
+  const normalized = normalizeSubcontractorIssueNo(issueNo);
+  return normalized ? `${projectId ?? ''}::${normalized.toLowerCase()}` : null;
+}
+
+function resolveOwnerCode(row: Pick<ParsedDefectRow, 'subcontractor_name' | 'subsub_name' | 'team'>, masters: OwnerMaster[]): string {
+  const subsubKey = masterNameKey(row.subsub_name);
+  const subKey = masterNameKey(row.subcontractor_name);
+  const subsub = masters.find((master) => master.type === 'subsub' && masterNameKey(master.name) === subsubKey);
+  const sub = masters.find((master) => (master.type ?? 'sub') === 'sub' && masterNameKey(master.name) === subKey);
+  return subsub?.owner_code || sub?.owner_code || normalizeTeamValue(row.team) || 'UNASSIGNED';
+}
+
+async function buildIssueRegistry(projectId: string | null): Promise<IssueRegistry> {
+  const [{ data: masters }, { data: defects }] = await Promise.all([
+    (supabase as any).from('subcontractor_master').select('name, type, parent_subcontractor_id, owner_code').eq('is_active', true),
+    (supabase as any).from('defect_items').select('project_id, subcontractor_issue_no').eq('is_active', true).not('subcontractor_issue_no', 'is', null),
+  ]);
+  const ownerMasters = (masters ?? []) as OwnerMaster[];
+  const existingKeys = new Set<string>();
+  const nextSeqByOwner = new Map<string, number>();
+
+  for (const defect of defects ?? []) {
+    const key = issueKey(defect.project_id, defect.subcontractor_issue_no);
+    if (key) existingKeys.add(key);
+    const match = /^SC-([A-Z0-9]+)-(\d+)$/i.exec(String(defect.subcontractor_issue_no ?? '').trim());
+    if (!match) continue;
+    const owner = match[1].toUpperCase();
+    nextSeqByOwner.set(owner, Math.max(nextSeqByOwner.get(owner) ?? 1, Number(match[2]) + 1));
+  }
+
+  return { existingKeys, reservedKeys: new Set<string>(), nextSeqByOwner, masters: ownerMasters };
+}
+
+function reserveSubcontractorIssueNo(row: ParsedDefectRow, projectId: string | null, registry: IssueRegistry, existing?: any) {
+  if (existing?.subcontractor_issue_no) {
+    return {
+      subcontractor_issue_no: normalizeSubcontractorIssueNo(existing.subcontractor_issue_no),
+      subcontractor_issue_source: existing.subcontractor_issue_source ?? null,
+      duplicate: false,
+    };
+  }
+
+  const ownerCode = resolveOwnerCode(row, registry.masters) || suggestOwnerCode(row.subsub_name ?? row.subcontractor_name ?? row.team);
+  const imported = normalizeSubcontractorIssueNo(row.subcontractor_issue_no);
+  if (imported) {
+    const key = issueKey(projectId, imported);
+    const duplicate = !!key && (registry.existingKeys.has(key) || registry.reservedKeys.has(key));
+    if (!duplicate && key) registry.reservedKeys.add(key);
+    return { subcontractor_issue_no: imported, subcontractor_issue_source: 'imported', duplicate };
+  }
+
+  let sequence = registry.nextSeqByOwner.get(ownerCode) ?? 1;
+  let generated = generateSubcontractorIssueNo(ownerCode, sequence);
+  let key = issueKey(projectId, generated)!;
+  while (registry.existingKeys.has(key) || registry.reservedKeys.has(key)) {
+    sequence += 1;
+    generated = generateSubcontractorIssueNo(ownerCode, sequence);
+    key = issueKey(projectId, generated)!;
+  }
+  registry.reservedKeys.add(key);
+  registry.nextSeqByOwner.set(ownerCode, sequence + 1);
+  parseSubcontractorIssueSequence(generated, ownerCode);
+  return { subcontractor_issue_no: generated, subcontractor_issue_source: 'auto_generated', duplicate: false };
+}
+
 export default function DefectImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
