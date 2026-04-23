@@ -53,6 +53,7 @@ const DEFECT_RAW_FIELDS = [
   'hdec_pic_name',
   'planned_date',
   'target_date',
+  'actual_date',
   'closed_date',
   'remarks',
   'hdec_comments',
@@ -71,7 +72,7 @@ const TEXT_FILTER_FIELDS = new Set([
   'trade_detail',
 ]);
 
-const DATE_FILTER_FIELDS = new Set(['planned_date', 'target_date', 'closed_date', 'updated_at', 'created_at']);
+const DATE_FILTER_FIELDS = new Set(['planned_date', 'target_date', 'actual_date', 'closed_date', 'updated_at', 'created_at']);
 const PROGRESS_FIELD = 'actual_progress_pct';
 
 const RAW_SEARCH_FIELDS = [
@@ -367,7 +368,7 @@ export default function DefectRawDataPage() {
       issueNo: 'issue_no',
       subcontractorIssueNo: 'subcontractor_issue_no',
     };
-    const hasUrlFilters = ['q', 'dateStart', 'dateEnd', 'dateField', ...Object.keys(urlMap)].some((key) => searchParams.has(key));
+    const hasUrlFilters = ['q', 'dateStart', 'dateEnd', 'dateField', 'actualComplete', 'closureComplete', 'overdue', 'atRisk', ...Object.keys(urlMap)].some((key) => searchParams.has(key));
     const nextFilters = hasUrlFilters ? [] : baseFilters.filter((filter) => !Object.values(urlMap).includes(filter.id));
 
     for (const [param, col] of Object.entries(urlMap)) {
