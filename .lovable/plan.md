@@ -1,233 +1,126 @@
 
-## 구현 계획: Defect View Import Log를 T&C Import Log와 동일한 UI/기능으로 개편
+## 해결 계획: Defect Import History 삭제 시 Bad Request 오류 수정
 
-`Defect Management > Import > View Import Logs` 화면을 현재 T&C Management의 Import Log 화면 구조와 동일하게 맞추겠습니다. UI 문구는 기존 정책대로 영어로 유지합니다.
-
-## 1. Defect Import Logs 화면 구조 변경
-
-현재 Defect Import Logs는 좌우 2-column 구조입니다.
+원인 확인 결과, 현재 삭제 로직은 다음 순서로 동작합니다.
 
 ```text
-왼쪽: Defect Import Logs
-오른쪽: Row Logs
+1. defect_items에서 source_upload_id = batch.id 인 defect id 목록 조회
+2. 조회된 defect id 전체를 URL query의 in.(...) 조건에 넣어 defect_daily_snapshots 삭제
+3. defect_items / audit / row_logs / batch 삭제
 ```
 
-이를 T&C Import Logs와 동일한 흐름으로 변경합니다.
+현재 batch에는 약 1,968건의 defect item이 있고, 이 id 목록을 한 번에 `in.(...)` URL로 보내면서 요청 URL이 과도하게 길어져 `400 Bad Request`가 발생하고 있습니다. 또한 목록 조회도 기본 limit 1,000건 제한에 걸릴 수 있어 대량 import batch 삭제에는 안전하지 않습니다.
+
+## 1. 삭제 로직을 DB 함수 기반으로 변경
+
+클라이언트에서 수천 개 id를 URL에 실어 보내지 않도록, Lovable Cloud database function을 추가하겠습니다.
+
+함수명:
 
 ```text
-목록 화면:
-- 상단 Back button
-- title: Import History
-- import batch table
-
-상세 화면:
-- 상단 Back button
-- title: Import Row Details
-- selected file name card title
-- tabs:
-  - Row Logs
-  - Schedule Changes
+delete_defect_import_batch(_batch_id uuid)
 ```
 
-Back button 동작도 T&C와 동일하게 적용합니다.
+동작:
 
 ```text
-상세 화면에서 Back → batch list로 이동
-목록 화면에서 Back → /defects/import 로 이동
+1. 현재 사용자가 admin 또는 superuser인지 서버에서 검증
+2. 해당 batch의 defect_items와 연결된 defect_daily_snapshots 삭제
+3. defect_schedule_change_audit 삭제
+4. defect_upload_row_logs 삭제
+5. defect_items 삭제
+6. defect_upload_batches 삭제
 ```
 
-## 2. URL query state 적용
+삭제는 database 내부에서 subquery / join으로 처리하므로, URL 길이 제한이나 1,000건 조회 제한에 걸리지 않습니다.
 
-T&C Import Logs처럼 선택 상태를 URL에 반영합니다.
+## 2. 보안 적용
+
+함수 내부에서 다음 조건을 먼저 검사합니다.
 
 ```text
-/defects/import/logs?batch={batchId}
-/defects/import/logs?batch={batchId}&tab=schedule
+public.is_admin_or_superuser(auth.uid())
 ```
 
-적용 효과:
+admin/superuser가 아니면 삭제를 중단하고 권한 오류를 반환합니다.
 
-```text
-- 새로고침해도 선택 batch 유지
-- Row Logs / Schedule Changes tab 상태 유지
-- 사용자가 특정 import log 상세 URL을 공유 가능
-```
-
-## 3. Import History table을 T&C와 동일하게 확장
-
-Defect import batch 목록을 T&C Import History table과 동일한 컬럼 구성으로 표시합니다.
-
-```text
-File
-Date
-Status
-Total
-Success
-Skipped
-Rejected
-Delete action/admin only
-```
-
-Defect에는 `import_type` 컬럼이 없으므로 T&C의 `Type` 컬럼은 제외하거나 `Defect` 고정 표시로 맞추겠습니다. 화면 정합성을 위해 다음 구성을 권장합니다.
-
-```text
-File | Type | Date | Status | Total | Success | Skipped | Rejected | Delete
-```
-
-`Type` 값은 `Defect`로 표시합니다.
-
-날짜는 앱 공통 기준대로 표시합니다.
-
-```text
-dd-MMM-yyyy HH:mm
-```
-
-예시:
-
-```text
-23-Apr-2026 14:35
-```
-
-## 4. Row Logs tab을 T&C 스타일로 변경
-
-Defect row logs도 T&C Row Logs와 동일한 테이블 스타일, badge 색상, empty state, scroll behavior를 적용합니다.
-
-컬럼:
-
-```text
-Row
-Issue No
-Action
-Reason
-Detail
-```
-
-표시 규칙:
-
-```text
-action_taken = inserted / updated / skipped / rejected badge 표시
-reason_code 없으면 —
-reason_detail 없으면 —
-team_unresolved 로그도 이 화면에서 확인 가능
-```
-
-## 5. Schedule Changes tab 추가
-
-Defect import 중 발생한 `defect_schedule_change_audit` 데이터를 T&C의 Schedule Changes tab과 같은 방식으로 표시합니다.
-
-Defect용 컬럼은 T&C의 Pred/T1/T2 구조 대신 Defect schedule audit 구조에 맞춥니다.
-
-```text
-Row
-Issue No
-Subcon Issue No
-Planned: Old date / New date / Diff
-Target: Old date / New date / Diff
-Closed: Old date / New date / Diff
-Progress: Old % / New % / Diff
-Closure Status
-Source
-```
-
-표시 규칙:
-
-```text
-- 날짜는 dd-MMM 형식
-- diff는 +n / -n 형태
-- 지연 방향 diff는 destructive 색상
-- 단축 방향 diff는 primary 색상
-- progress diff는 % suffix 표시
-- schedule change row 클릭 시 /defects/{defect_id} 로 이동
-```
-
-## 6. Delete 기능을 T&C와 동일하게 적용
-
-관리자/슈퍼유저 또는 개발 모드에서만 delete icon을 표시합니다.
+현재 UI의 delete button 노출 조건도 유지합니다.
 
 ```text
 canDelete = isAdminOrSuperuser || import.meta.env.DEV
 ```
 
-삭제 확인 dialog도 T&C와 동일한 패턴으로 적용합니다.
+단, 최종 권한 검증은 반드시 서버 함수에서 수행되므로 클라이언트 조작으로 삭제할 수 없습니다.
 
-Dialog 문구 예시:
+## 3. 기존 RLS delete policy는 유지
 
-```text
-Delete import batch?
-
-This will permanently delete [file name], defect items imported from it, schedule change audits, snapshots, and row logs. This action cannot be undone.
-```
-
-삭제 대상:
+이미 추가된 delete policy는 유지합니다.
 
 ```text
-1. defect_daily_snapshots linked to defect_items.source_upload_id = batch.id
-2. defect_items where source_upload_id = batch.id
-3. defect_schedule_change_audit where upload_id = batch.id
-4. defect_upload_row_logs where upload_id = batch.id
-5. defect_upload_batches where id = batch.id
+defect_upload_row_logs
+defect_schedule_change_audit
+defect_daily_snapshots
+defect_items
+defect_upload_batches
 ```
 
-주의: 현재 Defect import는 update된 기존 defect에도 `source_upload_id`가 갱신됩니다. 따라서 T&C와 동일한 삭제 방식은 해당 batch가 마지막으로 업데이트한 defect item도 삭제 대상이 됩니다. 요청하신 “T&C Import Log 기능과 UI 그대로” 기준에 맞춰 동일하게 적용하되, dialog 문구에서 삭제 범위를 명확히 표시하겠습니다.
+이번 수정의 핵심은 RLS 문제가 아니라 대량 id를 URL query로 전달하는 방식의 한계이므로, 추가 RLS policy보다는 안전한 서버-side 삭제 함수로 처리합니다.
 
-## 7. 필요한 DB 권한 보강
+## 4. `DefectImportLogsPage.tsx` 삭제 로직 수정
 
-현재 Defect upload 관련 table은 select/insert 중심으로 정책이 구성되어 있어, row logs와 schedule audit 삭제가 막힐 수 있습니다.
-
-관리자 삭제 기능을 안정적으로 동작시키기 위해 migration으로 다음 RLS delete policy를 추가합니다.
+현재 코드:
 
 ```text
-defect_upload_row_logs:
-- Admins can delete defect upload logs
-
-defect_schedule_change_audit:
-- Admins can delete defect schedule audit
-
-defect_daily_snapshots:
-- Admins can delete defect daily snapshots
+- defect_items id 목록 select
+- defect_daily_snapshots.delete().in('defect_id', defectIds)
+- 여러 table을 client에서 순차 delete
 ```
 
-`defect_upload_batches`와 `defect_items`는 이미 admin delete policy가 있으므로 기존 정책을 사용합니다.
-
-## 8. 코드 변경 대상
+변경 후:
 
 ```text
-src/pages/DefectImportLogsPage.tsx
+- supabase.rpc('delete_defect_import_batch', { _batch_id: batch.id })
+- 성공 시 toast 표시
+- selectedBatch 초기화
+- Import History 목록 refresh
 ```
 
-주요 변경:
+이렇게 하면 T&C Import Log와 동일한 UX는 유지하면서, Defect처럼 대량 row가 있는 import batch도 안정적으로 삭제됩니다.
+
+## 5. 사용자 오류 메시지 개선
+
+삭제 실패 시 현재는 단순히 `Bad Request`만 표시됩니다.
+
+변경 후에는 상황별로 더 명확한 메시지를 표시합니다.
 
 ```text
-- T&C ImportLogsPage 구조를 Defect용으로 이식
-- useNavigate / useSearchParams 추가
-- useAuth / useToast 추가
-- AlertDialog delete confirmation 추가
-- statusColor / actionColor 재사용
-- defect schedule audit 전용 StageCells 또는 DeltaCells 구성
-- date formatting utilities 적용
+권한 없음:
+You do not have permission to delete this import batch.
+
+기타 오류:
+Delete failed. Please try again or contact administrator.
 ```
 
-DB 권한 보강이 필요한 경우:
+기술 상세는 console/log에는 남기되, UI에는 사용자가 이해 가능한 메시지를 보여주겠습니다.
+
+## 6. 수정 대상
 
 ```text
 supabase/migrations/[new_migration].sql
+src/pages/DefectImportLogsPage.tsx
 ```
 
-## 9. 검증 항목
+## 7. 검증 항목
 
 ```text
-1. /defects/import 에서 View Import Logs 클릭 시 새 UI로 이동
-2. Defect Import History가 T&C Import History와 동일한 테이블 스타일로 표시됨
-3. File row 클릭 시 상세 화면으로 전환됨
-4. URL에 batch query가 반영되고 새로고침 후에도 상세가 유지됨
-5. Row Logs tab에서 inserted/updated/skipped/rejected badge가 표시됨
-6. team_unresolved reason이 Row Logs에서 확인됨
-7. Schedule Changes tab에서 planned/target/closed/progress/closure status 변경이 표시됨
-8. Schedule Changes row 클릭 시 해당 Defect Detail로 이동함
-9. Back button이 상세에서는 목록으로, 목록에서는 /defects/import 로 이동함
-10. 관리자/슈퍼유저만 delete button을 볼 수 있음
-11. Delete confirm 후 관련 defect import batch/log/audit 데이터가 삭제됨
-12. 일반 사용자는 delete 기능이 노출되지 않음
-13. 날짜 형식은 dd-MMM 또는 dd-MMM-yyyy 기준을 유지함
-14. 모바일/좁은 화면에서는 table이 overflow scroll로 깨지지 않음
+1. Defect Import History에서 대량 row batch 삭제 시 Bad Request가 발생하지 않음
+2. 1,000건 초과 defect item이 포함된 batch도 삭제 가능
+3. defect_daily_snapshots가 해당 batch defect 기준으로 함께 삭제됨
+4. defect_schedule_change_audit가 upload_id 기준으로 삭제됨
+5. defect_upload_row_logs가 upload_id 기준으로 삭제됨
+6. defect_items가 source_upload_id 기준으로 삭제됨
+7. defect_upload_batches row가 최종 삭제됨
+8. 삭제 성공 후 Import History 목록이 갱신됨
+9. admin/superuser 외 사용자는 서버 함수에서 삭제 거부됨
+10. 기존 T&C Import Log UI/동작에는 영향 없음
 ```
