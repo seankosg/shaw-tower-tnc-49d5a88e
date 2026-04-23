@@ -6,9 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
+import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 
 const trackedFields = ['planned_date', 'target_date', 'closed_date', 'actual_progress_pct', 'closure_status'] as const;
@@ -25,6 +27,8 @@ interface DefectImportFile {
   progress: number;
   error?: string;
   headerCount?: number;
+  dataDate?: string;
+  team?: TeamType;
   result?: { inserted: number; updated: number; skipped: number; rejected: number };
 }
 
@@ -47,6 +51,10 @@ function changed(a: unknown, b: unknown) {
   return String(a ?? '') !== String(b ?? '');
 }
 
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function DefectImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -65,6 +73,7 @@ export default function DefectImportPage() {
       status: 'parsing',
       parsedCount: 0,
       progress: 0,
+      dataDate: todayIso(),
     }));
     setFiles((current) => [...current, ...nextFiles]);
 
@@ -97,7 +106,9 @@ export default function DefectImportPage() {
 
   const removeFile = (id: string) => setFiles((current) => current.filter((file) => file.id !== id));
   const clearAll = () => setFiles([]);
-  const readyCount = files.filter((file) => file.status === 'ready').length;
+  const setFileDataDate = (id: string, dataDate: string) => setFiles((current) => current.map((file) => file.id === id ? { ...file, dataDate } : file));
+  const setFileTeam = (id: string, team: TeamType) => setFiles((current) => current.map((file) => file.id === id ? { ...file, team } : file));
+  const readyCount = files.filter((file) => file.status === 'ready' && file.team).length;
   const hasResults = files.some((file) => file.result);
   const totals = files.reduce((acc, file) => {
     if (file.result) {
@@ -111,7 +122,8 @@ export default function DefectImportPage() {
 
   const importOneFile = async (item: DefectImportFile) => {
     if (!user || !item.parsed) return { inserted: 0, updated: 0, skipped: 0, rejected: 0 };
-    const batchRes = await (supabase as any).from('defect_upload_batches').insert({ uploaded_file_name: item.name, uploaded_by: user.id, status: 'processing', total_rows: item.parsed.length }).select('id').single();
+    const dataDate = item.dataDate || todayIso();
+    const batchRes = await (supabase as any).from('defect_upload_batches').insert({ uploaded_file_name: item.name, uploaded_by: user.id, status: 'processing', total_rows: item.parsed.length, data_date: dataDate }).select('id').single();
     const uploadId = batchRes.data?.id;
     let insertedCount = 0;
     let updatedCount = 0;
@@ -129,7 +141,7 @@ export default function DefectImportPage() {
 
       const existingRes = await (supabase as any).from('defect_items').select('*').eq('issue_no', row.issue_no).maybeSingle();
       const existing = existingRes.data;
-      const payload = { ...row, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
+      const payload = { ...row, team: item.team || row.team || null, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
 
       if (existing) {
         const hasAnyChange = Object.entries(payload).some(([key, value]) => key !== 'raw_payload' && key !== 'row_version' && key !== 'updated_by' && key !== 'source_upload_id' && changed(existing[key], value));
@@ -158,7 +170,7 @@ export default function DefectImportPage() {
         const inserted = await (supabase as any).from('defect_items').insert(payload).select('id').single();
         insertedCount++;
         await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'inserted' });
-        if (inserted.data?.id) await (supabase as any).from('defect_daily_snapshots').insert({ defect_id: inserted.data.id, issue_no: row.issue_no, planned_date: row.planned_date, actual_progress_pct: row.actual_progress_pct, closure_status: row.closure_status, closed_date: row.closed_date, created_by: user.id });
+        if (inserted.data?.id) await (supabase as any).from('defect_daily_snapshots').insert({ defect_id: inserted.data.id, issue_no: row.issue_no, snapshot_date: dataDate, planned_date: row.planned_date, actual_progress_pct: row.actual_progress_pct, closure_status: row.closure_status, closed_date: row.closed_date, created_by: user.id });
       }
     }
 
@@ -168,7 +180,7 @@ export default function DefectImportPage() {
 
   const startImport = async () => {
     setIsRunning(true);
-    for (const item of files.filter((file) => file.status === 'ready')) {
+    for (const item of files.filter((file) => file.status === 'ready' && file.team)) {
       setFiles((current) => current.map((file) => file.id === item.id ? { ...file, status: 'processing', progress: 0 } : file));
       try {
         const result = await importOneFile(item);
@@ -239,6 +251,34 @@ export default function DefectImportPage() {
                       {file.parsedCount > 0 && ` · ${file.parsedCount} rows`}
                       {file.error && <span className="text-destructive"> · {file.error}</span>}
                       {file.result && <span className="ml-1">· {file.result.inserted} ins, {file.result.updated} upd, {file.result.skipped} skp, {file.result.rejected} rej</span>}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <span className="whitespace-nowrap text-xs text-muted-foreground">Data Date:</span>
+                      <Input
+                        type="date"
+                        value={file.dataDate || ''}
+                        onChange={(event) => setFileDataDate(file.id, event.target.value)}
+                        disabled={isRunning || file.status === 'done' || file.status === 'failed'}
+                        className="h-7 w-[150px] text-xs"
+                      />
+                      <span className="whitespace-nowrap text-xs text-muted-foreground">Team:</span>
+                      <Select
+                        value={file.team || ''}
+                        onValueChange={(value) => setFileTeam(file.id, value as TeamType)}
+                        disabled={isRunning || file.status === 'done' || file.status === 'failed'}
+                      >
+                        <SelectTrigger className="h-7 w-[140px] text-xs">
+                          <SelectValue placeholder="Select team" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ALL_TEAMS.map((team) => (
+                            <SelectItem key={team} value={team}>{TEAM_LABELS[team]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {file.status === 'ready' && !file.team && (
+                        <span className="text-xs text-destructive">Team is required before import.</span>
+                      )}
                     </div>
                     {file.parsed?.some((row) => !row.issue_no) && (
                       <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-border bg-muted px-2 py-1.5">
