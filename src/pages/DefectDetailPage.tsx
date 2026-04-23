@@ -163,23 +163,23 @@ export default function DefectDetailPage() {
       <Card><CardHeader><CardTitle className="flex flex-wrap items-center gap-x-8 gap-y-2 text-xl">ITEM DETAIL - NO.{record.issue_no}<span className="rounded-md border bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">Closure Status: {record.closure_status || '—'}</span></CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-3">
         <Field field="issue_no" label={getLabel('issue_no')} value={form.issue_no} required={isFieldRequired('issue_no')} disabled onChange={(v) => updateField('issue_no', v)} />
         {isFieldVisible('subcontractor_issue_no') && <Field field="subcontractor_issue_no" label={getLabel('subcontractor_issue_no')} value={form.subcontractor_issue_no} required={isFieldRequired('subcontractor_issue_no')} disabled={!canEdit} onChange={(v) => updateField('subcontractor_issue_no', v)} />}
-        <ReadonlyField label="Item Description" value={itemDescription} />
+        <Field label="Item Description" value={itemDescription} disabled={!canEdit} onChange={(v) => updateField('item_description' as any, v)} />
         <Field label="Type" value={form.area_type} disabled={!canEdit} onChange={(v) => updateField('area_type', v)} />
         <Field label="Level" value={form.area_level} disabled={!canEdit} onChange={(v) => updateField('area_level', v)} />
         <Field label="Location" value={form.area_location} disabled={!canEdit} onChange={(v) => updateField('area_location', v)} />
         <Field label="Main Trade" value={form.main_trade} disabled={!canEdit} onChange={(v) => updateField('main_trade', v)} />
         <Field label="Sub Trade" value={form.sub_trade} disabled={!canEdit} onChange={(v) => updateField('sub_trade', v)} />
-        <ReadonlyField label="Work Type" value={workType} />
+        <Field label="Work Type" value={workType} disabled={!canEdit} onChange={(v) => updateField('trade_detail', v)} />
         <Field label="Subcontractor" value={form.subcontractor_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subcontractor_name', v)} />
         <Field label="Sub-Sub" value={form.subsub_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subsub_name', v)} />
         <Field label="HDEC PIC" value={form.hdec_pic_name} disabled={!canEditResponsibility} onChange={(v) => updateField('hdec_pic_name', v)} />
-        <ReadonlyField label="Captured on" value={capturedOn} />
-        <ReadonlyField label="Start Date" value={startDate} />
-        <ReadonlyField label="Finish Date" value={finishDate} />
-        <ReadonlyField label="Actual Start Date" value={actualStartDate} />
-        <ReadonlyField label="Actual Finish Date" value={actualFinishDate} />
+        <Field label="Captured on" type="date" value={toDateInput(capturedOn)} disabled={!canEdit} onChange={(v) => updateField('captured_on' as any, v)} />
+        <Field label="Start Date" type="date" value={toDateInput(startDate)} disabled={!canEdit} onChange={(v) => updateField('planned_date', v)} />
+        <Field label="Finish Date" type="date" value={toDateInput(finishDate)} disabled={!canEdit} onChange={(v) => updateField('target_date', v)} />
+        <Field label="Actual Start Date" type="date" value={toDateInput(actualStartDate)} disabled={!canEdit} onChange={(v) => updateField('actual_start_date' as any, v)} />
+        <Field label="Actual Finish Date" type="date" value={toDateInput(actualFinishDate)} disabled={!canEdit} onChange={(v) => updateField('actual_finish_date' as any, v)} />
         <Field label="Closed Date" type="date" value={form.closed_date} disabled={!canEdit} onChange={(v) => updateField('closed_date', v)} />
-        <ReadonlyField label="Planned Progress" value={plannedProgress == null ? plannedProgressRaw : formatPct(plannedProgress)} />
+        <Field label="Planned Progress" type="number" value={plannedProgressRaw} disabled={!canEdit} onChange={(v) => updateField('planned_progress' as any, v === '' ? null : Number(v))} />
         <Field label="Actual Progress %" type="number" value={form.actual_progress_pct} disabled={!canEdit} onChange={(v) => updateField('actual_progress_pct', v === '' ? null : Number(v))} />
         <ReadonlyField label="Difference" value={progressDifference == null ? null : formatPct(progressDifference)} />
         <Field label="Closure Status" value={form.closure_status} disabled={!canEdit} onChange={(v) => updateField('closure_status', v)} />
