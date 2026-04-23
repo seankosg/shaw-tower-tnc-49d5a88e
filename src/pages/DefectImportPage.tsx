@@ -7,10 +7,12 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
+import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 
@@ -32,6 +34,19 @@ interface DefectImportFile {
   team?: TeamType;
   result?: { inserted: number; updated: number; skipped: number; rejected: number };
 }
+
+type SimilarDecisionAction = 'use_existing' | 'register_new';
+type SimilarMasterDecision = {
+  key: string;
+  kind: 'subcontractor' | 'subsub';
+  importedName: string;
+  existingName: string;
+  parentName?: string | null;
+  score: number;
+  action?: SimilarDecisionAction;
+};
+
+type MasterNameDecisions = Record<string, SimilarMasterDecision>;
 
 const statusBadge: Record<DefectFileStatus, { label: string; cls: string }> = {
   pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
