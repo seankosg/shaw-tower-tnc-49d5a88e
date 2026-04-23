@@ -1642,10 +1642,10 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
 
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base">Field Configuration</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
       <CardContent>
         <p className="mb-3 text-xs text-muted-foreground">
-          The "Visible" toggle only controls whether the field is shown in the UI (Subtest List columns and Subtest Detail fields). Underlying data is always saved regardless of this setting.
+          The "Visible" toggle controls whether the field is shown in UI surfaces. Underlying data is always saved regardless of this setting.
         </p>
         <div className="overflow-auto">
           <Table>
@@ -1654,8 +1654,11 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
                 <TableHead className="w-[120px]">Order</TableHead>
                 <TableHead>Field Name</TableHead>
                 <TableHead>Display Name</TableHead>
+                {showOrigin && <TableHead>Origin</TableHead>}
                 <TableHead className="text-center">Visible</TableHead>
                 <TableHead className="text-center">Required</TableHead>
+                <TableHead>Visible Roles</TableHead>
+                <TableHead>Editable Roles</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1687,13 +1690,16 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">{f.field_name}</TableCell>
-                  <TableCell>{f.display_name}</TableCell>
+                  <TableCell><Input className="h-8 min-w-[180px]" defaultValue={f.display_name} onBlur={(e) => updateName(f, e.target.value)} /></TableCell>
+                  {showOrigin && <TableCell className="text-xs text-muted-foreground">{f.source_origin ?? 'system'}{f.original_header ? ` · ${f.original_header}` : ''}</TableCell>}
                   <TableCell className="text-center">
                     <Switch checked={f.is_enabled} onCheckedChange={() => toggle(f, 'is_enabled')} />
                   </TableCell>
                   <TableCell className="text-center">
                     <Switch checked={f.is_required} onCheckedChange={() => toggle(f, 'is_required')} />
                   </TableCell>
+                  <TableCell><RoleChecks field={f} fieldKey="visible_to_roles" onToggle={toggleRole} /></TableCell>
+                  <TableCell><RoleChecks field={f} fieldKey="editable_to_roles" onToggle={toggleRole} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
