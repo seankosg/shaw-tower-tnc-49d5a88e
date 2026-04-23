@@ -1,334 +1,217 @@
 
-## 구현 계획: Defect Raw Data를 T&C Raw Data 방식으로 전환
+## 구현 계획: Defect Detail 카드 UI 재구성
 
-Defect Raw Data 화면(`/defects/raw-data`)에 T&C Raw Data(`Subtest Master Database`)의 페이지 설정, 스크롤, 헤더 필터, 정렬, 컬럼 리사이즈, 상태 저장 방식을 그대로 적용하겠습니다.
+`Defect Detail` 화면의 첫 번째 카드 구성을 요청하신 layout으로 변경하겠습니다. 화면의 UI label은 기존 정책대로 영어로 유지합니다.
 
-핵심 요구사항:
+## 1. 카드 제목 변경
+
+현재 제목:
 
 ```text
-- Defect Raw Data도 T&C Raw Data와 동일한 table UX 적용
-- 페이지 설정/필터/정렬/스크롤 상태 저장
-- 헤더별 필터 dropdown 적용
-- 헤더 클릭 정렬 및 Shift+Click 다중 정렬 적용
-- 컬럼 리사이즈 및 double-click auto-fit 적용
-- 대량 데이터 대응을 위한 virtualized scroll 적용
-- 최초 기본 정렬: Issue No 오름차순
+Defect Detail · {issue_no}
 ```
 
----
-
-## 1. Defect Raw Data를 TanStack Table 기반으로 재구성
-
-현재 `DefectRawDataPage.tsx`는 단순 HTML table + 수동 필터 구조입니다.
-
-이를 T&C Raw Data와 동일하게 아래 구조로 변경합니다.
+변경 후:
 
 ```text
-useReactTable
-getCoreRowModel
-getSortedRowModel
-getFilteredRowModel
-useVirtualizer
-columnFilters
-columnSizing
-columnVisibility
-columnOrder
-globalFilter
-sorting
+ITEM DETAIL - NO.[Issue No]    Closure Status: [closure_status]
 ```
 
-수정 대상:
+예시:
 
 ```text
-src/pages/DefectRawDataPage.tsx
+ITEM DETAIL - NO.DF-000123    Closure Status: Open
 ```
 
----
+`Status` 표시는 별도 `status` 컬럼이 아니라, 요청하신 대로 `closure_status` 값을 사용합니다.
 
-## 2. 기본 정렬을 Issue No 오름차순으로 설정
+## 2. 카드 필드 배열 변경
 
-페이지 최초 로딩 시 기본 정렬은 아래로 고정합니다.
+첫 번째 Detail 카드의 field 배치를 아래 순서로 재구성합니다.
 
 ```text
-DEFAULT_SORTING = [{ id: 'issue_no', desc: false }]
+Row 1:
+Issue No | Subcon Issue No | Subcon Issue Source
+
+Row 2:
+Type | Level | Location
+
+Row 3:
+Main Trade | Sub Trade | Work Type
+
+Row 4:
+Subcontractor | Sub-Sub | HDEC PIC
+
+Row 5:
+Captured on | Start Date | Finish Date
+
+Row 6:
+Actual Start Date | Actual Finish Date | Closed Date
+
+Row 7:
+Planned Progress | Actual Progress | Difference
 ```
 
-동작 기준:
+기본 grid는 desktop 기준 3 columns로 유지하고, mobile에서는 1 column로 자연스럽게 접히도록 구성합니다.
+
+## 3. 필드 데이터 매핑
+
+현재 `defect_items` 테이블에 직접 존재하는 필드는 기존 값을 사용합니다.
 
 ```text
-- 저장된 사용자 정렬 상태가 없으면 Issue No ASC
-- 사용자가 정렬을 변경하면 localStorage에 저장
-- Clear sort 후에는 필요 시 기본 정렬로 돌아가도록 처리
+Issue No                  → issue_no
+Subcon Issue No           → subcontractor_issue_no
+Subcon Issue Source       → subcontractor_issue_source
+Type                      → area_type
+Level                     → area_level
+Location                  → area_location
+Main Trade                → main_trade
+Sub Trade                 → sub_trade
+Subcontractor             → subcontractor_name
+Sub-Sub                   → subsub_name
+HDEC PIC                  → hdec_pic_name
+Closed Date               → closed_date
+Actual Progress           → actual_progress_pct
+Closure Status            → closure_status
 ```
 
-DB fetch 자체도 안정성을 위해 `issue_no` 오름차순 기준으로 변경합니다.
+현재 전용 DB 컬럼이 없는 항목은 우선 import 원본 `raw_payload`에서 alias 기반으로 표시합니다.
 
 ```text
-현재:
-order('issue_no', ascending: false)
-
-변경:
-order('issue_no', ascending: true)
+Work Type                 → raw_payload의 Work Type 계열 header, 없으면 trade_detail 또는 defect_type fallback
+Captured on               → raw_payload의 Captured on 계열 header, 없으면 created_at fallback
+Start Date                → raw_payload의 Start 계열 header
+Finish Date               → raw_payload의 Finish 계열 header
+Actual Start Date         → raw_payload의 Actual Start 계열 header
+Actual Finish Date        → raw_payload의 Actual Finish 계열 header
+Planned Progress          → raw_payload의 Planned Progress 계열 header
 ```
 
----
-
-## 3. T&C Raw Data와 동일한 페이지 상태 저장
-
-사용자별로 Defect Raw Data table 상태를 저장합니다.
-
-저장 항목:
+`Difference`는 다음 기준으로 표시합니다.
 
 ```text
-- sorting
-- columnFilters
-- globalFilter
-- columnSizing
-- scrollTop
-- scrollLeft
+Difference = Actual Progress - Planned Progress
 ```
 
-저장 key는 T&C와 충돌하지 않게 별도로 사용합니다.
+`Planned Progress`가 없으면 `Difference`는 `—`로 표시합니다.
+
+## 4. raw_payload alias helper 추가
+
+`DefectDetailPage.tsx` 안에 표시 전용 helper를 추가합니다.
 
 ```text
-defect-raw-data-state:{userId}
-defect-raw-data-state:{userId}:scroll
+getRawValue(record.raw_payload, aliases)
 ```
 
-이를 통해 사용자가 Detail로 이동 후 Raw Data로 돌아와도 기존 위치와 필터 상태를 유지합니다.
-
----
-
-## 4. Header 필터 UI 적용
-
-T&C Raw Data의 헤더 필터 dropdown 컴포넌트를 Defect Raw Data에 맞게 적용합니다.
-
-필터 타입:
+예시 alias:
 
 ```text
-Text filter:
-- issue_no
-- subcontractor_issue_no
-- subcontractor_issue_source
-- area_location
-- description
-- remarks
-- hdec_comments
+Captured on:
+- Captured on
+- Captured On
+- Captured Date
+- Capture Date
 
-Multi-select filter:
-- team
-- closure_status
-- status
-- subcontractor_name
-- subsub_name
-- hdec_pic_name
-- area_type
-- area_level
-- main_trade
-- sub_trade
-- defect_type
-- priority
+Start Date:
+- Start
+- Start Date
+- Planned Start
+- Plan Start
 
-Date range filter:
-- planned_date
-- target_date
-- closed_date
-- updated_at
-- created_at
+Finish Date:
+- Finish
+- Finish Date
+- Planned Finish
+- Plan Finish
+
+Actual Start Date:
+- Actual Start
+- Actual Start Date
+
+Actual Finish Date:
+- Actual Finish
+- Actual Finish Date
+
+Planned Progress:
+- Planned Progress
+- Planned Progress %
+- Plan Progress
+- Plan %
 ```
 
-헤더에서 제공할 기능:
+대소문자, 공백, `(H)` suffix 차이는 무시해서 찾도록 합니다.
+
+## 5. 입력 가능 / 읽기 전용 처리
+
+기존에 DB 컬럼으로 관리되는 필드는 현재 권한 로직을 유지합니다.
 
 ```text
-- filter icon 표시
-- 필터 활성 시 primary color 표시
-- Empty only 옵션
-- Clear / Clear all
-```
-
----
-
-## 5. Header 정렬 UI 적용
-
-T&C와 동일하게 헤더 클릭 정렬을 적용합니다.
-
-```text
-- Header click: 해당 컬럼 정렬
-- Shift+Click: 다중 정렬
-- ▲ / ▼ 아이콘 표시
-- 다중 정렬 순서 표시
-- Clear sort 버튼 제공
-```
-
-Issue No는 기본 오름차순으로 시작합니다.
-
----
-
-## 6. 스크롤 및 Frozen Column 구조 적용
-
-T&C Raw Data처럼 table을 두 pane으로 나눕니다.
-
-```text
-Frozen pane:
-- Issue No
-- Subcontractor Issue No
+canEdit = true:
+- Subcon Issue No
+- Subcon Issue Source
+- Type
+- Level
+- Location
+- Main Trade
+- Sub Trade
+- Closed Date
+- Actual Progress
 - Closure Status
-- Team
 
-Scrollable pane:
-- 나머지 defect fields
+canEditResponsibility = true:
+- Subcontractor
+- Sub-Sub
+- HDEC PIC
 ```
 
-모바일에서는 frozen column 수를 줄입니다.
+`raw_payload`에서만 가져오는 표시 전용 항목은 우선 read-only로 표시합니다.
 
 ```text
-Desktop: 4개 frozen column
-Mobile: 1개 frozen column
+Work Type
+Captured on
+Start Date
+Finish Date
+Actual Start Date
+Actual Finish Date
+Planned Progress
+Difference
 ```
 
-대량 데이터 성능을 위해 row virtualization을 적용합니다.
+단, `Work Type`은 기존 `trade_detail` 또는 `defect_type` fallback을 사용하므로, 현재 저장 가능한 필드가 확인되는 범위에서는 `trade_detail` 중심으로 관리 가능하게 연결할 수 있습니다.
+
+## 6. 기존 Description / Remarks 유지
+
+요청하신 카드 구성 아래에 기존 `Description`, `Remarks` textarea는 유지하되, 새 field grid 아래쪽에 full-width로 배치합니다.
 
 ```text
-ROW_HEIGHT = 36
-overscan = 12
-max height = calc(100vh - 220px)
-```
-
----
-
-## 7. Defect Field Config 반영 유지
-
-기존에 구현된 `defect_field_config` 기반 컬럼 표시/순서를 유지하면서, TanStack Table의 `columnVisibility`, `columnOrder`로 반영합니다.
-
-적용 기준:
-
-```text
-- issue_no는 항상 표시
-- defect_field_config.is_enabled = false인 컬럼은 숨김
-- defect_field_config.sort_order 기준으로 컬럼 순서 적용
-- display_name을 header label로 사용
-```
-
-고정 컬럼은 앞쪽에 우선 배치하고, 나머지는 Field Config 순서를 따릅니다.
-
----
-
-## 8. URL 필터 연동 유지 및 확장
-
-Progress Matrix, Dashboard 등에서 Raw Data로 이동할 때 전달되는 query param 필터를 TanStack column filter로 변환합니다.
-
-기존 지원 필터:
-
-```text
-team
-subcontractor
-subsub
-hdecPic
-level
-mainTrade
-subTrade
-dateStart
-dateEnd
-q
-```
-
-추가/정규화할 필터:
-
-```text
-issueNo
-subcontractorIssueNo
-status
-closureStatus
-dateField
-```
-
-URL 필터가 있을 때는 T&C와 동일하게 상단에 active filter chips를 표시하고, 개별 제거 및 전체 제거를 지원합니다.
-
----
-
-## 9. 검색 UI 및 records count 적용
-
-T&C Raw Data와 동일한 상단 검색/상태 UI를 적용합니다.
-
-```text
-- Search icon 포함 global search input
-- 검색 debounce 적용
-- 현재 filtered records count 표시
-- active column filter count 표시
-- Clear filters 버튼
-- Clear sort 버튼
-- 사용 팁 문구 표시
-```
-
-검색 대상은 모든 주요 Defect 필드에 적용합니다.
-
-```text
-Issue No
-Subcontractor Issue No
-Subcontractor Issue Source
-Team
-Area
-Trade
 Description
-Subcontractor
-Sub-Subcontractor
-HDEC PIC
-Status
 Remarks
 ```
 
----
+Raw Payload 카드와 Change History 카드는 기존처럼 아래에 유지합니다.
 
-## 10. Import / Export 버튼 유지
-
-기존 Raw Data 상단의 Import 버튼은 유지하고, T&C Raw Data처럼 Export 진입 버튼도 함께 배치합니다.
+## 7. 수정 대상 파일
 
 ```text
-Import → /defects/import
-Export → /defects/export
-```
-
-필요 시 현재 필터 상태를 Export 화면으로 전달할 수 있게 query param 유지도 검토합니다.
-
----
-
-## 11. 구현 대상 파일
-
-주요 수정:
-
-```text
-src/pages/DefectRawDataPage.tsx
-```
-
-필요 시 보조 수정:
-
-```text
-src/hooks/useDefectFieldConfig.ts
+src/pages/DefectDetailPage.tsx
 src/lib/defect-utils.ts
 ```
 
-DB schema 변경은 필요 없습니다.
+필요 시 `DefectItem` type에 표시용 optional field를 보강합니다. DB schema 변경은 이번 UI 재구성만으로는 필요 없습니다.
 
----
-
-## 12. 검증 항목
+## 8. 검증 항목
 
 ```text
-1. /defects/raw-data 로딩 시 Issue No 오름차순으로 표시됨
-2. Header 클릭 정렬이 동작함
-3. Shift+Click 다중 정렬이 동작함
-4. Header filter dropdown이 컬럼별로 표시됨
-5. Text / multi-select / date-range filter가 동작함
-6. Empty only 필터가 동작함
-7. Clear filters / Clear sort가 동작함
-8. Global search가 동작함
-9. Scroll 위치가 저장되고 복원됨
-10. Column width resize가 동작함
-11. Header double-click auto-fit이 동작함
-12. Frozen columns와 horizontal scroll이 T&C Raw Data처럼 동작함
-13. 대량 defect row에서도 virtualization으로 성능이 유지됨
-14. Field Config visibility/order/display name이 유지됨
-15. Progress Matrix 등에서 넘어온 URL 필터가 Raw Data에 반영됨
-16. row 클릭 시 기존처럼 Defect Detail로 이동함
-17. Import / Export 버튼이 정상 이동함
+1. Detail 카드 제목이 ITEM DETAIL - NO.[issue_no] 형식으로 표시됨
+2. 같은 제목 줄에 Closure Status 값이 표시됨
+3. Status 표시는 defect_items.status가 아니라 closure_status 값을 사용함
+4. 요청한 7개 row 순서대로 3-column layout이 적용됨
+5. Subcon Issue No / Source가 첫 줄에 표시됨
+6. Work Type이 raw_payload 또는 trade_detail/defect_type fallback으로 표시됨
+7. Start / Finish 계열 값이 import raw_payload에서 alias 기반으로 표시됨
+8. Actual Start / Actual Finish 계열 값이 raw_payload에서 alias 기반으로 표시됨
+9. Planned Progress / Actual Progress / Difference가 표시됨
+10. 기존 edit 권한, Save, change log, schedule audit 동작이 유지됨
+11. Raw Payload와 Change History 카드가 기존처럼 유지됨
+12. 모바일에서는 1-column으로 깨지지 않고 표시됨
 ```
