@@ -106,7 +106,9 @@ export default function DefectImportPage() {
 
   const removeFile = (id: string) => setFiles((current) => current.filter((file) => file.id !== id));
   const clearAll = () => setFiles([]);
-  const readyCount = files.filter((file) => file.status === 'ready').length;
+  const setFileDataDate = (id: string, dataDate: string) => setFiles((current) => current.map((file) => file.id === id ? { ...file, dataDate } : file));
+  const setFileTeam = (id: string, team: TeamType) => setFiles((current) => current.map((file) => file.id === id ? { ...file, team } : file));
+  const readyCount = files.filter((file) => file.status === 'ready' && file.team).length;
   const hasResults = files.some((file) => file.result);
   const totals = files.reduce((acc, file) => {
     if (file.result) {
@@ -120,7 +122,8 @@ export default function DefectImportPage() {
 
   const importOneFile = async (item: DefectImportFile) => {
     if (!user || !item.parsed) return { inserted: 0, updated: 0, skipped: 0, rejected: 0 };
-    const batchRes = await (supabase as any).from('defect_upload_batches').insert({ uploaded_file_name: item.name, uploaded_by: user.id, status: 'processing', total_rows: item.parsed.length }).select('id').single();
+    const dataDate = item.dataDate || todayIso();
+    const batchRes = await (supabase as any).from('defect_upload_batches').insert({ uploaded_file_name: item.name, uploaded_by: user.id, status: 'processing', total_rows: item.parsed.length, data_date: dataDate }).select('id').single();
     const uploadId = batchRes.data?.id;
     let insertedCount = 0;
     let updatedCount = 0;
@@ -138,7 +141,7 @@ export default function DefectImportPage() {
 
       const existingRes = await (supabase as any).from('defect_items').select('*').eq('issue_no', row.issue_no).maybeSingle();
       const existing = existingRes.data;
-      const payload = { ...row, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
+      const payload = { ...row, team: item.team || row.team || null, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
 
       if (existing) {
         const hasAnyChange = Object.entries(payload).some(([key, value]) => key !== 'raw_payload' && key !== 'row_version' && key !== 'updated_by' && key !== 'source_upload_id' && changed(existing[key], value));
@@ -167,7 +170,7 @@ export default function DefectImportPage() {
         const inserted = await (supabase as any).from('defect_items').insert(payload).select('id').single();
         insertedCount++;
         await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'inserted' });
-        if (inserted.data?.id) await (supabase as any).from('defect_daily_snapshots').insert({ defect_id: inserted.data.id, issue_no: row.issue_no, planned_date: row.planned_date, actual_progress_pct: row.actual_progress_pct, closure_status: row.closure_status, closed_date: row.closed_date, created_by: user.id });
+        if (inserted.data?.id) await (supabase as any).from('defect_daily_snapshots').insert({ defect_id: inserted.data.id, issue_no: row.issue_no, snapshot_date: dataDate, planned_date: row.planned_date, actual_progress_pct: row.actual_progress_pct, closure_status: row.closure_status, closed_date: row.closed_date, created_by: user.id });
       }
     }
 
@@ -177,7 +180,7 @@ export default function DefectImportPage() {
 
   const startImport = async () => {
     setIsRunning(true);
-    for (const item of files.filter((file) => file.status === 'ready')) {
+    for (const item of files.filter((file) => file.status === 'ready' && file.team)) {
       setFiles((current) => current.map((file) => file.id === item.id ? { ...file, status: 'processing', progress: 0 } : file));
       try {
         const result = await importOneFile(item);
