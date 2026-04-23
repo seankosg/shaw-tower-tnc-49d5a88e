@@ -192,6 +192,10 @@ function getRawValue(payload: Record<string, unknown> | undefined, aliases: stri
   return key ? payload[key] : null;
 }
 
+function isRawAlias(key: string, aliases: string[]) {
+  return aliases.map(normalizeRawKey).includes(normalizeRawKey(key));
+}
+
 function parseProgress(value: unknown) {
   if (value == null || value === '') return null;
   const parsed = Number(String(value).replace('%', '').trim());
