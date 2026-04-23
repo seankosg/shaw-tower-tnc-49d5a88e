@@ -1586,8 +1586,24 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
   const toggle = async (f: FieldCfg, key: 'is_enabled' | 'is_required') => {
     const update = { is_enabled: f.is_enabled, is_required: f.is_required };
     update[key] = !f[key];
-    await supabase.from('field_config').update(update).eq('id', f.id);
+    await (supabase as any).from(table).update(update).eq('id', f.id);
     toast({ title: 'Field updated' });
+    load();
+  };
+
+  const updateName = async (f: FieldCfg, displayName: string) => {
+    const value = displayName.trim();
+    if (!value || value === f.display_name) return;
+    await (supabase as any).from(table).update({ display_name: value }).eq('id', f.id);
+    toast({ title: 'Display name updated' });
+    load();
+  };
+
+  const toggleRole = async (f: FieldCfg, key: 'visible_to_roles' | 'editable_to_roles', role: AppRole) => {
+    const current = new Set(f[key] ?? []);
+    current.has(role) ? current.delete(role) : current.add(role);
+    await (supabase as any).from(table).update({ [key]: [...current] }).eq('id', f.id);
+    toast({ title: 'Role settings updated' });
     load();
   };
 
@@ -1612,7 +1628,7 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
     });
     const results = await Promise.all(
       changed.map((r) =>
-        supabase.from('field_config').update({ sort_order: r.sort_order }).eq('id', r.id)
+        (supabase as any).from(table).update({ sort_order: r.sort_order }).eq('id', r.id)
       )
     );
     const firstError = results.find((r) => r.error)?.error;
