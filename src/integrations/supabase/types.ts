@@ -71,6 +71,396 @@ export type Database = {
         }
         Relationships: []
       }
+      defect_change_log: {
+        Row: {
+          change_source: string | null
+          changed_at: string
+          changed_by: string | null
+          changed_field: string
+          defect_id: string
+          id: string
+          new_value: string | null
+          old_value: string | null
+          upload_id: string | null
+        }
+        Insert: {
+          change_source?: string | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_field: string
+          defect_id: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          upload_id?: string | null
+        }
+        Update: {
+          change_source?: string | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_field?: string
+          defect_id?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          upload_id?: string | null
+        }
+        Relationships: []
+      }
+      defect_daily_snapshots: {
+        Row: {
+          actual_progress_pct: number | null
+          closed_date: string | null
+          closure_status: string | null
+          created_at: string
+          created_by: string | null
+          defect_id: string
+          id: string
+          issue_no: string
+          planned_date: string | null
+          snapshot_date: string
+        }
+        Insert: {
+          actual_progress_pct?: number | null
+          closed_date?: string | null
+          closure_status?: string | null
+          created_at?: string
+          created_by?: string | null
+          defect_id: string
+          id?: string
+          issue_no: string
+          planned_date?: string | null
+          snapshot_date?: string
+        }
+        Update: {
+          actual_progress_pct?: number | null
+          closed_date?: string | null
+          closure_status?: string | null
+          created_at?: string
+          created_by?: string | null
+          defect_id?: string
+          id?: string
+          issue_no?: string
+          planned_date?: string | null
+          snapshot_date?: string
+        }
+        Relationships: []
+      }
+      defect_field_config: {
+        Row: {
+          display_name: string
+          editable_to_roles: Database["public"]["Enums"]["app_role"][] | null
+          field_name: string
+          id: string
+          is_enabled: boolean
+          is_required: boolean
+          original_header: string | null
+          sort_order: number
+          source_origin: string
+          visible_to_roles: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Insert: {
+          display_name: string
+          editable_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+          field_name: string
+          id?: string
+          is_enabled?: boolean
+          is_required?: boolean
+          original_header?: string | null
+          sort_order?: number
+          source_origin?: string
+          visible_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Update: {
+          display_name?: string
+          editable_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+          field_name?: string
+          id?: string
+          is_enabled?: boolean
+          is_required?: boolean
+          original_header?: string | null
+          sort_order?: number
+          source_origin?: string
+          visible_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Relationships: []
+      }
+      defect_items: {
+        Row: {
+          actual_progress_pct: number | null
+          area_level: string | null
+          area_location: string | null
+          area_raw: string | null
+          area_type: string | null
+          closed_date: string | null
+          closure_status: string | null
+          created_at: string
+          data_source_type: string | null
+          defect_type: string | null
+          description: string | null
+          hdec_comments: string | null
+          hdec_pic_name: string | null
+          id: string
+          is_active: boolean
+          issue_no: string
+          main_trade: string | null
+          planned_date: string | null
+          priority: string | null
+          project_id: string | null
+          raw_payload: Json
+          remarks: string | null
+          row_version: number
+          source_upload_id: string | null
+          status: string | null
+          sub_trade: string | null
+          subcontractor_issue_no: string | null
+          subcontractor_issue_source: string | null
+          subcontractor_name: string | null
+          subsub_name: string | null
+          target_date: string | null
+          team: Database["public"]["Enums"]["team_type"] | null
+          trade_detail: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          actual_progress_pct?: number | null
+          area_level?: string | null
+          area_location?: string | null
+          area_raw?: string | null
+          area_type?: string | null
+          closed_date?: string | null
+          closure_status?: string | null
+          created_at?: string
+          data_source_type?: string | null
+          defect_type?: string | null
+          description?: string | null
+          hdec_comments?: string | null
+          hdec_pic_name?: string | null
+          id?: string
+          is_active?: boolean
+          issue_no: string
+          main_trade?: string | null
+          planned_date?: string | null
+          priority?: string | null
+          project_id?: string | null
+          raw_payload?: Json
+          remarks?: string | null
+          row_version?: number
+          source_upload_id?: string | null
+          status?: string | null
+          sub_trade?: string | null
+          subcontractor_issue_no?: string | null
+          subcontractor_issue_source?: string | null
+          subcontractor_name?: string | null
+          subsub_name?: string | null
+          target_date?: string | null
+          team?: Database["public"]["Enums"]["team_type"] | null
+          trade_detail?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          actual_progress_pct?: number | null
+          area_level?: string | null
+          area_location?: string | null
+          area_raw?: string | null
+          area_type?: string | null
+          closed_date?: string | null
+          closure_status?: string | null
+          created_at?: string
+          data_source_type?: string | null
+          defect_type?: string | null
+          description?: string | null
+          hdec_comments?: string | null
+          hdec_pic_name?: string | null
+          id?: string
+          is_active?: boolean
+          issue_no?: string
+          main_trade?: string | null
+          planned_date?: string | null
+          priority?: string | null
+          project_id?: string | null
+          raw_payload?: Json
+          remarks?: string | null
+          row_version?: number
+          source_upload_id?: string | null
+          status?: string | null
+          sub_trade?: string | null
+          subcontractor_issue_no?: string | null
+          subcontractor_issue_source?: string | null
+          subcontractor_name?: string | null
+          subsub_name?: string | null
+          target_date?: string | null
+          team?: Database["public"]["Enums"]["team_type"] | null
+          trade_detail?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      defect_schedule_change_audit: {
+        Row: {
+          change_source: string | null
+          closed_diff_days: number | null
+          closed_new_date: string | null
+          closed_old_date: string | null
+          closure_status_new: string | null
+          closure_status_old: string | null
+          created_at: string
+          created_by: string | null
+          defect_id: string
+          id: string
+          issue_no: string
+          planned_diff_days: number | null
+          planned_new_date: string | null
+          planned_old_date: string | null
+          progress_diff_pct: number | null
+          progress_new_pct: number | null
+          progress_old_pct: number | null
+          project_id: string | null
+          raw_row_no: number | null
+          subcontractor_issue_no: string | null
+          target_diff_days: number | null
+          target_new_date: string | null
+          target_old_date: string | null
+          upload_id: string | null
+        }
+        Insert: {
+          change_source?: string | null
+          closed_diff_days?: number | null
+          closed_new_date?: string | null
+          closed_old_date?: string | null
+          closure_status_new?: string | null
+          closure_status_old?: string | null
+          created_at?: string
+          created_by?: string | null
+          defect_id: string
+          id?: string
+          issue_no: string
+          planned_diff_days?: number | null
+          planned_new_date?: string | null
+          planned_old_date?: string | null
+          progress_diff_pct?: number | null
+          progress_new_pct?: number | null
+          progress_old_pct?: number | null
+          project_id?: string | null
+          raw_row_no?: number | null
+          subcontractor_issue_no?: string | null
+          target_diff_days?: number | null
+          target_new_date?: string | null
+          target_old_date?: string | null
+          upload_id?: string | null
+        }
+        Update: {
+          change_source?: string | null
+          closed_diff_days?: number | null
+          closed_new_date?: string | null
+          closed_old_date?: string | null
+          closure_status_new?: string | null
+          closure_status_old?: string | null
+          created_at?: string
+          created_by?: string | null
+          defect_id?: string
+          id?: string
+          issue_no?: string
+          planned_diff_days?: number | null
+          planned_new_date?: string | null
+          planned_old_date?: string | null
+          progress_diff_pct?: number | null
+          progress_new_pct?: number | null
+          progress_old_pct?: number | null
+          project_id?: string | null
+          raw_row_no?: number | null
+          subcontractor_issue_no?: string | null
+          target_diff_days?: number | null
+          target_new_date?: string | null
+          target_old_date?: string | null
+          upload_id?: string | null
+        }
+        Relationships: []
+      }
+      defect_upload_batches: {
+        Row: {
+          data_date: string | null
+          id: string
+          note: string | null
+          processed_rows: number | null
+          project_id: string | null
+          rejected_rows: number | null
+          skipped_rows: number | null
+          status: Database["public"]["Enums"]["upload_status"]
+          success_rows: number | null
+          total_rows: number | null
+          uploaded_at: string
+          uploaded_by: string | null
+          uploaded_file_name: string
+        }
+        Insert: {
+          data_date?: string | null
+          id?: string
+          note?: string | null
+          processed_rows?: number | null
+          project_id?: string | null
+          rejected_rows?: number | null
+          skipped_rows?: number | null
+          status?: Database["public"]["Enums"]["upload_status"]
+          success_rows?: number | null
+          total_rows?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+          uploaded_file_name: string
+        }
+        Update: {
+          data_date?: string | null
+          id?: string
+          note?: string | null
+          processed_rows?: number | null
+          project_id?: string | null
+          rejected_rows?: number | null
+          skipped_rows?: number | null
+          status?: Database["public"]["Enums"]["upload_status"]
+          success_rows?: number | null
+          total_rows?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+          uploaded_file_name?: string
+        }
+        Relationships: []
+      }
+      defect_upload_row_logs: {
+        Row: {
+          action_taken: Database["public"]["Enums"]["action_taken"] | null
+          id: string
+          issue_no: string | null
+          processed_at: string
+          raw_row_no: number | null
+          reason_code: string | null
+          reason_detail: string | null
+          upload_id: string
+        }
+        Insert: {
+          action_taken?: Database["public"]["Enums"]["action_taken"] | null
+          id?: string
+          issue_no?: string | null
+          processed_at?: string
+          raw_row_no?: number | null
+          reason_code?: string | null
+          reason_detail?: string | null
+          upload_id: string
+        }
+        Update: {
+          action_taken?: Database["public"]["Enums"]["action_taken"] | null
+          id?: string
+          issue_no?: string | null
+          processed_at?: string
+          raw_row_no?: number | null
+          reason_code?: string | null
+          reason_detail?: string | null
+          upload_id?: string
+        }
+        Relationships: []
+      }
       field_config: {
         Row: {
           display_name: string
@@ -856,6 +1246,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      can_update_defect: {
+        Args: { _defect_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_update_subtest: {
         Args: { _subtest_id: string; _user_id: string }
         Returns: boolean
@@ -867,6 +1261,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      get_defect_edit_scope: {
+        Args: { _defect_id: string; _user_id: string }
+        Returns: string
       }
       get_subtest_edit_scope: {
         Args: { _subtest_id: string; _user_id: string }
