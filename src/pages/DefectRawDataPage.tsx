@@ -434,11 +434,26 @@ export default function DefectRawDataPage() {
     const dateStart = searchParams.get('dateStart');
     const dateEnd = searchParams.get('dateEnd');
     const dateField = searchParams.get('dateField');
-    if ((!dateStart && !dateEnd) || (dateField && DATE_FILTER_FIELDS.has(dateField))) return items;
-    return items.filter((item) => {
+    let next = items;
+    if ((dateStart || dateEnd) && !(dateField && DATE_FILTER_FIELDS.has(dateField))) next = next.filter((item) => {
       const dateValue = item.target_date ?? item.planned_date ?? '';
       return (!dateStart || dateValue >= dateStart) && (!dateEnd || dateValue <= dateEnd);
     });
+    if (searchParams.get('actualComplete') === 'true') next = next.filter((item) => Number(item.actual_progress_pct ?? 0) >= 100);
+    if (searchParams.get('closureComplete') === 'true') next = next.filter((item) => Boolean(item.closed_date));
+    if (searchParams.get('overdue') === 'true') next = next.filter((item) => isOverdueDefect(item, searchParams.get('asOf') ?? undefined));
+    if (searchParams.get('atRisk') === 'true') {
+      const asOf = new Date().toISOString().slice(0, 10);
+      const days = Number(searchParams.get('atRiskDays') ?? 7);
+      next = next.filter((item) => {
+        if (isOverdueDefect(item, asOf)) return false;
+        const due = item.target_date ?? item.planned_date;
+        if (!due || Number(item.actual_progress_pct ?? 0) >= 100) return false;
+        const diff = Math.round((new Date(due).getTime() - new Date(asOf).getTime()) / 86400000);
+        return diff >= 0 && diff <= days;
+      });
+    }
+    return next;
   }, [items, searchParams]);
 
   const optionFields = useMemo(() => ({
