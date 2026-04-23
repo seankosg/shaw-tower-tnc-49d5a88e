@@ -13,6 +13,17 @@ import { daysDiff } from '@/lib/defect-parser';
 import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct } from '@/lib/defect-utils';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
 
+const RAW_FIELD_LABELS = {
+  item_description: 'Item Description',
+  work_type: 'Work Type',
+  captured_on: 'Captured on',
+  start_date: 'Start Date',
+  finish_date: 'Finish Date',
+  actual_start_date: 'Actual Start Date',
+  actual_finish_date: 'Actual Finish Date',
+  planned_progress: 'Planned Progress',
+} as const;
+
 export default function DefectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -30,7 +41,7 @@ export default function DefectDetailPage() {
     async function load() {
       const { data } = await (supabase as any).from('defect_items').select('*').eq('id', id).single();
       setRecord(data);
-      setForm(data ?? {});
+      setForm(data ? hydrateDetailForm(data) : {});
       if (user) {
         const scopeRes = await (supabase as any).rpc('get_defect_edit_scope', { _user_id: user.id, _defect_id: id });
         setScope((scopeRes.data as DefectEditScope) ?? 'none');
@@ -74,6 +85,9 @@ export default function DefectDetailPage() {
       .filter((field) => canEditResponsibility || !DEFECT_RESPONSIBILITY_FIELDS.includes(field as any))
       .filter((field) => String((record as any)[field] ?? '') !== String((form as any)[field] ?? ''))
       .map((field) => ({ field, oldValue: (record as any)[field], newValue: (form as any)[field] }));
+    const rawChanges = rawFieldKeys
+      .filter((field) => String(getRawValue(record.raw_payload, [RAW_FIELD_LABELS[field]]) ?? '') !== String((form as any)[field] ?? ''))
+      .map((field) => ({ field: RAW_FIELD_LABELS[field], oldValue: getRawValue(record.raw_payload, [RAW_FIELD_LABELS[field]]), newValue: (form as any)[field] }));
 
     const payload: any = {
       subcontractor_issue_no: form.subcontractor_issue_no || null,
@@ -113,15 +127,15 @@ export default function DefectDetailPage() {
       toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
       return;
     }
-    if (changes.length > 0) {
-      await (supabase as any).from('defect_change_log').insert(changes.map(({ field, oldValue, newValue }) => ({ defect_id: record.id, changed_field: field, old_value: String(oldValue ?? ''), new_value: String(newValue ?? ''), changed_by: user.id, change_source: 'app_direct_input' })));
+    if (changes.length > 0 || rawChanges.length > 0) {
+      await (supabase as any).from('defect_change_log').insert([...changes, ...rawChanges].map(({ field, oldValue, newValue }) => ({ defect_id: record.id, changed_field: field, old_value: String(oldValue ?? ''), new_value: String(newValue ?? ''), changed_by: user.id, change_source: 'app_direct_input' })));
       for (const { field, oldValue, newValue } of changes) {
         if ((DEFECT_REVISION_FIELDS as readonly string[]).includes(field)) await (supabase as any).from('defect_schedule_change_audit').insert(revisionPayload(field, oldValue, newValue));
       }
     }
     const updatedRecord = { ...record, ...payload };
     setRecord(updatedRecord);
-    setForm(updatedRecord);
+    setForm(hydrateDetailForm(updatedRecord));
     const logRes = await (supabase as any).from('defect_change_log').select('*').eq('defect_id', record.id).order('changed_at', { ascending: false }).limit(50);
     setLogs(logRes.data ?? []);
     setSaving(false);
