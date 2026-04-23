@@ -1,535 +1,173 @@
 
+## 구현 계획: Defect Import에 Data Date 및 Team 입력 기능 추가
 
-## 추가 반영 목표
-
-Defect Management에도 T&C Management와 동일한 개념의 `Schedule Revision` 탭을 추가합니다.
-
-즉, Defect Import 또는 Detail/Quick Update에서 일정 관련 값이 변경될 때 변경 이력을 별도로 추적하고, 화면에서 변경 전/후 일정, 변경 일수, 변경 사유/영향을 확인할 수 있도록 구성합니다.
+Defect Management의 Import UI를 T&C Management Import와 동일한 사용 흐름으로 맞추겠습니다.
 
 ```text
-T&C Management
-- Schedule Revision
+현재 Defect Import
+- 파일 업로드
+- 파싱 결과 표시
+- Execute Import
 
-Defect Management
-- Schedule Revision
+추가 구현 후
+- 파일 업로드
+- 파일별 Data Date 입력
+- 파일별 Team 선택
+- Execute Import
+- 선택한 Data Date / Team을 Import batch 및 defect item에 반영
 ```
 
----
+## 1. Defect Import 파일 상태 확장
 
-## 최종 메뉴 구조
-
-### T&C Management
+`src/pages/DefectImportPage.tsx`의 파일 상태 타입에 아래 값을 추가합니다.
 
 ```text
-Dashboard
-Progress
-Schedule Revision
-Raw Data
-Import
-Import Logs
-Export
-Quick Update
+dataDate
+team
 ```
 
-### Defect Management
+기본값은 T&C Import와 동일하게 처리합니다.
 
 ```text
-Dashboard
-Progress
-Schedule Revision
-Raw Data
-Import
-Import Logs
-Export
-Quick Update
+dataDate = 오늘 날짜
+team = 빈 값
 ```
 
-### Administration
+## 2. UI 추가
+
+각 선택 파일 카드 안에 T&C Import와 같은 입력 영역을 추가합니다.
 
 ```text
-Admin
+Data Date: [date input]
+Team:      [Mechanical / Electrical / Architecture / Support select]
 ```
 
-Defect 신규 라우트는 아래를 추가합니다.
+사용 규칙:
 
 ```text
-/defects/schedule-revision
+- Import 실행 중에는 입력 비활성화
+- 완료/실패된 파일은 입력 비활성화
+- Team 선택지는 기존 공통 enum 사용
+  - Mech = Mechanical
+  - Elec = Electrical
+  - Arch = Architecture
+  - Supp = Support
 ```
 
-기존 T&C 라우트는 새 구조로 유지/redirect합니다.
+## 3. Ready Count 및 실행 조건 조정
+
+Defect Import에서도 파일별 Team을 필수로 두겠습니다.
 
 ```text
-/schedule/revision → /tc/schedule-revision
+readyCount = status가 ready이고 team이 선택된 파일 수
 ```
 
----
-
-## Defect Schedule Revision의 목적
-
-Defect Management에서는 T&C의 Pred/T1/T2 일정 변경 대신, Defect 항목의 주요 일정 및 종결 관련 변경을 추적합니다.
-
-주요 추적 대상은 다음과 같습니다.
+Team 미선택 파일은 Execute Import 대상에서 제외되며, UI에는 선택이 필요하다는 안내를 표시합니다.
 
 ```text
-Planned Date
-Target Date
-Closed Date
-Closure Status
-Actual Progress %
+Team is required before import.
 ```
 
-특히 계획일 변경, 종결 예정일 변경, 실제 종결일 입력/변경, 진행률 변화가 Import 또는 수동 입력으로 발생했을 때 별도 revision log에 기록합니다.
+## 4. Import Batch에 Data Date 저장
 
----
+`defect_upload_batches` 테이블에는 이미 `data_date` 컬럼이 있으므로 DB schema 변경은 필요 없습니다.
 
-## Defect Schedule Revision 화면 구성
-
-기본 화면은 T&C `Schedule Revision`과 유사한 테이블 형태로 구성합니다.
-
-기본 표시 컬럼:
+Import batch 생성 시 아래처럼 저장합니다.
 
 ```text
-Issue No
-Subcontractor Issue No
-Type
-Level
-Location
-Main Trade
-Sub Trade
-Team
-Subcontractor
-Sub-Sub
-HDEC PIC
-Changed At
-Changed By
-Change Source
+data_date = file.dataDate
 ```
 
-일정/진도 변경 컬럼:
+## 5. Defect Item에 Team 반영
+
+Import row에 Excel에서 파싱된 Team이 있더라도, 파일 카드에서 선택한 Team을 우선 적용합니다.
 
 ```text
-Planned Date
-- Old Date
-- New Date
-- Diff Days
-
-Target Date
-- Old Date
-- New Date
-- Diff Days
-
-Closed Date
-- Old Date
-- New Date
-- Diff Days
-
-Actual Progress %
-- Old %
-- New %
-- Diff %
-
-Closure Status
-- Old Status
-- New Status
+defect_items.team = selected file team
 ```
 
-헤더에는 T&C Schedule Revision과 동일한 정렬/필터 로직을 적용합니다.
+적용 방식:
 
 ```text
-1. Header click sorting
-2. Text filter
-3. Date range filter
-4. Multi-select filter
-5. Clear filters
-6. Clear sort
-7. Row click → Defect Detail 이동
+1. 파일별 Team 선택값이 있으면 그 값을 사용
+2. 선택값이 없을 경우 기존 Excel parser의 row.team 사용
+3. 둘 다 없으면 null
 ```
 
----
+다만 UI에서 Team을 필수로 만들 예정이므로 실제 Import에서는 대부분 선택 Team이 저장됩니다.
 
-## Defect Schedule Revision 데이터 구조
+## 6. Insert / Update 모두 반영
 
-Defect 전용 일정 변경 audit table을 추가합니다.
-
-### defect_schedule_change_audit
+신규 Defect 항목 생성 시:
 
 ```text
-id
-upload_id
-defect_id
-project_id
-
-issue_no
-subcontractor_issue_no
-
-raw_row_no
-
-planned_old_date
-planned_new_date
-planned_diff_days
-
-target_old_date
-target_new_date
-target_diff_days
-
-closed_old_date
-closed_new_date
-closed_diff_days
-
-progress_old_pct
-progress_new_pct
-progress_diff_pct
-
-closure_status_old
-closure_status_new
-
-created_by
-created_at
-change_source
+team = selected file team
+source_upload_id = upload batch id
+data_source_type = defect_import
 ```
 
-연결 및 조회 편의를 위해 `issue_no`는 audit table에도 저장합니다.
-
-다만 실제 상세 이동은 `defect_id` 기준으로 처리합니다.
-
----
-
-## Import 시 Revision 기록
-
-Defect Import는 `Issue No` 기준으로 upsert합니다.
-
-Import 중 기존 defect item과 신규 row를 비교하여 아래 필드가 변경되면 `defect_schedule_change_audit`에 기록합니다.
+기존 Defect 항목 업데이트 시:
 
 ```text
-planned_date
-target_date
-closed_date
-actual_progress_pct
-closure_status
+team = selected file team
+source_upload_id = upload batch id
+data_source_type = defect_import
+row_version 증가
 ```
 
-처리 방식:
+즉, 같은 Issue No를 재import해도 선택한 Team이 반영됩니다.
+
+## 7. Daily Snapshot 및 Schedule Revision 연계
+
+기존 로직을 유지하면서 선택한 Data Date를 snapshot 기준일로 사용하도록 보강합니다.
 
 ```text
-Issue No 신규 → defect_items insert
-Issue No 기존 + 일정/진도 변경 있음 → defect_items update + revision audit insert
-Issue No 기존 + 변경 없음 → skipped
-Issue No 없음 → rejected
+defect_daily_snapshots.snapshot_date = file.dataDate 또는 오늘 날짜
 ```
 
-T&C Schedule Revision처럼 일정 변경사항만 따로 모아 조회할 수 있도록, 일반 change log와 별도로 schedule revision audit을 유지합니다.
+Schedule Revision audit은 기존처럼 변경이 발생한 경우 기록하되, `created_at`은 시스템 시간으로 유지합니다.
 
----
+## 8. Import Summary 및 Logs 영향
 
-## 수동 수정 시 Revision 기록
-
-Defect Detail 또는 Defect Quick Update에서 아래 값이 변경될 때도 동일하게 revision audit을 생성합니다.
+Import Summary는 현재 구조를 유지합니다.
 
 ```text
-planned_date
-target_date
-closed_date
-actual_progress_pct
-closure_status
+Inserted
+Updated
+Skipped
+Rejected
 ```
 
-변경 경로는 `change_source`로 구분합니다.
+Import Logs에서는 `defect_upload_batches.data_date`가 저장되므로, 이후 필요 시 로그 화면에서 Data Date 표시도 확장할 수 있습니다.
+
+이번 구현 범위에는 우선 Import 저장까지 포함하고, 로그 화면 컬럼 확장은 별도 요청 시 진행합니다.
+
+## 9. 수정 대상 파일
 
 ```text
-import
-app_direct_input
-quick_update
+src/pages/DefectImportPage.tsx
 ```
 
-일반 필드 변경 이력은 기존 계획의 `defect_change_log`에 기록하고, 일정/진도/종결 관련 변경은 추가로 `defect_schedule_change_audit`에도 기록합니다.
-
----
-
-## Area 및 Header 처리 유지
-
-이전 수정사항은 그대로 유지합니다.
-
-### Area 분리
-
-Excel의 `Area` 값은 아래처럼 저장합니다.
+DB schema 변경은 필요 없습니다.
 
 ```text
-area_raw
-area_type
-area_level
-area_location
+defect_upload_batches.data_date 이미 존재
+defect_items.team 이미 존재
+defect_daily_snapshots.snapshot_date 이미 존재
 ```
 
-예시:
+## 10. 검증 항목
 
 ```text
-Area:
-Shaw Tower Redevelopment > STR > Level 07 > Riser - ELV/ICN
-
-area_type     = STR
-area_level    = Level 07
-area_location = Riser - ELV/ICN
+1. Defect Import 파일 카드에 Data Date 입력이 표시됨
+2. Defect Import 파일 카드에 Team 선택이 표시됨
+3. 기본 Data Date가 오늘 날짜로 설정됨
+4. Team 미선택 시 Execute Import 대상에서 제외됨
+5. Team 선택 후 Execute Import 버튼 count가 증가함
+6. Import batch에 data_date가 저장됨
+7. 신규 defect_items.team에 선택 Team이 저장됨
+8. 기존 Issue No 업데이트 시 team도 선택 Team으로 갱신됨
+9. daily snapshot의 snapshot_date에 Data Date가 반영됨
+10. 기존 Import Summary 및 progress UI가 유지됨
+11. T&C Import UI와 Defect Import UI의 사용 방식이 일치함
 ```
-
-### Header 표시
-
-Excel header에 `(H)`가 있어도 앱 화면에서는 제거해서 표시합니다.
-
-```text
-Excel: Planned Date (H)
-App:   Planned Date
-```
-
-내부적으로는 향후 자동화 대비 `original_header`, `display_name`, `source_origin`만 보관합니다.
-
-일반 사용자 화면에는 `(H)`, `LL original`, `HDEC-added` 같은 구분 문구를 노출하지 않습니다.
-
----
-
-## Defect DB 최종 구성
-
-Defect Management에는 아래 테이블을 추가합니다.
-
-```text
-defect_items
-defect_field_config
-defect_upload_batches
-defect_upload_row_logs
-defect_change_log
-defect_daily_snapshots
-defect_schedule_change_audit
-```
-
-핵심 기준:
-
-```text
-1. Issue No = Defect item unique key
-2. Subcontractor Issue No = 향후 Subcontractor별 자체 번호 연동용
-3. Area = Type / Level / Location으로 분리 저장
-4. raw_payload = Excel 원본 row 보존
-5. Schedule Revision = 일정/진도/종결 변경 이력 전용 audit
-```
-
----
-
-## 권한 정책
-
-T&C에서 적용한 2단계 권한 구조를 Defect에도 동일하게 적용합니다.
-
-### 담당자 기반 권한
-
-아래 중 하나가 일치하면 저장 권한을 부여합니다.
-
-```text
-profile.hdec_pic_name = defect_items.hdec_pic_name
-profile.subcontractor_name = defect_items.subcontractor_name
-profile.subsub_name = defect_items.subsub_name
-```
-
-담당자 기반 사용자는 진행/상태/종결 관련 필드를 수정할 수 있습니다.
-
-```text
-actual_progress_pct
-closure_status
-closed_date
-remarks
-hdec_comments
-```
-
-책임자명은 변경할 수 없습니다.
-
-```text
-subcontractor_name
-subsub_name
-hdec_pic_name
-```
-
-### Senior User 권한
-
-Senior User는 본인 소속 Team의 Defect item을 수정/저장할 수 있습니다.
-
-```text
-profile.team = defect_items.team
-```
-
-Senior User는 소속 Team 내 책임자명 변경도 가능합니다.
-
-### Admin / Superuser 권한
-
-기존처럼 전체 관리 권한을 유지합니다.
-
-```text
-전체 조회
-전체 수정
-전체 삭제
-책임자명 변경
-Import 관리
-Field Config 관리
-```
-
----
-
-## 단계별 구현 계획
-
-### Phase 1. 메뉴/라우트 구조 개편
-
-```text
-1. Sidebar를 T&C Management / Defect Management / Administration으로 재구성
-2. 기존 T&C route를 /tc/*로 이동
-3. 기존 route는 새 route로 redirect
-4. Defect Management route 추가
-5. Defect Schedule Revision route 추가
-6. Breadcrumb/page title에 섹션 구분 반영
-```
-
-### Phase 2. Defect DB 및 권한 기반 구축
-
-```text
-1. defect_items 생성
-2. defect_field_config 생성
-3. defect_upload_batches 생성
-4. defect_upload_row_logs 생성
-5. defect_change_log 생성
-6. defect_daily_snapshots 생성
-7. defect_schedule_change_audit 생성
-8. Issue No unique 기준 설정
-9. Area 분리 컬럼 추가
-10. Subcontractor 자체 번호 확장 컬럼 추가
-11. Defect RLS 정책 추가
-12. get_defect_edit_scope / can_update_defect 함수 추가
-13. 책임자명 변경 방지 trigger 추가
-```
-
-### Phase 3. Defect Import 구현
-
-```text
-1. 업로드 Excel header 분석
-2. "(H)" 포함 header의 내부 source_origin 저장
-3. 앱 표시용 display_name에서는 "(H)" 제거
-4. Issue No 기준 upsert 구현
-5. Area → Type / Level / Location 파싱 구현
-6. raw_payload에 원본 row 보존
-7. 일정/진도/종결 변경 비교 로직 구현
-8. defect_schedule_change_audit 기록
-9. Import summary 구현
-10. Import row log 구현
-11. 일반 change log 기록
-12. Daily snapshot 생성
-```
-
-### Phase 4. Defect Raw Data / Detail / Quick Update
-
-```text
-1. Defect Raw Data 테이블 구현
-2. Type / Level / Location 컬럼 표시
-3. 정렬/필터/검색 구현
-4. Defect Field Config 연동
-5. Defect Detail 화면 구현
-6. 권한에 따른 Save 표시/미표시
-7. assigned 권한자의 책임자명 field 비활성화
-8. Senior User 팀 권한 적용
-9. 일정/진도/종결 변경 시 Schedule Revision audit 기록
-10. Defect Quick Update 구현
-```
-
-### Phase 5. Defect Schedule Revision
-
-```text
-1. /defects/schedule-revision 페이지 생성
-2. defect_schedule_change_audit 조회
-3. defect_items metadata와 연결
-4. Issue No / Type / Level / Location / 담당자 정보 표시
-5. Planned Date 변경 표시
-6. Target Date 변경 표시
-7. Closed Date 변경 표시
-8. Actual Progress % 변경 표시
-9. Closure Status 변경 표시
-10. Header sorting/filter 구현
-11. Clear filters / Clear sort 구현
-12. Row click → Defect Detail 이동
-```
-
-### Phase 6. Defect Dashboard / Progress
-
-```text
-1. Defect Dashboard KPI 구현
-2. Type / Level / Location별 집계 구현
-3. Main Trade / Sub Trade / Team / 담당자별 집계 구현
-4. 계획 대비 실제 진도율 구현
-5. 누계 계획 / 누계 실적 구현
-6. 일일 실적 구현
-7. Overdue / Due Soon / Closed trend 구현
-8. Dashboard에서 Raw Data drill-down 연결
-```
-
-### Phase 7. Export / Admin / Audit 완성
-
-```text
-1. Defect Export 구현
-2. Defect Schedule Revision export 구현
-3. Defect Field Config Admin 구현
-4. Defect change log 조회
-5. Backup & Restore 범위에 Defect data 포함
-6. Audit Logs에서 T&C / Defect 구분 표시
-7. Subcontractor Issue No 관리 기능 추가
-```
-
----
-
-## 1차 구현 범위 제안
-
-먼저 아래 범위까지 구현하는 것을 권장합니다.
-
-```text
-1. 메뉴/라우트 구조 개편
-2. Defect DB schema + 권한 구조
-3. Defect Excel Import
-4. Issue No 기준 upsert
-5. Area → Type / Level / Location 분리
-6. "(H)" 제거 표시명 처리
-7. Defect Raw Data
-8. Defect Detail
-9. Defect Schedule Revision
-10. 기본 Dashboard KPI
-```
-
-이후 2차로 고도화합니다.
-
-```text
-1. Progress matrix
-2. Daily / cumulative chart
-3. Subcontractor Issue No 관리
-4. Advanced export
-5. Admin Field Config 고도화
-6. LL 원본파일 자동 비교 기능
-```
-
----
-
-## 검증 항목
-
-```text
-1. 기존 T&C 기능이 T&C Management 섹션에서 정상 동작
-2. 기존 URL 접속 시 새 T&C URL로 redirect
-3. Defect Management 메뉴가 권한에 맞게 표시
-4. Defect Schedule Revision 메뉴가 표시됨
-5. Defect Import에서 Issue No가 고유 key로 사용됨
-6. Issue No가 없는 row는 rejected 처리
-7. 동일 Issue No 재import 시 update 처리
-8. Area 값이 Type / Level / Location으로 분리 저장됨
-9. "(H)" header는 화면에 "(H)" 없이 표시됨
-10. raw_payload에는 원본 header와 값이 보존됨
-11. Planned Date 변경 시 Defect Schedule Revision에 기록됨
-12. Target Date 변경 시 Defect Schedule Revision에 기록됨
-13. Closed Date 변경 시 Defect Schedule Revision에 기록됨
-14. Actual Progress % 변경 시 Defect Schedule Revision에 기록됨
-15. Closure Status 변경 시 Defect Schedule Revision에 기록됨
-16. Defect Schedule Revision에서 정렬/필터가 동작함
-17. Defect Schedule Revision 행 클릭 시 Defect Detail로 이동함
-18. Defect Detail Save 버튼이 권한 있을 때만 표시됨
-19. 담당자 기반 사용자는 책임자명 변경 불가
-20. Senior User는 본인 Team 항목의 책임자명 변경 가능
-21. Admin / Superuser는 전체 관리 가능
-22. Dashboard KPI와 Raw Data count가 일치
-```
-
