@@ -222,6 +222,26 @@ function isRawAlias(key: string, aliases: string[]) {
   return aliases.map(normalizeRawKey).includes(normalizeRawKey(key));
 }
 
+function hydrateDetailForm(record: DefectItem) {
+  return {
+    ...record,
+    item_description: getRawValue(record.raw_payload, ['Issue Description', 'IssueDescription', 'Item Description', 'Description']) ?? record.description,
+    captured_on: getRawValue(record.raw_payload, ['Captured on', 'Captured On', 'Captured Date', 'Capture Date']) ?? record.created_at,
+    actual_start_date: getRawValue(record.raw_payload, ['Actual Start', 'Actual Start Date']),
+    actual_finish_date: getRawValue(record.raw_payload, ['Actual Finish', 'Actual Finish Date']),
+    planned_progress: getRawValue(record.raw_payload, ['Planned Progress', 'Planned Progress %', 'Plan Progress', 'Plan %']),
+  } as Partial<DefectItem> & Record<string, unknown>;
+}
+
+function toDateInput(value: unknown) {
+  if (value == null || value === '') return '';
+  const text = String(value);
+  const iso = /^(\d{4}-\d{2}-\d{2})/.exec(text)?.[1];
+  if (iso) return iso;
+  const d = new Date(text);
+  return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+}
+
 function parseProgress(value: unknown) {
   if (value == null || value === '') return null;
   const parsed = Number(String(value).replace('%', '').trim());
