@@ -1,6 +1,6 @@
 import XLSX from 'xlsx-js-style';
 import type { Table, Column, Row } from '@tanstack/react-table';
-import { formatDdMmm } from './format';
+import { formatDdMmm, formatDdMmmYyyy } from './format';
 import { DATA_SOURCE_LABELS, type DataSource, type TcStatus } from '@/types/enums';
 import type { FieldConfigRow } from '@/hooks/useFieldConfig';
 
@@ -137,8 +137,7 @@ function formatCellValue<TRow>(row: Row<TRow>, col: Column<TRow, unknown>): stri
     return formatDdMmm(raw as string);
   }
   if (id === 'updated_at') {
-    const d = new Date(raw as string);
-    return isNaN(d.getTime()) ? String(raw) : d.toLocaleDateString();
+    return formatDdMmmYyyy(raw as string);
   }
   if (id === 'data_source_type') {
     return DATA_SOURCE_LABELS[raw as DataSource] ?? String(raw);

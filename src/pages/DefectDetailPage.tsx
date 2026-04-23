@@ -11,6 +11,18 @@ import { useToast } from '@/hooks/use-toast';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { daysDiff } from '@/lib/defect-parser';
 import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct } from '@/lib/defect-utils';
+import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
+
+const RAW_FIELD_LABELS = {
+  item_description: 'Item Description',
+  work_type: 'Work Type',
+  captured_on: 'Captured on',
+  start_date: 'Start Date',
+  finish_date: 'Finish Date',
+  actual_start_date: 'Actual Start Date',
+  actual_finish_date: 'Actual Finish Date',
+  planned_progress: 'Planned Progress',
+} as const;
 
 export default function DefectDetailPage() {
   const { id } = useParams();
@@ -29,7 +41,7 @@ export default function DefectDetailPage() {
     async function load() {
       const { data } = await (supabase as any).from('defect_items').select('*').eq('id', id).single();
       setRecord(data);
-      setForm(data ?? {});
+      setForm(data ? hydrateDetailForm(data) : {});
       if (user) {
         const scopeRes = await (supabase as any).rpc('get_defect_edit_scope', { _user_id: user.id, _defect_id: id });
         setScope((scopeRes.data as DefectEditScope) ?? 'none');
@@ -59,11 +71,12 @@ export default function DefectDetailPage() {
     if (!record || !user || !canEdit) return;
     setSaving(true);
 
+    const rawFieldKeys = ['item_description', 'work_type', 'captured_on', 'start_date', 'finish_date', 'actual_start_date', 'actual_finish_date', 'planned_progress'] as const;
     const editableFields = [
       'subcontractor_issue_no', 'subcontractor_issue_source',
       'area_type', 'area_level', 'area_location',
-      'main_trade', 'sub_trade',
-      'closed_date', 'actual_progress_pct', 'closure_status',
+      'main_trade', 'sub_trade', 'trade_detail',
+      'planned_date', 'target_date', 'closed_date', 'actual_progress_pct', 'closure_status',
       'description', 'remarks',
       'subcontractor_name', 'subsub_name', 'hdec_pic_name',
     ] as const;
@@ -72,6 +85,9 @@ export default function DefectDetailPage() {
       .filter((field) => canEditResponsibility || !DEFECT_RESPONSIBILITY_FIELDS.includes(field as any))
       .filter((field) => String((record as any)[field] ?? '') !== String((form as any)[field] ?? ''))
       .map((field) => ({ field, oldValue: (record as any)[field], newValue: (form as any)[field] }));
+    const rawChanges = rawFieldKeys
+      .filter((field) => String(getRawValue(record.raw_payload, [RAW_FIELD_LABELS[field]]) ?? '') !== String((form as any)[field] ?? ''))
+      .map((field) => ({ field: RAW_FIELD_LABELS[field], oldValue: getRawValue(record.raw_payload, [RAW_FIELD_LABELS[field]]), newValue: (form as any)[field] }));
 
     const payload: any = {
       subcontractor_issue_no: form.subcontractor_issue_no || null,
@@ -81,6 +97,9 @@ export default function DefectDetailPage() {
       area_location: form.area_location || null,
       main_trade: form.main_trade || null,
       sub_trade: form.sub_trade || null,
+      trade_detail: form.trade_detail || null,
+      planned_date: form.planned_date || null,
+      target_date: form.target_date || null,
       closed_date: form.closed_date || null,
       actual_progress_pct: form.actual_progress_pct ?? null,
       closure_status: form.closure_status || null,
@@ -90,6 +109,13 @@ export default function DefectDetailPage() {
       data_source_type: 'app_direct_input',
       row_version: record.row_version + 1,
     };
+    const rawPayload = { ...(record.raw_payload ?? {}) };
+    for (const key of rawFieldKeys) {
+      const value = (form as any)[key];
+      if (value == null || value === '') delete rawPayload[RAW_FIELD_LABELS[key]];
+      else rawPayload[RAW_FIELD_LABELS[key]] = value;
+    }
+    payload.raw_payload = rawPayload;
     if (canEditResponsibility) {
       payload.subcontractor_name = form.subcontractor_name || null;
       payload.subsub_name = form.subsub_name || null;
@@ -101,15 +127,15 @@ export default function DefectDetailPage() {
       toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
       return;
     }
-    if (changes.length > 0) {
-      await (supabase as any).from('defect_change_log').insert(changes.map(({ field, oldValue, newValue }) => ({ defect_id: record.id, changed_field: field, old_value: String(oldValue ?? ''), new_value: String(newValue ?? ''), changed_by: user.id, change_source: 'app_direct_input' })));
+    if (changes.length > 0 || rawChanges.length > 0) {
+      await (supabase as any).from('defect_change_log').insert([...changes, ...rawChanges].map(({ field, oldValue, newValue }) => ({ defect_id: record.id, changed_field: field, old_value: String(oldValue ?? ''), new_value: String(newValue ?? ''), changed_by: user.id, change_source: 'app_direct_input' })));
       for (const { field, oldValue, newValue } of changes) {
         if ((DEFECT_REVISION_FIELDS as readonly string[]).includes(field)) await (supabase as any).from('defect_schedule_change_audit').insert(revisionPayload(field, oldValue, newValue));
       }
     }
     const updatedRecord = { ...record, ...payload };
     setRecord(updatedRecord);
-    setForm(updatedRecord);
+    setForm(hydrateDetailForm(updatedRecord));
     const logRes = await (supabase as any).from('defect_change_log').select('*').eq('defect_id', record.id).order('changed_at', { ascending: false }).limit(50);
     setLogs(logRes.data ?? []);
     setSaving(false);
@@ -119,14 +145,14 @@ export default function DefectDetailPage() {
   const rawEntries = useMemo(() => Object.entries(record?.raw_payload ?? {}).slice(0, 80), [record]);
   if (!record) return <div className="text-sm text-muted-foreground">Loading defect...</div>;
 
-  const workType = getRawValue(record.raw_payload, ['Work Type', 'WorkType', 'Type of Work']) ?? record.trade_detail ?? record.defect_type;
-  const itemDescription = getRawValue(record.raw_payload, ['Issue Description', 'IssueDescription', 'Item Description', 'Description']) ?? record.description;
-  const capturedOn = getRawValue(record.raw_payload, ['Captured on', 'Captured On', 'Captured Date', 'Capture Date']) ?? record.created_at;
-  const startDate = getRawValue(record.raw_payload, ['Start', 'Start Date', 'Planned Start', 'Plan Start']);
-  const finishDate = getRawValue(record.raw_payload, ['Finish', 'Finish Date', 'Planned Finish', 'Plan Finish']);
-  const actualStartDate = getRawValue(record.raw_payload, ['Actual Start', 'Actual Start Date']);
-  const actualFinishDate = getRawValue(record.raw_payload, ['Actual Finish', 'Actual Finish Date']);
-  const plannedProgressRaw = getRawValue(record.raw_payload, ['Planned Progress', 'Planned Progress %', 'Plan Progress', 'Plan %']);
+  const workType = form.trade_detail ?? getRawValue(record.raw_payload, ['Work Type', 'WorkType', 'Type of Work']) ?? record.defect_type;
+  const itemDescription = (form as any).item_description ?? getRawValue(record.raw_payload, ['Issue Description', 'IssueDescription', 'Item Description', 'Description']) ?? record.description;
+  const capturedOn = (form as any).captured_on ?? getRawValue(record.raw_payload, ['Captured on', 'Captured On', 'Captured Date', 'Capture Date']) ?? record.created_at;
+  const startDate = (form as any).start_date ?? form.planned_date ?? getRawValue(record.raw_payload, ['Start', 'Start Date', 'Planned Start', 'Plan Start']);
+  const finishDate = (form as any).finish_date ?? form.target_date ?? getRawValue(record.raw_payload, ['Finish', 'Finish Date', 'Planned Finish', 'Plan Finish']);
+  const actualStartDate = (form as any).actual_start_date ?? getRawValue(record.raw_payload, ['Actual Start', 'Actual Start Date']);
+  const actualFinishDate = (form as any).actual_finish_date ?? getRawValue(record.raw_payload, ['Actual Finish', 'Actual Finish Date']);
+  const plannedProgressRaw = (form as any).planned_progress ?? getRawValue(record.raw_payload, ['Planned Progress', 'Planned Progress %', 'Plan Progress', 'Plan %']);
   const plannedProgress = parseProgress(plannedProgressRaw);
   const actualProgress = form.actual_progress_pct == null ? null : Number(form.actual_progress_pct);
   const progressDifference = plannedProgress == null || actualProgress == null ? null : actualProgress - plannedProgress;
@@ -137,23 +163,23 @@ export default function DefectDetailPage() {
       <Card><CardHeader><CardTitle className="flex flex-wrap items-center gap-x-8 gap-y-2 text-xl">ITEM DETAIL - NO.{record.issue_no}<span className="rounded-md border bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">Closure Status: {record.closure_status || '—'}</span></CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-3">
         <Field field="issue_no" label={getLabel('issue_no')} value={form.issue_no} required={isFieldRequired('issue_no')} disabled onChange={(v) => updateField('issue_no', v)} />
         {isFieldVisible('subcontractor_issue_no') && <Field field="subcontractor_issue_no" label={getLabel('subcontractor_issue_no')} value={form.subcontractor_issue_no} required={isFieldRequired('subcontractor_issue_no')} disabled={!canEdit} onChange={(v) => updateField('subcontractor_issue_no', v)} />}
-        <ReadonlyField label="Item Description" value={itemDescription} />
+        <Field label="Item Description" value={itemDescription} disabled={!canEdit} onChange={(v) => updateField('item_description' as any, v)} />
         <Field label="Type" value={form.area_type} disabled={!canEdit} onChange={(v) => updateField('area_type', v)} />
         <Field label="Level" value={form.area_level} disabled={!canEdit} onChange={(v) => updateField('area_level', v)} />
         <Field label="Location" value={form.area_location} disabled={!canEdit} onChange={(v) => updateField('area_location', v)} />
         <Field label="Main Trade" value={form.main_trade} disabled={!canEdit} onChange={(v) => updateField('main_trade', v)} />
         <Field label="Sub Trade" value={form.sub_trade} disabled={!canEdit} onChange={(v) => updateField('sub_trade', v)} />
-        <ReadonlyField label="Work Type" value={workType} />
+        <Field label="Work Type" value={workType} disabled={!canEdit} onChange={(v) => updateField('trade_detail', v)} />
         <Field label="Subcontractor" value={form.subcontractor_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subcontractor_name', v)} />
         <Field label="Sub-Sub" value={form.subsub_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subsub_name', v)} />
         <Field label="HDEC PIC" value={form.hdec_pic_name} disabled={!canEditResponsibility} onChange={(v) => updateField('hdec_pic_name', v)} />
-        <ReadonlyField label="Captured on" value={capturedOn} />
-        <ReadonlyField label="Start Date" value={startDate} />
-        <ReadonlyField label="Finish Date" value={finishDate} />
-        <ReadonlyField label="Actual Start Date" value={actualStartDate} />
-        <ReadonlyField label="Actual Finish Date" value={actualFinishDate} />
+        <Field label="Captured on" type="date" value={toDateInput(capturedOn)} disabled={!canEdit} onChange={(v) => updateField('captured_on' as any, v)} />
+        <Field label="Start Date" type="date" value={toDateInput(startDate)} disabled={!canEdit} onChange={(v) => updateField('planned_date', v)} />
+        <Field label="Finish Date" type="date" value={toDateInput(finishDate)} disabled={!canEdit} onChange={(v) => updateField('target_date', v)} />
+        <Field label="Actual Start Date" type="date" value={toDateInput(actualStartDate)} disabled={!canEdit} onChange={(v) => updateField('actual_start_date' as any, v)} />
+        <Field label="Actual Finish Date" type="date" value={toDateInput(actualFinishDate)} disabled={!canEdit} onChange={(v) => updateField('actual_finish_date' as any, v)} />
         <Field label="Closed Date" type="date" value={form.closed_date} disabled={!canEdit} onChange={(v) => updateField('closed_date', v)} />
-        <ReadonlyField label="Planned Progress" value={plannedProgress == null ? plannedProgressRaw : formatPct(plannedProgress)} />
+        <Field label="Planned Progress" type="number" value={plannedProgressRaw} disabled={!canEdit} onChange={(v) => updateField('planned_progress' as any, v === '' ? null : Number(v))} />
         <Field label="Actual Progress %" type="number" value={form.actual_progress_pct} disabled={!canEdit} onChange={(v) => updateField('actual_progress_pct', v === '' ? null : Number(v))} />
         <ReadonlyField label="Difference" value={progressDifference == null ? null : formatPct(progressDifference)} />
         <Field label="Closure Status" value={form.closure_status} disabled={!canEdit} onChange={(v) => updateField('closure_status', v)} />
@@ -161,7 +187,7 @@ export default function DefectDetailPage() {
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Remarks</label><Textarea value={String(form.remarks ?? '')} disabled={!canEdit} onChange={(e) => updateField('remarks', e.target.value)} /></div>
       </CardContent></Card>
       <Card><CardHeader><CardTitle>Raw Payload</CardTitle></CardHeader><CardContent><div className="grid gap-2 md:grid-cols-2"><div className="rounded-md border p-2 text-xs"><div className="text-muted-foreground">Subcon Issue Source</div><div className="font-medium">{String(form.subcontractor_issue_source || '—')}</div></div>{rawEntries.filter(([k]) => !isRawAlias(k, ['Issue Description', 'IssueDescription', 'Item Description', 'Description'])).map(([k, v]) => <div key={k} className="rounded-md border p-2 text-xs"><div className="text-muted-foreground">{k.replace(/\s*\(H\)\s*$/i, '')}</div><div className="font-medium">{String(v || '—')}</div></div>)}</div></CardContent></Card>
-      <Card><CardHeader><CardTitle>Change History</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Field</TableHead><TableHead>Old</TableHead><TableHead>New</TableHead><TableHead>Changed At</TableHead></TableRow></TableHeader><TableBody>{logs.map((log) => <TableRow key={log.id}><TableCell>{log.changed_field}</TableCell><TableCell>{log.old_value}</TableCell><TableCell>{log.new_value}</TableCell><TableCell>{new Date(log.changed_at).toLocaleString()}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+      <Card><CardHeader><CardTitle>Change History</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Field</TableHead><TableHead>Old</TableHead><TableHead>New</TableHead><TableHead>Changed At</TableHead></TableRow></TableHeader><TableBody>{logs.map((log) => <TableRow key={log.id}><TableCell>{log.changed_field}</TableCell><TableCell>{formatMaybeDate(log.old_value)}</TableCell><TableCell>{formatMaybeDate(log.new_value)}</TableCell><TableCell>{formatDateTimeDdMmmYyyy(log.changed_at)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
     </div>
   );
 }
@@ -194,6 +220,31 @@ function getRawValue(payload: Record<string, unknown> | undefined, aliases: stri
 
 function isRawAlias(key: string, aliases: string[]) {
   return aliases.map(normalizeRawKey).includes(normalizeRawKey(key));
+}
+
+function hydrateDetailForm(record: DefectItem) {
+  return {
+    ...record,
+    item_description: getRawValue(record.raw_payload, ['Issue Description', 'IssueDescription', 'Item Description', 'Description']) ?? record.description,
+    captured_on: getRawValue(record.raw_payload, ['Captured on', 'Captured On', 'Captured Date', 'Capture Date']) ?? record.created_at,
+    actual_start_date: getRawValue(record.raw_payload, ['Actual Start', 'Actual Start Date']),
+    actual_finish_date: getRawValue(record.raw_payload, ['Actual Finish', 'Actual Finish Date']),
+    planned_progress: getRawValue(record.raw_payload, ['Planned Progress', 'Planned Progress %', 'Plan Progress', 'Plan %']),
+  } as Partial<DefectItem> & Record<string, unknown>;
+}
+
+function toDateInput(value: unknown) {
+  if (value == null || value === '') return '';
+  const text = String(value);
+  const iso = /^(\d{4}-\d{2}-\d{2})/.exec(text)?.[1];
+  if (iso) return iso;
+  const d = new Date(text);
+  return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+}
+
+function formatMaybeDate(value: unknown) {
+  if (typeof value !== 'string') return value == null || value === '' ? '—' : String(value);
+  return /^\d{4}-\d{2}-\d{2}/.test(value) ? formatDdMmmYyyy(value) : (value || '—');
 }
 
 function parseProgress(value: unknown) {
