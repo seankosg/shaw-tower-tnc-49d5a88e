@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
-import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, parseSubcontractorIssueSequence, suggestOwnerCode } from '@/lib/defect-utils';
+import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, suggestOwnerCode } from '@/lib/defect-utils';
 import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
 import { normalizeTeamValue, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
@@ -165,7 +165,6 @@ function reserveSubcontractorIssueNo(row: ParsedDefectRow, projectId: string | n
   }
   registry.reservedKeys.add(key);
   registry.nextSeqByOwner.set(ownerCode, sequence + 1);
-  parseSubcontractorIssueSequence(generated, ownerCode);
   return { subcontractor_issue_no: generated, subcontractor_issue_source: 'auto_generated', duplicate: false };
 }
 
