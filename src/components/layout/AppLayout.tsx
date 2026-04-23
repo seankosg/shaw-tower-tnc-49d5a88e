@@ -17,6 +17,23 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouteMemory } from '@/hooks/useRouteMemory';
 
 const ROUTE_TITLES: Array<{ match: (p: string) => boolean; label: string }> = [
+  { match: (p) => p === '/tc/dashboard', label: 'T&C / Dashboard' },
+  { match: (p) => p === '/tc/progress', label: 'T&C / Progress' },
+  { match: (p) => p === '/tc/schedule-revision', label: 'T&C / Schedule Revision' },
+  { match: (p) => p === '/tc/raw-data', label: 'T&C / Raw Data' },
+  { match: (p) => p === '/tc/import', label: 'T&C / Import' },
+  { match: (p) => p === '/tc/import/logs', label: 'T&C / Import Logs' },
+  { match: (p) => p === '/tc/export', label: 'T&C / Export' },
+  { match: (p) => p === '/tc/quick-update', label: 'T&C / Quick Update' },
+  { match: (p) => p === '/defects/dashboard', label: 'Defect / Dashboard' },
+  { match: (p) => p === '/defects/progress', label: 'Defect / Progress' },
+  { match: (p) => p === '/defects/schedule-revision', label: 'Defect / Schedule Revision' },
+  { match: (p) => p === '/defects/raw-data', label: 'Defect / Raw Data' },
+  { match: (p) => p === '/defects/import', label: 'Defect / Import' },
+  { match: (p) => p === '/defects/import/logs', label: 'Defect / Import Logs' },
+  { match: (p) => p === '/defects/export', label: 'Defect / Export' },
+  { match: (p) => p === '/defects/quick-update', label: 'Defect / Quick Update' },
+  { match: (p) => /^\/defects\/[^/]+$/.test(p), label: 'Defect / Detail' },
   { match: (p) => p === '/dashboard', label: 'Dashboard' },
   { match: (p) => p === '/schedule/revision', label: 'Schedule Revision' },
   { match: (p) => p === '/schedule', label: 'Progress' },
