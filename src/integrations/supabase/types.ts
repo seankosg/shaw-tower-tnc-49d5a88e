@@ -1262,6 +1262,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      delete_defect_import_batch: {
+        Args: { _batch_id: string }
+        Returns: undefined
+      }
       get_defect_edit_scope: {
         Args: { _defect_id: string; _user_id: string }
         Returns: string

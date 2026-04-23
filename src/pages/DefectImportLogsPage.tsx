@@ -157,31 +157,18 @@ export default function DefectImportLogsPage() {
   const deleteBatch = async (batch: DefectBatch) => {
     setDeletingId(batch.id);
     try {
-      const { data: defects, error: defectLookupErr } = await supabase.from('defect_items')
-        .select('id')
-        .eq('source_upload_id', batch.id);
-      if (defectLookupErr) throw defectLookupErr;
-
-      const defectIds = (defects ?? []).map((d) => d.id);
-      if (defectIds.length > 0) {
-        const { error: snapshotErr } = await supabase.from('defect_daily_snapshots').delete().in('defect_id', defectIds);
-        if (snapshotErr) throw snapshotErr;
-      }
-
-      const { error: itemErr } = await supabase.from('defect_items').delete().eq('source_upload_id', batch.id);
-      if (itemErr) throw itemErr;
-      const { error: auditErr } = await supabase.from('defect_schedule_change_audit').delete().eq('upload_id', batch.id);
-      if (auditErr) throw auditErr;
-      const { error: logErr } = await supabase.from('defect_upload_row_logs').delete().eq('upload_id', batch.id);
-      if (logErr) throw logErr;
-      const { error: batchErr } = await supabase.from('defect_upload_batches').delete().eq('id', batch.id);
-      if (batchErr) throw batchErr;
+      const { error } = await (supabase as any).rpc('delete_defect_import_batch', { _batch_id: batch.id });
+      if (error) throw error;
 
       toast({ title: 'Batch deleted', description: `Removed ${batch.uploaded_file_name} and its defect data` });
       if (selectedBatch === batch.id) setSelectedBatch(null);
       await fetchBatches();
     } catch (e: any) {
-      toast({ title: 'Delete failed', description: e.message, variant: 'destructive' });
+      const message = e?.message?.includes('permission')
+        ? 'You do not have permission to delete this import batch.'
+        : 'Delete failed. Please try again or contact administrator.';
+      console.error('Defect import batch delete failed', e);
+      toast({ title: 'Delete failed', description: message, variant: 'destructive' });
     } finally {
       setDeletingId(null);
     }
