@@ -1,217 +1,207 @@
 
-## 구현 계획: Defect Detail 카드 UI 재구성
+## 제안: Team 명칭 정합 기준
 
-`Defect Detail` 화면의 첫 번째 카드 구성을 요청하신 layout으로 변경하겠습니다. 화면의 UI label은 기존 정책대로 영어로 유지합니다.
-
-## 1. 카드 제목 변경
-
-현재 제목:
+현재 T&C Management 구축 시 이미 기 구축된 기준은 다음과 같습니다.
 
 ```text
-Defect Detail · {issue_no}
+DB 저장값 / 내부 enum:
+- Mech
+- Elec
+- Arch
+- Supp
+
+앱 표시명:
+- Mechanical
+- Electrical
+- Architecture
+- Support
+```
+
+다만 사용자가 선호하신 명칭과 현장 discipline 표현의 일관성을 고려하면, 앱 전체 표시명은 아래처럼 통일하는 것이 가장 적절합니다.
+
+```text
+권장 앱 표시명:
+- Mechanical
+- Electrical
+- Architectural
+- Support
+```
+
+즉, DB에는 기존 T&C 기준인 짧은 enum 값을 유지하고, 화면/엑셀/필터/로그/관리자 UI에는 full label을 일관되게 표시하는 방식입니다.
+
+## 권장 기준
+
+```text
+Internal value: Mech
+Display label: Mechanical
+
+Internal value: Elec
+Display label: Electrical
+
+Internal value: Arch
+Display label: Architectural
+
+Internal value: Supp
+Display label: Support
+```
+
+## DB enum 값을 변경하지 않는 이유
+
+현재 `team_type`은 이미 다음 enum으로 생성되어 있고, T&C `subtests`, Defect `defect_items`, User Management `profiles`, 권한 RPC, 필터, import/export에서 공통 사용 중입니다.
+
+```text
+Mech, Elec, Arch, Supp
+```
+
+이를 DB 레벨에서 `Mechanical`, `Electrical`, `Architectural`, `Support`로 변경하면 다음 영향이 큽니다.
+
+```text
+- 기존 데이터 migration 필요
+- database enum rename / cast 처리 필요
+- RLS/RPC 권한 로직 재검증 필요
+- Import/Export 필터 값 변경 필요
+- 기존 URL filter / localStorage 상태와 충돌 가능
+```
+
+따라서 안정성을 위해 DB 저장값은 유지하고, 앱 전체 표시명만 통일하는 것을 제안합니다.
+
+## 적용 계획
+
+### 1. 공통 Team label 기준 변경
+
+`src/types/enums.ts`의 `TEAM_LABELS`를 앱 전체 기준으로 사용합니다.
+
+변경 전:
+
+```text
+Arch: Architecture
 ```
 
 변경 후:
 
 ```text
-ITEM DETAIL - NO.[Issue No]    Closure Status: [closure_status]
+Arch: Architectural
 ```
+
+최종 기준:
+
+```text
+Mech → Mechanical
+Elec → Electrical
+Arch → Architectural
+Supp → Support
+```
+
+### 2. Team normalization helper 공통화
+
+현재 T&C import와 Defect parser/import에서 Team 판단 로직이 분산되어 있으므로, 공통 helper를 추가하거나 기존 enum 파일에 정리합니다.
+
+예시 기준:
+
+```text
+normalizeTeamValue(input) → TeamType | null
+formatTeamLabel(team) → Mechanical / Electrical / Architectural / Support
+```
+
+이 helper를 다음 영역에서 동일하게 사용합니다.
+
+```text
+- T&C Import
+- Defect Import
+- User Management
+- Raw Data filter
+- Dashboard filter
+- Export filter
+- Detail pages
+```
+
+### 3. Defect Import 자동 Team 판단 기준
+
+Defect Import의 Field Discipline 기반 판단은 내부 저장값으로는 기존 enum을 사용하고, 사용자에게 보이는 명칭은 full label로 표시합니다.
+
+```text
+Architectural 계열 → Arch → Architectural
+Electrical 계열    → Elec → Electrical
+Mechanical 계열    → Mech → Mechanical
+Support 계열       → Supp → Support
+```
+
+Electrical 우선 규칙은 유지합니다.
+
+```text
+Electrical / ICT / SBT / Vertical Transport → Electrical
+```
+
+Mechanical은 다음으로 판단합니다.
+
+```text
+Mechanical / ACMV / BMS / Plumbing / Sanitary / Santary / Gas / Fire Protection → Mechanical
+```
+
+Architectural은 다음으로 판단합니다.
+
+```text
+Architectural / Archtectural / Architecture / Landscaping / Facade / Structural → Architectural
+```
+
+### 4. User Management fallback도 동일 기준 사용
+
+Field Discipline으로 Team이 판단되지 않을 경우, User Management의 profile team을 참조합니다.
+
+profile에는 내부값이 저장됩니다.
+
+```text
+Mech / Elec / Arch / Supp
+```
+
+화면에는 항상 다음처럼 표시합니다.
+
+```text
+Mechanical / Electrical / Architectural / Support
+```
+
+### 5. Defect Import 화면 변경 시 반영
+
+기존 계획의 Team 수동 선택 제거는 유지합니다.
+
+추가로 Import 결과/로그 문구도 full label 기준으로 표시합니다.
 
 예시:
 
 ```text
-ITEM DETAIL - NO.DF-000123    Closure Status: Open
+Resolved Team: Electrical
+Team unresolved
 ```
 
-`Status` 표시는 별도 `status` 컬럼이 아니라, 요청하신 대로 `closure_status` 값을 사용합니다.
+내부 저장값 `Elec` 같은 약어는 화면에 노출하지 않습니다.
 
-## 2. 카드 필드 배열 변경
+### 6. 앱 전체 표시 점검 대상
 
-첫 번째 Detail 카드의 field 배치를 아래 순서로 재구성합니다.
+다음 화면/기능에서 Team 표시가 모두 동일 label을 쓰도록 점검 및 보강합니다.
 
 ```text
-Row 1:
-Issue No | Subcon Issue No | Subcon Issue Source
-
-Row 2:
-Type | Level | Location
-
-Row 3:
-Main Trade | Sub Trade | Work Type
-
-Row 4:
-Subcontractor | Sub-Sub | HDEC PIC
-
-Row 5:
-Captured on | Start Date | Finish Date
-
-Row 6:
-Actual Start Date | Actual Finish Date | Closed Date
-
-Row 7:
-Planned Progress | Actual Progress | Difference
+- Admin / User Management
+- T&C Raw Data
+- T&C Detail
+- T&C Import
+- T&C Dashboard
+- Defect Import
+- Defect Raw Data
+- Defect Detail
+- Defect Dashboard / Progress
+- Defect Export
+- Excel export files
+- Import Logs
 ```
 
-기본 grid는 desktop 기준 3 columns로 유지하고, mobile에서는 1 column로 자연스럽게 접히도록 구성합니다.
-
-## 3. 필드 데이터 매핑
-
-현재 `defect_items` 테이블에 직접 존재하는 필드는 기존 값을 사용합니다.
+## 최종 제안 기준
 
 ```text
-Issue No                  → issue_no
-Subcon Issue No           → subcontractor_issue_no
-Subcon Issue Source       → subcontractor_issue_source
-Type                      → area_type
-Level                     → area_level
-Location                  → area_location
-Main Trade                → main_trade
-Sub Trade                 → sub_trade
-Subcontractor             → subcontractor_name
-Sub-Sub                   → subsub_name
-HDEC PIC                  → hdec_pic_name
-Closed Date               → closed_date
-Actual Progress           → actual_progress_pct
-Closure Status            → closure_status
+DB / internal value는 기존 T&C 기준 유지:
+Mech, Elec, Arch, Supp
+
+앱 전체 표시명은 다음으로 통일:
+Mechanical, Electrical, Architectural, Support
 ```
 
-현재 전용 DB 컬럼이 없는 항목은 우선 import 원본 `raw_payload`에서 alias 기반으로 표시합니다.
-
-```text
-Work Type                 → raw_payload의 Work Type 계열 header, 없으면 trade_detail 또는 defect_type fallback
-Captured on               → raw_payload의 Captured on 계열 header, 없으면 created_at fallback
-Start Date                → raw_payload의 Start 계열 header
-Finish Date               → raw_payload의 Finish 계열 header
-Actual Start Date         → raw_payload의 Actual Start 계열 header
-Actual Finish Date        → raw_payload의 Actual Finish 계열 header
-Planned Progress          → raw_payload의 Planned Progress 계열 header
-```
-
-`Difference`는 다음 기준으로 표시합니다.
-
-```text
-Difference = Actual Progress - Planned Progress
-```
-
-`Planned Progress`가 없으면 `Difference`는 `—`로 표시합니다.
-
-## 4. raw_payload alias helper 추가
-
-`DefectDetailPage.tsx` 안에 표시 전용 helper를 추가합니다.
-
-```text
-getRawValue(record.raw_payload, aliases)
-```
-
-예시 alias:
-
-```text
-Captured on:
-- Captured on
-- Captured On
-- Captured Date
-- Capture Date
-
-Start Date:
-- Start
-- Start Date
-- Planned Start
-- Plan Start
-
-Finish Date:
-- Finish
-- Finish Date
-- Planned Finish
-- Plan Finish
-
-Actual Start Date:
-- Actual Start
-- Actual Start Date
-
-Actual Finish Date:
-- Actual Finish
-- Actual Finish Date
-
-Planned Progress:
-- Planned Progress
-- Planned Progress %
-- Plan Progress
-- Plan %
-```
-
-대소문자, 공백, `(H)` suffix 차이는 무시해서 찾도록 합니다.
-
-## 5. 입력 가능 / 읽기 전용 처리
-
-기존에 DB 컬럼으로 관리되는 필드는 현재 권한 로직을 유지합니다.
-
-```text
-canEdit = true:
-- Subcon Issue No
-- Subcon Issue Source
-- Type
-- Level
-- Location
-- Main Trade
-- Sub Trade
-- Closed Date
-- Actual Progress
-- Closure Status
-
-canEditResponsibility = true:
-- Subcontractor
-- Sub-Sub
-- HDEC PIC
-```
-
-`raw_payload`에서만 가져오는 표시 전용 항목은 우선 read-only로 표시합니다.
-
-```text
-Work Type
-Captured on
-Start Date
-Finish Date
-Actual Start Date
-Actual Finish Date
-Planned Progress
-Difference
-```
-
-단, `Work Type`은 기존 `trade_detail` 또는 `defect_type` fallback을 사용하므로, 현재 저장 가능한 필드가 확인되는 범위에서는 `trade_detail` 중심으로 관리 가능하게 연결할 수 있습니다.
-
-## 6. 기존 Description / Remarks 유지
-
-요청하신 카드 구성 아래에 기존 `Description`, `Remarks` textarea는 유지하되, 새 field grid 아래쪽에 full-width로 배치합니다.
-
-```text
-Description
-Remarks
-```
-
-Raw Payload 카드와 Change History 카드는 기존처럼 아래에 유지합니다.
-
-## 7. 수정 대상 파일
-
-```text
-src/pages/DefectDetailPage.tsx
-src/lib/defect-utils.ts
-```
-
-필요 시 `DefectItem` type에 표시용 optional field를 보강합니다. DB schema 변경은 이번 UI 재구성만으로는 필요 없습니다.
-
-## 8. 검증 항목
-
-```text
-1. Detail 카드 제목이 ITEM DETAIL - NO.[issue_no] 형식으로 표시됨
-2. 같은 제목 줄에 Closure Status 값이 표시됨
-3. Status 표시는 defect_items.status가 아니라 closure_status 값을 사용함
-4. 요청한 7개 row 순서대로 3-column layout이 적용됨
-5. Subcon Issue No / Source가 첫 줄에 표시됨
-6. Work Type이 raw_payload 또는 trade_detail/defect_type fallback으로 표시됨
-7. Start / Finish 계열 값이 import raw_payload에서 alias 기반으로 표시됨
-8. Actual Start / Actual Finish 계열 값이 raw_payload에서 alias 기반으로 표시됨
-9. Planned Progress / Actual Progress / Difference가 표시됨
-10. 기존 edit 권한, Save, change log, schedule audit 동작이 유지됨
-11. Raw Payload와 Change History 카드가 기존처럼 유지됨
-12. 모바일에서는 1-column으로 깨지지 않고 표시됨
-```
+이 방식이 현재 T&C Management의 기 구축 DB/권한/필터 구조와 가장 안전하게 정합되고, 사용자가 선호한 full label 방식도 만족합니다.
