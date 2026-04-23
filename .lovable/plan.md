@@ -1,302 +1,296 @@
 
-## 점검 결과
+## 제안: Import Issue No 정렬 기준에 맞춰 Subcontractor Issue No 자동 채번
 
-현재 코드 기준으로는 Defect Management의 주요 drill-down은 이미 대부분 현재 route인 `/defects/raw-data`로 직접 이동하고 있어, T&C에서 발생했던 `/raw-data → /tc/raw-data` legacy redirect 과정의 query 손실 문제와 동일한 구조는 보이지 않습니다.
+## 현재 원인
 
-확인된 현재 상태:
-
-```text
-Defect Dashboard
-- KPI card drill-down: /defects/raw-data?... 직접 이동
-- Overdue / At-Risk alert: /defects/raw-data?... 직접 이동
-- Plan vs Actual table drill-down: /defects/raw-data?... 직접 이동
-- Pie chart drill-down: /defects/raw-data?... 직접 이동
-
-Defect Progress
-- Matrix group/cell drill-down: /defects/raw-data?... 직접 이동
-
-App Router
-- /defects/raw-data route 존재
-- 현재 /defects/* legacy redirect는 별도로 없음
-```
-
-따라서 T&C와 동일하게 “legacy redirect가 query string을 제거해서 필터가 풀리는 문제”는 Defect Management에서는 현재 직접 재현될 가능성이 낮습니다.
-
-다만 Defect drill-down 쪽에는 별도 보완이 필요한 부분이 있습니다.
-
-## 발견된 보완 포인트
-
-### 1. Defect legacy alias가 없음
-
-T&C는 기존 route를 `/tc/*`로 바꾸면서 legacy route를 query-preserving redirect로 유지합니다.
+현재 Defect Import는 Excel에서 읽힌 행 순서 그대로 처리합니다.
 
 ```text
-/raw-data?... → /tc/raw-data?...
+Excel row order대로 for-loop 처리
+→ 빈 Subcontractor Issue No 발견 시 즉시 다음 SEQ 부여
 ```
 
-Defect Management는 현재 `/defects/*`가 처음부터 실제 route로 보이며 legacy redirect는 없습니다.
-
-하지만 사용자가 과거/외부 링크로 아래 같은 경로를 접근할 가능성을 고려하면 query-preserving alias를 추가하는 것이 안전합니다.
+따라서 원본 Excel의 `Issue No`가 내림차순이면 아래처럼 보일 수 있습니다.
 
 ```text
-/defect/dashboard?...      → /defects/dashboard?...
-/defect/progress?...       → /defects/progress?...
-/defect/raw-data?...       → /defects/raw-data?...
-/defect/import?...         → /defects/import?...
-/defect/import/logs?...    → /defects/import/logs?...
-/defect/export?...         → /defects/export?...
-/defect/quick-update?...   → /defects/quick-update?...
+Issue No      Subcontractor Issue No
+1005          SC-ABC-00001
+1004          SC-ABC-00002
+1003          SC-ABC-00003
 ```
 
-핵심은 T&C처럼 `RedirectPreserveSearch`를 재사용해서 query string을 반드시 보존하는 것입니다.
+데이터 자체는 중복 없이 정상 생성되지만, 사람이 볼 때 `Issue No` 방향과 `Subcontractor Issue No` 방향이 반대로 느껴져 부자연스럽습니다.
 
-### 2. Defect Progress Matrix drill-down의 date field가 불명확함
+## 적용 방향
 
-현재 `DefectProgressPage`에는 date field 선택이 있습니다.
+자동 생성 대상 행에 대해서는 `Issue No` 정렬 기준으로 먼저 번호를 예약한 뒤, 기존 import 행 순서대로 insert/update를 진행하도록 변경합니다.
+
+핵심 결과:
 
 ```text
-Planned Date / Target Date
+Issue No가 내림차순이면
+Issue No 큰 값부터 Subcontractor Issue No도 작은 SEQ부터 부여
+
+Issue No      Subcontractor Issue No
+1005          SC-ABC-00001
+1004          SC-ABC-00002
+1003          SC-ABC-00003
 ```
 
-하지만 `DefectProgressMatrix`에서 Raw Data로 이동할 때는 아래만 전달합니다.
+즉 화면/Excel에서 보이는 Issue No 순서와 Subcontractor Issue No 증가 방향이 맞게 됩니다.
+
+## 상세 구현 계획
+
+### 1. `Issue No` 자연 정렬 유틸 추가
+
+`src/pages/DefectImportPage.tsx`에 Issue No 비교 함수를 추가합니다.
+
+정렬 기준:
 
 ```text
-dateStart
-dateEnd
+- 숫자가 포함된 Issue No는 numeric sorting 사용
+- 예: 2 < 10, D-2 < D-10
+- 영문/기호가 섞인 경우에도 안정적으로 비교
+- 값이 없으면 뒤로 보냄
 ```
 
-`dateField`를 전달하지 않기 때문에 Raw Data에서는 fallback 로직으로 `target_date ?? planned_date` 기준 필터를 적용합니다.
-
-즉 사용자가 Progress 화면에서 `Planned Date`를 선택해도 matrix drill-down에서는 그 선택이 명확히 반영되지 않을 수 있습니다.
-
-수정 방향:
-
-```text
-DefectProgressPage의 dateField 값을 DefectProgressMatrix에 prop으로 전달
-DefectProgressMatrix drill-down URL에 dateField=planned_date 또는 target_date 포함
-```
-
-예상 URL:
-
-```text
-/defects/raw-data?subTrade=...&dateStart=2026-04-24&dateEnd=2026-04-24&dateField=planned_date
-```
-
-### 3. Defect Progress Matrix의 빈 그룹값 처리 보완
-
-현재 Defect progress group key가 없으면 label/key가 `—`로 생성됩니다.
-
-```text
-row.key = "—"
-```
-
-그리고 drill-down 시 아래처럼 전달됩니다.
-
-```text
-/defects/raw-data?subTrade=—
-```
-
-하지만 Raw Data의 column filter가 실제 blank/null 값을 `—` 문자열과 동일하게 처리하지 않으면 필터 결과가 비거나 부정확할 수 있습니다.
-
-T&C 쪽은 빈 값 표현에 `__EMPTY__` 같은 convention을 사용하고 있으므로 Defect 쪽도 동일하게 맞추는 것이 안전합니다.
-
-수정 방향:
-
-```text
-DefectProgressMatrix에서 row.key가 "—" 또는 "(None)"이면 __EMPTY__ 전달
-DefectRawDataPage에서 __EMPTY__를 blank/null filter로 해석
-```
-
-### 4. Defect Raw Data URL filter key 정리
-
-현재 Defect Dashboard와 Progress에서 사용하는 query key는 아래 형태입니다.
-
-```text
-team
-subcontractor
-subsub
-hdecPic
-level
-mainTrade
-subTrade
-status
-closureStatus
-issueNo
-subcontractorIssueNo
-dateStart
-dateEnd
-dateField
-actualComplete
-closureComplete
-overdue
-atRisk
-asOf
-atRiskDays
-```
-
-이 key들은 `DefectRawDataPage`에서 대부분 처리되고 있습니다.
-
-다만 수정 시 다음을 함께 재확인합니다.
-
-```text
-- dateField가 DATE_FILTER_FIELDS에 있을 때 column filter로 정상 반영되는지
-- dateField가 없을 때 fallback date range가 의도대로 동작하는지
-- overdue=true + asOf=YYYY-MM-DD 필터가 정상 동작하는지
-- atRisk=true + atRiskDays=N 필터가 정상 동작하는지
-- group filter와 overdue/date filter가 동시에 적용되는지
-```
-
-## 수정 계획
-
-### 1. `src/App.tsx`
-
-현재 T&C에 적용된 `RedirectPreserveSearch`를 Defect legacy alias에도 재사용합니다.
-
-추가 route:
+구현 방식:
 
 ```tsx
-<Route path="/defect/dashboard" element={<RedirectPreserveSearch to="/defects/dashboard" />} />
-<Route path="/defect/progress" element={<RedirectPreserveSearch to="/defects/progress" />} />
-<Route path="/defect/schedule-revision" element={<RedirectPreserveSearch to="/defects/schedule-revision" />} />
-<Route path="/defect/raw-data" element={<RedirectPreserveSearch to="/defects/raw-data" />} />
-<Route path="/defect/import" element={<RedirectPreserveSearch to="/defects/import" />} />
-<Route path="/defect/import/logs" element={<RedirectPreserveSearch to="/defects/import/logs" />} />
-<Route path="/defect/export" element={<RedirectPreserveSearch to="/defects/export" />} />
-<Route path="/defect/quick-update" element={<RedirectPreserveSearch to="/defects/quick-update" />} />
+const issueNoCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: 'base',
+});
 ```
 
-효과:
-
-```text
-/defect/raw-data?overdue=true&asOf=2026-04-24
-→ /defects/raw-data?overdue=true&asOf=2026-04-24
-```
-
-### 2. `src/pages/DefectProgressPage.tsx`
-
-`dateField`를 `DefectProgressMatrix`에 전달합니다.
-
-변경 방향:
+그리고 다음과 같은 helper를 둡니다.
 
 ```tsx
-<DefectProgressMatrix
-  rows={matrix.rows}
-  buckets={matrix.buckets}
-  bucket={bucket}
-  groupBy={groupBy}
-  dateField={dateField}
-/>
+function compareIssueNoAsc(a: string | null | undefined, b: string | null | undefined) {
+  return issueNoCollator.compare(String(a ?? ''), String(b ?? ''));
+}
+
+function compareIssueNoDesc(a: string | null | undefined, b: string | null | undefined) {
+  return compareIssueNoAsc(b, a);
+}
 ```
 
-### 3. `src/components/defects/DefectProgressMatrix.tsx`
+### 2. Import 파일의 Issue No 정렬 방향 감지
 
-props에 `dateField`를 추가하고, bucket drill-down 시 URL에 포함합니다.
+원본 import 파일이 오름차순인지 내림차순인지 자동 감지합니다.
 
-변경 방향:
+방식:
 
 ```text
-- dateField prop 추가
-- openRawData()에서 bucketStart가 있을 경우 dateField도 params에 set
-- 빈 그룹값은 __EMPTY__로 normalize
+1. issue_no가 있는 row만 추출
+2. 인접 row 간 비교
+3. 오름차순 pair 수와 내림차순 pair 수 계산
+4. 내림차순 pair가 더 많으면 desc로 판단
+5. 그 외는 asc로 판단
 ```
 
-예상 query:
+예시:
 
 ```text
-/defects/raw-data?subTrade=ARCH&dateStart=2026-04-24&dateEnd=2026-04-24&dateField=planned_date
+1005, 1004, 1003 → desc
+1003, 1004, 1005 → asc
+D-001, D-002, D-010 → asc
 ```
 
-### 4. `src/pages/DefectRawDataPage.tsx`
+### 3. 자동 생성 번호 사전 예약 단계 추가
 
-URL filter에서 `__EMPTY__`를 blank/null 값으로 처리하도록 보완합니다.
+현재는 각 row를 처리하면서 즉시 `reserveSubcontractorIssueNo()`를 호출합니다.
 
-적용 대상:
+이를 아래 구조로 바꿉니다.
 
 ```text
-team
-subcontractor
-subsub
-hdecPic
-level
-mainTrade
-subTrade
-status
-closureStatus
-issueNo
-subcontractorIssueNo
+A. import 시작 전, 전체 row에 대해 Subcontractor Issue No assignment map 생성
+B. assignment map 생성 시 Issue No 정렬 방향을 기준으로 자동 생성 번호 부여
+C. 실제 DB insert/update는 기존 row 순서대로 수행
 ```
 
-처리 방향:
+즉, 처리 순서는 유지하지만 번호 배정 기준만 개선합니다.
+
+이렇게 하면:
 
 ```text
-param value가 __EMPTY__이면 해당 column의 null/blank row만 매칭
-일반 value는 기존처럼 text/multi-select filter 유지
+- progress 표시
+- raw_row_no log
+- upload row log
+- inserted/updated/skipped/rejected count
 ```
 
-가능하면 T&C `SubtestList`의 empty handling convention과 맞춥니다.
+기존 동작을 유지할 수 있습니다.
 
-### 5. Defect drill-down 경로 재점검
+### 4. 기존 번호 보존 규칙 유지
 
-아래 drill-down이 모두 `/defects/raw-data?...` 직접 이동하는지 확인하고, legacy 또는 잘못된 route가 있으면 수정합니다.
+아래 케이스는 절대 바꾸지 않습니다.
 
 ```text
-DefectDashboardPage
-- Total Defects
-- Sub Trades
-- Actual Complete
-- Closure
-- Overdue
-- Overdue alert
-- At-Risk alert
-- Plan vs Actual table values
-- Pie chart slices
-
-DefectProgressPage / DefectProgressMatrix
-- Group label click
-- Bucket cell click
+- 기존 defect에 subcontractor_issue_no가 이미 있으면 그대로 보존
+- Excel에 subcontractor_issue_no가 입력되어 있으면 imported 값 사용
+- imported 값이 기존 DB 또는 같은 import session 내에서 중복이면 reject
 ```
 
-## 검증 항목
+정렬 기반 자동 채번은 오직 아래 케이스에만 적용합니다.
+
+```text
+신규 defect 또는 기존 defect 중 subcontractor_issue_no가 비어 있고,
+Excel에도 subcontractor_issue_no가 없는 row
+```
+
+### 5. Owner Code별로 독립 채번 유지
+
+Subcontractor Issue No는 owner code별 sequence이므로 정렬 후에도 owner code별로 독립적으로 부여합니다.
+
+예시:
+
+```text
+Issue No   Owner   Generated
+1005       ABC     SC-ABC-00001
+1004       XYZ     SC-XYZ-00001
+1003       ABC     SC-ABC-00002
+1002       XYZ     SC-XYZ-00002
+```
+
+기존 DB에 이미 번호가 있으면 다음 번호부터 시작합니다.
+
+```text
+기존 최대: SC-ABC-00027
+신규 시작: SC-ABC-00028
+```
+
+### 6. 함수 구조 정리
+
+`reserveSubcontractorIssueNo()`는 단일 row 즉시 예약용으로만 쓰기보다, assignment 생성 로직에서 재사용 가능한 형태로 정리합니다.
+
+추가 예상 함수:
+
+```tsx
+function detectIssueNoSortDirection(rows: ParsedDefectRow[]): 'asc' | 'desc'
+
+function buildSubcontractorIssueAssignments(
+  rows: ParsedDefectRow[],
+  registry: IssueRegistry,
+  existingByIssueNo: Map<string, any>
+): Map<number, IssueAssignment>
+```
+
+`Map` key는 `rawRowNo` 또는 stable row key를 사용해 원본 row와 assignment를 연결합니다.
+
+### 7. 기존 import 루프 반영
+
+`importOneFile()`에서 row별로 매번 DB 조회하는 구조는 유지하되, 최소한 assignment 생성에 필요한 existing 조회 결과를 재사용하도록 정리합니다.
+
+변경 후 흐름:
+
+```text
+1. profile/team map 준비
+2. master ensurer 준비
+3. issue registry 준비
+4. import rows에 대한 existing defect 조회 또는 map 구성
+5. Issue No 정렬 방향 감지
+6. Subcontractor Issue No assignment map 생성
+7. 기존 row order대로 import loop 실행
+8. row별 assignment를 payload에 반영
+```
+
+## 예외 처리
+
+### Issue No가 완전히 정렬되어 있지 않은 경우
+
+혼합 정렬이면 다수 방향을 기준으로 판단합니다.
+
+```text
+대부분 내림차순 → desc
+대부분 오름차순 또는 판단 불가 → asc
+```
+
+### Issue No가 숫자형이 아닌 경우
+
+`Intl.Collator`의 numeric compare를 사용하므로 문자열 기반 Issue No도 자연 정렬됩니다.
+
+```text
+D-2, D-10, D-11
+```
+
+### Issue No가 비어 있는 경우
+
+기존처럼 reject 대상입니다.
+
+```text
+reason_code: missing_issue_no
+```
+
+자동 채번 대상에서 제외합니다.
+
+## 테스트 계획
+
+### 1. Unit test 추가
+
+`src/test/defect-import-issue-assignment.test.ts`를 추가하거나 기존 테스트 파일에 포함합니다.
+
+테스트 케이스:
+
+```text
+1. Issue No 오름차순 import
+   1001, 1002, 1003
+   → SC-ABC-00001, 00002, 00003
+
+2. Issue No 내림차순 import
+   1003, 1002, 1001
+   → Excel 표시 순서 기준 SC-ABC-00001, 00002, 00003
+
+3. 자연 정렬
+   D-10, D-2, D-1
+   → desc 판단 및 numeric order 유지
+
+4. owner code별 sequence 분리
+   ABC / XYZ 섞여 있어도 각 owner별 00001부터 증가
+
+5. 기존 DB 최대 SEQ 이후부터 시작
+   existing SC-ABC-00027
+   → 신규 SC-ABC-00028부터
+
+6. existing defect에 기존 subcontractor_issue_no가 있으면 보존
+
+7. Excel imported subcontractor_issue_no가 있으면 자동 생성하지 않음
+
+8. imported subcontractor_issue_no 중복이면 기존처럼 reject
+```
+
+### 2. Build 확인
 
 수정 후 아래를 확인합니다.
 
 ```text
-1. Defect Dashboard > Overdue 클릭
-   → /defects/raw-data?source=dashboard&overdue=true&asOf=... 이동
-
-2. Defect Raw Data에 overdue defect만 표시됨
-
-3. Defect Dashboard > At-Risk 클릭
-   → /defects/raw-data?source=dashboard&atRisk=true&atRiskDays=... 이동
-
-4. Defect Dashboard > Plan vs Actual 숫자 클릭
-   → group filter + date/dateField/overdue 조건이 함께 유지됨
-
-5. Defect Progress Matrix bucket 클릭
-   → dateStart/dateEnd/dateField가 모두 URL에 포함됨
-
-6. Defect Progress에서 Planned Date 선택 후 drill-down
-   → planned_date 기준으로 Raw Data 필터링됨
-
-7. Defect Progress에서 Target Date 선택 후 drill-down
-   → target_date 기준으로 Raw Data 필터링됨
-
-8. 빈 그룹값 drill-down
-   → __EMPTY__ 처리로 blank/null row만 표시됨
-
-9. legacy alias 직접 접근 확인
-   → /defect/raw-data?overdue=true&asOf=... 가 /defects/raw-data?overdue=true&asOf=... 로 query 보존 redirect됨
-
-10. T&C 기존 route와 drill-down 영향 없음
-
-11. build 성공
+npm run build
+npm run test
 ```
 
 ## 수정 대상 파일
 
 ```text
-src/App.tsx
-src/pages/DefectProgressPage.tsx
-src/components/defects/DefectProgressMatrix.tsx
-src/pages/DefectRawDataPage.tsx
+src/pages/DefectImportPage.tsx
+src/test/defect-import-issue-assignment.test.ts
 ```
+
+## 기대 결과
+
+수정 후 Defect Import에서 원본 Excel의 `Issue No`가 내림차순이면 `Subcontractor Issue No`도 같은 표시 방향으로 자연스럽게 증가합니다.
+
+```text
+Before
+Issue No      Subcontractor Issue No
+1005          SC-ABC-00001
+1004          SC-ABC-00002
+1003          SC-ABC-00003
+
+After
+Issue No      Subcontractor Issue No
+1005          SC-ABC-00001
+1004          SC-ABC-00002
+1003          SC-ABC-00003
+```
+
+단, 기존 데이터 보존, 중복 방지, owner code별 sequence, import log 동작은 그대로 유지합니다.
