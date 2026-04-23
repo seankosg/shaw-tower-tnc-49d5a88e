@@ -261,12 +261,12 @@ function ColumnFilterDropdown({ column }: { column: Column<ScheduleRevisionRow> 
   return <TextFilterDropdown column={column} />;
 }
 
-function SortableHeader({ column, label, className }: { column: Column<ScheduleRevisionRow> | undefined; label: string; className?: string }) {
-  if (!column) return <TableHead className={cn('text-xs whitespace-nowrap', className)}>{label}</TableHead>;
+function SortableHeader({ column, label, className, rowSpan }: { column: Column<ScheduleRevisionRow> | undefined; label: string; className?: string; rowSpan?: number }) {
+  if (!column) return <TableHead rowSpan={rowSpan} className={cn('text-xs whitespace-nowrap', className)}>{label}</TableHead>;
   const sorted = column.getIsSorted();
 
   return (
-    <TableHead className={cn('text-xs whitespace-nowrap', className)}>
+    <TableHead rowSpan={rowSpan} className={cn('text-xs whitespace-nowrap', className)}>
       <div className="flex items-center gap-1">
         <button className="inline-flex items-center gap-1 hover:text-foreground" onClick={column.getToggleSortingHandler()}>
           <span>{label}</span>
