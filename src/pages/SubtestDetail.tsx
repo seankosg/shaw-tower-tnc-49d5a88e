@@ -201,7 +201,7 @@ export default function SubtestDetailPage() {
 
     const { error } = await supabase
       .from('subtests')
-      .update(updatePayload)
+      .update(updatePayload as any)
       .eq('id', record.id);
 
     if (error) {
@@ -268,6 +268,8 @@ export default function SubtestDetailPage() {
       return updated;
     });
   };
+
+  const canEditResponsibility = editScope === 'team' || editScope === 'full';
 
   if (loading) {
     return <div className="flex items-center justify-center py-12 text-muted-foreground">Loading...</div>;
@@ -441,19 +443,19 @@ export default function SubtestDetailPage() {
           {isFieldVisible('subcontractor_name') && (
           <div className="space-y-1.5">
             <Label className="text-xs">Subcontractor</Label>
-            <Input className="h-9" value={form.subcontractor_name || ''} onChange={e => updateField('subcontractor_name', e.target.value)} />
+            <Input className="h-9" value={form.subcontractor_name || ''} disabled={!canEditResponsibility} onChange={e => updateField('subcontractor_name', e.target.value)} />
           </div>
           )}
           {isFieldVisible('subsub_name') && (
           <div className="space-y-1.5">
             <Label className="text-xs">Sub-Sub</Label>
-            <Input className="h-9" value={form.subsub_name || ''} onChange={e => updateField('subsub_name', e.target.value)} />
+            <Input className="h-9" value={form.subsub_name || ''} disabled={!canEditResponsibility} onChange={e => updateField('subsub_name', e.target.value)} />
           </div>
           )}
           {isFieldVisible('hdec_pic_name') && (
           <div className="space-y-1.5 md:col-span-2">
             <Label className="text-xs">HDEC PIC</Label>
-            <Input className="h-9" value={form.hdec_pic_name || ''} onChange={e => updateField('hdec_pic_name', e.target.value)} />
+            <Input className="h-9" value={form.hdec_pic_name || ''} disabled={!canEditResponsibility} onChange={e => updateField('hdec_pic_name', e.target.value)} />
           </div>
           )}
         </CardContent>
