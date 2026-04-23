@@ -47,6 +47,7 @@ interface PermRow {
 interface FieldCfg {
   id: string; field_name: string; display_name: string; is_enabled: boolean; is_required: boolean; sort_order: number;
   visible_to_roles: AppRole[] | null; editable_to_roles: AppRole[] | null;
+  original_header?: string | null; source_origin?: string;
 }
 interface ChangeLogRow {
   id: string; subtest_id: string; changed_field: string; old_value: string | null;
