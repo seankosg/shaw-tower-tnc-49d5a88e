@@ -66,11 +66,11 @@ const App = () => (
                 <Route path="/defects/progress" element={<DefectProgressPage />} />
                 <Route path="/defects/schedule-revision" element={<DefectScheduleRevisionPage />} />
                 <Route path="/defects/raw-data" element={<DefectRawDataPage />} />
-                <Route path="/defects/:id" element={<DefectDetailPage />} />
                 <Route path="/defects/import" element={<DefectImportPage />} />
                 <Route path="/defects/import/logs" element={<DefectImportLogsPage />} />
                 <Route path="/defects/export" element={<DefectExportPage />} />
                 <Route path="/defects/quick-update" element={<DefectQuickUpdatePage />} />
+                <Route path="/defects/:id" element={<DefectDetailPage />} />
                 <Route path="/admin" element={<AdminPage />} />
               </Route>
             </Routes>
