@@ -7,10 +7,12 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
+import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 
@@ -32,6 +34,19 @@ interface DefectImportFile {
   team?: TeamType;
   result?: { inserted: number; updated: number; skipped: number; rejected: number };
 }
+
+type SimilarDecisionAction = 'use_existing' | 'register_new';
+type SimilarMasterDecision = {
+  key: string;
+  kind: 'subcontractor' | 'subsub';
+  importedName: string;
+  existingName: string;
+  parentName?: string | null;
+  score: number;
+  action?: SimilarDecisionAction;
+};
+
+type MasterNameDecisions = Record<string, SimilarMasterDecision>;
 
 const statusBadge: Record<DefectFileStatus, { label: string; cls: string }> = {
   pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
@@ -63,6 +78,9 @@ export default function DefectImportPage() {
   const { toast } = useToast();
   const [files, setFiles] = useState<DefectImportFile[]>([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [similarDecisions, setSimilarDecisions] = useState<SimilarMasterDecision[]>([]);
+  const [pendingImportFiles, setPendingImportFiles] = useState<DefectImportFile[] | null>(null);
+  const [confirmedDecisions, setConfirmedDecisions] = useState<MasterNameDecisions>({});
 
   const parseFiles = useCallback(async (selected: File[]) => {
     const excelFiles = selected.filter((file) => /\.(xlsx|xls)$/i.test(file.name));
@@ -121,7 +139,61 @@ export default function DefectImportPage() {
     return acc;
   }, { inserted: 0, updated: 0, skipped: 0, rejected: 0 });
 
-  const importOneFile = async (item: DefectImportFile) => {
+  const applyMasterDecisions = (row: ParsedDefectRow, decisions: MasterNameDecisions): ParsedDefectRow => {
+    const subKey = `sub:${masterNameKey(row.subcontractor_name)}`;
+    const mappedSub = decisions[subKey]?.action === 'use_existing' ? decisions[subKey].existingName : row.subcontractor_name;
+    const subsubKey = `subsub:${masterNameKey(mappedSub)}::${masterNameKey(row.subsub_name)}`;
+    const mappedSubsub = decisions[subsubKey]?.action === 'use_existing' ? decisions[subsubKey].existingName : row.subsub_name;
+
+    return {
+      ...row,
+      subcontractor_name: mappedSub,
+      subsub_name: mappedSubsub,
+    };
+  };
+
+  const preflightSimilarMasterDecisions = async (items: DefectImportFile[]) => {
+    const { data } = await (supabase as any)
+      .from('subcontractor_master')
+      .select('id, name, type, parent_subcontractor_id');
+    const masters = (data ?? []) as Array<{ id: string; name: string; type: string; parent_subcontractor_id: string | null }>;
+    const subMasters = masters.filter((master) => (master.type ?? 'sub') === 'sub');
+    const subIdToName = new Map(subMasters.map((master) => [master.id, master.name]));
+    const exactSubs = new Set(subMasters.map((master) => masterNameKey(master.name)));
+    const subsubMasters = masters
+      .filter((master) => master.type === 'subsub')
+      .map((master) => ({ ...master, parentName: master.parent_subcontractor_id ? subIdToName.get(master.parent_subcontractor_id) ?? null : null }));
+    const exactSubsubs = new Set(subsubMasters.map((master) => `${masterNameKey(master.parentName)}::${masterNameKey(master.name)}`));
+    const decisions = new Map<string, SimilarMasterDecision>();
+
+    for (const item of items) {
+      for (const row of item.parsed ?? []) {
+        const subName = row.subcontractor_name?.trim();
+        if (subName && !exactSubs.has(masterNameKey(subName))) {
+          const key = `sub:${masterNameKey(subName)}`;
+          const match = findSimilarMasterName(subName, subMasters);
+          if (match && !decisions.has(key)) {
+            decisions.set(key, { key, kind: 'subcontractor', importedName: subName, existingName: match.candidate.name, score: match.score });
+          }
+        }
+
+        const parentName = (decisions.get(`sub:${masterNameKey(subName)}`)?.existingName ?? subName)?.trim();
+        const subsubName = row.subsub_name?.trim();
+        if (parentName && subsubName && !exactSubsubs.has(`${masterNameKey(parentName)}::${masterNameKey(subsubName)}`)) {
+          const key = `subsub:${masterNameKey(parentName)}::${masterNameKey(subsubName)}`;
+          const candidates = subsubMasters.filter((master) => masterNameKey(master.parentName) === masterNameKey(parentName));
+          const match = findSimilarMasterName(subsubName, candidates);
+          if (match && !decisions.has(key)) {
+            decisions.set(key, { key, kind: 'subsub', importedName: subsubName, existingName: match.candidate.name, parentName, score: match.score });
+          }
+        }
+      }
+    }
+
+    return [...decisions.values()];
+  };
+
+  const importOneFile = async (item: DefectImportFile, decisions: MasterNameDecisions) => {
     if (!user || !item.parsed) return { inserted: 0, updated: 0, skipped: 0, rejected: 0 };
     const dataDate = item.dataDate || todayIso();
     const masterEnsurer = await createDefectMasterEnsurer(supabase as any);
@@ -133,7 +205,7 @@ export default function DefectImportPage() {
     let rejected = 0;
 
     for (let index = 0; index < item.parsed.length; index++) {
-      const row = item.parsed[index];
+      const row = applyMasterDecisions(item.parsed[index], decisions);
       setFiles((current) => current.map((file) => file.id === item.id ? { ...file, progress: Math.round(((index + 1) / item.parsed!.length) * 100) } : file));
       if (!row.issue_no) {
         rejected++;
@@ -189,12 +261,12 @@ export default function DefectImportPage() {
     return { inserted: insertedCount, updated: updatedCount, skipped, rejected };
   };
 
-  const startImport = async () => {
+  const runImport = async (items: DefectImportFile[], decisions: MasterNameDecisions) => {
     setIsRunning(true);
-    for (const item of files.filter((file) => file.status === 'ready' && file.team)) {
+    for (const item of items) {
       setFiles((current) => current.map((file) => file.id === item.id ? { ...file, status: 'processing', progress: 0 } : file));
       try {
-        const result = await importOneFile(item);
+        const result = await importOneFile(item, decisions);
         setFiles((current) => current.map((file) => file.id === item.id ? { ...file, status: 'done', progress: 100, result } : file));
       } catch (error) {
         setFiles((current) => current.map((file) => file.id === item.id ? { ...file, status: 'failed', error: error instanceof Error ? error.message : 'Import failed' } : file));
@@ -202,6 +274,42 @@ export default function DefectImportPage() {
     }
     setIsRunning(false);
     toast({ title: 'Defect import complete' });
+  };
+
+  const startImport = async () => {
+    const readyFiles = files.filter((file) => file.status === 'ready' && file.team);
+    setIsRunning(true);
+    try {
+      const decisions = await preflightSimilarMasterDecisions(readyFiles);
+      if (decisions.length > 0) {
+        setSimilarDecisions(decisions);
+        setPendingImportFiles(readyFiles);
+        setIsRunning(false);
+        return;
+      }
+      setIsRunning(false);
+      await runImport(readyFiles, confirmedDecisions);
+    } catch (error) {
+      setIsRunning(false);
+      toast({ title: 'Similarity check failed', description: error instanceof Error ? error.message : 'Unable to check master names', variant: 'destructive' });
+    }
+  };
+
+  const setDecisionAction = (key: string, action: SimilarDecisionAction) => {
+    setSimilarDecisions((current) => current.map((decision) => decision.key === key ? { ...decision, action } : decision));
+  };
+
+  const confirmSimilarDecisions = async () => {
+    if (!pendingImportFiles || similarDecisions.some((decision) => !decision.action)) return;
+    const nextDecisions = similarDecisions.reduce<MasterNameDecisions>((acc, decision) => {
+      acc[decision.key] = decision;
+      return acc;
+    }, { ...confirmedDecisions });
+    setConfirmedDecisions(nextDecisions);
+    setSimilarDecisions([]);
+    const items = pendingImportFiles;
+    setPendingImportFiles(null);
+    await runImport(items, nextDecisions);
   };
 
   return (
@@ -334,6 +442,75 @@ export default function DefectImportPage() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={similarDecisions.length > 0} onOpenChange={(open) => {
+        if (!open) {
+          setSimilarDecisions([]);
+          setPendingImportFiles(null);
+        }
+      }}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Possible Existing Subcontractors Found</DialogTitle>
+            <DialogDescription>
+              Review similar master names before the import creates new subcontractors or users.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
+            <div className="grid grid-cols-[1fr_1fr_220px] gap-3 border-b bg-muted px-3 py-2 text-xs font-medium text-muted-foreground">
+              <span>Imported Name</span>
+              <span>Similar Existing Master</span>
+              <span>Action</span>
+            </div>
+            {similarDecisions.map((decision) => (
+              <div key={decision.key} className="grid grid-cols-[1fr_1fr_220px] items-center gap-3 border-b px-3 py-3 last:border-b-0">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{decision.importedName}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {decision.kind === 'subsub' ? `Sub-sub · Parent: ${decision.parentName}` : 'Subcontractor'}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{decision.existingName}</div>
+                  <div className="text-xs text-muted-foreground">Similarity {Math.round(decision.score * 100)}%</div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={decision.action === 'use_existing' ? 'default' : 'outline'}
+                    onClick={() => setDecisionAction(decision.key, 'use_existing')}
+                  >
+                    Use Existing
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={decision.action === 'register_new' ? 'default' : 'outline'}
+                    onClick={() => setDecisionAction(decision.key, 'register_new')}
+                  >
+                    Register New
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSimilarDecisions([]);
+                setPendingImportFiles(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={confirmSimilarDecisions} disabled={similarDecisions.some((decision) => !decision.action) || isRunning}>
+              Continue Import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
