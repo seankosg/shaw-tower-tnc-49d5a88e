@@ -193,6 +193,21 @@ export default function DefectImportPage() {
     return [...decisions.values()];
   };
 
+  const findDuplicateSubcontractorIssueNos = (items: DefectImportFile[]) => {
+    const seen = new Map<string, string>();
+    const duplicates = new Set<string>();
+    for (const item of items) {
+      for (const row of item.parsed ?? []) {
+        const value = row.subcontractor_issue_no?.trim();
+        if (!value) continue;
+        const key = value.toLowerCase();
+        if (seen.has(key)) duplicates.add(value);
+        seen.set(key, value);
+      }
+    }
+    return [...duplicates];
+  };
+
   const importOneFile = async (item: DefectImportFile, decisions: MasterNameDecisions) => {
     if (!user || !item.parsed) return { inserted: 0, updated: 0, skipped: 0, rejected: 0 };
     const dataDate = item.dataDate || todayIso();
@@ -281,6 +296,8 @@ export default function DefectImportPage() {
     setIsRunning(true);
     try {
       const decisions = await preflightSimilarMasterDecisions(readyFiles);
+      const duplicateIssueNos = findDuplicateSubcontractorIssueNos(readyFiles);
+      if (duplicateIssueNos.length > 0) toast({ title: 'Same Subcontractor Issue No found in multiple imported rows', description: duplicateIssueNos.slice(0, 5).join(', '), variant: 'destructive' });
       if (decisions.length > 0) {
         setSimilarDecisions(decisions);
         setPendingImportFiles(readyFiles);

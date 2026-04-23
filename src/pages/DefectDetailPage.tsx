@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { daysDiff } from '@/lib/defect-parser';
 import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct } from '@/lib/defect-utils';
 
@@ -21,6 +22,7 @@ export default function DefectDetailPage() {
   const [scope, setScope] = useState<DefectEditScope>('none');
   const [logs, setLogs] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const { isFieldVisible, isFieldRequired, getLabel } = useDefectFieldConfig();
 
   useEffect(() => {
     if (!id) return;
@@ -83,8 +85,9 @@ export default function DefectDetailPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between"><Button variant="outline" onClick={() => navigate(-1)}>Back</Button>{canEdit && <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>}</div>
       <Card><CardHeader><CardTitle>Defect Detail · {record.issue_no}</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-3">
-        <Field label="Issue No" value={form.issue_no} disabled onChange={(v) => updateField('issue_no', v)} />
-        <Field label="Subcontractor Issue No" value={form.subcontractor_issue_no} disabled={!canEdit} onChange={(v) => updateField('subcontractor_issue_no', v)} />
+        <Field field="issue_no" label={getLabel('issue_no')} value={form.issue_no} required={isFieldRequired('issue_no')} disabled onChange={(v) => updateField('issue_no', v)} />
+        {isFieldVisible('subcontractor_issue_no') && <Field field="subcontractor_issue_no" label={getLabel('subcontractor_issue_no')} value={form.subcontractor_issue_no} required={isFieldRequired('subcontractor_issue_no')} disabled={!canEdit} onChange={(v) => updateField('subcontractor_issue_no', v)} />}
+        {isFieldVisible('subcontractor_issue_source') && <Field field="subcontractor_issue_source" label={getLabel('subcontractor_issue_source')} value={form.subcontractor_issue_source} required={isFieldRequired('subcontractor_issue_source')} disabled={!canEdit} onChange={(v) => updateField('subcontractor_issue_source', v)} />}
         <Field label="Type" value={form.area_type} disabled={!canEdit} onChange={(v) => updateField('area_type', v)} />
         <Field label="Level" value={form.area_level} disabled={!canEdit} onChange={(v) => updateField('area_level', v)} />
         <Field label="Location" value={form.area_location} disabled={!canEdit} onChange={(v) => updateField('area_location', v)} />
@@ -107,6 +110,6 @@ export default function DefectDetailPage() {
   );
 }
 
-function Field({ label, value, onChange, disabled, type = 'text' }: { label: string; value: any; onChange: (value: string) => void; disabled?: boolean; type?: string }) {
-  return <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">{label}</label><Input className="h-9" type={type} value={value ?? ''} disabled={disabled} onChange={(e) => onChange(e.target.value)} /></div>;
+function Field({ label, value, onChange, disabled, type = 'text', required }: { field?: string; label: string; value: any; onChange: (value: string) => void; disabled?: boolean; type?: string; required?: boolean }) {
+  return <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">{label}{required ? ' *' : ''}</label><Input className="h-9" type={type} value={value ?? ''} disabled={disabled} onChange={(e) => onChange(e.target.value)} /></div>;
 }

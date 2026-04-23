@@ -47,6 +47,7 @@ interface PermRow {
 interface FieldCfg {
   id: string; field_name: string; display_name: string; is_enabled: boolean; is_required: boolean; sort_order: number;
   visible_to_roles: AppRole[] | null; editable_to_roles: AppRole[] | null;
+  original_header?: string | null; source_origin?: string;
 }
 interface ChangeLogRow {
   id: string; subtest_id: string; changed_field: string; old_value: string | null;
@@ -1545,13 +1546,25 @@ function PermissionsTab() {
 
 /* ═══════ Tab 4: Field Config ═══════ */
 function FieldConfigTab() {
+  const [scope, setScope] = useState<'tc' | 'defect'>('tc');
+
+  return (
+    <Tabs value={scope} onValueChange={(value) => setScope(value as 'tc' | 'defect')}>
+      <TabsList><TabsTrigger value="tc">T&C Fields</TabsTrigger><TabsTrigger value="defect">Defect Fields</TabsTrigger></TabsList>
+      <TabsContent value="tc"><FieldConfigTable table="field_config" title="T&C Field Configuration" /></TabsContent>
+      <TabsContent value="defect"><FieldConfigTable table="defect_field_config" title="Defect Field Configuration" showOrigin /></TabsContent>
+    </Tabs>
+  );
+}
+
+function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_config' | 'defect_field_config'; title: string; showOrigin?: boolean }) {
   const { toast } = useToast();
   const [fields, setFields] = useState<FieldCfg[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from('field_config').select('*').order('sort_order');
+    const { data } = await (supabase as any).from(table).select('*').order('sort_order');
     if (data) {
       let rows = data as FieldCfg[];
       // Normalize sort_order if all zero (initial seed) so swap works predictably.
@@ -1559,7 +1572,7 @@ function FieldConfigTab() {
       if (allZero && rows.length > 0) {
         await Promise.all(
           rows.map((r, idx) =>
-            supabase.from('field_config').update({ sort_order: (idx + 1) * 10 }).eq('id', r.id)
+            (supabase as any).from(table).update({ sort_order: (idx + 1) * 10 }).eq('id', r.id)
           )
         );
         rows = rows.map((r, idx) => ({ ...r, sort_order: (idx + 1) * 10 }));
@@ -1568,13 +1581,29 @@ function FieldConfigTab() {
     }
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [table]);
 
   const toggle = async (f: FieldCfg, key: 'is_enabled' | 'is_required') => {
     const update = { is_enabled: f.is_enabled, is_required: f.is_required };
     update[key] = !f[key];
-    await supabase.from('field_config').update(update).eq('id', f.id);
+    await (supabase as any).from(table).update(update).eq('id', f.id);
     toast({ title: 'Field updated' });
+    load();
+  };
+
+  const updateName = async (f: FieldCfg, displayName: string) => {
+    const value = displayName.trim();
+    if (!value || value === f.display_name) return;
+    await (supabase as any).from(table).update({ display_name: value }).eq('id', f.id);
+    toast({ title: 'Display name updated' });
+    load();
+  };
+
+  const toggleRole = async (f: FieldCfg, key: 'visible_to_roles' | 'editable_to_roles', role: AppRole) => {
+    const current = new Set(f[key] ?? []);
+    current.has(role) ? current.delete(role) : current.add(role);
+    await (supabase as any).from(table).update({ [key]: [...current] }).eq('id', f.id);
+    toast({ title: 'Role settings updated' });
     load();
   };
 
@@ -1599,7 +1628,7 @@ function FieldConfigTab() {
     });
     const results = await Promise.all(
       changed.map((r) =>
-        supabase.from('field_config').update({ sort_order: r.sort_order }).eq('id', r.id)
+        (supabase as any).from(table).update({ sort_order: r.sort_order }).eq('id', r.id)
       )
     );
     const firstError = results.find((r) => r.error)?.error;
@@ -1613,10 +1642,10 @@ function FieldConfigTab() {
 
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base">Field Configuration</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
       <CardContent>
         <p className="mb-3 text-xs text-muted-foreground">
-          The "Visible" toggle only controls whether the field is shown in the UI (Subtest List columns and Subtest Detail fields). Underlying data is always saved regardless of this setting.
+          The "Visible" toggle controls whether the field is shown in UI surfaces. Underlying data is always saved regardless of this setting.
         </p>
         <div className="overflow-auto">
           <Table>
@@ -1625,8 +1654,11 @@ function FieldConfigTab() {
                 <TableHead className="w-[120px]">Order</TableHead>
                 <TableHead>Field Name</TableHead>
                 <TableHead>Display Name</TableHead>
+                {showOrigin && <TableHead>Origin</TableHead>}
                 <TableHead className="text-center">Visible</TableHead>
                 <TableHead className="text-center">Required</TableHead>
+                <TableHead>Visible Roles</TableHead>
+                <TableHead>Editable Roles</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1658,13 +1690,16 @@ function FieldConfigTab() {
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">{f.field_name}</TableCell>
-                  <TableCell>{f.display_name}</TableCell>
+                  <TableCell><Input className="h-8 min-w-[180px]" defaultValue={f.display_name} onBlur={(e) => updateName(f, e.target.value)} /></TableCell>
+                  {showOrigin && <TableCell className="text-xs text-muted-foreground">{f.source_origin ?? 'system'}{f.original_header ? ` · ${f.original_header}` : ''}</TableCell>}
                   <TableCell className="text-center">
                     <Switch checked={f.is_enabled} onCheckedChange={() => toggle(f, 'is_enabled')} />
                   </TableCell>
                   <TableCell className="text-center">
                     <Switch checked={f.is_required} onCheckedChange={() => toggle(f, 'is_required')} />
                   </TableCell>
+                  <TableCell><RoleChecks field={f} fieldKey="visible_to_roles" onToggle={toggleRole} /></TableCell>
+                  <TableCell><RoleChecks field={f} fieldKey="editable_to_roles" onToggle={toggleRole} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -1672,6 +1707,20 @@ function FieldConfigTab() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function RoleChecks({ field, fieldKey, onToggle }: { field: FieldCfg; fieldKey: 'visible_to_roles' | 'editable_to_roles'; onToggle: (field: FieldCfg, key: 'visible_to_roles' | 'editable_to_roles', role: AppRole) => void }) {
+  const selected = new Set(field[fieldKey] ?? []);
+  return (
+    <div className="grid min-w-[220px] grid-cols-2 gap-1">
+      {ALL_ROLES.map((role) => (
+        <label key={role} className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Checkbox checked={selected.has(role)} onCheckedChange={() => onToggle(field, fieldKey, role)} />
+          {ROLE_LABELS[role]}
+        </label>
+      ))}
+    </div>
   );
 }
 

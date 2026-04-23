@@ -82,6 +82,8 @@ const FIELD_ALIASES: Record<string, string> = {
   'closure status': 'closure_status',
   'subcontractor issue no': 'subcontractor_issue_no',
   'subcontractor no': 'subcontractor_issue_no',
+  'subcontractor issue source': 'subcontractor_issue_source',
+  'subcontractor issue no source': 'subcontractor_issue_source',
 };
 
 function cleanHeader(header: string): string {
@@ -177,7 +179,7 @@ export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
       rawRowNo: index + 2,
       issue_no: toText(getMapped(raw, 'issue_no')) ?? '',
       subcontractor_issue_no: toText(getMapped(raw, 'subcontractor_issue_no')),
-      subcontractor_issue_source: null,
+      subcontractor_issue_source: toText(getMapped(raw, 'subcontractor_issue_source')),
       main_trade: toText(getMapped(raw, 'main_trade')),
       sub_trade: toText(getMapped(raw, 'sub_trade')),
       trade_detail: toText(getMapped(raw, 'trade_detail')),
