@@ -499,6 +499,11 @@ function CreateUserDialog({
     : userType === 'subsub'
       ? selectedSubsub?.owner_code
       : null;
+  const selectedOwnerCode = userType === 'subcontractor'
+    ? subcons.find(s => s.name === subconName)?.owner_code
+    : userType === 'subsub'
+      ? selectedSubsub?.owner_code
+      : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -617,6 +622,7 @@ function CreateUserDialog({
                 {hdecPics.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">Owner Code: <span className="font-mono">{selectedOwnerCode ?? '—'}</span></p>
           </div>
         )}
         <div className="space-y-1.5">
@@ -754,7 +760,7 @@ function EditUserDialog({
               </SelectContent>
             </Select>
             {subsubParent && (
-              <p className="text-xs text-muted-foreground">Subcontractor (parent): <strong>{subsubParent.name}</strong> — auto-assigned</p>
+              <p className="text-xs text-muted-foreground">Subcontractor (parent): <strong>{subsubParent.name}</strong> — Owner Code: <span className="font-mono">{selectedOwnerCode ?? '—'}</span></p>
             )}
           </div>
         )}
