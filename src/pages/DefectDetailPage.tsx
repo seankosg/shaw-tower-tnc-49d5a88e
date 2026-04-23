@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { daysDiff } from '@/lib/defect-parser';
-import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct } from '@/lib/defect-utils';
+import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct, normalizeSubcontractorIssueNo } from '@/lib/defect-utils';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
 
 const RAW_FIELD_LABELS = {
@@ -90,8 +90,8 @@ export default function DefectDetailPage() {
       .map((field) => ({ field: RAW_FIELD_LABELS[field], oldValue: getRawValue(record.raw_payload, [RAW_FIELD_LABELS[field]]), newValue: (form as any)[field] }));
 
     const payload: any = {
-      subcontractor_issue_no: form.subcontractor_issue_no || null,
-      subcontractor_issue_source: form.subcontractor_issue_source || null,
+      subcontractor_issue_no: normalizeSubcontractorIssueNo(form.subcontractor_issue_no),
+      subcontractor_issue_source: normalizeSubcontractorIssueNo(form.subcontractor_issue_no) !== normalizeSubcontractorIssueNo(record.subcontractor_issue_no) ? 'manual' : (form.subcontractor_issue_source || null),
       area_type: form.area_type || null,
       area_level: form.area_level || null,
       area_location: form.area_location || null,
@@ -121,6 +121,21 @@ export default function DefectDetailPage() {
       payload.subcontractor_name = form.subcontractor_name || null;
       payload.subsub_name = form.subsub_name || null;
       payload.hdec_pic_name = form.hdec_pic_name || null;
+    }
+    if (payload.subcontractor_issue_no && payload.subcontractor_issue_no !== normalizeSubcontractorIssueNo(record.subcontractor_issue_no)) {
+      const { data: duplicate } = await (supabase as any)
+        .from('defect_items')
+        .select('id, issue_no')
+        .eq('is_active', true)
+        .eq('subcontractor_issue_no', payload.subcontractor_issue_no)
+        .neq('id', record.id)
+        .limit(1)
+        .maybeSingle();
+      if (duplicate) {
+        setSaving(false);
+        toast({ title: 'Duplicate Subcontractor Issue No', description: 'Subcontractor Issue No already exists for this owner.', variant: 'destructive' });
+        return;
+      }
     }
     const { error } = await (supabase as any).from('defect_items').update(payload).eq('id', record.id);
     if (error) {
