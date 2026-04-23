@@ -683,6 +683,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          owner_code: string | null
           parent_subcontractor_id: string | null
           type: string
         }
@@ -691,6 +692,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          owner_code?: string | null
           parent_subcontractor_id?: string | null
           type?: string
         }
@@ -699,6 +701,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          owner_code?: string | null
           parent_subcontractor_id?: string | null
           type?: string
         }
@@ -1305,6 +1308,8 @@ export type Database = {
         Returns: boolean
       }
       is_admin_or_superuser: { Args: { _user_id: string }; Returns: boolean }
+      normalize_owner_code: { Args: { _value: string }; Returns: string }
+      suggest_owner_code: { Args: { _name: string }; Returns: string }
     }
     Enums: {
       action_taken: "inserted" | "updated" | "skipped" | "rejected"
