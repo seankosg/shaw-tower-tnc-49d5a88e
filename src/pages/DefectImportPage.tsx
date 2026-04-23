@@ -429,6 +429,25 @@ export default function DefectImportPage() {
     const profileTeamMap = await buildProfileTeamMap();
     const masterEnsurer = await createDefectMasterEnsurer(supabase as any);
     const issueRegistry = await buildIssueRegistry(null);
+
+    // Apply master decisions up-front so owner code resolution sees the mapped names
+    const mappedRows = item.parsed.map((row) => applyMasterDecisions(row, decisions));
+
+    // Pre-fetch existing defects for all issue_nos in this batch so we can pre-compute assignments
+    const issueNos = mappedRows.map((row) => row.issue_no).filter((value): value is string => Boolean(value));
+    const existingByIssueNo = new Map<string, any>();
+    if (issueNos.length > 0) {
+      const chunkSize = 200;
+      for (let i = 0; i < issueNos.length; i += chunkSize) {
+        const chunk = issueNos.slice(i, i + chunkSize);
+        const { data } = await (supabase as any).from('defect_items').select('*').in('issue_no', chunk);
+        for (const existing of data ?? []) existingByIssueNo.set(existing.issue_no, existing);
+      }
+    }
+
+    // Pre-compute Subcontractor Issue No assignments based on Issue No sort direction
+    const assignments = buildSubcontractorIssueAssignments(mappedRows, null, issueRegistry, existingByIssueNo);
+
     const batchRes = await (supabase as any).from('defect_upload_batches').insert({ uploaded_file_name: item.name, uploaded_by: user.id, status: 'processing', total_rows: item.parsed.length, data_date: dataDate }).select('id').single();
     const uploadId = batchRes.data?.id;
     let insertedCount = 0;
@@ -437,9 +456,9 @@ export default function DefectImportPage() {
     let rejected = 0;
     let teamUnresolved = 0;
 
-    for (let index = 0; index < item.parsed.length; index++) {
-      const row = applyMasterDecisions(item.parsed[index], decisions);
-      setFiles((current) => current.map((file) => file.id === item.id ? { ...file, progress: Math.round(((index + 1) / item.parsed!.length) * 100) } : file));
+    for (let index = 0; index < mappedRows.length; index++) {
+      const row = mappedRows[index];
+      setFiles((current) => current.map((file) => file.id === item.id ? { ...file, progress: Math.round(((index + 1) / mappedRows.length) * 100) } : file));
       if (!row.issue_no) {
         rejected++;
         await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, action_taken: 'rejected', reason_code: 'missing_issue_no', reason_detail: 'Issue No is required' });
@@ -448,9 +467,9 @@ export default function DefectImportPage() {
 
       await masterEnsurer.ensureForRow(row);
 
-      const existingRes = await (supabase as any).from('defect_items').select('*').eq('issue_no', row.issue_no).maybeSingle();
-      const existing = existingRes.data;
-      const issueAssignment = reserveSubcontractorIssueNo(row, existing?.project_id ?? null, issueRegistry, existing);
+      const existing = existingByIssueNo.get(row.issue_no) ?? null;
+      const issueAssignment = assignments.get(row.rawRowNo)
+        ?? reserveSubcontractorIssueNo(row, existing?.project_id ?? null, issueRegistry, existing);
       if (issueAssignment.duplicate) {
         rejected++;
         await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `${issueAssignment.subcontractor_issue_no} already exists in this project.` });
