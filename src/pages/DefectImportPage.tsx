@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
+import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, suggestOwnerCode } from '@/lib/defect-utils';
 import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
 import { normalizeTeamValue, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
@@ -45,6 +46,8 @@ type SimilarMasterDecision = {
 };
 
 type MasterNameDecisions = Record<string, SimilarMasterDecision>;
+type OwnerMaster = { name: string; type: string | null; parent_subcontractor_id: string | null; owner_code: string | null };
+type IssueRegistry = { existingKeys: Set<string>; reservedKeys: Set<string>; nextSeqByOwner: Map<string, number>; masters: OwnerMaster[] };
 
 const statusBadge: Record<DefectFileStatus, { label: string; cls: string }> = {
   pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
@@ -98,6 +101,71 @@ function resolveDefectTeam(row: ParsedDefectRow, profileTeamMap: ProfileTeamMap)
     ?? profileTeamMap.get(masterNameKey(row.subcontractor_name))
     ?? profileTeamMap.get(masterNameKey(row.subsub_name))
     ?? null;
+}
+
+function issueKey(projectId: string | null | undefined, issueNo: string | null | undefined) {
+  const normalized = normalizeSubcontractorIssueNo(issueNo);
+  return normalized ? `${projectId ?? ''}::${normalized.toLowerCase()}` : null;
+}
+
+function resolveOwnerCode(row: Pick<ParsedDefectRow, 'subcontractor_name' | 'subsub_name' | 'team'>, masters: OwnerMaster[]): string {
+  const subsubKey = masterNameKey(row.subsub_name);
+  const subKey = masterNameKey(row.subcontractor_name);
+  const subsub = masters.find((master) => master.type === 'subsub' && masterNameKey(master.name) === subsubKey);
+  const sub = masters.find((master) => (master.type ?? 'sub') === 'sub' && masterNameKey(master.name) === subKey);
+  return subsub?.owner_code || sub?.owner_code || normalizeTeamValue(row.team) || 'UNASSIGNED';
+}
+
+async function buildIssueRegistry(projectId: string | null): Promise<IssueRegistry> {
+  const [{ data: masters }, { data: defects }] = await Promise.all([
+    (supabase as any).from('subcontractor_master').select('name, type, parent_subcontractor_id, owner_code').eq('is_active', true),
+    (supabase as any).from('defect_items').select('project_id, subcontractor_issue_no').eq('is_active', true).not('subcontractor_issue_no', 'is', null),
+  ]);
+  const ownerMasters = (masters ?? []) as OwnerMaster[];
+  const existingKeys = new Set<string>();
+  const nextSeqByOwner = new Map<string, number>();
+
+  for (const defect of defects ?? []) {
+    const key = issueKey(defect.project_id, defect.subcontractor_issue_no);
+    if (key) existingKeys.add(key);
+    const match = /^SC-([A-Z0-9]+)-(\d+)$/i.exec(String(defect.subcontractor_issue_no ?? '').trim());
+    if (!match) continue;
+    const owner = match[1].toUpperCase();
+    nextSeqByOwner.set(owner, Math.max(nextSeqByOwner.get(owner) ?? 1, Number(match[2]) + 1));
+  }
+
+  return { existingKeys, reservedKeys: new Set<string>(), nextSeqByOwner, masters: ownerMasters };
+}
+
+function reserveSubcontractorIssueNo(row: ParsedDefectRow, projectId: string | null, registry: IssueRegistry, existing?: any) {
+  if (existing?.subcontractor_issue_no) {
+    return {
+      subcontractor_issue_no: normalizeSubcontractorIssueNo(existing.subcontractor_issue_no),
+      subcontractor_issue_source: existing.subcontractor_issue_source ?? null,
+      duplicate: false,
+    };
+  }
+
+  const ownerCode = resolveOwnerCode(row, registry.masters) || suggestOwnerCode(row.subsub_name ?? row.subcontractor_name ?? row.team);
+  const imported = normalizeSubcontractorIssueNo(row.subcontractor_issue_no);
+  if (imported) {
+    const key = issueKey(projectId, imported);
+    const duplicate = !!key && (registry.existingKeys.has(key) || registry.reservedKeys.has(key));
+    if (!duplicate && key) registry.reservedKeys.add(key);
+    return { subcontractor_issue_no: imported, subcontractor_issue_source: 'imported', duplicate };
+  }
+
+  let sequence = registry.nextSeqByOwner.get(ownerCode) ?? 1;
+  let generated = generateSubcontractorIssueNo(ownerCode, sequence);
+  let key = issueKey(projectId, generated)!;
+  while (registry.existingKeys.has(key) || registry.reservedKeys.has(key)) {
+    sequence += 1;
+    generated = generateSubcontractorIssueNo(ownerCode, sequence);
+    key = issueKey(projectId, generated)!;
+  }
+  registry.reservedKeys.add(key);
+  registry.nextSeqByOwner.set(ownerCode, sequence + 1);
+  return { subcontractor_issue_no: generated, subcontractor_issue_source: 'auto_generated', duplicate: false };
 }
 
 export default function DefectImportPage() {
@@ -242,6 +310,7 @@ export default function DefectImportPage() {
     const dataDate = item.dataDate || todayIso();
     const profileTeamMap = await buildProfileTeamMap();
     const masterEnsurer = await createDefectMasterEnsurer(supabase as any);
+    const issueRegistry = await buildIssueRegistry(null);
     const batchRes = await (supabase as any).from('defect_upload_batches').insert({ uploaded_file_name: item.name, uploaded_by: user.id, status: 'processing', total_rows: item.parsed.length, data_date: dataDate }).select('id').single();
     const uploadId = batchRes.data?.id;
     let insertedCount = 0;
@@ -263,11 +332,17 @@ export default function DefectImportPage() {
 
       const existingRes = await (supabase as any).from('defect_items').select('*').eq('issue_no', row.issue_no).maybeSingle();
       const existing = existingRes.data;
+      const issueAssignment = reserveSubcontractorIssueNo(row, existing?.project_id ?? null, issueRegistry, existing);
+      if (issueAssignment.duplicate) {
+        rejected++;
+        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `${issueAssignment.subcontractor_issue_no} already exists in this project.` });
+        continue;
+      }
       const resolvedTeam = resolveDefectTeam(row, profileTeamMap);
       const logReason = resolvedTeam ? {} : { reason_code: 'team_unresolved', reason_detail: 'Team could not be resolved from Field Discipline or User Management profile.' };
       if (!resolvedTeam) teamUnresolved++;
       const actualDate = Number(row.actual_progress_pct ?? 0) >= 100 ? (existing?.actual_date ?? dataDate) : null;
-      const payload = { ...row, actual_date: actualDate, team: resolvedTeam, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
+      const payload = { ...row, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_date: actualDate, team: resolvedTeam, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
 
       if (existing) {
         const hasAnyChange = Object.entries(payload).some(([key, value]) => key !== 'raw_payload' && key !== 'row_version' && key !== 'updated_by' && key !== 'source_upload_id' && changed(existing[key], value));
@@ -280,7 +355,7 @@ export default function DefectImportPage() {
         for (const field of trackedFields) {
           if (changed(existing[field], (row as any)[field])) {
             await (supabase as any).from('defect_schedule_change_audit').insert({
-              upload_id: uploadId, defect_id: existing.id, project_id: existing.project_id, issue_no: row.issue_no, subcontractor_issue_no: row.subcontractor_issue_no, raw_row_no: row.rawRowNo,
+              upload_id: uploadId, defect_id: existing.id, project_id: existing.project_id, issue_no: row.issue_no, subcontractor_issue_no: payload.subcontractor_issue_no, raw_row_no: row.rawRowNo,
               planned_old_date: field === 'planned_date' ? existing.planned_date : null, planned_new_date: field === 'planned_date' ? row.planned_date : null, planned_diff_days: field === 'planned_date' ? daysDiff(existing.planned_date, row.planned_date) : null,
               target_old_date: field === 'target_date' ? existing.target_date : null, target_new_date: field === 'target_date' ? row.target_date : null, target_diff_days: field === 'target_date' ? daysDiff(existing.target_date, row.target_date) : null,
               closed_old_date: field === 'closed_date' ? existing.closed_date : null, closed_new_date: field === 'closed_date' ? row.closed_date : null, closed_diff_days: field === 'closed_date' ? daysDiff(existing.closed_date, row.closed_date) : null,

@@ -23,6 +23,7 @@ import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown, Do
 import * as XLSX from 'xlsx';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
+import { normalizeOwnerCode, suggestOwnerCode } from '@/lib/defect-utils';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -54,7 +55,16 @@ interface ChangeLogRow {
   id: string; subtest_id: string; changed_field: string; old_value: string | null;
   new_value: string | null; changed_by: string | null; changed_at: string; change_source: string | null;
 }
-interface MasterRow { id: string; name: string; is_active: boolean; type?: 'sub' | 'subsub'; parent_subcontractor_id?: string | null; }
+interface MasterRow { id: string; name: string; is_active: boolean; type?: 'sub' | 'subsub'; parent_subcontractor_id?: string | null; owner_code?: string | null; }
+
+function getLinkedOwnerCode(profile: Profile, masters: MasterRow[]): string | null {
+  const target = profile.user_type === 'subsub'
+    ? masters.find((master) => master.type === 'subsub' && master.name === profile.subsub_name)
+    : profile.user_type === 'subcontractor'
+      ? masters.find((master) => (master.type ?? 'sub') === 'sub' && master.name === profile.subcontractor_name)
+      : null;
+  return target?.owner_code ?? null;
+}
 
 export default function AdminPage() {
   const { isAdminOrSuperuser } = useAuth();
@@ -258,7 +268,8 @@ function UsersTab() {
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => {
             import('xlsx-js-style').then(XLSX => {
-              const headers = ['Login ID', 'Name', 'User Type', 'Team', 'Linked Master', 'Role', 'Active'];
+              const allMasters = [...subcons, ...subsubs];
+              const headers = ['Login ID', 'Name', 'User Type', 'Team', 'Linked Master', 'Owner Code', 'Role', 'Active'];
               const rows = profiles.map(p => [
                 p.login_id ?? '',
                 p.name ?? '',
@@ -267,6 +278,7 @@ function UsersTab() {
                 p.user_type === 'subcontractor' ? (p.subcontractor_name ?? '') :
                   p.user_type === 'subsub' ? (p.subcontractor_name ?? '') :
                   (p.user_type === 'hdec' || p.user_type === 'pm_pd') ? (p.hdec_pic_name ?? '') : '',
+                getLinkedOwnerCode(p, allMasters) ?? '',
                 ROLE_LABELS[getUserRole(p.user_id) as AppRole] ?? '',
                 p.is_active ? 'Yes' : 'No',
               ]);
@@ -361,6 +373,7 @@ function UsersTab() {
                 <TableHead>Type</TableHead>
                 <TableHead>Team</TableHead>
                 <TableHead>Linked Master</TableHead>
+                <TableHead>Owner Code</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Active</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -373,6 +386,7 @@ function UsersTab() {
                   p.user_type === 'subcontractor' ? p.subcontractor_name :
                   p.user_type === 'subsub' ? p.subcontractor_name :
                   p.user_type === 'hdec' || p.user_type === 'pm_pd' ? p.hdec_pic_name : null;
+                const ownerCode = getLinkedOwnerCode(p, [...subcons, ...subsubs]);
                 return (
                   <TableRow key={p.id}>
                     <TableCell className="font-mono text-xs">
@@ -388,6 +402,7 @@ function UsersTab() {
                     <TableCell><Badge variant="outline" className="text-xs">{USER_TYPE_LABELS[p.user_type]}</Badge></TableCell>
                     <TableCell className="text-xs">{p.team ? TEAM_LABELS[p.team] : '—'}</TableCell>
                     <TableCell className="text-xs">{linked ?? '—'}</TableCell>
+                    <TableCell className="font-mono text-xs">{ownerCode ?? '—'}</TableCell>
                     <TableCell>
                       <Select value={role ?? ''} onValueChange={(v) => setUserRole(p.user_id, v as AppRole)}>
                         <SelectTrigger className="h-8 w-[140px]"><SelectValue placeholder="—" /></SelectTrigger>
@@ -479,6 +494,11 @@ function CreateUserDialog({
   const subsubParent = selectedSubsub
     ? subcons.find(s => s.id === selectedSubsub.parent_subcontractor_id)
     : null;
+  const selectedOwnerCode = userType === 'subcontractor'
+    ? subcons.find(s => s.name === subconName)?.owner_code
+    : userType === 'subsub'
+      ? selectedSubsub?.owner_code
+      : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -564,6 +584,7 @@ function CreateUserDialog({
                 {subcons.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">Owner Code: <span className="font-mono">{selectedOwnerCode ?? '—'}</span></p>
           </div>
         )}
         {userType === 'subsub' && (
@@ -583,7 +604,7 @@ function CreateUserDialog({
               </SelectContent>
             </Select>
             {subsubParent && (
-              <p className="text-xs text-muted-foreground">Subcontractor (parent): <strong>{subsubParent.name}</strong> — auto-assigned</p>
+              <p className="text-xs text-muted-foreground">Subcontractor (parent): <strong>{subsubParent.name}</strong> — Owner Code: <span className="font-mono">{selectedOwnerCode ?? '—'}</span></p>
             )}
           </div>
         )}
@@ -596,6 +617,7 @@ function CreateUserDialog({
                 {hdecPics.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">Owner Code: <span className="font-mono">{selectedOwnerCode ?? '—'}</span></p>
           </div>
         )}
         <div className="space-y-1.5">
@@ -642,6 +664,11 @@ function EditUserDialog({
   const subsubParent = selectedSubsub
     ? subcons.find(s => s.id === selectedSubsub.parent_subcontractor_id)
     : null;
+  const selectedOwnerCode = userType === 'subcontractor'
+    ? subcons.find(s => s.name === subconName)?.owner_code
+    : userType === 'subsub'
+      ? selectedSubsub?.owner_code
+      : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -733,7 +760,7 @@ function EditUserDialog({
               </SelectContent>
             </Select>
             {subsubParent && (
-              <p className="text-xs text-muted-foreground">Subcontractor (parent): <strong>{subsubParent.name}</strong> — auto-assigned</p>
+              <p className="text-xs text-muted-foreground">Subcontractor (parent): <strong>{subsubParent.name}</strong> — Owner Code: <span className="font-mono">{selectedOwnerCode ?? '—'}</span></p>
             )}
           </div>
         )}
@@ -844,8 +871,10 @@ function SubcontractorMasterTable() {
   const [rows, setRows] = useState<MasterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [newSubName, setNewSubName] = useState('');
+  const [newSubOwnerCode, setNewSubOwnerCode] = useState('');
   const [newSubSubName, setNewSubSubName] = useState('');
   const [newSubSubParent, setNewSubSubParent] = useState('');
+  const [newSubSubOwnerCode, setNewSubSubOwnerCode] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -862,14 +891,15 @@ function SubcontractorMasterTable() {
     e.preventDefault();
     if (!newSubName.trim()) return;
     const name = newSubName.trim();
-    const { error } = await supabase.from('subcontractor_master').insert({ name, type: 'sub' } as any);
+    const owner_code = normalizeOwnerCode(newSubOwnerCode) ?? suggestOwnerCode(name);
+    const { error } = await supabase.from('subcontractor_master').insert({ name, type: 'sub', owner_code } as any);
     if (error) { toast({ title: 'Add failed', description: error.message, variant: 'destructive' }); return; }
     const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
       body: { name, master_type: 'subcontractor', subcontractor_name: name },
     });
     if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
     else toast({ title: 'Subcontractor added', description: `User account created (PW: ${DEFAULT_PASSWORD})` });
-    setNewSubName(''); load();
+    setNewSubName(''); setNewSubOwnerCode(''); load();
   };
 
   const addSubSub = async (e: React.FormEvent) => {
@@ -880,8 +910,9 @@ function SubcontractorMasterTable() {
     }
     const name = newSubSubName.trim();
     const parentName = subs.find(s => s.id === newSubSubParent)?.name ?? null;
+    const owner_code = normalizeOwnerCode(newSubSubOwnerCode) ?? suggestOwnerCode(name);
     const { error } = await supabase.from('subcontractor_master').insert({
-      name, type: 'subsub', parent_subcontractor_id: newSubSubParent,
+      name, type: 'subsub', parent_subcontractor_id: newSubSubParent, owner_code,
     } as any);
     if (error) { toast({ title: 'Add failed', description: error.message, variant: 'destructive' }); return; }
     const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
@@ -889,7 +920,7 @@ function SubcontractorMasterTable() {
     });
     if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
     else toast({ title: 'Sub-Sub added', description: `User account created (PW: ${DEFAULT_PASSWORD})` });
-    setNewSubSubName(''); setNewSubSubParent(''); load();
+    setNewSubSubName(''); setNewSubSubParent(''); setNewSubSubOwnerCode(''); load();
   };
 
   const [pendingToggle, setPendingToggle] = useState<{ row: MasterRow; linkedCount: number } | null>(null);
@@ -949,6 +980,15 @@ function SubcontractorMasterTable() {
     load();
   };
 
+  const updateOwnerCode = async (r: MasterRow, value: string) => {
+    const owner_code = normalizeOwnerCode(value);
+    if (!owner_code || owner_code === r.owner_code) return;
+    const { error } = await supabase.from('subcontractor_master').update({ owner_code } as any).eq('id', r.id);
+    if (error) { toast({ title: 'Owner Code update failed', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: 'Owner Code updated' });
+    load();
+  };
+
   const remove = async (r: MasterRow) => {
     const col = (r.type ?? 'sub') === 'sub' ? 'subcontractor_name' : 'subsub_name';
     // Block hard delete if any subtests or profiles still reference this name
@@ -987,6 +1027,7 @@ function SubcontractorMasterTable() {
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subcontractors</h3>
           <form onSubmit={addSub} className="flex gap-2">
             <Input value={newSubName} onChange={(e) => setNewSubName(e.target.value)} placeholder="Add Subcontractor..." />
+            <Input value={newSubOwnerCode} onChange={(e) => setNewSubOwnerCode(e.target.value)} placeholder={suggestOwnerCode(newSubName)} className="w-32 font-mono" />
             <Button type="submit" size="sm"><Plus className="h-4 w-4" /></Button>
           </form>
           {loading ? (
@@ -997,6 +1038,7 @@ function SubcontractorMasterTable() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead className="w-32">Owner Code</TableHead>
                     <TableHead className="w-20 text-center">Active</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
@@ -1005,6 +1047,7 @@ function SubcontractorMasterTable() {
                   {subs.map(r => (
                     <TableRow key={r.id}>
                       <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
+                      <TableCell><InlineNameEdit value={r.owner_code ?? suggestOwnerCode(r.name)} onSave={(v) => updateOwnerCode(r, v)} /></TableCell>
                       <TableCell className="text-center">
                         <Switch checked={r.is_active} onCheckedChange={() => startToggleActive(r)} />
                       </TableCell>
@@ -1026,6 +1069,7 @@ function SubcontractorMasterTable() {
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sub-Subs (재하도)</h3>
           <form onSubmit={addSubSub} className="flex gap-2">
             <Input value={newSubSubName} onChange={(e) => setNewSubSubName(e.target.value)} placeholder="Sub-Sub name..." className="flex-1" />
+            <Input value={newSubSubOwnerCode} onChange={(e) => setNewSubSubOwnerCode(e.target.value)} placeholder={suggestOwnerCode(newSubSubName)} className="w-32 font-mono" />
             <Select value={newSubSubParent} onValueChange={setNewSubSubParent}>
               <SelectTrigger className="w-[160px]"><SelectValue placeholder="Parent Sub" /></SelectTrigger>
               <SelectContent>
@@ -1040,6 +1084,7 @@ function SubcontractorMasterTable() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Owner Code</TableHead>
                     <TableHead>Parent</TableHead>
                     <TableHead className="w-20 text-center">Active</TableHead>
                     <TableHead className="w-12"></TableHead>
@@ -1051,6 +1096,7 @@ function SubcontractorMasterTable() {
                     return (
                       <TableRow key={r.id}>
                         <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
+                        <TableCell className="font-mono text-xs"><InlineNameEdit value={r.owner_code ?? suggestOwnerCode(r.name)} onSave={(v) => updateOwnerCode(r, v)} /></TableCell>
                         <TableCell className="text-xs text-muted-foreground">{parent?.name ?? '—'}</TableCell>
                         <TableCell className="text-center">
                           <Switch checked={r.is_active} onCheckedChange={() => startToggleActive(r)} />

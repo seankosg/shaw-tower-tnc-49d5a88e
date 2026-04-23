@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { suggestOwnerCode } from '@/lib/defect-utils';
 
 type MasterType = 'subcontractor' | 'subsub' | 'hdec_pic';
 
@@ -7,6 +8,7 @@ type MasterRow = {
   name: string;
   type?: string | null;
   parent_subcontractor_id?: string | null;
+  owner_code?: string | null;
   is_active?: boolean | null;
 };
 
@@ -124,7 +126,7 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
 
     const { data, error } = await supabase
       .from('subcontractor_master')
-      .insert({ name, type: 'sub' })
+      .insert({ name, type: 'sub', owner_code: suggestOwnerCode(name) })
       .select('id')
       .single();
 
@@ -159,7 +161,7 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
 
     const { data, error } = await supabase
       .from('subcontractor_master')
-      .insert({ name, type: 'subsub', parent_subcontractor_id: parentId })
+      .insert({ name, type: 'subsub', parent_subcontractor_id: parentId, owner_code: suggestOwnerCode(name) })
       .select('id')
       .single();
 
