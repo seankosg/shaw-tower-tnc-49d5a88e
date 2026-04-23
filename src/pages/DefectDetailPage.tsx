@@ -80,11 +80,21 @@ export default function DefectDetailPage() {
   const rawEntries = useMemo(() => Object.entries(record?.raw_payload ?? {}).slice(0, 80), [record]);
   if (!record) return <div className="text-sm text-muted-foreground">Loading defect...</div>;
 
-  const inputClass = 'h-9';
+  const workType = getRawValue(record.raw_payload, ['Work Type', 'WorkType', 'Type of Work']) ?? record.trade_detail ?? record.defect_type;
+  const capturedOn = getRawValue(record.raw_payload, ['Captured on', 'Captured On', 'Captured Date', 'Capture Date']) ?? record.created_at;
+  const startDate = getRawValue(record.raw_payload, ['Start', 'Start Date', 'Planned Start', 'Plan Start']);
+  const finishDate = getRawValue(record.raw_payload, ['Finish', 'Finish Date', 'Planned Finish', 'Plan Finish']);
+  const actualStartDate = getRawValue(record.raw_payload, ['Actual Start', 'Actual Start Date']);
+  const actualFinishDate = getRawValue(record.raw_payload, ['Actual Finish', 'Actual Finish Date']);
+  const plannedProgressRaw = getRawValue(record.raw_payload, ['Planned Progress', 'Planned Progress %', 'Plan Progress', 'Plan %']);
+  const plannedProgress = parseProgress(plannedProgressRaw);
+  const actualProgress = form.actual_progress_pct == null ? null : Number(form.actual_progress_pct);
+  const progressDifference = plannedProgress == null || actualProgress == null ? null : actualProgress - plannedProgress;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between"><Button variant="outline" onClick={() => navigate(-1)}>Back</Button>{canEdit && <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>}</div>
-      <Card><CardHeader><CardTitle>Defect Detail · {record.issue_no}</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-3">
+      <Card><CardHeader><CardTitle className="flex flex-wrap items-center gap-x-8 gap-y-2 text-xl">ITEM DETAIL - NO.{record.issue_no}<span className="rounded-md border bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">Closure Status: {record.closure_status || '—'}</span></CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-3">
         <Field field="issue_no" label={getLabel('issue_no')} value={form.issue_no} required={isFieldRequired('issue_no')} disabled onChange={(v) => updateField('issue_no', v)} />
         {isFieldVisible('subcontractor_issue_no') && <Field field="subcontractor_issue_no" label={getLabel('subcontractor_issue_no')} value={form.subcontractor_issue_no} required={isFieldRequired('subcontractor_issue_no')} disabled={!canEdit} onChange={(v) => updateField('subcontractor_issue_no', v)} />}
         {isFieldVisible('subcontractor_issue_source') && <Field field="subcontractor_issue_source" label={getLabel('subcontractor_issue_source')} value={form.subcontractor_issue_source} required={isFieldRequired('subcontractor_issue_source')} disabled={!canEdit} onChange={(v) => updateField('subcontractor_issue_source', v)} />}
@@ -93,13 +103,19 @@ export default function DefectDetailPage() {
         <Field label="Location" value={form.area_location} disabled={!canEdit} onChange={(v) => updateField('area_location', v)} />
         <Field label="Main Trade" value={form.main_trade} disabled={!canEdit} onChange={(v) => updateField('main_trade', v)} />
         <Field label="Sub Trade" value={form.sub_trade} disabled={!canEdit} onChange={(v) => updateField('sub_trade', v)} />
+        <ReadonlyField label="Work Type" value={workType} />
         <Field label="Subcontractor" value={form.subcontractor_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subcontractor_name', v)} />
         <Field label="Sub-Sub" value={form.subsub_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subsub_name', v)} />
         <Field label="HDEC PIC" value={form.hdec_pic_name} disabled={!canEditResponsibility} onChange={(v) => updateField('hdec_pic_name', v)} />
-        <Field label="Planned Date" type="date" value={form.planned_date} disabled={!canEdit} onChange={(v) => updateField('planned_date', v)} />
-        <Field label="Target Date" type="date" value={form.target_date} disabled={!canEdit} onChange={(v) => updateField('target_date', v)} />
+        <ReadonlyField label="Captured on" value={capturedOn} />
+        <ReadonlyField label="Start Date" value={startDate} />
+        <ReadonlyField label="Finish Date" value={finishDate} />
+        <ReadonlyField label="Actual Start Date" value={actualStartDate} />
+        <ReadonlyField label="Actual Finish Date" value={actualFinishDate} />
         <Field label="Closed Date" type="date" value={form.closed_date} disabled={!canEdit} onChange={(v) => updateField('closed_date', v)} />
+        <ReadonlyField label="Planned Progress" value={plannedProgress == null ? plannedProgressRaw : formatPct(plannedProgress)} />
         <Field label="Actual Progress %" type="number" value={form.actual_progress_pct} disabled={!canEdit} onChange={(v) => updateField('actual_progress_pct', v === '' ? null : Number(v))} />
+        <ReadonlyField label="Difference" value={progressDifference == null ? null : formatPct(progressDifference)} />
         <Field label="Closure Status" value={form.closure_status} disabled={!canEdit} onChange={(v) => updateField('closure_status', v)} />
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Description</label><Textarea value={String(form.description ?? '')} disabled={!canEdit} onChange={(e) => updateField('description', e.target.value)} /></div>
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Remarks</label><Textarea value={String(form.remarks ?? '')} disabled={!canEdit} onChange={(e) => updateField('remarks', e.target.value)} /></div>
@@ -112,4 +128,32 @@ export default function DefectDetailPage() {
 
 function Field({ label, value, onChange, disabled, type = 'text', required }: { field?: string; label: string; value: any; onChange: (value: string) => void; disabled?: boolean; type?: string; required?: boolean }) {
   return <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">{label}{required ? ' *' : ''}</label><Input className="h-9" type={type} value={value ?? ''} disabled={disabled} onChange={(e) => onChange(e.target.value)} /></div>;
+}
+
+function ReadonlyField({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-foreground">
+        {value == null || value === '' ? '—' : String(value)}
+      </div>
+    </div>
+  );
+}
+
+function normalizeRawKey(value: string) {
+  return value.replace(/\s*\(H\)\s*$/i, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+function getRawValue(payload: Record<string, unknown> | undefined, aliases: string[]) {
+  if (!payload) return null;
+  const aliasSet = new Set(aliases.map(normalizeRawKey));
+  const key = Object.keys(payload).find((item) => aliasSet.has(normalizeRawKey(item)));
+  return key ? payload[key] : null;
+}
+
+function parseProgress(value: unknown) {
+  if (value == null || value === '') return null;
+  const parsed = Number(String(value).replace('%', '').trim());
+  return Number.isFinite(parsed) ? parsed : null;
 }
