@@ -1,207 +1,233 @@
 
-## 제안: Team 명칭 정합 기준
+## 구현 계획: Defect View Import Log를 T&C Import Log와 동일한 UI/기능으로 개편
 
-현재 T&C Management 구축 시 이미 기 구축된 기준은 다음과 같습니다.
+`Defect Management > Import > View Import Logs` 화면을 현재 T&C Management의 Import Log 화면 구조와 동일하게 맞추겠습니다. UI 문구는 기존 정책대로 영어로 유지합니다.
 
-```text
-DB 저장값 / 내부 enum:
-- Mech
-- Elec
-- Arch
-- Supp
+## 1. Defect Import Logs 화면 구조 변경
 
-앱 표시명:
-- Mechanical
-- Electrical
-- Architecture
-- Support
-```
-
-다만 사용자가 선호하신 명칭과 현장 discipline 표현의 일관성을 고려하면, 앱 전체 표시명은 아래처럼 통일하는 것이 가장 적절합니다.
+현재 Defect Import Logs는 좌우 2-column 구조입니다.
 
 ```text
-권장 앱 표시명:
-- Mechanical
-- Electrical
-- Architectural
-- Support
+왼쪽: Defect Import Logs
+오른쪽: Row Logs
 ```
 
-즉, DB에는 기존 T&C 기준인 짧은 enum 값을 유지하고, 화면/엑셀/필터/로그/관리자 UI에는 full label을 일관되게 표시하는 방식입니다.
-
-## 권장 기준
+이를 T&C Import Logs와 동일한 흐름으로 변경합니다.
 
 ```text
-Internal value: Mech
-Display label: Mechanical
+목록 화면:
+- 상단 Back button
+- title: Import History
+- import batch table
 
-Internal value: Elec
-Display label: Electrical
-
-Internal value: Arch
-Display label: Architectural
-
-Internal value: Supp
-Display label: Support
+상세 화면:
+- 상단 Back button
+- title: Import Row Details
+- selected file name card title
+- tabs:
+  - Row Logs
+  - Schedule Changes
 ```
 
-## DB enum 값을 변경하지 않는 이유
-
-현재 `team_type`은 이미 다음 enum으로 생성되어 있고, T&C `subtests`, Defect `defect_items`, User Management `profiles`, 권한 RPC, 필터, import/export에서 공통 사용 중입니다.
+Back button 동작도 T&C와 동일하게 적용합니다.
 
 ```text
-Mech, Elec, Arch, Supp
+상세 화면에서 Back → batch list로 이동
+목록 화면에서 Back → /defects/import 로 이동
 ```
 
-이를 DB 레벨에서 `Mechanical`, `Electrical`, `Architectural`, `Support`로 변경하면 다음 영향이 큽니다.
+## 2. URL query state 적용
+
+T&C Import Logs처럼 선택 상태를 URL에 반영합니다.
 
 ```text
-- 기존 데이터 migration 필요
-- database enum rename / cast 처리 필요
-- RLS/RPC 권한 로직 재검증 필요
-- Import/Export 필터 값 변경 필요
-- 기존 URL filter / localStorage 상태와 충돌 가능
+/defects/import/logs?batch={batchId}
+/defects/import/logs?batch={batchId}&tab=schedule
 ```
 
-따라서 안정성을 위해 DB 저장값은 유지하고, 앱 전체 표시명만 통일하는 것을 제안합니다.
-
-## 적용 계획
-
-### 1. 공통 Team label 기준 변경
-
-`src/types/enums.ts`의 `TEAM_LABELS`를 앱 전체 기준으로 사용합니다.
-
-변경 전:
+적용 효과:
 
 ```text
-Arch: Architecture
+- 새로고침해도 선택 batch 유지
+- Row Logs / Schedule Changes tab 상태 유지
+- 사용자가 특정 import log 상세 URL을 공유 가능
 ```
 
-변경 후:
+## 3. Import History table을 T&C와 동일하게 확장
+
+Defect import batch 목록을 T&C Import History table과 동일한 컬럼 구성으로 표시합니다.
 
 ```text
-Arch: Architectural
+File
+Date
+Status
+Total
+Success
+Skipped
+Rejected
+Delete action/admin only
 ```
 
-최종 기준:
+Defect에는 `import_type` 컬럼이 없으므로 T&C의 `Type` 컬럼은 제외하거나 `Defect` 고정 표시로 맞추겠습니다. 화면 정합성을 위해 다음 구성을 권장합니다.
 
 ```text
-Mech → Mechanical
-Elec → Electrical
-Arch → Architectural
-Supp → Support
+File | Type | Date | Status | Total | Success | Skipped | Rejected | Delete
 ```
 
-### 2. Team normalization helper 공통화
+`Type` 값은 `Defect`로 표시합니다.
 
-현재 T&C import와 Defect parser/import에서 Team 판단 로직이 분산되어 있으므로, 공통 helper를 추가하거나 기존 enum 파일에 정리합니다.
-
-예시 기준:
+날짜는 앱 공통 기준대로 표시합니다.
 
 ```text
-normalizeTeamValue(input) → TeamType | null
-formatTeamLabel(team) → Mechanical / Electrical / Architectural / Support
+dd-MMM-yyyy HH:mm
 ```
-
-이 helper를 다음 영역에서 동일하게 사용합니다.
-
-```text
-- T&C Import
-- Defect Import
-- User Management
-- Raw Data filter
-- Dashboard filter
-- Export filter
-- Detail pages
-```
-
-### 3. Defect Import 자동 Team 판단 기준
-
-Defect Import의 Field Discipline 기반 판단은 내부 저장값으로는 기존 enum을 사용하고, 사용자에게 보이는 명칭은 full label로 표시합니다.
-
-```text
-Architectural 계열 → Arch → Architectural
-Electrical 계열    → Elec → Electrical
-Mechanical 계열    → Mech → Mechanical
-Support 계열       → Supp → Support
-```
-
-Electrical 우선 규칙은 유지합니다.
-
-```text
-Electrical / ICT / SBT / Vertical Transport → Electrical
-```
-
-Mechanical은 다음으로 판단합니다.
-
-```text
-Mechanical / ACMV / BMS / Plumbing / Sanitary / Santary / Gas / Fire Protection → Mechanical
-```
-
-Architectural은 다음으로 판단합니다.
-
-```text
-Architectural / Archtectural / Architecture / Landscaping / Facade / Structural → Architectural
-```
-
-### 4. User Management fallback도 동일 기준 사용
-
-Field Discipline으로 Team이 판단되지 않을 경우, User Management의 profile team을 참조합니다.
-
-profile에는 내부값이 저장됩니다.
-
-```text
-Mech / Elec / Arch / Supp
-```
-
-화면에는 항상 다음처럼 표시합니다.
-
-```text
-Mechanical / Electrical / Architectural / Support
-```
-
-### 5. Defect Import 화면 변경 시 반영
-
-기존 계획의 Team 수동 선택 제거는 유지합니다.
-
-추가로 Import 결과/로그 문구도 full label 기준으로 표시합니다.
 
 예시:
 
 ```text
-Resolved Team: Electrical
-Team unresolved
+23-Apr-2026 14:35
 ```
 
-내부 저장값 `Elec` 같은 약어는 화면에 노출하지 않습니다.
+## 4. Row Logs tab을 T&C 스타일로 변경
 
-### 6. 앱 전체 표시 점검 대상
+Defect row logs도 T&C Row Logs와 동일한 테이블 스타일, badge 색상, empty state, scroll behavior를 적용합니다.
 
-다음 화면/기능에서 Team 표시가 모두 동일 label을 쓰도록 점검 및 보강합니다.
+컬럼:
 
 ```text
-- Admin / User Management
-- T&C Raw Data
-- T&C Detail
-- T&C Import
-- T&C Dashboard
-- Defect Import
-- Defect Raw Data
-- Defect Detail
-- Defect Dashboard / Progress
-- Defect Export
-- Excel export files
-- Import Logs
+Row
+Issue No
+Action
+Reason
+Detail
 ```
 
-## 최종 제안 기준
+표시 규칙:
 
 ```text
-DB / internal value는 기존 T&C 기준 유지:
-Mech, Elec, Arch, Supp
-
-앱 전체 표시명은 다음으로 통일:
-Mechanical, Electrical, Architectural, Support
+action_taken = inserted / updated / skipped / rejected badge 표시
+reason_code 없으면 —
+reason_detail 없으면 —
+team_unresolved 로그도 이 화면에서 확인 가능
 ```
 
-이 방식이 현재 T&C Management의 기 구축 DB/권한/필터 구조와 가장 안전하게 정합되고, 사용자가 선호한 full label 방식도 만족합니다.
+## 5. Schedule Changes tab 추가
+
+Defect import 중 발생한 `defect_schedule_change_audit` 데이터를 T&C의 Schedule Changes tab과 같은 방식으로 표시합니다.
+
+Defect용 컬럼은 T&C의 Pred/T1/T2 구조 대신 Defect schedule audit 구조에 맞춥니다.
+
+```text
+Row
+Issue No
+Subcon Issue No
+Planned: Old date / New date / Diff
+Target: Old date / New date / Diff
+Closed: Old date / New date / Diff
+Progress: Old % / New % / Diff
+Closure Status
+Source
+```
+
+표시 규칙:
+
+```text
+- 날짜는 dd-MMM 형식
+- diff는 +n / -n 형태
+- 지연 방향 diff는 destructive 색상
+- 단축 방향 diff는 primary 색상
+- progress diff는 % suffix 표시
+- schedule change row 클릭 시 /defects/{defect_id} 로 이동
+```
+
+## 6. Delete 기능을 T&C와 동일하게 적용
+
+관리자/슈퍼유저 또는 개발 모드에서만 delete icon을 표시합니다.
+
+```text
+canDelete = isAdminOrSuperuser || import.meta.env.DEV
+```
+
+삭제 확인 dialog도 T&C와 동일한 패턴으로 적용합니다.
+
+Dialog 문구 예시:
+
+```text
+Delete import batch?
+
+This will permanently delete [file name], defect items imported from it, schedule change audits, snapshots, and row logs. This action cannot be undone.
+```
+
+삭제 대상:
+
+```text
+1. defect_daily_snapshots linked to defect_items.source_upload_id = batch.id
+2. defect_items where source_upload_id = batch.id
+3. defect_schedule_change_audit where upload_id = batch.id
+4. defect_upload_row_logs where upload_id = batch.id
+5. defect_upload_batches where id = batch.id
+```
+
+주의: 현재 Defect import는 update된 기존 defect에도 `source_upload_id`가 갱신됩니다. 따라서 T&C와 동일한 삭제 방식은 해당 batch가 마지막으로 업데이트한 defect item도 삭제 대상이 됩니다. 요청하신 “T&C Import Log 기능과 UI 그대로” 기준에 맞춰 동일하게 적용하되, dialog 문구에서 삭제 범위를 명확히 표시하겠습니다.
+
+## 7. 필요한 DB 권한 보강
+
+현재 Defect upload 관련 table은 select/insert 중심으로 정책이 구성되어 있어, row logs와 schedule audit 삭제가 막힐 수 있습니다.
+
+관리자 삭제 기능을 안정적으로 동작시키기 위해 migration으로 다음 RLS delete policy를 추가합니다.
+
+```text
+defect_upload_row_logs:
+- Admins can delete defect upload logs
+
+defect_schedule_change_audit:
+- Admins can delete defect schedule audit
+
+defect_daily_snapshots:
+- Admins can delete defect daily snapshots
+```
+
+`defect_upload_batches`와 `defect_items`는 이미 admin delete policy가 있으므로 기존 정책을 사용합니다.
+
+## 8. 코드 변경 대상
+
+```text
+src/pages/DefectImportLogsPage.tsx
+```
+
+주요 변경:
+
+```text
+- T&C ImportLogsPage 구조를 Defect용으로 이식
+- useNavigate / useSearchParams 추가
+- useAuth / useToast 추가
+- AlertDialog delete confirmation 추가
+- statusColor / actionColor 재사용
+- defect schedule audit 전용 StageCells 또는 DeltaCells 구성
+- date formatting utilities 적용
+```
+
+DB 권한 보강이 필요한 경우:
+
+```text
+supabase/migrations/[new_migration].sql
+```
+
+## 9. 검증 항목
+
+```text
+1. /defects/import 에서 View Import Logs 클릭 시 새 UI로 이동
+2. Defect Import History가 T&C Import History와 동일한 테이블 스타일로 표시됨
+3. File row 클릭 시 상세 화면으로 전환됨
+4. URL에 batch query가 반영되고 새로고침 후에도 상세가 유지됨
+5. Row Logs tab에서 inserted/updated/skipped/rejected badge가 표시됨
+6. team_unresolved reason이 Row Logs에서 확인됨
+7. Schedule Changes tab에서 planned/target/closed/progress/closure status 변경이 표시됨
+8. Schedule Changes row 클릭 시 해당 Defect Detail로 이동함
+9. Back button이 상세에서는 목록으로, 목록에서는 /defects/import 로 이동함
+10. 관리자/슈퍼유저만 delete button을 볼 수 있음
+11. Delete confirm 후 관련 defect import batch/log/audit 데이터가 삭제됨
+12. 일반 사용자는 delete 기능이 노출되지 않음
+13. 날짜 형식은 dd-MMM 또는 dd-MMM-yyyy 기준을 유지함
+14. 모바일/좁은 화면에서는 table이 overflow scroll로 깨지지 않음
+```
