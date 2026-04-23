@@ -1,351 +1,210 @@
 
-## 확인 결과
+## 구현 계획: Defect Import 전 협력사 유사명 확인 대화창 추가
 
-현재 T&C Management의 Import는 단순히 `subtests` 데이터만 넣는 방식이 아니라, Import 파일 안에 등장하는 담당/업체 정보를 기준으로 Master와 사용자를 자동 등록합니다.
-
-반면 현재 Defect Management Import에는 같은 로직이 아직 완전히 반영되어 있지 않습니다.
-
-즉, 현재 상태는 아래와 같습니다.
+Defect Management Import 시 Excel에 있는 협력사명이 기존 Master에 완전히 일치하지 않더라도, 기존 등록 협력사와 유사하면 즉시 신규 등록하지 않고 사용자에게 확인 대화창을 띄우도록 구현합니다.
 
 ```text
-T&C Import
-- Subcontractor Master 자동 등록
-- Sub-Subcontractor Master 자동 등록
-- HDEC PIC Master 자동 등록
-- 각 Master별 로그인 사용자 자동 생성
-- 기본 비밀번호 부여
-- user_roles에 user role 부여
+현재 동작
+- Excel 협력사명과 Master명이 완전 일치하지 않음
+- 신규 Subcontractor Master로 자동 등록
+- 신규 로그인 사용자도 자동 생성
 
-Defect Import
-- defect_items import / update
-- Data Date 저장
-- Team 저장
-- Schedule Revision 기록
-- Daily Snapshot 기록
-- 그러나 Master 자동 등록 / 사용자 자동 생성 로직은 아직 없음
+변경 후 동작
+- Excel 협력사명과 Master명이 완전 일치하지 않음
+- 기존 Master와 유사한 이름이 있으면 Import 전 확인
+- 사용자가 기존 업체로 매핑할지, 신규 업체로 등록할지 선택
+- 선택 결과에 따라 defect_items / Master / 사용자 생성 처리
 ```
 
----
+## 1. 적용 대상
 
-## T&C Import의 현재 동작 방식
-
-T&C Import는 각 row를 처리하면서 아래 필드를 확인합니다.
+우선 협력사 관련 Master에 적용합니다.
 
 ```text
 subcontractor_name
 subsub_name
-hdec_pic_name
 ```
 
-각 값이 기존 Master에 없으면 자동으로 등록합니다.
+HDEC PIC는 “업체명”이 아니므로 이번 범위에서는 자동 유사명 확인 대상에서 제외하고, 기존 방식대로 정확히 일치하지 않으면 신규 등록 로직을 유지합니다.
 
-### 1. Subcontractor 자동 등록
+## 2. 유사명 판단 기준
+
+Import 실행 전, 파일에 포함된 협력사명을 기존 `subcontractor_master`와 비교합니다.
+
+비교 시 단순 대소문자 차이뿐 아니라 아래 차이를 완화해서 판단합니다.
 
 ```text
-Excel row의 subcontractor_name 확인
-→ subcontractor_master에 같은 이름이 없으면 insert
-→ type = sub
-→ auto-create-master-user backend function 호출
-→ 해당 Subcontractor용 로그인 사용자 자동 생성
+- 대소문자 차이
+- 앞뒤 공백
+- 중복 공백
+- 점, 쉼표, 하이픈 등 일부 기호
+- Co., Ltd / Co Ltd / Ltd / Pte Ltd 등 회사명 suffix 차이
+- Corporation / Corp 등 약어 차이
 ```
-
-### 2. Sub-Subcontractor 자동 등록
-
-```text
-Excel row의 subsub_name 확인
-→ subcontractor_master에 같은 이름이 없으면 insert
-→ type = subsub
-→ parent_subcontractor_id 연결
-→ auto-create-master-user backend function 호출
-→ 해당 Sub-Subcontractor용 로그인 사용자 자동 생성
-```
-
-### 3. HDEC PIC 자동 등록
-
-```text
-Excel row의 hdec_pic_name 확인
-→ hdec_pic_master에 같은 이름이 없으면 insert
-→ auto-create-master-user backend function 호출
-→ 해당 HDEC PIC용 로그인 사용자 자동 생성
-```
-
-### 4. 자동 생성 사용자 규칙
-
-자동 생성 사용자는 아래 규칙으로 생성됩니다.
-
-```text
-login_id: 이름 기반 자동 생성
-password: 기본 비밀번호
-role: user
-must_change_password: true
-```
-
-즉, 사용자는 최초 로그인 후 비밀번호 변경 대상이 됩니다.
-
----
-
-## Defect Management에 적용해야 하는 방식
-
-Defect Management도 T&C와 동일한 운영 구조가 되어야 하므로, Defect Import 시에도 아래 필드 기준으로 Master 및 User 자동 등록을 구현하겠습니다.
-
-```text
-subcontractor_name
-subsub_name
-hdec_pic_name
-```
-
-Defect Import 파일에서 위 값들이 들어오면 다음 순서로 처리합니다.
-
-```text
-1. 기존 Master 존재 여부 확인
-2. 없으면 Master 자동 등록
-3. Master 등록 후 auto-create-master-user 호출
-4. 이미 같은 Master 사용자 profile이 있으면 중복 생성하지 않음
-5. 생성 실패 시 Import 자체는 계속 진행하되 warning으로 표시
-```
-
----
-
-## 구현 계획
-
-### 1. Defect Import에 Master Cache 로직 추가
-
-`src/pages/DefectImportPage.tsx`의 Import 실행 시작 시점에 기존 Master 데이터를 불러옵니다.
-
-```text
-subcontractor_master
-hdec_pic_master
-profiles
-```
-
-메모리 cache를 구성합니다.
-
-```text
-subconCache
-subsubCache
-hdecCache
-```
-
-이 cache를 이용해 row별 중복 insert를 방지합니다.
-
----
-
-### 2. Defect Import row 처리 전에 Master 자동 등록
-
-각 Defect row를 `defect_items`에 insert/update하기 전에 아래 처리를 먼저 수행합니다.
-
-```text
-await ensureSubcontractor(row.subcontractor_name)
-await ensureSubsub(row.subsub_name, row.subcontractor_name)
-await ensureHdecPic(row.hdec_pic_name)
-```
-
-이 로직은 T&C Import와 동일하게 구성합니다.
-
----
-
-### 3. Subcontractor 자동 등록 함수 추가
-
-Defect Import 내부에 아래 로직을 추가합니다.
-
-```text
-ensureSubcontractor(name)
-```
-
-동작:
-
-```text
-1. name이 없으면 skip
-2. 기존 subcontractor_master에 있으면 skip
-3. 없으면 subcontractor_master insert
-4. type = sub
-5. auto-create-master-user 호출
-6. 생성 실패 시 userCreateFails에 기록
-```
-
----
-
-### 4. Sub-Subcontractor 자동 등록 함수 추가
-
-Defect Import 내부에 아래 로직을 추가합니다.
-
-```text
-ensureSubsub(name, parentName)
-```
-
-동작:
-
-```text
-1. subsub name이 없으면 skip
-2. 기존 subsub master에 있으면 skip
-3. parent subcontractor가 있으면 먼저 ensureSubcontractor 실행
-4. parent_subcontractor_id 연결
-5. subcontractor_master insert
-6. type = subsub
-7. auto-create-master-user 호출
-8. 생성 실패 시 userCreateFails에 기록
-```
-
-주의사항:
-
-```text
-parentName이 없는 subsub는 parent 연결이 불명확하므로 자동 등록하지 않고 warning 처리
-```
-
-T&C 쪽에는 임의 parent fallback이 있으나, Defect에서는 데이터 정합성을 위해 parent가 없는 subsub 자동등록은 보수적으로 처리하는 것이 안전합니다.
-
----
-
-### 5. HDEC PIC 자동 등록 함수 추가
-
-Defect Import 내부에 아래 로직을 추가합니다.
-
-```text
-ensureHdecPic(name)
-```
-
-동작:
-
-```text
-1. name이 없으면 skip
-2. 기존 hdec_pic_master에 있으면 skip
-3. 없으면 hdec_pic_master insert
-4. auto-create-master-user 호출
-5. 생성 실패 시 userCreateFails에 기록
-```
-
----
-
-### 6. 자동 생성 사용자 규칙은 T&C와 동일하게 사용
-
-이미 존재하는 backend function을 그대로 재사용합니다.
-
-```text
-auto-create-master-user
-```
-
-따라서 Defect Management용 별도 사용자 생성 function은 만들지 않습니다.
-
-자동 생성되는 profile 값:
-
-```text
-Subcontractor:
-- user_type = subcontractor
-- subcontractor_name = imported subcontractor name
-
-Sub-Subcontractor:
-- user_type = subsub
-- subcontractor_name = parent subcontractor name
-- subsub_name = imported subsub name
-
-HDEC PIC:
-- user_type = hdec
-- hdec_pic_name = imported HDEC PIC name
-```
-
-부여 role:
-
-```text
-user
-```
-
----
-
-### 7. Import 완료 후 warning 표시
-
-T&C Import와 동일하게 사용자 자동 생성 실패 목록을 수집합니다.
 
 예시:
 
 ```text
-Some master users could not be auto-created:
-- ABC Contractor (sub): duplicate login id
-- HDEC PIC Name (hdec_pic): create failed
+Excel: ABC Engineering Co., Ltd
+Master: ABC Engineering
+
+→ 유사 업체 후보로 표시
 ```
 
-중요한 원칙:
+## 3. Import 전 Preflight 단계 추가
+
+`Execute Import` 버튼 클릭 후 실제 DB 등록 전에 Preflight 검사를 먼저 실행합니다.
 
 ```text
-Master/User 자동 생성 일부 실패 때문에 전체 Defect Import를 중단하지 않음
+1. 선택된 Defect Import 파일들의 parsed rows 확인
+2. 파일 안의 subcontractor_name / subsub_name 수집
+3. 기존 Master와 정확히 일치하는 이름은 통과
+4. 정확히 일치하지 않지만 유사한 기존 Master가 있으면 pending decision 생성
+5. pending decision이 있으면 실제 import를 중단하고 확인 Dialog 표시
+6. 사용자가 모든 항목을 결정하면 실제 import 시작
 ```
 
-Defect data import는 계속 진행하고, 실패 내역만 toast 또는 file error summary로 표시합니다.
+즉, row loop 안에서 바로 Master를 생성하지 않고, Import 전에 먼저 판단하도록 순서를 바꿉니다.
 
----
+## 4. 확인 Dialog UI
 
-### 8. Admin Master 탭과 연동
+Defect Import 화면에 아래 형태의 대화창을 추가합니다.
 
-Defect Import로 자동 등록된 Master는 기존 Admin의 Master 관리 화면에서 동일하게 관리됩니다.
+UI 문구는 앱 정책에 따라 영어로 표시합니다.
 
 ```text
-Administration
-- Subcontractor Master
-- HDEC PIC Master
+Possible Existing Subcontractors Found
+
+Imported Name              Similar Existing Master              Action
+ABC Engineering Co., Ltd   ABC Engineering                      [Use Existing] [Register New]
+XYZ M&E Pte Ltd            XYZ M&E                              [Use Existing] [Register New]
 ```
 
-즉, Defect Management용 별도 Master 화면을 만들지 않고, T&C와 공통 Master를 사용합니다.
+각 항목별 선택지는 다음과 같습니다.
 
----
+```text
+Use Existing
+- 기존 Master 업체와 동일 업체로 판단
+- Excel의 업체명을 기존 Master의 표준 이름으로 치환
+- 신규 Master / 신규 사용자 생성하지 않음
 
-## 수정 대상 파일
+Register New
+- 기존 업체와 다른 별도 업체로 판단
+- 기존 자동 등록 로직대로 신규 Master 생성
+- 신규 로그인 사용자 자동 생성
+```
+
+동일한 Excel 업체명이 여러 row에 반복되어도 Dialog에는 한 번만 표시하고, 선택 결과를 모든 row에 동일하게 적용합니다.
+
+## 5. 매핑 결과 반영 방식
+
+사용자가 `Use Existing`을 선택하면 해당 Import 세션에서는 row 값을 기존 Master 기준으로 표준화합니다.
+
+예시:
+
+```text
+Excel row subcontractor_name:
+ABC Engineering Co., Ltd
+
+사용자 선택:
+Use Existing → ABC Engineering
+
+DB 저장 defect_items.subcontractor_name:
+ABC Engineering
+```
+
+Sub-Subcontractor도 parent subcontractor 기준과 함께 처리합니다.
+
+```text
+Excel:
+subcontractor_name = ABC Engineering Co., Ltd
+subsub_name = ABC ELV Team
+
+선택 결과:
+subcontractor_name → ABC Engineering
+
+Sub-sub 등록/확인 시:
+parent = ABC Engineering 기준으로 처리
+```
+
+## 6. 신규 등록 전 차단 보장
+
+현재 Defect Import는 `createDefectMasterEnsurer(...).ensureForRow(row)`에서 Master를 즉시 생성합니다.
+
+이를 다음 구조로 변경합니다.
+
+```text
+Before:
+row 처리 중 ensureForRow(row)
+→ 유사명 확인 없이 즉시 신규 등록 가능
+
+After:
+startImport()
+→ preflightSimilarMasterDecisions()
+→ decision map 생성
+→ importOneFile()
+→ decision map을 적용한 row로 ensureForRow(row)
+```
+
+이렇게 해서 유사 업체가 발견된 경우에는 사용자가 선택하기 전까지 신규 Master가 생성되지 않도록 합니다.
+
+## 7. 수정 대상 파일
 
 ```text
 src/pages/DefectImportPage.tsx
+src/lib/defect-master-autocreate.ts
 ```
 
-기존 backend function은 재사용합니다.
+필요 시 유사도 계산 유틸을 별도 파일로 분리할 수 있습니다.
 
 ```text
-supabase/functions/auto-create-master-user/index.ts
+src/lib/master-name-match.ts
 ```
 
-DB schema 변경은 필요 없습니다.
+## 8. DB 변경 여부
 
-이미 사용하는 공통 Master 테이블:
+이번 구현에는 DB schema 변경이 필요 없습니다.
+
+사용자 선택 결과는 해당 Import 실행에만 적용합니다.
 
 ```text
-subcontractor_master
-hdec_pic_master
-profiles
-user_roles
+- 기존 Master를 선택한 경우: defect_items에 기존 Master 이름 저장
+- 신규 등록을 선택한 경우: 기존 자동 등록 로직 사용
 ```
 
----
+향후 같은 유사명에 대해 반복 확인을 줄이려면 별도 alias 테이블을 추가할 수 있지만, 이번 요청 범위에서는 “등록 전에 확인 Dialog 표시”에 집중합니다.
 
-## 구현 후 Defect Import 최종 동작
+## 9. Import 흐름 변경 후 최종 동작
 
 ```text
 1. Defect Excel 업로드
 2. Data Date 선택
 3. Team 선택
-4. Execute Import
-5. row별 Issue No 검증
-6. row별 Subcontractor / Sub-Sub / HDEC PIC Master 확인
-7. Master가 없으면 자동 등록
-8. Master별 사용자 자동 생성
-9. defect_items insert/update
-10. Schedule Revision audit 기록
-11. Daily Snapshot 기록
-12. Import Logs 기록
-13. Import Summary 표시
-14. 자동 사용자 생성 실패가 있으면 warning 표시
+4. Execute Import 클릭
+5. 기존 subcontractor_master와 유사명 비교
+6. 유사 업체가 있으면 Dialog 표시
+7. 사용자가 Use Existing 또는 Register New 선택
+8. 선택 결과를 모든 parsed row에 반영
+9. 실제 Defect Import 실행
+10. 기존 업체 선택 항목은 신규 Master/User 생성하지 않음
+11. 신규 등록 선택 항목만 Master/User 자동 생성
+12. defect_items insert/update
+13. Schedule Revision / Daily Snapshot / Import Logs 기존처럼 처리
 ```
 
----
-
-## 검증 항목
+## 10. 검증 항목
 
 ```text
-1. Defect Import 시 신규 subcontractor_name이 subcontractor_master에 등록됨
-2. Defect Import 시 신규 subsub_name이 parent와 함께 subcontractor_master에 등록됨
-3. Defect Import 시 신규 hdec_pic_name이 hdec_pic_master에 등록됨
-4. 신규 Subcontractor Master에 대해 로그인 사용자가 자동 생성됨
-5. 신규 Sub-Subcontractor Master에 대해 로그인 사용자가 자동 생성됨
-6. 신규 HDEC PIC Master에 대해 로그인 사용자가 자동 생성됨
-7. 이미 존재하는 Master는 중복 등록되지 않음
-8. 이미 존재하는 profile/user는 중복 생성되지 않음
-9. Master/User 생성 실패가 있어도 Defect Import 자체는 계속 진행됨
-10. 실패 내역은 사용자에게 warning으로 표시됨
-11. Admin Master 탭에서 Defect Import로 생성된 Master를 확인할 수 있음
-12. Defect 권한 로직이 자동 생성된 profile 정보와 정상 연동됨
+1. Excel 협력사명이 기존 Master와 완전 일치하면 Dialog 없이 import됨
+2. Excel 협력사명이 기존 Master와 유사하지만 완전 일치하지 않으면 Dialog가 표시됨
+3. Use Existing 선택 시 defect_items.subcontractor_name이 기존 Master명으로 저장됨
+4. Use Existing 선택 시 신규 subcontractor_master가 생성되지 않음
+5. Use Existing 선택 시 신규 로그인 사용자가 생성되지 않음
+6. Register New 선택 시 기존 자동 등록 로직대로 Master가 생성됨
+7. Register New 선택 시 신규 로그인 사용자가 자동 생성됨
+8. 동일한 Excel 업체명이 여러 row에 있어도 Dialog에는 한 번만 표시됨
+9. 선택 결과가 해당 파일의 모든 row에 일관되게 적용됨
+10. subsub_name 처리 시 선택된 parent subcontractor 기준으로 연결됨
+11. Dialog 결정 전에는 실제 import batch / master insert가 실행되지 않음
+12. 기존 Data Date / Team / Schedule Revision / Import Summary 기능이 유지됨
 ```
