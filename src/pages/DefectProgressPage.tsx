@@ -69,7 +69,7 @@ export default function DefectProgressPage() {
         <CardHeader><CardTitle className="text-base">Daily / Cumulative Chart</CardTitle></CardHeader>
         <CardContent><DefectDailyCumulativeChart items={items} start={start} end={end} bucket={bucket} dateField={dateField} cumulative={chartMode === 'cumulative'} /></CardContent>
       </Card>
-      <DefectProgressMatrix rows={matrix.rows} buckets={matrix.buckets} bucket={bucket} groupBy={groupBy} />
+      <DefectProgressMatrix rows={matrix.rows} buckets={matrix.buckets} bucket={bucket} groupBy={groupBy} dateField={dateField} />
     </div>
   );
 }

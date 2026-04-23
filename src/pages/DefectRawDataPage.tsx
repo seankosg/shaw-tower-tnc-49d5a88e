@@ -374,7 +374,7 @@ export default function DefectRawDataPage() {
     for (const [param, col] of Object.entries(urlMap)) {
       const value = searchParams.get(param);
       if (!value) continue;
-      if (TEXT_FILTER_FIELDS.has(col)) nextFilters.push({ id: col, value: { text: value } });
+      if (TEXT_FILTER_FIELDS.has(col)) nextFilters.push({ id: col, value: value === EMPTY_TOKEN ? { text: '', emptyOnly: true } : { text: value } });
       else nextFilters.push({ id: col, value: [value] });
     }
 
@@ -560,7 +560,7 @@ export default function DefectRawDataPage() {
     const out: { label: string; param: string; clears?: string[] }[] = [];
     for (const [param, label] of Object.entries(labels)) {
       const value = searchParams.get(param);
-      if (value) out.push({ label: `${label} ${value}`, param });
+      if (value) out.push({ label: `${label} ${value === EMPTY_TOKEN ? '(Blank)' : value}`, param });
     }
     const from = searchParams.get('dateStart');
     const to = searchParams.get('dateEnd');
