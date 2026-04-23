@@ -248,6 +248,7 @@ export default function DefectImportPage() {
     let updatedCount = 0;
     let skipped = 0;
     let rejected = 0;
+    let teamUnresolved = 0;
 
     for (let index = 0; index < item.parsed.length; index++) {
       const row = applyMasterDecisions(item.parsed[index], decisions);
@@ -264,13 +265,14 @@ export default function DefectImportPage() {
       const existing = existingRes.data;
       const resolvedTeam = resolveDefectTeam(row, profileTeamMap);
       const logReason = resolvedTeam ? {} : { reason_code: 'team_unresolved', reason_detail: 'Team could not be resolved from Field Discipline or User Management profile.' };
+      if (!resolvedTeam) teamUnresolved++;
       const payload = { ...row, team: resolvedTeam, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
 
       if (existing) {
         const hasAnyChange = Object.entries(payload).some(([key, value]) => key !== 'raw_payload' && key !== 'row_version' && key !== 'updated_by' && key !== 'source_upload_id' && changed(existing[key], value));
         if (!hasAnyChange) {
           skipped++;
-          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'skipped' });
+          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'skipped', ...logReason });
           continue;
         }
         await (supabase as any).from('defect_items').update(payload).eq('id', existing.id);
@@ -288,11 +290,11 @@ export default function DefectImportPage() {
           }
         }
         updatedCount++;
-        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated' });
+        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', ...logReason });
       } else {
         const inserted = await (supabase as any).from('defect_items').insert(payload).select('id').single();
         insertedCount++;
-        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'inserted' });
+        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'inserted', ...logReason });
         if (inserted.data?.id) await (supabase as any).from('defect_daily_snapshots').insert({ defect_id: inserted.data.id, issue_no: row.issue_no, snapshot_date: dataDate, planned_date: row.planned_date, actual_progress_pct: row.actual_progress_pct, closure_status: row.closure_status, closed_date: row.closed_date, created_by: user.id });
       }
     }
@@ -305,7 +307,7 @@ export default function DefectImportPage() {
         variant: 'destructive',
       });
     }
-    return { inserted: insertedCount, updated: updatedCount, skipped, rejected };
+    return { inserted: insertedCount, updated: updatedCount, skipped, rejected, teamUnresolved };
   };
 
   const runImport = async (items: DefectImportFile[], decisions: MasterNameDecisions) => {
@@ -324,7 +326,7 @@ export default function DefectImportPage() {
   };
 
   const startImport = async () => {
-    const readyFiles = files.filter((file) => file.status === 'ready' && file.team);
+    const readyFiles = files.filter((file) => file.status === 'ready');
     setIsRunning(true);
     try {
       const decisions = await preflightSimilarMasterDecisions(readyFiles);
