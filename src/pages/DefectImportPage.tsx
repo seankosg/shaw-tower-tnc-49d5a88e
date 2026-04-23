@@ -333,7 +333,7 @@ export default function DefectImportPage() {
 
       const existingRes = await (supabase as any).from('defect_items').select('*').eq('issue_no', row.issue_no).maybeSingle();
       const existing = existingRes.data;
-      const issueAssignment = reserveSubcontractorIssueNo(row, existing?.project_id ?? row.project_id ?? null, issueRegistry, existing);
+      const issueAssignment = reserveSubcontractorIssueNo(row, existing?.project_id ?? null, issueRegistry, existing);
       if (issueAssignment.duplicate) {
         rejected++;
         await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `${issueAssignment.subcontractor_issue_no} already exists in this project.` });
