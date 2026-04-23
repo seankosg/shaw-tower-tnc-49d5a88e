@@ -58,23 +58,62 @@ export default function DefectDetailPage() {
   const handleSave = async () => {
     if (!record || !user || !canEdit) return;
     setSaving(true);
-    const payload: any = { ...form, updated_by: user.id, data_source_type: 'app_direct_input', row_version: record.row_version + 1 };
-    if (!canEditResponsibility) DEFECT_RESPONSIBILITY_FIELDS.forEach((field) => delete payload[field]);
+
+    const editableFields = [
+      'subcontractor_issue_no', 'subcontractor_issue_source',
+      'area_type', 'area_level', 'area_location',
+      'main_trade', 'sub_trade',
+      'closed_date', 'actual_progress_pct', 'closure_status',
+      'description', 'remarks',
+      'subcontractor_name', 'subsub_name', 'hdec_pic_name',
+    ] as const;
+
+    const changes = editableFields
+      .filter((field) => canEditResponsibility || !DEFECT_RESPONSIBILITY_FIELDS.includes(field as any))
+      .filter((field) => String((record as any)[field] ?? '') !== String((form as any)[field] ?? ''))
+      .map((field) => ({ field, oldValue: (record as any)[field], newValue: (form as any)[field] }));
+
+    const payload: any = {
+      subcontractor_issue_no: form.subcontractor_issue_no || null,
+      subcontractor_issue_source: form.subcontractor_issue_source || null,
+      area_type: form.area_type || null,
+      area_level: form.area_level || null,
+      area_location: form.area_location || null,
+      main_trade: form.main_trade || null,
+      sub_trade: form.sub_trade || null,
+      closed_date: form.closed_date || null,
+      actual_progress_pct: form.actual_progress_pct ?? null,
+      closure_status: form.closure_status || null,
+      description: form.description || null,
+      remarks: form.remarks || null,
+      updated_by: user.id,
+      data_source_type: 'app_direct_input',
+      row_version: record.row_version + 1,
+    };
+    if (canEditResponsibility) {
+      payload.subcontractor_name = form.subcontractor_name || null;
+      payload.subsub_name = form.subsub_name || null;
+      payload.hdec_pic_name = form.hdec_pic_name || null;
+    }
     const { error } = await (supabase as any).from('defect_items').update(payload).eq('id', record.id);
     if (error) {
       setSaving(false);
       toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
       return;
     }
-    for (const [field, value] of Object.entries(payload)) {
-      if (String((record as any)[field] ?? '') !== String(value ?? '') && field in record) {
-        await (supabase as any).from('defect_change_log').insert({ defect_id: record.id, changed_field: field, old_value: String((record as any)[field] ?? ''), new_value: String(value ?? ''), changed_by: user.id, change_source: 'app_direct_input' });
-        if ((DEFECT_REVISION_FIELDS as readonly string[]).includes(field)) await (supabase as any).from('defect_schedule_change_audit').insert(revisionPayload(field, (record as any)[field], value));
+    if (changes.length > 0) {
+      await (supabase as any).from('defect_change_log').insert(changes.map(({ field, oldValue, newValue }) => ({ defect_id: record.id, changed_field: field, old_value: String(oldValue ?? ''), new_value: String(newValue ?? ''), changed_by: user.id, change_source: 'app_direct_input' })));
+      for (const { field, oldValue, newValue } of changes) {
+        if ((DEFECT_REVISION_FIELDS as readonly string[]).includes(field)) await (supabase as any).from('defect_schedule_change_audit').insert(revisionPayload(field, oldValue, newValue));
       }
     }
+    const updatedRecord = { ...record, ...payload };
+    setRecord(updatedRecord);
+    setForm(updatedRecord);
+    const logRes = await (supabase as any).from('defect_change_log').select('*').eq('defect_id', record.id).order('changed_at', { ascending: false }).limit(50);
+    setLogs(logRes.data ?? []);
     setSaving(false);
-    toast({ title: 'Defect saved' });
-    navigate('/defects/raw-data');
+    toast({ title: 'Saved', description: 'Defect updated successfully.' });
   };
 
   const rawEntries = useMemo(() => Object.entries(record?.raw_payload ?? {}).slice(0, 80), [record]);
