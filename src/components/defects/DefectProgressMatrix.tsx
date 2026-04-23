@@ -8,6 +8,7 @@ interface DefectProgressMatrixProps {
   buckets: string[];
   bucket: DefectProgressBucket;
   groupBy: DefectProgressGroupBy;
+  dateField: 'planned_date' | 'target_date';
 }
 
 const QUERY_FIELD: Record<DefectProgressGroupBy, string> = {
@@ -25,10 +26,11 @@ export function DefectProgressMatrix({ rows, buckets, bucket, groupBy }: DefectP
 
   const openRawData = (row: DefectProgressRow, bucketStart?: string) => {
     const params = new URLSearchParams();
-    params.set(QUERY_FIELD[groupBy], row.key);
+    params.set(QUERY_FIELD[groupBy], row.key === '—' || row.key === '(None)' ? '__EMPTY__' : row.key);
     if (bucketStart) {
       params.set('dateStart', bucketStart);
       params.set('dateEnd', row.buckets[bucketStart]?.end ?? bucketStart);
+      params.set('dateField', dateField);
     }
     navigate(`/defects/raw-data?${params.toString()}`);
   };
