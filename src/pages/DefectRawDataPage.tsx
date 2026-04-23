@@ -53,6 +53,7 @@ const DEFECT_RAW_FIELDS = [
   'hdec_pic_name',
   'planned_date',
   'target_date',
+  'actual_date',
   'closed_date',
   'remarks',
   'hdec_comments',
@@ -71,7 +72,7 @@ const TEXT_FILTER_FIELDS = new Set([
   'trade_detail',
 ]);
 
-const DATE_FILTER_FIELDS = new Set(['planned_date', 'target_date', 'closed_date', 'updated_at', 'created_at']);
+const DATE_FILTER_FIELDS = new Set(['planned_date', 'target_date', 'actual_date', 'closed_date', 'updated_at', 'created_at']);
 const PROGRESS_FIELD = 'actual_progress_pct';
 
 const RAW_SEARCH_FIELDS = [
@@ -367,7 +368,7 @@ export default function DefectRawDataPage() {
       issueNo: 'issue_no',
       subcontractorIssueNo: 'subcontractor_issue_no',
     };
-    const hasUrlFilters = ['q', 'dateStart', 'dateEnd', 'dateField', ...Object.keys(urlMap)].some((key) => searchParams.has(key));
+    const hasUrlFilters = ['q', 'dateStart', 'dateEnd', 'dateField', 'actualComplete', 'closureComplete', 'overdue', 'atRisk', ...Object.keys(urlMap)].some((key) => searchParams.has(key));
     const nextFilters = hasUrlFilters ? [] : baseFilters.filter((filter) => !Object.values(urlMap).includes(filter.id));
 
     for (const [param, col] of Object.entries(urlMap)) {
@@ -433,11 +434,26 @@ export default function DefectRawDataPage() {
     const dateStart = searchParams.get('dateStart');
     const dateEnd = searchParams.get('dateEnd');
     const dateField = searchParams.get('dateField');
-    if ((!dateStart && !dateEnd) || (dateField && DATE_FILTER_FIELDS.has(dateField))) return items;
-    return items.filter((item) => {
+    let next = items;
+    if ((dateStart || dateEnd) && !(dateField && DATE_FILTER_FIELDS.has(dateField))) next = next.filter((item) => {
       const dateValue = item.target_date ?? item.planned_date ?? '';
       return (!dateStart || dateValue >= dateStart) && (!dateEnd || dateValue <= dateEnd);
     });
+    if (searchParams.get('actualComplete') === 'true') next = next.filter((item) => Number(item.actual_progress_pct ?? 0) >= 100);
+    if (searchParams.get('closureComplete') === 'true') next = next.filter((item) => Boolean(item.closed_date));
+    if (searchParams.get('overdue') === 'true') next = next.filter((item) => isOverdueDefect(item, searchParams.get('asOf') ?? undefined));
+    if (searchParams.get('atRisk') === 'true') {
+      const asOf = new Date().toISOString().slice(0, 10);
+      const days = Number(searchParams.get('atRiskDays') ?? 7);
+      next = next.filter((item) => {
+        if (isOverdueDefect(item, asOf)) return false;
+        const due = item.target_date ?? item.planned_date;
+        if (!due || Number(item.actual_progress_pct ?? 0) >= 100) return false;
+        const diff = Math.round((new Date(due).getTime() - new Date(asOf).getTime()) / 86400000);
+        return diff >= 0 && diff <= days;
+      });
+    }
+    return next;
   }, [items, searchParams]);
 
   const optionFields = useMemo(() => ({

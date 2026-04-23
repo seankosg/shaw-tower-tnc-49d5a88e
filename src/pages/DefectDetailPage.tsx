@@ -76,7 +76,7 @@ export default function DefectDetailPage() {
       'subcontractor_issue_no', 'subcontractor_issue_source',
       'area_type', 'area_level', 'area_location',
       'main_trade', 'sub_trade', 'trade_detail',
-      'planned_date', 'target_date', 'closed_date', 'actual_progress_pct', 'closure_status',
+      'planned_date', 'target_date', 'actual_date', 'closed_date', 'actual_progress_pct', 'closure_status',
       'description', 'remarks',
       'subcontractor_name', 'subsub_name', 'hdec_pic_name',
     ] as const;
@@ -102,6 +102,7 @@ export default function DefectDetailPage() {
       target_date: form.target_date || null,
       closed_date: form.closed_date || null,
       actual_progress_pct: form.actual_progress_pct ?? null,
+      actual_date: Number(form.actual_progress_pct ?? 0) >= 100 ? (form.actual_date || record.actual_date || new Date().toISOString().slice(0, 10)) : null,
       closure_status: form.closure_status || null,
       description: form.description || null,
       remarks: form.remarks || null,
@@ -178,6 +179,7 @@ export default function DefectDetailPage() {
         <Field label="Finish Date" type="date" value={toDateInput(finishDate)} disabled={!canEdit} onChange={(v) => updateField('target_date', v)} />
         <Field label="Actual Start Date" type="date" value={toDateInput(actualStartDate)} disabled={!canEdit} onChange={(v) => updateField('actual_start_date' as any, v)} />
         <Field label="Actual Finish Date" type="date" value={toDateInput(actualFinishDate)} disabled={!canEdit} onChange={(v) => updateField('actual_finish_date' as any, v)} />
+        <Field label="Actual Date" type="date" value={form.actual_date} disabled={!canEdit} onChange={(v) => updateField('actual_date', v)} />
         <Field label="Closed Date" type="date" value={form.closed_date} disabled={!canEdit} onChange={(v) => updateField('closed_date', v)} />
         <Field label="Planned Progress" type="number" value={plannedProgressRaw} disabled={!canEdit} onChange={(v) => updateField('planned_progress' as any, v === '' ? null : Number(v))} />
         <Field label="Actual Progress %" type="number" value={form.actual_progress_pct} disabled={!canEdit} onChange={(v) => updateField('actual_progress_pct', v === '' ? null : Number(v))} />

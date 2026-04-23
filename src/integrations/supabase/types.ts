@@ -187,6 +187,7 @@ export type Database = {
       }
       defect_items: {
         Row: {
+          actual_date: string | null
           actual_progress_pct: number | null
           area_level: string | null
           area_location: string | null
@@ -224,6 +225,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          actual_date?: string | null
           actual_progress_pct?: number | null
           area_level?: string | null
           area_location?: string | null
@@ -261,6 +263,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          actual_date?: string | null
           actual_progress_pct?: number | null
           area_level?: string | null
           area_location?: string | null

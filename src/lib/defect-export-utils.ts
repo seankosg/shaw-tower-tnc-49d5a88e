@@ -12,7 +12,7 @@ export interface DefectExportFilters {
   mainTrade: string;
   subTrade: string;
   level: string;
-  dateField: 'planned_date' | 'target_date' | 'closed_date' | 'updated_at';
+  dateField: 'planned_date' | 'target_date' | 'actual_date' | 'closed_date' | 'updated_at';
   dateStart: string;
   dateEnd: string;
 }
@@ -22,8 +22,8 @@ export type DefectColumnMode = 'all' | 'visible' | 'responsibility' | 'schedule'
 export const DEFECT_EXPORT_FIELDS = Object.keys(DEFECT_DEFAULT_FIELD_LABELS);
 export const DEFECT_EXPORT_GROUPS: Record<Exclude<DefectColumnMode, 'all' | 'visible'>, string[]> = {
   responsibility: ['issue_no', 'subcontractor_issue_no', 'subcontractor_issue_source', 'team', 'subcontractor_name', 'subsub_name', 'hdec_pic_name'],
-  schedule: ['issue_no', 'planned_date', 'target_date', 'closed_date', 'closure_status', 'actual_progress_pct'],
-  progress: ['issue_no', 'status', 'closure_status', 'actual_progress_pct', 'planned_date', 'target_date', 'closed_date'],
+  schedule: ['issue_no', 'planned_date', 'target_date', 'actual_date', 'closed_date', 'closure_status', 'actual_progress_pct'],
+  progress: ['issue_no', 'status', 'closure_status', 'actual_progress_pct', 'actual_date', 'planned_date', 'target_date', 'closed_date'],
 };
 
 function matchesText(item: DefectItem, query: string) {

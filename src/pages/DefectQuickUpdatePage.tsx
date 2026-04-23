@@ -27,7 +27,9 @@ export default function DefectQuickUpdatePage() {
   const save = async (item: DefectItem & { scope: DefectEditScope }) => {
     if (!user || item.scope === 'none') return;
     const patch = edits[item.id] ?? {};
-    const { error } = await (supabase as any).from('defect_items').update({ ...patch, updated_by: user.id, data_source_type: 'quick_update', row_version: item.row_version + 1 }).eq('id', item.id);
+    const nextProgress = patch.actual_progress_pct ?? item.actual_progress_pct;
+    const actualDatePatch = 'actual_progress_pct' in patch ? { actual_date: Number(nextProgress ?? 0) >= 100 ? (item.actual_date ?? new Date().toISOString().slice(0, 10)) : null } : {};
+    const { error } = await (supabase as any).from('defect_items').update({ ...patch, ...actualDatePatch, updated_by: user.id, data_source_type: 'quick_update', row_version: item.row_version + 1 }).eq('id', item.id);
     if (error) toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
     else toast({ title: 'Quick update saved' });
   };
