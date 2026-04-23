@@ -120,6 +120,7 @@ export default function DefectDetailPage() {
   if (!record) return <div className="text-sm text-muted-foreground">Loading defect...</div>;
 
   const workType = getRawValue(record.raw_payload, ['Work Type', 'WorkType', 'Type of Work']) ?? record.trade_detail ?? record.defect_type;
+  const itemDescription = getRawValue(record.raw_payload, ['Issue Description', 'IssueDescription', 'Item Description', 'Description']) ?? record.description;
   const capturedOn = getRawValue(record.raw_payload, ['Captured on', 'Captured On', 'Captured Date', 'Capture Date']) ?? record.created_at;
   const startDate = getRawValue(record.raw_payload, ['Start', 'Start Date', 'Planned Start', 'Plan Start']);
   const finishDate = getRawValue(record.raw_payload, ['Finish', 'Finish Date', 'Planned Finish', 'Plan Finish']);
@@ -136,7 +137,7 @@ export default function DefectDetailPage() {
       <Card><CardHeader><CardTitle className="flex flex-wrap items-center gap-x-8 gap-y-2 text-xl">ITEM DETAIL - NO.{record.issue_no}<span className="rounded-md border bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">Closure Status: {record.closure_status || '—'}</span></CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-3">
         <Field field="issue_no" label={getLabel('issue_no')} value={form.issue_no} required={isFieldRequired('issue_no')} disabled onChange={(v) => updateField('issue_no', v)} />
         {isFieldVisible('subcontractor_issue_no') && <Field field="subcontractor_issue_no" label={getLabel('subcontractor_issue_no')} value={form.subcontractor_issue_no} required={isFieldRequired('subcontractor_issue_no')} disabled={!canEdit} onChange={(v) => updateField('subcontractor_issue_no', v)} />}
-        {isFieldVisible('subcontractor_issue_source') && <Field field="subcontractor_issue_source" label={getLabel('subcontractor_issue_source')} value={form.subcontractor_issue_source} required={isFieldRequired('subcontractor_issue_source')} disabled={!canEdit} onChange={(v) => updateField('subcontractor_issue_source', v)} />}
+        <ReadonlyField label="Item Description" value={itemDescription} />
         <Field label="Type" value={form.area_type} disabled={!canEdit} onChange={(v) => updateField('area_type', v)} />
         <Field label="Level" value={form.area_level} disabled={!canEdit} onChange={(v) => updateField('area_level', v)} />
         <Field label="Location" value={form.area_location} disabled={!canEdit} onChange={(v) => updateField('area_location', v)} />
@@ -159,7 +160,7 @@ export default function DefectDetailPage() {
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Description</label><Textarea value={String(form.description ?? '')} disabled={!canEdit} onChange={(e) => updateField('description', e.target.value)} /></div>
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Remarks</label><Textarea value={String(form.remarks ?? '')} disabled={!canEdit} onChange={(e) => updateField('remarks', e.target.value)} /></div>
       </CardContent></Card>
-      <Card><CardHeader><CardTitle>Raw Payload</CardTitle></CardHeader><CardContent><div className="grid gap-2 md:grid-cols-2">{rawEntries.map(([k, v]) => <div key={k} className="rounded-md border p-2 text-xs"><div className="text-muted-foreground">{k.replace(/\s*\(H\)\s*$/i, '')}</div><div className="font-medium">{String(v || '—')}</div></div>)}</div></CardContent></Card>
+      <Card><CardHeader><CardTitle>Raw Payload</CardTitle></CardHeader><CardContent><div className="grid gap-2 md:grid-cols-2"><div className="rounded-md border p-2 text-xs"><div className="text-muted-foreground">Subcon Issue Source</div><div className="font-medium">{String(form.subcontractor_issue_source || '—')}</div></div>{rawEntries.filter(([k]) => !isRawAlias(k, ['Issue Description', 'IssueDescription', 'Item Description', 'Description'])).map(([k, v]) => <div key={k} className="rounded-md border p-2 text-xs"><div className="text-muted-foreground">{k.replace(/\s*\(H\)\s*$/i, '')}</div><div className="font-medium">{String(v || '—')}</div></div>)}</div></CardContent></Card>
       <Card><CardHeader><CardTitle>Change History</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Field</TableHead><TableHead>Old</TableHead><TableHead>New</TableHead><TableHead>Changed At</TableHead></TableRow></TableHeader><TableBody>{logs.map((log) => <TableRow key={log.id}><TableCell>{log.changed_field}</TableCell><TableCell>{log.old_value}</TableCell><TableCell>{log.new_value}</TableCell><TableCell>{new Date(log.changed_at).toLocaleString()}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
     </div>
   );
