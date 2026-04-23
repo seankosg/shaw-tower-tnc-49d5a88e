@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
+import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, parseSubcontractorIssueSequence, suggestOwnerCode } from '@/lib/defect-utils';
 import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
 import { normalizeTeamValue, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
@@ -45,6 +46,8 @@ type SimilarMasterDecision = {
 };
 
 type MasterNameDecisions = Record<string, SimilarMasterDecision>;
+type OwnerMaster = { name: string; type: string | null; parent_subcontractor_id: string | null; owner_code: string | null };
+type IssueRegistry = { existingKeys: Set<string>; reservedKeys: Set<string>; nextSeqByOwner: Map<string, number>; masters: OwnerMaster[] };
 
 const statusBadge: Record<DefectFileStatus, { label: string; cls: string }> = {
   pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
