@@ -150,15 +150,20 @@ export default function MobileUpdatePage() {
       <div className="space-y-3">
         {results.map(card => {
           const hasChanges = edits[card.id] && Object.keys(edits[card.id]).length > 0;
+          const scope = editScopes[card.id] || 'none';
+          const canSave = scope !== 'none';
+          const canEditResponsibility = scope === 'team' || scope === 'full';
           return (
             <Card key={card.id}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center justify-between">
                   <span>{card.subtest_id} <span className="text-muted-foreground font-normal">({card.system_code})</span></span>
-                  <Button size="sm" disabled={!hasChanges || saving === card.id} onClick={() => saveCard(card)}>
-                    <Save className="mr-1 h-3.5 w-3.5" />
-                    {saving === card.id ? 'Saving...' : 'Save'}
-                  </Button>
+                  {canSave && (
+                    <Button size="sm" disabled={!hasChanges || saving === card.id} onClick={() => saveCard(card)}>
+                      <Save className="mr-1 h-3.5 w-3.5" />
+                      {saving === card.id ? 'Saving...' : 'Save'}
+                    </Button>
+                  )}
                 </CardTitle>
                 {card.description && <p className="text-xs text-muted-foreground">{card.description}</p>}
               </CardHeader>
@@ -238,6 +243,7 @@ export default function MobileUpdatePage() {
                     <Input
                       className="h-8 text-xs"
                       value={(getVal(card, 'subcontractor_name') as string) || ''}
+                      disabled={!canEditResponsibility}
                       onChange={e => updateField(card.id, 'subcontractor_name', e.target.value || null)}
                     />
                   </div>
@@ -246,6 +252,7 @@ export default function MobileUpdatePage() {
                     <Input
                       className="h-8 text-xs"
                       value={(getVal(card, 'subsub_name') as string) || ''}
+                      disabled={!canEditResponsibility}
                       onChange={e => updateField(card.id, 'subsub_name', e.target.value || null)}
                     />
                   </div>
@@ -254,6 +261,7 @@ export default function MobileUpdatePage() {
                     <Input
                       className="h-8 text-xs"
                       value={(getVal(card, 'hdec_pic_name') as string) || ''}
+                      disabled={!canEditResponsibility}
                       onChange={e => updateField(card.id, 'hdec_pic_name', e.target.value || null)}
                     />
                   </div>
