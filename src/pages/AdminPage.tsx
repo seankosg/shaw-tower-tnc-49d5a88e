@@ -23,6 +23,7 @@ import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown, Do
 import * as XLSX from 'xlsx';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
+import { normalizeOwnerCode, suggestOwnerCode } from '@/lib/defect-utils';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -54,7 +55,16 @@ interface ChangeLogRow {
   id: string; subtest_id: string; changed_field: string; old_value: string | null;
   new_value: string | null; changed_by: string | null; changed_at: string; change_source: string | null;
 }
-interface MasterRow { id: string; name: string; is_active: boolean; type?: 'sub' | 'subsub'; parent_subcontractor_id?: string | null; }
+interface MasterRow { id: string; name: string; is_active: boolean; type?: 'sub' | 'subsub'; parent_subcontractor_id?: string | null; owner_code?: string | null; }
+
+function getLinkedOwnerCode(profile: Profile, masters: MasterRow[]): string | null {
+  const target = profile.user_type === 'subsub'
+    ? masters.find((master) => master.type === 'subsub' && master.name === profile.subsub_name)
+    : profile.user_type === 'subcontractor'
+      ? masters.find((master) => (master.type ?? 'sub') === 'sub' && master.name === profile.subcontractor_name)
+      : null;
+  return target?.owner_code ?? null;
+}
 
 export default function AdminPage() {
   const { isAdminOrSuperuser } = useAuth();
