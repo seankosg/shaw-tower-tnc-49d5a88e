@@ -442,6 +442,75 @@ export default function DefectImportPage() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={similarDecisions.length > 0} onOpenChange={(open) => {
+        if (!open) {
+          setSimilarDecisions([]);
+          setPendingImportFiles(null);
+        }
+      }}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Possible Existing Subcontractors Found</DialogTitle>
+            <DialogDescription>
+              Review similar master names before the import creates new subcontractors or users.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
+            <div className="grid grid-cols-[1fr_1fr_220px] gap-3 border-b bg-muted px-3 py-2 text-xs font-medium text-muted-foreground">
+              <span>Imported Name</span>
+              <span>Similar Existing Master</span>
+              <span>Action</span>
+            </div>
+            {similarDecisions.map((decision) => (
+              <div key={decision.key} className="grid grid-cols-[1fr_1fr_220px] items-center gap-3 border-b px-3 py-3 last:border-b-0">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{decision.importedName}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {decision.kind === 'subsub' ? `Sub-sub · Parent: ${decision.parentName}` : 'Subcontractor'}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{decision.existingName}</div>
+                  <div className="text-xs text-muted-foreground">Similarity {Math.round(decision.score * 100)}%</div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={decision.action === 'use_existing' ? 'default' : 'outline'}
+                    onClick={() => setDecisionAction(decision.key, 'use_existing')}
+                  >
+                    Use Existing
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={decision.action === 'register_new' ? 'default' : 'outline'}
+                    onClick={() => setDecisionAction(decision.key, 'register_new')}
+                  >
+                    Register New
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSimilarDecisions([]);
+                setPendingImportFiles(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={confirmSimilarDecisions} disabled={similarDecisions.some((decision) => !decision.action) || isRunning}>
+              Continue Import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
