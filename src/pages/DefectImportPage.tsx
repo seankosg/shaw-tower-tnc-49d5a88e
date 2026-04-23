@@ -193,7 +193,7 @@ export default function DefectImportPage() {
     return [...decisions.values()];
   };
 
-  const importOneFile = async (item: DefectImportFile) => {
+  const importOneFile = async (item: DefectImportFile, decisions: MasterNameDecisions) => {
     if (!user || !item.parsed) return { inserted: 0, updated: 0, skipped: 0, rejected: 0 };
     const dataDate = item.dataDate || todayIso();
     const masterEnsurer = await createDefectMasterEnsurer(supabase as any);
@@ -205,7 +205,7 @@ export default function DefectImportPage() {
     let rejected = 0;
 
     for (let index = 0; index < item.parsed.length; index++) {
-      const row = item.parsed[index];
+      const row = applyMasterDecisions(item.parsed[index], decisions);
       setFiles((current) => current.map((file) => file.id === item.id ? { ...file, progress: Math.round(((index + 1) / item.parsed!.length) * 100) } : file));
       if (!row.issue_no) {
         rejected++;
@@ -261,12 +261,12 @@ export default function DefectImportPage() {
     return { inserted: insertedCount, updated: updatedCount, skipped, rejected };
   };
 
-  const startImport = async () => {
+  const runImport = async (items: DefectImportFile[], decisions: MasterNameDecisions) => {
     setIsRunning(true);
-    for (const item of files.filter((file) => file.status === 'ready' && file.team)) {
+    for (const item of items) {
       setFiles((current) => current.map((file) => file.id === item.id ? { ...file, status: 'processing', progress: 0 } : file));
       try {
-        const result = await importOneFile(item);
+        const result = await importOneFile(item, decisions);
         setFiles((current) => current.map((file) => file.id === item.id ? { ...file, status: 'done', progress: 100, result } : file));
       } catch (error) {
         setFiles((current) => current.map((file) => file.id === item.id ? { ...file, status: 'failed', error: error instanceof Error ? error.message : 'Import failed' } : file));
@@ -274,6 +274,42 @@ export default function DefectImportPage() {
     }
     setIsRunning(false);
     toast({ title: 'Defect import complete' });
+  };
+
+  const startImport = async () => {
+    const readyFiles = files.filter((file) => file.status === 'ready' && file.team);
+    setIsRunning(true);
+    try {
+      const decisions = await preflightSimilarMasterDecisions(readyFiles);
+      if (decisions.length > 0) {
+        setSimilarDecisions(decisions);
+        setPendingImportFiles(readyFiles);
+        setIsRunning(false);
+        return;
+      }
+      setIsRunning(false);
+      await runImport(readyFiles, confirmedDecisions);
+    } catch (error) {
+      setIsRunning(false);
+      toast({ title: 'Similarity check failed', description: error instanceof Error ? error.message : 'Unable to check master names', variant: 'destructive' });
+    }
+  };
+
+  const setDecisionAction = (key: string, action: SimilarDecisionAction) => {
+    setSimilarDecisions((current) => current.map((decision) => decision.key === key ? { ...decision, action } : decision));
+  };
+
+  const confirmSimilarDecisions = async () => {
+    if (!pendingImportFiles || similarDecisions.some((decision) => !decision.action)) return;
+    const nextDecisions = similarDecisions.reduce<MasterNameDecisions>((acc, decision) => {
+      acc[decision.key] = decision;
+      return acc;
+    }, { ...confirmedDecisions });
+    setConfirmedDecisions(nextDecisions);
+    setSimilarDecisions([]);
+    const items = pendingImportFiles;
+    setPendingImportFiles(null);
+    await runImport(items, nextDecisions);
   };
 
   return (
