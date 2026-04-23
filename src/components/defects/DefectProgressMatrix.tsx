@@ -21,7 +21,7 @@ const QUERY_FIELD: Record<DefectProgressGroupBy, string> = {
   sub_trade: 'subTrade',
 };
 
-export function DefectProgressMatrix({ rows, buckets, bucket, groupBy }: DefectProgressMatrixProps) {
+export function DefectProgressMatrix({ rows, buckets, bucket, groupBy, dateField }: DefectProgressMatrixProps) {
   const navigate = useNavigate();
 
   const openRawData = (row: DefectProgressRow, bucketStart?: string) => {
