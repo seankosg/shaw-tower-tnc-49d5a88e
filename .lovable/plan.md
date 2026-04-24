@@ -1,129 +1,84 @@
 
 
-## Planned Progress % 자동 계산 plan (확정)
+## Defect Field Config 누락 필드 보충 plan
 
-### 결정 사항 반영
+### 배경
 
 ```text
-Q1. Data Date < Planned Start Date  → null (b: 아직 시작 전이므로 N/A)
-Q2. Data Date > Planned Completion  → 100 (a)
-Q3. Detail 단건 수정 Data Date 기준 → today() (a)
+코드에서 사용 중인 Defect 필드: 32개
+DB defect_field_config 등록: 22개
+→ 11개 필드가 Admin > Defect Field Config 에서 관리 불가 상태
 ```
 
-### 1. 계산 로직 (신규 `src/lib/defect-progress-calc.ts`)
+### 1. 마이그레이션: 누락 필드 11개 INSERT
 
 ```text
-export function computePlannedProgressPct(
-  plannedStart: string | null,
-  plannedCompletion: string | null,
-  dataDate: string,
-): number | null
+defect_field_config 에 아래 row 추가 (모두 is_enabled=true, is_required=false,
+visible_to_roles/editable_to_roles 는 기본 ALL_ROLES)
 
-규칙 (위에서 아래 순서):
-  1) plannedStart 또는 plannedCompletion null → null
-  2) plannedCompletion < plannedStart → null (역전된 일정)
-  3) dataDate < plannedStart → null   ← Q1=b
-  4) duration_days = plannedCompletion - plannedStart
-     duration=0 (start = completion):
-       dataDate >= start → 100
-       (dataDate < start 는 위에서 이미 null 처리됨)
-  5) dataDate > plannedCompletion → 100 ← Q2=a
-  6) 그 외 → round(lapsed/duration * 100, 1) (소수 1자리)
+field_name                  | display_name              | sort_order | source_origin
+----------------------------+---------------------------+------------+---------------
+description                 | Description               | 45         | ll_original
+defect_type                 | Defect Type               | 46         | ll_original
+priority                    | Priority                  | 47         | ll_original
+team                        | Team                      | 55         | system
+trade_detail                | Trade Detail              | 65         | ll_original
+subcontractor_issue_source  | Subcontractor Issue Source| 82         | hdec_added
+area_raw                    | Area (Raw)                | 35         | ll_original
+classification_source       | Classification Source     | 142        | system
+classified_at               | Classified At             | 144        | system
+remarks                     | Remarks                   | 170        | ll_original
+hdec_comments               | HDEC Comments             | 180        | hdec_added
 
-날짜 처리:
-  - 'YYYY-MM-DD' 문자열을 UTC 자정으로 파싱
-  - 일(day) 단위 정수 차이로 계산
+(sort_order 는 기존 22개 사이에 자연스럽게 끼우되, 필요 시
+ FieldConfigTable 의 위/아래 버튼으로 사용자 재정렬 가능)
 ```
 
-### 2. Import 통합 (`src/pages/DefectImportPage.tsx`)
+### 2. 코드 정합성 점검
 
 ```text
-- 매 row 처리 직전:
-    const computedPlanned = computePlannedProgressPct(
-      row.planned_start_date,
-      row.planned_completion_date,
-      dataDate,
-    );
-    row.planned_progress_pct = computedPlanned;  // Excel 값 무시·덮어쓰기
+src/hooks/useDefectFieldConfig.ts
+  DEFECT_DEFAULT_FIELD_LABELS 에 누락된 키 보완:
+    - area_raw: 'Area (Raw)'
+    - classified_at: 'Classified At'
+  (나머지는 이미 정의되어 있음)
 
-- statusInputs.planned_progress_pct 도 새 값 사용
-- upsert payload, defect_daily_snapshots, audit 모두 새 값 사용
-- 계산 불가 사유별 로그 (defect_upload_row_logs):
-    a) plannedStart/Completion 누락
-       → reason_code='planned_pct_not_computable'
-          reason_detail='Missing planned_start_date or planned_completion_date'
-    b) 역전된 일정 (completion < start)
-       → reason_code='planned_pct_invalid_dates'
-          reason_detail='Planned completion is earlier than planned start'
-    c) Data Date < Planned Start (Q1=b로 null)
-       → reason_code='planned_pct_not_started'
-          reason_detail='Data date is before planned start date'
-          (info 수준)
-- 계산 결과가 기존 DB 값과 다르면 schedule_change_audit에
-  planned_progress_old/new_pct 자동 기록 (기존 trackedFields 동작 유지)
+확인만 하고 변경 불필요한 항목:
+  - DefectRawDataPage 컬럼 정의: 이미 위 필드 일부 사용 중
+  - DefectExportPage / defect-export-utils: DEFECT_EXPORT_FIELDS 가
+    동적 columns 기반이므로 자동 반영
+  - DefectDetailPage: 직접 input 매핑이라 영향 없음
 ```
 
-### 3. 단건 수정 페이지 (`DefectDetailPage.tsx`, `DefectQuickUpdatePage.tsx`)
+### 3. 확인 작업
 
 ```text
-- planned_start_date 또는 planned_completion_date 변경 시
-  computePlannedProgressPct(start, completion, todayIso())
-  결과를 form/payload에 자동 반영 (Q3=a: today 기준)
-- planned_progress_pct 입력 필드는 read-only
-  라벨 안내: "Auto-calculated from Planned Start/Completion and today()"
-- 저장 시에도 서버로 보내는 payload는 자동 계산값 사용
+- AdminPage > Defect Field Config 탭에서 32개 모두 노출되는지
+- is_enabled 토글, role 체크박스, sort_order 위/아래 이동 정상 동작
+- RawData / Export / Dashboard 에서 라벨이 display_name 기반으로 표시되는지
 ```
 
-### 4. 파서 (`src/lib/defect-parser.ts`)
+### 4. 영향 받는 파일
 
 ```text
-- planned_progress_pct 매핑은 그대로 유지 (Excel 호환을 위해 파싱은 함)
-- Import 단계에서 무조건 덮어쓰므로 실질 영향 없음
-```
-
-### 5. 테스트 (신규 `src/test/defect-progress-calc.test.ts`)
-
-```text
-- null start → null
-- null completion → null
-- completion < start → null
-- dataDate < start → null  (Q1=b)
-- duration=0 & dataDate >= start → 100
-- dataDate > completion → 100  (Q2=a)
-- 정확한 중간값:
-    start=2026-01-01, completion=2026-01-11, dataDate=2026-01-06 → 50.0
-- 소수 1자리 반올림: lapsed=3, duration=7 → 42.9
-- 윤년 케이스: 2024-02-28 ~ 2024-03-01 (윤일 포함)
-```
-
-### 6. 영향 받는 파일
-
-```text
-[신규]
-src/lib/defect-progress-calc.ts
-src/test/defect-progress-calc.test.ts
+[신규 마이그레이션]
+supabase/migrations/<timestamp>_seed_defect_field_config_missing.sql
+  - 11개 row INSERT (ON CONFLICT DO NOTHING by field_name)
 
 [수정]
-src/pages/DefectImportPage.tsx       (계산 호출, 3종 로그)
-src/pages/DefectDetailPage.tsx       (Planned 날짜 변경시 재계산, read-only)
-src/pages/DefectQuickUpdatePage.tsx  (동일)
+src/hooks/useDefectFieldConfig.ts
+  - DEFECT_DEFAULT_FIELD_LABELS 에 area_raw / classified_at 라벨 보완
 ```
 
-### 7. 검증 항목
+### 5. 검증 항목
 
 ```text
-1. Excel에 'planned progress %' 컬럼 없어도 import 후 값이 채워짐
-2. Excel에 값이 있어도 시스템 계산값으로 덮어써짐 (audit 기록)
-3. start=2026-01-01, completion=2026-01-11, dataDate=2026-01-06 → 50.0
-4. dataDate < start → null + 'planned_pct_not_started' info 로그
-5. dataDate > completion → 100
-6. start/completion 누락 → null + 'planned_pct_not_computable' 로그
-7. completion < start → null + 'planned_pct_invalid_dates' 로그
-8. Detail 페이지 Planned 날짜 수정 → planned_progress_pct 자동 갱신 (today 기준)
-9. completion_status 자동 계산이 새 planned_pct 기준으로 동작
-   (예: actual=30%, 계산된 planned=50% → 'Delay';
-        planned=null → actual_pct만으로 판정)
-10. defect_daily_snapshots의 planned_progress_pct 도 새 값으로 기록
-11. build + vitest 통과
+1. AdminPage > Defect Management > Field Config 탭에 32개 row 표시
+2. description / priority / remarks / hdec_comments 등 기존에 안 보이던
+   필드의 display_name·is_enabled·role 설정 가능
+3. is_enabled=false 로 설정 시 RawData 컬럼에서 즉시 숨김
+4. Export 'all' / 'visible' 모드에서 신규 필드 컬럼 포함
+5. 기존 22개 row의 sort_order/설정값은 보존 (ON CONFLICT DO NOTHING)
+6. build + vitest 통과
 ```
 
