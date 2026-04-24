@@ -113,9 +113,10 @@ export default function DefectDashboardPage() {
     const difference = actualDone - closureDone;
     const overdueCount = filteredItems.filter((item) => isOverdue(item, dataDate)).length;
     const atRiskCount = filteredItems.filter((item) => isAtRisk(item, today, atRiskDays)).length;
+    const startOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'start', dataDate)).length;
     const completionOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'completion', dataDate)).length;
     const closureOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'closure', dataDate)).length;
-    return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, completionOverdue, closureOverdue };
+    return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, startOverdue, completionOverdue, closureOverdue };
   }, [filteredItems, today, dataDate, atRiskDays]);
 
   const bySubTrade = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.sub_trade ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
@@ -185,8 +186,10 @@ export default function DefectDashboardPage() {
         <KpiCard icon={<Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />} label="Remain Inspection" value={kpis.difference.toLocaleString()} sub="검측 대기" onClick={() => goRaw({ actualComplete: 'true', closureComplete: 'false' })} />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <KpiCard icon={<AlertTriangle className="h-6 w-6 text-destructive" />} label="Overdue" value={kpis.overdueCount} accent="destructive" onClick={() => goRaw({ overdue: 'true', asOf: dataDate })} />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiCard icon={<AlertTriangle className="h-6 w-6 text-destructive" />} label="Overdue - Start" value={kpis.startOverdue} accent="destructive" sub="Start 지연" onClick={() => goRaw({ overdue: 'true', stage: 'start', asOf: dataDate })} />
+        <KpiCard icon={<AlertTriangle className="h-6 w-6 text-destructive" />} label="Overdue - Completion" value={kpis.completionOverdue} accent="destructive" sub="Completion 지연" onClick={() => goRaw({ overdue: 'true', stage: 'completion', asOf: dataDate })} />
+        <KpiCard icon={<AlertTriangle className="h-6 w-6 text-destructive" />} label="Overdue - Closure" value={kpis.closureOverdue} accent="destructive" sub="Closure 지연" onClick={() => goRaw({ overdue: 'true', stage: 'closure', asOf: dataDate })} />
         <Card className="flex flex-col justify-center p-4">
           <div className="mb-1 flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-muted-foreground" /><p className="text-xs text-muted-foreground">Overall Progress</p></div>
           <p className="text-xl font-bold text-foreground">{kpis.overallProgressPct}%</p>

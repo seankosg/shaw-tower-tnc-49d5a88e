@@ -1,7 +1,7 @@
 import { type DefectItem } from '@/lib/defect-utils';
 
 export const NONE_LABEL = '(None)';
-export type DefectDashboardStage = 'completion' | 'closure';
+export type DefectDashboardStage = 'start' | 'completion' | 'closure';
 export type DefectSCurveBucket = 'day' | 'week';
 
 export type DefectForDashboard = DefectItem;
@@ -89,16 +89,19 @@ export function isClosureComplete(item: Pick<DefectForDashboard, 'actual_closure
 }
 
 export function getStagePlanDate(item: DefectForDashboard, stage: DefectDashboardStage): string | null {
+  if (stage === 'start') return item.planned_start_date;
   if (stage === 'completion') return item.planned_completion_date;
   return item.planned_closure_date;
 }
 
 export function getStageActualDate(item: DefectForDashboard, stage: DefectDashboardStage): string | null {
+  if (stage === 'start') return item.actual_start_date;
   if (stage === 'completion') return item.actual_completion_date;
   return item.actual_closure_date;
 }
 
 export function isStageDone(item: DefectForDashboard, stage: DefectDashboardStage): boolean {
+  if (stage === 'start') return Boolean(item.actual_start_date) || isActualComplete(item);
   if (stage === 'completion') return isActualComplete(item);
   return isClosureComplete(item);
 }
@@ -108,7 +111,7 @@ export function isStageDelayedAsOf(item: DefectForDashboard, stage: DefectDashbo
   return Boolean(plan && plan <= asOfDate && !isStageDone(item, stage));
 }
 
-const STAGES: DefectDashboardStage[] = ['completion', 'closure'];
+const STAGES: DefectDashboardStage[] = ['start', 'completion', 'closure'];
 
 export function isOverdue(item: DefectForDashboard, asOfDate: string): boolean {
   return STAGES.some((stage) => isStageDelayedAsOf(item, stage, asOfDate));
