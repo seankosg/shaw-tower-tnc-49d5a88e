@@ -1,296 +1,270 @@
 
-## 제안: Import Issue No 정렬 기준에 맞춰 Subcontractor Issue No 자동 채번
 
-## 현재 원인
+## Defect Import 매핑 변경 + Status 자동 판정 (수정 v2)
 
-현재 Defect Import는 Excel에서 읽힌 행 순서 그대로 처리합니다.
+기존 plan에 더해서 아래 사항을 반영합니다.
 
-```text
-Excel row order대로 for-loop 처리
-→ 빈 Subcontractor Issue No 발견 시 즉시 다음 SEQ 부여
-```
-
-따라서 원본 Excel의 `Issue No`가 내림차순이면 아래처럼 보일 수 있습니다.
+## 1. Excel 신규 컬럼 (총 9개)
 
 ```text
-Issue No      Subcontractor Issue No
-1005          SC-ABC-00001
-1004          SC-ABC-00002
-1003          SC-ABC-00003
+Planned Start Date
+Planned Completion Date
+Planned Closure Date
+Actual Start Date
+Actual Completion Date
+Actual Closure Date
+Planned Progress %
+Completion Status
+Closure Status
 ```
 
-데이터 자체는 중복 없이 정상 생성되지만, 사람이 볼 때 `Issue No` 방향과 `Subcontractor Issue No` 방향이 반대로 느껴져 부자연스럽습니다.
+## 2. DB 스키마 변경
 
-## 적용 방향
+### 삭제
+```text
+defect_items: planned_date, target_date, closed_date, actual_date, closure_status (기존)
+```
 
-자동 생성 대상 행에 대해서는 `Issue No` 정렬 기준으로 먼저 번호를 예약한 뒤, 기존 import 행 순서대로 insert/update를 진행하도록 변경합니다.
+### 추가
+```text
+defect_items:
+  planned_start_date         date
+  planned_completion_date    date
+  planned_closure_date       date
+  actual_start_date          date
+  actual_completion_date     date
+  actual_closure_date        date
+  planned_progress_pct       numeric
+  completion_status          text   -- Planned | Delay | Done | WIP
+  closure_status             text   -- Planned | Delay | Done | WIP
 
-핵심 결과:
+defect_daily_snapshots:
+  - planned_date, closed_date 삭제
+  + planned_completion_date, actual_completion_date
+  + planned_closure_date, actual_closure_date
+  + planned_progress_pct, actual_progress_pct
+  + completion_status, closure_status
+
+defect_schedule_change_audit:
+  - planned_/target_/closed_ 컬럼 세트 삭제
+  + planned_start / planned_completion / planned_closure
+  + actual_start / actual_completion / actual_closure
+    각각 _old_date, _new_date, _diff_days
+  + planned_progress_old_pct / new_pct / diff_pct (기존 progress 컬럼 재활용)
+  + completion_status_old / new
+  + closure_status_old / new (기존 컬럼 의미 재정의)
+```
+
+기존 row 데이터 자동 매핑 없음. raw_payload는 보존.
+
+## 3. Status 자동 판정 (`completion_status`, `closure_status`)
+
+### Excel 값 우선순위
 
 ```text
-Issue No가 내림차순이면
-Issue No 큰 값부터 Subcontractor Issue No도 작은 SEQ부터 부여
-
-Issue No      Subcontractor Issue No
-1005          SC-ABC-00001
-1004          SC-ABC-00002
-1003          SC-ABC-00003
+1) Excel cell 값이 비어 있지 않고 4가지 enum (Planned/Delay/Done/WIP) 중 하나면 그대로 사용
+2) Excel 값이 enum 외 값이면 reject log 기록 후 자동 계산값으로 대체
+3) Excel 값이 비어 있으면:
+   - planned_completion_date / planned_closure_date 둘 다 비어 있으면
+     reason_code='missing_planned_dates'로 reject 로그 + status=null
+   - 그 외에는 자동 계산
 ```
 
-즉 화면/Excel에서 보이는 Issue No 순서와 Subcontractor Issue No 증가 방향이 맞게 됩니다.
+### Completion Status 자동 계산 (엄격 비교)
 
-## 상세 구현 계획
-
-### 1. `Issue No` 자연 정렬 유틸 추가
-
-`src/pages/DefectImportPage.tsx`에 Issue No 비교 함수를 추가합니다.
-
-정렬 기준:
+`asOf = batch.data_date ?? today`
 
 ```text
-- 숫자가 포함된 Issue No는 numeric sorting 사용
-- 예: 2 < 10, D-2 < D-10
-- 영문/기호가 섞인 경우에도 안정적으로 비교
-- 값이 없으면 뒤로 보냄
+if actual_completion_date present
+   OR (actual_progress_pct ≥ 100):
+       'Done'
+elif asOf < planned_start_date:
+       'Planned'
+elif (actual_progress_pct ?? 0) < (planned_progress_pct ?? 0):
+       'Delay'
+elif planned_completion_date < asOf AND no actual_completion_date:
+       'Delay'
+elif (actual_progress_pct ?? 0) > 0:
+       'WIP'
+else:
+       'Planned'
 ```
 
-구현 방식:
-
-```tsx
-const issueNoCollator = new Intl.Collator(undefined, {
-  numeric: true,
-  sensitivity: 'base',
-});
-```
-
-그리고 다음과 같은 helper를 둡니다.
-
-```tsx
-function compareIssueNoAsc(a: string | null | undefined, b: string | null | undefined) {
-  return issueNoCollator.compare(String(a ?? ''), String(b ?? ''));
-}
-
-function compareIssueNoDesc(a: string | null | undefined, b: string | null | undefined) {
-  return compareIssueNoAsc(b, a);
-}
-```
-
-### 2. Import 파일의 Issue No 정렬 방향 감지
-
-원본 import 파일이 오름차순인지 내림차순인지 자동 감지합니다.
-
-방식:
+### Closure Status 자동 계산 (Completion 연동)
 
 ```text
-1. issue_no가 있는 row만 추출
-2. 인접 row 간 비교
-3. 오름차순 pair 수와 내림차순 pair 수 계산
-4. 내림차순 pair가 더 많으면 desc로 판단
-5. 그 외는 asc로 판단
+if actual_closure_date present:
+       'Done'
+elif planned_closure_date < asOf:
+       'Delay'
+elif completion_status == 'Done' AND no actual_closure_date:
+       'WIP'   -- completion 끝났는데 closure 미완료
+else:
+       'Planned'
 ```
 
-예시:
+## 4. 재계산 시점
 
 ```text
-1005, 1004, 1003 → desc
-1003, 1004, 1005 → asc
-D-001, D-002, D-010 → asc
+A. Excel Import 직후
+   - 해당 batch의 모든 row에 대해 위 규칙 재적용
+   - status 변동 시 defect_change_log + defect_schedule_change_audit 기록
+
+B. Detail 페이지에서 사용자가
+   - planned_progress_pct / actual_progress_pct
+   - planned_*_date / actual_*_date
+   저장 시 → 그 row 한 건 재계산
+   - 사용자가 status를 직접 override한 경우는 자동 계산 무시 (수동값 우선)
+   - 단, override 여부를 구분하려면 별도 flag 필요. 본 plan에서는 단순화:
+     "사용자가 status 필드를 직접 입력하면 그 값 그대로 저장"으로 처리.
+
+C. Edge function (cron, daily)
+   - supabase/functions/recompute-defect-status/index.ts 신규
+   - pg_cron으로 매일 1회 실행 (KST 02:00)
+   - asOf = today 기준으로 모든 active defect의 status 재계산
+   - status가 바뀐 row만 update + change_log 기록
+   - data date 기반 overdue 자동 반영
 ```
 
-### 3. 자동 생성 번호 사전 예약 단계 추가
-
-현재는 각 row를 처리하면서 즉시 `reserveSubcontractorIssueNo()`를 호출합니다.
-
-이를 아래 구조로 바꿉니다.
+## 5. Import 단계 추가 reject 케이스
 
 ```text
-A. import 시작 전, 전체 row에 대해 Subcontractor Issue No assignment map 생성
-B. assignment map 생성 시 Issue No 정렬 방향을 기준으로 자동 생성 번호 부여
-C. 실제 DB insert/update는 기존 row 순서대로 수행
+reason_code='missing_planned_dates':
+   Excel status 비어 있음 + planned_completion_date/closure_date 모두 없음
+   → row는 생성되되 status=null, log에 기록
+
+reason_code='invalid_status_value':
+   Excel status가 4가지 enum이 아님
+   → 자동 계산값으로 대체 + log
 ```
 
-즉, 처리 순서는 유지하지만 번호 배정 기준만 개선합니다.
-
-이렇게 하면:
+## 6. defect-parser.ts 매핑 (alias)
 
 ```text
-- progress 표시
-- raw_row_no log
-- upload row log
-- inserted/updated/skipped/rejected count
+'planned start date'      → planned_start_date
+'planned completion date' → planned_completion_date
+'planned closure date'    → planned_closure_date
+'actual start date'       → actual_start_date
+'actual completion date'  → actual_completion_date
+'actual closure date'     → actual_closure_date
+'planned progress %'      → planned_progress_pct
+'planned progress'        → planned_progress_pct
+'completion status'       → completion_status
+'closure status'          → closure_status
 ```
 
-기존 동작을 유지할 수 있습니다.
+기존 alias (`due date`, `target date`, `closed on`, `date closed`, `planned date`)는 모두 제거.
 
-### 4. 기존 번호 보존 규칙 유지
-
-아래 케이스는 절대 바꾸지 않습니다.
+## 7. UI / Dashboard 영향
 
 ```text
-- 기존 defect에 subcontractor_issue_no가 이미 있으면 그대로 보존
-- Excel에 subcontractor_issue_no가 입력되어 있으면 imported 값 사용
-- imported 값이 기존 DB 또는 같은 import session 내에서 중복이면 reject
+DefectDetailPage:
+  필드 그룹 표시
+    Planned Start Date  | Actual Start Date
+    Planned Completion  | Actual Completion
+    Planned Closure     | Actual Closure
+    Planned Progress %  | Actual Progress %
+    Completion Status   | Closure Status
+
+  Status는 select (Planned/Delay/Done/WIP) + "Auto recompute" 버튼
+
+DefectQuickUpdatePage:
+  actual_progress_pct, actual_completion_date, actual_closure_date,
+  completion_status, closure_status, remarks 편집
+
+DefectRawDataPage:
+  컬럼/필터 정의 교체
+  DATE_FILTER_FIELDS = [planned_start_date, planned_completion_date,
+                       planned_closure_date, actual_start_date,
+                       actual_completion_date, actual_closure_date]
+
+DefectDashboardPage:
+  3 stage = Start / Completion / Closure
+  KPI: Done / WIP / Delay / Planned 4가지 색
+  Plan vs Actual table = stage별 Planned/Actual 비교
+  drill-down query key: stage=start|completion|closure
+
+DefectProgressPage / DefectProgressMatrix:
+  dateField 옵션: planned_completion_date | planned_closure_date
+
+DefectExportPage / DefectDashboardExcelExport:
+  컬럼 9개 신규 반영
 ```
 
-정렬 기반 자동 채번은 오직 아래 케이스에만 적용합니다.
+## 8. 영향 받는 파일
 
 ```text
-신규 defect 또는 기존 defect 중 subcontractor_issue_no가 비어 있고,
-Excel에도 subcontractor_issue_no가 없는 row
-```
+[migration]
+supabase/migrations/<new>_defect_lifecycle_schema.sql
 
-### 5. Owner Code별로 독립 채번 유지
+[edge function]
+supabase/functions/recompute-defect-status/index.ts          (신규)
++ pg_cron 등록 SQL (insert 도구로 별도 실행)
 
-Subcontractor Issue No는 owner code별 sequence이므로 정렬 후에도 owner code별로 독립적으로 부여합니다.
+[lib]
+src/lib/defect-parser.ts
+src/lib/defect-utils.ts                  (DefectItem, isClosed, isOverdue 재정의)
+src/lib/defect-status.ts                 (신규: computeCompletionStatus / computeClosureStatus)
+src/lib/defect-dashboard-utils.ts
+src/lib/defect-progress-utils.ts
+src/lib/defect-chart-utils.ts
+src/lib/defect-export-utils.ts
+src/lib/defect-dashboard-excel-export.ts
 
-예시:
-
-```text
-Issue No   Owner   Generated
-1005       ABC     SC-ABC-00001
-1004       XYZ     SC-XYZ-00001
-1003       ABC     SC-ABC-00002
-1002       XYZ     SC-XYZ-00002
-```
-
-기존 DB에 이미 번호가 있으면 다음 번호부터 시작합니다.
-
-```text
-기존 최대: SC-ABC-00027
-신규 시작: SC-ABC-00028
-```
-
-### 6. 함수 구조 정리
-
-`reserveSubcontractorIssueNo()`는 단일 row 즉시 예약용으로만 쓰기보다, assignment 생성 로직에서 재사용 가능한 형태로 정리합니다.
-
-추가 예상 함수:
-
-```tsx
-function detectIssueNoSortDirection(rows: ParsedDefectRow[]): 'asc' | 'desc'
-
-function buildSubcontractorIssueAssignments(
-  rows: ParsedDefectRow[],
-  registry: IssueRegistry,
-  existingByIssueNo: Map<string, any>
-): Map<number, IssueAssignment>
-```
-
-`Map` key는 `rawRowNo` 또는 stable row key를 사용해 원본 row와 assignment를 연결합니다.
-
-### 7. 기존 import 루프 반영
-
-`importOneFile()`에서 row별로 매번 DB 조회하는 구조는 유지하되, 최소한 assignment 생성에 필요한 existing 조회 결과를 재사용하도록 정리합니다.
-
-변경 후 흐름:
-
-```text
-1. profile/team map 준비
-2. master ensurer 준비
-3. issue registry 준비
-4. import rows에 대한 existing defect 조회 또는 map 구성
-5. Issue No 정렬 방향 감지
-6. Subcontractor Issue No assignment map 생성
-7. 기존 row order대로 import loop 실행
-8. row별 assignment를 payload에 반영
-```
-
-## 예외 처리
-
-### Issue No가 완전히 정렬되어 있지 않은 경우
-
-혼합 정렬이면 다수 방향을 기준으로 판단합니다.
-
-```text
-대부분 내림차순 → desc
-대부분 오름차순 또는 판단 불가 → asc
-```
-
-### Issue No가 숫자형이 아닌 경우
-
-`Intl.Collator`의 numeric compare를 사용하므로 문자열 기반 Issue No도 자연 정렬됩니다.
-
-```text
-D-2, D-10, D-11
-```
-
-### Issue No가 비어 있는 경우
-
-기존처럼 reject 대상입니다.
-
-```text
-reason_code: missing_issue_no
-```
-
-자동 채번 대상에서 제외합니다.
-
-## 테스트 계획
-
-### 1. Unit test 추가
-
-`src/test/defect-import-issue-assignment.test.ts`를 추가하거나 기존 테스트 파일에 포함합니다.
-
-테스트 케이스:
-
-```text
-1. Issue No 오름차순 import
-   1001, 1002, 1003
-   → SC-ABC-00001, 00002, 00003
-
-2. Issue No 내림차순 import
-   1003, 1002, 1001
-   → Excel 표시 순서 기준 SC-ABC-00001, 00002, 00003
-
-3. 자연 정렬
-   D-10, D-2, D-1
-   → desc 판단 및 numeric order 유지
-
-4. owner code별 sequence 분리
-   ABC / XYZ 섞여 있어도 각 owner별 00001부터 증가
-
-5. 기존 DB 최대 SEQ 이후부터 시작
-   existing SC-ABC-00027
-   → 신규 SC-ABC-00028부터
-
-6. existing defect에 기존 subcontractor_issue_no가 있으면 보존
-
-7. Excel imported subcontractor_issue_no가 있으면 자동 생성하지 않음
-
-8. imported subcontractor_issue_no 중복이면 기존처럼 reject
-```
-
-### 2. Build 확인
-
-수정 후 아래를 확인합니다.
-
-```text
-npm run build
-npm run test
-```
-
-## 수정 대상 파일
-
-```text
+[pages / components]
 src/pages/DefectImportPage.tsx
-src/test/defect-import-issue-assignment.test.ts
+src/pages/DefectDetailPage.tsx
+src/pages/DefectQuickUpdatePage.tsx
+src/pages/DefectRawDataPage.tsx
+src/pages/DefectDashboardPage.tsx
+src/pages/DefectProgressPage.tsx
+src/pages/DefectExportPage.tsx
+src/components/defects/DefectProgressMatrix.tsx
+src/components/defects/DefectDailyCumulativeChart.tsx
+src/components/defects/DefectKpiCard.tsx
+src/components/defects/DefectStatusBadge.tsx   (4 status 색상 매핑)
+src/hooks/useDefectFieldConfig.ts
+
+[seed]
+defect_field_config row 교체 (insert 도구):
+  - 기존 planned_date, target_date, closed_date, actual_date 행 삭제
+  - 9개 신규 행 추가 (display_name, sort_order)
+
+[test]
+src/test/defect-status.test.ts (신규: 자동 계산 4 status 분기 검증)
+src/test/defect-import-issue-assignment.test.ts (필요 시 보강)
 ```
 
-## 기대 결과
-
-수정 후 Defect Import에서 원본 Excel의 `Issue No`가 내림차순이면 `Subcontractor Issue No`도 같은 표시 방향으로 자연스럽게 증가합니다.
+## 9. 검증 항목
 
 ```text
-Before
-Issue No      Subcontractor Issue No
-1005          SC-ABC-00001
-1004          SC-ABC-00002
-1003          SC-ABC-00003
-
-After
-Issue No      Subcontractor Issue No
-1005          SC-ABC-00001
-1004          SC-ABC-00002
-1003          SC-ABC-00003
+1. Excel 9개 신규 헤더 import 시 정상 파싱 + DB 저장
+2. Excel status enum 외 값 → invalid_status_value 로그 + 자동값
+3. Excel status 비어 있고 planned 날짜 둘 다 없음 → missing_planned_dates 로그
+4. Completion: actual=100 → Done
+5. Completion: actual<planned → Delay
+6. Completion: planned_completion_date < dataDate & not done → Delay
+7. Completion: actual>0 & 진행 OK → WIP
+8. Completion: dataDate < planned_start_date → Planned
+9. Closure: actual_closure_date → Done
+10. Closure: planned_closure_date < dataDate & no actual → Delay
+11. Closure: completion=Done & no actual_closure → WIP
+12. Closure: 그 외 → Planned
+13. DetailPage 저장 시 해당 row recompute
+14. 사용자가 status 직접 입력 시 그 값 보존
+15. Cron edge function 실행 시 status 변동분만 update + log
+16. Dashboard 3 stage / 4 status KPI 정상
+17. RawData / Export / Progress 신규 필드 표시 정상
+18. defect_schedule_change_audit row가 신규 필드 변경 시 정상 기록
+19. build + tests pass
 ```
 
-단, 기존 데이터 보존, 중복 방지, owner code별 sequence, import log 동작은 그대로 유지합니다.
+## 10. 데이터 마이그레이션
+
+```text
+- 기존 5개 컬럼 DROP
+- 신규 9개 컬럼 ADD (모두 nullable)
+- 기존 row의 기존 값은 자동 변환하지 않음
+- 운영자가 새 Excel을 import하면 raw_payload + 신규 컬럼이 채워짐
+```
+
