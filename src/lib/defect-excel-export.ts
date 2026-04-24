@@ -393,7 +393,7 @@ export function exportDefectRawToExcel<TRow>(opts: ExportDefectRawOptions<TRow>)
   rowCount: number;
   fileName: string;
 } {
-  const { table, fieldConfig, globalFilter, searchParams, meta } = opts;
+  const { table, fieldConfig, globalFilter, searchParams, meta, format = 'view' } = opts;
 
   const visibleCols = table.getVisibleLeafColumns();
   const sortedRows = table.getSortedRowModel().rows;
@@ -405,11 +405,13 @@ export function exportDefectRawToExcel<TRow>(opts: ExportDefectRawOptions<TRow>)
     meta,
     globalFilter,
     searchParams,
+    format,
     _filterSummary: summarizeFilters(table, fieldConfig),
     _sortSummary: summarizeSort(table, fieldConfig),
   } as BuildSheetParams<TRow>);
 
-  const fileName = `SHAW_Defects_${timestampForFilename()}.xlsx`;
+  const suffix = format === 'reimport' ? '_REIMPORT' : '';
+  const fileName = `SHAW_Defects${suffix}_${timestampForFilename()}.xlsx`;
   XLSX.writeFile(wb, fileName);
   return { rowCount: sortedRows.length, fileName };
 }
@@ -423,7 +425,7 @@ export function exportDefectRawToExcelBySubcontractor<TRow>(opts: ExportDefectRa
   rowCount: number;
   fileNames: string[];
 } {
-  const { table, fieldConfig, globalFilter, searchParams, meta } = opts;
+  const { table, fieldConfig, globalFilter, searchParams, meta, format = 'view' } = opts;
   const visibleCols = table.getVisibleLeafColumns();
   const sortedRows = table.getSortedRowModel().rows;
 
@@ -449,6 +451,8 @@ export function exportDefectRawToExcelBySubcontractor<TRow>(opts: ExportDefectRa
     return a.localeCompare(b);
   });
 
+  const suffix = format === 'reimport' ? '_REIMPORT' : '';
+
   for (const subconName of sortedKeys) {
     const groupRows = groups.get(subconName)!;
     const wb = buildDefectWorkbook({
@@ -458,12 +462,13 @@ export function exportDefectRawToExcelBySubcontractor<TRow>(opts: ExportDefectRa
       meta,
       globalFilter,
       searchParams,
+      format,
       sourceSuffix: `Subcontractor: ${subconName}`,
       _filterSummary: filterSummary,
       _sortSummary: sortSummary,
     } as BuildSheetParams<TRow>);
 
-    const fileName = `SHAW_Defects_${sanitizeForFilename(subconName)}_${ts}.xlsx`;
+    const fileName = `SHAW_Defects${suffix}_${sanitizeForFilename(subconName)}_${ts}.xlsx`;
     XLSX.writeFile(wb, fileName);
     fileNames.push(fileName);
   }
