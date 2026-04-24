@@ -122,6 +122,9 @@ export default function DefectImportPage() {
                     <div className="flex items-center gap-2">
                       <span className="truncate text-sm font-medium">{file.name}</span>
                       <Badge variant="outline" className={`text-xs ${sb.cls}`}>{sb.label}</Badge>
+                      {file.isReimport && (
+                        <Badge variant="outline" className="bg-amber-100 text-amber-900 text-xs">Re-import (Update only)</Badge>
+                      )}
                     </div>
                     <div className="mt-0.5 text-xs text-muted-foreground">
                       {formatSize(file.size)} · Defect Import
@@ -130,6 +133,11 @@ export default function DefectImportPage() {
                       {file.error && <span className="text-destructive"> · {file.error}</span>}
                       {file.result && <span className="ml-1">· {file.result.inserted} ins, {file.result.updated} upd, {file.result.skipped} skp, {file.result.rejected} rej{file.result.teamUnresolved > 0 ? ` · ${file.result.teamUnresolved} team unresolved` : ''}</span>}
                     </div>
+                    {file.isReimport && (
+                      <div className="mt-1 text-xs text-amber-800">
+                        This file was exported in Re-import format. Existing rows will be updated; new rows will not be created.
+                      </div>
+                    )}
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
                       <span className="whitespace-nowrap text-xs text-muted-foreground">Data Date:</span>
                       <Input
