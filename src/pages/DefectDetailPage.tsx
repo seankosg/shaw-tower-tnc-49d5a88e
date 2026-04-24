@@ -340,7 +340,7 @@ export default function DefectDetailPage() {
             <div className="flex items-center justify-between gap-2">
               <label className="text-xs font-medium text-muted-foreground">{getLabel('subcontractor_issue_no')}{isFieldRequired('subcontractor_issue_no') ? ' *' : ''}</label>
               {(form.subcontractor_issue_source ?? record.subcontractor_issue_source) === 'reassigned' && (
-                <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">Reassigned</span>
+                <span className="inline-flex items-center rounded-full border border-warning/40 bg-warning/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">Reassigned</span>
               )}
             </div>
             <Input className="h-9" value={String(form.subcontractor_issue_no ?? '')} disabled={!canEdit} onChange={(e) => updateField('subcontractor_issue_no', e.target.value)} />
