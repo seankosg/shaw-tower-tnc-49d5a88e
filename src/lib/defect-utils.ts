@@ -38,6 +38,9 @@ export interface DefectItem {
   closure_status: DefectStatusValue | string | null;
   remarks: string | null;
   hdec_comments: string | null;
+  work_type: string | null;
+  classification_source: string | null;
+  classified_at: string | null;
   raw_payload?: Record<string, unknown>;
   source_upload_id: string | null;
   data_source_type: string | null;

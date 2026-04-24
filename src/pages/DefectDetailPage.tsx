@@ -12,6 +12,7 @@ import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { daysDiff } from '@/lib/defect-parser';
 import { computeDefectStatuses } from '@/lib/defect-status';
 import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct, normalizeSubcontractorIssueNo } from '@/lib/defect-utils';
+import { classifyDefect, type ClassificationRule, type DisciplineFallback } from '@/lib/defect-classifier';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
 
 const RAW_FIELD_LABELS = {
@@ -81,7 +82,7 @@ export default function DefectDetailPage() {
     const editableFields = [
       'subcontractor_issue_no', 'subcontractor_issue_source',
       'area_type', 'area_level', 'area_location',
-      'main_trade', 'sub_trade', 'trade_detail',
+      'main_trade', 'sub_trade', 'trade_detail', 'work_type',
       'planned_start_date', 'planned_completion_date', 'planned_closure_date',
       'actual_start_date', 'actual_completion_date', 'actual_closure_date',
       'planned_progress_pct', 'actual_progress_pct', 'completion_status', 'closure_status',
@@ -106,6 +107,7 @@ export default function DefectDetailPage() {
       main_trade: form.main_trade || null,
       sub_trade: form.sub_trade || null,
       trade_detail: form.trade_detail || null,
+      work_type: form.work_type || null,
       planned_start_date: form.planned_start_date || null,
       planned_completion_date: form.planned_completion_date || null,
       planned_closure_date: form.planned_closure_date || null,
@@ -118,6 +120,8 @@ export default function DefectDetailPage() {
       closure_status: form.closure_status || null,
       description: form.description || null,
       remarks: form.remarks || null,
+      classification_source: 'manual',
+      classified_at: new Date().toISOString(),
       updated_by: user.id,
       data_source_type: 'app_direct_input',
       row_version: record.row_version + 1,
@@ -191,7 +195,7 @@ export default function DefectDetailPage() {
   const rawEntries = useMemo(() => Object.entries(record?.raw_payload ?? {}).slice(0, 80), [record]);
   if (!record) return <div className="text-sm text-muted-foreground">Loading defect...</div>;
 
-  const workType = form.trade_detail ?? getRawValue(record.raw_payload, ['Work Type', 'WorkType', 'Type of Work']) ?? record.defect_type;
+  const workType = form.work_type ?? record.work_type;
   const itemDescription = (form as any).item_description ?? getRawValue(record.raw_payload, ['Issue Description', 'IssueDescription', 'Item Description', 'Description']) ?? record.description;
   const capturedOn = (form as any).captured_on ?? getRawValue(record.raw_payload, ['Captured on', 'Captured On', 'Captured Date', 'Capture Date']) ?? record.created_at;
   const startDate = (form as any).start_date ?? form.planned_start_date ?? getRawValue(record.raw_payload, ['Start', 'Start Date', 'Planned Start', 'Plan Start']);
@@ -215,7 +219,23 @@ export default function DefectDetailPage() {
         <Field label="Location" value={form.area_location} disabled={!canEdit} onChange={(v) => updateField('area_location', v)} />
         <Field label="Main Trade" value={form.main_trade} disabled={!canEdit} onChange={(v) => updateField('main_trade', v)} />
         <Field label="Sub Trade" value={form.sub_trade} disabled={!canEdit} onChange={(v) => updateField('sub_trade', v)} />
-        <Field label="Work Type" value={workType} disabled={!canEdit} onChange={(v) => updateField('trade_detail', v)} />
+        <Field label="Work Type" value={workType} disabled={!canEdit} onChange={(v) => updateField('work_type', v)} />
+        <ReadonlyField label="Classification Source" value={form.classification_source ?? record.classification_source} />
+        <div className="md:col-span-3 flex items-center gap-2">
+          <Button variant="outline" size="sm" disabled={!canEdit} onClick={async () => {
+            const [rulesRes, fbRes] = await Promise.all([
+              (supabase as any).from('defect_classification_rules').select('*').eq('is_active', true),
+              (supabase as any).from('defect_discipline_fallback').select('*').eq('is_active', true),
+            ]);
+            const c = classifyDefect(
+              { description: form.description ?? record.description, field_discipline: form.trade_detail ?? record.trade_detail },
+              (rulesRes.data ?? []) as ClassificationRule[],
+              (fbRes.data ?? []) as DisciplineFallback[],
+            );
+            setForm((cur) => ({ ...cur, main_trade: cur.main_trade || c.main_trade, sub_trade: cur.sub_trade || c.sub_trade, work_type: c.work_type, classification_source: c.source }));
+            toast({ title: 'Auto-classified', description: `${c.source} → ${c.work_type}` });
+          }}>Auto-classify from description</Button>
+        </div>
         <Field label="Subcontractor" value={form.subcontractor_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subcontractor_name', v)} />
         <Field label="Sub-Sub" value={form.subsub_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subsub_name', v)} />
         <Field label="HDEC PIC" value={form.hdec_pic_name} disabled={!canEditResponsibility} onChange={(v) => updateField('hdec_pic_name', v)} />

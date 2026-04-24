@@ -13,6 +13,7 @@ import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-p
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
 import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, suggestOwnerCode } from '@/lib/defect-utils';
 import { computeDefectStatuses, isValidDefectStatus } from '@/lib/defect-status';
+import { classifyDefect, type ClassificationRule, type DisciplineFallback } from '@/lib/defect-classifier';
 import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
 import { normalizeTeamValue, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
@@ -32,7 +33,7 @@ interface DefectImportFile {
   error?: string;
   headerCount?: number;
   dataDate?: string;
-  result?: { inserted: number; updated: number; skipped: number; rejected: number; teamUnresolved: number };
+  result?: { inserted: number; updated: number; skipped: number; rejected: number; teamUnresolved: number; classifiedRule: number; classifiedDiscipline: number; unclassified: number };
 }
 
 type SimilarDecisionAction = 'use_existing' | 'register_new';
@@ -351,9 +352,12 @@ export default function DefectImportPage() {
       acc.skipped += file.result.skipped;
       acc.rejected += file.result.rejected;
       acc.teamUnresolved += file.result.teamUnresolved;
+      acc.classifiedRule += file.result.classifiedRule;
+      acc.classifiedDiscipline += file.result.classifiedDiscipline;
+      acc.unclassified += file.result.unclassified;
     }
     return acc;
-  }, { inserted: 0, updated: 0, skipped: 0, rejected: 0, teamUnresolved: 0 });
+  }, { inserted: 0, updated: 0, skipped: 0, rejected: 0, teamUnresolved: 0, classifiedRule: 0, classifiedDiscipline: 0, unclassified: 0 });
 
   const applyMasterDecisions = (row: ParsedDefectRow, decisions: MasterNameDecisions): ParsedDefectRow => {
     const subKey = `sub:${masterNameKey(row.subcontractor_name)}`;
@@ -425,11 +429,19 @@ export default function DefectImportPage() {
   };
 
   const importOneFile = async (item: DefectImportFile, decisions: MasterNameDecisions) => {
-    if (!user || !item.parsed) return { inserted: 0, updated: 0, skipped: 0, rejected: 0, teamUnresolved: 0 };
+    if (!user || !item.parsed) return { inserted: 0, updated: 0, skipped: 0, rejected: 0, teamUnresolved: 0, classifiedRule: 0, classifiedDiscipline: 0, unclassified: 0 };
     const dataDate = item.dataDate || todayIso();
     const profileTeamMap = await buildProfileTeamMap();
     const masterEnsurer = await createDefectMasterEnsurer(supabase as any);
     const issueRegistry = await buildIssueRegistry(null);
+
+    // Load classification rules + discipline fallback once per file
+    const [rulesRes, fbRes] = await Promise.all([
+      (supabase as any).from('defect_classification_rules').select('*').eq('is_active', true),
+      (supabase as any).from('defect_discipline_fallback').select('*').eq('is_active', true),
+    ]);
+    const rules = (rulesRes.data ?? []) as ClassificationRule[];
+    const fallbacks = (fbRes.data ?? []) as DisciplineFallback[];
 
     // Apply master decisions up-front so owner code resolution sees the mapped names
     const mappedRows = item.parsed.map((row) => applyMasterDecisions(row, decisions));
@@ -456,6 +468,9 @@ export default function DefectImportPage() {
     let skipped = 0;
     let rejected = 0;
     let teamUnresolved = 0;
+    let classifiedRule = 0;
+    let classifiedDiscipline = 0;
+    let unclassified = 0;
 
     for (let index = 0; index < mappedRows.length; index++) {
       const row = mappedRows[index];
@@ -467,6 +482,26 @@ export default function DefectImportPage() {
       }
 
       await masterEnsurer.ensureForRow(row);
+
+      // Auto-classification: preserve Excel main/sub_trade if provided; always set work_type from classifier
+      const classification = classifyDefect(
+        { description: row.description, field_discipline: row.trade_detail },
+        rules,
+        fallbacks,
+      );
+      if (!row.main_trade) row.main_trade = classification.main_trade;
+      if (!row.sub_trade) row.sub_trade = classification.sub_trade;
+      row.work_type = classification.work_type;
+      const classificationSource = classification.source;
+      const classifiedAt = new Date().toISOString();
+      if (classification.source === 'rule') classifiedRule++;
+      else if (classification.source === 'discipline') {
+        classifiedDiscipline++;
+        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'discipline_fallback', reason_detail: `Auto-classified via Field Discipline fallback (${row.trade_detail ?? ''}).` });
+      } else {
+        unclassified++;
+        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'unclassified_defect', reason_detail: 'Could not classify from description or Field Discipline.' });
+      }
 
       const existing = existingByIssueNo.get(row.issue_no) ?? null;
       const issueAssignment = assignments.get(row.rawRowNo)
@@ -511,7 +546,7 @@ export default function DefectImportPage() {
         closureStatus = null;
       }
 
-      const payload = { ...row, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, completion_status: completionStatus, closure_status: closureStatus, team: resolvedTeam, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
+      const payload = { ...row, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, completion_status: completionStatus, closure_status: closureStatus, team: resolvedTeam, classification_source: classificationSource, classified_at: classifiedAt, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
 
       if (existing) {
         const hasAnyChange = Object.entries(payload).some(([key, value]) => key !== 'raw_payload' && key !== 'row_version' && key !== 'updated_by' && key !== 'source_upload_id' && changed(existing[key], value));
@@ -571,7 +606,7 @@ export default function DefectImportPage() {
         variant: 'destructive',
       });
     }
-    return { inserted: insertedCount, updated: updatedCount, skipped, rejected, teamUnresolved };
+    return { inserted: insertedCount, updated: updatedCount, skipped, rejected, teamUnresolved, classifiedRule, classifiedDiscipline, unclassified };
   };
 
   const runImport = async (items: DefectImportFile[], decisions: MasterNameDecisions) => {
@@ -730,13 +765,18 @@ export default function DefectImportPage() {
               Import Summary
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <div className="grid gap-4 sm:grid-cols-5">
               <SummaryBox label="Inserted" value={totals.inserted} />
               <SummaryBox label="Updated" value={totals.updated} />
               <SummaryBox label="Skipped" value={totals.skipped} />
               <SummaryBox label="Rejected" value={totals.rejected} />
               <SummaryBox label="Team Unresolved" value={totals.teamUnresolved} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <SummaryBox label="Auto-classified (rule)" value={totals.classifiedRule} onClick={() => navigate('/defects/raw?classificationSource=rule')} />
+              <SummaryBox label="Auto-classified (discipline)" value={totals.classifiedDiscipline} onClick={() => navigate('/defects/raw?classificationSource=discipline')} />
+              <SummaryBox label="Unclassified" value={totals.unclassified} onClick={() => navigate('/defects/raw?classificationSource=unclassified')} />
             </div>
           </CardContent>
         </Card>
@@ -814,11 +854,16 @@ export default function DefectImportPage() {
   );
 }
 
-function SummaryBox({ label, value }: { label: string; value: number }) {
+function SummaryBox({ label, value, onClick }: { label: string; value: number; onClick?: () => void }) {
   return (
-    <div className="rounded-md bg-muted p-3 text-center">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className="rounded-md bg-muted p-3 text-center transition-colors disabled:cursor-default enabled:hover:bg-muted/80"
+    >
       <div className="text-2xl font-bold text-foreground">{value}</div>
       <div className="text-xs text-muted-foreground">{label}</div>
-    </div>
+    </button>
   );
 }

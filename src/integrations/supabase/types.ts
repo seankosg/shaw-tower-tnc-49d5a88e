@@ -107,6 +107,42 @@ export type Database = {
         }
         Relationships: []
       }
+      defect_classification_rules: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          keyword: string
+          main_trade: string
+          priority: number
+          sub_trade: string
+          updated_at: string
+          work_type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          keyword: string
+          main_trade: string
+          priority?: number
+          sub_trade: string
+          updated_at?: string
+          work_type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          keyword?: string
+          main_trade?: string
+          priority?: number
+          sub_trade?: string
+          updated_at?: string
+          work_type?: string
+        }
+        Relationships: []
+      }
       defect_daily_snapshots: {
         Row: {
           actual_closure_date: string | null
@@ -155,6 +191,39 @@ export type Database = {
           planned_completion_date?: string | null
           planned_progress_pct?: number | null
           snapshot_date?: string
+        }
+        Relationships: []
+      }
+      defect_discipline_fallback: {
+        Row: {
+          created_at: string
+          field_discipline: string
+          id: string
+          is_active: boolean
+          main_trade: string
+          sub_trade: string
+          updated_at: string
+          work_type: string
+        }
+        Insert: {
+          created_at?: string
+          field_discipline: string
+          id?: string
+          is_active?: boolean
+          main_trade: string
+          sub_trade: string
+          updated_at?: string
+          work_type: string
+        }
+        Update: {
+          created_at?: string
+          field_discipline?: string
+          id?: string
+          is_active?: boolean
+          main_trade?: string
+          sub_trade?: string
+          updated_at?: string
+          work_type?: string
         }
         Relationships: []
       }
@@ -207,6 +276,8 @@ export type Database = {
           area_location: string | null
           area_raw: string | null
           area_type: string | null
+          classification_source: string | null
+          classified_at: string | null
           closure_status: string | null
           completion_status: string | null
           created_at: string
@@ -239,6 +310,7 @@ export type Database = {
           trade_detail: string | null
           updated_at: string
           updated_by: string | null
+          work_type: string | null
         }
         Insert: {
           actual_closure_date?: string | null
@@ -249,6 +321,8 @@ export type Database = {
           area_location?: string | null
           area_raw?: string | null
           area_type?: string | null
+          classification_source?: string | null
+          classified_at?: string | null
           closure_status?: string | null
           completion_status?: string | null
           created_at?: string
@@ -281,6 +355,7 @@ export type Database = {
           trade_detail?: string | null
           updated_at?: string
           updated_by?: string | null
+          work_type?: string | null
         }
         Update: {
           actual_closure_date?: string | null
@@ -291,6 +366,8 @@ export type Database = {
           area_location?: string | null
           area_raw?: string | null
           area_type?: string | null
+          classification_source?: string | null
+          classified_at?: string | null
           closure_status?: string | null
           completion_status?: string | null
           created_at?: string
@@ -323,6 +400,7 @@ export type Database = {
           trade_detail?: string | null
           updated_at?: string
           updated_by?: string | null
+          work_type?: string | null
         }
         Relationships: []
       }

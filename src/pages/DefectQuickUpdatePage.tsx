@@ -70,6 +70,7 @@ export default function DefectQuickUpdatePage() {
             <Button onClick={() => save(item)} disabled={item.scope === 'none'}>Save</Button>
             <Input placeholder="Completion Status" value={val(item, 'completion_status')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'completion_status', e.target.value || null)} />
             <Input placeholder="Closure Status" value={val(item, 'closure_status')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'closure_status', e.target.value || null)} />
+            <Input placeholder="Work Type" value={val(item, 'work_type')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'work_type', e.target.value || null)} />
             <div className="md:col-span-4 text-sm text-muted-foreground">Current actual progress: {formatPct(item.actual_progress_pct)} · Permission: {item.scope}</div>
             <Textarea className="md:col-span-4" placeholder="Remarks" value={val(item, 'remarks')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'remarks', e.target.value)} />
           </CardContent>
