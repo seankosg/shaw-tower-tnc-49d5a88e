@@ -43,6 +43,9 @@ export default function DefectDetailPage() {
   const [logs, setLogs] = useState<any[]>([]);
   const [scHistory, setScHistory] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [subOptions, setSubOptions] = useState<SubMaster[]>([]);
+  const [subsubOptions, setSubsubOptions] = useState<SubMaster[]>([]);
+  const [hdecOptions, setHdecOptions] = useState<HdecMaster[]>([]);
   const { isFieldVisible, isFieldRequired, getLabel } = useDefectFieldConfig();
 
   const loadScHistory = async (defectId: string) => {
