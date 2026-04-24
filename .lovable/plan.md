@@ -1,92 +1,90 @@
 
 
-## Overdue 카드 세분화 — Start / Completion / Closure 3개로 분리
+## Subcontractor 재배정 시 SC No 자동 재발급 + 이력 보존
 
-### 변경 내용
+### 동작 시나리오
 
 ```text
-[현재] 2단에 Overdue (단일 통합) + Overall Progress 2칸
+[사용자 동작]
+  Defect Detail 페이지에서 Subcontractor 를 "Acme" → "Mero" 로 변경 후 Save
 
-[변경 후] 2단을 4칸으로 확장 (md:grid-cols-4)
-  Overdue - Start | Overdue - Completion | Overdue - Closure | Overall Progress
-
-  Overdue - Start
-    = planned_start_date <= dataDate && !actual_start_date && !closure_done
-  Overdue - Completion
-    = planned_completion_date <= dataDate && !completion_done (현 completionOverdue 동일)
-  Overdue - Closure
-    = planned_closure_date <= dataDate && !closure_done (현 closureOverdue 동일)
+[시스템 처리]
+  1. 변경된 subcontractor_name 의 owner_code 를 subcontractor_master 에서 조회
+  2. 기존 SC No 의 owner_code 와 다르면 자동 재발급:
+       - 새 owner_code 의 max(SEQ)+1 로 SC-{new}-{NNNNN} 생성
+       - subcontractor_issue_source = 'reassigned'
+  3. sc_no_history 에 (defect_id, old SC No, new SC No, old/new subcontractor, 사유, 사용자, 시각) 한 줄 INSERT
+  4. defect_change_log 에도 subcontractor_issue_no 변경 한 줄 추가 (기존 흐름 유지)
+  5. owner_code 가 같으면 (예: 같은 owner 안에서 sub-sub만 변경) SC No 그대로 유지
+  6. subcontractor 가 master 에 없거나 owner_code 가 비어있으면 'UNASSIGNED' 로 대체 발급
 ```
 
-### 구체적 변경
+### DB 변경
 
-**[수정] `src/lib/defect-dashboard-utils.ts`**
-- `DefectDashboardStage` 타입에 `'start'` 추가:
-  `export type DefectDashboardStage = 'start' | 'completion' | 'closure';`
-- `getStagePlanDate`: `stage === 'start'` 시 `item.planned_start_date` 반환
-- `getStageActualDate`: `stage === 'start'` 시 `item.actual_start_date` 반환
-- `isStageDone`: `stage === 'start'` 시 `Boolean(item.actual_start_date) || isActualComplete(item)` (시작은 진행/완료된 항목 모두 done 처리)
-- `STAGES` 상수: `['start', 'completion', 'closure']` 로 확장
-  → 부수효과: `isOverdue` / `maxDelayDays` 도 start 지연을 함께 본다 (사용자 요구에 부합)
+```text
+[신설 테이블] public.sc_no_history
+  - id uuid PK default gen_random_uuid()
+  - defect_id uuid NOT NULL          (FK 없이 인덱스만)
+  - issue_no text NOT NULL           (조회 편의)
+  - old_subcontractor_issue_no text
+  - new_subcontractor_issue_no text
+  - old_subcontractor_name text
+  - new_subcontractor_name text
+  - old_owner_code text
+  - new_owner_code text
+  - reason text                       ('reassigned' | 'manual_edit' | 'admin_bulk')
+  - changed_by uuid
+  - changed_at timestamptz default now()
+  - INDEX (defect_id, changed_at desc)
 
-**[수정] `src/pages/DefectDashboardPage.tsx`**
-- `kpis` useMemo (라인 107–119)에 추가:
-  ```ts
-  const startOverdue = filteredItems.filter(i => isStageDelayedAsOf(i, 'start', dataDate)).length;
-  ```
-  반환 객체에 `startOverdue` 포함
-- 2단 그리드 (라인 188–196) 변경:
-  - `md:grid-cols-2` → `md:grid-cols-2 lg:grid-cols-4`
-  - 카드 4개 배치:
-    1. **Overdue - Start** (`AlertTriangle` 아이콘, accent="destructive")  
-       value=`kpis.startOverdue` · sub="Start 지연"  
-       onClick → `goRaw({ overdue: 'true', stage: 'start', asOf: dataDate })`
-    2. **Overdue - Completion** (동일 아이콘)  
-       value=`kpis.completionOverdue` · sub="Completion 지연"  
-       onClick → `goRaw({ overdue: 'true', stage: 'completion', asOf: dataDate })`
-    3. **Overdue - Closure** (동일 아이콘)  
-       value=`kpis.closureOverdue` · sub="Closure 지연"  
-       onClick → `goRaw({ overdue: 'true', stage: 'closure', asOf: dataDate })`
-    4. **Overall Progress** 카드 (현재 그대로)
-- 하단 **AlertBanner**(라인 204) 의 Overdue 합산 표시는 `kpis.startOverdue + kpis.completionOverdue + kpis.closureOverdue` 가 아닌 기존 `kpis.overdueCount` 유지 (any-stage 지연 건수 기준 — 한 결함이 여러 stage에서 지연돼도 1건)
+[RLS]
+  - SELECT : authenticated 전체 read
+  - INSERT : changed_by = auth.uid() OR is_admin_or_superuser
+  - UPDATE/DELETE : admin only
+```
 
-**[수정] `src/pages/DefectRawDataPage.tsx`** (라인 450 부근)
-- `overdue=true` 필터에 `stage` 파라미터 추가 처리:
-  ```ts
-  const stage = searchParams.get('stage'); // 'start' | 'completion' | 'closure' | null
-  if (searchParams.get('overdue') === 'true') {
-    const asOf = searchParams.get('asOf') ?? todayIso();
-    next = next.filter((item) => {
-      if (Boolean(item.actual_closure_date)) return false;
-      if (stage === 'start')
-        return item.planned_start_date && item.planned_start_date <= asOf && !item.actual_start_date;
-      if (stage === 'completion')
-        return item.planned_completion_date && item.planned_completion_date <= asOf && !item.actual_completion_date;
-      if (stage === 'closure')
-        return item.planned_closure_date && item.planned_closure_date <= asOf && !item.actual_closure_date;
-      return isOverdueDefect(item, asOf);
-    });
-  }
-  ```
-- `hasUrlFilters` 체크 배열(라인 377)에 `'stage'` 추가
-- 필터 칩(active filters) 라벨에 stage 표시: 예) "Overdue (Start)"
+### 코드 변경
+
+**[수정] `src/lib/defect-utils.ts`**
+- 헬퍼 추가:
+  - `extractOwnerCodeFromIssueNo(scNo): string | null` — `SC-{CODE}-{SEQ}` 에서 CODE 파싱
+  - `buildNextSubcontractorIssueNo(ownerCode, currentMaxSeq): string`
+
+**[수정] `src/pages/DefectDetailPage.tsx` (handleSave)**
+- `canEditResponsibility` 분기 안에서 subcontractor_name 이 바뀌었는지 감지
+- 바뀐 경우:
+  1. `subcontractor_master` 에서 새 이름의 `owner_code` 조회 (대소문자 무시 trim 매칭, type='sub' 우선)
+  2. `extractOwnerCodeFromIssueNo(record.subcontractor_issue_no)` 와 비교
+  3. 다르면:
+     - `select max(sequence) from defect_items where subcontractor_issue_no like 'SC-{NEW}-%'` 로 다음 SEQ 산출
+     - payload.subcontractor_issue_no = 새 SC No
+     - payload.subcontractor_issue_source = 'reassigned'
+     - 저장 후 sc_no_history INSERT
+- 사용자가 직접 subcontractor_issue_no 도 같이 수정한 경우는 사용자 입력값을 우선 (source='manual' 유지)
+- 중복 체크 로직(라인 171–185)은 그대로 적용
+
+**[추가] Detail 페이지 UI**
+- "Subcontractor Issue No History" 카드 (Card + 작은 표):
+  - sc_no_history where defect_id = 현재 결함, 최근 10건
+  - 컬럼: When | Old SC No | New SC No | Old Subcontractor | New Subcontractor | Reason | By
+- 상단 SC No 인풋 옆에 작은 배지: source='reassigned' 시 "Reassigned" 표시
 
 ### 변경하지 않는 항목
 
-- KpiCard 컴포넌트 시그니처
-- Plan vs Actual 표, S-Curve, Pie, Top Overdue 표
-- AlertBanner의 Overdue 총합 (any-stage 기준 그대로)
-- Stage Card (Completion/Closure) 영역
-- `isAtRisk` 로직 — 시작 지연은 At-Risk가 아닌 Overdue로만 처리
+- Import 경로 (`buildSubcontractorIssueAssignments`) 는 그대로 — 신규 import 행에는 영향 없음
+- Quick Update / Mobile Update 페이지의 SC No 처리 — Subcontractor 변경 권한 자체가 'team'/'full' 한정이므로 동일 로직 추후 확장 가능 (이번 변경 범위 밖)
+- 기존 데이터 일괄 보정 안 함 (필요시 별도 Admin 도구로 분리)
 
 ### 검증
 
 ```text
-1. 2단에 4개 카드 노출: Overdue-Start / Overdue-Completion / Overdue-Closure / Overall Progress
-2. 각 카드의 숫자가 raw-data 페이지에서 stage별 필터 적용 결과 건수와 일치
-3. Overdue-Start 클릭 → planned_start_date <= dataDate 이고 actual_start_date 없는 행만 노출
-4. 모바일(<lg) 에서는 2x2 wrap, 데스크탑(lg+)에서는 1x4 배치
-5. AlertBanner의 통합 Overdue 카운트는 변하지 않음 (한 결함의 다중 stage 지연 = 1건)
-6. Top Overdue 표는 maxDelayDays 기반이므로 start 지연도 자동 반영됨
+1. Subcontractor 만 'Acme'(ABC) → 'Mero'(MRO) 로 바꾸고 저장
+   → SC No 가 SC-ABC-00012 → SC-MRO-{새SEQ} 로 자동 변경
+   → sc_no_history 에 1행 추가, source='reassigned'
+2. 같은 owner 의 sub-sub 만 바꾸면 SC No 변동 없음, history 도 추가 안 됨
+3. 사용자가 SC No 를 직접 수정하면 owner 자동 변경 없이 입력값 유지(source='manual')
+4. Detail 페이지 하단에 SC No 변경 이력 표 노출
+5. 동일 SC No 중복 시 기존 중복 토스트로 차단
+6. Subcontractor 가 master 에 없으면 SC-UNASSIGNED-{SEQ} 발급 + history 기록
 ```
 
