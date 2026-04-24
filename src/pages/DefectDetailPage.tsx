@@ -122,9 +122,72 @@ export default function DefectDetailPage() {
       .filter((field) => String(getRawValue(record.raw_payload, [RAW_FIELD_LABELS[field]]) ?? '') !== String((form as any)[field] ?? ''))
       .map((field) => ({ field: RAW_FIELD_LABELS[field], oldValue: getRawValue(record.raw_payload, [RAW_FIELD_LABELS[field]]), newValue: (form as any)[field] }));
 
+    // --- SC No reassignment logic --------------------------------------------------
+    // 1. If user typed an SC No directly, that takes priority (source='manual').
+    // 2. Else, if the subcontractor changed and its owner_code differs from the current
+    //    SC No's embedded code, auto-reissue with new owner's next sequence
+    //    (source='reassigned'). Same owner → keep existing number.
+    const userTypedScNo = normalizeSubcontractorIssueNo(form.subcontractor_issue_no);
+    const existingScNo = normalizeSubcontractorIssueNo(record.subcontractor_issue_no);
+    const userEditedScNoDirectly = userTypedScNo !== existingScNo;
+    const subcontractorChanged = canEditResponsibility
+      && (form.subcontractor_name ?? null) !== (record.subcontractor_name ?? null);
+
+    let resolvedScNo: string | null = userTypedScNo;
+    let resolvedScSource: string | null = userEditedScNoDirectly
+      ? 'manual'
+      : (form.subcontractor_issue_source || record.subcontractor_issue_source || null);
+    let reassignment: null | {
+      oldScNo: string | null;
+      newScNo: string;
+      oldOwner: string | null;
+      newOwner: string;
+      oldSubcontractor: string | null;
+      newSubcontractor: string | null;
+    } = null;
+
+    if (!userEditedScNoDirectly && subcontractorChanged) {
+      const newSubName = (form.subcontractor_name ?? '').trim();
+      let newOwnerCode: string | null = null;
+      if (newSubName) {
+        const { data: masterRows } = await (supabase as any)
+          .from('subcontractor_master')
+          .select('owner_code, type, name')
+          .eq('is_active', true)
+          .ilike('name', newSubName);
+        const subRow = (masterRows ?? []).find((r: any) => r.type === 'sub') ?? (masterRows ?? [])[0] ?? null;
+        newOwnerCode = subRow?.owner_code ? String(subRow.owner_code).toUpperCase() : null;
+      }
+      const normalizedNewOwner = newOwnerCode ?? 'UNASSIGNED';
+      const oldOwnerCode = extractOwnerCodeFromIssueNo(existingScNo);
+      if (normalizedNewOwner !== oldOwnerCode) {
+        // Find max sequence for new owner from defect_items
+        const { data: ownerRows } = await (supabase as any)
+          .from('defect_items')
+          .select('subcontractor_issue_no')
+          .eq('is_active', true)
+          .ilike('subcontractor_issue_no', `SC-${normalizedNewOwner}-%`);
+        const maxSeq = (ownerRows ?? []).reduce((acc: number, row: any) => {
+          const seq = parseSubcontractorIssueSequence(row.subcontractor_issue_no, normalizedNewOwner);
+          return seq && seq > acc ? seq : acc;
+        }, 0);
+        const newScNo = buildNextSubcontractorIssueNo(normalizedNewOwner, maxSeq);
+        resolvedScNo = newScNo;
+        resolvedScSource = 'reassigned';
+        reassignment = {
+          oldScNo: existingScNo,
+          newScNo,
+          oldOwner: oldOwnerCode,
+          newOwner: normalizedNewOwner,
+          oldSubcontractor: record.subcontractor_name ?? null,
+          newSubcontractor: form.subcontractor_name ?? null,
+        };
+      }
+    }
+
     const payload: any = {
-      subcontractor_issue_no: normalizeSubcontractorIssueNo(form.subcontractor_issue_no),
-      subcontractor_issue_source: normalizeSubcontractorIssueNo(form.subcontractor_issue_no) !== normalizeSubcontractorIssueNo(record.subcontractor_issue_no) ? 'manual' : (form.subcontractor_issue_source || null),
+      subcontractor_issue_no: resolvedScNo,
+      subcontractor_issue_source: resolvedScSource,
       area_type: form.area_type || null,
       area_level: form.area_level || null,
       area_location: form.area_location || null,
