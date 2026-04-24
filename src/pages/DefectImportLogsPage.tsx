@@ -48,18 +48,20 @@ interface DefectScheduleChangeAudit {
   defect_id: string;
   issue_no: string;
   subcontractor_issue_no: string | null;
-  planned_old_date: string | null;
-  planned_new_date: string | null;
-  planned_diff_days: number | null;
-  target_old_date: string | null;
-  target_new_date: string | null;
-  target_diff_days: number | null;
-  closed_old_date: string | null;
-  closed_new_date: string | null;
-  closed_diff_days: number | null;
+  planned_completion_old_date: string | null;
+  planned_completion_new_date: string | null;
+  planned_completion_diff_days: number | null;
+  planned_closure_old_date: string | null;
+  planned_closure_new_date: string | null;
+  planned_closure_diff_days: number | null;
+  actual_closure_old_date: string | null;
+  actual_closure_new_date: string | null;
+  actual_closure_diff_days: number | null;
   progress_old_pct: number | null;
   progress_new_pct: number | null;
   progress_diff_pct: number | null;
+  completion_status_old: string | null;
+  completion_status_new: string | null;
   closure_status_old: string | null;
   closure_status_new: string | null;
   change_source: string | null;
@@ -149,9 +151,9 @@ export default function DefectImportLogsPage() {
     setRowLogs(data ?? []);
 
     const { data: changes } = await supabase.from('defect_schedule_change_audit')
-      .select('id, raw_row_no, defect_id, issue_no, subcontractor_issue_no, planned_old_date, planned_new_date, planned_diff_days, target_old_date, target_new_date, target_diff_days, closed_old_date, closed_new_date, closed_diff_days, progress_old_pct, progress_new_pct, progress_diff_pct, closure_status_old, closure_status_new, change_source')
+      .select('id, raw_row_no, defect_id, issue_no, subcontractor_issue_no, planned_completion_old_date, planned_completion_new_date, planned_completion_diff_days, planned_closure_old_date, planned_closure_new_date, planned_closure_diff_days, actual_closure_old_date, actual_closure_new_date, actual_closure_diff_days, progress_old_pct, progress_new_pct, progress_diff_pct, completion_status_old, completion_status_new, closure_status_old, closure_status_new, change_source')
       .eq('upload_id', id).order('raw_row_no', { ascending: true }).limit(500);
-    setScheduleChanges((changes as DefectScheduleChangeAudit[]) ?? []);
+    setScheduleChanges(((changes as unknown) as DefectScheduleChangeAudit[]) ?? []);
   };
 
   const deleteBatch = async (batch: DefectBatch) => {
@@ -305,33 +307,36 @@ export default function DefectImportLogsPage() {
                         <TableHead rowSpan={2} className="text-xs">Row</TableHead>
                         <TableHead rowSpan={2} className="text-xs">Issue No</TableHead>
                         <TableHead rowSpan={2} className="text-xs">Subcon Issue No</TableHead>
-                        <TableHead colSpan={3} className="text-center text-xs border-l">Planned</TableHead>
-                        <TableHead colSpan={3} className="text-center text-xs border-l">Target</TableHead>
-                        <TableHead colSpan={3} className="text-center text-xs border-l">Closed</TableHead>
+                        <TableHead colSpan={3} className="text-center text-xs border-l">Planned Completion</TableHead>
+                        <TableHead colSpan={3} className="text-center text-xs border-l">Planned Closure</TableHead>
+                        <TableHead colSpan={3} className="text-center text-xs border-l">Actual Closure</TableHead>
                         <TableHead colSpan={3} className="text-center text-xs border-l">Progress</TableHead>
+                        <TableHead colSpan={2} className="text-center text-xs border-l">Completion Status</TableHead>
                         <TableHead colSpan={2} className="text-center text-xs border-l">Closure Status</TableHead>
                         <TableHead rowSpan={2} className="text-xs border-l">Source</TableHead>
                       </TableRow>
                       <TableRow>
-                        {['Old date', 'New date', 'Diff', 'Old date', 'New date', 'Diff', 'Old date', 'New date', 'Diff', 'Old %', 'New %', 'Diff', 'Old', 'New'].map((label) => (
-                          <TableHead key={label} className="text-xs whitespace-nowrap border-l first:border-l-0">{label}</TableHead>
+                        {['Old date', 'New date', 'Diff', 'Old date', 'New date', 'Diff', 'Old date', 'New date', 'Diff', 'Old %', 'New %', 'Diff', 'Old', 'New', 'Old', 'New'].map((label, idx) => (
+                          <TableHead key={`${label}-${idx}`} className="text-xs whitespace-nowrap border-l first:border-l-0">{label}</TableHead>
                         ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {scheduleChanges.length === 0 ? (
-                        <TableRow><TableCell colSpan={18} className="text-center py-8 text-muted-foreground">No schedule changes</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={20} className="text-center py-8 text-muted-foreground">No schedule changes</TableCell></TableRow>
                       ) : scheduleChanges.map((r) => (
                         <TableRow key={r.id} className="cursor-pointer" onClick={() => navigate(`/defects/${r.defect_id}`)}>
                           <TableCell className="text-xs">{r.raw_row_no ?? '—'}</TableCell>
                           <TableCell className="text-xs">{r.issue_no}</TableCell>
                           <TableCell className="text-xs">{r.subcontractor_issue_no || '—'}</TableCell>
-                          <DateChangeCells oldDate={r.planned_old_date} newDate={r.planned_new_date} diff={r.planned_diff_days} />
-                          <DateChangeCells oldDate={r.target_old_date} newDate={r.target_new_date} diff={r.target_diff_days} />
-                          <DateChangeCells oldDate={r.closed_old_date} newDate={r.closed_new_date} diff={r.closed_diff_days} />
+                          <DateChangeCells oldDate={r.planned_completion_old_date} newDate={r.planned_completion_new_date} diff={r.planned_completion_diff_days} />
+                          <DateChangeCells oldDate={r.planned_closure_old_date} newDate={r.planned_closure_new_date} diff={r.planned_closure_diff_days} />
+                          <DateChangeCells oldDate={r.actual_closure_old_date} newDate={r.actual_closure_new_date} diff={r.actual_closure_diff_days} />
                           <TableCell className="text-xs text-right">{formatPercent(r.progress_old_pct)}</TableCell>
                           <TableCell className="text-xs text-right">{formatPercent(r.progress_new_pct)}</TableCell>
                           <TableCell className={`text-xs text-right ${diffClass(r.progress_diff_pct)}`}>{formatSignedPercent(r.progress_diff_pct)}</TableCell>
+                          <TableCell className="text-xs whitespace-nowrap">{r.completion_status_old || '—'}</TableCell>
+                          <TableCell className="text-xs whitespace-nowrap">{r.completion_status_new || '—'}</TableCell>
                           <TableCell className="text-xs whitespace-nowrap">{r.closure_status_old || '—'}</TableCell>
                           <TableCell className="text-xs whitespace-nowrap">{r.closure_status_new || '—'}</TableCell>
                           <TableCell className="text-xs whitespace-nowrap">{r.change_source || '—'}</TableCell>

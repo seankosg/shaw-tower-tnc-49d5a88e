@@ -16,7 +16,7 @@ import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
 import { normalizeTeamValue, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 
-const trackedFields = ['planned_date', 'target_date', 'closed_date', 'actual_progress_pct', 'closure_status'] as const;
+const trackedFields = ['planned_start_date', 'planned_completion_date', 'planned_closure_date', 'actual_start_date', 'actual_completion_date', 'actual_closure_date', 'planned_progress_pct', 'actual_progress_pct', 'completion_status', 'closure_status'] as const;
 type DefectFileStatus = 'pending' | 'parsing' | 'ready' | 'processing' | 'done' | 'failed';
 
 interface DefectImportFile {
@@ -478,8 +478,10 @@ export default function DefectImportPage() {
       const resolvedTeam = resolveDefectTeam(row, profileTeamMap);
       const logReason = resolvedTeam ? {} : { reason_code: 'team_unresolved', reason_detail: 'Team could not be resolved from Field Discipline or User Management profile.' };
       if (!resolvedTeam) teamUnresolved++;
-      const actualDate = Number(row.actual_progress_pct ?? 0) >= 100 ? (existing?.actual_date ?? dataDate) : null;
-      const payload = { ...row, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_date: actualDate, team: resolvedTeam, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
+      const actualCompletionDate = Number(row.actual_progress_pct ?? 0) >= 100
+        ? (row.actual_completion_date ?? existing?.actual_completion_date ?? dataDate)
+        : (row.actual_completion_date ?? null);
+      const payload = { ...row, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, team: resolvedTeam, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
 
       if (existing) {
         const hasAnyChange = Object.entries(payload).some(([key, value]) => key !== 'raw_payload' && key !== 'row_version' && key !== 'updated_by' && key !== 'source_upload_id' && changed(existing[key], value));
@@ -491,15 +493,34 @@ export default function DefectImportPage() {
         await (supabase as any).from('defect_items').update(payload).eq('id', existing.id);
         for (const field of trackedFields) {
           if (changed(existing[field], (row as any)[field])) {
-            await (supabase as any).from('defect_schedule_change_audit').insert({
+            const isDate = field.endsWith('_date');
+            const isPct = field.endsWith('_pct');
+            const oldVal = (existing as any)[field] ?? null;
+            const newVal = (row as any)[field] ?? null;
+            const auditPayload: Record<string, any> = {
               upload_id: uploadId, defect_id: existing.id, project_id: existing.project_id, issue_no: row.issue_no, subcontractor_issue_no: payload.subcontractor_issue_no, raw_row_no: row.rawRowNo,
-              planned_old_date: field === 'planned_date' ? existing.planned_date : null, planned_new_date: field === 'planned_date' ? row.planned_date : null, planned_diff_days: field === 'planned_date' ? daysDiff(existing.planned_date, row.planned_date) : null,
-              target_old_date: field === 'target_date' ? existing.target_date : null, target_new_date: field === 'target_date' ? row.target_date : null, target_diff_days: field === 'target_date' ? daysDiff(existing.target_date, row.target_date) : null,
-              closed_old_date: field === 'closed_date' ? existing.closed_date : null, closed_new_date: field === 'closed_date' ? row.closed_date : null, closed_diff_days: field === 'closed_date' ? daysDiff(existing.closed_date, row.closed_date) : null,
-              progress_old_pct: field === 'actual_progress_pct' ? existing.actual_progress_pct : null, progress_new_pct: field === 'actual_progress_pct' ? row.actual_progress_pct : null, progress_diff_pct: field === 'actual_progress_pct' ? Number(row.actual_progress_pct ?? 0) - Number(existing.actual_progress_pct ?? 0) : null,
-              closure_status_old: field === 'closure_status' ? existing.closure_status : null, closure_status_new: field === 'closure_status' ? row.closure_status : null,
               created_by: user.id, change_source: 'excel_import',
-            });
+            };
+            if (isDate) {
+              auditPayload[`${field.replace(/_date$/, '')}_old_date`] = oldVal;
+              auditPayload[`${field.replace(/_date$/, '')}_new_date`] = newVal;
+              auditPayload[`${field.replace(/_date$/, '')}_diff_days`] = daysDiff(oldVal, newVal);
+            } else if (field === 'actual_progress_pct') {
+              auditPayload.progress_old_pct = oldVal;
+              auditPayload.progress_new_pct = newVal;
+              auditPayload.progress_diff_pct = Number(newVal ?? 0) - Number(oldVal ?? 0);
+            } else if (field === 'planned_progress_pct') {
+              auditPayload.planned_progress_old_pct = oldVal;
+              auditPayload.planned_progress_new_pct = newVal;
+              auditPayload.planned_progress_diff_pct = Number(newVal ?? 0) - Number(oldVal ?? 0);
+            } else if (field === 'completion_status') {
+              auditPayload.completion_status_old = oldVal;
+              auditPayload.completion_status_new = newVal;
+            } else if (field === 'closure_status') {
+              auditPayload.closure_status_old = oldVal;
+              auditPayload.closure_status_new = newVal;
+            }
+            await (supabase as any).from('defect_schedule_change_audit').insert(auditPayload);
           }
         }
         updatedCount++;
@@ -508,7 +529,7 @@ export default function DefectImportPage() {
         const inserted = await (supabase as any).from('defect_items').insert(payload).select('id').single();
         insertedCount++;
         await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'inserted', ...logReason });
-        if (inserted.data?.id) await (supabase as any).from('defect_daily_snapshots').insert({ defect_id: inserted.data.id, issue_no: row.issue_no, snapshot_date: dataDate, planned_date: row.planned_date, actual_progress_pct: row.actual_progress_pct, closure_status: row.closure_status, closed_date: row.closed_date, created_by: user.id });
+        if (inserted.data?.id) await (supabase as any).from('defect_daily_snapshots').insert({ defect_id: inserted.data.id, issue_no: row.issue_no, snapshot_date: dataDate, planned_completion_date: row.planned_completion_date, actual_completion_date: row.actual_completion_date, planned_closure_date: row.planned_closure_date, actual_closure_date: row.actual_closure_date, planned_progress_pct: row.planned_progress_pct, actual_progress_pct: row.actual_progress_pct, completion_status: row.completion_status, closure_status: row.closure_status, created_by: user.id });
       }
     }
 

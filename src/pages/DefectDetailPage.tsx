@@ -59,10 +59,15 @@ export default function DefectDetailPage() {
 
   const revisionPayload = (field: string, before: any, after: any) => ({
     defect_id: record!.id, project_id: record!.project_id, issue_no: record!.issue_no, subcontractor_issue_no: form.subcontractor_issue_no ?? record!.subcontractor_issue_no,
-    planned_old_date: field === 'planned_date' ? before : null, planned_new_date: field === 'planned_date' ? after : null, planned_diff_days: field === 'planned_date' ? daysDiff(before, after) : null,
-    target_old_date: field === 'target_date' ? before : null, target_new_date: field === 'target_date' ? after : null, target_diff_days: field === 'target_date' ? daysDiff(before, after) : null,
-    closed_old_date: field === 'closed_date' ? before : null, closed_new_date: field === 'closed_date' ? after : null, closed_diff_days: field === 'closed_date' ? daysDiff(before, after) : null,
+    planned_start_old_date: field === 'planned_start_date' ? before : null, planned_start_new_date: field === 'planned_start_date' ? after : null, planned_start_diff_days: field === 'planned_start_date' ? daysDiff(before, after) : null,
+    planned_completion_old_date: field === 'planned_completion_date' ? before : null, planned_completion_new_date: field === 'planned_completion_date' ? after : null, planned_completion_diff_days: field === 'planned_completion_date' ? daysDiff(before, after) : null,
+    planned_closure_old_date: field === 'planned_closure_date' ? before : null, planned_closure_new_date: field === 'planned_closure_date' ? after : null, planned_closure_diff_days: field === 'planned_closure_date' ? daysDiff(before, after) : null,
+    actual_start_old_date: field === 'actual_start_date' ? before : null, actual_start_new_date: field === 'actual_start_date' ? after : null, actual_start_diff_days: field === 'actual_start_date' ? daysDiff(before, after) : null,
+    actual_completion_old_date: field === 'actual_completion_date' ? before : null, actual_completion_new_date: field === 'actual_completion_date' ? after : null, actual_completion_diff_days: field === 'actual_completion_date' ? daysDiff(before, after) : null,
+    actual_closure_old_date: field === 'actual_closure_date' ? before : null, actual_closure_new_date: field === 'actual_closure_date' ? after : null, actual_closure_diff_days: field === 'actual_closure_date' ? daysDiff(before, after) : null,
+    planned_progress_old_pct: field === 'planned_progress_pct' ? before : null, planned_progress_new_pct: field === 'planned_progress_pct' ? after : null, planned_progress_diff_pct: field === 'planned_progress_pct' ? Number(after ?? 0) - Number(before ?? 0) : null,
     progress_old_pct: field === 'actual_progress_pct' ? before : null, progress_new_pct: field === 'actual_progress_pct' ? after : null, progress_diff_pct: field === 'actual_progress_pct' ? Number(after ?? 0) - Number(before ?? 0) : null,
+    completion_status_old: field === 'completion_status' ? before : null, completion_status_new: field === 'completion_status' ? after : null,
     closure_status_old: field === 'closure_status' ? before : null, closure_status_new: field === 'closure_status' ? after : null,
     created_by: user?.id, change_source: 'app_direct_input',
   });
@@ -76,7 +81,9 @@ export default function DefectDetailPage() {
       'subcontractor_issue_no', 'subcontractor_issue_source',
       'area_type', 'area_level', 'area_location',
       'main_trade', 'sub_trade', 'trade_detail',
-      'planned_date', 'target_date', 'actual_date', 'closed_date', 'actual_progress_pct', 'closure_status',
+      'planned_start_date', 'planned_completion_date', 'planned_closure_date',
+      'actual_start_date', 'actual_completion_date', 'actual_closure_date',
+      'planned_progress_pct', 'actual_progress_pct', 'completion_status', 'closure_status',
       'description', 'remarks',
       'subcontractor_name', 'subsub_name', 'hdec_pic_name',
     ] as const;
@@ -98,11 +105,15 @@ export default function DefectDetailPage() {
       main_trade: form.main_trade || null,
       sub_trade: form.sub_trade || null,
       trade_detail: form.trade_detail || null,
-      planned_date: form.planned_date || null,
-      target_date: form.target_date || null,
-      closed_date: form.closed_date || null,
+      planned_start_date: form.planned_start_date || null,
+      planned_completion_date: form.planned_completion_date || null,
+      planned_closure_date: form.planned_closure_date || null,
+      actual_start_date: form.actual_start_date || null,
+      actual_completion_date: Number(form.actual_progress_pct ?? 0) >= 100 ? (form.actual_completion_date || record.actual_completion_date || new Date().toISOString().slice(0, 10)) : (form.actual_completion_date || null),
+      actual_closure_date: form.actual_closure_date || null,
+      planned_progress_pct: form.planned_progress_pct ?? null,
       actual_progress_pct: form.actual_progress_pct ?? null,
-      actual_date: Number(form.actual_progress_pct ?? 0) >= 100 ? (form.actual_date || record.actual_date || new Date().toISOString().slice(0, 10)) : null,
+      completion_status: form.completion_status || null,
       closure_status: form.closure_status || null,
       description: form.description || null,
       remarks: form.remarks || null,
@@ -164,8 +175,8 @@ export default function DefectDetailPage() {
   const workType = form.trade_detail ?? getRawValue(record.raw_payload, ['Work Type', 'WorkType', 'Type of Work']) ?? record.defect_type;
   const itemDescription = (form as any).item_description ?? getRawValue(record.raw_payload, ['Issue Description', 'IssueDescription', 'Item Description', 'Description']) ?? record.description;
   const capturedOn = (form as any).captured_on ?? getRawValue(record.raw_payload, ['Captured on', 'Captured On', 'Captured Date', 'Capture Date']) ?? record.created_at;
-  const startDate = (form as any).start_date ?? form.planned_date ?? getRawValue(record.raw_payload, ['Start', 'Start Date', 'Planned Start', 'Plan Start']);
-  const finishDate = (form as any).finish_date ?? form.target_date ?? getRawValue(record.raw_payload, ['Finish', 'Finish Date', 'Planned Finish', 'Plan Finish']);
+  const startDate = (form as any).start_date ?? form.planned_start_date ?? getRawValue(record.raw_payload, ['Start', 'Start Date', 'Planned Start', 'Plan Start']);
+  const finishDate = (form as any).finish_date ?? form.planned_completion_date ?? getRawValue(record.raw_payload, ['Finish', 'Finish Date', 'Planned Finish', 'Plan Finish']);
   const actualStartDate = (form as any).actual_start_date ?? getRawValue(record.raw_payload, ['Actual Start', 'Actual Start Date']);
   const actualFinishDate = (form as any).actual_finish_date ?? getRawValue(record.raw_payload, ['Actual Finish', 'Actual Finish Date']);
   const plannedProgressRaw = (form as any).planned_progress ?? getRawValue(record.raw_payload, ['Planned Progress', 'Planned Progress %', 'Plan Progress', 'Plan %']);
@@ -190,15 +201,16 @@ export default function DefectDetailPage() {
         <Field label="Sub-Sub" value={form.subsub_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subsub_name', v)} />
         <Field label="HDEC PIC" value={form.hdec_pic_name} disabled={!canEditResponsibility} onChange={(v) => updateField('hdec_pic_name', v)} />
         <Field label="Captured on" type="date" value={toDateInput(capturedOn)} disabled={!canEdit} onChange={(v) => updateField('captured_on' as any, v)} />
-        <Field label="Start Date" type="date" value={toDateInput(startDate)} disabled={!canEdit} onChange={(v) => updateField('planned_date', v)} />
-        <Field label="Finish Date" type="date" value={toDateInput(finishDate)} disabled={!canEdit} onChange={(v) => updateField('target_date', v)} />
-        <Field label="Actual Start Date" type="date" value={toDateInput(actualStartDate)} disabled={!canEdit} onChange={(v) => updateField('actual_start_date' as any, v)} />
-        <Field label="Actual Finish Date" type="date" value={toDateInput(actualFinishDate)} disabled={!canEdit} onChange={(v) => updateField('actual_finish_date' as any, v)} />
-        <Field label="Actual Date" type="date" value={form.actual_date} disabled={!canEdit} onChange={(v) => updateField('actual_date', v)} />
-        <Field label="Closed Date" type="date" value={form.closed_date} disabled={!canEdit} onChange={(v) => updateField('closed_date', v)} />
-        <Field label="Planned Progress" type="number" value={plannedProgressRaw} disabled={!canEdit} onChange={(v) => updateField('planned_progress' as any, v === '' ? null : Number(v))} />
+        <Field label="Planned Start Date" type="date" value={toDateInput(form.planned_start_date)} disabled={!canEdit} onChange={(v) => updateField('planned_start_date', v)} />
+        <Field label="Planned Completion Date" type="date" value={toDateInput(form.planned_completion_date)} disabled={!canEdit} onChange={(v) => updateField('planned_completion_date', v)} />
+        <Field label="Planned Closure Date" type="date" value={toDateInput(form.planned_closure_date)} disabled={!canEdit} onChange={(v) => updateField('planned_closure_date', v)} />
+        <Field label="Actual Start Date" type="date" value={toDateInput(form.actual_start_date)} disabled={!canEdit} onChange={(v) => updateField('actual_start_date', v)} />
+        <Field label="Actual Completion Date" type="date" value={toDateInput(form.actual_completion_date)} disabled={!canEdit} onChange={(v) => updateField('actual_completion_date', v)} />
+        <Field label="Actual Closure Date" type="date" value={toDateInput(form.actual_closure_date)} disabled={!canEdit} onChange={(v) => updateField('actual_closure_date', v)} />
+        <Field label="Planned Progress %" type="number" value={form.planned_progress_pct} disabled={!canEdit} onChange={(v) => updateField('planned_progress_pct', v === '' ? null : Number(v))} />
         <Field label="Actual Progress %" type="number" value={form.actual_progress_pct} disabled={!canEdit} onChange={(v) => updateField('actual_progress_pct', v === '' ? null : Number(v))} />
         <ReadonlyField label="Difference" value={progressDifference == null ? null : formatPct(progressDifference)} />
+        <Field label="Completion Status" value={form.completion_status} disabled={!canEdit} onChange={(v) => updateField('completion_status', v)} />
         <Field label="Closure Status" value={form.closure_status} disabled={!canEdit} onChange={(v) => updateField('closure_status', v)} />
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Description</label><Textarea value={String(form.description ?? '')} disabled={!canEdit} onChange={(e) => updateField('description', e.target.value)} /></div>
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Remarks</label><Textarea value={String(form.remarks ?? '')} disabled={!canEdit} onChange={(e) => updateField('remarks', e.target.value)} /></div>
