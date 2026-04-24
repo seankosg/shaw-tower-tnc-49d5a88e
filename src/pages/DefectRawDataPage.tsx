@@ -28,7 +28,9 @@ import { cn } from '@/lib/utils';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { formatTeamLabel } from '@/types/enums';
+import { formatTeamLabel, USER_TYPE_LABELS } from '@/types/enums';
+import { useToast } from '@/hooks/use-toast';
+import { exportDefectRawToExcel } from '@/lib/defect-excel-export';
 
 const EMPTY_TOKEN = '__EMPTY__';
 const DEFAULT_SORTING: SortingState = [{ id: 'issue_no', desc: false }];
@@ -300,10 +302,11 @@ function ColumnFilterDropdown({ column }: { column: any }) {
 
 export default function DefectRawDataPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const storageKey = user?.id ? `defect-raw-data-state:${user.id}` : 'defect-raw-data-state:anon';
-  const { isFieldVisible, getLabel, sortFieldNames } = useDefectFieldConfig();
+  const { isFieldVisible, getLabel, sortFieldNames, fields: fieldConfigRows } = useDefectFieldConfig();
   const [items, setItems] = useState<DefectRawRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [stateLoaded, setStateLoaded] = useState(false);
@@ -660,6 +663,35 @@ export default function DefectRawDataPage() {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => navigate('/defects/import')}>
             <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const visibleRows = table.getSortedRowModel().rows.length;
+              if (visibleRows === 0) {
+                toast({ title: 'No rows to export', description: 'Adjust filters and try again.', variant: 'destructive' });
+                return;
+              }
+              try {
+                const result = exportDefectRawToExcel({
+                  table,
+                  fieldConfig: fieldConfigRows,
+                  globalFilter,
+                  searchParams,
+                  meta: {
+                    userName: profile?.name || profile?.login_id || 'Unknown',
+                    userType: profile?.user_type ? USER_TYPE_LABELS[profile.user_type] : '',
+                  },
+                });
+                toast({ title: 'Export complete', description: `${result.rowCount} rows → ${result.fileName}` });
+              } catch (err) {
+                console.error('Defect Excel export failed', err);
+                toast({ title: 'Export failed', description: String((err as Error)?.message ?? err), variant: 'destructive' });
+              }
+            }}
+          >
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export Excel
           </Button>
           <Button variant="outline" size="sm" onClick={() => navigate('/defects/export')}>
             <Download className="mr-1.5 h-3.5 w-3.5" /> Export
