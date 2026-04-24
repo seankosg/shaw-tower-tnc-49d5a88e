@@ -302,10 +302,11 @@ function ColumnFilterDropdown({ column }: { column: any }) {
 
 export default function DefectRawDataPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const storageKey = user?.id ? `defect-raw-data-state:${user.id}` : 'defect-raw-data-state:anon';
-  const { isFieldVisible, getLabel, sortFieldNames } = useDefectFieldConfig();
+  const { isFieldVisible, getLabel, sortFieldNames, fields: fieldConfigRows } = useDefectFieldConfig();
   const [items, setItems] = useState<DefectRawRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [stateLoaded, setStateLoaded] = useState(false);
