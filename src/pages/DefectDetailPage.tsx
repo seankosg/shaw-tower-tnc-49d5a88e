@@ -12,6 +12,7 @@ import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { daysDiff } from '@/lib/defect-parser';
 import { computeDefectStatuses } from '@/lib/defect-status';
 import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct, normalizeSubcontractorIssueNo } from '@/lib/defect-utils';
+import { classifyDefect, type ClassificationRule, type DisciplineFallback } from '@/lib/defect-classifier';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
 
 const RAW_FIELD_LABELS = {
@@ -81,7 +82,7 @@ export default function DefectDetailPage() {
     const editableFields = [
       'subcontractor_issue_no', 'subcontractor_issue_source',
       'area_type', 'area_level', 'area_location',
-      'main_trade', 'sub_trade', 'trade_detail',
+      'main_trade', 'sub_trade', 'trade_detail', 'work_type',
       'planned_start_date', 'planned_completion_date', 'planned_closure_date',
       'actual_start_date', 'actual_completion_date', 'actual_closure_date',
       'planned_progress_pct', 'actual_progress_pct', 'completion_status', 'closure_status',
@@ -106,6 +107,7 @@ export default function DefectDetailPage() {
       main_trade: form.main_trade || null,
       sub_trade: form.sub_trade || null,
       trade_detail: form.trade_detail || null,
+      work_type: form.work_type || null,
       planned_start_date: form.planned_start_date || null,
       planned_completion_date: form.planned_completion_date || null,
       planned_closure_date: form.planned_closure_date || null,
@@ -118,6 +120,8 @@ export default function DefectDetailPage() {
       closure_status: form.closure_status || null,
       description: form.description || null,
       remarks: form.remarks || null,
+      classification_source: 'manual',
+      classified_at: new Date().toISOString(),
       updated_by: user.id,
       data_source_type: 'app_direct_input',
       row_version: record.row_version + 1,
