@@ -9,6 +9,7 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useImport } from '@/contexts/ImportContext';
+import { useDefectImport } from '@/contexts/DefectImportContext';
 import { Progress } from '@/components/ui/progress';
 import { KeyRound, Loader2, LogOut, UserCircle } from 'lucide-react';
 import { APP_NAME } from '@/lib/constants';
