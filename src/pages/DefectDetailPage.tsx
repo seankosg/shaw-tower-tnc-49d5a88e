@@ -12,7 +12,7 @@ import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { daysDiff } from '@/lib/defect-parser';
 import { computeDefectStatuses } from '@/lib/defect-status';
 import { computePlannedProgressPct } from '@/lib/defect-progress-calc';
-import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct, normalizeSubcontractorIssueNo } from '@/lib/defect-utils';
+import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct, normalizeSubcontractorIssueNo, extractOwnerCodeFromIssueNo, buildNextSubcontractorIssueNo, parseSubcontractorIssueSequence } from '@/lib/defect-utils';
 import { classifyDefect, type ClassificationRule, type DisciplineFallback } from '@/lib/defect-classifier';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
 
@@ -36,8 +36,19 @@ export default function DefectDetailPage() {
   const [form, setForm] = useState<Partial<DefectItem>>({});
   const [scope, setScope] = useState<DefectEditScope>('none');
   const [logs, setLogs] = useState<any[]>([]);
+  const [scHistory, setScHistory] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const { isFieldVisible, isFieldRequired, getLabel } = useDefectFieldConfig();
+
+  const loadScHistory = async (defectId: string) => {
+    const res = await (supabase as any)
+      .from('sc_no_history')
+      .select('*')
+      .eq('defect_id', defectId)
+      .order('changed_at', { ascending: false })
+      .limit(10);
+    setScHistory(res.data ?? []);
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -51,6 +62,7 @@ export default function DefectDetailPage() {
       }
       const logRes = await (supabase as any).from('defect_change_log').select('*').eq('defect_id', id).order('changed_at', { ascending: false }).limit(50);
       setLogs(logRes.data ?? []);
+      await loadScHistory(id);
     }
     load();
   }, [id, user]);
@@ -110,9 +122,72 @@ export default function DefectDetailPage() {
       .filter((field) => String(getRawValue(record.raw_payload, [RAW_FIELD_LABELS[field]]) ?? '') !== String((form as any)[field] ?? ''))
       .map((field) => ({ field: RAW_FIELD_LABELS[field], oldValue: getRawValue(record.raw_payload, [RAW_FIELD_LABELS[field]]), newValue: (form as any)[field] }));
 
+    // --- SC No reassignment logic --------------------------------------------------
+    // 1. If user typed an SC No directly, that takes priority (source='manual').
+    // 2. Else, if the subcontractor changed and its owner_code differs from the current
+    //    SC No's embedded code, auto-reissue with new owner's next sequence
+    //    (source='reassigned'). Same owner → keep existing number.
+    const userTypedScNo = normalizeSubcontractorIssueNo(form.subcontractor_issue_no);
+    const existingScNo = normalizeSubcontractorIssueNo(record.subcontractor_issue_no);
+    const userEditedScNoDirectly = userTypedScNo !== existingScNo;
+    const subcontractorChanged = canEditResponsibility
+      && (form.subcontractor_name ?? null) !== (record.subcontractor_name ?? null);
+
+    let resolvedScNo: string | null = userTypedScNo;
+    let resolvedScSource: string | null = userEditedScNoDirectly
+      ? 'manual'
+      : (form.subcontractor_issue_source || record.subcontractor_issue_source || null);
+    let reassignment: null | {
+      oldScNo: string | null;
+      newScNo: string;
+      oldOwner: string | null;
+      newOwner: string;
+      oldSubcontractor: string | null;
+      newSubcontractor: string | null;
+    } = null;
+
+    if (!userEditedScNoDirectly && subcontractorChanged) {
+      const newSubName = (form.subcontractor_name ?? '').trim();
+      let newOwnerCode: string | null = null;
+      if (newSubName) {
+        const { data: masterRows } = await (supabase as any)
+          .from('subcontractor_master')
+          .select('owner_code, type, name')
+          .eq('is_active', true)
+          .ilike('name', newSubName);
+        const subRow = (masterRows ?? []).find((r: any) => r.type === 'sub') ?? (masterRows ?? [])[0] ?? null;
+        newOwnerCode = subRow?.owner_code ? String(subRow.owner_code).toUpperCase() : null;
+      }
+      const normalizedNewOwner = newOwnerCode ?? 'UNASSIGNED';
+      const oldOwnerCode = extractOwnerCodeFromIssueNo(existingScNo);
+      if (normalizedNewOwner !== oldOwnerCode) {
+        // Find max sequence for new owner from defect_items
+        const { data: ownerRows } = await (supabase as any)
+          .from('defect_items')
+          .select('subcontractor_issue_no')
+          .eq('is_active', true)
+          .ilike('subcontractor_issue_no', `SC-${normalizedNewOwner}-%`);
+        const maxSeq = (ownerRows ?? []).reduce((acc: number, row: any) => {
+          const seq = parseSubcontractorIssueSequence(row.subcontractor_issue_no, normalizedNewOwner);
+          return seq && seq > acc ? seq : acc;
+        }, 0);
+        const newScNo = buildNextSubcontractorIssueNo(normalizedNewOwner, maxSeq);
+        resolvedScNo = newScNo;
+        resolvedScSource = 'reassigned';
+        reassignment = {
+          oldScNo: existingScNo,
+          newScNo,
+          oldOwner: oldOwnerCode,
+          newOwner: normalizedNewOwner,
+          oldSubcontractor: record.subcontractor_name ?? null,
+          newSubcontractor: form.subcontractor_name ?? null,
+        };
+      }
+    }
+
     const payload: any = {
-      subcontractor_issue_no: normalizeSubcontractorIssueNo(form.subcontractor_issue_no),
-      subcontractor_issue_source: normalizeSubcontractorIssueNo(form.subcontractor_issue_no) !== normalizeSubcontractorIssueNo(record.subcontractor_issue_no) ? 'manual' : (form.subcontractor_issue_source || null),
+      subcontractor_issue_no: resolvedScNo,
+      subcontractor_issue_source: resolvedScSource,
       area_type: form.area_type || null,
       area_level: form.area_level || null,
       area_location: form.area_location || null,
@@ -189,19 +264,55 @@ export default function DefectDetailPage() {
       toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
       return;
     }
-    if (changes.length > 0 || rawChanges.length > 0) {
-      await (supabase as any).from('defect_change_log').insert([...changes, ...rawChanges].map(({ field, oldValue, newValue }) => ({ defect_id: record.id, changed_field: field, old_value: String(oldValue ?? ''), new_value: String(newValue ?? ''), changed_by: user.id, change_source: 'app_direct_input' })));
+    // If SC No was auto-reissued, ensure it's logged in defect_change_log even though
+    // the form value didn't differ from record (the change happened server-side here).
+    const extraChanges: { field: string; oldValue: any; newValue: any }[] = [];
+    if (reassignment) {
+      extraChanges.push({
+        field: 'subcontractor_issue_no',
+        oldValue: reassignment.oldScNo,
+        newValue: reassignment.newScNo,
+      });
+      extraChanges.push({
+        field: 'subcontractor_issue_source',
+        oldValue: record.subcontractor_issue_source ?? null,
+        newValue: 'reassigned',
+      });
+    }
+    const allChanges = [...changes, ...extraChanges];
+    if (allChanges.length > 0 || rawChanges.length > 0) {
+      await (supabase as any).from('defect_change_log').insert([...allChanges, ...rawChanges].map(({ field, oldValue, newValue }) => ({ defect_id: record.id, changed_field: field, old_value: String(oldValue ?? ''), new_value: String(newValue ?? ''), changed_by: user.id, change_source: 'app_direct_input' })));
       for (const { field, oldValue, newValue } of changes) {
         if ((DEFECT_REVISION_FIELDS as readonly string[]).includes(field)) await (supabase as any).from('defect_schedule_change_audit').insert(revisionPayload(field, oldValue, newValue));
       }
     }
+    if (reassignment) {
+      await (supabase as any).from('sc_no_history').insert({
+        defect_id: record.id,
+        issue_no: record.issue_no,
+        old_subcontractor_issue_no: reassignment.oldScNo,
+        new_subcontractor_issue_no: reassignment.newScNo,
+        old_subcontractor_name: reassignment.oldSubcontractor,
+        new_subcontractor_name: reassignment.newSubcontractor,
+        old_owner_code: reassignment.oldOwner,
+        new_owner_code: reassignment.newOwner,
+        reason: 'reassigned',
+        changed_by: user.id,
+      });
+    }
     const updatedRecord = { ...record, ...payload };
     setRecord(updatedRecord);
     setForm(hydrateDetailForm(updatedRecord));
+    await loadScHistory(record.id);
     const logRes = await (supabase as any).from('defect_change_log').select('*').eq('defect_id', record.id).order('changed_at', { ascending: false }).limit(50);
     setLogs(logRes.data ?? []);
     setSaving(false);
-    toast({ title: 'Saved', description: 'Defect updated successfully.' });
+    toast({
+      title: 'Saved',
+      description: reassignment
+        ? `SC No reassigned: ${reassignment.oldScNo ?? '—'} → ${reassignment.newScNo}`
+        : 'Defect updated successfully.',
+    });
   };
 
   const rawEntries = useMemo(() => Object.entries(record?.raw_payload ?? {}).slice(0, 80), [record]);
@@ -224,7 +335,17 @@ export default function DefectDetailPage() {
       <div className="flex items-center justify-between"><Button variant="outline" onClick={() => navigate(-1)}>Back</Button>{canEdit && <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>}</div>
       <Card><CardHeader><CardTitle className="flex flex-wrap items-center gap-x-8 gap-y-2 text-xl">ITEM DETAIL - NO.{record.issue_no}<span className="rounded-md border bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">Closure Status: {record.closure_status || '—'}</span></CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-3">
         <Field field="issue_no" label={getLabel('issue_no')} value={form.issue_no} required={isFieldRequired('issue_no')} disabled onChange={(v) => updateField('issue_no', v)} />
-        {isFieldVisible('subcontractor_issue_no') && <Field field="subcontractor_issue_no" label={getLabel('subcontractor_issue_no')} value={form.subcontractor_issue_no} required={isFieldRequired('subcontractor_issue_no')} disabled={!canEdit} onChange={(v) => updateField('subcontractor_issue_no', v)} />}
+        {isFieldVisible('subcontractor_issue_no') && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-medium text-muted-foreground">{getLabel('subcontractor_issue_no')}{isFieldRequired('subcontractor_issue_no') ? ' *' : ''}</label>
+              {(form.subcontractor_issue_source ?? record.subcontractor_issue_source) === 'reassigned' && (
+                <span className="inline-flex items-center rounded-full border border-warning/40 bg-warning/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning">Reassigned</span>
+              )}
+            </div>
+            <Input className="h-9" value={String(form.subcontractor_issue_no ?? '')} disabled={!canEdit} onChange={(e) => updateField('subcontractor_issue_no', e.target.value)} />
+          </div>
+        )}
         <Field label="Item Description" value={itemDescription} disabled={!canEdit} onChange={(v) => updateField('item_description' as any, v)} />
         <Field label="Type" value={form.area_type} disabled={!canEdit} onChange={(v) => updateField('area_type', v)} />
         <Field label="Level" value={form.area_level} disabled={!canEdit} onChange={(v) => updateField('area_level', v)} />
@@ -268,6 +389,39 @@ export default function DefectDetailPage() {
       </CardContent></Card>
       <Card><CardHeader><CardTitle>Raw Payload</CardTitle></CardHeader><CardContent><div className="grid gap-2 md:grid-cols-2"><div className="rounded-md border p-2 text-xs"><div className="text-muted-foreground">Subcon Issue Source</div><div className="font-medium">{String(form.subcontractor_issue_source || '—')}</div></div>{rawEntries.filter(([k]) => !isRawAlias(k, ['Issue Description', 'IssueDescription', 'Item Description', 'Description'])).map(([k, v]) => <div key={k} className="rounded-md border p-2 text-xs"><div className="text-muted-foreground">{k.replace(/\s*\(H\)\s*$/i, '')}</div><div className="font-medium">{String(v || '—')}</div></div>)}</div></CardContent></Card>
       <Card><CardHeader><CardTitle>Change History</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Field</TableHead><TableHead>Old</TableHead><TableHead>New</TableHead><TableHead>Changed At</TableHead></TableRow></TableHeader><TableBody>{logs.map((log) => <TableRow key={log.id}><TableCell>{log.changed_field}</TableCell><TableCell>{formatMaybeDate(log.old_value)}</TableCell><TableCell>{formatMaybeDate(log.new_value)}</TableCell><TableCell>{formatDateTimeDdMmmYyyy(log.changed_at)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+      <Card>
+        <CardHeader><CardTitle>Subcontractor Issue No History</CardTitle></CardHeader>
+        <CardContent>
+          {scHistory.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No reassignment history.</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Old SC No</TableHead>
+                  <TableHead>New SC No</TableHead>
+                  <TableHead>Old Subcontractor</TableHead>
+                  <TableHead>New Subcontractor</TableHead>
+                  <TableHead>Reason</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {scHistory.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="whitespace-nowrap">{formatDateTimeDdMmmYyyy(row.changed_at)}</TableCell>
+                    <TableCell className="font-mono text-xs">{row.old_subcontractor_issue_no ?? '—'}</TableCell>
+                    <TableCell className="font-mono text-xs">{row.new_subcontractor_issue_no ?? '—'}</TableCell>
+                    <TableCell>{row.old_subcontractor_name ?? '—'}</TableCell>
+                    <TableCell>{row.new_subcontractor_name ?? '—'}</TableCell>
+                    <TableCell>{row.reason ?? '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
