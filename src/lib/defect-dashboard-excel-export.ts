@@ -61,7 +61,8 @@ export function exportDefectPlanActualToExcel(rows: DefectPlanActualRow[], group
     stageList.forEach((s, i) => {
       const m = s.metrics;
       const cr = dataRow;
-      const remain = row.totalDefects - m.cumActual;
+      const totalCell = s.isDiff ? m.cumActual : row.totalDefects;
+      const remain = s.isDiff ? 0 : row.totalDefects - m.cumActual;
       const cumD = m.cumActual - m.cumPlan;
       const dataDateD = m.dataDateActual - m.dataDatePlan;
       const todayD = m.todayActual - m.todayPlan;
@@ -69,10 +70,9 @@ export function exportDefectPlanActualToExcel(rows: DefectPlanActualRow[], group
       const dStyle = s.isDiff ? diffDeltaStyle : deltaStyle;
       if (i === 0) set(ws, cr, 0, row.label, S_GROUP_NAME);
       set(ws, cr, 1, s.label, S_STAGE(s.label));
-      setNum(ws, cr, 2, row.totalDefects, summaryStyle(row.totalDefects));
+      setNum(ws, cr, 2, totalCell, summaryStyle(totalCell));
       setNum(ws, cr, 3, m.cumActual, summaryStyle(m.cumActual, 'done'));
-      if (s.isDiff) set(ws, cr, 4, '—', S_DASH);
-      else setNum(ws, cr, 4, remain, summaryStyle(remain, 'remain'));
+      setNum(ws, cr, 4, remain, summaryStyle(remain, 'remain'));
       setNum(ws, cr, 5, m.cumPlan, S_NUM); setNum(ws, cr, 6, m.cumActual, S_NUM); setNum(ws, cr, 7, cumD, dStyle(cumD));
       setNum(ws, cr, 8, m.dataDatePlan, S_NUM); setNum(ws, cr, 9, m.dataDateActual, S_NUM); setNum(ws, cr, 10, dataDateD, dStyle(dataDateD)); setNum(ws, cr, 11, m.dataDateDelay, S_NUM);
       setNum(ws, cr, 12, m.todayPlan, S_NUM); setNum(ws, cr, 13, m.todayActual, S_NUM); setNum(ws, cr, 14, todayD, dStyle(todayD)); setNum(ws, cr, 15, m.todayDelay, S_NUM);
