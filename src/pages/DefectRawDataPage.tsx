@@ -30,7 +30,10 @@ import { useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatTeamLabel, USER_TYPE_LABELS } from '@/types/enums';
 import { useToast } from '@/hooks/use-toast';
-import { exportDefectRawToExcel } from '@/lib/defect-excel-export';
+import { exportDefectRawToExcel, exportDefectRawToExcelBySubcontractor } from '@/lib/defect-excel-export';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 
 const EMPTY_TOKEN = '__EMPTY__';
 const DEFAULT_SORTING: SortingState = [{ id: 'issue_no', desc: false }];
