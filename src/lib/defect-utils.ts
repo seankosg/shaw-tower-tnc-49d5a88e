@@ -135,3 +135,17 @@ export function normalizeSubcontractorIssueNo(value: string | null | undefined):
   const text = String(value ?? '').trim().toUpperCase();
   return text || null;
 }
+
+/** Extract the OWNER code from an SC issue number like `SC-{CODE}-{SEQ}`. Returns null if pattern does not match. */
+export function extractOwnerCodeFromIssueNo(scNo: string | null | undefined): string | null {
+  const text = String(scNo ?? '').trim().toUpperCase();
+  const match = /^SC-([A-Z0-9]+)-(\d+)$/.exec(text);
+  return match ? match[1] : null;
+}
+
+/** Build the next SC issue number for the given owner from the current max sequence. */
+export function buildNextSubcontractorIssueNo(ownerCode: string | null | undefined, currentMaxSeq: number): string {
+  const code = normalizeOwnerCode(ownerCode) ?? 'UNASSIGNED';
+  const next = Math.max(0, Math.floor(currentMaxSeq)) + 1;
+  return `SC-${code}-${String(next).padStart(5, '0')}`;
+}
