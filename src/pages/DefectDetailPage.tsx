@@ -478,6 +478,28 @@ function Field({ label, value, onChange, disabled, type = 'text', required }: { 
   return <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">{label}{required ? ' *' : ''}</label><Input className="h-9" type={type} value={value ?? ''} disabled={disabled} onChange={(e) => onChange(e.target.value)} /></div>;
 }
 
+const NONE_TOKEN = '__none__';
+
+function SelectField({ label, value, options, onChange, disabled, required }: { label: string; value: any; options: { value: string; label: string }[]; onChange: (value: string | null) => void; disabled?: boolean; required?: boolean }) {
+  const current = value == null || value === '' ? NONE_TOKEN : String(value);
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-muted-foreground">{label}{required ? ' *' : ''}</label>
+      <Select value={current} onValueChange={(v) => onChange(v === NONE_TOKEN ? null : v)} disabled={disabled}>
+        <SelectTrigger className={`h-9 ${disabled ? 'bg-muted text-foreground' : ''}`}>
+          <SelectValue placeholder="—" />
+        </SelectTrigger>
+        <SelectContent className="max-h-72 bg-popover">
+          <SelectItem value={NONE_TOKEN}>— None —</SelectItem>
+          {options.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 function ReadonlyField({ label, value }: { label: string; value: unknown }) {
   return (
     <div className="space-y-1">
