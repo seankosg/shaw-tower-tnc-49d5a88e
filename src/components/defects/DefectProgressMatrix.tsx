@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatPct } from '@/lib/defect-utils';
 import { formatDefectBucketLabel, type DefectProgressBucket, type DefectProgressDateField, type DefectProgressGroupBy, type DefectProgressRow } from '@/lib/defect-progress-utils';
+import { formatTeamLabel } from '@/types/enums';
 
 interface DefectProgressMatrixProps {
   rows: DefectProgressRow[];
@@ -53,7 +54,7 @@ export function DefectProgressMatrix({ rows, buckets, bucket, groupBy, dateField
         <TableBody>
           {rows.map((row) => (
             <TableRow key={row.key}>
-              <TableCell className="sticky left-0 z-10 cursor-pointer bg-background font-medium" onClick={() => openRawData(row)}>{row.label}</TableCell>
+              <TableCell className="sticky left-0 z-10 cursor-pointer bg-background font-medium" onClick={() => openRawData(row)}>{groupBy === 'team' ? formatTeamLabel(row.label) : row.label}</TableCell>
               <TableCell className="text-right">{row.total}</TableCell>
               <TableCell className="text-right">{row.closed}</TableCell>
               <TableCell className="text-right">{row.open}</TableCell>

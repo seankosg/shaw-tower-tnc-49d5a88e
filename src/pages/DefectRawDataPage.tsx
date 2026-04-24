@@ -27,6 +27,7 @@ import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { formatTeamLabel } from '@/types/enums';
 
 const EMPTY_TOKEN = '__EMPTY__';
 const DEFAULT_SORTING: SortingState = [{ id: 'issue_no', desc: false }];
@@ -493,7 +494,7 @@ export default function DefectRawDataPage() {
   }, [items, searchParams]);
 
   const optionFields = useMemo(() => ({
-    team: uniqueOptions(items, 'team'),
+    team: uniqueOptions(items, 'team').map((option) => ({ value: option.value, label: formatTeamLabel(option.value) })),
     closure_status: uniqueOptions(items, 'closure_status'),
     status: uniqueOptions(items, 'status'),
     subcontractor_name: uniqueOptions(items, 'subcontractor_name'),
@@ -553,6 +554,7 @@ export default function DefectRawDataPage() {
         if (field === 'closure_status') return <DefectStatusBadge status={row.original.closure_status ?? row.original.status} />;
         if (field === 'status') return <DefectStatusBadge status={row.original.status} />;
         if (field === 'completion_status') return <DefectStatusBadge status={row.original.completion_status} />;
+        if (field === 'team') return formatTeamLabel(value);
         if (PROGRESS_FIELDS.has(field)) return formatPct(value);
         if (field === 'classification_source') {
           const src = String(value ?? '').toLowerCase();
@@ -626,7 +628,9 @@ export default function DefectRawDataPage() {
     const out: { label: string; param: string; clears?: string[] }[] = [];
     for (const [param, label] of Object.entries(labels)) {
       const value = searchParams.get(param);
-      if (value) out.push({ label: `${label} ${value === EMPTY_TOKEN ? '(Blank)' : value}`, param });
+      if (!value) continue;
+      const display = value === EMPTY_TOKEN ? '(Blank)' : param === 'team' ? formatTeamLabel(value) : value;
+      out.push({ label: `${label} ${display}`, param });
     }
     const from = searchParams.get('dateStart');
     const to = searchParams.get('dateEnd');
