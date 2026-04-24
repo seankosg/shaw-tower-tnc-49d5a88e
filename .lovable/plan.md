@@ -1,119 +1,130 @@
 
+## Defect Raw Data 에 T&C 형식의 Export Excel 추가
 
-## Item Detail 풀다운 메뉴 적용 + Team 표시
-
-### 변경 대상 (`src/pages/DefectDetailPage.tsx`)
-
-자유 텍스트 Input 6개를 DB/Enum 기반 드롭다운으로 교체하고, "Type" 자리에 "Team" 노출.
-
-### 데이터 소스
-
-| 필드 | 소스 | 옵션 |
-|---|---|---|
-| Subcontractor | `subcontractor_master` (is_active=true, type='sub') | name 정렬 |
-| Sub-Sub | `subcontractor_master` (is_active=true, type='subsub') | name 정렬, 가능하면 선택된 Subcontractor의 자식만 필터 |
-| HDEC PIC | `hdec_pic_master` (is_active=true) | name 정렬 |
-| Completion Status | `DEFECT_STATUS_VALUES` (`Planned/WIP/Delay/Done`) | 고정 enum |
-| Closure Status | `DEFECT_STATUS_VALUES` | 고정 enum |
-| Team | `ALL_TEAMS` (`Mech/Elec/Arch/Supp`) + `formatTeamLabel` 라벨 | 고정 enum |
-
-### 구현 내용
-
-**1. 마스터 데이터 로드 (useEffect 한 번)**
+### 현황
 
 ```text
-const [subOptions, setSubOptions]       = useState<{ name }[]>([]);
-const [subsubOptions, setSubsubOptions] = useState<{ name, parent_subcontractor_id }[]>([]);
-const [hdecOptions, setHdecOptions]     = useState<{ name }[]>([]);
+T&C SubtestList:
+  [Import] [Export Excel ★ 화면에서 즉시 스타일 export] [Export → /export 페이지 이동]
+  → exportSubtestsToExcel(table, fieldConfig, globalFilter, searchParams, meta)
+  → 파일명: SHAW_Subtests_<ts>.xlsx
+  → 시트: 제목 / Exported / Source / Search / Filters / Sort / 헤더 / 데이터
+  → freeze panes (헤더+좌측 3컬럼), 컬럼 너비 자동, 셀 스타일 (제목/메타/헤더/데이터)
 
-// 동시 fetch:
-//   subcontractor_master where is_active=true (모두) → type 으로 분리
-//   hdec_pic_master where is_active=true
+Defect Raw Data:
+  [Import] [Export → /defects/export 별도 페이지로 이동만 함]
+  → 화면 즉시 export 버튼 없음
 ```
 
-**2. 새 컴포넌트 `SelectField` (Field 옆에 추가)**
+### 변경 범위
+
+**T&C 의 `exportSubtestsToExcel` 와 동일한 형식/로직을 Defect Raw Data 화면에서 즉시 동작하는 "Export Excel" 버튼으로 추가.** 기존 "Export"(별도 페이지) 버튼은 그대로 유지.
+
+### 구현
+
+**1. 신규 파일: `src/lib/defect-excel-export.ts`**
+
+`src/lib/excel-export.ts` 와 동일한 구조로 작성하되 Defect 도메인에 맞게 조정:
+
+- `exportDefectRawToExcel<TRow>(opts: ExportDefectRawOptions<TRow>)` — `exportSubtestsToExcel` 시그니처와 동일.
+- `ExportDefectRawOptions`:
+  ```text
+  table: Table<TRow>
+  fieldConfig: DefectFieldConfigRow[]    // useDefectFieldConfig().fields
+  globalFilter: string
+  searchParams: URLSearchParams
+  meta: { userName: string; userType: string }
+  ```
+- 스타일 상수 (`STYLE_TITLE/META_LABEL/META_VALUE/HEADER/DATA`, `FONT_NAME='Calibri'`, 색상) — T&C 와 100% 동일.
+- 메타 블록 7행: 제목 / Exported / Source / Search / Filters / Sort / blank, 그 다음 헤더 + 데이터.
+- 제목: `'SHAW T&C — Defect Raw Data Export'`
+- 파일명: `SHAW_Defects_<YYYYMMDD_HHMM>.xlsx`
+- 시트명: `'Defects'`
+- Freeze: `ySplit=8` (헤더 행), `xSplit = min(3, visibleCols.length)` — T&C 와 동일.
+- 컬럼 너비: react-table `c.getSize() / 7` (T&C 동일 공식, min 8 / max 60).
+- 라벨 helper: `DefectFieldConfigRow` 의 `display_name` 우선 → 없으면 `DEFECT_DEFAULT_FIELD_LABELS[id]` → 없으면 column header → id.
+
+**2. Source label inference (Defect URL 파라미터 기준)**
+
+T&C 는 `t1_status`, `subcon`, `at_risk_days` 등을 분기. Defect 도 동일 패턴으로 `searchParams` 로부터 라벨 도출:
 
 ```text
-<SelectField
-  label="Subcontractor"
-  value={form.subcontractor_name ?? ''}
-  options={subOptions.map(o => ({ value: o.name, label: o.name }))}
-  disabled={!canEditResponsibility}
-  onChange={(v) => updateField('subcontractor_name', v || null)}
-  allowClear   // "—" (Clear) 옵션 포함
-/>
+- ?team=Mech         → 'Defects → Team: Mechanical'  (formatTeamLabel)
+- ?subcontractor=… → 'Defects → Subcontractor: …'
+- ?subsub=…           → 'Defects → Sub-Sub: …'
+- ?hdecPic=…          → 'Defects → HDEC PIC: …'
+- ?status=… / ?closureStatus=… / ?level=… / ?mainTrade=… / ?subTrade=… / ?workType=… / ?classificationSource=… / ?issueNo=… / ?subcontractorIssueNo=…
+- ?dateField=…&dateStart=…&dateEnd=… → 'Defects → <dateField label> = <range>'
+- ?overdue / ?atRisk / ?actualComplete / ?closureComplete / ?stage 등 플래그성
+- 없으면 'Defect Raw Data (direct)'
 ```
 
-내부적으로 shadcn `Select` (`@/components/ui/select`) 사용, `<SelectItem value="__none__">— None —</SelectItem>` 로 clear 처리. `disabled` 시 `Input` 과 동일한 readonly 룩.
+**3. Cell value formatter (UI 와 동일하게 export)**
 
-**3. Sub-Sub 옵션 동적 필터**
+화면 표시값과 일치시키기:
+- `team` → `formatTeamLabel(value)` ('Mechanical' 등)
+- `closure_status` / `status` / `completion_status` → 텍스트 값 그대로 (`'Planned' | 'WIP' | 'Done' | 'Delay'` 등)
+- `planned_progress_pct` / `actual_progress_pct` → `formatPct(value)` ('45.0%')
+- `classification_source` → 소문자 텍스트 그대로
+- `*_date` (planned/actual + start/completion/closure), `classified_at` → `formatDdMmm(value.slice(0,10))`
+- `updated_at` / `created_at` → `formatDdMmmYyyy(value)`
+- 기타 → `String(value ?? '')`
 
-선택된 Subcontractor 의 master row id 를 찾아 `parent_subcontractor_id` 일치하는 subsub 만 노출. 매칭 안 되면 전체 subsub 노출 (옛 데이터 호환).
+**4. `src/pages/DefectRawDataPage.tsx` 수정**
 
-```text
-const selectedSubId = subOptions.find(o => o.name === form.subcontractor_name)?.id ?? null;
-const subsubFiltered = selectedSubId
-  ? subsubOptions.filter(o => o.parent_subcontractor_id === selectedSubId)
-  : subsubOptions;
-```
+- `useToast` import 추가.
+- `useAuth()` 에서 `profile` 사용 (이미 user 만 사용 중 → profile 추가).
+- `useDefectFieldConfig()` 의 `fields` 도 destructure.
+- `USER_TYPE_LABELS` import (`@/types/enums`).
+- 신규 `exportDefectRawToExcel` import.
+- 헤더 영역 (현재 line 660-667) 에 **Export Excel** 버튼을 Import 와 Export 사이에 삽입:
 
-**4. Status 두 필드를 enum 드롭다운으로**
+  ```text
+  [Import] [Export Excel ★ 신규] [Export → /defects/export]
+  ```
+- 버튼 onClick:
+  ```text
+  - table.getSortedRowModel().rows.length === 0 → toast destructive
+  - try: exportDefectRawToExcel({ table, fieldConfig: fields, globalFilter, searchParams, meta:{userName, userType} })
+  - 성공: toast 'Export complete' '<n> rows → <fileName>'
+  - 실패: toast destructive
+  ```
 
-```text
-<SelectField label="Completion Status" value={form.completion_status ?? ''}
-  options={DEFECT_STATUS_VALUES.map(s => ({ value: s, label: s }))} ... />
-<SelectField label="Closure Status" value={form.closure_status ?? ''}
-  options={DEFECT_STATUS_VALUES.map(s => ({ value: s, label: s }))} ... />
-```
+**5. 기존 "Export" 버튼 (→ `/defects/export`) 유지**
 
-**5. "Type" → "Team" 교체**
-
-현재 line 350:
-```text
-<Field label="Type" value={form.area_type} ... />   ← 제거
-```
-대체:
-```text
-<SelectField
-  label="Team"
-  value={form.team ?? ''}
-  options={ALL_TEAMS.map(t => ({ value: t, label: TEAM_LABELS[t] }))}
-  disabled={!canEditResponsibility}
-  onChange={(v) => updateField('team', v || null)}
-/>
-```
-- 표시 라벨은 풀네임 (Mechanical 등), 저장값은 enum (Mech).
-- `area_type` 입력 자체는 여전히 Raw Payload 카드에 보존(원본 그대로). 헤더 영역에서만 Type 자리를 Team 으로 대체.
-- `team` 을 `editableFields` 에 추가하고 권한은 `canEditResponsibility` 와 동일 처리 (팀 변경은 책임자 변경의 일종).
-- area_type 편집을 완전히 잃고 싶지 않다면, 카드 하단 보조 영역에 readonly 로 1줄 노출 가능 — 이번 변경에는 포함하지 않음 (요청대로 "그 자리에 Team 표시").
-
-**6. payload 에 `team` 추가**
-```text
-payload.team = form.team ?? null;   // canEditResponsibility 일 때만 포함
-```
-그리고 `editableFields` 배열에도 `'team'` 추가하여 변경 감지/change_log 기록.
-
-**7. 라벨 일관성**
-- Field Config 가 해당 필드명을 갖고 있으면 `getLabel()` 사용; 없으면 하드코딩 라벨 유지.
+별도 advanced export 페이지(`DefectExportPage`)는 다른 워크플로우(컬럼 모드 선택, summary/info 시트) 라서 보존. T&C 도 두 버튼 공존.
 
 ### 변경하지 않는 항목
 
-- DB 스키마, RLS, Edge Function, master 자동 생성 로직
-- Raw Data / Progress / Export / Dashboard 페이지
-- `Field`, `ReadonlyField` 함수
-- `area_type` DB 컬럼 자체 (그대로 저장됨, UI 노출만 제외)
+- DB, RLS, Edge Function
+- `src/lib/excel-export.ts` (T&C용 그대로)
+- `src/lib/defect-export-utils.ts`, `DefectExportPage.tsx` (Advanced export 워크플로우)
+- Field Config / 컬럼 순서 / frozen 설정 / 필터 / 정렬 / 검색 로직
+- 다른 Defect 페이지
 
 ### 검증
 
 ```text
-1. /defects/:id 진입 → Subcontractor 드롭다운 클릭 → DB 의 sub 마스터 목록 노출
-2. Subcontractor 변경 → Sub-Sub 옵션이 해당 부모의 subsub 로 좁혀짐
-3. HDEC PIC 드롭다운에 hdec_pic_master 전체 노출
-4. Completion / Closure Status 드롭다운에 Planned/WIP/Delay/Done 4개
-5. Type 자리에 "Team" 라벨 + 풀네임(Mechanical/Electrical/...) 옵션
-6. Team 변경 후 Save → defect_items.team 갱신, defect_change_log 에 'team' 행 기록
-7. canEditResponsibility=false 사용자: 6개 모두 disabled (보기만)
-8. 빈 값 선택 (— None —) → null 저장 가능
-9. 기존 값이 master 에 없는 경우(legacy) → 현재 값을 옵션 맨 위에 임시 추가하여 노출 (값 보존)
+1. /defects/raw-data 진입 → 헤더에 [Import] [Export Excel] [Export] 3개 버튼
+2. 필터 없이 Export Excel 클릭 → SHAW_Defects_<ts>.xlsx 다운로드
+   - Defects 시트 1개
+   - 1행: 'SHAW T&C — Defect Raw Data Export' (title 스타일)
+   - 2-6행: Exported / Source / Search / Filters / Sort 메타
+   - 8행: 헤더 (현재 화면 visible 컬럼 + Field Config 순서)
+   - 9행~: 데이터 (화면 표시값 = team 풀네임, status 그대로, % 포맷, 날짜 dd-MMM)
+3. 검색어 입력 + 컬럼 필터 + 정렬 적용 후 export
+   → 메타에 Search/Filters/Sort 요약 정확히 표시, 데이터도 필터/정렬 결과만 포함
+4. URL ?team=Mech&dateField=planned_completion_date&dateStart=2025-01-01 진입 후 export
+   → Source 라벨에 'Defects → Team: Mechanical' 또는 dateField 정보 노출
+5. Field Config 에서 일부 컬럼 disable → export 헤더/데이터 모두 해당 컬럼 빠짐
+6. 빈 결과에서 클릭 → 'No rows to export' 토스트
+7. Freeze panes: 헤더 행 + 좌측 3개 컬럼 고정 (엑셀 파일 열어서 확인)
+8. 모든 셀 스타일 (헤더 진한 배경, 데이터 얇은 보더) T&C 와 동일
 ```
 
+### 영향 받는 파일
+
+```text
+NEW   src/lib/defect-excel-export.ts
+EDIT  src/pages/DefectRawDataPage.tsx
+```
