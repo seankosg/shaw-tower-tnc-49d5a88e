@@ -430,8 +430,8 @@ export default function DefectDetailPage() {
         <ReadonlyField label="Planned Progress % (auto from Planned Start/Completion and today)" value={form.planned_progress_pct == null ? null : formatPct(form.planned_progress_pct)} />
         <Field label="Actual Progress %" type="number" value={form.actual_progress_pct} disabled={!canEdit} onChange={(v) => updateField('actual_progress_pct', v === '' ? null : Number(v))} />
         <ReadonlyField label="Difference" value={progressDifference == null ? null : formatPct(progressDifference)} />
-        <Field label="Completion Status" value={form.completion_status} disabled={!canEdit} onChange={(v) => updateField('completion_status', v)} />
-        <Field label="Closure Status" value={form.closure_status} disabled={!canEdit} onChange={(v) => updateField('closure_status', v)} />
+        <SelectField label="Completion Status" value={form.completion_status} options={statusOptionsList} disabled={!canEdit} onChange={(v) => updateField('completion_status', v)} />
+        <SelectField label="Closure Status" value={form.closure_status} options={statusOptionsList} disabled={!canEdit} onChange={(v) => updateField('closure_status', v)} />
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Description</label><Textarea value={String(form.description ?? '')} disabled={!canEdit} onChange={(e) => updateField('description', e.target.value)} /></div>
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Remarks</label><Textarea value={String(form.remarks ?? '')} disabled={!canEdit} onChange={(e) => updateField('remarks', e.target.value)} /></div>
       </CardContent></Card>
