@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
 import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, suggestOwnerCode } from '@/lib/defect-utils';
+import { computeDefectStatuses, isValidDefectStatus } from '@/lib/defect-status';
 import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
 import { normalizeTeamValue, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
@@ -481,7 +482,36 @@ export default function DefectImportPage() {
       const actualCompletionDate = Number(row.actual_progress_pct ?? 0) >= 100
         ? (row.actual_completion_date ?? existing?.actual_completion_date ?? dataDate)
         : (row.actual_completion_date ?? null);
-      const payload = { ...row, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, team: resolvedTeam, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
+
+      // Status resolution: Excel value > auto-compute > null+log
+      const statusInputs = {
+        planned_start_date: row.planned_start_date,
+        planned_completion_date: row.planned_completion_date,
+        planned_closure_date: row.planned_closure_date,
+        actual_start_date: row.actual_start_date,
+        actual_completion_date: actualCompletionDate,
+        actual_closure_date: row.actual_closure_date,
+        planned_progress_pct: row.planned_progress_pct,
+        actual_progress_pct: row.actual_progress_pct,
+      };
+      const auto = computeDefectStatuses(statusInputs, dataDate);
+      let completionStatus: string | null = auto.completion_status;
+      let closureStatus: string | null = auto.closure_status;
+      if (row.completion_status) {
+        if (isValidDefectStatus(row.completion_status)) completionStatus = row.completion_status;
+        else await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'invalid_status_value', reason_detail: `completion_status="${row.completion_status}" not in Planned/Delay/Done/WIP. Auto-computed.` });
+      } else if (!row.planned_completion_date && !row.planned_closure_date) {
+        completionStatus = null;
+        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'missing_planned_dates', reason_detail: 'No planned dates; completion_status set to null.' });
+      }
+      if (row.closure_status) {
+        if (isValidDefectStatus(row.closure_status)) closureStatus = row.closure_status;
+        else await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'invalid_status_value', reason_detail: `closure_status="${row.closure_status}" not in Planned/Delay/Done/WIP. Auto-computed.` });
+      } else if (!row.planned_completion_date && !row.planned_closure_date) {
+        closureStatus = null;
+      }
+
+      const payload = { ...row, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, completion_status: completionStatus, closure_status: closureStatus, team: resolvedTeam, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
 
       if (existing) {
         const hasAnyChange = Object.entries(payload).some(([key, value]) => key !== 'raw_payload' && key !== 'row_version' && key !== 'updated_by' && key !== 'source_upload_id' && changed(existing[key], value));
