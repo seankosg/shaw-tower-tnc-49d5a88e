@@ -264,15 +264,46 @@ export default function DefectDetailPage() {
       toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
       return;
     }
-    if (changes.length > 0 || rawChanges.length > 0) {
-      await (supabase as any).from('defect_change_log').insert([...changes, ...rawChanges].map(({ field, oldValue, newValue }) => ({ defect_id: record.id, changed_field: field, old_value: String(oldValue ?? ''), new_value: String(newValue ?? ''), changed_by: user.id, change_source: 'app_direct_input' })));
+    // If SC No was auto-reissued, ensure it's logged in defect_change_log even though
+    // the form value didn't differ from record (the change happened server-side here).
+    const extraChanges: { field: string; oldValue: any; newValue: any }[] = [];
+    if (reassignment) {
+      extraChanges.push({
+        field: 'subcontractor_issue_no',
+        oldValue: reassignment.oldScNo,
+        newValue: reassignment.newScNo,
+      });
+      extraChanges.push({
+        field: 'subcontractor_issue_source',
+        oldValue: record.subcontractor_issue_source ?? null,
+        newValue: 'reassigned',
+      });
+    }
+    const allChanges = [...changes, ...extraChanges];
+    if (allChanges.length > 0 || rawChanges.length > 0) {
+      await (supabase as any).from('defect_change_log').insert([...allChanges, ...rawChanges].map(({ field, oldValue, newValue }) => ({ defect_id: record.id, changed_field: field, old_value: String(oldValue ?? ''), new_value: String(newValue ?? ''), changed_by: user.id, change_source: 'app_direct_input' })));
       for (const { field, oldValue, newValue } of changes) {
         if ((DEFECT_REVISION_FIELDS as readonly string[]).includes(field)) await (supabase as any).from('defect_schedule_change_audit').insert(revisionPayload(field, oldValue, newValue));
       }
     }
+    if (reassignment) {
+      await (supabase as any).from('sc_no_history').insert({
+        defect_id: record.id,
+        issue_no: record.issue_no,
+        old_subcontractor_issue_no: reassignment.oldScNo,
+        new_subcontractor_issue_no: reassignment.newScNo,
+        old_subcontractor_name: reassignment.oldSubcontractor,
+        new_subcontractor_name: reassignment.newSubcontractor,
+        old_owner_code: reassignment.oldOwner,
+        new_owner_code: reassignment.newOwner,
+        reason: 'reassigned',
+        changed_by: user.id,
+      });
+    }
     const updatedRecord = { ...record, ...payload };
     setRecord(updatedRecord);
     setForm(hydrateDetailForm(updatedRecord));
+    await loadScHistory(record.id);
     const logRes = await (supabase as any).from('defect_change_log').select('*').eq('defect_id', record.id).order('changed_at', { ascending: false }).limit(50);
     setLogs(logRes.data ?? []);
     setSaving(false);
