@@ -18,6 +18,21 @@ export const TEAM_LABELS: Record<TeamType, string> = {
   Supp: 'Support',
 };
 
+/**
+ * Display helper: convert team enum value (e.g. 'Mech') to full label ('Mechanical').
+ * - null/empty → '—'
+ * - enum value → TEAM_LABELS[value]
+ * - already full label ('Mechanical') → returned as-is
+ * - unknown → original value
+ */
+export function formatTeamLabel(value: string | null | undefined): string {
+  if (value == null) return '—';
+  const trimmed = String(value).trim();
+  if (!trimmed) return '—';
+  if (trimmed in TEAM_LABELS) return TEAM_LABELS[trimmed as TeamType];
+  return trimmed;
+}
+
 const normalizeTeamToken = (value: unknown) => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 
 export function normalizeTeamValue(value: unknown): TeamType | null {
