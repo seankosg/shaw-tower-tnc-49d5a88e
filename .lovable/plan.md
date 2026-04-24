@@ -1,90 +1,95 @@
 
 
-## Subcontractor 재배정 시 SC No 자동 재발급 + 이력 보존
+## Import 진행 상황 탭 이동 후에도 유지
 
-### 동작 시나리오
-
-```text
-[사용자 동작]
-  Defect Detail 페이지에서 Subcontractor 를 "Acme" → "Mero" 로 변경 후 Save
-
-[시스템 처리]
-  1. 변경된 subcontractor_name 의 owner_code 를 subcontractor_master 에서 조회
-  2. 기존 SC No 의 owner_code 와 다르면 자동 재발급:
-       - 새 owner_code 의 max(SEQ)+1 로 SC-{new}-{NNNNN} 생성
-       - subcontractor_issue_source = 'reassigned'
-  3. sc_no_history 에 (defect_id, old SC No, new SC No, old/new subcontractor, 사유, 사용자, 시각) 한 줄 INSERT
-  4. defect_change_log 에도 subcontractor_issue_no 변경 한 줄 추가 (기존 흐름 유지)
-  5. owner_code 가 같으면 (예: 같은 owner 안에서 sub-sub만 변경) SC No 그대로 유지
-  6. subcontractor 가 master 에 없거나 owner_code 가 비어있으면 'UNASSIGNED' 로 대체 발급
-```
-
-### DB 변경
+### 현재 한계
 
 ```text
-[신설 테이블] public.sc_no_history
-  - id uuid PK default gen_random_uuid()
-  - defect_id uuid NOT NULL          (FK 없이 인덱스만)
-  - issue_no text NOT NULL           (조회 편의)
-  - old_subcontractor_issue_no text
-  - new_subcontractor_issue_no text
-  - old_subcontractor_name text
-  - new_subcontractor_name text
-  - old_owner_code text
-  - new_owner_code text
-  - reason text                       ('reassigned' | 'manual_edit' | 'admin_bulk')
-  - changed_by uuid
-  - changed_at timestamptz default now()
-  - INDEX (defect_id, changed_at desc)
+DefectImportPage 의 files 상태는 컴포넌트 로컬 useState
+  → 탭 이동(unmount) 시 상태 소실
+  → 돌아오면 빈 화면, 진행 중인 import 도 끊긴 것처럼 보임
 
-[RLS]
-  - SELECT : authenticated 전체 read
-  - INSERT : changed_by = auth.uid() OR is_admin_or_superuser
-  - UPDATE/DELETE : admin only
+대조군: Standard Import 는 ImportContext (전역 Provider) 사용 → 탭 이동해도 유지됨
 ```
 
-### 코드 변경
+### 변경 방향
 
-**[수정] `src/lib/defect-utils.ts`**
-- 헬퍼 추가:
-  - `extractOwnerCodeFromIssueNo(scNo): string | null` — `SC-{CODE}-{SEQ}` 에서 CODE 파싱
-  - `buildNextSubcontractorIssueNo(ownerCode, currentMaxSeq): string`
+Standard Import 와 동일한 패턴 적용 — **`DefectImportContext` 신설**해서 상태/로직을 컴포넌트 밖으로 끌어올림.
 
-**[수정] `src/pages/DefectDetailPage.tsx` (handleSave)**
-- `canEditResponsibility` 분기 안에서 subcontractor_name 이 바뀌었는지 감지
-- 바뀐 경우:
-  1. `subcontractor_master` 에서 새 이름의 `owner_code` 조회 (대소문자 무시 trim 매칭, type='sub' 우선)
-  2. `extractOwnerCodeFromIssueNo(record.subcontractor_issue_no)` 와 비교
-  3. 다르면:
-     - `select max(sequence) from defect_items where subcontractor_issue_no like 'SC-{NEW}-%'` 로 다음 SEQ 산출
-     - payload.subcontractor_issue_no = 새 SC No
-     - payload.subcontractor_issue_source = 'reassigned'
-     - 저장 후 sc_no_history INSERT
-- 사용자가 직접 subcontractor_issue_no 도 같이 수정한 경우는 사용자 입력값을 우선 (source='manual' 유지)
-- 중복 체크 로직(라인 171–185)은 그대로 적용
+### 변경 내용
 
-**[추가] Detail 페이지 UI**
-- "Subcontractor Issue No History" 카드 (Card + 작은 표):
-  - sc_no_history where defect_id = 현재 결함, 최근 10건
-  - 컬럼: When | Old SC No | New SC No | Old Subcontractor | New Subcontractor | Reason | By
-- 상단 SC No 인풋 옆에 작은 배지: source='reassigned' 시 "Reassigned" 표시
+**1. 신규 파일: `src/contexts/DefectImportContext.tsx`**
+
+DefectImportPage 안에 있던 다음 항목을 그대로 이전:
+- `interface DefectImportFile` (currentStep / stepDetail / progress / result 등 포함)
+- `files` state, `isRunning` state, `summary` state
+- `addFiles`, `removeFile`, `clearAll`, `setFileDataDate`
+- `importOneFile`, `runImport`(=`startImport`)
+- 단계 보고 헬퍼 `reportStep`
+- duplicate / similar-master 확인 dialog 상태도 함께 이전
+
+Provider 형태:
+```text
+export function DefectImportProvider({ children }) { ... }
+export function useDefectImport() { ... }
+```
+
+**2. `src/App.tsx`**
+
+기존 `<ImportProvider>` 옆에 `<DefectImportProvider>` 추가로 감싸기:
+```text
+<ImportProvider>
+  <DefectImportProvider>
+    ...
+  </DefectImportProvider>
+</ImportProvider>
+```
+
+**3. `src/pages/DefectImportPage.tsx`**
+
+- 모든 로컬 state / handler 제거
+- `const { files, isRunning, summary, addFiles, ... } = useDefectImport()` 로 교체
+- JSX (드롭존, 파일 카드, 단계 인디케이터, summary) 는 그대로 유지
+- 컴포넌트는 "view only" 가 됨
+
+**4. `src/components/layout/AppLayout.tsx` — 글로벌 인디케이터 확장**
+
+기존 `GlobalImportIndicator` 가 Standard Import 만 표시 중. Defect Import 도 동시 표시:
+- `useDefectImport()` 의 `isRunning` / 진행률 함께 읽음
+- 둘 중 하나라도 진행 중이면 헤더에 작은 칩 표시:
+  ```
+  [Importing TC: 2/5]   [Importing Defect: file.xlsx Step 5/6]
+  ```
+- 클릭 시 각각 `/import` 또는 `/defects/import` 로 이동
+
+**5. 다이얼로그 (similar-master / duplicate 확인) 처리**
+
+- 다이얼로그 open 상태도 Context 로 이동
+- DefectImportPage 에서 다이얼로그 JSX 렌더링 (Context state 참조)
+- 사용자가 다른 탭으로 이동한 사이 확인 필요 상태가 되면, 글로벌 인디케이터에 "⚠ Awaiting confirmation" 표시 + 클릭 시 `/defects/import` 로 이동
 
 ### 변경하지 않는 항목
 
-- Import 경로 (`buildSubcontractorIssueAssignments`) 는 그대로 — 신규 import 행에는 영향 없음
-- Quick Update / Mobile Update 페이지의 SC No 처리 — Subcontractor 변경 권한 자체가 'team'/'full' 한정이므로 동일 로직 추후 확장 가능 (이번 변경 범위 밖)
-- 기존 데이터 일괄 보정 안 함 (필요시 별도 Admin 도구로 분리)
+- import 비즈니스 로직 (분류, SC No 발급, master ensurer, audit) — 코드 위치만 이동, 동작 동일
+- DB 스키마 / 토스트 / 단계 정의
+- Standard Import 쪽 (`ImportContext`, `ImportPage`) — 기존 유지
+- 파일 객체(File) 자체의 영속화는 하지 않음 — Provider 메모리 보존만 (페이지 새로고침 시는 초기화, 이는 Standard Import 와 동일한 한계)
+
+### 기술 세부사항
+
+- File 객체 + parsed rows 가 메모리에 남아있어야 하므로 sessionStorage / IndexedDB 영속화는 이번 범위 밖 (요구가 "탭 이동" 한정이므로 Provider 메모리로 충분)
+- importOneFile 안의 setFiles 클로저는 Context 의 setFiles 를 그대로 사용 — 단계 보고도 자연스럽게 유지
+- 페이지 재진입 시 useEffect 없이도 Provider state 가 그대로라 즉시 동일 화면 복원
 
 ### 검증
 
 ```text
-1. Subcontractor 만 'Acme'(ABC) → 'Mero'(MRO) 로 바꾸고 저장
-   → SC No 가 SC-ABC-00012 → SC-MRO-{새SEQ} 로 자동 변경
-   → sc_no_history 에 1행 추가, source='reassigned'
-2. 같은 owner 의 sub-sub 만 바꾸면 SC No 변동 없음, history 도 추가 안 됨
-3. 사용자가 SC No 를 직접 수정하면 owner 자동 변경 없이 입력값 유지(source='manual')
-4. Detail 페이지 하단에 SC No 변경 이력 표 노출
-5. 동일 SC No 중복 시 기존 중복 토스트로 차단
-6. Subcontractor 가 master 에 없으면 SC-UNASSIGNED-{SEQ} 발급 + history 기록
+1. Defect Import 시작 → 진행 중 (Step 5) 에 다른 탭(Dashboard) 이동
+2. 다시 /defects/import 진입 → 같은 파일 목록, 같은 step dot, 같은 progress 그대로 보임
+3. 진행 중인 동안 헤더에 "Importing Defect: ... (Step X/6)" 칩 노출
+4. 완료 후 진입해도 결과 summary 가 그대로 남아있음 (clearAll 누르기 전까지)
+5. similar-master 확인 다이얼로그가 떠야 하는 시점에 다른 탭에 있어도, 돌아오면 다이얼로그 노출
+6. Standard Import 와 Defect Import 동시 실행 시 헤더에 두 개의 인디케이터 동시 표시
+7. 페이지 새로고침(F5) 은 초기화 — 이는 정상 (Standard Import 와 동일)
 ```
 
