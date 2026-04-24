@@ -317,6 +317,8 @@ export default function DefectRawDataPage() {
   const [searchInput, setSearchInput] = useState('');
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<'single' | 'per-subcon'>('single');
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const tableRef = useRef<HTMLDivElement>(null);
 
