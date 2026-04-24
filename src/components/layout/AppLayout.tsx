@@ -91,6 +91,46 @@ function GlobalImportIndicator() {
   );
 }
 
+function GlobalDefectImportIndicator() {
+  const navigate = useNavigate();
+  let ctx;
+  try {
+    ctx = useDefectImport();
+  } catch {
+    return null;
+  }
+  const { files, isRunning, similarDecisions } = ctx;
+  const awaitingConfirmation = similarDecisions.length > 0;
+  if (!isRunning && !awaitingConfirmation) return null;
+  const current = files.find((f) => f.status === 'processing') ?? null;
+  const relevant = files.filter((f) => f.status === 'ready' || f.status === 'processing' || f.status === 'done');
+  const total = relevant.length;
+  const done = files.filter((f) => f.status === 'done').length;
+
+  return (
+    <button
+      onClick={() => navigate('/defects/import')}
+      className="flex items-center gap-2 rounded-md border bg-card px-3 py-1.5 text-xs hover:bg-accent transition-colors"
+    >
+      {awaitingConfirmation ? (
+        <>
+          <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+          <span className="font-medium">Defect: Awaiting confirmation</span>
+        </>
+      ) : (
+        <>
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+          <span className="font-medium truncate max-w-[100px] sm:max-w-[180px]">
+            {current ? `Defect: ${current.name}` : 'Defect import...'}
+          </span>
+          <span className="text-muted-foreground">{done}/{total}</span>
+          {current && <Progress value={current.progress} className="h-1 w-16" />}
+        </>
+      )}
+    </button>
+  );
+}
+
 function AccountMenu() {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
