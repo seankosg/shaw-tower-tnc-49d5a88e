@@ -159,12 +159,62 @@ function getMapped(row: Record<string, unknown>, field: string): unknown {
   return entry?.[1];
 }
 
+const HEADER_SCAN_LIMIT = 10;
+
+function detectHeaderRow(worksheet: XLSX.WorkSheet): { headerRowIdx: number; headers: string[] } | null {
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '', blankrows: false });
+  const limit = Math.min(matrix.length, HEADER_SCAN_LIMIT);
+  for (let i = 0; i < limit; i += 1) {
+    const row = matrix[i] ?? [];
+    const headers = row.map((cell) => String(cell ?? '').trim());
+    if (headers.some((h) => h && toFieldName(h) === 'issue_no')) {
+      return { headerRowIdx: i, headers };
+    }
+  }
+  return null;
+}
+
 export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: false });
-  const sheetName = workbook.SheetNames[0];
-  const worksheet = workbook.Sheets[sheetName];
-  const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: '' });
+
+  let sheetName: string | null = null;
+  let worksheet: XLSX.WorkSheet | null = null;
+  let headerRowIdx = 0;
+  let rawRows: Record<string, unknown>[] = [];
+  const scannedSheets: string[] = [];
+  let headerOnlySheet: { name: string; headerRowIdx: number } | null = null;
+
+  for (const name of workbook.SheetNames) {
+    scannedSheets.push(name);
+    const ws = workbook.Sheets[name];
+    if (!ws) continue;
+    const detected = detectHeaderRow(ws);
+    if (!detected) continue;
+    const candidateRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+      range: detected.headerRowIdx,
+      defval: '',
+      blankrows: false,
+    });
+    if (candidateRows.length > 0) {
+      sheetName = name;
+      worksheet = ws;
+      headerRowIdx = detected.headerRowIdx;
+      rawRows = candidateRows;
+      break;
+    }
+    if (!headerOnlySheet) {
+      headerOnlySheet = { name, headerRowIdx: detected.headerRowIdx };
+    }
+  }
+
+  if (!worksheet || !sheetName) {
+    if (headerOnlySheet) {
+      throw new Error(`No data rows found in sheet '${headerOnlySheet.name}' (header detected at row ${headerOnlySheet.headerRowIdx + 1})`);
+    }
+    throw new Error(`No 'Issue No' column found. Scanned sheets: [${scannedSheets.join(', ')}]`);
+  }
+
   const headers = Object.keys(rawRows[0] ?? {}).map((originalHeader, index) => ({
     originalHeader,
     displayName: cleanHeader(originalHeader),
