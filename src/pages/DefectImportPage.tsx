@@ -13,6 +13,7 @@ import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-p
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
 import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, suggestOwnerCode } from '@/lib/defect-utils';
 import { computeDefectStatuses, isValidDefectStatus } from '@/lib/defect-status';
+import { classifyDefect, type ClassificationRule, type DisciplineFallback } from '@/lib/defect-classifier';
 import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
 import { normalizeTeamValue, type TeamType } from '@/types/enums';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
@@ -32,7 +33,7 @@ interface DefectImportFile {
   error?: string;
   headerCount?: number;
   dataDate?: string;
-  result?: { inserted: number; updated: number; skipped: number; rejected: number; teamUnresolved: number };
+  result?: { inserted: number; updated: number; skipped: number; rejected: number; teamUnresolved: number; classifiedRule: number; classifiedDiscipline: number; unclassified: number };
 }
 
 type SimilarDecisionAction = 'use_existing' | 'register_new';
