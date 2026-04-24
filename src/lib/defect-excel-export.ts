@@ -252,10 +252,13 @@ interface BuildSheetParams<TRow> {
   globalFilter: string;
   searchParams: URLSearchParams;
   sourceSuffix?: string;
+  format?: DefectExportFormat;
 }
 
 function buildDefectWorkbook<TRow>(params: BuildSheetParams<TRow>): XLSX.WorkBook {
   const { rows: sortedRows, visibleCols, fieldConfig, meta, globalFilter, searchParams, sourceSuffix } = params;
+  const format: DefectExportFormat = params.format ?? 'view';
+  const isReimport = format === 'reimport';
 
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -263,19 +266,37 @@ function buildDefectWorkbook<TRow>(params: BuildSheetParams<TRow>): XLSX.WorkBoo
 
   const baseSourceLabel = inferSourceLabel(searchParams);
   const sourceLabel = sourceSuffix ? `${baseSourceLabel} · ${sourceSuffix}` : baseSourceLabel;
-  // dummy table-less summaries: we accept that filters/sort summaries depend on table state; pass via closure below
   const filterSummary = (params as any)._filterSummary ?? '(none)';
   const sortSummary = (params as any)._sortSummary ?? '(default)';
   const searchLabel = globalFilter?.trim() ? `"${globalFilter.trim()}"` : '(none)';
+  const formatLabel = isReimport ? `Re-import ready  ${REIMPORT_MARKER}` : 'View-friendly';
 
-  const colCount = Math.max(visibleCols.length, 2);
+  // For re-import: prepend stable identifier columns (id, issue_no, subcontractor_issue_no)
+  // that are NOT in visibleCols, then drop duplicates from visibleCols to avoid double headers.
+  const visibleColIds = new Set(visibleCols.map((c) => c.id));
+  const reimportIdFields = isReimport
+    ? REIMPORT_ID_FIELDS.filter((f) => !visibleColIds.has(f))
+    : [];
+
+  const headerRow: string[] = [
+    ...reimportIdFields.map((f) => REIMPORT_ID_LABELS[f] ?? f),
+    ...visibleCols.map((c) =>
+      isReimport && REIMPORT_ID_LABELS[c.id]
+        ? REIMPORT_ID_LABELS[c.id]
+        : getColumnDisplayName(c, fieldConfig),
+    ),
+  ];
+
+  const dataRows = sortedRows.map((r) => [
+    ...reimportIdFields.map((f) => formatReimportIdValue(r, f)),
+    ...visibleCols.map((c) => formatCellValue(r, c, format)),
+  ]);
+
+  const colCount = Math.max(headerRow.length, 2);
   const lastColLetter = XLSX.utils.encode_col(colCount - 1);
 
-  const headerRow = visibleCols.map((c) => getColumnDisplayName(c, fieldConfig));
-  const dataRows = sortedRows.map((r) => visibleCols.map((c) => formatCellValue(r, c)));
-
   const aoa: any[][] = [
-    ['SHAW T&C — Defect Raw Data Export'],
+    [`SHAW T&C — Defect Raw Data Export  (${formatLabel})`],
     [`Exported: ${exportedTs}  by  ${meta.userName}${meta.userType ? ` (${meta.userType})` : ''}`],
     [`Source: ${sourceLabel}`],
     [`Search: ${searchLabel}`],
@@ -294,7 +315,13 @@ function buildDefectWorkbook<TRow>(params: BuildSheetParams<TRow>): XLSX.WorkBoo
   }
   ws['!merges'] = merges;
 
-  const cols: XLSX.ColInfo[] = visibleCols.map((c) => {
+  const cols: XLSX.ColInfo[] = headerRow.map((_, idx) => {
+    if (idx < reimportIdFields.length) {
+      // ID columns: give them a reasonable fixed width
+      const fieldId = reimportIdFields[idx];
+      return { wch: fieldId === 'id' ? 38 : 20 };
+    }
+    const c = visibleCols[idx - reimportIdFields.length];
     const px = c.getSize();
     const wch = Math.max(8, Math.min(60, Math.round(px / 7)));
     return { wch };
@@ -311,7 +338,7 @@ function buildDefectWorkbook<TRow>(params: BuildSheetParams<TRow>): XLSX.WorkBoo
   }
   ws['!rows'] = rowsInfo;
 
-  const xSplit = Math.min(3, visibleCols.length);
+  const xSplit = Math.min(3, headerRow.length);
   ws['!freeze'] = { xSplit, ySplit: 8 };
   (ws as any)['!views'] = [
     {
