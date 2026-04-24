@@ -137,7 +137,7 @@ export default function DefectDetailPage() {
     ] as const;
 
     const changes = editableFields
-      .filter((field) => canEditResponsibility || !DEFECT_RESPONSIBILITY_FIELDS.includes(field as any))
+      .filter((field) => canEditResponsibility || (!DEFECT_RESPONSIBILITY_FIELDS.includes(field as any) && field !== 'team'))
       .filter((field) => String((record as any)[field] ?? '') !== String((form as any)[field] ?? ''))
       .map((field) => ({ field, oldValue: (record as any)[field], newValue: (form as any)[field] }));
     const rawChanges = rawFieldKeys
