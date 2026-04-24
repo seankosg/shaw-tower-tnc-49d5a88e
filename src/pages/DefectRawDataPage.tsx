@@ -436,18 +436,18 @@ export default function DefectRawDataPage() {
     const dateField = searchParams.get('dateField');
     let next = items;
     if ((dateStart || dateEnd) && !(dateField && DATE_FILTER_FIELDS.has(dateField))) next = next.filter((item) => {
-      const dateValue = item.target_date ?? item.planned_date ?? '';
+      const dateValue = item.planned_completion_date ?? item.planned_start_date ?? '';
       return (!dateStart || dateValue >= dateStart) && (!dateEnd || dateValue <= dateEnd);
     });
     if (searchParams.get('actualComplete') === 'true') next = next.filter((item) => Number(item.actual_progress_pct ?? 0) >= 100);
-    if (searchParams.get('closureComplete') === 'true') next = next.filter((item) => Boolean(item.closed_date));
+    if (searchParams.get('closureComplete') === 'true') next = next.filter((item) => Boolean(item.actual_closure_date));
     if (searchParams.get('overdue') === 'true') next = next.filter((item) => isOverdueDefect(item, searchParams.get('asOf') ?? undefined));
     if (searchParams.get('atRisk') === 'true') {
       const asOf = new Date().toISOString().slice(0, 10);
       const days = Number(searchParams.get('atRiskDays') ?? 7);
       next = next.filter((item) => {
         if (isOverdueDefect(item, asOf)) return false;
-        const due = item.target_date ?? item.planned_date;
+        const due = item.planned_completion_date ?? item.planned_start_date;
         if (!due || Number(item.actual_progress_pct ?? 0) >= 100) return false;
         const diff = Math.round((new Date(due).getTime() - new Date(asOf).getTime()) / 86400000);
         return diff >= 0 && diff <= days;
@@ -706,7 +706,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
   );
 
   const renderRowClass = (row: DefectRawRow, index: number) => {
-    const closed = Boolean(row.closed_date) || /closed|complete|done/i.test(`${row.closure_status ?? ''} ${row.status ?? ''}`);
+    const closed = Boolean(row.actual_closure_date) || /closed|complete|done/i.test(`${row.closure_status ?? ''} ${row.status ?? ''}`);
     const overdue = isOverdueDefect(row);
     return cn('cursor-pointer', closed && 'bg-muted/30 text-muted-foreground', overdue && !closed && 'bg-destructive/5', hoveredIndex === index && 'bg-muted/50');
   };
