@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut, ClipboardList,
+  Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut, ClipboardList, Tags,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -35,6 +35,7 @@ const defectNav = [
 
 const adminNav = [
   { label: 'Admin', icon: Shield, path: '/admin' },
+  { label: 'Defect Classification', icon: Tags, path: '/admin/classification' },
 ];
 
 export function AppSidebar() {
