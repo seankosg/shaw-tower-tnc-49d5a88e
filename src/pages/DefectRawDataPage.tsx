@@ -582,9 +582,8 @@ export default function DefectRawDataPage() {
 
   const columnOrder = useMemo(() => {
     const allIds = [...DEFECT_RAW_FIELDS] as string[];
-    const pinned = ['issue_no', 'subcontractor_issue_no', 'closure_status', 'team'].filter((id) => allIds.includes(id));
-    const remaining = allIds.filter((id) => !pinned.includes(id));
-    return [...pinned, ...sortFieldNames(remaining)];
+    const remaining = allIds.filter((id) => id !== 'issue_no');
+    return ['issue_no', ...sortFieldNames(remaining)];
   }, [sortFieldNames]);
 
   const table = useReactTable({
