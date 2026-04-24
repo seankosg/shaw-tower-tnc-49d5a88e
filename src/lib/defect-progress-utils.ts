@@ -2,6 +2,7 @@ import { type DefectItem, isClosedDefect, isOverdueDefect } from '@/lib/defect-u
 
 export type DefectProgressGroupBy = 'team' | 'subcontractor_name' | 'subsub_name' | 'hdec_pic_name' | 'area_level' | 'main_trade' | 'sub_trade';
 export type DefectProgressBucket = 'day' | 'week';
+export type DefectProgressDateField = 'planned_completion_date' | 'planned_closure_date';
 
 export interface DefectProgressBucketCell { planned: number; closed: number; start: string; end: string; }
 export interface DefectProgressRow {
@@ -20,7 +21,7 @@ const iso = (date: Date) => date.toISOString().slice(0, 10);
 const parse = (value: string) => new Date(`${value}T00:00:00`);
 
 export function defaultDefectDateRange(items: DefectItem[]) {
-  const dates = items.flatMap((item) => [item.planned_date, item.target_date, item.closed_date]).filter(Boolean) as string[];
+  const dates = items.flatMap((item) => [item.planned_completion_date, item.planned_closure_date, item.actual_closure_date]).filter(Boolean) as string[];
   const today = iso(new Date());
   if (!dates.length) return { start: today, end: today };
   dates.sort();
@@ -65,10 +66,12 @@ export function formatDefectBucketLabel(key: string, bucket: DefectProgressBucke
   return `${start.getFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
-export function aggregateDefectProgress(items: DefectItem[], opts: { groupBy: DefectProgressGroupBy; bucket: DefectProgressBucket; start: string; end: string }) {
+export function aggregateDefectProgress(items: DefectItem[], opts: { groupBy: DefectProgressGroupBy; bucket: DefectProgressBucket; start: string; end: string; dateField?: DefectProgressDateField }) {
   const buckets = buildDefectBuckets(opts.start, opts.end, opts.bucket);
   const bucketSet = new Set(buckets);
   const rows = new Map<string, DefectProgressRow>();
+  const planField: DefectProgressDateField = opts.dateField ?? 'planned_completion_date';
+  const actualField = planField === 'planned_completion_date' ? 'actual_completion_date' : 'actual_closure_date';
 
   for (const item of items) {
     const rawKey = String((item as any)[opts.groupBy] ?? '').trim() || '—';
@@ -78,13 +81,14 @@ export function aggregateDefectProgress(items: DefectItem[], opts: { groupBy: De
     else row.open += 1;
     if (isOverdueDefect(item)) row.overdue += 1;
 
-    const planned = item.target_date ?? item.planned_date;
+    const planned = (item as any)[planField] as string | null;
     if (planned) {
       const key = bucketKey(planned, opts.bucket);
       if (bucketSet.has(key)) row.buckets[key] = { planned: (row.buckets[key]?.planned ?? 0) + 1, closed: row.buckets[key]?.closed ?? 0, start: key, end: bucketEnd(key, opts.bucket) };
     }
-    if (item.closed_date) {
-      const key = bucketKey(item.closed_date, opts.bucket);
+    const actual = (item as any)[actualField] as string | null;
+    if (actual) {
+      const key = bucketKey(actual, opts.bucket);
       if (bucketSet.has(key)) row.buckets[key] = { planned: row.buckets[key]?.planned ?? 0, closed: (row.buckets[key]?.closed ?? 0) + 1, start: key, end: bucketEnd(key, opts.bucket) };
     }
     rows.set(rawKey, row);

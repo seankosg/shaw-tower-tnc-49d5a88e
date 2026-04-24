@@ -2,6 +2,15 @@ import * as XLSX from 'xlsx';
 import { type DefectItem, isClosedDefect, isOverdueDefect } from '@/lib/defect-utils';
 import { DEFECT_DEFAULT_FIELD_LABELS, type DefectFieldConfigRow } from '@/hooks/useDefectFieldConfig';
 
+export type DefectExportDateField =
+  | 'planned_start_date'
+  | 'planned_completion_date'
+  | 'planned_closure_date'
+  | 'actual_start_date'
+  | 'actual_completion_date'
+  | 'actual_closure_date'
+  | 'updated_at';
+
 export interface DefectExportFilters {
   query: string;
   team: string;
@@ -12,7 +21,7 @@ export interface DefectExportFilters {
   mainTrade: string;
   subTrade: string;
   level: string;
-  dateField: 'planned_date' | 'target_date' | 'actual_date' | 'closed_date' | 'updated_at';
+  dateField: DefectExportDateField;
   dateStart: string;
   dateEnd: string;
 }
@@ -22,8 +31,13 @@ export type DefectColumnMode = 'all' | 'visible' | 'responsibility' | 'schedule'
 export const DEFECT_EXPORT_FIELDS = Object.keys(DEFECT_DEFAULT_FIELD_LABELS);
 export const DEFECT_EXPORT_GROUPS: Record<Exclude<DefectColumnMode, 'all' | 'visible'>, string[]> = {
   responsibility: ['issue_no', 'subcontractor_issue_no', 'subcontractor_issue_source', 'team', 'subcontractor_name', 'subsub_name', 'hdec_pic_name'],
-  schedule: ['issue_no', 'planned_date', 'target_date', 'actual_date', 'closed_date', 'closure_status', 'actual_progress_pct'],
-  progress: ['issue_no', 'status', 'closure_status', 'actual_progress_pct', 'actual_date', 'planned_date', 'target_date', 'closed_date'],
+  schedule: [
+    'issue_no',
+    'planned_start_date', 'planned_completion_date', 'planned_closure_date',
+    'actual_start_date', 'actual_completion_date', 'actual_closure_date',
+    'completion_status', 'closure_status',
+  ],
+  progress: ['issue_no', 'status', 'completion_status', 'closure_status', 'planned_progress_pct', 'actual_progress_pct', 'planned_completion_date', 'actual_completion_date', 'planned_closure_date', 'actual_closure_date'],
 };
 
 function matchesText(item: DefectItem, query: string) {
@@ -35,7 +49,7 @@ function matchesText(item: DefectItem, query: string) {
 
 export function filterDefectsForExport(items: DefectItem[], filters: DefectExportFilters) {
   return items.filter((item) => {
-    const statusText = String(item.closure_status ?? item.status ?? '').toLowerCase();
+    const statusText = String(item.closure_status ?? item.completion_status ?? item.status ?? '').toLowerCase();
     const dateValue = filters.dateField === 'updated_at' ? item.updated_at?.slice(0, 10) : String((item as any)[filters.dateField] ?? '');
     return matchesText(item, filters.query)
       && (!filters.team || item.team === filters.team)
