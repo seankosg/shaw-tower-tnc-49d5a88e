@@ -116,12 +116,11 @@ export default function DefectDashboardPage() {
     const progressPct = total ? Math.round((actualDone / total) * 1000) / 10 : 0;
     const overdueCount = filteredItems.filter((item) => isOverdue(item, dataDate)).length;
     const atRiskCount = filteredItems.filter((item) => isAtRisk(item, today, atRiskDays)).length;
-    const plannedDone = actualDone;
-    const plannedOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'planned', dataDate)).length;
-    const targetDone = actualDone;
-    const targetOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'target', dataDate)).length;
+    const startDone = filteredItems.filter((item) => Boolean(item.actual_start_date)).length;
+    const startOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'start', dataDate)).length;
+    const completionOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'completion', dataDate)).length;
     const closureOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'closure', dataDate)).length;
-    return { total, subTradeCount, actualDone, closureDone, remaining, progressPct, overdueCount, atRiskCount, plannedDone, plannedOverdue, targetDone, targetOverdue, closureOverdue };
+    return { total, subTradeCount, actualDone, closureDone, remaining, progressPct, overdueCount, atRiskCount, startDone, startOverdue, completionOverdue, closureOverdue };
   }, [filteredItems, today, dataDate, atRiskDays]);
 
   const bySubTrade = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.sub_trade ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
