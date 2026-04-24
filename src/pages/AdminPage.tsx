@@ -22,7 +22,6 @@ import {
 import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown, ArrowUpDown, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAtRiskThreshold, useFrozenColumnCount } from '@/hooks/useAppSettings';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import { normalizeOwnerCode, suggestOwnerCode } from '@/lib/defect-utils';
 import {
