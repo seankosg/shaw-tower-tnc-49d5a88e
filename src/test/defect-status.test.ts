@@ -1,0 +1,76 @@
+import { describe, it, expect } from 'vitest';
+import { computeCompletionStatus, computeClosureStatus, computeDefectStatuses, isValidDefectStatus } from '@/lib/defect-status';
+
+const base = {
+  planned_start_date: null,
+  planned_completion_date: null,
+  planned_closure_date: null,
+  actual_start_date: null,
+  actual_completion_date: null,
+  actual_closure_date: null,
+  planned_progress_pct: null,
+  actual_progress_pct: null,
+};
+
+describe('isValidDefectStatus', () => {
+  it('accepts the four enum values', () => {
+    expect(isValidDefectStatus('Planned')).toBe(true);
+    expect(isValidDefectStatus('Delay')).toBe(true);
+    expect(isValidDefectStatus('Done')).toBe(true);
+    expect(isValidDefectStatus('WIP')).toBe(true);
+  });
+  it('rejects others', () => {
+    expect(isValidDefectStatus('done')).toBe(false);
+    expect(isValidDefectStatus('Open')).toBe(false);
+    expect(isValidDefectStatus(null)).toBe(false);
+  });
+});
+
+describe('computeCompletionStatus', () => {
+  const asOf = '2026-04-24';
+  it('returns Done when actual_completion_date present', () => {
+    expect(computeCompletionStatus({ ...base, actual_completion_date: '2026-04-20' }, asOf)).toBe('Done');
+  });
+  it('returns Done when actual_progress_pct >= 100', () => {
+    expect(computeCompletionStatus({ ...base, actual_progress_pct: 100 }, asOf)).toBe('Done');
+  });
+  it('returns Planned before planned_start_date', () => {
+    expect(computeCompletionStatus({ ...base, planned_start_date: '2026-05-01' }, asOf)).toBe('Planned');
+  });
+  it('returns Delay when actual_progress_pct < planned_progress_pct', () => {
+    expect(computeCompletionStatus({ ...base, planned_progress_pct: 50, actual_progress_pct: 30 }, asOf)).toBe('Delay');
+  });
+  it('returns Delay when planned_completion_date is past and not done', () => {
+    expect(computeCompletionStatus({ ...base, planned_completion_date: '2026-04-01', actual_progress_pct: 50, planned_progress_pct: 50 }, asOf)).toBe('Delay');
+  });
+  it('returns WIP when actual_progress_pct > 0 and on track', () => {
+    expect(computeCompletionStatus({ ...base, planned_progress_pct: 30, actual_progress_pct: 40, planned_completion_date: '2026-12-01' }, asOf)).toBe('WIP');
+  });
+  it('returns Planned by default', () => {
+    expect(computeCompletionStatus(base, asOf)).toBe('Planned');
+  });
+});
+
+describe('computeClosureStatus', () => {
+  const asOf = '2026-04-24';
+  it('returns Done when actual_closure_date present', () => {
+    expect(computeClosureStatus({ ...base, actual_closure_date: '2026-04-20' }, asOf, 'Done')).toBe('Done');
+  });
+  it('returns Delay when planned_closure_date is past and no actual', () => {
+    expect(computeClosureStatus({ ...base, planned_closure_date: '2026-04-01' }, asOf, 'Done')).toBe('Delay');
+  });
+  it('returns WIP when completion is Done but no actual_closure_date', () => {
+    expect(computeClosureStatus({ ...base, planned_closure_date: '2026-12-01' }, asOf, 'Done')).toBe('WIP');
+  });
+  it('returns Planned otherwise', () => {
+    expect(computeClosureStatus({ ...base, planned_closure_date: '2026-12-01' }, asOf, 'WIP')).toBe('Planned');
+  });
+});
+
+describe('computeDefectStatuses', () => {
+  it('chains completion -> closure correctly', () => {
+    const r = computeDefectStatuses({ ...base, actual_progress_pct: 100, planned_closure_date: '2026-12-01' }, '2026-04-24');
+    expect(r.completion_status).toBe('Done');
+    expect(r.closure_status).toBe('WIP');
+  });
+});
