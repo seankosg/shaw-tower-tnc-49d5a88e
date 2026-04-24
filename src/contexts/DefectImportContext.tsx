@@ -77,8 +77,13 @@ async function buildProfileTeamMap(): Promise<ProfileTeamMap> {
 }
 
 function resolveDefectTeam(row: ParsedDefectRow, profileTeamMap: ProfileTeamMap): TeamType | null {
+  // Unified rule (initial import + re-import):
+  //   1. If the Excel row has an explicit Team value, use it as-is.
+  //   2. Otherwise fall back to deriving Team from Field Discipline / profiles.
+  // Users can still edit the Team in the app subject to role permissions.
+  const explicit = normalizeTeamValue(row.team);
+  if (explicit) return explicit;
   return normalizeTeamValue(row.trade_detail)
-    ?? normalizeTeamValue(row.team)
     ?? profileTeamMap.get(masterNameKey(row.subcontractor_name))
     ?? profileTeamMap.get(masterNameKey(row.subsub_name))
     ?? null;
