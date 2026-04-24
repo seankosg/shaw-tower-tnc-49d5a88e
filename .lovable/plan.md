@@ -1,130 +1,95 @@
+## Defect Raw Data — Export Excel: 단일 / Subcon별 분할 선택
 
-## Defect Raw Data 에 T&C 형식의 Export Excel 추가
+### 변경 개요
 
-### 현황
-
-```text
-T&C SubtestList:
-  [Import] [Export Excel ★ 화면에서 즉시 스타일 export] [Export → /export 페이지 이동]
-  → exportSubtestsToExcel(table, fieldConfig, globalFilter, searchParams, meta)
-  → 파일명: SHAW_Subtests_<ts>.xlsx
-  → 시트: 제목 / Exported / Source / Search / Filters / Sort / 헤더 / 데이터
-  → freeze panes (헤더+좌측 3컬럼), 컬럼 너비 자동, 셀 스타일 (제목/메타/헤더/데이터)
-
-Defect Raw Data:
-  [Import] [Export → /defects/export 별도 페이지로 이동만 함]
-  → 화면 즉시 export 버튼 없음
-```
-
-### 변경 범위
-
-**T&C 의 `exportSubtestsToExcel` 와 동일한 형식/로직을 Defect Raw Data 화면에서 즉시 동작하는 "Export Excel" 버튼으로 추가.** 기존 "Export"(별도 페이지) 버튼은 그대로 유지.
-
-### 구현
-
-**1. 신규 파일: `src/lib/defect-excel-export.ts`**
-
-`src/lib/excel-export.ts` 와 동일한 구조로 작성하되 Defect 도메인에 맞게 조정:
-
-- `exportDefectRawToExcel<TRow>(opts: ExportDefectRawOptions<TRow>)` — `exportSubtestsToExcel` 시그니처와 동일.
-- `ExportDefectRawOptions`:
-  ```text
-  table: Table<TRow>
-  fieldConfig: DefectFieldConfigRow[]    // useDefectFieldConfig().fields
-  globalFilter: string
-  searchParams: URLSearchParams
-  meta: { userName: string; userType: string }
-  ```
-- 스타일 상수 (`STYLE_TITLE/META_LABEL/META_VALUE/HEADER/DATA`, `FONT_NAME='Calibri'`, 색상) — T&C 와 100% 동일.
-- 메타 블록 7행: 제목 / Exported / Source / Search / Filters / Sort / blank, 그 다음 헤더 + 데이터.
-- 제목: `'SHAW T&C — Defect Raw Data Export'`
-- 파일명: `SHAW_Defects_<YYYYMMDD_HHMM>.xlsx`
-- 시트명: `'Defects'`
-- Freeze: `ySplit=8` (헤더 행), `xSplit = min(3, visibleCols.length)` — T&C 와 동일.
-- 컬럼 너비: react-table `c.getSize() / 7` (T&C 동일 공식, min 8 / max 60).
-- 라벨 helper: `DefectFieldConfigRow` 의 `display_name` 우선 → 없으면 `DEFECT_DEFAULT_FIELD_LABELS[id]` → 없으면 column header → id.
-
-**2. Source label inference (Defect URL 파라미터 기준)**
-
-T&C 는 `t1_status`, `subcon`, `at_risk_days` 등을 분기. Defect 도 동일 패턴으로 `searchParams` 로부터 라벨 도출:
+현재 "Export Excel" 버튼은 즉시 1개 파일을 내려받음. 이를 **선택 다이얼로그**로 바꿔서 두 가지 모드 중 하나를 고를 수 있게 함:
 
 ```text
-- ?team=Mech         → 'Defects → Team: Mechanical'  (formatTeamLabel)
-- ?subcontractor=… → 'Defects → Subcontractor: …'
-- ?subsub=…           → 'Defects → Sub-Sub: …'
-- ?hdecPic=…          → 'Defects → HDEC PIC: …'
-- ?status=… / ?closureStatus=… / ?level=… / ?mainTrade=… / ?subTrade=… / ?workType=… / ?classificationSource=… / ?issueNo=… / ?subcontractorIssueNo=…
-- ?dateField=…&dateStart=…&dateEnd=… → 'Defects → <dateField label> = <range>'
-- ?overdue / ?atRisk / ?actualComplete / ?closureComplete / ?stage 등 플래그성
-- 없으면 'Defect Raw Data (direct)'
+[ ] Single file (current view as-is)
+    → SHAW_Defects_<ts>.xlsx
+[ ] One file per Subcontractor
+    → SHAW_Defects_<SubconName>_<ts>.xlsx  (필터된 결과의 subcontractor 별로 N개)
 ```
 
-**3. Cell value formatter (UI 와 동일하게 export)**
+### UI 변경 (`src/pages/DefectRawDataPage.tsx`)
 
-화면 표시값과 일치시키기:
-- `team` → `formatTeamLabel(value)` ('Mechanical' 등)
-- `closure_status` / `status` / `completion_status` → 텍스트 값 그대로 (`'Planned' | 'WIP' | 'Done' | 'Delay'` 등)
-- `planned_progress_pct` / `actual_progress_pct` → `formatPct(value)` ('45.0%')
-- `classification_source` → 소문자 텍스트 그대로
-- `*_date` (planned/actual + start/completion/closure), `classified_at` → `formatDdMmm(value.slice(0,10))`
-- `updated_at` / `created_at` → `formatDdMmmYyyy(value)`
-- 기타 → `String(value ?? '')`
+**1. 기존 버튼 onClick 교체**
+- 즉시 export 대신 `setExportDialogOpen(true)` 만 수행
+- "No rows" 검사도 다이얼로그 안으로 이동
 
-**4. `src/pages/DefectRawDataPage.tsx` 수정**
+**2. 신규 다이얼로그 (shadcn `Dialog` + `RadioGroup`)**
+```text
+Title: Export Defect Raw Data
+Body:
+  ◉ Single file
+       Exports current view as one .xlsx (matches what you see).
+  ○ One file per Subcontractor
+       Splits filtered rows by Subcontractor → N files.
+       Empty Subcontractor rows go to "Unassigned".
+       Preview: <N> Subcontractors, <M> total rows
+Footer:
+  [Cancel]  [Export]
+```
+- Preview 의 N/M 은 현재 `table.getSortedRowModel().rows` 를 `subcontractor_name` 으로 group by 해서 실시간 계산.
+- 선택값은 `useState<'single'|'per-subcon'>('single')`.
 
-- `useToast` import 추가.
-- `useAuth()` 에서 `profile` 사용 (이미 user 만 사용 중 → profile 추가).
-- `useDefectFieldConfig()` 의 `fields` 도 destructure.
-- `USER_TYPE_LABELS` import (`@/types/enums`).
-- 신규 `exportDefectRawToExcel` import.
-- 헤더 영역 (현재 line 660-667) 에 **Export Excel** 버튼을 Import 와 Export 사이에 삽입:
+**3. Export 동작**
 
-  ```text
-  [Import] [Export Excel ★ 신규] [Export → /defects/export]
-  ```
-- 버튼 onClick:
-  ```text
-  - table.getSortedRowModel().rows.length === 0 → toast destructive
-  - try: exportDefectRawToExcel({ table, fieldConfig: fields, globalFilter, searchParams, meta:{userName, userType} })
-  - 성공: toast 'Export complete' '<n> rows → <fileName>'
-  - 실패: toast destructive
-  ```
+| Mode | 호출 |
+|---|---|
+| `single` | 기존 `exportDefectRawToExcel(...)` 그대로 |
+| `per-subcon` | 신규 `exportDefectRawToExcelBySubcontractor(...)` |
 
-**5. 기존 "Export" 버튼 (→ `/defects/export`) 유지**
+성공 토스트:
+- single: `<n> rows → <fileName>`
+- per-subcon: `<k> files exported (<m> rows total)`
 
-별도 advanced export 페이지(`DefectExportPage`)는 다른 워크플로우(컬럼 모드 선택, summary/info 시트) 라서 보존. T&C 도 두 버튼 공존.
+### 신규 함수 (`src/lib/defect-excel-export.ts`)
+
+```text
+exportDefectRawToExcelBySubcontractor<TRow>(opts: ExportDefectRawOptions<TRow>): {
+  fileCount: number;
+  rowCount: number;
+  fileNames: string[];
+}
+```
+
+내부 로직:
+1. `table.getSortedRowModel().rows` 를 `row.original.subcontractor_name` (없으면 'Unassigned') 으로 group.
+2. 각 그룹마다:
+   - 동일한 헤더 / 메타 / 스타일 / freeze / 컬럼 너비 사용 (기존 `exportDefectRawToExcel` 와 동일 빌더 재사용 → 빌더를 헬퍼로 분리: `buildDefectWorkbook(rows, visibleCols, fieldConfig, meta, sourceLabel, ..., extraSourceSuffix)`).
+   - 메타의 `Source:` 끝에 ` · Subcontractor: <name>` 덧붙임.
+   - 파일명: `SHAW_Defects_<sanitizedSubcon>_<ts>.xlsx`
+     - sanitize: `[^A-Za-z0-9._-]` → `_`, 30자 제한, 빈 값/공백은 `Unassigned`.
+3. `XLSX.writeFile` 을 그룹마다 호출 (브라우저가 N개 다운로드 트리거).
+
+리팩터:
+- 기존 `exportDefectRawToExcel` 의 시트 빌드 부분(L213-303)을 내부 헬퍼 `buildDefectSheet({ rows, visibleCols, fieldConfig, meta, globalFilter, searchParams, sourceSuffix? })` 로 추출.
+- 둘 다 동일 헬퍼 사용 → 스타일/freeze/컬럼 너비/메타 100% 일치.
 
 ### 변경하지 않는 항목
-
-- DB, RLS, Edge Function
-- `src/lib/excel-export.ts` (T&C용 그대로)
-- `src/lib/defect-export-utils.ts`, `DefectExportPage.tsx` (Advanced export 워크플로우)
-- Field Config / 컬럼 순서 / frozen 설정 / 필터 / 정렬 / 검색 로직
-- 다른 Defect 페이지
+- `/defects/export` 페이지 (Advanced Export) 로직
+- DB / RLS / Field Config / 컬럼 순서 / frozen 설정
+- T&C SubtestList export
 
 ### 검증
 
 ```text
-1. /defects/raw-data 진입 → 헤더에 [Import] [Export Excel] [Export] 3개 버튼
-2. 필터 없이 Export Excel 클릭 → SHAW_Defects_<ts>.xlsx 다운로드
-   - Defects 시트 1개
-   - 1행: 'SHAW T&C — Defect Raw Data Export' (title 스타일)
-   - 2-6행: Exported / Source / Search / Filters / Sort 메타
-   - 8행: 헤더 (현재 화면 visible 컬럼 + Field Config 순서)
-   - 9행~: 데이터 (화면 표시값 = team 풀네임, status 그대로, % 포맷, 날짜 dd-MMM)
-3. 검색어 입력 + 컬럼 필터 + 정렬 적용 후 export
-   → 메타에 Search/Filters/Sort 요약 정확히 표시, 데이터도 필터/정렬 결과만 포함
-4. URL ?team=Mech&dateField=planned_completion_date&dateStart=2025-01-01 진입 후 export
-   → Source 라벨에 'Defects → Team: Mechanical' 또는 dateField 정보 노출
-5. Field Config 에서 일부 컬럼 disable → export 헤더/데이터 모두 해당 컬럼 빠짐
-6. 빈 결과에서 클릭 → 'No rows to export' 토스트
-7. Freeze panes: 헤더 행 + 좌측 3개 컬럼 고정 (엑셀 파일 열어서 확인)
-8. 모든 셀 스타일 (헤더 진한 배경, 데이터 얇은 보더) T&C 와 동일
+1. Export Excel 클릭 → 다이얼로그 표시, "Single" 기본 선택
+2. Single 선택 + Export → 기존 동작과 동일 (파일 1개)
+3. Per-Subcontractor 선택 → 미리보기에 "N Subcontractors, M rows"
+4. 필터 없이 Per-Subcon Export → DB 의 모든 subcon 마다 1개씩 + Unassigned 1개
+5. Subcontractor 컬럼 필터 적용 후 Per-Subcon → 해당 subcon 들만 분할
+6. 파일명에 subcon 이름 포함 (특수문자 sanitize, 빈 값은 Unassigned)
+7. 각 분할 파일도 헤더/메타/스타일/freeze 단일 export 와 동일
+8. 메타의 Source 라인에 "· Subcontractor: <name>" 표시
+9. 행 0 인 상태에서 Export 클릭 → "No rows to export" 토스트, 다이얼로그 안 열림
+10. Cancel 클릭 → 다이얼로그 닫힘, 아무 일 없음
 ```
 
 ### 영향 받는 파일
 
 ```text
-NEW   src/lib/defect-excel-export.ts
-EDIT  src/pages/DefectRawDataPage.tsx
+EDIT  src/lib/defect-excel-export.ts        (헬퍼 추출 + 신규 by-subcon 함수)
+EDIT  src/pages/DefectRawDataPage.tsx       (다이얼로그 + 모드 분기)
 ```

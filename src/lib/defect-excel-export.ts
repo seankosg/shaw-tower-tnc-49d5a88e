@@ -201,26 +201,31 @@ const STYLE_DATA = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Main export function
+// Workbook builder (shared by single + per-subcon exports)
 // ---------------------------------------------------------------------------
 
-export function exportDefectRawToExcel<TRow>(opts: ExportDefectRawOptions<TRow>): {
-  rowCount: number;
-  fileName: string;
-} {
-  const { table, fieldConfig, globalFilter, searchParams, meta } = opts;
+interface BuildSheetParams<TRow> {
+  rows: Row<TRow>[];
+  visibleCols: Column<TRow, unknown>[];
+  fieldConfig: DefectFieldConfigRow[];
+  meta: { userName: string; userType: string };
+  globalFilter: string;
+  searchParams: URLSearchParams;
+  sourceSuffix?: string;
+}
 
-  const visibleCols = table.getVisibleLeafColumns();
-  const sortedRows = table.getSortedRowModel().rows;
+function buildDefectWorkbook<TRow>(params: BuildSheetParams<TRow>): XLSX.WorkBook {
+  const { rows: sortedRows, visibleCols, fieldConfig, meta, globalFilter, searchParams, sourceSuffix } = params;
 
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const exportedTs = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  const fileTs = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
 
-  const sourceLabel = inferSourceLabel(searchParams);
-  const filterSummary = summarizeFilters(table, fieldConfig);
-  const sortSummary = summarizeSort(table, fieldConfig);
+  const baseSourceLabel = inferSourceLabel(searchParams);
+  const sourceLabel = sourceSuffix ? `${baseSourceLabel} · ${sourceSuffix}` : baseSourceLabel;
+  // dummy table-less summaries: we accept that filters/sort summaries depend on table state; pass via closure below
+  const filterSummary = (params as any)._filterSummary ?? '(none)';
+  const sortSummary = (params as any)._sortSummary ?? '(default)';
   const searchLabel = globalFilter?.trim() ? `"${globalFilter.trim()}"` : '(none)';
 
   const colCount = Math.max(visibleCols.length, 2);
@@ -256,15 +261,15 @@ export function exportDefectRawToExcel<TRow>(opts: ExportDefectRawOptions<TRow>)
   });
   ws['!cols'] = cols;
 
-  const rows: XLSX.RowInfo[] = [];
-  rows[0] = { hpt: 24 };
-  for (let i = 1; i <= 5; i++) rows[i] = { hpt: 16 };
-  rows[6] = { hpt: 6 };
-  rows[7] = { hpt: 28 };
+  const rowsInfo: XLSX.RowInfo[] = [];
+  rowsInfo[0] = { hpt: 24 };
+  for (let i = 1; i <= 5; i++) rowsInfo[i] = { hpt: 16 };
+  rowsInfo[6] = { hpt: 6 };
+  rowsInfo[7] = { hpt: 28 };
   for (let i = 0; i < dataRows.length; i++) {
-    rows[8 + i] = { hpt: 20 };
+    rowsInfo[8 + i] = { hpt: 20 };
   }
-  ws['!rows'] = rows;
+  ws['!rows'] = rowsInfo;
 
   const xSplit = Math.min(3, visibleCols.length);
   ws['!freeze'] = { xSplit, ySplit: 8 };
@@ -296,11 +301,107 @@ export function exportDefectRawToExcel<TRow>(opts: ExportDefectRawOptions<TRow>)
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Defects');
+  return wb;
+}
 
-  const fileName = `SHAW_Defects_${fileTs}.xlsx`;
+function timestampForFilename(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+}
+
+function sanitizeForFilename(name: string): string {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return 'Unassigned';
+  const cleaned = trimmed.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+  const truncated = cleaned.slice(0, 30);
+  return truncated || 'Unassigned';
+}
+
+// ---------------------------------------------------------------------------
+// Main export function (single file)
+// ---------------------------------------------------------------------------
+
+export function exportDefectRawToExcel<TRow>(opts: ExportDefectRawOptions<TRow>): {
+  rowCount: number;
+  fileName: string;
+} {
+  const { table, fieldConfig, globalFilter, searchParams, meta } = opts;
+
+  const visibleCols = table.getVisibleLeafColumns();
+  const sortedRows = table.getSortedRowModel().rows;
+
+  const wb = buildDefectWorkbook({
+    rows: sortedRows,
+    visibleCols,
+    fieldConfig,
+    meta,
+    globalFilter,
+    searchParams,
+    _filterSummary: summarizeFilters(table, fieldConfig),
+    _sortSummary: summarizeSort(table, fieldConfig),
+  } as BuildSheetParams<TRow>);
+
+  const fileName = `SHAW_Defects_${timestampForFilename()}.xlsx`;
   XLSX.writeFile(wb, fileName);
+  return { rowCount: sortedRows.length, fileName };
+}
 
-  return { rowCount: dataRows.length, fileName };
+// ---------------------------------------------------------------------------
+// Per-subcontractor split export
+// ---------------------------------------------------------------------------
+
+export function exportDefectRawToExcelBySubcontractor<TRow>(opts: ExportDefectRawOptions<TRow>): {
+  fileCount: number;
+  rowCount: number;
+  fileNames: string[];
+} {
+  const { table, fieldConfig, globalFilter, searchParams, meta } = opts;
+  const visibleCols = table.getVisibleLeafColumns();
+  const sortedRows = table.getSortedRowModel().rows;
+
+  // Group by subcontractor_name
+  const groups = new Map<string, Row<TRow>[]>();
+  for (const r of sortedRows) {
+    const original = r.original as any;
+    const raw = original?.subcontractor_name;
+    const key = raw && String(raw).trim() ? String(raw).trim() : 'Unassigned';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(r);
+  }
+
+  const filterSummary = summarizeFilters(table, fieldConfig);
+  const sortSummary = summarizeSort(table, fieldConfig);
+  const ts = timestampForFilename();
+  const fileNames: string[] = [];
+
+  // Sort keys alphabetically, Unassigned last
+  const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
+    if (a === 'Unassigned') return 1;
+    if (b === 'Unassigned') return -1;
+    return a.localeCompare(b);
+  });
+
+  for (const subconName of sortedKeys) {
+    const groupRows = groups.get(subconName)!;
+    const wb = buildDefectWorkbook({
+      rows: groupRows,
+      visibleCols,
+      fieldConfig,
+      meta,
+      globalFilter,
+      searchParams,
+      sourceSuffix: `Subcontractor: ${subconName}`,
+      _filterSummary: filterSummary,
+      _sortSummary: sortSummary,
+    } as BuildSheetParams<TRow>);
+
+    const fileName = `SHAW_Defects_${sanitizeForFilename(subconName)}_${ts}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    fileNames.push(fileName);
+  }
+
+  return { fileCount: fileNames.length, rowCount: sortedRows.length, fileNames };
 }
 
 function setCell(
