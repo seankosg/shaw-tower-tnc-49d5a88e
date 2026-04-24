@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { type DefectItem, isClosedDefect, isOverdueDefect } from '@/lib/defect-utils';
 import { DEFECT_DEFAULT_FIELD_LABELS, type DefectFieldConfigRow } from '@/hooks/useDefectFieldConfig';
+import { formatTeamLabel } from '@/types/enums';
 
 export type DefectExportDateField =
   | 'planned_start_date'
@@ -81,7 +82,11 @@ export function resolveDefectExportColumns(mode: DefectColumnMode, configs: Defe
 export function exportDefectsWorkbook(items: DefectItem[], opts: { columns: string[]; configs: DefectFieldConfigRow[]; filters: DefectExportFilters; filePrefix?: string }) {
   const configMap = new Map(opts.configs.map((field) => [field.field_name, field]));
   const label = (field: string) => configMap.get(field)?.display_name || DEFECT_DEFAULT_FIELD_LABELS[field] || field;
-  const rows = items.map((item) => Object.fromEntries(opts.columns.map((field) => [label(field), (item as any)[field] ?? ''])));
+  const rows = items.map((item) => Object.fromEntries(opts.columns.map((field) => {
+    const raw = (item as any)[field];
+    const value = field === 'team' ? formatTeamLabel(raw) : raw ?? '';
+    return [label(field), value];
+  })));
   const summary = [
     { Metric: 'Total', Value: items.length },
     { Metric: 'Closed', Value: items.filter(isClosedDefect).length },
