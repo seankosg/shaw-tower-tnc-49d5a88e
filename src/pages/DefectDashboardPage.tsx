@@ -190,8 +190,8 @@ export default function DefectDashboardPage() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <StageCard stage="Planned" total={kpis.total} done={kpis.plannedDone} remaining={kpis.remaining} pct={kpis.progressPct} overdue={kpis.plannedOverdue} onClick={() => goRaw({ actualComplete: 'true' })} />
-        <StageCard stage="Target" total={kpis.total} done={kpis.targetDone} remaining={kpis.remaining} pct={kpis.progressPct} overdue={kpis.targetOverdue} onClick={() => goRaw({ actualComplete: 'true' })} />
+        <StageCard stage="Start" total={kpis.total} done={kpis.startDone} remaining={kpis.total - kpis.startDone} pct={kpis.total ? Math.round((kpis.startDone / kpis.total) * 1000) / 10 : 0} overdue={kpis.startOverdue} onClick={() => goRaw({ stage: 'start' })} />
+        <StageCard stage="Completion" total={kpis.total} done={kpis.actualDone} remaining={kpis.remaining} pct={kpis.progressPct} overdue={kpis.completionOverdue} onClick={() => goRaw({ actualComplete: 'true' })} />
         <StageCard stage="Closure" total={kpis.total} done={kpis.closureDone} remaining={kpis.total - kpis.closureDone} pct={kpis.total ? Math.round((kpis.closureDone / kpis.total) * 1000) / 10 : 0} overdue={kpis.closureOverdue} onClick={() => goRaw({ closureComplete: 'true' })} />
       </div>
 
@@ -243,7 +243,7 @@ function DateButton({ value, onChange }: { value: string; onChange: (value: stri
 function HeaderTotalNumber({ value, tone }: { value: number; tone?: 'done' | 'remain' | 'delay' }) { return <span className={cn('tabular-nums font-semibold', value === 0 ? 'text-muted-foreground/40' : tone === 'done' ? 'text-emerald-700 dark:text-emerald-400' : tone === 'remain' ? 'text-amber-700 dark:text-amber-400' : tone === 'delay' ? 'text-destructive' : 'text-foreground')}>{value.toLocaleString()}</span>; }
 function VarianceCell({ value }: { value: number }) { if (value === 0) return <span className="text-muted-foreground/40 tabular-nums">0</span>; if (value > 0) return <span className="text-green-700 dark:text-green-400 tabular-nums">+{value}</span>; return <span className="font-semibold text-destructive tabular-nums">{value}</span>; }
 function ClickNum({ value, onClick, hideZero = false }: { value: number; onClick?: () => void; hideZero?: boolean }) { if (hideZero && value === 0) return <span className="tabular-nums text-muted-foreground/40" />; return onClick ? <button type="button" className={cn('tabular-nums hover:underline', value === 0 && 'text-muted-foreground/40')} onClick={(e) => { e.stopPropagation(); onClick(); }}>{value}</button> : <span className={cn('tabular-nums', value === 0 && 'text-muted-foreground/40')}>{value}</span>; }
-function StageBadge({ stage, label }: { stage: string; label: string }) { const cls = stage === 'planned' ? 'bg-muted text-muted-foreground border-border' : stage === 'target' ? 'bg-primary/10 text-primary border-primary/30' : 'bg-destructive/10 text-destructive border-destructive/30'; return <span className={cn('inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold', cls)}>{label}</span>; }
+function StageBadge({ stage, label }: { stage: string; label: string }) { const cls = stage === 'start' ? 'bg-muted text-muted-foreground border-border' : stage === 'completion' ? 'bg-primary/10 text-primary border-primary/30' : 'bg-destructive/10 text-destructive border-destructive/30'; return <span className={cn('inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold', cls)}>{label}</span>; }
 function FilterDropdown({ text, selected, options, onTextChange, onSelectedChange }: { text: string; selected: string[]; options: string[]; onTextChange: (v: string) => void; onSelectedChange: (v: string[]) => void }) { const toggle = (value: string) => onSelectedChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value]); return <Popover><PopoverTrigger asChild><button type="button" className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted/80" onClick={(e) => e.stopPropagation()}><Filter className="h-3.5 w-3.5" /></button></PopoverTrigger><PopoverContent className="w-64 p-3" align="start" onClick={(e) => e.stopPropagation()}><Input placeholder="Filter sub trades..." value={text} onChange={(e) => onTextChange(e.target.value)} className="mb-2 h-8 text-xs" /><button type="button" className="mb-2 text-[11px] text-muted-foreground hover:underline" onClick={() => { onTextChange(''); onSelectedChange([]); }}>Clear</button><div className="max-h-64 space-y-0.5 overflow-y-auto pr-1">{options.map(option => <label key={option} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50"><Checkbox checked={selected.includes(option)} onCheckedChange={() => toggle(option)} className="h-3.5 w-3.5" /><span className="min-w-0 truncate">{option}</span></label>)}</div></PopoverContent></Popover>; }
 
 function PlanActualTable({
@@ -281,7 +281,7 @@ function PlanActualTable({
 
   const totals = rows.reduce(
     (acc, row) => {
-      [row.planned, row.target, row.closure].forEach((metrics) => {
+      [row.start, row.completion, row.closure].forEach((metrics) => {
         acc.stageTotal += row.totalDefects;
         acc.stageDone += metrics.cumActual;
         acc.cumPlan += metrics.cumPlan;
@@ -333,27 +333,27 @@ function PlanActualTable({
 
   const stageDefs = (row: DefectPlanActualRow) => [
     {
-      stage: 'planned',
-      label: 'Planned',
-      metrics: row.planned,
-      planField: 'planned_date',
-      actualField: 'actual_date',
-      doneParam: 'actualComplete',
+      stage: 'start',
+      label: 'Start',
+      metrics: row.start,
+      planField: 'planned_start_date',
+      actualField: 'actual_start_date',
+      doneParam: 'startComplete',
     },
     {
-      stage: 'target',
-      label: 'Target',
-      metrics: row.target,
-      planField: 'target_date',
-      actualField: 'actual_date',
+      stage: 'completion',
+      label: 'Completion',
+      metrics: row.completion,
+      planField: 'planned_completion_date',
+      actualField: 'actual_completion_date',
       doneParam: 'actualComplete',
     },
     {
       stage: 'closure',
       label: 'Closure',
       metrics: row.closure,
-      planField: 'target_date',
-      actualField: 'closed_date',
+      planField: 'planned_closure_date',
+      actualField: 'actual_closure_date',
       doneParam: 'closureComplete',
     },
   ];
