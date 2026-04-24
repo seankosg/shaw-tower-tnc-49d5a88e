@@ -455,10 +455,10 @@ function PlanActualTable({
                         <TableCell className={cn('bg-muted/10 px-2 py-1.5', isDiff && 'border-y border-dashed border-muted-foreground/30')}>
                           <StageBadge stage={stage.stage} label={stage.label} />
                         </TableCell>
-                        <TableCell className="bg-muted/10 px-2 py-1.5 text-right text-xs tabular-nums">{row.totalDefects.toLocaleString()}</TableCell>
+                        <TableCell className="bg-muted/10 px-2 py-1.5 text-right text-xs tabular-nums">{(isDiff ? metrics.cumActual : row.totalDefects).toLocaleString()}</TableCell>
                         <TableCell className="bg-muted/10 px-2 py-1.5 text-right text-xs font-semibold text-primary tabular-nums">{metrics.cumActual.toLocaleString()}</TableCell>
                         <TableCell className="border-r border-border bg-muted/10 px-2 py-1.5 text-right text-xs font-semibold text-muted-foreground tabular-nums">
-                          {isDiff ? <span className="text-muted-foreground/50">—</span> : remain.toLocaleString()}
+                          {isDiff ? (0).toLocaleString() : remain.toLocaleString()}
                         </TableCell>
                         <TableCell className="border-l border-border px-2 py-1.5 text-right text-xs">
                           {isDiff
