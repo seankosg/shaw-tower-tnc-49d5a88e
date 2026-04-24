@@ -734,6 +734,51 @@ export type Database = {
         }
         Relationships: []
       }
+      sc_no_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          defect_id: string
+          id: string
+          issue_no: string
+          new_owner_code: string | null
+          new_subcontractor_issue_no: string | null
+          new_subcontractor_name: string | null
+          old_owner_code: string | null
+          old_subcontractor_issue_no: string | null
+          old_subcontractor_name: string | null
+          reason: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          defect_id: string
+          id?: string
+          issue_no: string
+          new_owner_code?: string | null
+          new_subcontractor_issue_no?: string | null
+          new_subcontractor_name?: string | null
+          old_owner_code?: string | null
+          old_subcontractor_issue_no?: string | null
+          old_subcontractor_name?: string | null
+          reason?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          defect_id?: string
+          id?: string
+          issue_no?: string
+          new_owner_code?: string | null
+          new_subcontractor_issue_no?: string | null
+          new_subcontractor_name?: string | null
+          old_owner_code?: string | null
+          old_subcontractor_issue_no?: string | null
+          old_subcontractor_name?: string | null
+          reason?: string | null
+        }
+        Relationships: []
+      }
       schedule_change_audit: {
         Row: {
           created_at: string
