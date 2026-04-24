@@ -175,8 +175,8 @@ export default function DefectDetailPage() {
   const workType = form.trade_detail ?? getRawValue(record.raw_payload, ['Work Type', 'WorkType', 'Type of Work']) ?? record.defect_type;
   const itemDescription = (form as any).item_description ?? getRawValue(record.raw_payload, ['Issue Description', 'IssueDescription', 'Item Description', 'Description']) ?? record.description;
   const capturedOn = (form as any).captured_on ?? getRawValue(record.raw_payload, ['Captured on', 'Captured On', 'Captured Date', 'Capture Date']) ?? record.created_at;
-  const startDate = (form as any).start_date ?? form.planned_date ?? getRawValue(record.raw_payload, ['Start', 'Start Date', 'Planned Start', 'Plan Start']);
-  const finishDate = (form as any).finish_date ?? form.target_date ?? getRawValue(record.raw_payload, ['Finish', 'Finish Date', 'Planned Finish', 'Plan Finish']);
+  const startDate = (form as any).start_date ?? form.planned_start_date ?? getRawValue(record.raw_payload, ['Start', 'Start Date', 'Planned Start', 'Plan Start']);
+  const finishDate = (form as any).finish_date ?? form.planned_completion_date ?? getRawValue(record.raw_payload, ['Finish', 'Finish Date', 'Planned Finish', 'Plan Finish']);
   const actualStartDate = (form as any).actual_start_date ?? getRawValue(record.raw_payload, ['Actual Start', 'Actual Start Date']);
   const actualFinishDate = (form as any).actual_finish_date ?? getRawValue(record.raw_payload, ['Actual Finish', 'Actual Finish Date']);
   const plannedProgressRaw = (form as any).planned_progress ?? getRawValue(record.raw_payload, ['Planned Progress', 'Planned Progress %', 'Plan Progress', 'Plan %']);
@@ -201,15 +201,16 @@ export default function DefectDetailPage() {
         <Field label="Sub-Sub" value={form.subsub_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subsub_name', v)} />
         <Field label="HDEC PIC" value={form.hdec_pic_name} disabled={!canEditResponsibility} onChange={(v) => updateField('hdec_pic_name', v)} />
         <Field label="Captured on" type="date" value={toDateInput(capturedOn)} disabled={!canEdit} onChange={(v) => updateField('captured_on' as any, v)} />
-        <Field label="Start Date" type="date" value={toDateInput(startDate)} disabled={!canEdit} onChange={(v) => updateField('planned_date', v)} />
-        <Field label="Finish Date" type="date" value={toDateInput(finishDate)} disabled={!canEdit} onChange={(v) => updateField('target_date', v)} />
-        <Field label="Actual Start Date" type="date" value={toDateInput(actualStartDate)} disabled={!canEdit} onChange={(v) => updateField('actual_start_date' as any, v)} />
-        <Field label="Actual Finish Date" type="date" value={toDateInput(actualFinishDate)} disabled={!canEdit} onChange={(v) => updateField('actual_finish_date' as any, v)} />
-        <Field label="Actual Date" type="date" value={form.actual_date} disabled={!canEdit} onChange={(v) => updateField('actual_date', v)} />
-        <Field label="Closed Date" type="date" value={form.closed_date} disabled={!canEdit} onChange={(v) => updateField('closed_date', v)} />
-        <Field label="Planned Progress" type="number" value={plannedProgressRaw} disabled={!canEdit} onChange={(v) => updateField('planned_progress' as any, v === '' ? null : Number(v))} />
+        <Field label="Planned Start Date" type="date" value={toDateInput(form.planned_start_date)} disabled={!canEdit} onChange={(v) => updateField('planned_start_date', v)} />
+        <Field label="Planned Completion Date" type="date" value={toDateInput(form.planned_completion_date)} disabled={!canEdit} onChange={(v) => updateField('planned_completion_date', v)} />
+        <Field label="Planned Closure Date" type="date" value={toDateInput(form.planned_closure_date)} disabled={!canEdit} onChange={(v) => updateField('planned_closure_date', v)} />
+        <Field label="Actual Start Date" type="date" value={toDateInput(form.actual_start_date)} disabled={!canEdit} onChange={(v) => updateField('actual_start_date', v)} />
+        <Field label="Actual Completion Date" type="date" value={toDateInput(form.actual_completion_date)} disabled={!canEdit} onChange={(v) => updateField('actual_completion_date', v)} />
+        <Field label="Actual Closure Date" type="date" value={toDateInput(form.actual_closure_date)} disabled={!canEdit} onChange={(v) => updateField('actual_closure_date', v)} />
+        <Field label="Planned Progress %" type="number" value={form.planned_progress_pct} disabled={!canEdit} onChange={(v) => updateField('planned_progress_pct', v === '' ? null : Number(v))} />
         <Field label="Actual Progress %" type="number" value={form.actual_progress_pct} disabled={!canEdit} onChange={(v) => updateField('actual_progress_pct', v === '' ? null : Number(v))} />
         <ReadonlyField label="Difference" value={progressDifference == null ? null : formatPct(progressDifference)} />
+        <Field label="Completion Status" value={form.completion_status} disabled={!canEdit} onChange={(v) => updateField('completion_status', v)} />
         <Field label="Closure Status" value={form.closure_status} disabled={!canEdit} onChange={(v) => updateField('closure_status', v)} />
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Description</label><Textarea value={String(form.description ?? '')} disabled={!canEdit} onChange={(e) => updateField('description', e.target.value)} /></div>
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Remarks</label><Textarea value={String(form.remarks ?? '')} disabled={!canEdit} onChange={(e) => updateField('remarks', e.target.value)} /></div>
