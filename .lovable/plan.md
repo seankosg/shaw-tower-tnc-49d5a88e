@@ -1,70 +1,67 @@
 
 
-## Defect Import — 시트 자동 스캔 + 헤더 행 자동 감지
+## Defect Dashboard 최상단 KPI 카드 재배치 + 명칭 변경
 
-### 목적
-
-현재 `parseDefectExcel` 가 **첫 시트만**, **첫 행을 헤더로 가정**하여 파싱하기 때문에 다음 케이스에서 "No defect rows found" 오류 발생:
-- 데이터가 두 번째 이후 시트에 있을 때
-- 상단에 제목/병합 셀이 있고 실제 헤더가 2~5행에 위치할 때
-
-### 동작 변경
+### 변경 내용
 
 ```text
-[시트 자동 스캔]
-  workbook.SheetNames 를 순서대로 순회하면서
-  "유효 헤더 + 1개 이상 데이터 행" 을 가진 첫 시트를 채택.
-  유효 헤더 판정 = toFieldName 결과에 'issue_no' 가 포함된 행 존재.
+[1단 (6칸 → 5칸)]
+  Total Defects | Completion Done | Open Defect (NEW) | Closure Done | Remain Inspection (이름변경)
+  - Open Defect = Total - Completion Done (= 미완료 결함)
+  - Difference 카드의 라벨을 "Difference" → "Remain Inspection" 으로 변경
+  - 서브텍스트 "검측 대기" 는 그대로 유지
+  - Overall Progress 카드는 1단에서 제거 (2단으로 이동)
 
-[헤더 행 자동 감지]
-  각 시트에 대해 sheet_to_json({ header: 1 }) 로 2D 배열 추출.
-  상위 최대 10행을 스캔 → 'issue_no' 로 매핑되는 셀이 있는 첫 행을 헤더 행으로 채택.
-  채택 후 그 행을 헤더로, 이후 행들을 데이터로 재구성한 객체 배열 생성
-  (sheet_to_json({ range: headerRowIndex }) 사용).
-
-[최종 결과]
-  - 어떤 시트도 'issue_no' 헤더를 못 찾으면 → 명확한 오류 메시지:
-      "No 'Issue No' column found. Scanned sheets: [Sheet1, Summary, Data]"
-  - 헤더는 찾았지만 데이터 행이 0개면:
-      "No data rows found in sheet '<name>' (header detected at row N)"
+[2단]
+  Overdue (1단에서 이동) | Overall Progress (1단에서 이동)
+  - 기존 grid-cols-2 의 Stage Card 영역이 아닌, KPI 그리드 2단에 배치
+  - 1단 5칸 → md:grid-cols-5, 2단 2칸 → md:grid-cols-2
 ```
 
-### 영향 받는 파일
+### 구체적 변경
 
 ```text
-[수정] src/lib/defect-parser.ts
-  - parseDefectExcel(file)
-      1. workbook.SheetNames 루프
-      2. 각 시트마다 detectHeaderRow(worksheet) 호출
-      3. 'issue_no' 매핑되는 헤더 행 발견 + 데이터 ≥ 1행이면 채택, 즉시 break
-      4. 채택된 시트로 sheet_to_json({ range: headerRowIdx, defval: '' }) 재호출
-      5. rawRowNo 계산: index + headerRowIdx + 2 (Excel 행번호 보존)
-      6. 미채택 시 throw new Error(상세 메시지)
-  - 신규 helper:
-      function detectHeaderRow(worksheet): { headerRowIdx: number; headers: string[] } | null
+[수정] src/pages/DefectDashboardPage.tsx (라인 180-192)
 
-[수정] src/pages/DefectImportPage.tsx
-  - 기존 "No defect rows found" 분기는 parseDefectExcel 가 throw 한
-    오류 메시지를 그대로 사용자에게 표시하도록 변경 (catch 블록에서 err.message 노출).
+  현재 1단 1줄(6칸):
+    Total / Completion Done / Closure Done / Difference / Overall Progress / Overdue
+  변경 후:
+    1단 (md:grid-cols-5):
+      Total Defects
+      Completion Done
+      Open Defect           ← 신규 추가
+        - icon: Clock 또는 ListChecks 계열
+        - value: kpis.total - kpis.actualDone
+        - sub: "Total − Completion"
+        - onClick: goRaw({ actualComplete: 'false' })
+      Closure Done
+      Remain Inspection     ← Difference 라벨 변경
+        - value: kpis.difference (= actualDone - closureDone) 그대로
+        - sub: "검측 대기" 유지
+        - onClick: goRaw({ actualComplete: 'true', closureComplete: 'false' }) 유지
+
+    2단 (md:grid-cols-2):
+      Overdue
+      Overall Progress 카드 (Progress bar 포함)
 ```
 
 ### 변경하지 않는 항목
 
 ```text
-- FIELD_ALIASES, toFieldName, parseArea 등 매핑 로직
-- ParsedDefectRow 형태, headers 배열 구조
-- 호출부 (DefectImportPage 의 parseDefectExcel 호출 시그니처)
-- raw_payload 구조 (헤더 행 기준의 객체 그대로)
+- KPI 계산 로직 (kpis useMemo) — 신규 값은 kpis.total - kpis.actualDone 으로 인라인 계산
+- KpiCard 컴포넌트 시그니처
+- 그 아래 Stage Card (Completion/Closure 2칸) 영역
+- Alert Banner, Plan vs Actual 표, S-Curve, Pie 등 하단 영역
+- Difference 행의 표 동작 (라벨은 카드만 변경, 표는 별개)
 ```
 
 ### 검증
 
 ```text
-1. 첫 시트 1행이 헤더인 정상 파일 → 기존과 동일하게 파싱 (회귀 없음)
-2. 데이터가 두 번째 시트에 있는 파일 → 두 번째 시트에서 자동 채택, 정상 import
-3. 첫 시트 1~3행이 제목/병합 셀이고 4행이 헤더 → 4행을 헤더로 인식, 5행부터 데이터
-4. rawRowNo 가 실제 Excel 행번호와 일치 (Import Logs 에서 클릭 시 정확한 행 추적)
-5. 'Issue No' 컬럼 자체가 없는 파일 → 명확한 오류 메시지 + 스캔한 시트 목록 표시
-6. 헤더는 있지만 데이터가 0행 → "header detected at row N" 메시지
+1. 1단에 5개 카드 표시: Total / Completion Done / Open Defect / Closure Done / Remain Inspection
+2. Open Defect 값 = Total Defects − Completion Done
+3. Remain Inspection 카드 값/클릭 동작 = 기존 Difference 와 동일
+4. 2단에 Overdue + Overall Progress 표시
+5. 모바일(grid-cols-2)에서도 자연스럽게 wrap
 ```
 
