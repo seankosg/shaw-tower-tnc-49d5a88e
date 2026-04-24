@@ -319,11 +319,11 @@ export default function DefectImportPage() {
         const parsed = await parseDefectExcel(item.file);
         setFiles((current) => current.map((file) => file.id === item.id ? {
           ...file,
-          status: parsed.rows.length ? 'ready' : 'failed',
+          status: 'ready',
           parsed: parsed.rows,
           parsedCount: parsed.rows.length,
           headerCount: parsed.headers.length,
-          error: parsed.rows.length ? undefined : 'No defect rows found',
+          error: undefined,
         } : file));
       } catch (error) {
         setFiles((current) => current.map((file) => file.id === item.id ? { ...file, status: 'failed', error: error instanceof Error ? error.message : 'Parse failed' } : file));
