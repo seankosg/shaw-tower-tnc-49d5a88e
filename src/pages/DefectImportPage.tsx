@@ -483,6 +483,26 @@ export default function DefectImportPage() {
 
       await masterEnsurer.ensureForRow(row);
 
+      // Auto-classification: preserve Excel main/sub_trade if provided; always set work_type from classifier
+      const classification = classifyDefect(
+        { description: row.description, field_discipline: row.trade_detail },
+        rules,
+        fallbacks,
+      );
+      if (!row.main_trade) row.main_trade = classification.main_trade;
+      if (!row.sub_trade) row.sub_trade = classification.sub_trade;
+      row.work_type = classification.work_type;
+      const classificationSource = classification.source;
+      const classifiedAt = new Date().toISOString();
+      if (classification.source === 'rule') classifiedRule++;
+      else if (classification.source === 'discipline') {
+        classifiedDiscipline++;
+        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'discipline_fallback', reason_detail: `Auto-classified via Field Discipline fallback (${row.trade_detail ?? ''}).` });
+      } else {
+        unclassified++;
+        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'unclassified_defect', reason_detail: 'Could not classify from description or Field Discipline.' });
+      }
+
       const existing = existingByIssueNo.get(row.issue_no) ?? null;
       const issueAssignment = assignments.get(row.rawRowNo)
         ?? reserveSubcontractorIssueNo(row, existing?.project_id ?? null, issueRegistry, existing);
@@ -526,7 +546,7 @@ export default function DefectImportPage() {
         closureStatus = null;
       }
 
-      const payload = { ...row, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, completion_status: completionStatus, closure_status: closureStatus, team: resolvedTeam, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
+      const payload = { ...row, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, completion_status: completionStatus, closure_status: closureStatus, team: resolvedTeam, classification_source: classificationSource, classified_at: classifiedAt, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
 
       if (existing) {
         const hasAnyChange = Object.entries(payload).some(([key, value]) => key !== 'raw_payload' && key !== 'row_version' && key !== 'updated_by' && key !== 'source_upload_id' && changed(existing[key], value));
@@ -586,7 +606,7 @@ export default function DefectImportPage() {
         variant: 'destructive',
       });
     }
-    return { inserted: insertedCount, updated: updatedCount, skipped, rejected, teamUnresolved };
+    return { inserted: insertedCount, updated: updatedCount, skipped, rejected, teamUnresolved, classifiedRule, classifiedDiscipline, unclassified };
   };
 
   const runImport = async (items: DefectImportFile[], decisions: MasterNameDecisions) => {
