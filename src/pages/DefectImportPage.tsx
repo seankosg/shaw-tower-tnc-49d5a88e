@@ -352,9 +352,12 @@ export default function DefectImportPage() {
       acc.skipped += file.result.skipped;
       acc.rejected += file.result.rejected;
       acc.teamUnresolved += file.result.teamUnresolved;
+      acc.classifiedRule += file.result.classifiedRule;
+      acc.classifiedDiscipline += file.result.classifiedDiscipline;
+      acc.unclassified += file.result.unclassified;
     }
     return acc;
-  }, { inserted: 0, updated: 0, skipped: 0, rejected: 0, teamUnresolved: 0 });
+  }, { inserted: 0, updated: 0, skipped: 0, rejected: 0, teamUnresolved: 0, classifiedRule: 0, classifiedDiscipline: 0, unclassified: 0 });
 
   const applyMasterDecisions = (row: ParsedDefectRow, decisions: MasterNameDecisions): ParsedDefectRow => {
     const subKey = `sub:${masterNameKey(row.subcontractor_name)}`;
@@ -426,11 +429,19 @@ export default function DefectImportPage() {
   };
 
   const importOneFile = async (item: DefectImportFile, decisions: MasterNameDecisions) => {
-    if (!user || !item.parsed) return { inserted: 0, updated: 0, skipped: 0, rejected: 0, teamUnresolved: 0 };
+    if (!user || !item.parsed) return { inserted: 0, updated: 0, skipped: 0, rejected: 0, teamUnresolved: 0, classifiedRule: 0, classifiedDiscipline: 0, unclassified: 0 };
     const dataDate = item.dataDate || todayIso();
     const profileTeamMap = await buildProfileTeamMap();
     const masterEnsurer = await createDefectMasterEnsurer(supabase as any);
     const issueRegistry = await buildIssueRegistry(null);
+
+    // Load classification rules + discipline fallback once per file
+    const [rulesRes, fbRes] = await Promise.all([
+      (supabase as any).from('defect_classification_rules').select('*').eq('is_active', true),
+      (supabase as any).from('defect_discipline_fallback').select('*').eq('is_active', true),
+    ]);
+    const rules = (rulesRes.data ?? []) as ClassificationRule[];
+    const fallbacks = (fbRes.data ?? []) as DisciplineFallback[];
 
     // Apply master decisions up-front so owner code resolution sees the mapped names
     const mappedRows = item.parsed.map((row) => applyMasterDecisions(row, decisions));
@@ -457,6 +468,9 @@ export default function DefectImportPage() {
     let skipped = 0;
     let rejected = 0;
     let teamUnresolved = 0;
+    let classifiedRule = 0;
+    let classifiedDiscipline = 0;
+    let unclassified = 0;
 
     for (let index = 0; index < mappedRows.length; index++) {
       const row = mappedRows[index];
