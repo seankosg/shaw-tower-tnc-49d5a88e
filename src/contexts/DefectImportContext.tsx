@@ -213,12 +213,10 @@ export function buildSubcontractorIssueAssignments(
     autoGenRows.push(row);
   }
 
-  const direction = detectIssueNoSortDirection(rows);
-  const sortedAutoGen = [...autoGenRows].sort((a, b) =>
-    direction === 'desc'
-      ? compareIssueNoAsc(b.issue_no, a.issue_no)
-      : compareIssueNoAsc(a.issue_no, b.issue_no),
-  );
+  // Always assign SC sequence numbers in Issue No ascending order so that the
+  // smallest Issue No within an owner gets the smallest SC-XXX-00001, regardless
+  // of whether the import file itself was sorted ascending or descending.
+  const sortedAutoGen = [...autoGenRows].sort((a, b) => compareIssueNoAsc(a.issue_no, b.issue_no));
 
   for (const row of sortedAutoGen) {
     const ownerCode = resolveOwnerCode(row, registry.masters) || suggestOwnerCode(row.subsub_name ?? row.subcontractor_name ?? row.team);
