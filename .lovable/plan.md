@@ -1,89 +1,83 @@
 
 
-## Defect ↔ T&C 팀 라벨 통일
+## Admin Settings 에 Frozen 컬럼 수 옵션 추가
 
-### 현황
+### 변경 개요
 
+Raw Data 의 frozen(좌측 고정) 컬럼 수를 Admin → Settings 에서 1~4 중 선택. 컬럼 순서는 Field Config 기준이고, 첫 번째는 항상 `issue_no` 로 고정.
+
+### 변경 내용
+
+**1. Admin Settings 에 옵션 추가** (`src/pages/AdminPage.tsx` — `SettingsTab`)
+
+기존 At-Risk 임계일수 옆에 새 항목:
 ```text
-DB enum (team_type): 'Mech' | 'Elec' | 'Arch' | 'Supp'
-profiles.team:        Mech, Elec, Arch, Supp  (enum)
-subtests.team:        Mech, Elec, Arch, Supp  (enum)
-defect_items.team:    Mech, Elec, Arch, Supp  (enum)
-TEAM_LABELS:          Mech→Mechanical, Elec→Electrical, Arch→Architectural, Supp→Support
+Frozen Columns (Raw Data):  [ 1 | 2 | 3 | 4 ]   기본값 1
+설명: "Number of left-fixed columns in Raw Data tables.
+       Issue No is always the first frozen column."
+```
+- 저장은 기존 `app_settings` 테이블 활용 (key=`raw_data_frozen_columns`, value=number)
+- DB 마이그레이션 불필요
 
-권한 로직 (get_defect_edit_scope, get_subtest_edit_scope):
-  → 이미 enum 그대로 비교 → 'Elec' senior_user 는 defect.team='Elec' 항목 'team' scope 부여 (정상 동작)
+**2. 새 훅** (`src/hooks/useAppSettings.ts`)
 
-읽기 RLS:
-  → defect_items SELECT = true (모든 인증 사용자 읽기 가능)
-
-문제는 표시 일관성:
-  - SubtestList:  "Mechanical" (TEAM_LABELS 적용)
-  - DefectRawDataPage:  "Mech" (raw enum 표시)
-  - DefectProgressMatrix / Detail / ScheduleRevision / Export:  "Mech" (raw enum)
-  → 사용자는 두 시스템이 별개 팀처럼 보여 혼동
-
-권한은 이미 통일되어 있으므로, 이번 변경은 "표시 라벨 통일"에 집중.
+`useAtRiskThreshold` 옆에:
+```text
+export function useFrozenColumnCount() {
+  return useAppSetting<number>('raw_data_frozen_columns', 1);
+}
 ```
 
-### 변경 범위
+**3. 컬럼 순서/Frozen 적용** (`src/pages/DefectRawDataPage.tsx`)
 
-**1. 모든 Defect 페이지에서 team 표시를 `TEAM_LABELS` 적용**
-
-| 파일 | 변경 |
-|---|---|
-| `src/pages/DefectRawDataPage.tsx` | team 컬럼 cell 렌더에 `TEAM_LABELS[v]` 적용; team 필터 multi-select 옵션 라벨도 풀네임; 활성 필터 칩 표시도 풀네임 |
-| `src/pages/DefectDetailPage.tsx` | team Field 렌더링/편집 옵션에 풀네임 라벨 (값은 enum 유지) |
-| `src/pages/DefectProgressPage.tsx` & `src/components/defects/DefectProgressMatrix.tsx` | groupBy='team' 일 때 행 라벨을 `TEAM_LABELS` 적용 |
-| `src/pages/DefectScheduleRevisionPage.tsx` | team 컬럼 표시 풀네임 |
-| `src/pages/DefectExportPage.tsx` & `src/lib/defect-export-utils.ts`, `defect-dashboard-excel-export.ts` | Excel export 시 team 셀에 풀네임으로 변환 (선택; 데이터 호환성 위해 옵션) |
-
-**2. DefectDashboardPage**
-- 이미 `TEAM_LABELS` 적용 중. 변경 불필요. 단 `byTeam` 집계의 row.label 도 이미 enum 값 → 표시 시 `TEAM_LABELS[label] ?? label` 폴백 적용해 풀네임 표시.
-
-**3. 권한 측면 — 변경 없음 (이미 정상)**
-- DB 함수 `get_defect_edit_scope`, `get_subtest_edit_scope` 모두 enum 일치로 팀 매칭 중.
-- profiles.team='Elec' 인 senior_user 는 defect_items.team='Elec' 항목들에 'team' scope 부여됨.
-- 이번 변경은 SQL 마이그레이션 없음.
-
-**4. URL 쿼리 호환**
-- `?team=Mech` 같은 URL 파라미터는 enum 값 그대로 유지 (외부 링크/북마크 호환).
-- 다만 사용자가 풀네임으로 검색하면 일치 안 함 → 라벨 매칭 시 `normalizeTeamValue` 사용해 양방향 허용 (이미 `enums.ts` 에 존재).
-
-**5. Helper 한 군데로 모음**
-- `src/types/enums.ts` 에 `formatTeamLabel(value: string | null | undefined): string` 추가:
+- `columnOrder` 변경: `issue_no` 만 강제 첫 번째, 나머지는 Field Config `sort_order` 순:
   ```text
-  null/empty → '—'
-  enum 값 (Mech) → TEAM_LABELS[v]
-  풀네임 ('Mechanical') → 그대로
-  알 수 없는 값 → 원본 그대로
+  ['issue_no', ...sortFieldNames(allIds.filter(id => id !== 'issue_no' && isFieldVisible(id)))]
   ```
-- 모든 Defect 페이지에서 이 헬퍼 사용 → 일관성 확보.
+- `frozenCount`: 기존 하드코드(`isMobile ? 1 : 4`) 제거 → Admin 설정값 사용:
+  ```text
+  const { value: frozenSetting } = useFrozenColumnCount();
+  const frozenCount = isMobile ? 1 : Math.min(Math.max(frozenSetting, 1), 4);
+  ```
+- 결과: frozen pane 에는 columnOrder 의 앞 N 개(=Issue No + Field Config 순서대로 다음 N-1 개) 가 자동으로 들어감
+- 모바일은 항상 1 (기존 동작 유지)
+
+**4. T&C SubtestList 동일 적용 여부**
+
+이번 범위는 Defect Raw Data 만. SubtestList 는 별도 frozen 동작 → 같은 설정을 공유할지는 후속 결정 사안. 이번 작업에서는 건드리지 않음.
 
 ### 변경하지 않는 항목
 
-- DB 스키마, RLS, 함수 (이미 정상)
-- T&C(SubtestList) 측 — 이미 풀네임 표시
-- Import 로직 — `normalizeTeamValue` 가 이미 'Mechanical'/'Mech' 모두 'Mech' 로 정규화
-- defect_items 의 저장값 — enum 유지
+- DB 스키마, Field Config UI, RLS, 권한
+- 다른 Defect 페이지 (Detail/Progress/Export/Dashboard)
+- 정렬/필터/검색/리사이즈/virtualization/localStorage
+- T&C 측 SubtestList
 
-### 검증
+### 동작 시나리오
 
 ```text
-1. profiles.team='Elec' senior_user 로 로그인
-   → /defects/raw-data 진입 → team 컬럼이 "Electrical" 로 표시됨
-   → /tc/raw-data 의 Electrical 행과 동일 라벨
+1. 신규 사용자 (설정 없음): frozen=1 → Issue No 만 고정
+2. Admin 에서 Frozen=3 으로 저장:
+   → Field Config 순서가 [issue_no, team, closure_status, status, ...] 라면
+   → 좌측에 Issue No / Team / Closure Status 3개 고정, 나머지 스크롤
+3. Admin 에서 Field Config 의 'team' sort_order 를 뒤로 옮김:
+   → Frozen=3 일 때 좌측에 Issue No / (다음 순서 컬럼) / (그 다음) 자동 반영
+4. Field Config 에서 frozen 영역에 들어갈 컬럼을 disable:
+   → 그 컬럼 사라지고, frozen pane 의 다음 컬럼이 끌려와 N 개 유지
+5. 모바일: 설정 무관 항상 1
+6. 설정 변경 직후 Raw Data 재진입 시 즉시 반영
+```
 
-2. team 필터 드롭다운에 "Mechanical / Electrical / Architectural / Support" 표시
+### 검증 체크리스트
 
-3. defect 행 더블클릭 → 편집 가능 (이미 'team' scope 정상 부여)
-
-4. URL ?team=Mech 접근 시 필터 정상 적용 + UI 는 "Mechanical" 표시
-
-5. Dashboard By Team 탭 → "Mechanical / Electrical / ..." 행 표시
-
-6. Schedule Revision / Detail / Progress 페이지에서도 team 컬럼이 풀네임
-
-7. Excel export 시 team 컬럼이 풀네임으로 출력 (가독성)
+```text
+[ ] Admin → Settings 에 "Frozen Columns" 1~4 셀렉터 표시 + 저장
+[ ] app_settings 에 key='raw_data_frozen_columns' 행 upsert 됨
+[ ] Defect Raw Data: 기본 1개 frozen, Issue No 고정
+[ ] 설정 2/3/4 변경 시 좌측 고정 영역 폭이 그에 맞게 늘어남
+[ ] columnOrder = [issue_no, ...Field Config 순서] 로 정상 정렬
+[ ] Field Config 토글이 즉시 표에 반영, frozen 개수 일정 유지
+[ ] 모바일 뷰포트에서는 항상 1개 frozen
+[ ] 가로 스크롤 시 frozen pane 이 함께 따라옴
 ```
 
