@@ -12,7 +12,7 @@ import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { daysDiff } from '@/lib/defect-parser';
 import { computeDefectStatuses } from '@/lib/defect-status';
 import { computePlannedProgressPct } from '@/lib/defect-progress-calc';
-import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct, normalizeSubcontractorIssueNo } from '@/lib/defect-utils';
+import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct, normalizeSubcontractorIssueNo, extractOwnerCodeFromIssueNo, buildNextSubcontractorIssueNo, parseSubcontractorIssueSequence } from '@/lib/defect-utils';
 import { classifyDefect, type ClassificationRule, type DisciplineFallback } from '@/lib/defect-classifier';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
 
