@@ -26,6 +26,7 @@ export const DEFECT_DEFAULT_FIELD_LABELS: Record<string, string> = {
   area_type: 'Type',
   area_level: 'Level',
   area_location: 'Location',
+  area_raw: 'Area (Raw)',
   description: 'Description',
   defect_type: 'Defect Type',
   status: 'Status',
@@ -47,6 +48,7 @@ export const DEFECT_DEFAULT_FIELD_LABELS: Record<string, string> = {
   hdec_comments: 'HDEC Comments',
   work_type: 'Work Type',
   classification_source: 'Classification Source',
+  classified_at: 'Classified At',
 };
 
 export function useDefectFieldConfig() {
