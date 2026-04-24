@@ -1,7 +1,7 @@
 import { type DefectItem } from '@/lib/defect-utils';
 
 export const NONE_LABEL = '(None)';
-export type DefectDashboardStage = 'start' | 'completion' | 'closure';
+export type DefectDashboardStage = 'completion' | 'closure';
 export type DefectSCurveBucket = 'day' | 'week';
 
 export type DefectForDashboard = DefectItem;
@@ -21,7 +21,6 @@ export interface DefectPlanActualRow {
   key: string;
   label: string;
   totalDefects: number;
-  start: DefectPlanActualMetrics;
   completion: DefectPlanActualMetrics;
   closure: DefectPlanActualMetrics;
 }
@@ -29,8 +28,6 @@ export interface DefectPlanActualRow {
 export interface DefectSCurvePoint {
   bucket: string;
   bucketLabel: string;
-  startPlan: number;
-  startActual: number | null;
   completionPlan: number;
   completionActual: number | null;
   closurePlan: number;
@@ -92,19 +89,16 @@ export function isClosureComplete(item: Pick<DefectForDashboard, 'actual_closure
 }
 
 export function getStagePlanDate(item: DefectForDashboard, stage: DefectDashboardStage): string | null {
-  if (stage === 'start') return item.planned_start_date;
   if (stage === 'completion') return item.planned_completion_date;
   return item.planned_closure_date;
 }
 
 export function getStageActualDate(item: DefectForDashboard, stage: DefectDashboardStage): string | null {
-  if (stage === 'start') return item.actual_start_date;
   if (stage === 'completion') return item.actual_completion_date;
   return item.actual_closure_date;
 }
 
 export function isStageDone(item: DefectForDashboard, stage: DefectDashboardStage): boolean {
-  if (stage === 'start') return Boolean(item.actual_start_date);
   if (stage === 'completion') return isActualComplete(item);
   return isClosureComplete(item);
 }
@@ -114,13 +108,15 @@ export function isStageDelayedAsOf(item: DefectForDashboard, stage: DefectDashbo
   return Boolean(plan && plan <= asOfDate && !isStageDone(item, stage));
 }
 
+const STAGES: DefectDashboardStage[] = ['completion', 'closure'];
+
 export function isOverdue(item: DefectForDashboard, asOfDate: string): boolean {
-  return (['start', 'completion', 'closure'] as DefectDashboardStage[]).some((stage) => isStageDelayedAsOf(item, stage, asOfDate));
+  return STAGES.some((stage) => isStageDelayedAsOf(item, stage, asOfDate));
 }
 
 export function isAtRisk(item: DefectForDashboard, today: string, thresholdDays: number): boolean {
   if (isOverdue(item, today)) return false;
-  return (['start', 'completion', 'closure'] as DefectDashboardStage[]).some((stage) => {
+  return STAGES.some((stage) => {
     const plan = getStagePlanDate(item, stage);
     if (!plan || isStageDone(item, stage)) return false;
     const diff = daysBetween(today, plan);
@@ -129,7 +125,7 @@ export function isAtRisk(item: DefectForDashboard, today: string, thresholdDays:
 }
 
 export function maxDelayDays(item: DefectForDashboard, asOfDate: string): number {
-  return Math.max(0, ...(['start', 'completion', 'closure'] as DefectDashboardStage[]).map((stage) => {
+  return Math.max(0, ...STAGES.map((stage) => {
     const plan = getStagePlanDate(item, stage);
     return plan && !isStageDone(item, stage) ? Math.max(0, -daysBetween(asOfDate, plan)) : 0;
   }));
@@ -168,32 +164,43 @@ export function aggregateDefectPlanActualByGroup(
     key,
     label: groupLabel(key),
     totalDefects: rows.length,
-    start: calcMetrics(rows, 'start', today, dataDate),
     completion: calcMetrics(rows, 'completion', today, dataDate),
     closure: calcMetrics(rows, 'closure', today, dataDate),
   })).sort((a, b) => {
-    const va = (a.start.cumActual - a.start.cumPlan) + (a.completion.cumActual - a.completion.cumPlan) + (a.closure.cumActual - a.closure.cumPlan);
-    const vb = (b.start.cumActual - b.start.cumPlan) + (b.completion.cumActual - b.completion.cumPlan) + (b.closure.cumActual - b.closure.cumPlan);
+    const va = (a.completion.cumActual - a.completion.cumPlan) + (a.closure.cumActual - a.closure.cumPlan);
+    const vb = (b.completion.cumActual - b.completion.cumPlan) + (b.closure.cumActual - b.closure.cumPlan);
     return va - vb || a.label.localeCompare(b.label);
   });
 }
 
+/** Difference metrics = completion − closure (검측 대기 적체 지표) */
+export function diffMetrics(row: DefectPlanActualRow): DefectPlanActualMetrics {
+  const c = row.completion;
+  const z = row.closure;
+  return {
+    cumPlan: c.cumPlan - z.cumPlan,
+    cumActual: c.cumActual - z.cumActual,
+    dataDatePlan: c.dataDatePlan - z.dataDatePlan,
+    dataDateActual: c.dataDateActual - z.dataDateActual,
+    dataDateDelay: Math.max(0, c.dataDateDelay - z.dataDateDelay),
+    todayPlan: c.todayPlan - z.todayPlan,
+    todayActual: c.todayActual - z.todayActual,
+    todayDelay: Math.max(0, c.todayDelay - z.todayDelay),
+  };
+}
+
 export function buildDefectSCurve(items: DefectForDashboard[], granularity: DefectSCurveBucket, startDate: string, endDate: string, today: string): DefectSCurvePoint[] {
-  const counts = new Map<string, { sp: number; sa: number; cmp: number; cma: number; cp: number; ca: number }>();
+  const counts = new Map<string, { cmp: number; cma: number; cp: number; ca: number }>();
   const ensure = (bucket: string) => {
     let value = counts.get(bucket);
-    if (!value) { value = { sp: 0, sa: 0, cmp: 0, cma: 0, cp: 0, ca: 0 }; counts.set(bucket, value); }
+    if (!value) { value = { cmp: 0, cma: 0, cp: 0, ca: 0 }; counts.set(bucket, value); }
     return value;
   };
   for (const item of items) {
-    const startPlan = getStagePlanDate(item, 'start');
-    const startActual = getStageActualDate(item, 'start');
     const completionPlan = getStagePlanDate(item, 'completion');
     const completionActual = getStageActualDate(item, 'completion');
     const closurePlan = getStagePlanDate(item, 'closure');
     const closureActual = getStageActualDate(item, 'closure');
-    if (startPlan) ensure(bucketize(startPlan, granularity)).sp++;
-    if (startActual) ensure(bucketize(startActual, granularity)).sa++;
     if (completionPlan) ensure(bucketize(completionPlan, granularity)).cmp++;
     if (completionActual) ensure(bucketize(completionActual, granularity)).cma++;
     if (closurePlan) ensure(bucketize(closurePlan, granularity)).cp++;
@@ -201,14 +208,14 @@ export function buildDefectSCurve(items: DefectForDashboard[], granularity: Defe
   }
   const buckets = generateBuckets(startDate, endDate, granularity);
   if (!buckets.length) return [];
-  let csp = 0, csa = 0, ccmp = 0, ccma = 0, ccp = 0, cca = 0;
+  let ccmp = 0, ccma = 0, ccp = 0, cca = 0;
   for (const [bucket, value] of counts) {
-    if (bucket < buckets[0]) { csp += value.sp; csa += value.sa; ccmp += value.cmp; ccma += value.cma; ccp += value.cp; cca += value.ca; }
+    if (bucket < buckets[0]) { ccmp += value.cmp; ccma += value.cma; ccp += value.cp; cca += value.ca; }
   }
   const todayBucket = bucketize(today, granularity);
   return buckets.map((bucket) => {
-    const value = counts.get(bucket) ?? { sp: 0, sa: 0, cmp: 0, cma: 0, cp: 0, ca: 0 };
-    csp += value.sp; csa += value.sa; ccmp += value.cmp; ccma += value.cma; ccp += value.cp; cca += value.ca;
+    const value = counts.get(bucket) ?? { cmp: 0, cma: 0, cp: 0, ca: 0 };
+    ccmp += value.cmp; ccma += value.cma; ccp += value.cp; cca += value.ca;
     const isFuture = bucket > todayBucket;
     const completionPlan = value.cmp;
     const completionDone = isFuture ? 0 : value.cma;
@@ -217,8 +224,6 @@ export function buildDefectSCurve(items: DefectForDashboard[], granularity: Defe
     return {
       bucket,
       bucketLabel: labelDdMmm(bucket),
-      startPlan: csp,
-      startActual: isFuture ? null : csa,
       completionPlan: ccmp,
       completionActual: isFuture ? null : ccma,
       closurePlan: ccp,

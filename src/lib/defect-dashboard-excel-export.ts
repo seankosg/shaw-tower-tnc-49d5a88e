@@ -1,5 +1,5 @@
 import XLSX from 'xlsx-js-style';
-import type { DefectPlanActualMetrics, DefectPlanActualRow } from './defect-dashboard-utils';
+import { diffMetrics, type DefectPlanActualMetrics, type DefectPlanActualRow } from './defect-dashboard-utils';
 import { formatDdMmm } from './format';
 
 const FONT = 'Calibri';
@@ -14,14 +14,18 @@ const S_SUB_HDR = { font: { name: FONT, sz: 10, bold: true, color: { rgb: 'FFFFF
 const S_GROUP_NAME = { font: { name: FONT, sz: 10, bold: true, color: { rgb: 'FF111827' } }, fill: { fgColor: { rgb: 'FFF8FAFC' } }, alignment: { vertical: 'top', horizontal: 'left' }, border: BORDERS_ALL } as const;
 const S_NUM = { font: { name: FONT, sz: 10, color: { rgb: 'FF111827' } }, alignment: { vertical: 'center', horizontal: 'right' }, border: BORDERS_ALL } as const;
 const S_PCT = { font: { name: FONT, sz: 10, color: { rgb: 'FF374151' } }, alignment: { vertical: 'center', horizontal: 'center' }, border: BORDERS_ALL } as const;
+const S_DASH = { font: { name: FONT, sz: 10, color: { rgb: 'FF9CA3AF' } }, alignment: { vertical: 'center', horizontal: 'right' }, border: BORDERS_ALL } as const;
 
 const summaryStyle = (v: number, tone?: 'done' | 'remain') => ({
   font: { name: FONT, sz: 10, bold: true, color: { rgb: v === 0 ? 'FFD1D5DB' : tone === 'done' ? 'FF047857' : tone === 'remain' ? 'FFB45309' : 'FF111827' } },
   fill: { fgColor: { rgb: 'FFF8FAFC' } }, alignment: { vertical: 'center', horizontal: 'right' }, border: BORDERS_ALL,
 });
-const stageColor = (stage: string) => stage === 'Start' ? 'FF6B7280' : stage === 'Completion' ? 'FF2563EB' : 'FF16A34A';
+const stageColor = (stage: string) =>
+  stage === 'Completion' ? 'FF2563EB' : stage === 'Closure' ? 'FF16A34A' : 'FF6B7280';
 const S_STAGE = (stage: string) => ({ font: { name: FONT, sz: 10, bold: true, color: { rgb: stageColor(stage) } }, alignment: { vertical: 'center', horizontal: 'center' }, border: BORDERS_ALL });
+// Difference 행: 양수=적체(빨강), 음수=빠름(초록), 일반 셀과 반대 색 의미
 const deltaStyle = (v: number) => ({ font: { name: FONT, sz: 10, bold: v !== 0, color: { rgb: v < 0 ? 'FFDC2626' : v > 0 ? 'FF16A34A' : 'FF9CA3AF' } }, alignment: { vertical: 'center', horizontal: 'right' }, border: BORDERS_ALL });
+const diffDeltaStyle = (v: number) => ({ font: { name: FONT, sz: 10, bold: v !== 0, color: { rgb: v > 0 ? 'FFDC2626' : v < 0 ? 'FF16A34A' : 'FF9CA3AF' } }, alignment: { vertical: 'center', horizontal: 'right' }, border: BORDERS_ALL });
 function set(ws: XLSX.WorkSheet, r: number, c: number, v: unknown, s: Record<string, unknown>) { ws[XLSX.utils.encode_cell({ r, c })] = { t: 's', v: v == null ? '' : String(v), s }; }
 function setNum(ws: XLSX.WorkSheet, r: number, c: number, v: number, s: Record<string, unknown>) { ws[XLSX.utils.encode_cell({ r, c })] = { t: 'n', v, s }; }
 
@@ -47,27 +51,33 @@ export function exportDefectPlanActualToExcel(rows: DefectPlanActualRow[], group
     { s: { r: HR, c: 5 }, e: { r: HR, c: 7 } }, { s: { r: HR, c: 8 }, e: { r: HR, c: 11 } }, { s: { r: HR, c: 12 }, e: { r: HR, c: 15 } }, { s: { r: HR, c: 16 }, e: { r: 4, c: 16 } },
   ];
   let dataRow = 5;
-  const stages: Array<{ key: 'start' | 'completion' | 'closure'; label: string }> = [
-    { key: 'start', label: 'Start' },
-    { key: 'completion', label: 'Completion' },
-    { key: 'closure', label: 'Closure' },
-  ];
   for (const row of rows) {
     const startRow = dataRow;
-    stages.forEach((stage, i) => {
-      const m: DefectPlanActualMetrics = row[stage.key];
+    const stageList: Array<{ label: 'Completion' | 'Closure' | 'Difference'; metrics: DefectPlanActualMetrics; isDiff: boolean }> = [
+      { label: 'Completion', metrics: row.completion, isDiff: false },
+      { label: 'Closure', metrics: row.closure, isDiff: false },
+      { label: 'Difference', metrics: diffMetrics(row), isDiff: true },
+    ];
+    stageList.forEach((s, i) => {
+      const m = s.metrics;
       const cr = dataRow;
       const remain = row.totalDefects - m.cumActual;
       const cumD = m.cumActual - m.cumPlan;
       const dataDateD = m.dataDateActual - m.dataDatePlan;
       const todayD = m.todayActual - m.todayPlan;
       const pct = row.totalDefects ? Math.round((m.cumActual / row.totalDefects) * 100) : 0;
+      const dStyle = s.isDiff ? diffDeltaStyle : deltaStyle;
       if (i === 0) set(ws, cr, 0, row.label, S_GROUP_NAME);
-      set(ws, cr, 1, stage.label, S_STAGE(stage.label)); setNum(ws, cr, 2, row.totalDefects, summaryStyle(row.totalDefects)); setNum(ws, cr, 3, m.cumActual, summaryStyle(m.cumActual, 'done')); setNum(ws, cr, 4, remain, summaryStyle(remain, 'remain'));
-      setNum(ws, cr, 5, m.cumPlan, S_NUM); setNum(ws, cr, 6, m.cumActual, S_NUM); setNum(ws, cr, 7, cumD, deltaStyle(cumD));
-      setNum(ws, cr, 8, m.dataDatePlan, S_NUM); setNum(ws, cr, 9, m.dataDateActual, S_NUM); setNum(ws, cr, 10, dataDateD, deltaStyle(dataDateD)); setNum(ws, cr, 11, m.dataDateDelay, S_NUM);
-      setNum(ws, cr, 12, m.todayPlan, S_NUM); setNum(ws, cr, 13, m.todayActual, S_NUM); setNum(ws, cr, 14, todayD, deltaStyle(todayD)); setNum(ws, cr, 15, m.todayDelay, S_NUM);
-      set(ws, cr, 16, `${pct}%`, S_PCT);
+      set(ws, cr, 1, s.label, S_STAGE(s.label));
+      setNum(ws, cr, 2, row.totalDefects, summaryStyle(row.totalDefects));
+      setNum(ws, cr, 3, m.cumActual, summaryStyle(m.cumActual, 'done'));
+      if (s.isDiff) set(ws, cr, 4, '—', S_DASH);
+      else setNum(ws, cr, 4, remain, summaryStyle(remain, 'remain'));
+      setNum(ws, cr, 5, m.cumPlan, S_NUM); setNum(ws, cr, 6, m.cumActual, S_NUM); setNum(ws, cr, 7, cumD, dStyle(cumD));
+      setNum(ws, cr, 8, m.dataDatePlan, S_NUM); setNum(ws, cr, 9, m.dataDateActual, S_NUM); setNum(ws, cr, 10, dataDateD, dStyle(dataDateD)); setNum(ws, cr, 11, m.dataDateDelay, S_NUM);
+      setNum(ws, cr, 12, m.todayPlan, S_NUM); setNum(ws, cr, 13, m.todayActual, S_NUM); setNum(ws, cr, 14, todayD, dStyle(todayD)); setNum(ws, cr, 15, m.todayDelay, S_NUM);
+      if (s.isDiff) set(ws, cr, 16, '—', S_DASH);
+      else set(ws, cr, 16, `${pct}%`, S_PCT);
       dataRow++;
     });
     merges.push({ s: { r: startRow, c: 0 }, e: { r: startRow + 2, c: 0 } });
