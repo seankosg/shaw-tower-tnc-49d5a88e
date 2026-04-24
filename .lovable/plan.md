@@ -1,84 +1,142 @@
 
 
-## Defect Field Config 누락 필드 보충 plan
+## Defect Dashboard 2단계 구조 — UI 미리보기
 
-### 배경
+### 화면 전체 구조 (위→아래)
 
 ```text
-코드에서 사용 중인 Defect 필드: 32개
-DB defect_field_config 등록: 22개
-→ 11개 필드가 Admin > Defect Field Config 에서 관리 불가 상태
+┌────────────────────────────────────────────────────────────────────────┐
+│ Header: Defect Executive Dashboard          [Team▼] [DateRange] [.xlsx]│
+├────────────────────────────────────────────────────────────────────────┤
+│ KPI 카드 6장 (1행)                                                     │
+│ ┌──────┬──────┬──────┬──────┬──────┬──────┐                           │
+│ │Total │Comp. │Closure│ Diff │Overall│Overdue│                         │
+│ │Defect│ Done │ Done │ (대기)│ Prog. │       │                         │
+│ └──────┴──────┴──────┴──────┴──────┴──────┘                           │
+├────────────────────────────────────────────────────────────────────────┤
+│ Stage 카드 2장 (1행, md:grid-cols-2)                                   │
+│ ┌─────────────────────────┬─────────────────────────┐                  │
+│ │ Completion              │ Closure                 │                  │
+│ │  120 / 200  ●●●○○ 60%   │  85 / 200  ●●○○○ 42.5%  │                 │
+│ │  Overdue: 8             │  Overdue: 14            │                  │
+│ └─────────────────────────┴─────────────────────────┘                  │
+├────────────────────────────────────────────────────────────────────────┤
+│ Alert Banner (Overdue / At-Risk)                                       │
+├────────────────────────────────────────────────────────────────────────┤
+│ Plan vs Actual Summary  [By Sub Trade│Subcon│Sub-Sub│PIC│Team│WorkType]│
+│  ※ 그룹당 3행: Completion / Closure / Difference                       │
+├────────────────────────────────────────────────────────────────────────┤
+│ S-Curve Chart  (Completion / Closure 2계열만 — Start 제거)             │
+├────────────────────────────────────────────────────────────────────────┤
+│ Top 10 Overdue Table   |   Status Distribution Pie                     │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 1. 마이그레이션: 누락 필드 11개 INSERT
+### KPI 카드 6장 상세
 
 ```text
-defect_field_config 에 아래 row 추가 (모두 is_enabled=true, is_required=false,
-visible_to_roles/editable_to_roles 는 기본 ALL_ROLES)
-
-field_name                  | display_name              | sort_order | source_origin
-----------------------------+---------------------------+------------+---------------
-description                 | Description               | 45         | ll_original
-defect_type                 | Defect Type               | 46         | ll_original
-priority                    | Priority                  | 47         | ll_original
-team                        | Team                      | 55         | system
-trade_detail                | Trade Detail              | 65         | ll_original
-subcontractor_issue_source  | Subcontractor Issue Source| 82         | hdec_added
-area_raw                    | Area (Raw)                | 35         | ll_original
-classification_source       | Classification Source     | 142        | system
-classified_at               | Classified At             | 144        | system
-remarks                     | Remarks                   | 170        | ll_original
-hdec_comments               | HDEC Comments             | 180        | hdec_added
-
-(sort_order 는 기존 22개 사이에 자연스럽게 끼우되, 필요 시
- FieldConfigTable 의 위/아래 버튼으로 사용자 재정렬 가능)
+┌─────────────┬─────────────┬─────────────┬─────────────┬─────────────┬─────────────┐
+│ 📋 Total    │ ✅ Comp.    │ 🛡 Closure  │ ⏳ Diff     │ 📈 Overall  │ 🚨 Overdue  │
+│   Defects   │    Done     │    Done     │ (검측대기)  │  Progress   │             │
+│             │             │             │             │             │             │
+│    200      │    120      │     85      │     35      │   42.5%     │     14      │
+│             │  60.0% comp │ 42.5% closed│ 적체 건수   │ closure base│ 누적 지연   │
+└─────────────┴─────────────┴─────────────┴─────────────┴─────────────┴─────────────┘
+   click→        click→        click→        click→        —            click→
+   raw-data    actualComp=t  closureComp=t actualComp=t                 overdue=t
+                                          &closureComp=f
 ```
 
-### 2. 코드 정합성 점검
+### Plan vs Actual Summary — 그룹당 3행 구조
 
 ```text
-src/hooks/useDefectFieldConfig.ts
-  DEFECT_DEFAULT_FIELD_LABELS 에 누락된 키 보완:
-    - area_raw: 'Area (Raw)'
-    - classified_at: 'Classified At'
-  (나머지는 이미 정의되어 있음)
+By Sub Trade 탭 예시 (헤더는 17열, 일부만 표시)
 
-확인만 하고 변경 불필요한 항목:
-  - DefectRawDataPage 컬럼 정의: 이미 위 필드 일부 사용 중
-  - DefectExportPage / defect-export-utils: DEFECT_EXPORT_FIELDS 가
-    동적 columns 기반이므로 자동 반영
-  - DefectDetailPage: 직접 input 매핑이라 영향 없음
+┌─────────────┬──────┬─────────────────┬──────────────────────────┬──────────────────────────┬──────┐
+│ Sub Trade   │ Total│ Done│Remain│Pct │ Cum  Cum  Δ              │ Today                    │Prog. │
+│             │      │     │      │    │ Plan Act                  │ Plan Act Δ Delay         │  %   │
+├─────────────┼──────┼─────┼──────┼────┼──────────────────────────┼──────────────────────────┼──────┤
+│ Painting    │  60  │     │      │    │                           │                          │      │
+│  Completion │      │ 40  │  20  │66% │  45   40   -5             │   3    2  -1   1         │ 66%  │
+│  Closure    │      │ 28  │  32  │46% │  35   28   -7             │   2    1  -1   1         │ 46%  │
+│  Difference │      │ 12  │  —   │ —  │  10   12   +2 ← 검측 적체 │   1    1   0   0         │  —   │
+├─────────────┼──────┼─────┼──────┼────┼──────────────────────────┼──────────────────────────┼──────┤
+│ Tiling      │  50  │ ... │      │    │                           │                          │      │
+│  Completion │      │ 38  │  12  │76% │  35   38   +3 ← 빠름      │   2    3  +1   0         │ 76%  │
+│  Closure    │      │ 30  │  20  │60% │  28   30   +2             │   2    2   0   0         │ 60%  │
+│  Difference │      │  8  │  —   │ —  │   7    8   +1             │   0    1  +1   0         │  —   │
+└─────────────┴──────┴─────┴──────┴────┴──────────────────────────┴──────────────────────────┴──────┘
+
+색상 약속:
+  Completion 행 → 기존 amber/orange 톤 유지
+  Closure    행 → 기존 emerald/green 톤 유지
+  Difference 행 → 회색 점선 보더 + 회색 배경 (보조 지표 시각)
+
+행 클릭 동작:
+  Completion → /defects/raw-data?subTrade=Painting&actualComplete=true
+  Closure    → /defects/raw-data?subTrade=Painting&closureComplete=true
+  Difference → /defects/raw-data?subTrade=Painting&actualComplete=true&closureComplete=false
+                (= 검측 대기 = Comp 됐지만 Closure 미완)
 ```
 
-### 3. 확인 작업
+### Difference 행 계산 규칙 (한눈에)
 
 ```text
-- AdminPage > Defect Field Config 탭에서 32개 모두 노출되는지
-- is_enabled 토글, role 체크박스, sort_order 위/아래 이동 정상 동작
-- RawData / Export / Dashboard 에서 라벨이 display_name 기반으로 표시되는지
+Difference 의미 = "Completion은 끝났는데 Closure가 안 된" 검측 대기 건
+
+컬럼            계산
+──────────────  ───────────────────────────────────────────────
+Total           row.totalDefects (그룹 총건수)
+Done            comp.cumActual − closure.cumActual
+Remain          —  (의미 약함, 빈 표시)
+Pct             —
+Cum Plan        comp.cumPlan   − closure.cumPlan
+Cum Actual      comp.cumActual − closure.cumActual
+Cum Δ           Cum Actual − Cum Plan
+                 양수 = 검측 적체 (빨강)
+                 음수 = 검측 빠름 (초록)
+DataDate Plan   comp.dataDatePlan   − closure.dataDatePlan
+DataDate Act    comp.dataDateActual − closure.dataDateActual
+DataDate Δ      Act − Plan
+DataDate Delay  max(0, comp.dataDateDelay − closure.dataDateDelay)
+Today Plan/Act/Δ/Delay  동일 방식
+Progress %      —  (Closure 카드/행에서 확인)
 ```
 
-### 4. 영향 받는 파일
+### Stage Card 2장
 
 ```text
-[신규 마이그레이션]
-supabase/migrations/<timestamp>_seed_defect_field_config_missing.sql
-  - 11개 row INSERT (ON CONFLICT DO NOTHING by field_name)
-
-[수정]
-src/hooks/useDefectFieldConfig.ts
-  - DEFECT_DEFAULT_FIELD_LABELS 에 area_raw / classified_at 라벨 보완
+┌─────────────────────────────┐  ┌─────────────────────────────┐
+│ Completion                  │  │ Closure                     │
+│ ─────────────────────────── │  │ ─────────────────────────── │
+│  120 / 200                  │  │   85 / 200                  │
+│  Remaining: 80              │  │   Remaining: 115            │
+│  ████████░░░░  60.0%        │  │   █████░░░░░░  42.5%        │
+│  ⚠ Overdue: 8               │  │   ⚠ Overdue: 14             │
+└─────────────────────────────┘  └─────────────────────────────┘
+   click→raw-data?actualComplete=false   click→raw-data?closureComplete=false
 ```
 
-### 5. 검증 항목
+### S-Curve 차트 (Start 제거)
 
 ```text
-1. AdminPage > Defect Management > Field Config 탭에 32개 row 표시
-2. description / priority / remarks / hdec_comments 등 기존에 안 보이던
-   필드의 display_name·is_enabled·role 설정 가능
-3. is_enabled=false 로 설정 시 RawData 컬럼에서 즉시 숨김
-4. Export 'all' / 'visible' 모드에서 신규 필드 컬럼 포함
-5. 기존 22개 row의 sort_order/설정값은 보존 (ON CONFLICT DO NOTHING)
-6. build + vitest 통과
+누적 라인 4개 + 막대 8개 (스택 2그룹)
+
+  Completion Plan  (dashed)   Completion Actual  (solid)
+  Closure    Plan  (dashed)   Closure    Actual  (solid)
+
+  Bars (per bucket):
+    Completion: Met / Shortfall / Excess / FuturePlan
+    Closure   : Met / Shortfall / Excess / FuturePlan
+```
+
+### 변경 요약
+
+```text
+- KPI: SubTrades / Start 카드 제거 → Difference 카드 추가
+- Stage Card: 3장 → 2장 (Start 제거)
+- Plan vs Actual: Start/Comp/Closure → Comp/Closure/Difference
+- S-Curve: Start 시리즈 제거
+- 모든 Diff 셀은 클릭 시 actualComplete=true & closureComplete=false 필터로 이동
 ```
 
