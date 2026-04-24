@@ -19,6 +19,7 @@ const QUERY_FIELD: Record<DefectProgressGroupBy, string> = {
   area_level: 'level',
   main_trade: 'mainTrade',
   sub_trade: 'subTrade',
+  work_type: 'workType',
 };
 
 export function DefectProgressMatrix({ rows, buckets, bucket, groupBy, dateField }: DefectProgressMatrixProps) {

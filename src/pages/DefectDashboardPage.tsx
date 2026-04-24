@@ -128,6 +128,7 @@ export default function DefectDashboardPage() {
   const bySubsub = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.subsub_name ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
   const byHdec = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.hdec_pic_name ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
   const byTeam = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.team ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
+  const byWorkType = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => (i as any).work_type ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
   const subTradeFilterOptions = useMemo(() => Array.from(new Set(bySubTrade.map(row => row.label))).sort((a, b) => a.localeCompare(b)), [bySubTrade]);
   const filteredBySubTrade = useMemo(() => {
     const text = subTradeTextFilter.trim().toLowerCase();
@@ -140,6 +141,7 @@ export default function DefectDashboardPage() {
     subsub: { rows: bySubsub, header: 'Sub-Sub', param: 'subsub' },
     hdec: { rows: byHdec, header: 'HDEC PIC', param: 'hdecPic' },
     team: { rows: byTeam, header: 'Team', param: 'team' },
+    workType: { rows: byWorkType, header: 'Work Type', param: 'workType' },
   };
 
   const scurve = useMemo(() => buildDefectSCurve(filteredItems, scurveBucket, scurveStart, scurveEnd, today), [filteredItems, scurveBucket, scurveStart, scurveEnd, today]);
@@ -204,12 +206,13 @@ export default function DefectDashboardPage() {
         <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-base">Plan vs Actual - Summary</CardTitle><Button variant="outline" size="sm" onClick={handleBreakdownExport}><Download className="mr-1.5 h-4 w-4" />Excel</Button></CardHeader>
         <CardContent>
           <Tabs value={breakdownTab} onValueChange={setBreakdownTab}>
-            <TabsList className="h-auto flex-wrap"><TabsTrigger value="subTrade">By Sub Trade</TabsTrigger><TabsTrigger value="subcon">By Subcontractor</TabsTrigger><TabsTrigger value="subsub">By Sub-Sub</TabsTrigger><TabsTrigger value="hdec">By HDEC PIC</TabsTrigger><TabsTrigger value="team">By Team</TabsTrigger></TabsList>
+            <TabsList className="h-auto flex-wrap"><TabsTrigger value="subTrade">By Sub Trade</TabsTrigger><TabsTrigger value="subcon">By Subcontractor</TabsTrigger><TabsTrigger value="subsub">By Sub-Sub</TabsTrigger><TabsTrigger value="hdec">By HDEC PIC</TabsTrigger><TabsTrigger value="team">By Team</TabsTrigger><TabsTrigger value="workType">By Work Type</TabsTrigger></TabsList>
             <TabsContent value="subTrade"><PlanActualTable rows={filteredBySubTrade} groupParam="subTrade" groupHeader="Sub Trade" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} filter={{ text: subTradeTextFilter, selected: selectedSubTradeFilters, options: subTradeFilterOptions, onTextChange: setSubTradeTextFilter, onSelectedChange: setSelectedSubTradeFilters }} /></TabsContent>
             <TabsContent value="subcon"><PlanActualTable rows={bySubcon} groupParam="subcontractor" groupHeader="Subcontractor" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
             <TabsContent value="subsub"><PlanActualTable rows={bySubsub} groupParam="subsub" groupHeader="Sub-Sub" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
             <TabsContent value="hdec"><PlanActualTable rows={byHdec} groupParam="hdecPic" groupHeader="HDEC PIC" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
             <TabsContent value="team"><PlanActualTable rows={byTeam} groupParam="team" groupHeader="Team" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
+            <TabsContent value="workType"><PlanActualTable rows={byWorkType} groupParam="workType" groupHeader="Work Type" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
           </Tabs>
         </CardContent>
       </Card>
@@ -227,7 +230,7 @@ export default function DefectDashboardPage() {
   );
 }
 
-type GroupParam = 'subTrade' | 'subcontractor' | 'subsub' | 'hdecPic' | 'team';
+type GroupParam = 'subTrade' | 'subcontractor' | 'subsub' | 'hdecPic' | 'team' | 'workType';
 
 function KpiCard({ icon, label, value, sub, accent, onClick }: { icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: 'destructive'; onClick?: () => void }) {
   return <Card onClick={onClick} className={cn(onClick && 'cursor-pointer transition-colors hover:bg-muted/40', accent === 'destructive' && 'border-destructive/30')}><CardContent className="flex items-center gap-3 p-4">{icon}<div className="min-w-0"><p className="truncate text-xs text-muted-foreground">{label}</p><p className={cn('text-2xl font-bold', accent === 'destructive' ? 'text-destructive' : 'text-foreground')}>{value}</p>{sub && <p className="text-xs text-muted-foreground">{sub}</p>}</div></CardContent></Card>;

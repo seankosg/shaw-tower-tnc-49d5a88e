@@ -16,6 +16,7 @@ const GROUP_LABELS: Record<DefectProgressGroupBy, string> = {
   area_level: 'Level',
   main_trade: 'Main Trade',
   sub_trade: 'Sub Trade',
+  work_type: 'Work Type',
 };
 
 export default function DefectProgressPage() {

@@ -20,13 +20,15 @@ export interface DefectExportFilters {
   hdecPic: string;
   mainTrade: string;
   subTrade: string;
+  workType: string;
+  classificationSource: string;
   level: string;
   dateField: DefectExportDateField;
   dateStart: string;
   dateEnd: string;
 }
 
-export type DefectColumnMode = 'all' | 'visible' | 'responsibility' | 'schedule' | 'progress';
+export type DefectColumnMode = 'all' | 'visible' | 'responsibility' | 'schedule' | 'progress' | 'classification';
 
 export const DEFECT_EXPORT_FIELDS = Object.keys(DEFECT_DEFAULT_FIELD_LABELS);
 export const DEFECT_EXPORT_GROUPS: Record<Exclude<DefectColumnMode, 'all' | 'visible'>, string[]> = {
@@ -38,6 +40,7 @@ export const DEFECT_EXPORT_GROUPS: Record<Exclude<DefectColumnMode, 'all' | 'vis
     'completion_status', 'closure_status',
   ],
   progress: ['issue_no', 'status', 'completion_status', 'closure_status', 'planned_progress_pct', 'actual_progress_pct', 'planned_completion_date', 'actual_completion_date', 'planned_closure_date', 'actual_closure_date'],
+  classification: ['issue_no', 'description', 'main_trade', 'sub_trade', 'work_type', 'classification_source', 'trade_detail'],
 };
 
 function matchesText(item: DefectItem, query: string) {
@@ -59,6 +62,8 @@ export function filterDefectsForExport(items: DefectItem[], filters: DefectExpor
       && (!filters.hdecPic || item.hdec_pic_name === filters.hdecPic)
       && (!filters.mainTrade || item.main_trade === filters.mainTrade)
       && (!filters.subTrade || item.sub_trade === filters.subTrade)
+      && (!filters.workType || item.work_type === filters.workType)
+      && (!filters.classificationSource || item.classification_source === filters.classificationSource)
       && (!filters.level || item.area_level === filters.level)
       && (!filters.dateStart || (dateValue && dateValue >= filters.dateStart))
       && (!filters.dateEnd || (dateValue && dateValue <= filters.dateEnd));
