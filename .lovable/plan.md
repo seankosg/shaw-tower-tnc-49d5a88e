@@ -1,104 +1,89 @@
 
 
-## Defect Raw Data 컬럼을 Field Config 와 동기화
+## Defect ↔ T&C 팀 라벨 통일
 
-### 문제
+### 현황
 
 ```text
-Admin → Field Config (defect_field_config) 의 필드:
-  planned_start_date, planned_completion_date, planned_closure_date
-  actual_start_date, actual_completion_date, actual_closure_date
-  area_raw, planned_progress_pct, completion_status, classified_at
-  remarks, hdec_comments, classification_source ...
+DB enum (team_type): 'Mech' | 'Elec' | 'Arch' | 'Supp'
+profiles.team:        Mech, Elec, Arch, Supp  (enum)
+subtests.team:        Mech, Elec, Arch, Supp  (enum)
+defect_items.team:    Mech, Elec, Arch, Supp  (enum)
+TEAM_LABELS:          Mech→Mechanical, Elec→Electrical, Arch→Architectural, Supp→Support
 
-DefectRawDataPage 의 하드코드 (DEFECT_RAW_FIELDS):
-  planned_date, target_date, actual_date, closed_date  ← DB 에 존재하지 않는 옛 이름
-  area_raw / planned_progress_pct / completion_status / classified_at  ← 누락
+권한 로직 (get_defect_edit_scope, get_subtest_edit_scope):
+  → 이미 enum 그대로 비교 → 'Elec' senior_user 는 defect.team='Elec' 항목 'team' scope 부여 (정상 동작)
 
-결과:
-  - Admin 에서 토글한 일정 컬럼이 Raw Data 에 반영되지 않음
-  - DB 에 없는 4개 필드가 "—" 만 표시됨
-  - 일부 활성 필드는 아예 표에 안 보임
+읽기 RLS:
+  → defect_items SELECT = true (모든 인증 사용자 읽기 가능)
+
+문제는 표시 일관성:
+  - SubtestList:  "Mechanical" (TEAM_LABELS 적용)
+  - DefectRawDataPage:  "Mech" (raw enum 표시)
+  - DefectProgressMatrix / Detail / ScheduleRevision / Export:  "Mech" (raw enum)
+  → 사용자는 두 시스템이 별개 팀처럼 보여 혼동
+
+권한은 이미 통일되어 있으므로, 이번 변경은 "표시 라벨 통일"에 집중.
 ```
 
-### 변경 내용
+### 변경 범위
 
-**파일: `src/pages/DefectRawDataPage.tsx`**
+**1. 모든 Defect 페이지에서 team 표시를 `TEAM_LABELS` 적용**
 
-**1. `DEFECT_RAW_FIELDS` 재정의 — Field Config 의 모든 필드를 포함**
+| 파일 | 변경 |
+|---|---|
+| `src/pages/DefectRawDataPage.tsx` | team 컬럼 cell 렌더에 `TEAM_LABELS[v]` 적용; team 필터 multi-select 옵션 라벨도 풀네임; 활성 필터 칩 표시도 풀네임 |
+| `src/pages/DefectDetailPage.tsx` | team Field 렌더링/편집 옵션에 풀네임 라벨 (값은 enum 유지) |
+| `src/pages/DefectProgressPage.tsx` & `src/components/defects/DefectProgressMatrix.tsx` | groupBy='team' 일 때 행 라벨을 `TEAM_LABELS` 적용 |
+| `src/pages/DefectScheduleRevisionPage.tsx` | team 컬럼 표시 풀네임 |
+| `src/pages/DefectExportPage.tsx` & `src/lib/defect-export-utils.ts`, `defect-dashboard-excel-export.ts` | Excel export 시 team 셀에 풀네임으로 변환 (선택; 데이터 호환성 위해 옵션) |
 
-옛 4개 (`planned_date`, `target_date`, `actual_date`, `closed_date`) 제거 후 다음으로 교체:
-```text
-'issue_no',
-'subcontractor_issue_no', 'subcontractor_issue_source',
-'closure_status', 'status', 'completion_status',
-'team',
-'planned_progress_pct', 'actual_progress_pct',
-'area_type', 'area_level', 'area_location', 'area_raw',
-'main_trade', 'sub_trade', 'work_type',
-'classification_source', 'classified_at', 'trade_detail',
-'description', 'defect_type', 'priority',
-'subcontractor_name', 'subsub_name', 'hdec_pic_name',
-'planned_start_date', 'planned_completion_date', 'planned_closure_date',
-'actual_start_date', 'actual_completion_date', 'actual_closure_date',
-'remarks', 'hdec_comments',
-'updated_at', 'created_at',
-```
+**2. DefectDashboardPage**
+- 이미 `TEAM_LABELS` 적용 중. 변경 불필요. 단 `byTeam` 집계의 row.label 도 이미 enum 값 → 표시 시 `TEAM_LABELS[label] ?? label` 폴백 적용해 풀네임 표시.
 
-**2. `DATE_FILTER_FIELDS` 갱신**
-```text
-new Set([
-  'planned_start_date', 'planned_completion_date', 'planned_closure_date',
-  'actual_start_date', 'actual_completion_date', 'actual_closure_date',
-  'classified_at', 'updated_at', 'created_at',
-])
-```
+**3. 권한 측면 — 변경 없음 (이미 정상)**
+- DB 함수 `get_defect_edit_scope`, `get_subtest_edit_scope` 모두 enum 일치로 팀 매칭 중.
+- profiles.team='Elec' 인 senior_user 는 defect_items.team='Elec' 항목들에 'team' scope 부여됨.
+- 이번 변경은 SQL 마이그레이션 없음.
 
-**3. `RAW_SEARCH_FIELDS` 정리**
-- `planned_date/target_date/actual_date/closed_date` 제거 (검색 대상에서 빼기 — 어차피 없는 필드)
-- 새 일정 필드는 텍스트 검색 대상이 아님 (날짜 필터로만 처리)
+**4. URL 쿼리 호환**
+- `?team=Mech` 같은 URL 파라미터는 enum 값 그대로 유지 (외부 링크/북마크 호환).
+- 다만 사용자가 풀네임으로 검색하면 일치 안 함 → 라벨 매칭 시 `normalizeTeamValue` 사용해 양방향 허용 (이미 `enums.ts` 에 존재).
 
-**4. `PROGRESS_FIELDS` 다중화**
-- 현재 `PROGRESS_FIELD = 'actual_progress_pct'` 단일
-- `PROGRESS_FIELDS = new Set(['actual_progress_pct', 'planned_progress_pct'])` 로 변경
-- column 정의에서 두 필드 모두 progressFilterFn / 'text' meta 사용
-- cell 렌더에서 두 필드 모두 `formatPct(value)` 사용
-
-**5. `filteredBaseData` 의 URL 날짜 폴백 수정**
-- 현재 `item.planned_completion_date ?? item.planned_start_date` 사용 중 — 이미 새 스키마와 일치하므로 그대로 OK
-
-**6. URL `urlMap` 의 dateField 매핑 검증**
-- `DefectExportPage`/`DefectProgressMatrix` 에서 `dateField` 로 `planned_completion_date` 등을 넘김 — 이미 `DATE_FILTER_FIELDS` 새 set 에 포함되어 자동 처리됨
-
-**7. `sizeByField` 에 신규 일정/진행률 컬럼 width 추가**
-```text
-planned_start_date: 110, planned_completion_date: 110, planned_closure_date: 110,
-actual_start_date: 110, actual_completion_date: 110, actual_closure_date: 110,
-planned_progress_pct: 100, actual_progress_pct: 100,
-completion_status: 130, area_raw: 180, classified_at: 130,
-```
-
-**8. cell 렌더에서 `completion_status` 도 `DefectStatusBadge` 사용** (status/closure_status 와 동일 패턴)
-
-**9. 셀 렌더의 description-like truncate 목록에 `area_raw` 추가**
+**5. Helper 한 군데로 모음**
+- `src/types/enums.ts` 에 `formatTeamLabel(value: string | null | undefined): string` 추가:
+  ```text
+  null/empty → '—'
+  enum 값 (Mech) → TEAM_LABELS[v]
+  풀네임 ('Mechanical') → 그대로
+  알 수 없는 값 → 원본 그대로
+  ```
+- 모든 Defect 페이지에서 이 헬퍼 사용 → 일관성 확보.
 
 ### 변경하지 않는 항목
 
-- Field Config 자체 (DB / Admin UI) — 이미 정확함
-- DefectRawTableView / 가상화 / 정렬 / localStorage 키 — 그대로
-- 다른 페이지 (Detail / Progress / Export) — 이미 새 스키마 사용 중
-- 컬럼 visibility 로직 (`isFieldVisible`) — 그대로 사용; 필드 이름만 일치시키면 자연스럽게 동작
+- DB 스키마, RLS, 함수 (이미 정상)
+- T&C(SubtestList) 측 — 이미 풀네임 표시
+- Import 로직 — `normalizeTeamValue` 가 이미 'Mechanical'/'Mech' 모두 'Mech' 로 정규화
+- defect_items 의 저장값 — enum 유지
 
 ### 검증
 
 ```text
-1. Admin → Field Config 에서 "Planned Start Date" off → Raw Data 그 컬럼 사라짐
-2. Admin 에서 "Remarks" 토글 → 즉시 반영
-3. URL ?dateField=planned_completion_date&dateStart=...&dateEnd=... 진입 시 해당 컬럼 날짜 필터 칠해짐
-4. DB 에 없는 planned_date/target_date/actual_date/closed_date 컬럼이 더이상 표에 없음
-5. planned_progress_pct / actual_progress_pct 두 컬럼 모두 % 표시
-6. completion_status 가 badge 로 표시
-7. localStorage 에 저장된 옛 columnSizing 키(planned_date 등) 는 무시되고 신규 컬럼은 default size 사용
-8. 정렬/필터/검색 정상 동작
+1. profiles.team='Elec' senior_user 로 로그인
+   → /defects/raw-data 진입 → team 컬럼이 "Electrical" 로 표시됨
+   → /tc/raw-data 의 Electrical 행과 동일 라벨
+
+2. team 필터 드롭다운에 "Mechanical / Electrical / Architectural / Support" 표시
+
+3. defect 행 더블클릭 → 편집 가능 (이미 'team' scope 정상 부여)
+
+4. URL ?team=Mech 접근 시 필터 정상 적용 + UI 는 "Mechanical" 표시
+
+5. Dashboard By Team 탭 → "Mechanical / Electrical / ..." 행 표시
+
+6. Schedule Revision / Detail / Progress 페이지에서도 team 컬럼이 풀네임
+
+7. Excel export 시 team 컬럼이 풀네임으로 출력 (가독성)
 ```
 
