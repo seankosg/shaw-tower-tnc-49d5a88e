@@ -389,6 +389,39 @@ export default function DefectDetailPage() {
       </CardContent></Card>
       <Card><CardHeader><CardTitle>Raw Payload</CardTitle></CardHeader><CardContent><div className="grid gap-2 md:grid-cols-2"><div className="rounded-md border p-2 text-xs"><div className="text-muted-foreground">Subcon Issue Source</div><div className="font-medium">{String(form.subcontractor_issue_source || '—')}</div></div>{rawEntries.filter(([k]) => !isRawAlias(k, ['Issue Description', 'IssueDescription', 'Item Description', 'Description'])).map(([k, v]) => <div key={k} className="rounded-md border p-2 text-xs"><div className="text-muted-foreground">{k.replace(/\s*\(H\)\s*$/i, '')}</div><div className="font-medium">{String(v || '—')}</div></div>)}</div></CardContent></Card>
       <Card><CardHeader><CardTitle>Change History</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Field</TableHead><TableHead>Old</TableHead><TableHead>New</TableHead><TableHead>Changed At</TableHead></TableRow></TableHeader><TableBody>{logs.map((log) => <TableRow key={log.id}><TableCell>{log.changed_field}</TableCell><TableCell>{formatMaybeDate(log.old_value)}</TableCell><TableCell>{formatMaybeDate(log.new_value)}</TableCell><TableCell>{formatDateTimeDdMmmYyyy(log.changed_at)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+      <Card>
+        <CardHeader><CardTitle>Subcontractor Issue No History</CardTitle></CardHeader>
+        <CardContent>
+          {scHistory.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No reassignment history.</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Old SC No</TableHead>
+                  <TableHead>New SC No</TableHead>
+                  <TableHead>Old Subcontractor</TableHead>
+                  <TableHead>New Subcontractor</TableHead>
+                  <TableHead>Reason</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {scHistory.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="whitespace-nowrap">{formatDateTimeDdMmmYyyy(row.changed_at)}</TableCell>
+                    <TableCell className="font-mono text-xs">{row.old_subcontractor_issue_no ?? '—'}</TableCell>
+                    <TableCell className="font-mono text-xs">{row.new_subcontractor_issue_no ?? '—'}</TableCell>
+                    <TableCell>{row.old_subcontractor_name ?? '—'}</TableCell>
+                    <TableCell>{row.new_subcontractor_name ?? '—'}</TableCell>
+                    <TableCell>{row.reason ?? '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
