@@ -13,7 +13,7 @@ import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 const ALL = '__all__';
 const EMPTY_FILTERS: DefectExportFilters = {
   query: '', team: '', status: '', subcontractor: '', subsub: '', hdecPic: '', mainTrade: '', subTrade: '', level: '',
-  dateField: 'planned_date', dateStart: '', dateEnd: '',
+  dateField: 'planned_completion_date', dateStart: '', dateEnd: '',
 };
 
 export default function DefectExportPage() {
@@ -59,14 +59,22 @@ export default function DefectExportPage() {
         <CardContent className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
           <Input placeholder="Issue, subcontractor no, location..." value={filters.query} onChange={(e) => setFilter('query', e.target.value)} className="xl:col-span-2" />
           <FilterSelect value={filters.team} placeholder="Team" options={ALL_TEAMS.map((team) => ({ value: team, label: TEAM_LABELS[team] }))} onChange={(v) => setFilter('team', v)} />
-          <FilterSelect value={filters.status} placeholder="Status" options={['Open', 'Closed', 'Done', 'WIP', 'Hold'].map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('status', v)} />
+          <FilterSelect value={filters.status} placeholder="Status" options={['Planned', 'WIP', 'Done', 'Delay'].map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('status', v)} />
           <FilterSelect value={filters.subcontractor} placeholder="Subcontractor" options={unique('subcontractor_name').map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('subcontractor', v)} />
           <FilterSelect value={filters.subsub} placeholder="Sub-Sub" options={unique('subsub_name').map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('subsub', v)} />
           <FilterSelect value={filters.hdecPic} placeholder="HDEC PIC" options={unique('hdec_pic_name').map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('hdecPic', v)} />
           <FilterSelect value={filters.mainTrade} placeholder="Main Trade" options={unique('main_trade').map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('mainTrade', v)} />
           <FilterSelect value={filters.subTrade} placeholder="Sub Trade" options={unique('sub_trade').map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('subTrade', v)} />
           <FilterSelect value={filters.level} placeholder="Level" options={unique('area_level').map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('level', v)} />
-          <Select value={filters.dateField} onValueChange={(value) => setFilter('dateField', value as DefectExportFilters['dateField'])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="planned_date">Planned Date</SelectItem><SelectItem value="target_date">Target Date</SelectItem><SelectItem value="actual_date">Actual Date</SelectItem><SelectItem value="closed_date">Closed Date</SelectItem><SelectItem value="updated_at">Updated Date</SelectItem></SelectContent></Select>
+          <Select value={filters.dateField} onValueChange={(value) => setFilter('dateField', value as DefectExportFilters['dateField'])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>
+            <SelectItem value="planned_start_date">Planned Start Date</SelectItem>
+            <SelectItem value="planned_completion_date">Planned Completion Date</SelectItem>
+            <SelectItem value="planned_closure_date">Planned Closure Date</SelectItem>
+            <SelectItem value="actual_start_date">Actual Start Date</SelectItem>
+            <SelectItem value="actual_completion_date">Actual Completion Date</SelectItem>
+            <SelectItem value="actual_closure_date">Actual Closure Date</SelectItem>
+            <SelectItem value="updated_at">Updated Date</SelectItem>
+          </SelectContent></Select>
           <Input type="date" value={filters.dateStart} onChange={(e) => setFilter('dateStart', e.target.value)} />
           <Input type="date" value={filters.dateEnd} onChange={(e) => setFilter('dateEnd', e.target.value)} />
         </CardContent>
