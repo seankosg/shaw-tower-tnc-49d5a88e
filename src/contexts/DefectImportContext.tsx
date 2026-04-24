@@ -490,7 +490,25 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'unclassified_defect', reason_detail: 'Could not classify from description or Field Discipline.' });
       }
 
-      const existing = existingByIssueNo.get(row.issue_no) ?? null;
+      // For re-import: prefer matching by id (which is included in the export);
+      // fall back to issue_no for backward compatibility.
+      const existing = (isReimport && row.id ? existingById.get(String(row.id)) : null)
+        ?? existingByIssueNo.get(row.issue_no)
+        ?? null;
+
+      if (isReimport && !existing) {
+        rejected++;
+        await (supabase as any).from('defect_upload_row_logs').insert({
+          upload_id: uploadId,
+          raw_row_no: row.rawRowNo,
+          issue_no: row.issue_no,
+          action_taken: 'rejected',
+          reason_code: 'reimport_not_found',
+          reason_detail: `Re-import row could not be matched to any existing defect (id=${row.id ?? 'n/a'}, issue_no=${row.issue_no}). New rows are not created in re-import mode.`,
+        });
+        continue;
+      }
+
       const issueAssignment = assignments.get(row.rawRowNo)
         ?? reserveSubcontractorIssueNo(row, existing?.project_id ?? null, issueRegistry, existing);
       if (issueAssignment.duplicate) {
