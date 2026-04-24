@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertTriangle, CalendarIcon, CheckCircle2, Clock, Download, Filter, ListChecks } from 'lucide-react';
+import { AlertTriangle, CalendarIcon, CheckCircle2, Clock, Download, Filter, ListChecks, ShieldCheck, TrendingUp } from 'lucide-react';
 import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,8 +24,7 @@ import {
   NONE_LABEL,
   aggregateDefectPlanActualByGroup,
   buildDefectSCurve,
-  daysBetween,
-  getStagePlanDate,
+  diffMetrics,
   isActualComplete,
   isAtRisk,
   isClosureComplete,
@@ -47,16 +46,14 @@ const PIE_COLORS: Record<string, string> = {
 };
 
 const chartConfig = {
-  plannedPlan: { label: 'Planned Plan', color: 'hsl(var(--muted-foreground))' },
-  plannedActual: { label: 'Planned Actual', color: 'hsl(var(--foreground))' },
-  targetPlan: { label: 'Target Plan', color: 'hsl(var(--primary))' },
-  targetActual: { label: 'Target Actual', color: 'hsl(var(--primary))' },
+  completionPlan: { label: 'Completion Plan', color: 'hsl(var(--muted-foreground))' },
+  completionActual: { label: 'Completion Actual', color: 'hsl(var(--primary))' },
   closurePlan: { label: 'Closure Plan', color: 'hsl(var(--accent-foreground))' },
   closureActual: { label: 'Closure Actual', color: 'hsl(var(--destructive))' },
-  actualMet: { label: 'Actual Met', color: 'hsl(var(--primary))' },
-  actualShortfall: { label: 'Actual Shortfall', color: 'hsl(var(--destructive))' },
-  actualExcess: { label: 'Actual Excess', color: 'hsl(var(--foreground))' },
-  actualFuturePlan: { label: 'Actual Future Plan', color: 'hsl(var(--muted))' },
+  completionMet: { label: 'Completion Met', color: 'hsl(var(--primary))' },
+  completionShortfall: { label: 'Completion Shortfall', color: 'hsl(var(--destructive))' },
+  completionExcess: { label: 'Completion Excess', color: 'hsl(var(--foreground))' },
+  completionFuturePlan: { label: 'Completion Future Plan', color: 'hsl(var(--muted))' },
   closureMet: { label: 'Closure Met', color: 'hsl(var(--accent-foreground))' },
   closureShortfall: { label: 'Closure Shortfall', color: 'hsl(var(--destructive))' },
   closureExcess: { label: 'Closure Excess', color: 'hsl(var(--foreground))' },
@@ -109,18 +106,16 @@ export default function DefectDashboardPage() {
 
   const kpis = useMemo(() => {
     const total = filteredItems.length;
-    const subTradeCount = new Set(filteredItems.map((item) => item.sub_trade || NONE_LABEL)).size;
     const actualDone = filteredItems.filter(isActualComplete).length;
     const closureDone = filteredItems.filter(isClosureComplete).length;
-    const remaining = total - actualDone;
-    const progressPct = total ? Math.round((actualDone / total) * 1000) / 10 : 0;
+    const completionPct = total ? Math.round((actualDone / total) * 1000) / 10 : 0;
+    const overallProgressPct = total ? Math.round((closureDone / total) * 1000) / 10 : 0;
+    const difference = actualDone - closureDone;
     const overdueCount = filteredItems.filter((item) => isOverdue(item, dataDate)).length;
     const atRiskCount = filteredItems.filter((item) => isAtRisk(item, today, atRiskDays)).length;
-    const startDone = filteredItems.filter((item) => Boolean(item.actual_start_date)).length;
-    const startOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'start', dataDate)).length;
     const completionOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'completion', dataDate)).length;
     const closureOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'closure', dataDate)).length;
-    return { total, subTradeCount, actualDone, closureDone, remaining, progressPct, overdueCount, atRiskCount, startDone, startOverdue, completionOverdue, closureOverdue };
+    return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, completionOverdue, closureOverdue };
   }, [filteredItems, today, dataDate, atRiskDays]);
 
   const bySubTrade = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.sub_trade ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
@@ -145,7 +140,7 @@ export default function DefectDashboardPage() {
   };
 
   const scurve = useMemo(() => buildDefectSCurve(filteredItems, scurveBucket, scurveStart, scurveEnd, today), [filteredItems, scurveBucket, scurveStart, scurveEnd, today]);
-  const topOverdue = useMemo(() => filteredItems.map(item => ({ item, delay: maxDelayDays(item, dataDate) })).filter(row => row.delay > 0 && !isActualComplete(row.item)).sort((a, b) => b.delay - a.delay).slice(0, 10), [filteredItems, dataDate]);
+  const topOverdue = useMemo(() => filteredItems.map(item => ({ item, delay: maxDelayDays(item, dataDate) })).filter(row => row.delay > 0 && !isClosureComplete(row.item)).sort((a, b) => b.delay - a.delay).slice(0, 10), [filteredItems, dataDate]);
   const actualPie = useMemo(() => buildActualPie(filteredItems), [filteredItems]);
   const closurePie = useMemo(() => buildClosurePie(filteredItems), [filteredItems]);
 
@@ -183,23 +178,27 @@ export default function DefectDashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
-        <KpiCard icon={<ListChecks className="h-6 w-6 text-primary" />} label="Sub Trades" value={kpis.subTradeCount} onClick={() => goRaw({})} />
         <KpiCard icon={<ListChecks className="h-6 w-6 text-muted-foreground" />} label="Total Defects" value={kpis.total.toLocaleString()} onClick={() => goRaw({})} />
-        <KpiCard icon={<CheckCircle2 className="h-6 w-6 text-primary" />} label="Actual Complete" value={kpis.actualDone.toLocaleString()} sub="Progress 100%" onClick={() => goRaw({ actualComplete: 'true' })} />
-        <KpiCard icon={<CheckCircle2 className="h-6 w-6 text-primary" />} label="Closure" value={kpis.closureDone.toLocaleString()} sub="Closed Date exists" onClick={() => goRaw({ closureComplete: 'true' })} />
-        <Card className="flex flex-col justify-center p-4"><p className="mb-1 text-xs text-muted-foreground">Progress</p><p className="text-xl font-bold text-foreground">{kpis.progressPct}%</p><Progress value={kpis.progressPct} className="mt-1 h-2" /></Card>
+        <KpiCard icon={<CheckCircle2 className="h-6 w-6 text-primary" />} label="Completion Done" value={kpis.actualDone.toLocaleString()} sub={`${kpis.completionPct}% completed`} onClick={() => goRaw({ actualComplete: 'true' })} />
+        <KpiCard icon={<ShieldCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />} label="Closure Done" value={kpis.closureDone.toLocaleString()} sub={`${kpis.overallProgressPct}% closed`} onClick={() => goRaw({ closureComplete: 'true' })} />
+        <KpiCard icon={<Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />} label="Difference" value={kpis.difference.toLocaleString()} sub="검측 대기" onClick={() => goRaw({ actualComplete: 'true', closureComplete: 'false' })} />
+        <Card className="flex flex-col justify-center p-4">
+          <div className="mb-1 flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-muted-foreground" /><p className="text-xs text-muted-foreground">Overall Progress</p></div>
+          <p className="text-xl font-bold text-foreground">{kpis.overallProgressPct}%</p>
+          <Progress value={kpis.overallProgressPct} className="mt-1 h-2" />
+          <p className="mt-1 text-[10px] text-muted-foreground">Closure / Total</p>
+        </Card>
         <KpiCard icon={<AlertTriangle className="h-6 w-6 text-destructive" />} label="Overdue" value={kpis.overdueCount} accent="destructive" onClick={() => goRaw({ overdue: 'true', asOf: dataDate })} />
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <StageCard stage="Start" total={kpis.total} done={kpis.startDone} remaining={kpis.total - kpis.startDone} pct={kpis.total ? Math.round((kpis.startDone / kpis.total) * 1000) / 10 : 0} overdue={kpis.startOverdue} onClick={() => goRaw({ stage: 'start' })} />
-        <StageCard stage="Completion" total={kpis.total} done={kpis.actualDone} remaining={kpis.remaining} pct={kpis.progressPct} overdue={kpis.completionOverdue} onClick={() => goRaw({ actualComplete: 'true' })} />
-        <StageCard stage="Closure" total={kpis.total} done={kpis.closureDone} remaining={kpis.total - kpis.closureDone} pct={kpis.total ? Math.round((kpis.closureDone / kpis.total) * 1000) / 10 : 0} overdue={kpis.closureOverdue} onClick={() => goRaw({ closureComplete: 'true' })} />
+      <div className="grid gap-3 md:grid-cols-2">
+        <StageCard stage="Completion" total={kpis.total} done={kpis.actualDone} remaining={kpis.total - kpis.actualDone} pct={kpis.completionPct} overdue={kpis.completionOverdue} onClick={() => goRaw({ actualComplete: 'false' })} />
+        <StageCard stage="Closure" total={kpis.total} done={kpis.closureDone} remaining={kpis.total - kpis.closureDone} pct={kpis.overallProgressPct} overdue={kpis.closureOverdue} onClick={() => goRaw({ closureComplete: 'false' })} />
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <AlertBanner tone="destructive" title={`${kpis.overdueCount} Overdue Defect${kpis.overdueCount === 1 ? '' : 's'}`} description={`Planned/Target date is on/before Data Date (${dataDateLabel}) and not yet complete.`} onClick={() => goRaw({ overdue: 'true', asOf: dataDate })} />
-        <AlertBanner tone="warning" title={`${kpis.atRiskCount} At-Risk Defect${kpis.atRiskCount === 1 ? '' : 's'}`} description={`Planned/Target date is within ${atRiskDays} day(s) and not yet complete.`} onClick={() => goRaw({ atRisk: 'true', atRiskDays: String(atRiskDays) })} />
+        <AlertBanner tone="destructive" title={`${kpis.overdueCount} Overdue Defect${kpis.overdueCount === 1 ? '' : 's'}`} description={`Planned date is on/before Data Date (${dataDateLabel}) and not yet complete.`} onClick={() => goRaw({ overdue: 'true', asOf: dataDate })} />
+        <AlertBanner tone="warning" title={`${kpis.atRiskCount} At-Risk Defect${kpis.atRiskCount === 1 ? '' : 's'}`} description={`Planned date is within ${atRiskDays} day(s) and not yet complete.`} onClick={() => goRaw({ atRisk: 'true', atRiskDays: String(atRiskDays) })} />
       </div>
 
       <Card>
@@ -219,18 +218,19 @@ export default function DefectDashboardPage() {
 
       <Card>
         <CardHeader className="flex flex-col space-y-2 pb-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0"><CardTitle className="text-base">Plan vs Actual — S-Curve</CardTitle><div className="flex flex-wrap items-center gap-2"><DateButton value={scurveStart} onChange={setScurveStart} /><span className="text-xs text-muted-foreground">~</span><DateButton value={scurveEnd} onChange={setScurveEnd} /><div className="flex gap-1 rounded-md border p-0.5"><button onClick={() => setScurveBucket('day')} className={cn('rounded px-3 py-1 text-xs', scurveBucket === 'day' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>Daily</button><button onClick={() => setScurveBucket('week')} className={cn('rounded px-3 py-1 text-xs', scurveBucket === 'week' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>Weekly</button></div></div></CardHeader>
-        <CardContent>{scurve.length === 0 ? <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p> : <ChartContainer config={chartConfig} className="h-[360px] w-full"><ComposedChart data={scurve} margin={{ left: 12, right: 16, top: 8, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} /><YAxis yAxisId="left" tick={{ fontSize: 11 }} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} /><ChartTooltip content={<ChartTooltipContent />} /><Legend wrapperStyle={{ fontSize: 11 }} /><ReferenceLine yAxisId="left" x={formatDdMmm(today)} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} /><Bar yAxisId="right" dataKey="actualMet" stackId="actual" fill="var(--color-actualMet)" name="Actual Met" barSize={10} /><Bar yAxisId="right" dataKey="actualShortfall" stackId="actual" fill="var(--color-actualShortfall)" name="Actual Shortfall" barSize={10} /><Bar yAxisId="right" dataKey="actualExcess" stackId="actual" fill="var(--color-actualExcess)" name="Actual Excess" barSize={10} /><Bar yAxisId="right" dataKey="actualFuturePlan" stackId="actual" fill="var(--color-actualFuturePlan)" name="Actual Plan (Future)" barSize={10} /><Bar yAxisId="right" dataKey="closureMet" stackId="closure" fill="var(--color-closureMet)" name="Closure Met" barSize={10} /><Bar yAxisId="right" dataKey="closureShortfall" stackId="closure" fill="var(--color-closureShortfall)" name="Closure Shortfall" barSize={10} /><Bar yAxisId="right" dataKey="closureExcess" stackId="closure" fill="var(--color-closureExcess)" name="Closure Excess" barSize={10} /><Bar yAxisId="right" dataKey="closureFuturePlan" stackId="closure" fill="var(--color-closureFuturePlan)" name="Closure Plan (Future)" barSize={10} /><Line yAxisId="left" type="monotone" dataKey="plannedPlan" stroke="var(--color-plannedPlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Planned Plan (cum)" /><Line yAxisId="left" type="monotone" dataKey="plannedActual" stroke="var(--color-plannedActual)" strokeWidth={2} dot={false} name="Planned Actual (cum)" /><Line yAxisId="left" type="monotone" dataKey="targetPlan" stroke="var(--color-targetPlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Target Plan (cum)" /><Line yAxisId="left" type="monotone" dataKey="targetActual" stroke="var(--color-targetActual)" strokeWidth={2} dot={false} name="Target Actual (cum)" /><Line yAxisId="left" type="monotone" dataKey="closurePlan" stroke="var(--color-closurePlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Closure Plan (cum)" /><Line yAxisId="left" type="monotone" dataKey="closureActual" stroke="var(--color-closureActual)" strokeWidth={2} dot={false} name="Closure Actual (cum)" /></ComposedChart></ChartContainer>}</CardContent>
+        <CardContent>{scurve.length === 0 ? <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p> : <ChartContainer config={chartConfig} className="h-[360px] w-full"><ComposedChart data={scurve} margin={{ left: 12, right: 16, top: 8, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} /><YAxis yAxisId="left" tick={{ fontSize: 11 }} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} /><ChartTooltip content={<ChartTooltipContent />} /><Legend wrapperStyle={{ fontSize: 11 }} /><ReferenceLine yAxisId="left" x={formatDdMmm(today)} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} /><Bar yAxisId="right" dataKey="completionMet" stackId="completion" fill="var(--color-completionMet)" name="Completion Met" barSize={10} /><Bar yAxisId="right" dataKey="completionShortfall" stackId="completion" fill="var(--color-completionShortfall)" name="Completion Shortfall" barSize={10} /><Bar yAxisId="right" dataKey="completionExcess" stackId="completion" fill="var(--color-completionExcess)" name="Completion Excess" barSize={10} /><Bar yAxisId="right" dataKey="completionFuturePlan" stackId="completion" fill="var(--color-completionFuturePlan)" name="Completion Plan (Future)" barSize={10} /><Bar yAxisId="right" dataKey="closureMet" stackId="closure" fill="var(--color-closureMet)" name="Closure Met" barSize={10} /><Bar yAxisId="right" dataKey="closureShortfall" stackId="closure" fill="var(--color-closureShortfall)" name="Closure Shortfall" barSize={10} /><Bar yAxisId="right" dataKey="closureExcess" stackId="closure" fill="var(--color-closureExcess)" name="Closure Excess" barSize={10} /><Bar yAxisId="right" dataKey="closureFuturePlan" stackId="closure" fill="var(--color-closureFuturePlan)" name="Closure Plan (Future)" barSize={10} /><Line yAxisId="left" type="monotone" dataKey="completionPlan" stroke="var(--color-completionPlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Completion Plan (cum)" /><Line yAxisId="left" type="monotone" dataKey="completionActual" stroke="var(--color-completionActual)" strokeWidth={2} dot={false} name="Completion Actual (cum)" /><Line yAxisId="left" type="monotone" dataKey="closurePlan" stroke="var(--color-closurePlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Closure Plan (cum)" /><Line yAxisId="left" type="monotone" dataKey="closureActual" stroke="var(--color-closureActual)" strokeWidth={2} dot={false} name="Closure Actual (cum)" /></ComposedChart></ChartContainer>}</CardContent>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card><CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><AlertTriangle className="h-4 w-4 text-destructive" />Top 10 Overdue Defects</CardTitle></CardHeader><CardContent>{topOverdue.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No overdue defects</p> : <Table><TableHeader><TableRow><TableHead>Sub Trade</TableHead><TableHead>Issue No</TableHead><TableHead>Level</TableHead><TableHead>Subcontractor</TableHead><TableHead className="text-right">Days Late</TableHead></TableRow></TableHeader><TableBody>{topOverdue.map(({ item, delay }) => <TableRow key={item.id} className="cursor-pointer" onClick={() => navigate(`/defects/${item.id}`)}><TableCell className="font-medium">{item.sub_trade || '—'}</TableCell><TableCell>{item.issue_no}</TableCell><TableCell>{item.area_level || '—'}</TableCell><TableCell className="max-w-[120px] truncate text-xs">{item.subcontractor_name || '—'}</TableCell><TableCell className="text-right font-semibold text-destructive">+{delay}d</TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-base">Status Distribution</CardTitle></CardHeader><CardContent><div className="grid grid-cols-2 gap-2"><PieBlock title="Actual Progress" data={actualPie} onSliceClick={(name) => goRaw(name === 'Complete' ? { actualComplete: 'true' } : {})} /><PieBlock title="Closure" data={closurePie} onSliceClick={(name) => goRaw(name === 'Closed' ? { closureComplete: 'true' } : {})} /></div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-base">Status Distribution</CardTitle></CardHeader><CardContent><div className="grid grid-cols-2 gap-2"><PieBlock title="Completion" data={actualPie} onSliceClick={(name) => goRaw(name === 'Complete' ? { actualComplete: 'true' } : {})} /><PieBlock title="Closure" data={closurePie} onSliceClick={(name) => goRaw(name === 'Closed' ? { closureComplete: 'true' } : {})} /></div></CardContent></Card>
       </div>
     </div>
   );
 }
 
 type GroupParam = 'subTrade' | 'subcontractor' | 'subsub' | 'hdecPic' | 'team' | 'workType';
+type StageKey = 'completion' | 'closure' | 'difference';
 
 function KpiCard({ icon, label, value, sub, accent, onClick }: { icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: 'destructive'; onClick?: () => void }) {
   return <Card onClick={onClick} className={cn(onClick && 'cursor-pointer transition-colors hover:bg-muted/40', accent === 'destructive' && 'border-destructive/30')}><CardContent className="flex items-center gap-3 p-4">{icon}<div className="min-w-0"><p className="truncate text-xs text-muted-foreground">{label}</p><p className={cn('text-2xl font-bold', accent === 'destructive' ? 'text-destructive' : 'text-foreground')}>{value}</p>{sub && <p className="text-xs text-muted-foreground">{sub}</p>}</div></CardContent></Card>;
@@ -244,10 +244,33 @@ function MiniStat({ label, value }: { label: string; value: number }) { return <
 function AlertBanner({ tone, title, description, onClick }: { tone: 'destructive' | 'warning'; title: string; description: string; onClick: () => void }) { const cls = tone === 'destructive' ? 'border-destructive/40 bg-destructive/5 text-destructive' : 'border-primary/40 bg-primary/5 text-primary'; return <button onClick={onClick} className={cn('flex items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/40', cls)}><div className="flex items-center gap-3"><AlertTriangle className="h-5 w-5" /><div><p className="font-semibold">{title}</p><p className="text-xs text-muted-foreground">{description}</p></div></div><span className="text-sm font-medium text-muted-foreground">View</span></button>; }
 function DateButton({ value, onChange }: { value: string; onChange: (value: string) => void }) { return <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-8 gap-1 text-xs"><CalendarIcon className="h-3.5 w-3.5" />{formatDdMmm(value)}</Button></PopoverTrigger><PopoverContent className="w-auto p-0" align="end"><Calendar mode="single" selected={new Date(value + 'T00:00:00')} onSelect={(d) => d && onChange(d.toISOString().slice(0, 10))} className={cn('p-3 pointer-events-auto')} /></PopoverContent></Popover>; }
 function HeaderTotalNumber({ value, tone }: { value: number; tone?: 'done' | 'remain' | 'delay' }) { return <span className={cn('tabular-nums font-semibold', value === 0 ? 'text-muted-foreground/40' : tone === 'done' ? 'text-emerald-700 dark:text-emerald-400' : tone === 'remain' ? 'text-amber-700 dark:text-amber-400' : tone === 'delay' ? 'text-destructive' : 'text-foreground')}>{value.toLocaleString()}</span>; }
-function VarianceCell({ value }: { value: number }) { if (value === 0) return <span className="text-muted-foreground/40 tabular-nums">0</span>; if (value > 0) return <span className="text-green-700 dark:text-green-400 tabular-nums">+{value}</span>; return <span className="font-semibold text-destructive tabular-nums">{value}</span>; }
+function VarianceCell({ value, invert = false }: { value: number; invert?: boolean }) {
+  if (value === 0) return <span className="text-muted-foreground/40 tabular-nums">0</span>;
+  // invert=true (Difference 행): 양수=적체(빨강), 음수=빠름(초록)
+  const positiveBad = invert;
+  if (value > 0) return <span className={cn('tabular-nums', positiveBad ? 'font-semibold text-destructive' : 'text-green-700 dark:text-green-400')}>+{value}</span>;
+  return <span className={cn('tabular-nums', positiveBad ? 'text-green-700 dark:text-green-400' : 'font-semibold text-destructive')}>{value}</span>;
+}
 function ClickNum({ value, onClick, hideZero = false }: { value: number; onClick?: () => void; hideZero?: boolean }) { if (hideZero && value === 0) return <span className="tabular-nums text-muted-foreground/40" />; return onClick ? <button type="button" className={cn('tabular-nums hover:underline', value === 0 && 'text-muted-foreground/40')} onClick={(e) => { e.stopPropagation(); onClick(); }}>{value}</button> : <span className={cn('tabular-nums', value === 0 && 'text-muted-foreground/40')}>{value}</span>; }
-function StageBadge({ stage, label }: { stage: string; label: string }) { const cls = stage === 'start' ? 'bg-muted text-muted-foreground border-border' : stage === 'completion' ? 'bg-primary/10 text-primary border-primary/30' : 'bg-destructive/10 text-destructive border-destructive/30'; return <span className={cn('inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold', cls)}>{label}</span>; }
+function StageBadge({ stage, label }: { stage: StageKey; label: string }) {
+  const cls = stage === 'completion'
+    ? 'bg-primary/10 text-primary border-primary/30'
+    : stage === 'closure'
+      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
+      : 'bg-muted text-muted-foreground border-dashed border-border';
+  return <span className={cn('inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold', cls)}>{label}</span>;
+}
 function FilterDropdown({ text, selected, options, onTextChange, onSelectedChange }: { text: string; selected: string[]; options: string[]; onTextChange: (v: string) => void; onSelectedChange: (v: string[]) => void }) { const toggle = (value: string) => onSelectedChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value]); return <Popover><PopoverTrigger asChild><button type="button" className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted/80" onClick={(e) => e.stopPropagation()}><Filter className="h-3.5 w-3.5" /></button></PopoverTrigger><PopoverContent className="w-64 p-3" align="start" onClick={(e) => e.stopPropagation()}><Input placeholder="Filter sub trades..." value={text} onChange={(e) => onTextChange(e.target.value)} className="mb-2 h-8 text-xs" /><button type="button" className="mb-2 text-[11px] text-muted-foreground hover:underline" onClick={() => { onTextChange(''); onSelectedChange([]); }}>Clear</button><div className="max-h-64 space-y-0.5 overflow-y-auto pr-1">{options.map(option => <label key={option} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50"><Checkbox checked={selected.includes(option)} onCheckedChange={() => toggle(option)} className="h-3.5 w-3.5" /><span className="min-w-0 truncate">{option}</span></label>)}</div></PopoverContent></Popover>; }
+
+interface StageDef {
+  stage: StageKey;
+  label: string;
+  metrics: DefectPlanActualMetrics;
+  planField: string | null;
+  actualField: string | null;
+  doneParam: string | null;
+  isDifference: boolean;
+}
 
 function PlanActualTable({
   rows,
@@ -284,7 +307,8 @@ function PlanActualTable({
 
   const totals = rows.reduce(
     (acc, row) => {
-      [row.start, row.completion, row.closure].forEach((metrics) => {
+      const d = diffMetrics(row);
+      [row.completion, row.closure, d].forEach((metrics) => {
         acc.stageTotal += row.totalDefects;
         acc.stageDone += metrics.cumActual;
         acc.cumPlan += metrics.cumPlan;
@@ -298,18 +322,7 @@ function PlanActualTable({
       });
       return acc;
     },
-    {
-      stageTotal: 0,
-      stageDone: 0,
-      cumPlan: 0,
-      cumActual: 0,
-      dataDatePlan: 0,
-      dataDateActual: 0,
-      dataDateDelay: 0,
-      todayPlan: 0,
-      todayActual: 0,
-      todayDelay: 0,
-    },
+    { stageTotal: 0, stageDone: 0, cumPlan: 0, cumActual: 0, dataDatePlan: 0, dataDateActual: 0, dataDateDelay: 0, todayPlan: 0, todayActual: 0, todayDelay: 0 },
   );
 
   const header = {
@@ -334,31 +347,10 @@ function PlanActualTable({
     </colgroup>
   );
 
-  const stageDefs = (row: DefectPlanActualRow) => [
-    {
-      stage: 'start',
-      label: 'Start',
-      metrics: row.start,
-      planField: 'planned_start_date',
-      actualField: 'actual_start_date',
-      doneParam: 'startComplete',
-    },
-    {
-      stage: 'completion',
-      label: 'Completion',
-      metrics: row.completion,
-      planField: 'planned_completion_date',
-      actualField: 'actual_completion_date',
-      doneParam: 'actualComplete',
-    },
-    {
-      stage: 'closure',
-      label: 'Closure',
-      metrics: row.closure,
-      planField: 'planned_closure_date',
-      actualField: 'actual_closure_date',
-      doneParam: 'closureComplete',
-    },
+  const stageDefs = (row: DefectPlanActualRow): StageDef[] => [
+    { stage: 'completion', label: 'Completion', metrics: row.completion, planField: 'planned_completion_date', actualField: 'actual_completion_date', doneParam: 'actualComplete', isDifference: false },
+    { stage: 'closure', label: 'Closure', metrics: row.closure, planField: 'planned_closure_date', actualField: 'actual_closure_date', doneParam: 'closureComplete', isDifference: false },
+    { stage: 'difference', label: 'Difference', metrics: diffMetrics(row), planField: null, actualField: null, doneParam: null, isDifference: true },
   ];
 
   const subheads = ['Plan', 'Actual', 'Δ', 'Plan', 'Actual', 'Δ', 'Delay', 'Plan', 'Actual', 'Δ', 'Delay'];
@@ -377,36 +369,21 @@ function PlanActualTable({
                     {filter && <FilterDropdown {...filter} />}
                   </div>
                 </TableHead>
-                <TableHead rowSpan={3} className="h-8 text-center align-middle">
-                  Stage
-                </TableHead>
+                <TableHead rowSpan={3} className="h-8 text-center align-middle">Stage</TableHead>
                 <TableHead className="h-8 text-center align-bottom">Total</TableHead>
                 <TableHead className="h-8 text-center align-bottom">Done</TableHead>
                 <TableHead className="h-8 border-r border-border text-center align-bottom">Remain</TableHead>
-                <TableHead colSpan={3} className="h-8 border-l border-border bg-muted/30 text-center">
-                  To Data Date (Cumulative)
-                </TableHead>
-                <TableHead colSpan={4} className="h-8 border-l border-border bg-muted/30 text-center">
-                  Data Date ({dataDateLabel})
-                </TableHead>
-                <TableHead colSpan={4} className="h-8 border-l border-border bg-muted/30 text-center">
-                  Today ({todayLabel})
-                </TableHead>
-                <TableHead rowSpan={3} className="h-8 border-l border-border text-center align-middle">
-                  Progress
-                </TableHead>
+                <TableHead colSpan={3} className="h-8 border-l border-border bg-muted/30 text-center">To Data Date (Cumulative)</TableHead>
+                <TableHead colSpan={4} className="h-8 border-l border-border bg-muted/30 text-center">Data Date ({dataDateLabel})</TableHead>
+                <TableHead colSpan={4} className="h-8 border-l border-border bg-muted/30 text-center">Today ({todayLabel})</TableHead>
+                <TableHead rowSpan={3} className="h-8 border-l border-border text-center align-middle">Progress</TableHead>
               </TableRow>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="h-8 text-center text-[11px]">All</TableHead>
                 <TableHead className="h-8 text-center text-[11px]">Done</TableHead>
                 <TableHead className="h-8 border-r border-border text-center text-[11px]">Open</TableHead>
                 {subheads.map((label, i) => (
-                  <TableHead
-                    key={`${label}-${i}`}
-                    className={cn('h-8 text-center text-[11px]', [0, 3, 7].includes(i) && 'border-l border-border')}
-                  >
-                    {label}
-                  </TableHead>
+                  <TableHead key={`${label}-${i}`} className={cn('h-8 text-center text-[11px]', [0, 3, 7].includes(i) && 'border-l border-border')}>{label}</TableHead>
                 ))}
               </TableRow>
               <TableRow className="bg-muted/20 hover:bg-muted/20">
@@ -435,19 +412,20 @@ function PlanActualTable({
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={17} className="py-8 text-center text-sm text-muted-foreground">
-                    No data.
-                  </TableCell>
+                  <TableCell colSpan={17} className="py-8 text-center text-sm text-muted-foreground">No data.</TableCell>
                 </TableRow>
               ) : (
                 rows.map((row, rowIndex) =>
                   stageDefs(row).map((stage, stageIndex) => {
-                    const metrics: DefectPlanActualMetrics = stage.metrics;
-                    const progress = row.totalDefects ? Math.round((metrics.cumActual / row.totalDefects) * 100) : 0;
+                    const metrics = stage.metrics;
                     const remain = row.totalDefects - metrics.cumActual;
                     const cumDelta = metrics.cumActual - metrics.cumPlan;
                     const dataDateDelta = metrics.dataDateActual - metrics.dataDatePlan;
                     const todayDelta = metrics.todayActual - metrics.todayPlan;
+                    const progress = row.totalDefects ? Math.round((metrics.cumActual / row.totalDefects) * 100) : 0;
+                    const isDiff = stage.isDifference;
+                    const rowExtra = isDiff ? { actualComplete: 'true', closureComplete: 'false' } : undefined;
+                    const rowClick = () => go(row.key, rowExtra);
 
                     return (
                       <TableRow
@@ -455,67 +433,77 @@ function PlanActualTable({
                         className={cn(
                           'cursor-pointer hover:bg-muted/40',
                           rowIndex > 0 && stageIndex === 0 && 'border-t-2 border-t-border',
+                          isDiff && 'bg-muted/20',
                         )}
-                        onClick={() => go(row.key)}
+                        onClick={rowClick}
                       >
                         {stageIndex === 0 && (
                           <TableCell rowSpan={3} className="px-2 py-2 align-top font-medium">
                             <button
                               type="button"
                               className="max-w-full truncate text-left hover:underline"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                go(row.key);
-                              }}
+                              onClick={(event) => { event.stopPropagation(); go(row.key); }}
                             >
                               {row.label}
                             </button>
                           </TableCell>
                         )}
-                        <TableCell className="bg-muted/10 px-2 py-1.5">
+                        <TableCell className={cn('bg-muted/10 px-2 py-1.5', isDiff && 'border-y border-dashed border-muted-foreground/30')}>
                           <StageBadge stage={stage.stage} label={stage.label} />
                         </TableCell>
-                        <TableCell className="bg-muted/10 px-2 py-1.5 text-right text-xs tabular-nums">
-                          {row.totalDefects.toLocaleString()}
-                        </TableCell>
-                        <TableCell className="bg-muted/10 px-2 py-1.5 text-right text-xs font-semibold text-primary tabular-nums">
-                          {metrics.cumActual.toLocaleString()}
-                        </TableCell>
+                        <TableCell className="bg-muted/10 px-2 py-1.5 text-right text-xs tabular-nums">{row.totalDefects.toLocaleString()}</TableCell>
+                        <TableCell className="bg-muted/10 px-2 py-1.5 text-right text-xs font-semibold text-primary tabular-nums">{metrics.cumActual.toLocaleString()}</TableCell>
                         <TableCell className="border-r border-border bg-muted/10 px-2 py-1.5 text-right text-xs font-semibold text-muted-foreground tabular-nums">
-                          {remain.toLocaleString()}
+                          {isDiff ? <span className="text-muted-foreground/50">—</span> : remain.toLocaleString()}
                         </TableCell>
                         <TableCell className="border-l border-border px-2 py-1.5 text-right text-xs">
-                          <ClickNum value={metrics.cumPlan} onClick={() => go(row.key, { dateField: stage.planField, dateEnd: dataDate })} />
+                          {isDiff
+                            ? <ClickNum value={metrics.cumPlan} onClick={rowClick} />
+                            : <ClickNum value={metrics.cumPlan} onClick={() => go(row.key, { dateField: stage.planField!, dateEnd: dataDate })} />}
                         </TableCell>
                         <TableCell className="px-2 py-1.5 text-right text-xs">
-                          <ClickNum value={metrics.cumActual} onClick={() => go(row.key, { dateField: stage.actualField, dateEnd: dataDate, [stage.doneParam]: 'true' })} />
+                          {isDiff
+                            ? <ClickNum value={metrics.cumActual} onClick={rowClick} />
+                            : <ClickNum value={metrics.cumActual} onClick={() => go(row.key, { dateField: stage.actualField!, dateEnd: dataDate, [stage.doneParam!]: 'true' })} />}
                         </TableCell>
-                        <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={cumDelta} /></TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={cumDelta} invert={isDiff} /></TableCell>
                         <TableCell className="border-l border-border px-2 py-1.5 text-right text-xs">
-                          <ClickNum value={metrics.dataDatePlan} onClick={() => go(row.key, { dateField: stage.planField, dateStart: dataDate, dateEnd: dataDate })} />
+                          {isDiff
+                            ? <ClickNum value={metrics.dataDatePlan} onClick={rowClick} />
+                            : <ClickNum value={metrics.dataDatePlan} onClick={() => go(row.key, { dateField: stage.planField!, dateStart: dataDate, dateEnd: dataDate })} />}
                         </TableCell>
                         <TableCell className="px-2 py-1.5 text-right text-xs">
-                          <ClickNum value={metrics.dataDateActual} onClick={() => go(row.key, { dateField: stage.actualField, dateStart: dataDate, dateEnd: dataDate, [stage.doneParam]: 'true' })} />
+                          {isDiff
+                            ? <ClickNum value={metrics.dataDateActual} onClick={rowClick} />
+                            : <ClickNum value={metrics.dataDateActual} onClick={() => go(row.key, { dateField: stage.actualField!, dateStart: dataDate, dateEnd: dataDate, [stage.doneParam!]: 'true' })} />}
                         </TableCell>
-                        <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={dataDateDelta} /></TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={dataDateDelta} invert={isDiff} /></TableCell>
                         <TableCell className="px-2 py-1.5 text-right text-xs font-semibold text-destructive">
                           <ClickNum value={metrics.dataDateDelay} hideZero onClick={() => go(row.key, { overdue: 'true', asOf: dataDate })} />
                         </TableCell>
                         <TableCell className="border-l border-border px-2 py-1.5 text-right text-xs">
-                          <ClickNum value={metrics.todayPlan} onClick={() => go(row.key, { dateField: stage.planField, dateStart: today, dateEnd: today })} />
+                          {isDiff
+                            ? <ClickNum value={metrics.todayPlan} onClick={rowClick} />
+                            : <ClickNum value={metrics.todayPlan} onClick={() => go(row.key, { dateField: stage.planField!, dateStart: today, dateEnd: today })} />}
                         </TableCell>
                         <TableCell className="px-2 py-1.5 text-right text-xs">
-                          <ClickNum value={metrics.todayActual} onClick={() => go(row.key, { dateField: stage.actualField, dateStart: today, dateEnd: today, [stage.doneParam]: 'true' })} />
+                          {isDiff
+                            ? <ClickNum value={metrics.todayActual} onClick={rowClick} />
+                            : <ClickNum value={metrics.todayActual} onClick={() => go(row.key, { dateField: stage.actualField!, dateStart: today, dateEnd: today, [stage.doneParam!]: 'true' })} />}
                         </TableCell>
-                        <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={todayDelta} /></TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={todayDelta} invert={isDiff} /></TableCell>
                         <TableCell className="px-2 py-1.5 text-right text-xs font-semibold text-destructive">
                           <ClickNum value={metrics.todayDelay} hideZero onClick={() => go(row.key, { overdue: 'true', asOf: today })} />
                         </TableCell>
                         <TableCell className="border-l border-border px-2 py-1.5">
-                          <div className="flex items-center gap-1.5">
-                            <Progress value={progress} className="h-1.5 flex-1" />
-                            <span className="w-9 text-right text-[10px] text-muted-foreground tabular-nums">{progress}%</span>
-                          </div>
+                          {isDiff ? (
+                            <span className="text-[10px] text-muted-foreground/50">—</span>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <Progress value={progress} className="h-1.5 flex-1" />
+                              <span className="w-9 text-right text-[10px] text-muted-foreground tabular-nums">{progress}%</span>
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
