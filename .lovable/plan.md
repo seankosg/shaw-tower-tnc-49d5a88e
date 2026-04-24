@@ -1,142 +1,70 @@
 
 
-## Defect Dashboard 2단계 구조 — UI 미리보기
+## Admin 메뉴 클릭 시 Classification 페이지로 잘못 이동되는 버그 수정
 
-### 화면 전체 구조 (위→아래)
+### 원인
 
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│ Header: Defect Executive Dashboard          [Team▼] [DateRange] [.xlsx]│
-├────────────────────────────────────────────────────────────────────────┤
-│ KPI 카드 6장 (1행)                                                     │
-│ ┌──────┬──────┬──────┬──────┬──────┬──────┐                           │
-│ │Total │Comp. │Closure│ Diff │Overall│Overdue│                         │
-│ │Defect│ Done │ Done │ (대기)│ Prog. │       │                         │
-│ └──────┴──────┴──────┴──────┴──────┴──────┘                           │
-├────────────────────────────────────────────────────────────────────────┤
-│ Stage 카드 2장 (1행, md:grid-cols-2)                                   │
-│ ┌─────────────────────────┬─────────────────────────┐                  │
-│ │ Completion              │ Closure                 │                  │
-│ │  120 / 200  ●●●○○ 60%   │  85 / 200  ●●○○○ 42.5%  │                 │
-│ │  Overdue: 8             │  Overdue: 14            │                  │
-│ └─────────────────────────┴─────────────────────────┘                  │
-├────────────────────────────────────────────────────────────────────────┤
-│ Alert Banner (Overdue / At-Risk)                                       │
-├────────────────────────────────────────────────────────────────────────┤
-│ Plan vs Actual Summary  [By Sub Trade│Subcon│Sub-Sub│PIC│Team│WorkType]│
-│  ※ 그룹당 3행: Completion / Closure / Difference                       │
-├────────────────────────────────────────────────────────────────────────┤
-│ S-Curve Chart  (Completion / Closure 2계열만 — Start 제거)             │
-├────────────────────────────────────────────────────────────────────────┤
-│ Top 10 Overdue Table   |   Status Distribution Pie                     │
-└────────────────────────────────────────────────────────────────────────┘
+useRouteMemory.ts 가 /admin/classification 방문을 last-route:/admin 키로 저장.
+사이드바 Admin 클릭 시 getRememberedRoute('/admin') 가
+저장된 '/admin/classification' 을 반환 → AdminPage 대신 Classification 페이지가 열림.
+
+추가로 Defect Classification 메뉴는 이제 Defect Management 그룹으로 이동했으므로,
+/admin/classification 은 더 이상 Admin 메뉴의 기억 대상이 아니어야 함.
 ```
 
-### KPI 카드 6장 상세
+### 수정 사항
 
 ```text
-┌─────────────┬─────────────┬─────────────┬─────────────┬─────────────┬─────────────┐
-│ 📋 Total    │ ✅ Comp.    │ 🛡 Closure  │ ⏳ Diff     │ 📈 Overall  │ 🚨 Overdue  │
-│   Defects   │    Done     │    Done     │ (검측대기)  │  Progress   │             │
-│             │             │             │             │             │             │
-│    200      │    120      │     85      │     35      │   42.5%     │     14      │
-│             │  60.0% comp │ 42.5% closed│ 적체 건수   │ closure base│ 누적 지연   │
-└─────────────┴─────────────┴─────────────┴─────────────┴─────────────┴─────────────┘
-   click→        click→        click→        click→        —            click→
-   raw-data    actualComp=t  closureComp=t actualComp=t                 overdue=t
-                                          &closureComp=f
+[src/hooks/useRouteMemory.ts]
+1) ROUTE_KEYS 에 '/admin/classification' 을 '/admin' 보다 먼저 매칭되도록 추가
+   (정렬은 길이 desc 이므로 자동으로 /admin/classification 이 우선 매치됨)
+
+2) routeKeyForPath 가 /admin/classification 방문 시
+   '/admin' 키가 아닌 '/admin/classification' 키로 저장하도록 함
+   → Admin 메뉴 클릭은 항상 /admin (또는 이전에 저장된 /admin/* 중
+     classification 이외 경로) 로 이동
 ```
 
-### Plan vs Actual Summary — 그룹당 3행 구조
+수정 후 `useRouteMemory.ts`:
 
-```text
-By Sub Trade 탭 예시 (헤더는 17열, 일부만 표시)
-
-┌─────────────┬──────┬─────────────────┬──────────────────────────┬──────────────────────────┬──────┐
-│ Sub Trade   │ Total│ Done│Remain│Pct │ Cum  Cum  Δ              │ Today                    │Prog. │
-│             │      │     │      │    │ Plan Act                  │ Plan Act Δ Delay         │  %   │
-├─────────────┼──────┼─────┼──────┼────┼──────────────────────────┼──────────────────────────┼──────┤
-│ Painting    │  60  │     │      │    │                           │                          │      │
-│  Completion │      │ 40  │  20  │66% │  45   40   -5             │   3    2  -1   1         │ 66%  │
-│  Closure    │      │ 28  │  32  │46% │  35   28   -7             │   2    1  -1   1         │ 46%  │
-│  Difference │      │ 12  │  —   │ —  │  10   12   +2 ← 검측 적체 │   1    1   0   0         │  —   │
-├─────────────┼──────┼─────┼──────┼────┼──────────────────────────┼──────────────────────────┼──────┤
-│ Tiling      │  50  │ ... │      │    │                           │                          │      │
-│  Completion │      │ 38  │  12  │76% │  35   38   +3 ← 빠름      │   2    3  +1   0         │ 76%  │
-│  Closure    │      │ 30  │  20  │60% │  28   30   +2             │   2    2   0   0         │ 60%  │
-│  Difference │      │  8  │  —   │ —  │   7    8   +1             │   0    1  +1   0         │  —   │
-└─────────────┴──────┴─────┴──────┴────┴──────────────────────────┴──────────────────────────┴──────┘
-
-색상 약속:
-  Completion 행 → 기존 amber/orange 톤 유지
-  Closure    행 → 기존 emerald/green 톤 유지
-  Difference 행 → 회색 점선 보더 + 회색 배경 (보조 지표 시각)
-
-행 클릭 동작:
-  Completion → /defects/raw-data?subTrade=Painting&actualComplete=true
-  Closure    → /defects/raw-data?subTrade=Painting&closureComplete=true
-  Difference → /defects/raw-data?subTrade=Painting&actualComplete=true&closureComplete=false
-                (= 검측 대기 = Comp 됐지만 Closure 미완)
+```ts
+const ROUTE_KEYS = [
+  '/dashboard',
+  '/raw-data',
+  '/schedule/revision',
+  '/schedule',
+  '/import',
+  '/import/logs',
+  '/export',
+  '/mobile',
+  '/admin/classification',  // ← 추가 (먼저 매치되도록)
+  '/admin',
+];
 ```
 
-### Difference 행 계산 규칙 (한눈에)
+### 일회성 정리(선택)
 
 ```text
-Difference 의미 = "Completion은 끝났는데 Closure가 안 된" 검측 대기 건
-
-컬럼            계산
-──────────────  ───────────────────────────────────────────────
-Total           row.totalDefects (그룹 총건수)
-Done            comp.cumActual − closure.cumActual
-Remain          —  (의미 약함, 빈 표시)
-Pct             —
-Cum Plan        comp.cumPlan   − closure.cumPlan
-Cum Actual      comp.cumActual − closure.cumActual
-Cum Δ           Cum Actual − Cum Plan
-                 양수 = 검측 적체 (빨강)
-                 음수 = 검측 빠름 (초록)
-DataDate Plan   comp.dataDatePlan   − closure.dataDatePlan
-DataDate Act    comp.dataDateActual − closure.dataDateActual
-DataDate Δ      Act − Plan
-DataDate Delay  max(0, comp.dataDateDelay − closure.dataDateDelay)
-Today Plan/Act/Δ/Delay  동일 방식
-Progress %      —  (Closure 카드/행에서 확인)
+이미 사용자 브라우저에 저장된 'last-route:/admin' = '/admin/classification' 값을
+정리하기 위해, useRouteMemory 안에서 1회성 마이그레이션 추가:
+  if (localStorage.getItem('last-route:/admin') === '/admin/classification') {
+    localStorage.removeItem('last-route:/admin');
+  }
 ```
 
-### Stage Card 2장
+### 영향 받는 파일
 
 ```text
-┌─────────────────────────────┐  ┌─────────────────────────────┐
-│ Completion                  │  │ Closure                     │
-│ ─────────────────────────── │  │ ─────────────────────────── │
-│  120 / 200                  │  │   85 / 200                  │
-│  Remaining: 80              │  │   Remaining: 115            │
-│  ████████░░░░  60.0%        │  │   █████░░░░░░  42.5%        │
-│  ⚠ Overdue: 8               │  │   ⚠ Overdue: 14             │
-└─────────────────────────────┘  └─────────────────────────────┘
-   click→raw-data?actualComplete=false   click→raw-data?closureComplete=false
+[수정] src/hooks/useRouteMemory.ts
 ```
 
-### S-Curve 차트 (Start 제거)
+### 검증
 
 ```text
-누적 라인 4개 + 막대 8개 (스택 2그룹)
-
-  Completion Plan  (dashed)   Completion Actual  (solid)
-  Closure    Plan  (dashed)   Closure    Actual  (solid)
-
-  Bars (per bucket):
-    Completion: Met / Shortfall / Excess / FuturePlan
-    Closure   : Met / Shortfall / Excess / FuturePlan
-```
-
-### 변경 요약
-
-```text
-- KPI: SubTrades / Start 카드 제거 → Difference 카드 추가
-- Stage Card: 3장 → 2장 (Start 제거)
-- Plan vs Actual: Start/Comp/Closure → Comp/Closure/Difference
-- S-Curve: Start 시리즈 제거
-- 모든 Diff 셀은 클릭 시 actualComplete=true & closureComplete=false 필터로 이동
+1. Admin 메뉴 클릭 → AdminPage 가 표시됨 (Classification X)
+2. Defect Management > Defect Classification 클릭 → AdminClassificationPage 표시
+3. Admin 내부 탭 이동(/admin?tab=...) 후 다른 메뉴 → Admin 재클릭 시
+   마지막 Admin 탭이 유지됨 (기존 동작 보존)
 ```
 
