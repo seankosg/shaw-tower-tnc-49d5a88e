@@ -133,7 +133,7 @@ export default function DefectDetailPage() {
       'actual_start_date', 'actual_completion_date', 'actual_closure_date',
       'planned_progress_pct', 'actual_progress_pct', 'completion_status', 'closure_status',
       'description', 'remarks',
-      'subcontractor_name', 'subsub_name', 'hdec_pic_name',
+      'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'team',
     ] as const;
 
     const changes = editableFields
