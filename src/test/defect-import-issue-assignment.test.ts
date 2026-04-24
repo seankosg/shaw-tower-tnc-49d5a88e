@@ -114,17 +114,17 @@ describe('buildSubcontractorIssueAssignments', () => {
     expect(assignments.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00003');
   });
 
-  it('keeps SEQ growing in display order when import is descending', () => {
+  it('assigns SEQ by Issue No ascending even when import file is descending', () => {
     const rows = [
       makeRow({ rawRowNo: 2, issue_no: '1005', subcontractor_name: 'Acme Builders' }),
       makeRow({ rawRowNo: 3, issue_no: '1004', subcontractor_name: 'Acme Builders' }),
       makeRow({ rawRowNo: 4, issue_no: '1003', subcontractor_name: 'Acme Builders' }),
     ];
     const assignments = buildSubcontractorIssueAssignments(rows, null, emptyRegistry(), new Map());
-    // First displayed row (highest issue_no) should get the lowest SEQ
-    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00001');
+    // Lowest Issue No (1003 → row 4) should always get the lowest SEQ
+    expect(assignments.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00001');
     expect(assignments.get(3)?.subcontractor_issue_no).toBe('SC-ABC-00002');
-    expect(assignments.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00003');
+    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00003');
   });
 
   it('handles natural sort with descending alphanumeric Issue No', () => {
@@ -134,12 +134,13 @@ describe('buildSubcontractorIssueAssignments', () => {
       makeRow({ rawRowNo: 4, issue_no: 'D-1', subcontractor_name: 'Acme Builders' }),
     ];
     const assignments = buildSubcontractorIssueAssignments(rows, null, emptyRegistry(), new Map());
-    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00001');
+    // D-1 < D-2 < D-10 (natural numeric sort)
+    expect(assignments.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00001');
     expect(assignments.get(3)?.subcontractor_issue_no).toBe('SC-ABC-00002');
-    expect(assignments.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00003');
+    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00003');
   });
 
-  it('keeps owner-code sequences independent', () => {
+  it('keeps owner-code sequences independent and ordered by Issue No asc', () => {
     const rows = [
       makeRow({ rawRowNo: 2, issue_no: '1005', subcontractor_name: 'Acme Builders' }),
       makeRow({ rawRowNo: 3, issue_no: '1004', subcontractor_name: 'Xerox Works' }),
@@ -147,20 +148,23 @@ describe('buildSubcontractorIssueAssignments', () => {
       makeRow({ rawRowNo: 5, issue_no: '1002', subcontractor_name: 'Xerox Works' }),
     ];
     const assignments = buildSubcontractorIssueAssignments(rows, null, emptyRegistry(), new Map());
-    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00001');
-    expect(assignments.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00002');
-    expect(assignments.get(3)?.subcontractor_issue_no).toBe('SC-XYZ-00001');
-    expect(assignments.get(5)?.subcontractor_issue_no).toBe('SC-XYZ-00002');
+    // ABC: 1003 < 1005 → row 4 = 00001, row 2 = 00002
+    expect(assignments.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00001');
+    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00002');
+    // XYZ: 1002 < 1004 → row 5 = 00001, row 3 = 00002
+    expect(assignments.get(5)?.subcontractor_issue_no).toBe('SC-XYZ-00001');
+    expect(assignments.get(3)?.subcontractor_issue_no).toBe('SC-XYZ-00002');
   });
 
-  it('starts from existing DB max sequence + 1', () => {
+  it('starts from existing DB max sequence + 1, lowest Issue No first', () => {
     const rows = [
       makeRow({ rawRowNo: 2, issue_no: '1003', subcontractor_name: 'Acme Builders' }),
       makeRow({ rawRowNo: 3, issue_no: '1002', subcontractor_name: 'Acme Builders' }),
     ];
     const assignments = buildSubcontractorIssueAssignments(rows, null, emptyRegistry({ ABC: 28 }), new Map());
-    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00028');
-    expect(assignments.get(3)?.subcontractor_issue_no).toBe('SC-ABC-00029');
+    // 1002 < 1003, so row 3 = 00028 (next from existing max 27 + 1), row 2 = 00029
+    expect(assignments.get(3)?.subcontractor_issue_no).toBe('SC-ABC-00028');
+    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00029');
   });
 
   it('preserves existing defect subcontractor_issue_no', () => {
