@@ -26,6 +26,7 @@ import { type DefectItem, formatPct, isOverdueDefect } from '@/lib/defect-utils'
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
+import { useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatTeamLabel } from '@/types/enums';
 
@@ -715,7 +716,8 @@ interface DefectRawTableViewProps {
 
 function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate, tableRef }: DefectRawTableViewProps) {
   const isMobile = useIsMobile();
-  const frozenCount = isMobile ? 1 : 4;
+  const { value: frozenSetting } = useFrozenColumnCount();
+  const frozenCount = isMobile ? 1 : Math.min(Math.max(Number(frozenSetting) || 1, 1), 4);
   const leafColumns = table.getVisibleLeafColumns();
   const frozenColumns = useMemo(() => leafColumns.slice(0, frozenCount), [leafColumns, frozenCount]);
   const scrollColumns = useMemo(() => leafColumns.slice(frozenCount), [leafColumns, frozenCount]);
