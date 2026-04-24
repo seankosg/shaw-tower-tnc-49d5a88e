@@ -765,13 +765,18 @@ export default function DefectImportPage() {
               Import Summary
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <div className="grid gap-4 sm:grid-cols-5">
               <SummaryBox label="Inserted" value={totals.inserted} />
               <SummaryBox label="Updated" value={totals.updated} />
               <SummaryBox label="Skipped" value={totals.skipped} />
               <SummaryBox label="Rejected" value={totals.rejected} />
               <SummaryBox label="Team Unresolved" value={totals.teamUnresolved} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <SummaryBox label="Auto-classified (rule)" value={totals.classifiedRule} onClick={() => navigate('/defects/raw?classificationSource=rule')} />
+              <SummaryBox label="Auto-classified (discipline)" value={totals.classifiedDiscipline} onClick={() => navigate('/defects/raw?classificationSource=discipline')} />
+              <SummaryBox label="Unclassified" value={totals.unclassified} onClick={() => navigate('/defects/raw?classificationSource=unclassified')} />
             </div>
           </CardContent>
         </Card>
@@ -849,11 +854,16 @@ export default function DefectImportPage() {
   );
 }
 
-function SummaryBox({ label, value }: { label: string; value: number }) {
+function SummaryBox({ label, value, onClick }: { label: string; value: number; onClick?: () => void }) {
   return (
-    <div className="rounded-md bg-muted p-3 text-center">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className="rounded-md bg-muted p-3 text-center transition-colors disabled:cursor-default enabled:hover:bg-muted/80"
+    >
       <div className="text-2xl font-bold text-foreground">{value}</div>
       <div className="text-xs text-muted-foreground">{label}</div>
-    </div>
+    </button>
   );
 }
