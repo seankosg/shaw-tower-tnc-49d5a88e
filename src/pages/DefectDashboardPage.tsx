@@ -308,8 +308,12 @@ function PlanActualTable({
   const totals = rows.reduce(
     (acc, row) => {
       const d = diffMetrics(row);
-      [row.completion, row.closure, d].forEach((metrics) => {
-        acc.stageTotal += row.totalDefects;
+      ([
+        { metrics: row.completion, isDiff: false },
+        { metrics: row.closure, isDiff: false },
+        { metrics: d, isDiff: true },
+      ]).forEach(({ metrics, isDiff }) => {
+        acc.stageTotal += isDiff ? metrics.cumActual : row.totalDefects;
         acc.stageDone += metrics.cumActual;
         acc.cumPlan += metrics.cumPlan;
         acc.cumActual += metrics.cumActual;
