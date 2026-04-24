@@ -307,7 +307,12 @@ export default function DefectDetailPage() {
     const logRes = await (supabase as any).from('defect_change_log').select('*').eq('defect_id', record.id).order('changed_at', { ascending: false }).limit(50);
     setLogs(logRes.data ?? []);
     setSaving(false);
-    toast({ title: 'Saved', description: 'Defect updated successfully.' });
+    toast({
+      title: 'Saved',
+      description: reassignment
+        ? `SC No reassigned: ${reassignment.oldScNo ?? '—'} → ${reassignment.newScNo}`
+        : 'Defect updated successfully.',
+    });
   };
 
   const rawEntries = useMemo(() => Object.entries(record?.raw_payload ?? {}).slice(0, 80), [record]);
