@@ -339,19 +339,6 @@ export default function DefectDetailPage() {
   };
 
   const rawEntries = useMemo(() => Object.entries(record?.raw_payload ?? {}).slice(0, 80), [record]);
-  if (!record) return <div className="text-sm text-muted-foreground">Loading defect...</div>;
-
-  const workType = form.work_type ?? record.work_type;
-  const itemDescription = (form as any).item_description ?? getRawValue(record.raw_payload, ['Issue Description', 'IssueDescription', 'Item Description', 'Description']) ?? record.description;
-  const capturedOn = (form as any).captured_on ?? getRawValue(record.raw_payload, ['Captured on', 'Captured On', 'Captured Date', 'Capture Date']) ?? record.created_at;
-  const startDate = (form as any).start_date ?? form.planned_start_date ?? getRawValue(record.raw_payload, ['Start', 'Start Date', 'Planned Start', 'Plan Start']);
-  const finishDate = (form as any).finish_date ?? form.planned_completion_date ?? getRawValue(record.raw_payload, ['Finish', 'Finish Date', 'Planned Finish', 'Plan Finish']);
-  const actualStartDate = (form as any).actual_start_date ?? getRawValue(record.raw_payload, ['Actual Start', 'Actual Start Date']);
-  const actualFinishDate = (form as any).actual_finish_date ?? getRawValue(record.raw_payload, ['Actual Finish', 'Actual Finish Date']);
-  const plannedProgressRaw = (form as any).planned_progress ?? getRawValue(record.raw_payload, ['Planned Progress', 'Planned Progress %', 'Plan Progress', 'Plan %']);
-  const plannedProgress = parseProgress(plannedProgressRaw);
-  const actualProgress = form.actual_progress_pct == null ? null : Number(form.actual_progress_pct);
-  const progressDifference = plannedProgress == null || actualProgress == null ? null : actualProgress - plannedProgress;
 
   // Master-driven dropdown options. Preserve legacy values that aren't in master.
   const subOptionsList = useMemo(() => {
@@ -376,6 +363,20 @@ export default function DefectDetailPage() {
   }, [hdecOptions, form.hdec_pic_name]);
   const statusOptionsList = DEFECT_STATUS_VALUES.map((s) => ({ value: s, label: s }));
   const teamOptionsList = ALL_TEAMS.map((t) => ({ value: t, label: TEAM_LABELS[t] }));
+
+  if (!record) return <div className="text-sm text-muted-foreground">Loading defect...</div>;
+
+  const workType = form.work_type ?? record.work_type;
+  const itemDescription = (form as any).item_description ?? getRawValue(record.raw_payload, ['Issue Description', 'IssueDescription', 'Item Description', 'Description']) ?? record.description;
+  const capturedOn = (form as any).captured_on ?? getRawValue(record.raw_payload, ['Captured on', 'Captured On', 'Captured Date', 'Capture Date']) ?? record.created_at;
+  const startDate = (form as any).start_date ?? form.planned_start_date ?? getRawValue(record.raw_payload, ['Start', 'Start Date', 'Planned Start', 'Plan Start']);
+  const finishDate = (form as any).finish_date ?? form.planned_completion_date ?? getRawValue(record.raw_payload, ['Finish', 'Finish Date', 'Planned Finish', 'Plan Finish']);
+  const actualStartDate = (form as any).actual_start_date ?? getRawValue(record.raw_payload, ['Actual Start', 'Actual Start Date']);
+  const actualFinishDate = (form as any).actual_finish_date ?? getRawValue(record.raw_payload, ['Actual Finish', 'Actual Finish Date']);
+  const plannedProgressRaw = (form as any).planned_progress ?? getRawValue(record.raw_payload, ['Planned Progress', 'Planned Progress %', 'Plan Progress', 'Plan %']);
+  const plannedProgress = parseProgress(plannedProgressRaw);
+  const actualProgress = form.actual_progress_pct == null ? null : Number(form.actual_progress_pct);
+  const progressDifference = plannedProgress == null || actualProgress == null ? null : actualProgress - plannedProgress;
 
   return (
     <div className="space-y-4">
