@@ -353,6 +353,30 @@ export default function DefectDetailPage() {
   const actualProgress = form.actual_progress_pct == null ? null : Number(form.actual_progress_pct);
   const progressDifference = plannedProgress == null || actualProgress == null ? null : actualProgress - plannedProgress;
 
+  // Master-driven dropdown options. Preserve legacy values that aren't in master.
+  const subOptionsList = useMemo(() => {
+    const names = subOptions.map((o) => o.name);
+    const cur = (form.subcontractor_name ?? '').trim();
+    const list = cur && !names.includes(cur) ? [{ id: '__legacy__', name: cur, parent_subcontractor_id: null }, ...subOptions] : subOptions;
+    return list.map((o) => ({ value: o.name, label: o.name }));
+  }, [subOptions, form.subcontractor_name]);
+  const subsubOptionsList = useMemo(() => {
+    const selectedSubId = subOptions.find((o) => o.name === form.subcontractor_name)?.id ?? null;
+    const filtered = selectedSubId ? subsubOptions.filter((o) => o.parent_subcontractor_id === selectedSubId) : subsubOptions;
+    const names = filtered.map((o) => o.name);
+    const cur = (form.subsub_name ?? '').trim();
+    const list = cur && !names.includes(cur) ? [{ id: '__legacy__', name: cur, parent_subcontractor_id: null }, ...filtered] : filtered;
+    return list.map((o) => ({ value: o.name, label: o.name }));
+  }, [subsubOptions, subOptions, form.subcontractor_name, form.subsub_name]);
+  const hdecOptionsList = useMemo(() => {
+    const names = hdecOptions.map((o) => o.name);
+    const cur = (form.hdec_pic_name ?? '').trim();
+    const list = cur && !names.includes(cur) ? [{ name: cur }, ...hdecOptions] : hdecOptions;
+    return list.map((o) => ({ value: o.name, label: o.name }));
+  }, [hdecOptions, form.hdec_pic_name]);
+  const statusOptionsList = DEFECT_STATUS_VALUES.map((s) => ({ value: s, label: s }));
+  const teamOptionsList = ALL_TEAMS.map((t) => ({ value: t, label: TEAM_LABELS[t] }));
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between"><Button variant="outline" onClick={() => navigate(-1)}>Back</Button>{canEdit && <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>}</div>
