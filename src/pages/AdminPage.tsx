@@ -19,7 +19,7 @@ import {
   DEFAULT_PASSWORD,
   type AppRole, type UserType, type TeamType,
 } from '@/types/enums';
-import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown, Download } from 'lucide-react';
+import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown, ArrowUpDown, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
@@ -64,6 +64,20 @@ function getLinkedOwnerCode(profile: Profile, masters: MasterRow[]): string | nu
       ? masters.find((master) => (master.type ?? 'sub') === 'sub' && master.name === profile.subcontractor_name)
       : null;
   return target?.owner_code ?? null;
+}
+
+type UsersSortField = 'login_id' | 'name' | 'user_type' | 'team' | 'linked' | 'owner_code' | 'role' | 'is_active';
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+function compareSortValues(a: string | number | boolean | null | undefined, b: string | number | boolean | null | undefined): number {
+  const aEmpty = a === null || a === undefined || a === '';
+  const bEmpty = b === null || b === undefined || b === '';
+  if (aEmpty && bEmpty) return 0;
+  if (aEmpty) return 1;
+  if (bEmpty) return -1;
+  if (typeof a === 'boolean' && typeof b === 'boolean') return a === b ? 0 : a ? -1 : 1;
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  return collator.compare(String(a), String(b));
 }
 
 export default function AdminPage() {
@@ -174,6 +188,17 @@ function UsersTab() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Profile | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
+  const [sortField, setSortField] = useState<UsersSortField>('login_id');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const toggleSort = (field: UsersSortField) => {
+    if (sortField === field) {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -260,6 +285,47 @@ function UsersTab() {
     }
     setDeleteTarget(null);
   };
+
+  const allMastersForSort = [...subcons, ...subsubs];
+  const sortedProfiles = [...profiles].sort((a, b) => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    let aVal: string | number | boolean | null;
+    let bVal: string | number | boolean | null;
+    switch (sortField) {
+      case 'login_id':
+        aVal = a.login_id; bVal = b.login_id; break;
+      case 'name':
+        aVal = a.name; bVal = b.name; break;
+      case 'user_type':
+        aVal = USER_TYPE_LABELS[a.user_type] ?? a.user_type;
+        bVal = USER_TYPE_LABELS[b.user_type] ?? b.user_type;
+        break;
+      case 'team':
+        aVal = a.team ? TEAM_LABELS[a.team] : null;
+        bVal = b.team ? TEAM_LABELS[b.team] : null;
+        break;
+      case 'linked':
+        aVal = a.user_type === 'subcontractor' || a.user_type === 'subsub' ? a.subcontractor_name : (a.user_type === 'hdec' || a.user_type === 'pm_pd' ? a.hdec_pic_name : null);
+        bVal = b.user_type === 'subcontractor' || b.user_type === 'subsub' ? b.subcontractor_name : (b.user_type === 'hdec' || b.user_type === 'pm_pd' ? b.hdec_pic_name : null);
+        break;
+      case 'owner_code':
+        aVal = getLinkedOwnerCode(a, allMastersForSort);
+        bVal = getLinkedOwnerCode(b, allMastersForSort);
+        break;
+      case 'role': {
+        const aRole = getUserRole(a.user_id);
+        const bRole = getUserRole(b.user_id);
+        aVal = aRole ? ROLE_LABELS[aRole] : null;
+        bVal = bRole ? ROLE_LABELS[bRole] : null;
+        break;
+      }
+      case 'is_active':
+        aVal = a.is_active; bVal = b.is_active; break;
+      default:
+        aVal = null; bVal = null;
+    }
+    return compareSortValues(aVal, bVal) * dir;
+  });
 
   return (
     <Card>
@@ -368,19 +434,19 @@ function UsersTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Login ID</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Team</TableHead>
-                <TableHead>Linked Master</TableHead>
-                <TableHead>Owner Code</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Active</TableHead>
+                <SortableHead field="login_id" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Login ID</SortableHead>
+                <SortableHead field="name" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Name</SortableHead>
+                <SortableHead field="user_type" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Type</SortableHead>
+                <SortableHead field="team" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Team</SortableHead>
+                <SortableHead field="linked" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Linked Master</SortableHead>
+                <SortableHead field="owner_code" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Owner Code</SortableHead>
+                <SortableHead field="role" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Role</SortableHead>
+                <SortableHead field="is_active" sortField={sortField} sortDir={sortDir} onSort={toggleSort}>Active</SortableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {profiles.map(p => {
+              {sortedProfiles.map(p => {
                 const role = getUserRole(p.user_id);
                 const linked =
                   p.user_type === 'subcontractor' ? p.subcontractor_name :
@@ -796,6 +862,39 @@ function EditUserDialog({
   );
 }
 
+function SortableHead({
+  field,
+  sortField,
+  sortDir,
+  onSort,
+  children,
+  className,
+}: {
+  field: UsersSortField;
+  sortField: UsersSortField;
+  sortDir: 'asc' | 'desc';
+  onSort: (field: UsersSortField) => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const isActive = sortField === field;
+  return (
+    <TableHead className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(field)}
+        className="inline-flex items-center gap-1 font-medium hover:text-foreground transition-colors"
+      >
+        <span>{children}</span>
+        {isActive ? (
+          sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-30" />
+        )}
+      </button>
+    </TableHead>
+  );
+}
 
 function MastersTab() {
   const { toast } = useToast();
