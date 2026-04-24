@@ -395,7 +395,7 @@ export default function DefectDetailPage() {
           </div>
         )}
         <Field label="Item Description" value={itemDescription} disabled={!canEdit} onChange={(v) => updateField('item_description' as any, v)} />
-        <Field label="Type" value={form.area_type} disabled={!canEdit} onChange={(v) => updateField('area_type', v)} />
+        <SelectField label="Team" value={form.team} options={teamOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('team', v as any)} />
         <Field label="Level" value={form.area_level} disabled={!canEdit} onChange={(v) => updateField('area_level', v)} />
         <Field label="Location" value={form.area_location} disabled={!canEdit} onChange={(v) => updateField('area_location', v)} />
         <Field label="Main Trade" value={form.main_trade} disabled={!canEdit} onChange={(v) => updateField('main_trade', v)} />
