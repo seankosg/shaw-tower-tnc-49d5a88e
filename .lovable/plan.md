@@ -1,95 +1,104 @@
 
 
-## Import 진행 상황 탭 이동 후에도 유지
+## Defect Raw Data 컬럼을 Field Config 와 동기화
 
-### 현재 한계
+### 문제
 
 ```text
-DefectImportPage 의 files 상태는 컴포넌트 로컬 useState
-  → 탭 이동(unmount) 시 상태 소실
-  → 돌아오면 빈 화면, 진행 중인 import 도 끊긴 것처럼 보임
+Admin → Field Config (defect_field_config) 의 필드:
+  planned_start_date, planned_completion_date, planned_closure_date
+  actual_start_date, actual_completion_date, actual_closure_date
+  area_raw, planned_progress_pct, completion_status, classified_at
+  remarks, hdec_comments, classification_source ...
 
-대조군: Standard Import 는 ImportContext (전역 Provider) 사용 → 탭 이동해도 유지됨
+DefectRawDataPage 의 하드코드 (DEFECT_RAW_FIELDS):
+  planned_date, target_date, actual_date, closed_date  ← DB 에 존재하지 않는 옛 이름
+  area_raw / planned_progress_pct / completion_status / classified_at  ← 누락
+
+결과:
+  - Admin 에서 토글한 일정 컬럼이 Raw Data 에 반영되지 않음
+  - DB 에 없는 4개 필드가 "—" 만 표시됨
+  - 일부 활성 필드는 아예 표에 안 보임
 ```
-
-### 변경 방향
-
-Standard Import 와 동일한 패턴 적용 — **`DefectImportContext` 신설**해서 상태/로직을 컴포넌트 밖으로 끌어올림.
 
 ### 변경 내용
 
-**1. 신규 파일: `src/contexts/DefectImportContext.tsx`**
+**파일: `src/pages/DefectRawDataPage.tsx`**
 
-DefectImportPage 안에 있던 다음 항목을 그대로 이전:
-- `interface DefectImportFile` (currentStep / stepDetail / progress / result 등 포함)
-- `files` state, `isRunning` state, `summary` state
-- `addFiles`, `removeFile`, `clearAll`, `setFileDataDate`
-- `importOneFile`, `runImport`(=`startImport`)
-- 단계 보고 헬퍼 `reportStep`
-- duplicate / similar-master 확인 dialog 상태도 함께 이전
+**1. `DEFECT_RAW_FIELDS` 재정의 — Field Config 의 모든 필드를 포함**
 
-Provider 형태:
+옛 4개 (`planned_date`, `target_date`, `actual_date`, `closed_date`) 제거 후 다음으로 교체:
 ```text
-export function DefectImportProvider({ children }) { ... }
-export function useDefectImport() { ... }
+'issue_no',
+'subcontractor_issue_no', 'subcontractor_issue_source',
+'closure_status', 'status', 'completion_status',
+'team',
+'planned_progress_pct', 'actual_progress_pct',
+'area_type', 'area_level', 'area_location', 'area_raw',
+'main_trade', 'sub_trade', 'work_type',
+'classification_source', 'classified_at', 'trade_detail',
+'description', 'defect_type', 'priority',
+'subcontractor_name', 'subsub_name', 'hdec_pic_name',
+'planned_start_date', 'planned_completion_date', 'planned_closure_date',
+'actual_start_date', 'actual_completion_date', 'actual_closure_date',
+'remarks', 'hdec_comments',
+'updated_at', 'created_at',
 ```
 
-**2. `src/App.tsx`**
-
-기존 `<ImportProvider>` 옆에 `<DefectImportProvider>` 추가로 감싸기:
+**2. `DATE_FILTER_FIELDS` 갱신**
 ```text
-<ImportProvider>
-  <DefectImportProvider>
-    ...
-  </DefectImportProvider>
-</ImportProvider>
+new Set([
+  'planned_start_date', 'planned_completion_date', 'planned_closure_date',
+  'actual_start_date', 'actual_completion_date', 'actual_closure_date',
+  'classified_at', 'updated_at', 'created_at',
+])
 ```
 
-**3. `src/pages/DefectImportPage.tsx`**
+**3. `RAW_SEARCH_FIELDS` 정리**
+- `planned_date/target_date/actual_date/closed_date` 제거 (검색 대상에서 빼기 — 어차피 없는 필드)
+- 새 일정 필드는 텍스트 검색 대상이 아님 (날짜 필터로만 처리)
 
-- 모든 로컬 state / handler 제거
-- `const { files, isRunning, summary, addFiles, ... } = useDefectImport()` 로 교체
-- JSX (드롭존, 파일 카드, 단계 인디케이터, summary) 는 그대로 유지
-- 컴포넌트는 "view only" 가 됨
+**4. `PROGRESS_FIELDS` 다중화**
+- 현재 `PROGRESS_FIELD = 'actual_progress_pct'` 단일
+- `PROGRESS_FIELDS = new Set(['actual_progress_pct', 'planned_progress_pct'])` 로 변경
+- column 정의에서 두 필드 모두 progressFilterFn / 'text' meta 사용
+- cell 렌더에서 두 필드 모두 `formatPct(value)` 사용
 
-**4. `src/components/layout/AppLayout.tsx` — 글로벌 인디케이터 확장**
+**5. `filteredBaseData` 의 URL 날짜 폴백 수정**
+- 현재 `item.planned_completion_date ?? item.planned_start_date` 사용 중 — 이미 새 스키마와 일치하므로 그대로 OK
 
-기존 `GlobalImportIndicator` 가 Standard Import 만 표시 중. Defect Import 도 동시 표시:
-- `useDefectImport()` 의 `isRunning` / 진행률 함께 읽음
-- 둘 중 하나라도 진행 중이면 헤더에 작은 칩 표시:
-  ```
-  [Importing TC: 2/5]   [Importing Defect: file.xlsx Step 5/6]
-  ```
-- 클릭 시 각각 `/import` 또는 `/defects/import` 로 이동
+**6. URL `urlMap` 의 dateField 매핑 검증**
+- `DefectExportPage`/`DefectProgressMatrix` 에서 `dateField` 로 `planned_completion_date` 등을 넘김 — 이미 `DATE_FILTER_FIELDS` 새 set 에 포함되어 자동 처리됨
 
-**5. 다이얼로그 (similar-master / duplicate 확인) 처리**
+**7. `sizeByField` 에 신규 일정/진행률 컬럼 width 추가**
+```text
+planned_start_date: 110, planned_completion_date: 110, planned_closure_date: 110,
+actual_start_date: 110, actual_completion_date: 110, actual_closure_date: 110,
+planned_progress_pct: 100, actual_progress_pct: 100,
+completion_status: 130, area_raw: 180, classified_at: 130,
+```
 
-- 다이얼로그 open 상태도 Context 로 이동
-- DefectImportPage 에서 다이얼로그 JSX 렌더링 (Context state 참조)
-- 사용자가 다른 탭으로 이동한 사이 확인 필요 상태가 되면, 글로벌 인디케이터에 "⚠ Awaiting confirmation" 표시 + 클릭 시 `/defects/import` 로 이동
+**8. cell 렌더에서 `completion_status` 도 `DefectStatusBadge` 사용** (status/closure_status 와 동일 패턴)
+
+**9. 셀 렌더의 description-like truncate 목록에 `area_raw` 추가**
 
 ### 변경하지 않는 항목
 
-- import 비즈니스 로직 (분류, SC No 발급, master ensurer, audit) — 코드 위치만 이동, 동작 동일
-- DB 스키마 / 토스트 / 단계 정의
-- Standard Import 쪽 (`ImportContext`, `ImportPage`) — 기존 유지
-- 파일 객체(File) 자체의 영속화는 하지 않음 — Provider 메모리 보존만 (페이지 새로고침 시는 초기화, 이는 Standard Import 와 동일한 한계)
-
-### 기술 세부사항
-
-- File 객체 + parsed rows 가 메모리에 남아있어야 하므로 sessionStorage / IndexedDB 영속화는 이번 범위 밖 (요구가 "탭 이동" 한정이므로 Provider 메모리로 충분)
-- importOneFile 안의 setFiles 클로저는 Context 의 setFiles 를 그대로 사용 — 단계 보고도 자연스럽게 유지
-- 페이지 재진입 시 useEffect 없이도 Provider state 가 그대로라 즉시 동일 화면 복원
+- Field Config 자체 (DB / Admin UI) — 이미 정확함
+- DefectRawTableView / 가상화 / 정렬 / localStorage 키 — 그대로
+- 다른 페이지 (Detail / Progress / Export) — 이미 새 스키마 사용 중
+- 컬럼 visibility 로직 (`isFieldVisible`) — 그대로 사용; 필드 이름만 일치시키면 자연스럽게 동작
 
 ### 검증
 
 ```text
-1. Defect Import 시작 → 진행 중 (Step 5) 에 다른 탭(Dashboard) 이동
-2. 다시 /defects/import 진입 → 같은 파일 목록, 같은 step dot, 같은 progress 그대로 보임
-3. 진행 중인 동안 헤더에 "Importing Defect: ... (Step X/6)" 칩 노출
-4. 완료 후 진입해도 결과 summary 가 그대로 남아있음 (clearAll 누르기 전까지)
-5. similar-master 확인 다이얼로그가 떠야 하는 시점에 다른 탭에 있어도, 돌아오면 다이얼로그 노출
-6. Standard Import 와 Defect Import 동시 실행 시 헤더에 두 개의 인디케이터 동시 표시
-7. 페이지 새로고침(F5) 은 초기화 — 이는 정상 (Standard Import 와 동일)
+1. Admin → Field Config 에서 "Planned Start Date" off → Raw Data 그 컬럼 사라짐
+2. Admin 에서 "Remarks" 토글 → 즉시 반영
+3. URL ?dateField=planned_completion_date&dateStart=...&dateEnd=... 진입 시 해당 컬럼 날짜 필터 칠해짐
+4. DB 에 없는 planned_date/target_date/actual_date/closed_date 컬럼이 더이상 표에 없음
+5. planned_progress_pct / actual_progress_pct 두 컬럼 모두 % 표시
+6. completion_status 가 badge 로 표시
+7. localStorage 에 저장된 옛 columnSizing 키(planned_date 등) 는 무시되고 신규 컬럼은 default size 사용
+8. 정렬/필터/검색 정상 동작
 ```
 
