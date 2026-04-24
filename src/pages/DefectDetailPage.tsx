@@ -264,6 +264,7 @@ export default function DefectDetailPage() {
       payload.subcontractor_name = form.subcontractor_name || null;
       payload.subsub_name = form.subsub_name || null;
       payload.hdec_pic_name = form.hdec_pic_name || null;
+      payload.team = form.team || null;
     }
     if (payload.subcontractor_issue_no && payload.subcontractor_issue_no !== normalizeSubcontractorIssueNo(record.subcontractor_issue_no)) {
       const { data: duplicate } = await (supabase as any)
