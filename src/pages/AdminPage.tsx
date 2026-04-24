@@ -286,6 +286,47 @@ function UsersTab() {
     setDeleteTarget(null);
   };
 
+  const allMastersForSort = [...subcons, ...subsubs];
+  const sortedProfiles = [...profiles].sort((a, b) => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    let aVal: string | number | boolean | null;
+    let bVal: string | number | boolean | null;
+    switch (sortField) {
+      case 'login_id':
+        aVal = a.login_id; bVal = b.login_id; break;
+      case 'name':
+        aVal = a.name; bVal = b.name; break;
+      case 'user_type':
+        aVal = USER_TYPE_LABELS[a.user_type] ?? a.user_type;
+        bVal = USER_TYPE_LABELS[b.user_type] ?? b.user_type;
+        break;
+      case 'team':
+        aVal = a.team ? TEAM_LABELS[a.team] : null;
+        bVal = b.team ? TEAM_LABELS[b.team] : null;
+        break;
+      case 'linked':
+        aVal = a.user_type === 'subcontractor' || a.user_type === 'subsub' ? a.subcontractor_name : (a.user_type === 'hdec' || a.user_type === 'pm_pd' ? a.hdec_pic_name : null);
+        bVal = b.user_type === 'subcontractor' || b.user_type === 'subsub' ? b.subcontractor_name : (b.user_type === 'hdec' || b.user_type === 'pm_pd' ? b.hdec_pic_name : null);
+        break;
+      case 'owner_code':
+        aVal = getLinkedOwnerCode(a, allMastersForSort);
+        bVal = getLinkedOwnerCode(b, allMastersForSort);
+        break;
+      case 'role': {
+        const aRole = getUserRole(a.user_id);
+        const bRole = getUserRole(b.user_id);
+        aVal = aRole ? ROLE_LABELS[aRole] : null;
+        bVal = bRole ? ROLE_LABELS[bRole] : null;
+        break;
+      }
+      case 'is_active':
+        aVal = a.is_active; bVal = b.is_active; break;
+      default:
+        aVal = null; bVal = null;
+    }
+    return compareSortValues(aVal, bVal) * dir;
+  });
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
