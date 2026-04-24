@@ -19,7 +19,7 @@ import {
   DEFAULT_PASSWORD,
   type AppRole, type UserType, type TeamType,
 } from '@/types/enums';
-import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown, Download } from 'lucide-react';
+import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown, ArrowUpDown, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
