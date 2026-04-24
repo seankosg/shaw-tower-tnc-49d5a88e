@@ -821,6 +821,39 @@ function EditUserDialog({
   );
 }
 
+function SortableHead({
+  field,
+  sortField,
+  sortDir,
+  onSort,
+  children,
+  className,
+}: {
+  field: UsersSortField;
+  sortField: UsersSortField;
+  sortDir: 'asc' | 'desc';
+  onSort: (field: UsersSortField) => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const isActive = sortField === field;
+  return (
+    <TableHead className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(field)}
+        className="inline-flex items-center gap-1 font-medium hover:text-foreground transition-colors"
+      >
+        <span>{children}</span>
+        {isActive ? (
+          sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-30" />
+        )}
+      </button>
+    </TableHead>
+  );
+}
 
 function MastersTab() {
   const { toast } = useToast();
