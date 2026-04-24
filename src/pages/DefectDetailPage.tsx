@@ -122,6 +122,24 @@ export default function DefectDetailPage() {
       data_source_type: 'app_direct_input',
       row_version: record.row_version + 1,
     };
+    // Auto-recompute statuses if user did not change them manually
+    const userChangedCompletion = (form.completion_status ?? null) !== (record.completion_status ?? null);
+    const userChangedClosure = (form.closure_status ?? null) !== (record.closure_status ?? null);
+    if (!userChangedCompletion || !userChangedClosure) {
+      const asOf = new Date().toISOString().slice(0, 10);
+      const auto = computeDefectStatuses({
+        planned_start_date: payload.planned_start_date,
+        planned_completion_date: payload.planned_completion_date,
+        planned_closure_date: payload.planned_closure_date,
+        actual_start_date: payload.actual_start_date,
+        actual_completion_date: payload.actual_completion_date,
+        actual_closure_date: payload.actual_closure_date,
+        planned_progress_pct: payload.planned_progress_pct,
+        actual_progress_pct: payload.actual_progress_pct,
+      }, asOf);
+      if (!userChangedCompletion) payload.completion_status = auto.completion_status;
+      if (!userChangedClosure) payload.closure_status = auto.closure_status;
+    }
     const rawPayload = { ...(record.raw_payload ?? {}) };
     for (const key of rawFieldKeys) {
       const value = (form as any)[key];
