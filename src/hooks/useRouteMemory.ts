@@ -12,6 +12,7 @@ const ROUTE_KEYS = [
   '/import/logs',
   '/export',
   '/mobile',
+  '/admin/classification',
   '/admin',
 ];
 
@@ -23,6 +24,14 @@ const routeKeyForPath = (pathname: string) =>
 export function getRememberedRoute(defaultPath: string) {
   if (typeof window === 'undefined') return defaultPath;
   return localStorage.getItem(`${MEMORY_PREFIX}${defaultPath}`) || defaultPath;
+}
+
+// One-time cleanup: remove stale '/admin' memory that pointed to '/admin/classification'
+if (typeof window !== 'undefined') {
+  const stale = localStorage.getItem(`${MEMORY_PREFIX}/admin`);
+  if (stale && (stale === '/admin/classification' || stale.startsWith('/admin/classification'))) {
+    localStorage.removeItem(`${MEMORY_PREFIX}/admin`);
+  }
 }
 
 export function useRouteMemory() {
