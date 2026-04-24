@@ -75,6 +75,20 @@ export default function DefectDetailPage() {
     load();
   }, [id, user]);
 
+  useEffect(() => {
+    async function loadMasters() {
+      const [subRes, hdecRes] = await Promise.all([
+        (supabase as any).from('subcontractor_master').select('id, name, parent_subcontractor_id, type').eq('is_active', true).order('name'),
+        (supabase as any).from('hdec_pic_master').select('name').eq('is_active', true).order('name'),
+      ]);
+      const allSubs = (subRes.data ?? []) as Array<SubMaster & { type: string }>;
+      setSubOptions(allSubs.filter((r) => r.type === 'sub').map(({ id, name, parent_subcontractor_id }) => ({ id, name, parent_subcontractor_id })));
+      setSubsubOptions(allSubs.filter((r) => r.type === 'subsub').map(({ id, name, parent_subcontractor_id }) => ({ id, name, parent_subcontractor_id })));
+      setHdecOptions((hdecRes.data ?? []) as HdecMaster[]);
+    }
+    loadMasters();
+  }, []);
+
   const canEdit = scope !== 'none';
   const canEditResponsibility = scope === 'team' || scope === 'full';
 
