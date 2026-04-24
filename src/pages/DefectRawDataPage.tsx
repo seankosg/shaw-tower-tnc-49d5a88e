@@ -724,6 +724,72 @@ export default function DefectRawDataPage() {
       </div>
 
       <DefectRawTableView table={table} loading={loading} sorting={sorting.length ? sorting : DEFAULT_SORTING} autoSizeColumn={autoSizeColumn} navigate={navigate} tableRef={tableRef} />
+
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Export Defect Raw Data</DialogTitle>
+            <DialogDescription>Choose how you want to export the currently filtered rows.</DialogDescription>
+          </DialogHeader>
+          {(() => {
+            const sortedRows = table.getSortedRowModel().rows;
+            const subconSet = new Set<string>();
+            for (const r of sortedRows) {
+              const raw = (r.original as any)?.subcontractor_name;
+              const key = raw && String(raw).trim() ? String(raw).trim() : 'Unassigned';
+              subconSet.add(key);
+            }
+            return (
+              <RadioGroup value={exportMode} onValueChange={(v) => setExportMode(v as 'single' | 'per-subcon')} className="gap-4 py-2">
+                <div className="flex items-start gap-3 rounded-md border p-3">
+                  <RadioGroupItem value="single" id="export-single" className="mt-0.5" />
+                  <div className="flex-1">
+                    <Label htmlFor="export-single" className="cursor-pointer text-sm font-medium">Single file</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">Exports the current view as one .xlsx file ({sortedRows.length} rows).</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 rounded-md border p-3">
+                  <RadioGroupItem value="per-subcon" id="export-per-subcon" className="mt-0.5" />
+                  <div className="flex-1">
+                    <Label htmlFor="export-per-subcon" className="cursor-pointer text-sm font-medium">One file per Subcontractor</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Splits filtered rows by Subcontractor — {subconSet.size} file{subconSet.size === 1 ? '' : 's'} ({sortedRows.length} rows total).
+                      Empty Subcontractor rows go to "Unassigned". File names include the Subcontractor name.
+                    </p>
+                  </div>
+                </div>
+              </RadioGroup>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                const meta = {
+                  userName: profile?.name || profile?.login_id || 'Unknown',
+                  userType: profile?.user_type ? USER_TYPE_LABELS[profile.user_type] : '',
+                };
+                try {
+                  if (exportMode === 'single') {
+                    const result = exportDefectRawToExcel({ table, fieldConfig: fieldConfigRows, globalFilter, searchParams, meta });
+                    toast({ title: 'Export complete', description: `${result.rowCount} rows → ${result.fileName}` });
+                  } else {
+                    const result = exportDefectRawToExcelBySubcontractor({ table, fieldConfig: fieldConfigRows, globalFilter, searchParams, meta });
+                    toast({ title: 'Export complete', description: `${result.fileCount} file${result.fileCount === 1 ? '' : 's'} exported (${result.rowCount} rows total)` });
+                  }
+                  setExportDialogOpen(false);
+                } catch (err) {
+                  console.error('Defect Excel export failed', err);
+                  toast({ title: 'Export failed', description: String((err as Error)?.message ?? err), variant: 'destructive' });
+                }
+              }}
+            >
+              <Download className="mr-1.5 h-3.5 w-3.5" /> Export
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
