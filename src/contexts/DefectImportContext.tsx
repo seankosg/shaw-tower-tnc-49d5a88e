@@ -399,14 +399,39 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
 
     const mappedRows = item.parsed.map((row) => applyMasterDecisions(row, decisions));
 
+    const isReimport = !!item.isReimport;
+
+    // Existing-row lookup: by issue_no for everyone, plus by id for re-imports.
     const issueNos = mappedRows.map((row) => row.issue_no).filter((value): value is string => Boolean(value));
     const existingByIssueNo = new Map<string, any>();
+    const existingById = new Map<string, any>();
     if (issueNos.length > 0) {
       const chunkSize = 200;
       for (let i = 0; i < issueNos.length; i += chunkSize) {
         const chunk = issueNos.slice(i, i + chunkSize);
         const { data } = await (supabase as any).from('defect_items').select('*').in('issue_no', chunk);
-        for (const existing of data ?? []) existingByIssueNo.set(existing.issue_no, existing);
+        for (const existing of data ?? []) {
+          existingByIssueNo.set(existing.issue_no, existing);
+          if (existing.id) existingById.set(String(existing.id), existing);
+        }
+      }
+    }
+
+    if (isReimport) {
+      // Also fetch by ID for any rows whose issue_no may have been edited.
+      const ids = mappedRows
+        .map((row) => row.id)
+        .filter((value): value is string => Boolean(value) && !existingById.has(String(value)));
+      if (ids.length > 0) {
+        const chunkSize = 200;
+        for (let i = 0; i < ids.length; i += chunkSize) {
+          const chunk = ids.slice(i, i + chunkSize);
+          const { data } = await (supabase as any).from('defect_items').select('*').in('id', chunk);
+          for (const existing of data ?? []) {
+            existingById.set(String(existing.id), existing);
+            if (existing.issue_no) existingByIssueNo.set(existing.issue_no, existing);
+          }
+        }
       }
     }
 
