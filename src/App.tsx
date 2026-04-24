@@ -93,6 +93,7 @@ const App = () => (
             </Routes>
           </BrowserRouter>
         </TooltipProvider>
+        </DefectImportProvider>
       </ImportProvider>
     </QueryClientProvider>
   </AuthProvider>
