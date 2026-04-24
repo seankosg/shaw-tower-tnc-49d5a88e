@@ -182,6 +182,7 @@ export function AppLayout() {
           </nav>
           <div className="ml-auto flex items-center gap-2">
             <GlobalImportIndicator />
+            <GlobalDefectImportIndicator />
             <AccountMenu />
           </div>
         </header>
