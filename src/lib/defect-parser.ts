@@ -231,7 +231,7 @@ export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
     const status = toText(getMapped(raw, 'status'));
 
     return {
-      rawRowNo: index + 2,
+      rawRowNo: index + headerRowIdx + 2,
       issue_no: toText(getMapped(raw, 'issue_no')) ?? '',
       subcontractor_issue_no: toText(getMapped(raw, 'subcontractor_issue_no')),
       subcontractor_issue_source: toText(getMapped(raw, 'subcontractor_issue_source')),
