@@ -417,9 +417,9 @@ export default function DefectDetailPage() {
             toast({ title: 'Auto-classified', description: `${c.source} → ${c.work_type}` });
           }}>Auto-classify from description</Button>
         </div>
-        <Field label="Subcontractor" value={form.subcontractor_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subcontractor_name', v)} />
-        <Field label="Sub-Sub" value={form.subsub_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subsub_name', v)} />
-        <Field label="HDEC PIC" value={form.hdec_pic_name} disabled={!canEditResponsibility} onChange={(v) => updateField('hdec_pic_name', v)} />
+        <SelectField label="Subcontractor" value={form.subcontractor_name} options={subOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('subcontractor_name', v)} />
+        <SelectField label="Sub-Sub" value={form.subsub_name} options={subsubOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('subsub_name', v)} />
+        <SelectField label="HDEC PIC" value={form.hdec_pic_name} options={hdecOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('hdec_pic_name', v)} />
         <Field label="Captured on" type="date" value={toDateInput(capturedOn)} disabled={!canEdit} onChange={(v) => updateField('captured_on' as any, v)} />
         <Field label="Planned Start Date" type="date" value={toDateInput(form.planned_start_date)} disabled={!canEdit} onChange={(v) => updateField('planned_start_date', v)} />
         <Field label="Planned Completion Date" type="date" value={toDateInput(form.planned_completion_date)} disabled={!canEdit} onChange={(v) => updateField('planned_completion_date', v)} />
