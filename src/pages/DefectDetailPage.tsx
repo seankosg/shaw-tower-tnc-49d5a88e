@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { daysDiff } from '@/lib/defect-parser';
 import { computeDefectStatuses } from '@/lib/defect-status';
+import { computePlannedProgressPct } from '@/lib/defect-progress-calc';
 import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct, normalizeSubcontractorIssueNo } from '@/lib/defect-utils';
 import { classifyDefect, type ClassificationRule, type DisciplineFallback } from '@/lib/defect-classifier';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
@@ -57,7 +58,18 @@ export default function DefectDetailPage() {
   const canEdit = scope !== 'none';
   const canEditResponsibility = scope === 'team' || scope === 'full';
 
-  const updateField = (field: keyof DefectItem, value: any) => setForm((current) => ({ ...current, [field]: value }));
+  const updateField = (field: keyof DefectItem, value: any) => setForm((current) => {
+    const next: any = { ...current, [field]: value };
+    if (field === 'planned_start_date' || field === 'planned_completion_date') {
+      const today = new Date().toISOString().slice(0, 10);
+      next.planned_progress_pct = computePlannedProgressPct(
+        next.planned_start_date ?? null,
+        next.planned_completion_date ?? null,
+        today,
+      );
+    }
+    return next;
+  });
 
   const revisionPayload = (field: string, before: any, after: any) => ({
     defect_id: record!.id, project_id: record!.project_id, issue_no: record!.issue_no, subcontractor_issue_no: form.subcontractor_issue_no ?? record!.subcontractor_issue_no,
@@ -114,7 +126,7 @@ export default function DefectDetailPage() {
       actual_start_date: form.actual_start_date || null,
       actual_completion_date: Number(form.actual_progress_pct ?? 0) >= 100 ? (form.actual_completion_date || record.actual_completion_date || new Date().toISOString().slice(0, 10)) : (form.actual_completion_date || null),
       actual_closure_date: form.actual_closure_date || null,
-      planned_progress_pct: form.planned_progress_pct ?? null,
+      planned_progress_pct: computePlannedProgressPct(form.planned_start_date ?? null, form.planned_completion_date ?? null, new Date().toISOString().slice(0, 10)),
       actual_progress_pct: form.actual_progress_pct ?? null,
       completion_status: form.completion_status || null,
       closure_status: form.closure_status || null,
@@ -246,7 +258,7 @@ export default function DefectDetailPage() {
         <Field label="Actual Start Date" type="date" value={toDateInput(form.actual_start_date)} disabled={!canEdit} onChange={(v) => updateField('actual_start_date', v)} />
         <Field label="Actual Completion Date" type="date" value={toDateInput(form.actual_completion_date)} disabled={!canEdit} onChange={(v) => updateField('actual_completion_date', v)} />
         <Field label="Actual Closure Date" type="date" value={toDateInput(form.actual_closure_date)} disabled={!canEdit} onChange={(v) => updateField('actual_closure_date', v)} />
-        <Field label="Planned Progress %" type="number" value={form.planned_progress_pct} disabled={!canEdit} onChange={(v) => updateField('planned_progress_pct', v === '' ? null : Number(v))} />
+        <ReadonlyField label="Planned Progress % (auto from Planned Start/Completion and today)" value={form.planned_progress_pct == null ? null : formatPct(form.planned_progress_pct)} />
         <Field label="Actual Progress %" type="number" value={form.actual_progress_pct} disabled={!canEdit} onChange={(v) => updateField('actual_progress_pct', v === '' ? null : Number(v))} />
         <ReadonlyField label="Difference" value={progressDifference == null ? null : formatPct(progressDifference)} />
         <Field label="Completion Status" value={form.completion_status} disabled={!canEdit} onChange={(v) => updateField('completion_status', v)} />

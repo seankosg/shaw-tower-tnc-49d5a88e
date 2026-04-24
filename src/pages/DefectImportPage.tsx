@@ -13,6 +13,7 @@ import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-p
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
 import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, suggestOwnerCode } from '@/lib/defect-utils';
 import { computeDefectStatuses, isValidDefectStatus } from '@/lib/defect-status';
+import { computePlannedProgressPct } from '@/lib/defect-progress-calc';
 import { classifyDefect, type ClassificationRule, type DisciplineFallback } from '@/lib/defect-classifier';
 import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
 import { normalizeTeamValue, type TeamType } from '@/types/enums';
@@ -483,6 +484,20 @@ export default function DefectImportPage() {
 
       await masterEnsurer.ensureForRow(row);
 
+      // Auto-compute Planned Progress %: always system-calculated, ignore Excel value.
+      // Q1=b: dataDate < plannedStart -> null (not started); Q2=a: dataDate > plannedCompletion -> 100.
+      const computedPlanned = computePlannedProgressPct(row.planned_start_date, row.planned_completion_date, dataDate);
+      row.planned_progress_pct = computedPlanned;
+      if (computedPlanned == null) {
+        if (!row.planned_start_date || !row.planned_completion_date) {
+          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_not_computable', reason_detail: 'Missing planned_start_date or planned_completion_date' });
+        } else if (row.planned_completion_date < row.planned_start_date) {
+          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_invalid_dates', reason_detail: 'Planned completion is earlier than planned start' });
+        } else if (dataDate < row.planned_start_date) {
+          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_not_started', reason_detail: 'Data date is before planned start date' });
+        }
+      }
+
       // Auto-classification: preserve Excel main/sub_trade if provided; always set work_type from classifier
       const classification = classifyDefect(
         { description: row.description, field_discipline: row.trade_detail },
@@ -594,7 +609,7 @@ export default function DefectImportPage() {
         const inserted = await (supabase as any).from('defect_items').insert(payload).select('id').single();
         insertedCount++;
         await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'inserted', ...logReason });
-        if (inserted.data?.id) await (supabase as any).from('defect_daily_snapshots').insert({ defect_id: inserted.data.id, issue_no: row.issue_no, snapshot_date: dataDate, planned_completion_date: row.planned_completion_date, actual_completion_date: row.actual_completion_date, planned_closure_date: row.planned_closure_date, actual_closure_date: row.actual_closure_date, planned_progress_pct: row.planned_progress_pct, actual_progress_pct: row.actual_progress_pct, completion_status: row.completion_status, closure_status: row.closure_status, created_by: user.id });
+        if (inserted.data?.id) await (supabase as any).from('defect_daily_snapshots').insert({ defect_id: inserted.data.id, issue_no: row.issue_no, snapshot_date: dataDate, planned_completion_date: row.planned_completion_date, actual_completion_date: row.actual_completion_date, planned_closure_date: row.planned_closure_date, actual_closure_date: row.actual_closure_date, planned_progress_pct: payload.planned_progress_pct, actual_progress_pct: row.actual_progress_pct, completion_status: completionStatus, closure_status: closureStatus, created_by: user.id });
       }
     }
 
