@@ -177,18 +177,22 @@ export default function DefectDashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         <KpiCard icon={<ListChecks className="h-6 w-6 text-muted-foreground" />} label="Total Defects" value={kpis.total.toLocaleString()} onClick={() => goRaw({})} />
         <KpiCard icon={<CheckCircle2 className="h-6 w-6 text-primary" />} label="Completion Done" value={kpis.actualDone.toLocaleString()} sub={`${kpis.completionPct}% completed`} onClick={() => goRaw({ actualComplete: 'true' })} />
+        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Open Defect" value={(kpis.total - kpis.actualDone).toLocaleString()} sub="Total − Completion" onClick={() => goRaw({ actualComplete: 'false' })} />
         <KpiCard icon={<ShieldCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />} label="Closure Done" value={kpis.closureDone.toLocaleString()} sub={`${kpis.overallProgressPct}% closed`} onClick={() => goRaw({ closureComplete: 'true' })} />
-        <KpiCard icon={<Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />} label="Difference" value={kpis.difference.toLocaleString()} sub="검측 대기" onClick={() => goRaw({ actualComplete: 'true', closureComplete: 'false' })} />
+        <KpiCard icon={<Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />} label="Remain Inspection" value={kpis.difference.toLocaleString()} sub="검측 대기" onClick={() => goRaw({ actualComplete: 'true', closureComplete: 'false' })} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <KpiCard icon={<AlertTriangle className="h-6 w-6 text-destructive" />} label="Overdue" value={kpis.overdueCount} accent="destructive" onClick={() => goRaw({ overdue: 'true', asOf: dataDate })} />
         <Card className="flex flex-col justify-center p-4">
           <div className="mb-1 flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-muted-foreground" /><p className="text-xs text-muted-foreground">Overall Progress</p></div>
           <p className="text-xl font-bold text-foreground">{kpis.overallProgressPct}%</p>
           <Progress value={kpis.overallProgressPct} className="mt-1 h-2" />
           <p className="mt-1 text-[10px] text-muted-foreground">Closure / Total</p>
         </Card>
-        <KpiCard icon={<AlertTriangle className="h-6 w-6 text-destructive" />} label="Overdue" value={kpis.overdueCount} accent="destructive" onClick={() => goRaw({ overdue: 'true', asOf: dataDate })} />
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
