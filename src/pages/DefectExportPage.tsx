@@ -12,7 +12,7 @@ import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 
 const ALL = '__all__';
 const EMPTY_FILTERS: DefectExportFilters = {
-  query: '', team: '', status: '', subcontractor: '', subsub: '', hdecPic: '', mainTrade: '', subTrade: '', level: '',
+  query: '', team: '', status: '', subcontractor: '', subsub: '', hdecPic: '', mainTrade: '', subTrade: '', workType: '', classificationSource: '', level: '',
   dateField: 'planned_completion_date', dateStart: '', dateEnd: '',
 };
 
@@ -65,6 +65,8 @@ export default function DefectExportPage() {
           <FilterSelect value={filters.hdecPic} placeholder="HDEC PIC" options={unique('hdec_pic_name').map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('hdecPic', v)} />
           <FilterSelect value={filters.mainTrade} placeholder="Main Trade" options={unique('main_trade').map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('mainTrade', v)} />
           <FilterSelect value={filters.subTrade} placeholder="Sub Trade" options={unique('sub_trade').map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('subTrade', v)} />
+          <FilterSelect value={filters.workType} placeholder="Work Type" options={unique('work_type').map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('workType', v)} />
+          <FilterSelect value={filters.classificationSource} placeholder="Classification" options={['rule', 'discipline', 'manual', 'unclassified'].map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('classificationSource', v)} />
           <FilterSelect value={filters.level} placeholder="Level" options={unique('area_level').map((v) => ({ value: v, label: v }))} onChange={(v) => setFilter('level', v)} />
           <Select value={filters.dateField} onValueChange={(value) => setFilter('dateField', value as DefectExportFilters['dateField'])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>
             <SelectItem value="planned_start_date">Planned Start Date</SelectItem>
@@ -83,7 +85,7 @@ export default function DefectExportPage() {
         <CardHeader><CardTitle className="text-base">Export Options</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2">
-            <Select value={columnMode} onValueChange={(value) => setColumnMode(value as DefectColumnMode)}><SelectTrigger className="w-[240px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Columns</SelectItem><SelectItem value="visible">Visible / Field Config Columns</SelectItem><SelectItem value="responsibility">Responsibility Fields</SelectItem><SelectItem value="schedule">Schedule Fields</SelectItem><SelectItem value="progress">Progress Fields</SelectItem></SelectContent></Select>
+            <Select value={columnMode} onValueChange={(value) => setColumnMode(value as DefectColumnMode)}><SelectTrigger className="w-[240px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Columns</SelectItem><SelectItem value="visible">Visible / Field Config Columns</SelectItem><SelectItem value="responsibility">Responsibility Fields</SelectItem><SelectItem value="schedule">Schedule Fields</SelectItem><SelectItem value="progress">Progress Fields</SelectItem><SelectItem value="classification">Classification Fields</SelectItem></SelectContent></Select>
             <span className="text-sm text-muted-foreground">{filtered.length} rows matched</span>
           </div>
           <Button onClick={exportData} disabled={loading}>{loading ? 'Loading...' : 'Export Excel'}</Button>

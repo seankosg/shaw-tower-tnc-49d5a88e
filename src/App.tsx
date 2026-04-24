@@ -20,6 +20,7 @@ import DashboardPage from "./pages/DashboardPage";
 import SchedulePage from "./pages/SchedulePage";
 import ScheduleRevisionPage from "./pages/ScheduleRevisionPage";
 import AdminPage from "./pages/AdminPage";
+import AdminClassificationPage from "./pages/AdminClassificationPage";
 import DefectDashboardPage from "./pages/DefectDashboardPage";
 import DefectProgressPage from "./pages/DefectProgressPage";
 import DefectRawDataPage from "./pages/DefectRawDataPage";
@@ -85,6 +86,7 @@ const App = () => (
                 <Route path="/defect/quick-update" element={<RedirectPreserveSearch to="/defects/quick-update" />} />
                 <Route path="/defects/:id" element={<DefectDetailPage />} />
                 <Route path="/admin" element={<AdminPage />} />
+                <Route path="/admin/classification" element={<AdminClassificationPage />} />
               </Route>
             </Routes>
           </BrowserRouter>

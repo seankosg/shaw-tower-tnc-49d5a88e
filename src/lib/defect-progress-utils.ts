@@ -1,6 +1,6 @@
 import { type DefectItem, isClosedDefect, isOverdueDefect } from '@/lib/defect-utils';
 
-export type DefectProgressGroupBy = 'team' | 'subcontractor_name' | 'subsub_name' | 'hdec_pic_name' | 'area_level' | 'main_trade' | 'sub_trade';
+export type DefectProgressGroupBy = 'team' | 'subcontractor_name' | 'subsub_name' | 'hdec_pic_name' | 'area_level' | 'main_trade' | 'sub_trade' | 'work_type';
 export type DefectProgressBucket = 'day' | 'week';
 export type DefectProgressDateField = 'planned_completion_date' | 'planned_closure_date';
 

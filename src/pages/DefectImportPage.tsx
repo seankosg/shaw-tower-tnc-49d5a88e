@@ -774,9 +774,9 @@ export default function DefectImportPage() {
               <SummaryBox label="Team Unresolved" value={totals.teamUnresolved} />
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
-              <SummaryBox label="Auto-classified (rule)" value={totals.classifiedRule} onClick={() => navigate('/defects/raw?classificationSource=rule')} />
-              <SummaryBox label="Auto-classified (discipline)" value={totals.classifiedDiscipline} onClick={() => navigate('/defects/raw?classificationSource=discipline')} />
-              <SummaryBox label="Unclassified" value={totals.unclassified} onClick={() => navigate('/defects/raw?classificationSource=unclassified')} />
+              <SummaryBox label="Auto-classified (rule)" value={totals.classifiedRule} onClick={() => navigate('/defects/raw-data?classificationSource=rule')} />
+              <SummaryBox label="Auto-classified (discipline)" value={totals.classifiedDiscipline} onClick={() => navigate('/defects/raw-data?classificationSource=discipline')} />
+              <SummaryBox label="Unclassified" value={totals.unclassified} onClick={() => navigate('/defects/raw-data?classificationSource=unclassified')} />
             </div>
           </CardContent>
         </Card>
