@@ -43,6 +43,7 @@ export interface ParsedDefectRow {
   closure_status: string | null;
   remarks: string | null;
   hdec_comments: string | null;
+  work_type: string | null;
   raw_payload: Record<string, unknown>;
 }
 
@@ -91,6 +92,7 @@ const FIELD_ALIASES: Record<string, string> = {
   progress: 'actual_progress_pct',
   'completion status': 'completion_status',
   'closure status': 'closure_status',
+  'work type': 'work_type',
   'subcontractor issue no': 'subcontractor_issue_no',
   'subcontractor no': 'subcontractor_issue_no',
   'subcontractor issue source': 'subcontractor_issue_source',
@@ -210,6 +212,7 @@ export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
       closure_status: toText(getMapped(raw, 'closure_status')),
       remarks: toText(getMapped(raw, 'remarks')),
       hdec_comments: toText(getMapped(raw, 'hdec_comments')),
+      work_type: toText(getMapped(raw, 'work_type')),
       raw_payload: raw,
     };
   });
