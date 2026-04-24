@@ -36,8 +36,19 @@ export default function DefectDetailPage() {
   const [form, setForm] = useState<Partial<DefectItem>>({});
   const [scope, setScope] = useState<DefectEditScope>('none');
   const [logs, setLogs] = useState<any[]>([]);
+  const [scHistory, setScHistory] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const { isFieldVisible, isFieldRequired, getLabel } = useDefectFieldConfig();
+
+  const loadScHistory = async (defectId: string) => {
+    const res = await (supabase as any)
+      .from('sc_no_history')
+      .select('*')
+      .eq('defect_id', defectId)
+      .order('changed_at', { ascending: false })
+      .limit(10);
+    setScHistory(res.data ?? []);
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -51,6 +62,7 @@ export default function DefectDetailPage() {
       }
       const logRes = await (supabase as any).from('defect_change_log').select('*').eq('defect_id', id).order('changed_at', { ascending: false }).limit(50);
       setLogs(logRes.data ?? []);
+      await loadScHistory(id);
     }
     load();
   }, [id, user]);
