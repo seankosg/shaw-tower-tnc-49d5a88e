@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -12,9 +13,13 @@ import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { daysDiff } from '@/lib/defect-parser';
 import { computeDefectStatuses } from '@/lib/defect-status';
 import { computePlannedProgressPct } from '@/lib/defect-progress-calc';
-import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct, normalizeSubcontractorIssueNo, extractOwnerCodeFromIssueNo, buildNextSubcontractorIssueNo, parseSubcontractorIssueSequence } from '@/lib/defect-utils';
+import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, DEFECT_STATUS_VALUES, type DefectEditScope, type DefectItem, formatPct, normalizeSubcontractorIssueNo, extractOwnerCodeFromIssueNo, buildNextSubcontractorIssueNo, parseSubcontractorIssueSequence } from '@/lib/defect-utils';
 import { classifyDefect, type ClassificationRule, type DisciplineFallback } from '@/lib/defect-classifier';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
+import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
+
+type SubMaster = { id: string; name: string; parent_subcontractor_id: string | null };
+type HdecMaster = { name: string };
 
 const RAW_FIELD_LABELS = {
   item_description: 'Item Description',
@@ -38,6 +43,9 @@ export default function DefectDetailPage() {
   const [logs, setLogs] = useState<any[]>([]);
   const [scHistory, setScHistory] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [subOptions, setSubOptions] = useState<SubMaster[]>([]);
+  const [subsubOptions, setSubsubOptions] = useState<SubMaster[]>([]);
+  const [hdecOptions, setHdecOptions] = useState<HdecMaster[]>([]);
   const { isFieldVisible, isFieldRequired, getLabel } = useDefectFieldConfig();
 
   const loadScHistory = async (defectId: string) => {
@@ -66,6 +74,20 @@ export default function DefectDetailPage() {
     }
     load();
   }, [id, user]);
+
+  useEffect(() => {
+    async function loadMasters() {
+      const [subRes, hdecRes] = await Promise.all([
+        (supabase as any).from('subcontractor_master').select('id, name, parent_subcontractor_id, type').eq('is_active', true).order('name'),
+        (supabase as any).from('hdec_pic_master').select('name').eq('is_active', true).order('name'),
+      ]);
+      const allSubs = (subRes.data ?? []) as Array<SubMaster & { type: string }>;
+      setSubOptions(allSubs.filter((r) => r.type === 'sub').map(({ id, name, parent_subcontractor_id }) => ({ id, name, parent_subcontractor_id })));
+      setSubsubOptions(allSubs.filter((r) => r.type === 'subsub').map(({ id, name, parent_subcontractor_id }) => ({ id, name, parent_subcontractor_id })));
+      setHdecOptions((hdecRes.data ?? []) as HdecMaster[]);
+    }
+    loadMasters();
+  }, []);
 
   const canEdit = scope !== 'none';
   const canEditResponsibility = scope === 'team' || scope === 'full';
@@ -111,11 +133,11 @@ export default function DefectDetailPage() {
       'actual_start_date', 'actual_completion_date', 'actual_closure_date',
       'planned_progress_pct', 'actual_progress_pct', 'completion_status', 'closure_status',
       'description', 'remarks',
-      'subcontractor_name', 'subsub_name', 'hdec_pic_name',
+      'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'team',
     ] as const;
 
     const changes = editableFields
-      .filter((field) => canEditResponsibility || !DEFECT_RESPONSIBILITY_FIELDS.includes(field as any))
+      .filter((field) => canEditResponsibility || (!DEFECT_RESPONSIBILITY_FIELDS.includes(field as any) && field !== 'team'))
       .filter((field) => String((record as any)[field] ?? '') !== String((form as any)[field] ?? ''))
       .map((field) => ({ field, oldValue: (record as any)[field], newValue: (form as any)[field] }));
     const rawChanges = rawFieldKeys
@@ -242,6 +264,7 @@ export default function DefectDetailPage() {
       payload.subcontractor_name = form.subcontractor_name || null;
       payload.subsub_name = form.subsub_name || null;
       payload.hdec_pic_name = form.hdec_pic_name || null;
+      payload.team = form.team || null;
     }
     if (payload.subcontractor_issue_no && payload.subcontractor_issue_no !== normalizeSubcontractorIssueNo(record.subcontractor_issue_no)) {
       const { data: duplicate } = await (supabase as any)
@@ -316,6 +339,31 @@ export default function DefectDetailPage() {
   };
 
   const rawEntries = useMemo(() => Object.entries(record?.raw_payload ?? {}).slice(0, 80), [record]);
+
+  // Master-driven dropdown options. Preserve legacy values that aren't in master.
+  const subOptionsList = useMemo(() => {
+    const names = subOptions.map((o) => o.name);
+    const cur = (form.subcontractor_name ?? '').trim();
+    const list = cur && !names.includes(cur) ? [{ id: '__legacy__', name: cur, parent_subcontractor_id: null }, ...subOptions] : subOptions;
+    return list.map((o) => ({ value: o.name, label: o.name }));
+  }, [subOptions, form.subcontractor_name]);
+  const subsubOptionsList = useMemo(() => {
+    const selectedSubId = subOptions.find((o) => o.name === form.subcontractor_name)?.id ?? null;
+    const filtered = selectedSubId ? subsubOptions.filter((o) => o.parent_subcontractor_id === selectedSubId) : subsubOptions;
+    const names = filtered.map((o) => o.name);
+    const cur = (form.subsub_name ?? '').trim();
+    const list = cur && !names.includes(cur) ? [{ id: '__legacy__', name: cur, parent_subcontractor_id: null }, ...filtered] : filtered;
+    return list.map((o) => ({ value: o.name, label: o.name }));
+  }, [subsubOptions, subOptions, form.subcontractor_name, form.subsub_name]);
+  const hdecOptionsList = useMemo(() => {
+    const names = hdecOptions.map((o) => o.name);
+    const cur = (form.hdec_pic_name ?? '').trim();
+    const list = cur && !names.includes(cur) ? [{ name: cur }, ...hdecOptions] : hdecOptions;
+    return list.map((o) => ({ value: o.name, label: o.name }));
+  }, [hdecOptions, form.hdec_pic_name]);
+  const statusOptionsList = DEFECT_STATUS_VALUES.map((s) => ({ value: s, label: s }));
+  const teamOptionsList = ALL_TEAMS.map((t) => ({ value: t, label: TEAM_LABELS[t] }));
+
   if (!record) return <div className="text-sm text-muted-foreground">Loading defect...</div>;
 
   const workType = form.work_type ?? record.work_type;
@@ -347,7 +395,7 @@ export default function DefectDetailPage() {
           </div>
         )}
         <Field label="Item Description" value={itemDescription} disabled={!canEdit} onChange={(v) => updateField('item_description' as any, v)} />
-        <Field label="Type" value={form.area_type} disabled={!canEdit} onChange={(v) => updateField('area_type', v)} />
+        <SelectField label="Team" value={form.team} options={teamOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('team', v as any)} />
         <Field label="Level" value={form.area_level} disabled={!canEdit} onChange={(v) => updateField('area_level', v)} />
         <Field label="Location" value={form.area_location} disabled={!canEdit} onChange={(v) => updateField('area_location', v)} />
         <Field label="Main Trade" value={form.main_trade} disabled={!canEdit} onChange={(v) => updateField('main_trade', v)} />
@@ -369,9 +417,9 @@ export default function DefectDetailPage() {
             toast({ title: 'Auto-classified', description: `${c.source} → ${c.work_type}` });
           }}>Auto-classify from description</Button>
         </div>
-        <Field label="Subcontractor" value={form.subcontractor_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subcontractor_name', v)} />
-        <Field label="Sub-Sub" value={form.subsub_name} disabled={!canEditResponsibility} onChange={(v) => updateField('subsub_name', v)} />
-        <Field label="HDEC PIC" value={form.hdec_pic_name} disabled={!canEditResponsibility} onChange={(v) => updateField('hdec_pic_name', v)} />
+        <SelectField label="Subcontractor" value={form.subcontractor_name} options={subOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('subcontractor_name', v)} />
+        <SelectField label="Sub-Sub" value={form.subsub_name} options={subsubOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('subsub_name', v)} />
+        <SelectField label="HDEC PIC" value={form.hdec_pic_name} options={hdecOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('hdec_pic_name', v)} />
         <Field label="Captured on" type="date" value={toDateInput(capturedOn)} disabled={!canEdit} onChange={(v) => updateField('captured_on' as any, v)} />
         <Field label="Planned Start Date" type="date" value={toDateInput(form.planned_start_date)} disabled={!canEdit} onChange={(v) => updateField('planned_start_date', v)} />
         <Field label="Planned Completion Date" type="date" value={toDateInput(form.planned_completion_date)} disabled={!canEdit} onChange={(v) => updateField('planned_completion_date', v)} />
@@ -382,8 +430,8 @@ export default function DefectDetailPage() {
         <ReadonlyField label="Planned Progress % (auto from Planned Start/Completion and today)" value={form.planned_progress_pct == null ? null : formatPct(form.planned_progress_pct)} />
         <Field label="Actual Progress %" type="number" value={form.actual_progress_pct} disabled={!canEdit} onChange={(v) => updateField('actual_progress_pct', v === '' ? null : Number(v))} />
         <ReadonlyField label="Difference" value={progressDifference == null ? null : formatPct(progressDifference)} />
-        <Field label="Completion Status" value={form.completion_status} disabled={!canEdit} onChange={(v) => updateField('completion_status', v)} />
-        <Field label="Closure Status" value={form.closure_status} disabled={!canEdit} onChange={(v) => updateField('closure_status', v)} />
+        <SelectField label="Completion Status" value={form.completion_status} options={statusOptionsList} disabled={!canEdit} onChange={(v) => updateField('completion_status', v)} />
+        <SelectField label="Closure Status" value={form.closure_status} options={statusOptionsList} disabled={!canEdit} onChange={(v) => updateField('closure_status', v)} />
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Description</label><Textarea value={String(form.description ?? '')} disabled={!canEdit} onChange={(e) => updateField('description', e.target.value)} /></div>
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Remarks</label><Textarea value={String(form.remarks ?? '')} disabled={!canEdit} onChange={(e) => updateField('remarks', e.target.value)} /></div>
       </CardContent></Card>
@@ -428,6 +476,28 @@ export default function DefectDetailPage() {
 
 function Field({ label, value, onChange, disabled, type = 'text', required }: { field?: string; label: string; value: any; onChange: (value: string) => void; disabled?: boolean; type?: string; required?: boolean }) {
   return <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">{label}{required ? ' *' : ''}</label><Input className="h-9" type={type} value={value ?? ''} disabled={disabled} onChange={(e) => onChange(e.target.value)} /></div>;
+}
+
+const NONE_TOKEN = '__none__';
+
+function SelectField({ label, value, options, onChange, disabled, required }: { label: string; value: any; options: { value: string; label: string }[]; onChange: (value: string | null) => void; disabled?: boolean; required?: boolean }) {
+  const current = value == null || value === '' ? NONE_TOKEN : String(value);
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-muted-foreground">{label}{required ? ' *' : ''}</label>
+      <Select value={current} onValueChange={(v) => onChange(v === NONE_TOKEN ? null : v)} disabled={disabled}>
+        <SelectTrigger className={`h-9 ${disabled ? 'bg-muted text-foreground' : ''}`}>
+          <SelectValue placeholder="—" />
+        </SelectTrigger>
+        <SelectContent className="max-h-72 bg-popover">
+          <SelectItem value={NONE_TOKEN}>— None —</SelectItem>
+          {options.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 }
 
 function ReadonlyField({ label, value }: { label: string; value: unknown }) {
