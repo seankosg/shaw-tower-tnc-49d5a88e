@@ -1,12 +1,10 @@
 import { type DefectItem } from '@/lib/defect-utils';
 
 export const NONE_LABEL = '(None)';
-export type DefectDashboardStage = 'planned' | 'target' | 'closure';
+export type DefectDashboardStage = 'start' | 'completion' | 'closure';
 export type DefectSCurveBucket = 'day' | 'week';
 
-export interface DefectForDashboard extends DefectItem {
-  actual_date: string | null;
-}
+export type DefectForDashboard = DefectItem;
 
 export interface DefectPlanActualMetrics {
   cumPlan: number;
@@ -23,31 +21,31 @@ export interface DefectPlanActualRow {
   key: string;
   label: string;
   totalDefects: number;
-  planned: DefectPlanActualMetrics;
-  target: DefectPlanActualMetrics;
+  start: DefectPlanActualMetrics;
+  completion: DefectPlanActualMetrics;
   closure: DefectPlanActualMetrics;
 }
 
 export interface DefectSCurvePoint {
   bucket: string;
   bucketLabel: string;
-  plannedPlan: number;
-  plannedActual: number | null;
-  targetPlan: number;
-  targetActual: number | null;
+  startPlan: number;
+  startActual: number | null;
+  completionPlan: number;
+  completionActual: number | null;
   closurePlan: number;
   closureActual: number | null;
-  actualMet: number;
-  actualShortfall: number;
-  actualExcess: number;
-  actualFuturePlan: number;
+  completionMet: number;
+  completionShortfall: number;
+  completionExcess: number;
+  completionFuturePlan: number;
   closureMet: number;
   closureShortfall: number;
   closureExcess: number;
   closureFuturePlan: number;
 }
 
-const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -85,27 +83,30 @@ function generateBuckets(startDate: string, endDate: string, granularity: Defect
   return result;
 }
 
-export function isActualComplete(item: Pick<DefectForDashboard, 'actual_progress_pct'>): boolean {
-  return Number(item.actual_progress_pct ?? 0) >= 100;
+export function isActualComplete(item: Pick<DefectForDashboard, 'actual_completion_date' | 'actual_progress_pct'>): boolean {
+  return Boolean(item.actual_completion_date) || Number(item.actual_progress_pct ?? 0) >= 100;
 }
 
-export function isClosureComplete(item: Pick<DefectForDashboard, 'closed_date'>): boolean {
-  return Boolean(item.closed_date);
+export function isClosureComplete(item: Pick<DefectForDashboard, 'actual_closure_date'>): boolean {
+  return Boolean(item.actual_closure_date);
 }
 
 export function getStagePlanDate(item: DefectForDashboard, stage: DefectDashboardStage): string | null {
-  if (stage === 'planned') return item.planned_date;
-  if (stage === 'target') return item.target_date;
-  return item.target_date ?? item.planned_date;
+  if (stage === 'start') return item.planned_start_date;
+  if (stage === 'completion') return item.planned_completion_date;
+  return item.planned_closure_date;
 }
 
 export function getStageActualDate(item: DefectForDashboard, stage: DefectDashboardStage): string | null {
-  if (stage === 'closure') return item.closed_date;
-  return isActualComplete(item) ? item.actual_date : null;
+  if (stage === 'start') return item.actual_start_date;
+  if (stage === 'completion') return item.actual_completion_date;
+  return item.actual_closure_date;
 }
 
 export function isStageDone(item: DefectForDashboard, stage: DefectDashboardStage): boolean {
-  return stage === 'closure' ? isClosureComplete(item) : isActualComplete(item);
+  if (stage === 'start') return Boolean(item.actual_start_date);
+  if (stage === 'completion') return isActualComplete(item);
+  return isClosureComplete(item);
 }
 
 export function isStageDelayedAsOf(item: DefectForDashboard, stage: DefectDashboardStage, asOfDate: string): boolean {
@@ -114,12 +115,12 @@ export function isStageDelayedAsOf(item: DefectForDashboard, stage: DefectDashbo
 }
 
 export function isOverdue(item: DefectForDashboard, asOfDate: string): boolean {
-  return isStageDelayedAsOf(item, 'planned', asOfDate) || isStageDelayedAsOf(item, 'target', asOfDate) || isStageDelayedAsOf(item, 'closure', asOfDate);
+  return (['start', 'completion', 'closure'] as DefectDashboardStage[]).some((stage) => isStageDelayedAsOf(item, stage, asOfDate));
 }
 
 export function isAtRisk(item: DefectForDashboard, today: string, thresholdDays: number): boolean {
   if (isOverdue(item, today)) return false;
-  return (['planned', 'target', 'closure'] as DefectDashboardStage[]).some((stage) => {
+  return (['start', 'completion', 'closure'] as DefectDashboardStage[]).some((stage) => {
     const plan = getStagePlanDate(item, stage);
     if (!plan || isStageDone(item, stage)) return false;
     const diff = daysBetween(today, plan);
@@ -128,7 +129,7 @@ export function isAtRisk(item: DefectForDashboard, today: string, thresholdDays:
 }
 
 export function maxDelayDays(item: DefectForDashboard, asOfDate: string): number {
-  return Math.max(0, ...(['planned', 'target', 'closure'] as DefectDashboardStage[]).map((stage) => {
+  return Math.max(0, ...(['start', 'completion', 'closure'] as DefectDashboardStage[]).map((stage) => {
     const plan = getStagePlanDate(item, stage);
     return plan && !isStageDone(item, stage) ? Math.max(0, -daysBetween(asOfDate, plan)) : 0;
   }));
@@ -167,65 +168,65 @@ export function aggregateDefectPlanActualByGroup(
     key,
     label: groupLabel(key),
     totalDefects: rows.length,
-    planned: calcMetrics(rows, 'planned', today, dataDate),
-    target: calcMetrics(rows, 'target', today, dataDate),
+    start: calcMetrics(rows, 'start', today, dataDate),
+    completion: calcMetrics(rows, 'completion', today, dataDate),
     closure: calcMetrics(rows, 'closure', today, dataDate),
   })).sort((a, b) => {
-    const va = (a.planned.cumActual - a.planned.cumPlan) + (a.target.cumActual - a.target.cumPlan) + (a.closure.cumActual - a.closure.cumPlan);
-    const vb = (b.planned.cumActual - b.planned.cumPlan) + (b.target.cumActual - b.target.cumPlan) + (b.closure.cumActual - b.closure.cumPlan);
+    const va = (a.start.cumActual - a.start.cumPlan) + (a.completion.cumActual - a.completion.cumPlan) + (a.closure.cumActual - a.closure.cumPlan);
+    const vb = (b.start.cumActual - b.start.cumPlan) + (b.completion.cumActual - b.completion.cumPlan) + (b.closure.cumActual - b.closure.cumPlan);
     return va - vb || a.label.localeCompare(b.label);
   });
 }
 
 export function buildDefectSCurve(items: DefectForDashboard[], granularity: DefectSCurveBucket, startDate: string, endDate: string, today: string): DefectSCurvePoint[] {
-  const counts = new Map<string, { pp: number; pa: number; tp: number; ta: number; cp: number; ca: number }>();
+  const counts = new Map<string, { sp: number; sa: number; cmp: number; cma: number; cp: number; ca: number }>();
   const ensure = (bucket: string) => {
     let value = counts.get(bucket);
-    if (!value) { value = { pp: 0, pa: 0, tp: 0, ta: 0, cp: 0, ca: 0 }; counts.set(bucket, value); }
+    if (!value) { value = { sp: 0, sa: 0, cmp: 0, cma: 0, cp: 0, ca: 0 }; counts.set(bucket, value); }
     return value;
   };
   for (const item of items) {
-    const plannedPlan = getStagePlanDate(item, 'planned');
-    const plannedActual = getStageActualDate(item, 'planned');
-    const targetPlan = getStagePlanDate(item, 'target');
-    const targetActual = getStageActualDate(item, 'target');
+    const startPlan = getStagePlanDate(item, 'start');
+    const startActual = getStageActualDate(item, 'start');
+    const completionPlan = getStagePlanDate(item, 'completion');
+    const completionActual = getStageActualDate(item, 'completion');
     const closurePlan = getStagePlanDate(item, 'closure');
     const closureActual = getStageActualDate(item, 'closure');
-    if (plannedPlan) ensure(bucketize(plannedPlan, granularity)).pp++;
-    if (plannedActual) ensure(bucketize(plannedActual, granularity)).pa++;
-    if (targetPlan) ensure(bucketize(targetPlan, granularity)).tp++;
-    if (targetActual) ensure(bucketize(targetActual, granularity)).ta++;
+    if (startPlan) ensure(bucketize(startPlan, granularity)).sp++;
+    if (startActual) ensure(bucketize(startActual, granularity)).sa++;
+    if (completionPlan) ensure(bucketize(completionPlan, granularity)).cmp++;
+    if (completionActual) ensure(bucketize(completionActual, granularity)).cma++;
     if (closurePlan) ensure(bucketize(closurePlan, granularity)).cp++;
     if (closureActual) ensure(bucketize(closureActual, granularity)).ca++;
   }
   const buckets = generateBuckets(startDate, endDate, granularity);
   if (!buckets.length) return [];
-  let cpp = 0, cpa = 0, ctp = 0, cta = 0, ccp = 0, cca = 0;
+  let csp = 0, csa = 0, ccmp = 0, ccma = 0, ccp = 0, cca = 0;
   for (const [bucket, value] of counts) {
-    if (bucket < buckets[0]) { cpp += value.pp; cpa += value.pa; ctp += value.tp; cta += value.ta; ccp += value.cp; cca += value.ca; }
+    if (bucket < buckets[0]) { csp += value.sp; csa += value.sa; ccmp += value.cmp; ccma += value.cma; ccp += value.cp; cca += value.ca; }
   }
   const todayBucket = bucketize(today, granularity);
   return buckets.map((bucket) => {
-    const value = counts.get(bucket) ?? { pp: 0, pa: 0, tp: 0, ta: 0, cp: 0, ca: 0 };
-    cpp += value.pp; cpa += value.pa; ctp += value.tp; cta += value.ta; ccp += value.cp; cca += value.ca;
+    const value = counts.get(bucket) ?? { sp: 0, sa: 0, cmp: 0, cma: 0, cp: 0, ca: 0 };
+    csp += value.sp; csa += value.sa; ccmp += value.cmp; ccma += value.cma; ccp += value.cp; cca += value.ca;
     const isFuture = bucket > todayBucket;
-    const actualPlan = value.tp;
-    const actualDone = isFuture ? 0 : value.ta;
+    const completionPlan = value.cmp;
+    const completionDone = isFuture ? 0 : value.cma;
     const closurePlan = value.cp;
     const closureDone = isFuture ? 0 : value.ca;
     return {
       bucket,
       bucketLabel: labelDdMmm(bucket),
-      plannedPlan: cpp,
-      plannedActual: isFuture ? null : cpa,
-      targetPlan: ctp,
-      targetActual: isFuture ? null : cta,
+      startPlan: csp,
+      startActual: isFuture ? null : csa,
+      completionPlan: ccmp,
+      completionActual: isFuture ? null : ccma,
       closurePlan: ccp,
       closureActual: isFuture ? null : cca,
-      actualMet: isFuture ? 0 : Math.min(actualPlan, actualDone),
-      actualShortfall: isFuture ? 0 : Math.max(0, actualPlan - actualDone),
-      actualExcess: isFuture ? 0 : Math.max(0, actualDone - actualPlan),
-      actualFuturePlan: isFuture ? actualPlan : 0,
+      completionMet: isFuture ? 0 : Math.min(completionPlan, completionDone),
+      completionShortfall: isFuture ? 0 : Math.max(0, completionPlan - completionDone),
+      completionExcess: isFuture ? 0 : Math.max(0, completionDone - completionPlan),
+      completionFuturePlan: isFuture ? completionPlan : 0,
       closureMet: isFuture ? 0 : Math.min(closurePlan, closureDone),
       closureShortfall: isFuture ? 0 : Math.max(0, closurePlan - closureDone),
       closureExcess: isFuture ? 0 : Math.max(0, closureDone - closurePlan),

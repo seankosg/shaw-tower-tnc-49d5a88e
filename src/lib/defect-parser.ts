@@ -30,10 +30,16 @@ export interface ParsedDefectRow {
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
-  planned_date: string | null;
-  target_date: string | null;
+  // New lifecycle date fields
+  planned_start_date: string | null;
+  planned_completion_date: string | null;
+  planned_closure_date: string | null;
+  actual_start_date: string | null;
+  actual_completion_date: string | null;
+  actual_closure_date: string | null;
+  planned_progress_pct: number | null;
   actual_progress_pct: number | null;
-  closed_date: string | null;
+  completion_status: string | null;
   closure_status: string | null;
   remarks: string | null;
   hdec_comments: string | null;
@@ -55,11 +61,6 @@ const FIELD_ALIASES: Record<string, string> = {
   'issue description': 'description',
   description: 'description',
   status: 'status',
-  'due date': 'planned_date',
-  'planned date': 'planned_date',
-  'target date': 'target_date',
-  'closed on': 'closed_date',
-  'date closed': 'closed_date',
   'field discipline': 'trade_detail',
   'defect prioritisation': 'priority',
   priority: 'priority',
@@ -76,9 +77,19 @@ const FIELD_ALIASES: Record<string, string> = {
   remarks: 'remarks',
   comments: 'hdec_comments',
   'hdec comments': 'hdec_comments',
+  // New lifecycle headers
+  'planned start date': 'planned_start_date',
+  'planned completion date': 'planned_completion_date',
+  'planned closure date': 'planned_closure_date',
+  'actual start date': 'actual_start_date',
+  'actual completion date': 'actual_completion_date',
+  'actual closure date': 'actual_closure_date',
+  'planned progress %': 'planned_progress_pct',
+  'planned progress': 'planned_progress_pct',
   'actual progress %': 'actual_progress_pct',
   'actual progress': 'actual_progress_pct',
   progress: 'actual_progress_pct',
+  'completion status': 'completion_status',
   'closure status': 'closure_status',
   'subcontractor issue no': 'subcontractor_issue_no',
   'subcontractor no': 'subcontractor_issue_no',
@@ -166,8 +177,6 @@ export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
     const explicitLevel = toText(getMapped(raw, 'area_level'));
     const explicitLocation = toText(getMapped(raw, 'area_location'));
     const status = toText(getMapped(raw, 'status'));
-    const closedDate = normalizeDate(getMapped(raw, 'closed_date'));
-    const closure = toText(getMapped(raw, 'closure_status')) ?? (closedDate || status?.toLowerCase() === 'closed' ? 'Closed' : status ? 'Open' : null);
 
     return {
       rawRowNo: index + 2,
@@ -189,11 +198,16 @@ export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
       subcontractor_name: toText(getMapped(raw, 'subcontractor_name')),
       subsub_name: toText(getMapped(raw, 'subsub_name')),
       hdec_pic_name: toText(getMapped(raw, 'hdec_pic_name')),
-      planned_date: normalizeDate(getMapped(raw, 'planned_date')),
-      target_date: normalizeDate(getMapped(raw, 'target_date')),
+      planned_start_date: normalizeDate(getMapped(raw, 'planned_start_date')),
+      planned_completion_date: normalizeDate(getMapped(raw, 'planned_completion_date')),
+      planned_closure_date: normalizeDate(getMapped(raw, 'planned_closure_date')),
+      actual_start_date: normalizeDate(getMapped(raw, 'actual_start_date')),
+      actual_completion_date: normalizeDate(getMapped(raw, 'actual_completion_date')),
+      actual_closure_date: normalizeDate(getMapped(raw, 'actual_closure_date')),
+      planned_progress_pct: normalizePct(getMapped(raw, 'planned_progress_pct')),
       actual_progress_pct: normalizePct(getMapped(raw, 'actual_progress_pct')),
-      closed_date: closedDate,
-      closure_status: closure,
+      completion_status: toText(getMapped(raw, 'completion_status')),
+      closure_status: toText(getMapped(raw, 'closure_status')),
       remarks: toText(getMapped(raw, 'remarks')),
       hdec_comments: toText(getMapped(raw, 'hdec_comments')),
       raw_payload: raw,

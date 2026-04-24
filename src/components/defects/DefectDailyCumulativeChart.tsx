@@ -2,14 +2,14 @@ import { Line, LineChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { buildDefectTrendData } from '@/lib/defect-chart-utils';
 import { type DefectItem } from '@/lib/defect-utils';
-import { type DefectProgressBucket } from '@/lib/defect-progress-utils';
+import { type DefectProgressBucket, type DefectProgressDateField } from '@/lib/defect-progress-utils';
 
 interface DefectDailyCumulativeChartProps {
   items: DefectItem[];
   start: string;
   end: string;
   bucket: DefectProgressBucket;
-  dateField: 'planned_date' | 'target_date';
+  dateField: DefectProgressDateField;
   cumulative: boolean;
 }
 

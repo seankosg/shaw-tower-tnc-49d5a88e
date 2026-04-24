@@ -1,5 +1,9 @@
 export type DefectEditScope = 'none' | 'assigned' | 'team' | 'full';
 
+export type DefectStatusValue = 'Planned' | 'Delay' | 'Done' | 'WIP';
+
+export const DEFECT_STATUS_VALUES: DefectStatusValue[] = ['Planned', 'Delay', 'Done', 'WIP'];
+
 export interface DefectItem {
   id: string;
   project_id: string | null;
@@ -21,12 +25,17 @@ export interface DefectItem {
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
-  planned_date: string | null;
-  target_date: string | null;
+  // New lifecycle date fields
+  planned_start_date: string | null;
+  planned_completion_date: string | null;
+  planned_closure_date: string | null;
+  actual_start_date: string | null;
+  actual_completion_date: string | null;
+  actual_closure_date: string | null;
+  planned_progress_pct: number | null;
   actual_progress_pct: number | null;
-  actual_date: string | null;
-  closed_date: string | null;
-  closure_status: string | null;
+  completion_status: DefectStatusValue | string | null;
+  closure_status: DefectStatusValue | string | null;
   remarks: string | null;
   hdec_comments: string | null;
   raw_payload?: Record<string, unknown>;
@@ -40,12 +49,25 @@ export interface DefectItem {
 }
 
 export const DEFECT_RESPONSIBILITY_FIELDS = ['subcontractor_name', 'subsub_name', 'hdec_pic_name'] as const;
-export const DEFECT_REVISION_FIELDS = ['planned_date', 'target_date', 'closed_date', 'actual_progress_pct', 'closure_status'] as const;
+
+// Fields that, when changed, are tracked in defect_schedule_change_audit
+export const DEFECT_REVISION_FIELDS = [
+  'planned_start_date',
+  'planned_completion_date',
+  'planned_closure_date',
+  'actual_start_date',
+  'actual_completion_date',
+  'actual_closure_date',
+  'planned_progress_pct',
+  'actual_progress_pct',
+  'completion_status',
+  'closure_status',
+] as const;
 
 const OWNER_CODE_STOP_WORDS = new Set(['CO', 'LTD', 'INC', 'CORP', 'CORPORATION', 'COMPANY', 'LLC', 'GROUP', 'ENG', 'ENGINEERING', 'THE', 'AND']);
 
-export function isClosedDefect(item: Pick<DefectItem, 'closure_status' | 'status' | 'closed_date'>): boolean {
-  return Boolean(item.closed_date) || /closed|complete|done/i.test(`${item.closure_status ?? ''} ${item.status ?? ''}`);
+export function isClosedDefect(item: Pick<DefectItem, 'actual_closure_date' | 'closure_status'>): boolean {
+  return Boolean(item.actual_closure_date) || String(item.closure_status ?? '') === 'Done';
 }
 
 export function formatPct(value: number | null | undefined): string {
@@ -57,10 +79,23 @@ export function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function isOverdueDefect(item: Pick<DefectItem, 'planned_date' | 'target_date' | 'closure_status' | 'status' | 'closed_date'>, asOf = todayIso()): boolean {
-  if (isClosedDefect(item)) return false;
-  const due = item.target_date ?? item.planned_date;
-  return Boolean(due && due < asOf);
+/**
+ * A defect is overdue when any of its planned dates is on/before asOf and the
+ * corresponding actual stage hasn't been completed yet.
+ */
+export function isOverdueDefect(
+  item: Pick<DefectItem,
+    'planned_start_date' | 'planned_completion_date' | 'planned_closure_date'
+    | 'actual_start_date' | 'actual_completion_date' | 'actual_closure_date'
+    | 'closure_status'
+  >,
+  asOf = todayIso(),
+): boolean {
+  if (Boolean(item.actual_closure_date) || String(item.closure_status ?? '') === 'Done') return false;
+  if (item.planned_start_date && item.planned_start_date < asOf && !item.actual_start_date) return true;
+  if (item.planned_completion_date && item.planned_completion_date < asOf && !item.actual_completion_date) return true;
+  if (item.planned_closure_date && item.planned_closure_date < asOf && !item.actual_closure_date) return true;
+  return false;
 }
 
 export function toNullable(value: FormDataEntryValue | string | null | undefined): string | null {

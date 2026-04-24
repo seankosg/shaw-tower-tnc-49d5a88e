@@ -1,14 +1,14 @@
 import { useNavigate } from 'react-router-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatPct } from '@/lib/defect-utils';
-import { formatDefectBucketLabel, type DefectProgressBucket, type DefectProgressGroupBy, type DefectProgressRow } from '@/lib/defect-progress-utils';
+import { formatDefectBucketLabel, type DefectProgressBucket, type DefectProgressDateField, type DefectProgressGroupBy, type DefectProgressRow } from '@/lib/defect-progress-utils';
 
 interface DefectProgressMatrixProps {
   rows: DefectProgressRow[];
   buckets: string[];
   bucket: DefectProgressBucket;
   groupBy: DefectProgressGroupBy;
-  dateField: 'planned_date' | 'target_date';
+  dateField: DefectProgressDateField;
 }
 
 const QUERY_FIELD: Record<DefectProgressGroupBy, string> = {

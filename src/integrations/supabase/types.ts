@@ -109,39 +109,51 @@ export type Database = {
       }
       defect_daily_snapshots: {
         Row: {
+          actual_closure_date: string | null
+          actual_completion_date: string | null
           actual_progress_pct: number | null
-          closed_date: string | null
           closure_status: string | null
+          completion_status: string | null
           created_at: string
           created_by: string | null
           defect_id: string
           id: string
           issue_no: string
-          planned_date: string | null
+          planned_closure_date: string | null
+          planned_completion_date: string | null
+          planned_progress_pct: number | null
           snapshot_date: string
         }
         Insert: {
+          actual_closure_date?: string | null
+          actual_completion_date?: string | null
           actual_progress_pct?: number | null
-          closed_date?: string | null
           closure_status?: string | null
+          completion_status?: string | null
           created_at?: string
           created_by?: string | null
           defect_id: string
           id?: string
           issue_no: string
-          planned_date?: string | null
+          planned_closure_date?: string | null
+          planned_completion_date?: string | null
+          planned_progress_pct?: number | null
           snapshot_date?: string
         }
         Update: {
+          actual_closure_date?: string | null
+          actual_completion_date?: string | null
           actual_progress_pct?: number | null
-          closed_date?: string | null
           closure_status?: string | null
+          completion_status?: string | null
           created_at?: string
           created_by?: string | null
           defect_id?: string
           id?: string
           issue_no?: string
-          planned_date?: string | null
+          planned_closure_date?: string | null
+          planned_completion_date?: string | null
+          planned_progress_pct?: number | null
           snapshot_date?: string
         }
         Relationships: []
@@ -187,14 +199,16 @@ export type Database = {
       }
       defect_items: {
         Row: {
-          actual_date: string | null
+          actual_closure_date: string | null
+          actual_completion_date: string | null
           actual_progress_pct: number | null
+          actual_start_date: string | null
           area_level: string | null
           area_location: string | null
           area_raw: string | null
           area_type: string | null
-          closed_date: string | null
           closure_status: string | null
+          completion_status: string | null
           created_at: string
           data_source_type: string | null
           defect_type: string | null
@@ -205,7 +219,10 @@ export type Database = {
           is_active: boolean
           issue_no: string
           main_trade: string | null
-          planned_date: string | null
+          planned_closure_date: string | null
+          planned_completion_date: string | null
+          planned_progress_pct: number | null
+          planned_start_date: string | null
           priority: string | null
           project_id: string | null
           raw_payload: Json
@@ -218,21 +235,22 @@ export type Database = {
           subcontractor_issue_source: string | null
           subcontractor_name: string | null
           subsub_name: string | null
-          target_date: string | null
           team: Database["public"]["Enums"]["team_type"] | null
           trade_detail: string | null
           updated_at: string
           updated_by: string | null
         }
         Insert: {
-          actual_date?: string | null
+          actual_closure_date?: string | null
+          actual_completion_date?: string | null
           actual_progress_pct?: number | null
+          actual_start_date?: string | null
           area_level?: string | null
           area_location?: string | null
           area_raw?: string | null
           area_type?: string | null
-          closed_date?: string | null
           closure_status?: string | null
+          completion_status?: string | null
           created_at?: string
           data_source_type?: string | null
           defect_type?: string | null
@@ -243,7 +261,10 @@ export type Database = {
           is_active?: boolean
           issue_no: string
           main_trade?: string | null
-          planned_date?: string | null
+          planned_closure_date?: string | null
+          planned_completion_date?: string | null
+          planned_progress_pct?: number | null
+          planned_start_date?: string | null
           priority?: string | null
           project_id?: string | null
           raw_payload?: Json
@@ -256,21 +277,22 @@ export type Database = {
           subcontractor_issue_source?: string | null
           subcontractor_name?: string | null
           subsub_name?: string | null
-          target_date?: string | null
           team?: Database["public"]["Enums"]["team_type"] | null
           trade_detail?: string | null
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
-          actual_date?: string | null
+          actual_closure_date?: string | null
+          actual_completion_date?: string | null
           actual_progress_pct?: number | null
+          actual_start_date?: string | null
           area_level?: string | null
           area_location?: string | null
           area_raw?: string | null
           area_type?: string | null
-          closed_date?: string | null
           closure_status?: string | null
+          completion_status?: string | null
           created_at?: string
           data_source_type?: string | null
           defect_type?: string | null
@@ -281,7 +303,10 @@ export type Database = {
           is_active?: boolean
           issue_no?: string
           main_trade?: string | null
-          planned_date?: string | null
+          planned_closure_date?: string | null
+          planned_completion_date?: string | null
+          planned_progress_pct?: number | null
+          planned_start_date?: string | null
           priority?: string | null
           project_id?: string | null
           raw_payload?: Json
@@ -294,7 +319,6 @@ export type Database = {
           subcontractor_issue_source?: string | null
           subcontractor_name?: string | null
           subsub_name?: string | null
-          target_date?: string | null
           team?: Database["public"]["Enums"]["team_type"] | null
           trade_detail?: string | null
           updated_at?: string
@@ -304,81 +328,123 @@ export type Database = {
       }
       defect_schedule_change_audit: {
         Row: {
+          actual_closure_diff_days: number | null
+          actual_closure_new_date: string | null
+          actual_closure_old_date: string | null
+          actual_completion_diff_days: number | null
+          actual_completion_new_date: string | null
+          actual_completion_old_date: string | null
+          actual_start_diff_days: number | null
+          actual_start_new_date: string | null
+          actual_start_old_date: string | null
           change_source: string | null
-          closed_diff_days: number | null
-          closed_new_date: string | null
-          closed_old_date: string | null
           closure_status_new: string | null
           closure_status_old: string | null
+          completion_status_new: string | null
+          completion_status_old: string | null
           created_at: string
           created_by: string | null
           defect_id: string
           id: string
           issue_no: string
-          planned_diff_days: number | null
-          planned_new_date: string | null
-          planned_old_date: string | null
+          planned_closure_diff_days: number | null
+          planned_closure_new_date: string | null
+          planned_closure_old_date: string | null
+          planned_completion_diff_days: number | null
+          planned_completion_new_date: string | null
+          planned_completion_old_date: string | null
+          planned_progress_diff_pct: number | null
+          planned_progress_new_pct: number | null
+          planned_progress_old_pct: number | null
+          planned_start_diff_days: number | null
+          planned_start_new_date: string | null
+          planned_start_old_date: string | null
           progress_diff_pct: number | null
           progress_new_pct: number | null
           progress_old_pct: number | null
           project_id: string | null
           raw_row_no: number | null
           subcontractor_issue_no: string | null
-          target_diff_days: number | null
-          target_new_date: string | null
-          target_old_date: string | null
           upload_id: string | null
         }
         Insert: {
+          actual_closure_diff_days?: number | null
+          actual_closure_new_date?: string | null
+          actual_closure_old_date?: string | null
+          actual_completion_diff_days?: number | null
+          actual_completion_new_date?: string | null
+          actual_completion_old_date?: string | null
+          actual_start_diff_days?: number | null
+          actual_start_new_date?: string | null
+          actual_start_old_date?: string | null
           change_source?: string | null
-          closed_diff_days?: number | null
-          closed_new_date?: string | null
-          closed_old_date?: string | null
           closure_status_new?: string | null
           closure_status_old?: string | null
+          completion_status_new?: string | null
+          completion_status_old?: string | null
           created_at?: string
           created_by?: string | null
           defect_id: string
           id?: string
           issue_no: string
-          planned_diff_days?: number | null
-          planned_new_date?: string | null
-          planned_old_date?: string | null
+          planned_closure_diff_days?: number | null
+          planned_closure_new_date?: string | null
+          planned_closure_old_date?: string | null
+          planned_completion_diff_days?: number | null
+          planned_completion_new_date?: string | null
+          planned_completion_old_date?: string | null
+          planned_progress_diff_pct?: number | null
+          planned_progress_new_pct?: number | null
+          planned_progress_old_pct?: number | null
+          planned_start_diff_days?: number | null
+          planned_start_new_date?: string | null
+          planned_start_old_date?: string | null
           progress_diff_pct?: number | null
           progress_new_pct?: number | null
           progress_old_pct?: number | null
           project_id?: string | null
           raw_row_no?: number | null
           subcontractor_issue_no?: string | null
-          target_diff_days?: number | null
-          target_new_date?: string | null
-          target_old_date?: string | null
           upload_id?: string | null
         }
         Update: {
+          actual_closure_diff_days?: number | null
+          actual_closure_new_date?: string | null
+          actual_closure_old_date?: string | null
+          actual_completion_diff_days?: number | null
+          actual_completion_new_date?: string | null
+          actual_completion_old_date?: string | null
+          actual_start_diff_days?: number | null
+          actual_start_new_date?: string | null
+          actual_start_old_date?: string | null
           change_source?: string | null
-          closed_diff_days?: number | null
-          closed_new_date?: string | null
-          closed_old_date?: string | null
           closure_status_new?: string | null
           closure_status_old?: string | null
+          completion_status_new?: string | null
+          completion_status_old?: string | null
           created_at?: string
           created_by?: string | null
           defect_id?: string
           id?: string
           issue_no?: string
-          planned_diff_days?: number | null
-          planned_new_date?: string | null
-          planned_old_date?: string | null
+          planned_closure_diff_days?: number | null
+          planned_closure_new_date?: string | null
+          planned_closure_old_date?: string | null
+          planned_completion_diff_days?: number | null
+          planned_completion_new_date?: string | null
+          planned_completion_old_date?: string | null
+          planned_progress_diff_pct?: number | null
+          planned_progress_new_pct?: number | null
+          planned_progress_old_pct?: number | null
+          planned_start_diff_days?: number | null
+          planned_start_new_date?: string | null
+          planned_start_old_date?: string | null
           progress_diff_pct?: number | null
           progress_new_pct?: number | null
           progress_old_pct?: number | null
           project_id?: string | null
           raw_row_no?: number | null
           subcontractor_issue_no?: string | null
-          target_diff_days?: number | null
-          target_new_date?: string | null
-          target_old_date?: string | null
           upload_id?: string | null
         }
         Relationships: []

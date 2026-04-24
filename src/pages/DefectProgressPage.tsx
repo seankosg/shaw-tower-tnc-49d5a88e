@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DefectProgressMatrix } from '@/components/defects/DefectProgressMatrix';
 import { DefectDailyCumulativeChart } from '@/components/defects/DefectDailyCumulativeChart';
-import { aggregateDefectProgress, defaultDefectDateRange, type DefectProgressBucket, type DefectProgressGroupBy } from '@/lib/defect-progress-utils';
+import { aggregateDefectProgress, defaultDefectDateRange, type DefectProgressBucket, type DefectProgressDateField, type DefectProgressGroupBy } from '@/lib/defect-progress-utils';
 import { type DefectItem } from '@/lib/defect-utils';
 
 const GROUP_LABELS: Record<DefectProgressGroupBy, string> = {
@@ -26,7 +26,7 @@ export default function DefectProgressPage() {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [chartMode, setChartMode] = useState<'daily' | 'cumulative'>('cumulative');
-  const [dateField, setDateField] = useState<'planned_date' | 'target_date'>('planned_date');
+  const [dateField, setDateField] = useState<DefectProgressDateField>('planned_completion_date');
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +44,7 @@ export default function DefectProgressPage() {
     return () => { cancelled = true; };
   }, []);
 
-  const matrix = useMemo(() => start && end ? aggregateDefectProgress(items, { groupBy, bucket, start, end }) : { buckets: [], rows: [] }, [items, groupBy, bucket, start, end]);
+  const matrix = useMemo(() => start && end ? aggregateDefectProgress(items, { groupBy, bucket, start, end, dateField }) : { buckets: [], rows: [] }, [items, groupBy, bucket, start, end, dateField]);
 
   if (loading) return <div className="text-sm text-muted-foreground">Loading defect progress...</div>;
 
@@ -61,7 +61,7 @@ export default function DefectProgressPage() {
           <Select value={bucket} onValueChange={(value) => setBucket(value as DefectProgressBucket)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="day">Daily</SelectItem><SelectItem value="week">Weekly</SelectItem></SelectContent></Select>
           <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
           <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
-          <Select value={dateField} onValueChange={(value) => setDateField(value as 'planned_date' | 'target_date')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="planned_date">Planned Date</SelectItem><SelectItem value="target_date">Target Date</SelectItem></SelectContent></Select>
+          <Select value={dateField} onValueChange={(value) => setDateField(value as DefectProgressDateField)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="planned_completion_date">Planned Completion Date</SelectItem><SelectItem value="planned_closure_date">Planned Closure Date</SelectItem></SelectContent></Select>
           <Select value={chartMode} onValueChange={(value) => setChartMode(value as 'daily' | 'cumulative')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="daily">Daily Chart</SelectItem><SelectItem value="cumulative">Cumulative Chart</SelectItem></SelectContent></Select>
         </CardContent>
       </Card>

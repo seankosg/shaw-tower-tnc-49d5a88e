@@ -19,7 +19,7 @@ const summaryStyle = (v: number, tone?: 'done' | 'remain') => ({
   font: { name: FONT, sz: 10, bold: true, color: { rgb: v === 0 ? 'FFD1D5DB' : tone === 'done' ? 'FF047857' : tone === 'remain' ? 'FFB45309' : 'FF111827' } },
   fill: { fgColor: { rgb: 'FFF8FAFC' } }, alignment: { vertical: 'center', horizontal: 'right' }, border: BORDERS_ALL,
 });
-const stageColor = (stage: string) => stage === 'Planned' ? 'FF6B7280' : stage === 'Target' ? 'FF2563EB' : 'FF16A34A';
+const stageColor = (stage: string) => stage === 'Start' ? 'FF6B7280' : stage === 'Completion' ? 'FF2563EB' : 'FF16A34A';
 const S_STAGE = (stage: string) => ({ font: { name: FONT, sz: 10, bold: true, color: { rgb: stageColor(stage) } }, alignment: { vertical: 'center', horizontal: 'center' }, border: BORDERS_ALL });
 const deltaStyle = (v: number) => ({ font: { name: FONT, sz: 10, bold: v !== 0, color: { rgb: v < 0 ? 'FFDC2626' : v > 0 ? 'FF16A34A' : 'FF9CA3AF' } }, alignment: { vertical: 'center', horizontal: 'right' }, border: BORDERS_ALL });
 function set(ws: XLSX.WorkSheet, r: number, c: number, v: unknown, s: Record<string, unknown>) { ws[XLSX.utils.encode_cell({ r, c })] = { t: 's', v: v == null ? '' : String(v), s }; }
@@ -47,7 +47,11 @@ export function exportDefectPlanActualToExcel(rows: DefectPlanActualRow[], group
     { s: { r: HR, c: 5 }, e: { r: HR, c: 7 } }, { s: { r: HR, c: 8 }, e: { r: HR, c: 11 } }, { s: { r: HR, c: 12 }, e: { r: HR, c: 15 } }, { s: { r: HR, c: 16 }, e: { r: 4, c: 16 } },
   ];
   let dataRow = 5;
-  const stages: Array<{ key: keyof Pick<DefectPlanActualRow, 'planned' | 'target' | 'closure'>; label: string }> = [{ key: 'planned', label: 'Planned' }, { key: 'target', label: 'Target' }, { key: 'closure', label: 'Closure' }];
+  const stages: Array<{ key: 'start' | 'completion' | 'closure'; label: string }> = [
+    { key: 'start', label: 'Start' },
+    { key: 'completion', label: 'Completion' },
+    { key: 'closure', label: 'Closure' },
+  ];
   for (const row of rows) {
     const startRow = dataRow;
     stages.forEach((stage, i) => {
@@ -69,7 +73,7 @@ export function exportDefectPlanActualToExcel(rows: DefectPlanActualRow[], group
     merges.push({ s: { r: startRow, c: 0 }, e: { r: startRow + 2, c: 0 } });
   }
   ws['!merges'] = merges;
-  ws['!cols'] = [{ wch: 24 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 10 }];
+  ws['!cols'] = [{ wch: 24 }, { wch: 11 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 10 }];
   ws['!ref'] = `A1:${XLSX.utils.encode_col(COL_COUNT - 1)}${dataRow}`;
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Plan vs Actual');

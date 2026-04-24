@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { type DefectEditScope, type DefectItem, formatPct } from '@/lib/defect-utils';
+import { computeDefectStatuses } from '@/lib/defect-status';
 
 export default function DefectQuickUpdatePage() {
   const { user } = useAuth();
@@ -27,9 +28,25 @@ export default function DefectQuickUpdatePage() {
   const save = async (item: DefectItem & { scope: DefectEditScope }) => {
     if (!user || item.scope === 'none') return;
     const patch = edits[item.id] ?? {};
-    const nextProgress = patch.actual_progress_pct ?? item.actual_progress_pct;
-    const actualDatePatch = 'actual_progress_pct' in patch ? { actual_date: Number(nextProgress ?? 0) >= 100 ? (item.actual_date ?? new Date().toISOString().slice(0, 10)) : null } : {};
-    const { error } = await (supabase as any).from('defect_items').update({ ...patch, ...actualDatePatch, updated_by: user.id, data_source_type: 'quick_update', row_version: item.row_version + 1 }).eq('id', item.id);
+    const merged = { ...item, ...patch } as DefectItem;
+    // Recompute statuses unless user explicitly entered them in this edit
+    const userSetCompletion = 'completion_status' in patch;
+    const userSetClosure = 'closure_status' in patch;
+    const asOf = new Date().toISOString().slice(0, 10);
+    const computed = computeDefectStatuses({
+      planned_start_date: merged.planned_start_date,
+      planned_completion_date: merged.planned_completion_date,
+      planned_closure_date: merged.planned_closure_date,
+      actual_start_date: merged.actual_start_date,
+      actual_completion_date: merged.actual_completion_date,
+      actual_closure_date: merged.actual_closure_date,
+      planned_progress_pct: merged.planned_progress_pct,
+      actual_progress_pct: merged.actual_progress_pct,
+    }, asOf);
+    const finalPatch: any = { ...patch };
+    if (!userSetCompletion) finalPatch.completion_status = computed.completion_status;
+    if (!userSetClosure) finalPatch.closure_status = computed.closure_status;
+    const { error } = await (supabase as any).from('defect_items').update({ ...finalPatch, updated_by: user.id, data_source_type: 'quick_update', row_version: item.row_version + 1 }).eq('id', item.id);
     if (error) toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
     else toast({ title: 'Quick update saved' });
   };
@@ -37,5 +54,27 @@ export default function DefectQuickUpdatePage() {
   const setField = (id: string, field: keyof DefectItem, value: any) => setEdits((current) => ({ ...current, [id]: { ...(current[id] ?? {}), [field]: value } }));
   const val = (item: DefectItem, field: keyof DefectItem) => (edits[item.id]?.[field] ?? item[field] ?? '') as any;
 
-  return <div className="space-y-4"><div className="flex gap-2"><Input placeholder="Search Issue No, Level, Location..." value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') search(); }} /><Button onClick={search}>Search</Button></div>{items.map((item) => <Card key={item.id}><CardHeader><CardTitle>{item.issue_no} · {item.area_level || '—'} · {item.area_location || '—'}</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-4"><Input placeholder="Progress %" type="number" value={val(item, 'actual_progress_pct')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'actual_progress_pct', e.target.value ? Number(e.target.value) : null)} /><Input placeholder="Closure Status" value={val(item, 'closure_status')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'closure_status', e.target.value)} /><Input type="date" value={val(item, 'closed_date')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'closed_date', e.target.value || null)} /><Button onClick={() => save(item)} disabled={item.scope === 'none'}>Save</Button><div className="md:col-span-4 text-sm text-muted-foreground">Current progress: {formatPct(item.actual_progress_pct)} · Permission: {item.scope}</div><Textarea className="md:col-span-4" placeholder="Remarks" value={val(item, 'remarks')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'remarks', e.target.value)} /></CardContent></Card>)}</div>;
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Input placeholder="Search Issue No, Level, Location..." value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') search(); }} />
+        <Button onClick={search}>Search</Button>
+      </div>
+      {items.map((item) => (
+        <Card key={item.id}>
+          <CardHeader><CardTitle>{item.issue_no} · {item.area_level || '—'} · {item.area_location || '—'}</CardTitle></CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-4">
+            <Input placeholder="Actual Progress %" type="number" value={val(item, 'actual_progress_pct')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'actual_progress_pct', e.target.value ? Number(e.target.value) : null)} />
+            <Input type="date" placeholder="Actual Completion Date" value={val(item, 'actual_completion_date')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'actual_completion_date', e.target.value || null)} />
+            <Input type="date" placeholder="Actual Closure Date" value={val(item, 'actual_closure_date')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'actual_closure_date', e.target.value || null)} />
+            <Button onClick={() => save(item)} disabled={item.scope === 'none'}>Save</Button>
+            <Input placeholder="Completion Status" value={val(item, 'completion_status')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'completion_status', e.target.value || null)} />
+            <Input placeholder="Closure Status" value={val(item, 'closure_status')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'closure_status', e.target.value || null)} />
+            <div className="md:col-span-4 text-sm text-muted-foreground">Current actual progress: {formatPct(item.actual_progress_pct)} · Permission: {item.scope}</div>
+            <Textarea className="md:col-span-4" placeholder="Remarks" value={val(item, 'remarks')} disabled={item.scope === 'none'} onChange={(e) => setField(item.id, 'remarks', e.target.value)} />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
 }
