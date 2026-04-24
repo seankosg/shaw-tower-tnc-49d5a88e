@@ -1,70 +1,91 @@
 
 
-## Admin 메뉴 클릭 시 Classification 페이지로 잘못 이동되는 버그 수정
+## Plan vs Actual 표 — Difference 행 Total/Done/Remain 정의 수정
 
-### 원인
-
-```text
-useRouteMemory.ts 가 /admin/classification 방문을 last-route:/admin 키로 저장.
-사이드바 Admin 클릭 시 getRememberedRoute('/admin') 가
-저장된 '/admin/classification' 을 반환 → AdminPage 대신 Classification 페이지가 열림.
-
-추가로 Defect Classification 메뉴는 이제 Defect Management 그룹으로 이동했으므로,
-/admin/classification 은 더 이상 Admin 메뉴의 기억 대상이 아니어야 함.
-```
-
-### 수정 사항
+### 현재 문제
 
 ```text
-[src/hooks/useRouteMemory.ts]
-1) ROUTE_KEYS 에 '/admin/classification' 을 '/admin' 보다 먼저 매칭되도록 추가
-   (정렬은 길이 desc 이므로 자동으로 /admin/classification 이 우선 매치됨)
-
-2) routeKeyForPath 가 /admin/classification 방문 시
-   '/admin' 키가 아닌 '/admin/classification' 키로 저장하도록 함
-   → Admin 메뉴 클릭은 항상 /admin (또는 이전에 저장된 /admin/* 중
-     classification 이외 경로) 로 이동
+ACU 그룹: Completion Done = 87, Closure Done = 87
+  → Difference 행이 다음처럼 표시되어야 함:
+       Total = 0, Done = 0, Remain = 0  (검측 대기 0건)
+  → 그러나 현재:
+       Total = 87 (그룹 전체 결함수 그대로)
+       Done  = 0  ← 이건 맞음 (87−87)
+       Remain = "—" (의미 모호)
 ```
 
-수정 후 `useRouteMemory.ts`:
+원인: `row.totalDefects` 가 모든 stage(Completion/Closure/Difference)에서 그대로 사용됨. Difference 의 "Total" 의미가 잘못 정의되어 있음.
 
-```ts
-const ROUTE_KEYS = [
-  '/dashboard',
-  '/raw-data',
-  '/schedule/revision',
-  '/schedule',
-  '/import',
-  '/import/logs',
-  '/export',
-  '/mobile',
-  '/admin/classification',  // ← 추가 (먼저 매치되도록)
-  '/admin',
-];
-```
-
-### 일회성 정리(선택)
+### 정의 변경 (사용자 확정)
 
 ```text
-이미 사용자 브라우저에 저장된 'last-route:/admin' = '/admin/classification' 값을
-정리하기 위해, useRouteMemory 안에서 1회성 마이그레이션 추가:
-  if (localStorage.getItem('last-route:/admin') === '/admin/classification') {
-    localStorage.removeItem('last-route:/admin');
-  }
+[Completion / Closure 행]  변동 없음
+  Total  = row.totalDefects (그룹 전체 결함 수)
+  Done   = stage.cumActual
+  Remain = Total − Done
+
+[Difference 행 — 검측 대기 적체]  ← 재정의
+  Total  = Completion.cumActual − Closure.cumActual   (검측 대기 건수)
+  Done   = Total                                       (= 동일값)
+  Remain = 0                                           (남은 작업 없음)
+
+  나머지 컬럼(Cum Plan/Actual/Δ, Data Date, Today, Delay)은
+  현재처럼 Comp metric − Closure metric 차이값 그대로 유지.
+
+  Progress % = "—" (의미 없음, 현재와 동일)
+```
+
+검증 예시:
+```text
+ACU      → Comp.Done 87, Closure.Done 87 → Diff Total/Done/Remain = 0/0/0  ✅
+ECOPLUS  → Comp.Done 2,  Closure.Done 2  → Diff Total/Done/Remain = 0/0/0  ✅
+Painting → Comp.Done 40, Closure.Done 28 → Diff Total/Done/Remain = 12/12/0
 ```
 
 ### 영향 받는 파일
 
 ```text
-[수정] src/hooks/useRouteMemory.ts
+[수정] src/pages/DefectDashboardPage.tsx
+  - PlanActualTable 본문 렌더링부 (라인 418–467 부근)
+    isDiff 일 때:
+      Total  셀  → row.totalDefects 대신 metrics.cumActual (= Comp−Closure) 표시
+      Done   셀  → metrics.cumActual 그대로 (변경 없음)
+      Remain 셀  → "—" 대신 0 표시 (tabular-nums)
+    Completion / Closure 행은 변경 없음
+  - 헤더 합계(stageTotal/stageDone/stageRemain) 계산 로직 (라인 308–334)
+    Difference 행이 더해질 때:
+      acc.stageTotal += row.totalDefects   →  acc.stageTotal += d.cumActual
+    Completion/Closure 합산은 기존 로직 유지
+    헤더 stageRemain 계산식은 그대로 (= stageTotal − stageDone)
+
+[수정] src/lib/defect-dashboard-excel-export.ts
+  - 동일한 Total/Done/Remain 규칙으로 Excel 출력 정정 (라인 72–75)
+      isDiff 일 때:
+        col 2 (Total)  = m.cumActual          (Comp.cumActual − Closure.cumActual)
+        col 3 (Done)   = m.cumActual          (동일)
+        col 4 (Remain) = 0 (S_NUM 스타일, "—" 제거)
+```
+
+### 변경하지 않는 항목
+
+```text
+- diffMetrics() 함수 자체 (Comp − Closure 차이 계산은 그대로)
+- Cum Plan/Actual/Δ, Data Date Plan/Actual/Δ/Delay, Today Plan/Actual/Δ/Delay
+- Difference 행 클릭 시 raw-data 이동 필터 (actualComplete=true & closureComplete=false)
+- KPI 카드의 "Difference" 값 (이미 actualDone − closureDone 으로 올바름)
+- 색상 / Δ 부호 의미 / 점선 보더
 ```
 
 ### 검증
 
 ```text
-1. Admin 메뉴 클릭 → AdminPage 가 표시됨 (Classification X)
-2. Defect Management > Defect Classification 클릭 → AdminClassificationPage 표시
-3. Admin 내부 탭 이동(/admin?tab=...) 후 다른 메뉴 → Admin 재클릭 시
-   마지막 Admin 탭이 유지됨 (기존 동작 보존)
+1. Defect Dashboard 진입 → ACU/ECOPLUS 처럼 Comp.Done == Closure.Done 인 그룹의
+   Difference 행이 Total=0, Done=0, Remain=0 으로 표시
+2. Comp.Done > Closure.Done 인 그룹은 Total = Done = (차이), Remain = 0
+3. 헤더(컬럼 합계)의 Total/Done/Remain 도 Difference 기여분이 동일 규칙으로 합산되어
+   stageTotal == stageDone (Difference 부분), 전체 stageRemain 은
+   sum(Comp.Remain) + sum(Closure.Remain) + 0 과 일치
+4. Excel export 에서도 동일 값이 출력
+5. 기존 Cum/Data Date/Today 컬럼 값 변동 없음
 ```
 
