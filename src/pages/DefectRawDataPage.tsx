@@ -374,7 +374,7 @@ export default function DefectRawDataPage() {
       issueNo: 'issue_no',
       subcontractorIssueNo: 'subcontractor_issue_no',
     };
-    const hasUrlFilters = ['q', 'dateStart', 'dateEnd', 'dateField', 'actualComplete', 'closureComplete', 'overdue', 'atRisk', ...Object.keys(urlMap)].some((key) => searchParams.has(key));
+    const hasUrlFilters = ['q', 'dateStart', 'dateEnd', 'dateField', 'actualComplete', 'closureComplete', 'overdue', 'stage', 'atRisk', ...Object.keys(urlMap)].some((key) => searchParams.has(key));
     const nextFilters = hasUrlFilters ? [] : baseFilters.filter((filter) => !Object.values(urlMap).includes(filter.id));
 
     for (const [param, col] of Object.entries(urlMap)) {
@@ -447,7 +447,18 @@ export default function DefectRawDataPage() {
     });
     if (searchParams.get('actualComplete') === 'true') next = next.filter((item) => Number(item.actual_progress_pct ?? 0) >= 100);
     if (searchParams.get('closureComplete') === 'true') next = next.filter((item) => Boolean(item.actual_closure_date));
-    if (searchParams.get('overdue') === 'true') next = next.filter((item) => isOverdueDefect(item, searchParams.get('asOf') ?? undefined));
+    if (searchParams.get('overdue') === 'true') {
+      const asOf = searchParams.get('asOf') ?? undefined;
+      const stage = searchParams.get('stage');
+      next = next.filter((item) => {
+        if (Boolean(item.actual_closure_date)) return false;
+        const asOfDate = asOf ?? new Date().toISOString().slice(0, 10);
+        if (stage === 'start') return Boolean(item.planned_start_date && item.planned_start_date <= asOfDate && !item.actual_start_date);
+        if (stage === 'completion') return Boolean(item.planned_completion_date && item.planned_completion_date <= asOfDate && !item.actual_completion_date);
+        if (stage === 'closure') return Boolean(item.planned_closure_date && item.planned_closure_date <= asOfDate && !item.actual_closure_date);
+        return isOverdueDefect(item, asOf);
+      });
+    }
     if (searchParams.get('atRisk') === 'true') {
       const asOf = new Date().toISOString().slice(0, 10);
       const days = Number(searchParams.get('atRiskDays') ?? 7);
