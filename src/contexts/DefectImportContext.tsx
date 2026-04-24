@@ -27,6 +27,9 @@ export interface DefectImportFile {
   error?: string;
   headerCount?: number;
   dataDate?: string;
+  /** True when the parsed file carries the SHAW_DEFECT_REIMPORT_V1 marker.
+   *  In that case the importer runs in update-only mode and never inserts new rows. */
+  isReimport?: boolean;
   result?: { inserted: number; updated: number; skipped: number; rejected: number; teamUnresolved: number; classifiedRule: number; classifiedDiscipline: number; unclassified: number };
 }
 
@@ -299,6 +302,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
           parsed: parsed.rows,
           parsedCount: parsed.rows.length,
           headerCount: parsed.headers.length,
+          isReimport: parsed.isReimport,
           error: undefined,
         } : file));
       } catch (error) {
