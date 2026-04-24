@@ -59,6 +59,9 @@ export interface ParseDefectResult {
 export const REIMPORT_MARKER_TAG = 'SHAW_DEFECT_REIMPORT_V1';
 
 const FIELD_ALIASES: Record<string, string> = {
+  id: 'id',
+  uuid: 'id',
+  'defect id': 'id',
   'issue no': 'issue_no',
   'issue number': 'issue_no',
   'issue type': 'defect_type',
