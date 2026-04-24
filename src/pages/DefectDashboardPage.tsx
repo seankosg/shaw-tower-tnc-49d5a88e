@@ -186,6 +186,14 @@ export default function DefectDashboardPage() {
         <KpiCard icon={<Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />} label="Remain Inspection" value={kpis.difference.toLocaleString()} sub="검측 대기" onClick={() => goRaw({ actualComplete: 'true', closureComplete: 'false' })} />
       </div>
 
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <div className="hidden md:block" />
+        <StageCard stage="Completion" total={kpis.total} done={kpis.actualDone} remaining={kpis.total - kpis.actualDone} pct={kpis.completionPct} overdue={kpis.completionOverdue} onClick={() => goRaw({ actualComplete: 'false' })} />
+        <div className="hidden md:block" />
+        <StageCard stage="Closure" total={kpis.total} done={kpis.closureDone} remaining={kpis.total - kpis.closureDone} pct={kpis.overallProgressPct} overdue={kpis.closureOverdue} onClick={() => goRaw({ closureComplete: 'false' })} />
+        <div className="hidden md:block" />
+      </div>
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard icon={<AlertTriangle className="h-6 w-6 text-destructive" />} label="Overdue - Start" value={kpis.startOverdue} accent="destructive" sub="Start 지연" onClick={() => goRaw({ overdue: 'true', stage: 'start', asOf: dataDate })} />
         <KpiCard icon={<AlertTriangle className="h-6 w-6 text-destructive" />} label="Overdue - Completion" value={kpis.completionOverdue} accent="destructive" sub="Completion 지연" onClick={() => goRaw({ overdue: 'true', stage: 'completion', asOf: dataDate })} />
@@ -196,11 +204,6 @@ export default function DefectDashboardPage() {
           <Progress value={kpis.overallProgressPct} className="mt-1 h-2" />
           <p className="mt-1 text-[10px] text-muted-foreground">Closure / Total</p>
         </Card>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <StageCard stage="Completion" total={kpis.total} done={kpis.actualDone} remaining={kpis.total - kpis.actualDone} pct={kpis.completionPct} overdue={kpis.completionOverdue} onClick={() => goRaw({ actualComplete: 'false' })} />
-        <StageCard stage="Closure" total={kpis.total} done={kpis.closureDone} remaining={kpis.total - kpis.closureDone} pct={kpis.overallProgressPct} overdue={kpis.closureOverdue} onClick={() => goRaw({ closureComplete: 'false' })} />
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
