@@ -319,6 +319,7 @@ export default function DefectRawDataPage() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportMode, setExportMode] = useState<'single' | 'per-subcon'>('single');
+  const [exportFormat, setExportFormat] = useState<'view' | 'reimport'>('view');
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -679,6 +680,7 @@ export default function DefectRawDataPage() {
                 return;
               }
               setExportMode('single');
+              setExportFormat('view');
               setExportDialogOpen(true);
             }}
           >
