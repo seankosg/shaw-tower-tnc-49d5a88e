@@ -664,6 +664,35 @@ export default function DefectRawDataPage() {
           <Button variant="outline" size="sm" onClick={() => navigate('/defects/import')}>
             <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const visibleRows = table.getSortedRowModel().rows.length;
+              if (visibleRows === 0) {
+                toast({ title: 'No rows to export', description: 'Adjust filters and try again.', variant: 'destructive' });
+                return;
+              }
+              try {
+                const result = exportDefectRawToExcel({
+                  table,
+                  fieldConfig: fieldConfigRows,
+                  globalFilter,
+                  searchParams,
+                  meta: {
+                    userName: profile?.name || profile?.login_id || 'Unknown',
+                    userType: profile?.user_type ? USER_TYPE_LABELS[profile.user_type] : '',
+                  },
+                });
+                toast({ title: 'Export complete', description: `${result.rowCount} rows → ${result.fileName}` });
+              } catch (err) {
+                console.error('Defect Excel export failed', err);
+                toast({ title: 'Export failed', description: String((err as Error)?.message ?? err), variant: 'destructive' });
+              }
+            }}
+          >
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export Excel
+          </Button>
           <Button variant="outline" size="sm" onClick={() => navigate('/defects/export')}>
             <Download className="mr-1.5 h-3.5 w-3.5" /> Export
           </Button>
