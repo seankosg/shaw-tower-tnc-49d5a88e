@@ -44,6 +44,8 @@ const DEFECT_RAW_FIELDS = [
   'area_location',
   'main_trade',
   'sub_trade',
+  'work_type',
+  'classification_source',
   'trade_detail',
   'description',
   'defect_type',
@@ -85,6 +87,8 @@ const RAW_SEARCH_FIELDS = [
   'area_location',
   'main_trade',
   'sub_trade',
+  'work_type',
+  'classification_source',
   'trade_detail',
   'description',
   'defect_type',
@@ -363,6 +367,8 @@ export default function DefectRawDataPage() {
       level: 'area_level',
       mainTrade: 'main_trade',
       subTrade: 'sub_trade',
+      workType: 'work_type',
+      classificationSource: 'classification_source',
       status: 'status',
       closureStatus: 'closure_status',
       issueNo: 'issue_no',
@@ -375,7 +381,7 @@ export default function DefectRawDataPage() {
       const value = searchParams.get(param);
       if (!value) continue;
       if (TEXT_FILTER_FIELDS.has(col)) nextFilters.push({ id: col, value: value === EMPTY_TOKEN ? { text: '', emptyOnly: true } : { text: value } });
-      else nextFilters.push({ id: col, value: [value] });
+      else nextFilters.push({ id: col, value: value.split(',').filter(Boolean) });
     }
 
     const dateStart = searchParams.get('dateStart');
@@ -467,6 +473,13 @@ export default function DefectRawDataPage() {
     area_level: uniqueOptions(items, 'area_level'),
     main_trade: uniqueOptions(items, 'main_trade'),
     sub_trade: uniqueOptions(items, 'sub_trade'),
+    work_type: uniqueOptions(items, 'work_type'),
+    classification_source: [
+      { value: 'rule', label: 'rule' },
+      { value: 'discipline', label: 'discipline' },
+      { value: 'manual', label: 'manual' },
+      { value: 'unclassified', label: 'unclassified' },
+    ],
     defect_type: uniqueOptions(items, 'defect_type'),
     priority: uniqueOptions(items, 'priority'),
   }), [items]);
@@ -499,6 +512,15 @@ export default function DefectRawDataPage() {
         if (field === 'closure_status') return <DefectStatusBadge status={row.original.closure_status ?? row.original.status} />;
         if (field === 'status') return <DefectStatusBadge status={row.original.status} />;
         if (field === 'actual_progress_pct') return formatPct(value);
+        if (field === 'classification_source') {
+          const src = String(value ?? '').toLowerCase();
+          if (!src) return '—';
+          const cls = src === 'rule' ? 'bg-primary/10 text-primary border-primary/30'
+            : src === 'discipline' ? 'bg-accent text-accent-foreground border-border'
+            : src === 'manual' ? 'bg-muted text-foreground border-border'
+            : 'bg-destructive/10 text-destructive border-destructive/30';
+          return <span className={cn('inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold', cls)}>{src}</span>;
+        }
         if (DATE_FILTER_FIELDS.has(field)) return formatDdMmm(value ? String(value).slice(0, 10) : null);
         const text = String(value ?? '—');
         if (['description', 'area_location', 'remarks', 'hdec_comments'].includes(field)) return <span className="block truncate">{text}</span>;
@@ -552,6 +574,8 @@ export default function DefectRawDataPage() {
       level: 'Level',
       mainTrade: 'Main Trade',
       subTrade: 'Sub Trade',
+      workType: 'Work Type',
+      classificationSource: 'Classification',
       status: 'Status',
       closureStatus: 'Closure',
       issueNo: 'Issue No',
