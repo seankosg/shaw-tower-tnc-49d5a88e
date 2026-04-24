@@ -151,9 +151,9 @@ export default function DefectImportLogsPage() {
     setRowLogs(data ?? []);
 
     const { data: changes } = await supabase.from('defect_schedule_change_audit')
-      .select('id, raw_row_no, defect_id, issue_no, subcontractor_issue_no, planned_old_date, planned_new_date, planned_diff_days, target_old_date, target_new_date, target_diff_days, closed_old_date, closed_new_date, closed_diff_days, progress_old_pct, progress_new_pct, progress_diff_pct, closure_status_old, closure_status_new, change_source')
+      .select('id, raw_row_no, defect_id, issue_no, subcontractor_issue_no, planned_completion_old_date, planned_completion_new_date, planned_completion_diff_days, planned_closure_old_date, planned_closure_new_date, planned_closure_diff_days, actual_closure_old_date, actual_closure_new_date, actual_closure_diff_days, progress_old_pct, progress_new_pct, progress_diff_pct, completion_status_old, completion_status_new, closure_status_old, closure_status_new, change_source')
       .eq('upload_id', id).order('raw_row_no', { ascending: true }).limit(500);
-    setScheduleChanges((changes as DefectScheduleChangeAudit[]) ?? []);
+    setScheduleChanges(((changes as unknown) as DefectScheduleChangeAudit[]) ?? []);
   };
 
   const deleteBatch = async (batch: DefectBatch) => {
