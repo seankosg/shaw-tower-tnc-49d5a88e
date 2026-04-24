@@ -45,6 +45,8 @@ export const DEFECT_DEFAULT_FIELD_LABELS: Record<string, string> = {
   closure_status: 'Closure Status',
   remarks: 'Remarks',
   hdec_comments: 'HDEC Comments',
+  work_type: 'Work Type',
+  classification_source: 'Classification Source',
 };
 
 export function useDefectFieldConfig() {
