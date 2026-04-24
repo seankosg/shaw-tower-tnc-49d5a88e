@@ -9,6 +9,24 @@ import { type DefectFieldConfigRow, DEFECT_DEFAULT_FIELD_LABELS } from '@/hooks/
 // Types
 // ---------------------------------------------------------------------------
 
+export type DefectExportFormat = 'view' | 'reimport';
+
+export const REIMPORT_MARKER = '[Format: SHAW_DEFECT_REIMPORT_V1]';
+
+/**
+ * Stable list of identifier / system columns we always include (and pin to the
+ * front) in a Re-import ready export so that the importer can match rows to
+ * existing DB records. These fields are intentionally NOT user-friendly — they
+ * are the contract between export and re-import.
+ */
+const REIMPORT_ID_FIELDS = ['id', 'issue_no', 'subcontractor_issue_no'] as const;
+
+const REIMPORT_ID_LABELS: Record<string, string> = {
+  id: 'ID',
+  issue_no: 'Issue No',
+  subcontractor_issue_no: 'Subcontractor Issue No',
+};
+
 export interface ExportDefectRawOptions<TRow> {
   table: Table<TRow>;
   fieldConfig: DefectFieldConfigRow[];
@@ -18,6 +36,9 @@ export interface ExportDefectRawOptions<TRow> {
     userName: string;
     userType: string;
   };
+  /** 'view' (default) keeps current human-friendly format. 'reimport' produces
+   *  a file that can be edited and re-imported to update existing rows. */
+  format?: DefectExportFormat;
 }
 
 // ---------------------------------------------------------------------------
