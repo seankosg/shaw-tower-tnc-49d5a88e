@@ -1,91 +1,70 @@
 
 
-## Plan vs Actual 표 — Difference 행 Total/Done/Remain 정의 수정
+## Defect Import — 시트 자동 스캔 + 헤더 행 자동 감지
 
-### 현재 문제
+### 목적
 
-```text
-ACU 그룹: Completion Done = 87, Closure Done = 87
-  → Difference 행이 다음처럼 표시되어야 함:
-       Total = 0, Done = 0, Remain = 0  (검측 대기 0건)
-  → 그러나 현재:
-       Total = 87 (그룹 전체 결함수 그대로)
-       Done  = 0  ← 이건 맞음 (87−87)
-       Remain = "—" (의미 모호)
-```
+현재 `parseDefectExcel` 가 **첫 시트만**, **첫 행을 헤더로 가정**하여 파싱하기 때문에 다음 케이스에서 "No defect rows found" 오류 발생:
+- 데이터가 두 번째 이후 시트에 있을 때
+- 상단에 제목/병합 셀이 있고 실제 헤더가 2~5행에 위치할 때
 
-원인: `row.totalDefects` 가 모든 stage(Completion/Closure/Difference)에서 그대로 사용됨. Difference 의 "Total" 의미가 잘못 정의되어 있음.
-
-### 정의 변경 (사용자 확정)
+### 동작 변경
 
 ```text
-[Completion / Closure 행]  변동 없음
-  Total  = row.totalDefects (그룹 전체 결함 수)
-  Done   = stage.cumActual
-  Remain = Total − Done
+[시트 자동 스캔]
+  workbook.SheetNames 를 순서대로 순회하면서
+  "유효 헤더 + 1개 이상 데이터 행" 을 가진 첫 시트를 채택.
+  유효 헤더 판정 = toFieldName 결과에 'issue_no' 가 포함된 행 존재.
 
-[Difference 행 — 검측 대기 적체]  ← 재정의
-  Total  = Completion.cumActual − Closure.cumActual   (검측 대기 건수)
-  Done   = Total                                       (= 동일값)
-  Remain = 0                                           (남은 작업 없음)
+[헤더 행 자동 감지]
+  각 시트에 대해 sheet_to_json({ header: 1 }) 로 2D 배열 추출.
+  상위 최대 10행을 스캔 → 'issue_no' 로 매핑되는 셀이 있는 첫 행을 헤더 행으로 채택.
+  채택 후 그 행을 헤더로, 이후 행들을 데이터로 재구성한 객체 배열 생성
+  (sheet_to_json({ range: headerRowIndex }) 사용).
 
-  나머지 컬럼(Cum Plan/Actual/Δ, Data Date, Today, Delay)은
-  현재처럼 Comp metric − Closure metric 차이값 그대로 유지.
-
-  Progress % = "—" (의미 없음, 현재와 동일)
-```
-
-검증 예시:
-```text
-ACU      → Comp.Done 87, Closure.Done 87 → Diff Total/Done/Remain = 0/0/0  ✅
-ECOPLUS  → Comp.Done 2,  Closure.Done 2  → Diff Total/Done/Remain = 0/0/0  ✅
-Painting → Comp.Done 40, Closure.Done 28 → Diff Total/Done/Remain = 12/12/0
+[최종 결과]
+  - 어떤 시트도 'issue_no' 헤더를 못 찾으면 → 명확한 오류 메시지:
+      "No 'Issue No' column found. Scanned sheets: [Sheet1, Summary, Data]"
+  - 헤더는 찾았지만 데이터 행이 0개면:
+      "No data rows found in sheet '<name>' (header detected at row N)"
 ```
 
 ### 영향 받는 파일
 
 ```text
-[수정] src/pages/DefectDashboardPage.tsx
-  - PlanActualTable 본문 렌더링부 (라인 418–467 부근)
-    isDiff 일 때:
-      Total  셀  → row.totalDefects 대신 metrics.cumActual (= Comp−Closure) 표시
-      Done   셀  → metrics.cumActual 그대로 (변경 없음)
-      Remain 셀  → "—" 대신 0 표시 (tabular-nums)
-    Completion / Closure 행은 변경 없음
-  - 헤더 합계(stageTotal/stageDone/stageRemain) 계산 로직 (라인 308–334)
-    Difference 행이 더해질 때:
-      acc.stageTotal += row.totalDefects   →  acc.stageTotal += d.cumActual
-    Completion/Closure 합산은 기존 로직 유지
-    헤더 stageRemain 계산식은 그대로 (= stageTotal − stageDone)
+[수정] src/lib/defect-parser.ts
+  - parseDefectExcel(file)
+      1. workbook.SheetNames 루프
+      2. 각 시트마다 detectHeaderRow(worksheet) 호출
+      3. 'issue_no' 매핑되는 헤더 행 발견 + 데이터 ≥ 1행이면 채택, 즉시 break
+      4. 채택된 시트로 sheet_to_json({ range: headerRowIdx, defval: '' }) 재호출
+      5. rawRowNo 계산: index + headerRowIdx + 2 (Excel 행번호 보존)
+      6. 미채택 시 throw new Error(상세 메시지)
+  - 신규 helper:
+      function detectHeaderRow(worksheet): { headerRowIdx: number; headers: string[] } | null
 
-[수정] src/lib/defect-dashboard-excel-export.ts
-  - 동일한 Total/Done/Remain 규칙으로 Excel 출력 정정 (라인 72–75)
-      isDiff 일 때:
-        col 2 (Total)  = m.cumActual          (Comp.cumActual − Closure.cumActual)
-        col 3 (Done)   = m.cumActual          (동일)
-        col 4 (Remain) = 0 (S_NUM 스타일, "—" 제거)
+[수정] src/pages/DefectImportPage.tsx
+  - 기존 "No defect rows found" 분기는 parseDefectExcel 가 throw 한
+    오류 메시지를 그대로 사용자에게 표시하도록 변경 (catch 블록에서 err.message 노출).
 ```
 
 ### 변경하지 않는 항목
 
 ```text
-- diffMetrics() 함수 자체 (Comp − Closure 차이 계산은 그대로)
-- Cum Plan/Actual/Δ, Data Date Plan/Actual/Δ/Delay, Today Plan/Actual/Δ/Delay
-- Difference 행 클릭 시 raw-data 이동 필터 (actualComplete=true & closureComplete=false)
-- KPI 카드의 "Difference" 값 (이미 actualDone − closureDone 으로 올바름)
-- 색상 / Δ 부호 의미 / 점선 보더
+- FIELD_ALIASES, toFieldName, parseArea 등 매핑 로직
+- ParsedDefectRow 형태, headers 배열 구조
+- 호출부 (DefectImportPage 의 parseDefectExcel 호출 시그니처)
+- raw_payload 구조 (헤더 행 기준의 객체 그대로)
 ```
 
 ### 검증
 
 ```text
-1. Defect Dashboard 진입 → ACU/ECOPLUS 처럼 Comp.Done == Closure.Done 인 그룹의
-   Difference 행이 Total=0, Done=0, Remain=0 으로 표시
-2. Comp.Done > Closure.Done 인 그룹은 Total = Done = (차이), Remain = 0
-3. 헤더(컬럼 합계)의 Total/Done/Remain 도 Difference 기여분이 동일 규칙으로 합산되어
-   stageTotal == stageDone (Difference 부분), 전체 stageRemain 은
-   sum(Comp.Remain) + sum(Closure.Remain) + 0 과 일치
-4. Excel export 에서도 동일 값이 출력
-5. 기존 Cum/Data Date/Today 컬럼 값 변동 없음
+1. 첫 시트 1행이 헤더인 정상 파일 → 기존과 동일하게 파싱 (회귀 없음)
+2. 데이터가 두 번째 시트에 있는 파일 → 두 번째 시트에서 자동 채택, 정상 import
+3. 첫 시트 1~3행이 제목/병합 셀이고 4행이 헤더 → 4행을 헤더로 인식, 5행부터 데이터
+4. rawRowNo 가 실제 Excel 행번호와 일치 (Import Logs 에서 클릭 시 정확한 행 추적)
+5. 'Issue No' 컬럼 자체가 없는 파일 → 명확한 오류 메시지 + 스캔한 시트 목록 표시
+6. 헤더는 있지만 데이터가 0행 → "header detected at row N" 메시지
 ```
 
