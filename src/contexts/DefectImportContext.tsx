@@ -27,6 +27,9 @@ export interface DefectImportFile {
   error?: string;
   headerCount?: number;
   dataDate?: string;
+  /** True when the parsed file carries the SHAW_DEFECT_REIMPORT_V1 marker.
+   *  In that case the importer runs in update-only mode and never inserts new rows. */
+  isReimport?: boolean;
   result?: { inserted: number; updated: number; skipped: number; rejected: number; teamUnresolved: number; classifiedRule: number; classifiedDiscipline: number; unclassified: number };
 }
 
@@ -77,8 +80,13 @@ async function buildProfileTeamMap(): Promise<ProfileTeamMap> {
 }
 
 function resolveDefectTeam(row: ParsedDefectRow, profileTeamMap: ProfileTeamMap): TeamType | null {
+  // Unified rule (initial import + re-import):
+  //   1. If the Excel row has an explicit Team value, use it as-is.
+  //   2. Otherwise fall back to deriving Team from Field Discipline / profiles.
+  // Users can still edit the Team in the app subject to role permissions.
+  const explicit = normalizeTeamValue(row.team);
+  if (explicit) return explicit;
   return normalizeTeamValue(row.trade_detail)
-    ?? normalizeTeamValue(row.team)
     ?? profileTeamMap.get(masterNameKey(row.subcontractor_name))
     ?? profileTeamMap.get(masterNameKey(row.subsub_name))
     ?? null;
@@ -294,6 +302,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
           parsed: parsed.rows,
           parsedCount: parsed.rows.length,
           headerCount: parsed.headers.length,
+          isReimport: parsed.isReimport,
           error: undefined,
         } : file));
       } catch (error) {
@@ -390,14 +399,39 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
 
     const mappedRows = item.parsed.map((row) => applyMasterDecisions(row, decisions));
 
+    const isReimport = !!item.isReimport;
+
+    // Existing-row lookup: by issue_no for everyone, plus by id for re-imports.
     const issueNos = mappedRows.map((row) => row.issue_no).filter((value): value is string => Boolean(value));
     const existingByIssueNo = new Map<string, any>();
+    const existingById = new Map<string, any>();
     if (issueNos.length > 0) {
       const chunkSize = 200;
       for (let i = 0; i < issueNos.length; i += chunkSize) {
         const chunk = issueNos.slice(i, i + chunkSize);
         const { data } = await (supabase as any).from('defect_items').select('*').in('issue_no', chunk);
-        for (const existing of data ?? []) existingByIssueNo.set(existing.issue_no, existing);
+        for (const existing of data ?? []) {
+          existingByIssueNo.set(existing.issue_no, existing);
+          if (existing.id) existingById.set(String(existing.id), existing);
+        }
+      }
+    }
+
+    if (isReimport) {
+      // Also fetch by ID for any rows whose issue_no may have been edited.
+      const ids = mappedRows
+        .map((row) => row.id)
+        .filter((value): value is string => Boolean(value) && !existingById.has(String(value)));
+      if (ids.length > 0) {
+        const chunkSize = 200;
+        for (let i = 0; i < ids.length; i += chunkSize) {
+          const chunk = ids.slice(i, i + chunkSize);
+          const { data } = await (supabase as any).from('defect_items').select('*').in('id', chunk);
+          for (const existing of data ?? []) {
+            existingById.set(String(existing.id), existing);
+            if (existing.issue_no) existingByIssueNo.set(existing.issue_no, existing);
+          }
+        }
       }
     }
 
@@ -456,7 +490,25 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'unclassified_defect', reason_detail: 'Could not classify from description or Field Discipline.' });
       }
 
-      const existing = existingByIssueNo.get(row.issue_no) ?? null;
+      // For re-import: prefer matching by id (which is included in the export);
+      // fall back to issue_no for backward compatibility.
+      const existing = (isReimport && row.id ? existingById.get(String(row.id)) : null)
+        ?? existingByIssueNo.get(row.issue_no)
+        ?? null;
+
+      if (isReimport && !existing) {
+        rejected++;
+        await (supabase as any).from('defect_upload_row_logs').insert({
+          upload_id: uploadId,
+          raw_row_no: row.rawRowNo,
+          issue_no: row.issue_no,
+          action_taken: 'rejected',
+          reason_code: 'reimport_not_found',
+          reason_detail: `Re-import row could not be matched to any existing defect (id=${row.id ?? 'n/a'}, issue_no=${row.issue_no}). New rows are not created in re-import mode.`,
+        });
+        continue;
+      }
+
       const issueAssignment = assignments.get(row.rawRowNo)
         ?? reserveSubcontractorIssueNo(row, existing?.project_id ?? null, issueRegistry, existing);
       if (issueAssignment.duplicate) {
@@ -498,7 +550,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         closureStatus = null;
       }
 
-      const payload = { ...row, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, completion_status: completionStatus, closure_status: closureStatus, team: resolvedTeam, classification_source: classificationSource, classified_at: classifiedAt, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
+      const payload = { ...row, id: undefined, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, completion_status: completionStatus, closure_status: closureStatus, team: resolvedTeam, classification_source: classificationSource, classified_at: classifiedAt, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
 
       if (existing) {
         const hasAnyChange = Object.entries(payload).some(([key, value]) => key !== 'raw_payload' && key !== 'row_version' && key !== 'updated_by' && key !== 'source_upload_id' && changed(existing[key], value));

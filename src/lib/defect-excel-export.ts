@@ -9,6 +9,24 @@ import { type DefectFieldConfigRow, DEFECT_DEFAULT_FIELD_LABELS } from '@/hooks/
 // Types
 // ---------------------------------------------------------------------------
 
+export type DefectExportFormat = 'view' | 'reimport';
+
+export const REIMPORT_MARKER = '[Format: SHAW_DEFECT_REIMPORT_V1]';
+
+/**
+ * Stable list of identifier / system columns we always include (and pin to the
+ * front) in a Re-import ready export so that the importer can match rows to
+ * existing DB records. These fields are intentionally NOT user-friendly — they
+ * are the contract between export and re-import.
+ */
+const REIMPORT_ID_FIELDS = ['id', 'issue_no', 'subcontractor_issue_no'] as const;
+
+const REIMPORT_ID_LABELS: Record<string, string> = {
+  id: 'ID',
+  issue_no: 'Issue No',
+  subcontractor_issue_no: 'Subcontractor Issue No',
+};
+
 export interface ExportDefectRawOptions<TRow> {
   table: Table<TRow>;
   fieldConfig: DefectFieldConfigRow[];
@@ -18,6 +36,9 @@ export interface ExportDefectRawOptions<TRow> {
     userName: string;
     userType: string;
   };
+  /** 'view' (default) keeps current human-friendly format. 'reimport' produces
+   *  a file that can be edited and re-imported to update existing rows. */
+  format?: DefectExportFormat;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,10 +161,22 @@ const DATE_FIELDS = new Set([
 const DATETIME_FIELDS = new Set(['updated_at', 'created_at']);
 const PROGRESS_FIELDS = new Set(['planned_progress_pct', 'actual_progress_pct']);
 
-function formatCellValue<TRow>(row: Row<TRow>, col: Column<TRow, unknown>): string {
+function formatCellValue<TRow>(row: Row<TRow>, col: Column<TRow, unknown>, format: DefectExportFormat = 'view'): string {
   const id = col.id;
   const raw = row.getValue(id);
   if (raw == null || raw === '') return '';
+
+  if (format === 'reimport') {
+    // Raw, machine-friendly values for round-trip import.
+    if (PROGRESS_FIELDS.has(id)) {
+      const num = Number(raw);
+      return Number.isFinite(num) ? String(num) : '';
+    }
+    if (DATE_FIELDS.has(id)) return String(raw).slice(0, 10); // YYYY-MM-DD
+    if (DATETIME_FIELDS.has(id)) return String(raw); // ISO timestamp
+    // team / status / classification stay as raw enum/code values
+    return String(raw);
+  }
 
   if (id === 'team') return formatTeamLabel(raw as any);
   if (PROGRESS_FIELDS.has(id)) return formatPct(raw as any);
@@ -151,6 +184,13 @@ function formatCellValue<TRow>(row: Row<TRow>, col: Column<TRow, unknown>): stri
   if (DATETIME_FIELDS.has(id)) return formatDdMmmYyyy(String(raw));
   if (id === 'classification_source') return String(raw).toLowerCase();
   return String(raw);
+}
+
+function formatReimportIdValue<TRow>(row: Row<TRow>, fieldId: string): string {
+  const original = row.original as any;
+  const value = original?.[fieldId];
+  if (value == null || value === '') return '';
+  return String(value);
 }
 
 // ---------------------------------------------------------------------------
@@ -212,10 +252,13 @@ interface BuildSheetParams<TRow> {
   globalFilter: string;
   searchParams: URLSearchParams;
   sourceSuffix?: string;
+  format?: DefectExportFormat;
 }
 
 function buildDefectWorkbook<TRow>(params: BuildSheetParams<TRow>): XLSX.WorkBook {
   const { rows: sortedRows, visibleCols, fieldConfig, meta, globalFilter, searchParams, sourceSuffix } = params;
+  const format: DefectExportFormat = params.format ?? 'view';
+  const isReimport = format === 'reimport';
 
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -223,19 +266,37 @@ function buildDefectWorkbook<TRow>(params: BuildSheetParams<TRow>): XLSX.WorkBoo
 
   const baseSourceLabel = inferSourceLabel(searchParams);
   const sourceLabel = sourceSuffix ? `${baseSourceLabel} · ${sourceSuffix}` : baseSourceLabel;
-  // dummy table-less summaries: we accept that filters/sort summaries depend on table state; pass via closure below
   const filterSummary = (params as any)._filterSummary ?? '(none)';
   const sortSummary = (params as any)._sortSummary ?? '(default)';
   const searchLabel = globalFilter?.trim() ? `"${globalFilter.trim()}"` : '(none)';
+  const formatLabel = isReimport ? `Re-import ready  ${REIMPORT_MARKER}` : 'View-friendly';
 
-  const colCount = Math.max(visibleCols.length, 2);
+  // For re-import: prepend stable identifier columns (id, issue_no, subcontractor_issue_no)
+  // that are NOT in visibleCols, then drop duplicates from visibleCols to avoid double headers.
+  const visibleColIds = new Set(visibleCols.map((c) => c.id));
+  const reimportIdFields = isReimport
+    ? REIMPORT_ID_FIELDS.filter((f) => !visibleColIds.has(f))
+    : [];
+
+  const headerRow: string[] = [
+    ...reimportIdFields.map((f) => REIMPORT_ID_LABELS[f] ?? f),
+    ...visibleCols.map((c) =>
+      isReimport && REIMPORT_ID_LABELS[c.id]
+        ? REIMPORT_ID_LABELS[c.id]
+        : getColumnDisplayName(c, fieldConfig),
+    ),
+  ];
+
+  const dataRows = sortedRows.map((r) => [
+    ...reimportIdFields.map((f) => formatReimportIdValue(r, f)),
+    ...visibleCols.map((c) => formatCellValue(r, c, format)),
+  ]);
+
+  const colCount = Math.max(headerRow.length, 2);
   const lastColLetter = XLSX.utils.encode_col(colCount - 1);
 
-  const headerRow = visibleCols.map((c) => getColumnDisplayName(c, fieldConfig));
-  const dataRows = sortedRows.map((r) => visibleCols.map((c) => formatCellValue(r, c)));
-
   const aoa: any[][] = [
-    ['SHAW T&C — Defect Raw Data Export'],
+    [`SHAW T&C — Defect Raw Data Export  (${formatLabel})`],
     [`Exported: ${exportedTs}  by  ${meta.userName}${meta.userType ? ` (${meta.userType})` : ''}`],
     [`Source: ${sourceLabel}`],
     [`Search: ${searchLabel}`],
@@ -254,7 +315,13 @@ function buildDefectWorkbook<TRow>(params: BuildSheetParams<TRow>): XLSX.WorkBoo
   }
   ws['!merges'] = merges;
 
-  const cols: XLSX.ColInfo[] = visibleCols.map((c) => {
+  const cols: XLSX.ColInfo[] = headerRow.map((_, idx) => {
+    if (idx < reimportIdFields.length) {
+      // ID columns: give them a reasonable fixed width
+      const fieldId = reimportIdFields[idx];
+      return { wch: fieldId === 'id' ? 38 : 20 };
+    }
+    const c = visibleCols[idx - reimportIdFields.length];
     const px = c.getSize();
     const wch = Math.max(8, Math.min(60, Math.round(px / 7)));
     return { wch };
@@ -271,7 +338,7 @@ function buildDefectWorkbook<TRow>(params: BuildSheetParams<TRow>): XLSX.WorkBoo
   }
   ws['!rows'] = rowsInfo;
 
-  const xSplit = Math.min(3, visibleCols.length);
+  const xSplit = Math.min(3, headerRow.length);
   ws['!freeze'] = { xSplit, ySplit: 8 };
   (ws as any)['!views'] = [
     {
@@ -326,7 +393,7 @@ export function exportDefectRawToExcel<TRow>(opts: ExportDefectRawOptions<TRow>)
   rowCount: number;
   fileName: string;
 } {
-  const { table, fieldConfig, globalFilter, searchParams, meta } = opts;
+  const { table, fieldConfig, globalFilter, searchParams, meta, format = 'view' } = opts;
 
   const visibleCols = table.getVisibleLeafColumns();
   const sortedRows = table.getSortedRowModel().rows;
@@ -338,11 +405,13 @@ export function exportDefectRawToExcel<TRow>(opts: ExportDefectRawOptions<TRow>)
     meta,
     globalFilter,
     searchParams,
+    format,
     _filterSummary: summarizeFilters(table, fieldConfig),
     _sortSummary: summarizeSort(table, fieldConfig),
   } as BuildSheetParams<TRow>);
 
-  const fileName = `SHAW_Defects_${timestampForFilename()}.xlsx`;
+  const suffix = format === 'reimport' ? '_REIMPORT' : '';
+  const fileName = `SHAW_Defects${suffix}_${timestampForFilename()}.xlsx`;
   XLSX.writeFile(wb, fileName);
   return { rowCount: sortedRows.length, fileName };
 }
@@ -356,7 +425,7 @@ export function exportDefectRawToExcelBySubcontractor<TRow>(opts: ExportDefectRa
   rowCount: number;
   fileNames: string[];
 } {
-  const { table, fieldConfig, globalFilter, searchParams, meta } = opts;
+  const { table, fieldConfig, globalFilter, searchParams, meta, format = 'view' } = opts;
   const visibleCols = table.getVisibleLeafColumns();
   const sortedRows = table.getSortedRowModel().rows;
 
@@ -382,6 +451,8 @@ export function exportDefectRawToExcelBySubcontractor<TRow>(opts: ExportDefectRa
     return a.localeCompare(b);
   });
 
+  const suffix = format === 'reimport' ? '_REIMPORT' : '';
+
   for (const subconName of sortedKeys) {
     const groupRows = groups.get(subconName)!;
     const wb = buildDefectWorkbook({
@@ -391,12 +462,13 @@ export function exportDefectRawToExcelBySubcontractor<TRow>(opts: ExportDefectRa
       meta,
       globalFilter,
       searchParams,
+      format,
       sourceSuffix: `Subcontractor: ${subconName}`,
       _filterSummary: filterSummary,
       _sortSummary: sortSummary,
     } as BuildSheetParams<TRow>);
 
-    const fileName = `SHAW_Defects_${sanitizeForFilename(subconName)}_${ts}.xlsx`;
+    const fileName = `SHAW_Defects${suffix}_${sanitizeForFilename(subconName)}_${ts}.xlsx`;
     XLSX.writeFile(wb, fileName);
     fileNames.push(fileName);
   }

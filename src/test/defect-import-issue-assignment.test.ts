@@ -11,6 +11,7 @@ type RowOverrides = Partial<ParsedDefectRow> & { issue_no: string; rawRowNo: num
 function makeRow(overrides: RowOverrides): ParsedDefectRow {
   return {
     rawRowNo: overrides.rawRowNo,
+    id: overrides.id ?? null,
     issue_no: overrides.issue_no,
     subcontractor_issue_no: overrides.subcontractor_issue_no ?? null,
     subcontractor_issue_source: overrides.subcontractor_issue_source ?? null,

@@ -15,6 +15,8 @@ export interface ParsedDefectRow {
   issue_no: string;
   subcontractor_issue_no: string | null;
   subcontractor_issue_source: string | null;
+  /** Defect row UUID — only present in re-import files (from "Re-import ready" export). */
+  id: string | null;
   main_trade: string | null;
   sub_trade: string | null;
   trade_detail: string | null;
@@ -51,9 +53,17 @@ export interface ParseDefectResult {
   rows: ParsedDefectRow[];
   headers: DefectHeaderInfo[];
   sheetName: string;
+  /** True when the file was produced by "Re-import ready" export and contains the
+   *  SHAW_DEFECT_REIMPORT_V1 marker — importer should run in update-only mode. */
+  isReimport: boolean;
 }
 
+export const REIMPORT_MARKER_TAG = 'SHAW_DEFECT_REIMPORT_V1';
+
 const FIELD_ALIASES: Record<string, string> = {
+  id: 'id',
+  uuid: 'id',
+  'defect id': 'id',
   'issue no': 'issue_no',
   'issue number': 'issue_no',
   'issue type': 'defect_type',
@@ -175,7 +185,8 @@ function getMapped(row: Record<string, unknown>, field: string): unknown {
   return entry?.[1];
 }
 
-const HEADER_SCAN_LIMIT = 10;
+// Increased to 20 so re-import files (with extra metadata block / marker rows) still parse.
+const HEADER_SCAN_LIMIT = 20;
 
 function detectHeaderRow(worksheet: XLSX.WorkSheet): { headerRowIdx: number; headers: string[] } | null {
   const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '', blankrows: false });
@@ -188,6 +199,20 @@ function detectHeaderRow(worksheet: XLSX.WorkSheet): { headerRowIdx: number; hea
     }
   }
   return null;
+}
+
+/** Scan the first ~20 rows of a worksheet for the SHAW_DEFECT_REIMPORT_V1 marker. */
+function detectReimportMarker(worksheet: XLSX.WorkSheet): boolean {
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '', blankrows: false });
+  const limit = Math.min(matrix.length, HEADER_SCAN_LIMIT);
+  for (let i = 0; i < limit; i += 1) {
+    const row = matrix[i] ?? [];
+    for (const cell of row) {
+      const text = String(cell ?? '');
+      if (text.includes(REIMPORT_MARKER_TAG)) return true;
+    }
+  }
+  return false;
 }
 
 export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
@@ -248,6 +273,7 @@ export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
 
     return {
       rawRowNo: index + headerRowIdx + 2,
+      id: toText(getMapped(raw, 'id')),
       issue_no: toText(getMapped(raw, 'issue_no')) ?? '',
       subcontractor_issue_no: toText(getMapped(raw, 'subcontractor_issue_no')),
       subcontractor_issue_source: toText(getMapped(raw, 'subcontractor_issue_source')),
@@ -283,7 +309,8 @@ export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
     };
   });
 
-  return { rows, headers, sheetName };
+  const isReimport = detectReimportMarker(worksheet);
+  return { rows, headers, sheetName, isReimport };
 }
 
 export function daysDiff(oldDate?: string | null, newDate?: string | null): number | null {
