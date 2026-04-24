@@ -21,7 +21,7 @@ import {
 } from '@/types/enums';
 import { Shield, Plus, KeyRound, Trash2, Pencil, UserCog, ArrowUp, ArrowDown, ArrowUpDown, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { useAtRiskThreshold } from '@/hooks/useAppSettings';
+import { useAtRiskThreshold, useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import { normalizeOwnerCode, suggestOwnerCode } from '@/lib/defect-utils';
 import {
@@ -126,10 +126,14 @@ export default function AdminPage() {
 function SettingsTab() {
   const { toast } = useToast();
   const { value: threshold, loading, updateValue } = useAtRiskThreshold();
+  const { value: frozenCols, loading: frozenLoading, updateValue: updateFrozen } = useFrozenColumnCount();
   const [draft, setDraft] = useState<number>(2);
   const [saving, setSaving] = useState(false);
+  const [frozenDraft, setFrozenDraft] = useState<number>(1);
+  const [savingFrozen, setSavingFrozen] = useState(false);
 
   useEffect(() => { setDraft(threshold); }, [threshold]);
+  useEffect(() => { setFrozenDraft(Math.min(Math.max(Number(frozenCols) || 1, 1), 4)); }, [frozenCols]);
 
   const onSave = async () => {
     if (!Number.isFinite(draft) || draft < 1 || draft > 30) {
@@ -146,12 +150,24 @@ function SettingsTab() {
     }
   };
 
+  const onSaveFrozen = async () => {
+    const v = Math.min(Math.max(Math.round(frozenDraft), 1), 4);
+    setSavingFrozen(true);
+    const { error } = await updateFrozen(v);
+    setSavingFrozen(false);
+    if (error) {
+      toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Settings saved', description: `Frozen columns set to ${v}.` });
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Dashboard Settings</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4 max-w-md">
+      <CardContent className="space-y-6 max-w-md">
         <div className="space-y-2">
           <Label htmlFor="at-risk">At-Risk Threshold (days)</Label>
           <div className="flex items-center gap-2">
@@ -169,6 +185,32 @@ function SettingsTab() {
           <p className="text-xs text-muted-foreground">
             Subtests whose planned date is within ≤ N days from today (and not Done) will be flagged as At-Risk on the Dashboard.
             Default: 2 days.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="frozen-cols">Frozen Columns (Raw Data)</Label>
+          <div className="flex items-center gap-2">
+            <Select
+              value={frozenLoading ? '' : String(frozenDraft)}
+              onValueChange={(v) => setFrozenDraft(Number(v))}
+            >
+              <SelectTrigger id="frozen-cols" className="w-32">
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1</SelectItem>
+                <SelectItem value="2">2</SelectItem>
+                <SelectItem value="3">3</SelectItem>
+                <SelectItem value="4">4</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={onSaveFrozen} disabled={savingFrozen || frozenLoading}>Save</Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Number of left-fixed columns in Raw Data tables. Issue No is always the first frozen column;
+            additional frozen columns follow the order configured in Field Config. Mobile view always uses 1.
+            Default: 1.
           </p>
         </div>
       </CardContent>

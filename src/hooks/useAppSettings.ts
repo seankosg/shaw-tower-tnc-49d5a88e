@@ -38,3 +38,7 @@ export function useAppSetting<T = unknown>(key: string, defaultValue: T) {
 export function useAtRiskThreshold() {
   return useAppSetting<number>('at_risk_threshold_days', 2);
 }
+
+export function useFrozenColumnCount() {
+  return useAppSetting<number>('raw_data_frozen_columns', 1);
+}
