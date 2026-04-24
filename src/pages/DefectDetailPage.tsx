@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { daysDiff } from '@/lib/defect-parser';
+import { computeDefectStatuses } from '@/lib/defect-status';
 import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, type DefectEditScope, type DefectItem, formatPct, normalizeSubcontractorIssueNo } from '@/lib/defect-utils';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
 
