@@ -27,6 +27,7 @@ import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { formatTeamLabel } from '@/types/enums';
 
 const EMPTY_TOKEN = '__EMPTY__';
 const DEFAULT_SORTING: SortingState = [{ id: 'issue_no', desc: false }];
