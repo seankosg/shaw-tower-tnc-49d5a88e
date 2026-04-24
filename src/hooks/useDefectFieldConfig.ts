@@ -26,6 +26,7 @@ export const DEFECT_DEFAULT_FIELD_LABELS: Record<string, string> = {
   area_type: 'Type',
   area_level: 'Level',
   area_location: 'Location',
+  area_raw: 'Area (Raw)',
   description: 'Description',
   defect_type: 'Defect Type',
   status: 'Status',
