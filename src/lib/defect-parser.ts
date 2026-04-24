@@ -51,7 +51,12 @@ export interface ParseDefectResult {
   rows: ParsedDefectRow[];
   headers: DefectHeaderInfo[];
   sheetName: string;
+  /** True when the file was produced by "Re-import ready" export and contains the
+   *  SHAW_DEFECT_REIMPORT_V1 marker — importer should run in update-only mode. */
+  isReimport: boolean;
 }
+
+export const REIMPORT_MARKER_TAG = 'SHAW_DEFECT_REIMPORT_V1';
 
 const FIELD_ALIASES: Record<string, string> = {
   'issue no': 'issue_no',
