@@ -48,6 +48,7 @@ export const DEFECT_DEFAULT_FIELD_LABELS: Record<string, string> = {
   hdec_comments: 'HDEC Comments',
   work_type: 'Work Type',
   classification_source: 'Classification Source',
+  classified_at: 'Classified At',
 };
 
 export function useDefectFieldConfig() {
