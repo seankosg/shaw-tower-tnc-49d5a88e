@@ -161,10 +161,22 @@ const DATE_FIELDS = new Set([
 const DATETIME_FIELDS = new Set(['updated_at', 'created_at']);
 const PROGRESS_FIELDS = new Set(['planned_progress_pct', 'actual_progress_pct']);
 
-function formatCellValue<TRow>(row: Row<TRow>, col: Column<TRow, unknown>): string {
+function formatCellValue<TRow>(row: Row<TRow>, col: Column<TRow, unknown>, format: DefectExportFormat = 'view'): string {
   const id = col.id;
   const raw = row.getValue(id);
   if (raw == null || raw === '') return '';
+
+  if (format === 'reimport') {
+    // Raw, machine-friendly values for round-trip import.
+    if (PROGRESS_FIELDS.has(id)) {
+      const num = Number(raw);
+      return Number.isFinite(num) ? String(num) : '';
+    }
+    if (DATE_FIELDS.has(id)) return String(raw).slice(0, 10); // YYYY-MM-DD
+    if (DATETIME_FIELDS.has(id)) return String(raw); // ISO timestamp
+    // team / status / classification stay as raw enum/code values
+    return String(raw);
+  }
 
   if (id === 'team') return formatTeamLabel(raw as any);
   if (PROGRESS_FIELDS.has(id)) return formatPct(raw as any);
@@ -172,6 +184,13 @@ function formatCellValue<TRow>(row: Row<TRow>, col: Column<TRow, unknown>): stri
   if (DATETIME_FIELDS.has(id)) return formatDdMmmYyyy(String(raw));
   if (id === 'classification_source') return String(raw).toLowerCase();
   return String(raw);
+}
+
+function formatReimportIdValue<TRow>(row: Row<TRow>, fieldId: string): string {
+  const original = row.original as any;
+  const value = original?.[fieldId];
+  if (value == null || value === '') return '';
+  return String(value);
 }
 
 // ---------------------------------------------------------------------------
