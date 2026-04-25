@@ -227,6 +227,7 @@ function UsersTab() {
   const [subcons, setSubcons] = useState<MasterRow[]>([]);
   const [subsubs, setSubsubs] = useState<MasterRow[]>([]);
   const [hdecPics, setHdecPics] = useState<MasterRow[]>([]);
+  const [hdecEngs, setHdecEngs] = useState<MasterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Profile | null>(null);
@@ -245,11 +246,12 @@ function UsersTab() {
 
   const load = async () => {
     setLoading(true);
-    const [p, r, s, h] = await Promise.all([
+    const [p, r, s, h, he] = await Promise.all([
       supabase.from('profiles').select('*').order('login_id'),
       supabase.from('user_roles').select('*'),
       supabase.from('subcontractor_master').select('*').eq('is_active', true).order('name'),
       supabase.from('hdec_pic_master').select('*').eq('is_active', true).order('name'),
+      supabase.from('hdec_eng_master').select('*').eq('is_active', true).order('name'),
     ]);
     if (p.data) setProfiles(p.data as Profile[]);
     if (r.data) setRoles(r.data as UserRole[]);
@@ -259,6 +261,7 @@ function UsersTab() {
       setSubsubs(all.filter(m => m.type === 'subsub'));
     }
     if (h.data) setHdecPics(h.data as MasterRow[]);
+    if (he.data) setHdecEngs(he.data as MasterRow[]);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -348,8 +351,8 @@ function UsersTab() {
         bVal = b.team ? TEAM_LABELS[b.team] : null;
         break;
       case 'linked':
-        aVal = a.user_type === 'subcontractor' || a.user_type === 'subsub' ? a.subcontractor_name : (a.user_type === 'hdec' || a.user_type === 'pm_pd' ? a.hdec_pic_name : null);
-        bVal = b.user_type === 'subcontractor' || b.user_type === 'subsub' ? b.subcontractor_name : (b.user_type === 'hdec' || b.user_type === 'pm_pd' ? b.hdec_pic_name : null);
+        aVal = a.user_type === 'subcontractor' || a.user_type === 'subsub' ? a.subcontractor_name : (a.user_type === 'hdec' || a.user_type === 'pm_pd' ? (a.hdec_pic_name ?? a.hdec_eng_name) : null);
+        bVal = b.user_type === 'subcontractor' || b.user_type === 'subsub' ? b.subcontractor_name : (b.user_type === 'hdec' || b.user_type === 'pm_pd' ? (b.hdec_pic_name ?? b.hdec_eng_name) : null);
         break;
       case 'owner_code':
         aVal = getLinkedOwnerCode(a, allMastersForSort);
@@ -386,7 +389,7 @@ function UsersTab() {
                 p.team ? TEAM_LABELS[p.team] : '',
                 p.user_type === 'subcontractor' ? (p.subcontractor_name ?? '') :
                   p.user_type === 'subsub' ? (p.subcontractor_name ?? '') :
-                  (p.user_type === 'hdec' || p.user_type === 'pm_pd') ? (p.hdec_pic_name ?? '') : '',
+                  (p.user_type === 'hdec' || p.user_type === 'pm_pd') ? (p.hdec_pic_name ?? p.hdec_eng_name ?? '') : '',
                 getLinkedOwnerCode(p, allMasters) ?? '',
                 ROLE_LABELS[getUserRole(p.user_id) as AppRole] ?? '',
                 p.is_active ? 'Yes' : 'No',
@@ -494,7 +497,7 @@ function UsersTab() {
                 const linked =
                   p.user_type === 'subcontractor' ? p.subcontractor_name :
                   p.user_type === 'subsub' ? p.subcontractor_name :
-                  p.user_type === 'hdec' || p.user_type === 'pm_pd' ? p.hdec_pic_name : null;
+                  p.user_type === 'hdec' || p.user_type === 'pm_pd' ? (p.hdec_pic_name ?? p.hdec_eng_name) : null;
                 const ownerCode = getLinkedOwnerCode(p, [...subcons, ...subsubs]);
                 return (
                   <TableRow key={p.id}>
