@@ -8,6 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SuggestField } from '@/components/ui/suggest-field';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { MessageSquare } from 'lucide-react';
+import { DefectComments } from '@/components/defects/DefectComments';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
