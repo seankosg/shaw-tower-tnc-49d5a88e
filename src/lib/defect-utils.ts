@@ -25,6 +25,7 @@ export interface DefectItem {
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
+  hdec_eng_name: string | null;
   // New lifecycle date fields
   planned_start_date: string | null;
   planned_completion_date: string | null;

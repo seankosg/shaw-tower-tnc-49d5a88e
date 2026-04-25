@@ -46,6 +46,7 @@ export default function DefectDetailPage() {
   const [subOptions, setSubOptions] = useState<SubMaster[]>([]);
   const [subsubOptions, setSubsubOptions] = useState<SubMaster[]>([]);
   const [hdecOptions, setHdecOptions] = useState<HdecMaster[]>([]);
+  const [hdecEngOptions, setHdecEngOptions] = useState<HdecMaster[]>([]);
   const { isFieldVisible, isFieldRequired, getLabel } = useDefectFieldConfig();
 
   const loadScHistory = async (defectId: string) => {
@@ -77,14 +78,16 @@ export default function DefectDetailPage() {
 
   useEffect(() => {
     async function loadMasters() {
-      const [subRes, hdecRes] = await Promise.all([
+      const [subRes, hdecRes, hdecEngRes] = await Promise.all([
         (supabase as any).from('subcontractor_master').select('id, name, parent_subcontractor_id, type').eq('is_active', true).order('name'),
         (supabase as any).from('hdec_pic_master').select('name').eq('is_active', true).order('name'),
+        (supabase as any).from('hdec_eng_master').select('name').eq('is_active', true).order('name'),
       ]);
       const allSubs = (subRes.data ?? []) as Array<SubMaster & { type: string }>;
       setSubOptions(allSubs.filter((r) => r.type === 'sub').map(({ id, name, parent_subcontractor_id }) => ({ id, name, parent_subcontractor_id })));
       setSubsubOptions(allSubs.filter((r) => r.type === 'subsub').map(({ id, name, parent_subcontractor_id }) => ({ id, name, parent_subcontractor_id })));
       setHdecOptions((hdecRes.data ?? []) as HdecMaster[]);
+      setHdecEngOptions((hdecEngRes.data ?? []) as HdecMaster[]);
     }
     loadMasters();
   }, []);
@@ -133,7 +136,7 @@ export default function DefectDetailPage() {
       'actual_start_date', 'actual_completion_date', 'actual_closure_date',
       'planned_progress_pct', 'actual_progress_pct', 'completion_status', 'closure_status',
       'description', 'remarks',
-      'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'team',
+      'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'hdec_eng_name', 'team',
     ] as const;
 
     const changes = editableFields
@@ -229,6 +232,7 @@ export default function DefectDetailPage() {
       closure_status: form.closure_status || null,
       description: form.description || null,
       remarks: form.remarks || null,
+      hdec_eng_name: form.hdec_eng_name || null,
       classification_source: 'manual',
       classified_at: new Date().toISOString(),
       updated_by: user.id,
@@ -361,6 +365,12 @@ export default function DefectDetailPage() {
     const list = cur && !names.includes(cur) ? [{ name: cur }, ...hdecOptions] : hdecOptions;
     return list.map((o) => ({ value: o.name, label: o.name }));
   }, [hdecOptions, form.hdec_pic_name]);
+  const hdecEngOptionsList = useMemo(() => {
+    const names = hdecEngOptions.map((o) => o.name);
+    const cur = (form.hdec_eng_name ?? '').trim();
+    const list = cur && !names.includes(cur) ? [{ name: cur }, ...hdecEngOptions] : hdecEngOptions;
+    return list.map((o) => ({ value: o.name, label: o.name }));
+  }, [hdecEngOptions, form.hdec_eng_name]);
   const statusOptionsList = DEFECT_STATUS_VALUES.map((s) => ({ value: s, label: s }));
   const teamOptionsList = ALL_TEAMS.map((t) => ({ value: t, label: TEAM_LABELS[t] }));
 
@@ -420,6 +430,7 @@ export default function DefectDetailPage() {
         <SelectField label="Subcontractor" value={form.subcontractor_name} options={subOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('subcontractor_name', v)} />
         <SelectField label="Sub-Sub" value={form.subsub_name} options={subsubOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('subsub_name', v)} />
         <SelectField label="HDEC PIC" value={form.hdec_pic_name} options={hdecOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('hdec_pic_name', v)} />
+        <SelectField label="HDEC Eng" value={form.hdec_eng_name} options={hdecEngOptionsList} disabled={!canEdit} onChange={(v) => updateField('hdec_eng_name', v)} />
         <Field label="Captured on" type="date" value={toDateInput(capturedOn)} disabled={!canEdit} onChange={(v) => updateField('captured_on' as any, v)} />
         <Field label="Planned Start Date" type="date" value={toDateInput(form.planned_start_date)} disabled={!canEdit} onChange={(v) => updateField('planned_start_date', v)} />
         <Field label="Planned Completion Date" type="date" value={toDateInput(form.planned_completion_date)} disabled={!canEdit} onChange={(v) => updateField('planned_completion_date', v)} />

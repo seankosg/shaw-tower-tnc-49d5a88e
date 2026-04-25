@@ -23,6 +23,7 @@ export type DefectMasterRowInput = {
   subcontractor_name?: string | null;
   subsub_name?: string | null;
   hdec_pic_name?: string | null;
+  hdec_eng_name?: string | null;
 };
 
 export type DefectMasterEnsurer = {
@@ -42,17 +43,22 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
   const { data: hdecData, error: hdecError } = await supabase
     .from('hdec_pic_master')
     .select('id, name, is_active');
+  const { data: hdecEngData, error: hdecEngError } = await supabase
+    .from('hdec_eng_master')
+    .select('id, name, is_active');
   const { data: profileData } = await supabase
     .from('profiles')
     .select('user_type, subcontractor_name, subsub_name, hdec_pic_name');
 
   if (subError) warnings.push(`Master lookup failed (subcontractor): ${subError.message}`);
   if (hdecError) warnings.push(`Master lookup failed (HDEC PIC): ${hdecError.message}`);
+  if (hdecEngError) warnings.push(`Master lookup failed (HDEC Eng): ${hdecEngError.message}`);
 
   const subcontractors = new Map<string, { id: string; name: string }>();
   const subIdToName = new Map<string, string>();
   const subsubs = new Set<string>();
   const hdecPics = new Set<string>();
+  const hdecEngs = new Set<string>();
   const profileKeys = new Set<string>();
 
   (subData as MasterRow[] | null || []).forEach((master) => {
@@ -74,6 +80,11 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
   (hdecData as Array<{ name: string }> | null || []).forEach((master) => {
     const name = normalizeName(master.name);
     if (name) hdecPics.add(keyOf(name));
+  });
+
+  (hdecEngData as Array<{ name: string }> | null || []).forEach((master) => {
+    const name = normalizeName(master.name);
+    if (name) hdecEngs.add(keyOf(name));
   });
 
   (profileData as ProfileRow[] | null || []).forEach((profile) => {
@@ -195,12 +206,33 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
     await createMasterUser('hdec_pic', name, null);
   }
 
+  async function ensureHdecEng(value?: string | null): Promise<void> {
+    const name = normalizeName(value);
+    if (!name) return;
+    const key = keyOf(name);
+    if (hdecEngs.has(key)) return;
+
+    const { data, error } = await supabase
+      .from('hdec_eng_master')
+      .insert({ name })
+      .select('id')
+      .single();
+
+    if (error || !data) {
+      warnings.push(`${name} (hdec_eng): ${error?.message ?? 'master insert failed'}`);
+      return;
+    }
+
+    hdecEngs.add(key);
+  }
+
   return {
     warnings,
     ensureForRow: async (row) => {
       await ensureSubcontractor(row.subcontractor_name);
       await ensureSubsub(row.subsub_name, row.subcontractor_name);
       await ensureHdecPic(row.hdec_pic_name);
+      await ensureHdecEng(row.hdec_eng_name);
     },
   };
 }

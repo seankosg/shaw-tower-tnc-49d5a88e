@@ -32,6 +32,7 @@ export interface ParsedDefectRow {
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
+  hdec_eng_name: string | null;
   // New lifecycle date fields
   planned_start_date: string | null;
   planned_completion_date: string | null;
@@ -85,14 +86,18 @@ const FIELD_ALIASES: Record<string, string> = {
   'hdec p i c': 'hdec_pic_name',
   'hdec_pic': 'hdec_pic_name',
   'hdec pic name': 'hdec_pic_name',
-  'hdec engineer': 'hdec_pic_name',
-  'hdec eng': 'hdec_pic_name',
   'hdec in charge': 'hdec_pic_name',
   'hdec person in charge': 'hdec_pic_name',
   'responsible pic': 'hdec_pic_name',
-  'responsible engineer': 'hdec_pic_name',
-  'engineer in charge': 'hdec_pic_name',
   'person in charge': 'hdec_pic_name',
+  // → hdec_eng_name (Engineer 계열은 모두 신규 필드로 매핑)
+  'hdec eng': 'hdec_eng_name',
+  'hdec engineer': 'hdec_eng_name',
+  'hdec_eng': 'hdec_eng_name',
+  'hdec eng name': 'hdec_eng_name',
+  'responsible engineer': 'hdec_eng_name',
+  'engineer in charge': 'hdec_eng_name',
+  engineer: 'hdec_eng_name',
   'in charge': 'hdec_pic_name',
   'pic name': 'hdec_pic_name',
   pic: 'hdec_pic_name',
@@ -292,6 +297,7 @@ export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
       subcontractor_name: toText(getMapped(raw, 'subcontractor_name')),
       subsub_name: toText(getMapped(raw, 'subsub_name')),
       hdec_pic_name: toText(getMapped(raw, 'hdec_pic_name')),
+      hdec_eng_name: toText(getMapped(raw, 'hdec_eng_name')),
       planned_start_date: normalizeDate(getMapped(raw, 'planned_start_date')),
       planned_completion_date: normalizeDate(getMapped(raw, 'planned_completion_date')),
       planned_closure_date: normalizeDate(getMapped(raw, 'planned_closure_date')),
