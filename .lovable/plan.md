@@ -1,54 +1,67 @@
-## 변경 요청 요약
+# HDEC ENG 사용자 자동 등록
 
-Defect Executive Dashboard의 **Plan vs Actual - Summary** 탭에 다음 두 가지를 적용합니다.
+## 목표
 
-1. **By HDEC ENG** 탭 신규 추가 (`hdec_eng_name` 기준 집계)
-2. 페이지 진입 시 기본 활성 탭을 **By Subcontractor**로 변경 (현재는 `By Sub Trade`)
+엑셀 import 시 `hdec_eng_name` 값이 발견되면 다른 마스터(Subcontractor/Sub-Sub/HDEC PIC)와 동일하게 **로그인 가능한 사용자 계정**도 자동 생성합니다. 또한 HDEC ENG profile을 Team 자동 판별에 활용합니다.
 
----
+## 현재 상태
 
-## 변경 파일
+- `hdec_eng_master` 테이블에는 자동 insert됨 ✅
+- 사용자 계정은 자동 생성 안 됨 ❌
+- `profiles` 테이블에 `hdec_eng_name` 컬럼 없음 → 사용자와 HDEC ENG를 매핑할 방법이 없음
 
-### 1) `src/pages/DefectDashboardPage.tsx`
+## 변경 사항
 
-**(a) 기본 탭 값 변경**
-- `useState` 초기값: `searchParams.get('tab') || 'subTrade'` → `searchParams.get('tab') || 'subcon'`
-- URL 동기화 default 비교값도 동일하게 `'subcon'`으로 변경 (기본일 땐 URL에서 `tab` 파라미터 제거)
-- `breakdownDataMap[breakdownTab] ?? breakdownDataMap.subTrade` fallback도 `breakdownDataMap.subcon`으로 변경
+### 1. 데이터베이스 (마이그레이션)
 
-**(b) HDEC ENG 집계 추가**
-- `byHdecEng` 신규 메모이제이션 추가:
-  ```ts
-  const byHdecEng = useMemo(
-    () => aggregateDefectPlanActualByGroup(
-      filteredItems, today, dataDate,
-      i => (i as any).hdec_eng_name ?? NONE_LABEL,
-      k => k
-    ),
-    [filteredItems, today, dataDate]
-  );
+`profiles` 테이블에 `hdec_eng_name` 컬럼 추가:
+- `hdec_eng_name text` (nullable)
+
+### 2. Edge Function: `auto-create-master-user`
+
+- `MasterType`에 `'hdec_eng'` 추가
+- Body 인터페이스에 `hdec_eng_name?: string | null` 추가
+- `userType` 매핑: `hdec_eng` → `'hdec'` (user_type enum)
+- `findExistingMasterUser`: `hdec_eng_name` 컬럼으로 중복 체크
+- `suggestBase`: HDEC PIC와 동일한 `picSnake()` 방식 (사람 이름이므로) 사용
+- `user_metadata`에 `hdec_eng_name` 포함하여 `handle_new_user()` 트리거가 profile에 저장하도록
+
+### 3. DB 트리거: `handle_new_user`
+
+- `raw_user_meta_data->>'hdec_eng_name'`을 읽어 profile insert에 포함
+
+### 4. 자동 생성 로직: `src/lib/defect-master-autocreate.ts`
+
+- `MasterType` 유니온에 `'hdec_eng'` 추가
+- `ensureHdecEng()` 함수 끝에 `await createMasterUser('hdec_eng', name, null)` 호출 추가
+- profile 중복 체크용 `profileKeys`에 `hdec_eng:` 키 추가
+- `createMasterUser` 호출 시 body에 `hdec_eng_name` 필드 전달
+
+### 5. Team 자동 판별: `src/contexts/DefectImportContext.tsx`
+
+- `buildProfileTeamMap()`에서 `hdec_eng_name`도 select하고 bucket 키에 포함
+- `resolveDefectTeam()` fallback chain에 `hdec_eng_name` 매핑 추가:
   ```
-- `GroupParam` 유니언 타입에 `'hdecEng'` 추가
-- `breakdownDataMap`에 `hdecEng: { rows: byHdecEng, header: 'HDEC ENG', param: 'hdecEng' }` 추가
+  team(엑셀) → trade_detail → subcontractor → subsub → hdec_eng → null
+  ```
 
-**(c) 탭 UI 추가**
-- `TabsList`에 `<TabsTrigger value="hdecEng">By HDEC ENG</TabsTrigger>` 추가 (By HDEC PIC 다음 위치)
-- `<TabsContent value="hdecEng">` 추가 — `PlanActualTable`에 `groupParam="hdecEng"`, `groupHeader="HDEC ENG"` 전달
+### 6. AuthContext / 관련 타입
 
-### 2) `src/pages/DefectRawDataPage.tsx`
+- `Profile` 인터페이스에 `hdec_eng_name: string | null` 추가
+- 기타 profile 사용 페이지(Admin 사용자 관리 등)는 표시 필요 시 후속 추가 (이번 범위 외)
 
-`PlanActualTable`이 그룹 행 클릭 시 navigate 하는 URL param `hdecEng`를 raw-data 페이지의 컬럼 필터로 매핑해야 클릭 드릴다운이 동작합니다.
+## 영향 범위 / 주의사항
 
-- `urlMap`에 `hdecEng: 'hdec_eng_name'` 추가
-- `activeUrlFilters` labels에 `hdecEng: 'HDEC ENG'` 추가
+- 기존 HDEC ENG 마스터 데이터에 대해서는 자동 backfill 하지 않음. 차후 import 시점부터 사용자 계정이 만들어짐 (요청 시 일회성 backfill 스크립트 제공 가능).
+- 자동 생성된 HDEC ENG 사용자는 `user_type='hdec'`, `role='user'`, 기본 비밀번호 `Shaw@2026!`, `must_change_password=true`로 생성됩니다 (기존 HDEC PIC와 동일).
+- `hdec_eng_name`만 있는 profile은 `hdec_pic_name`이 null이므로 권한 함수(`get_defect_edit_scope` 등)에서는 별도 권한이 부여되지 않습니다. 즉 ENG 계정은 로그인은 되지만 본인이 담당한 defect를 자동으로 편집할 권한은 없는 상태(필요 시 별도 정책 추가 필요).
 
-`hdec_eng_name`은 이미 데이터 모델/필터/컬럼에 존재하므로 추가 마이그레이션은 불필요합니다.
+## 변경 파일 목록
 
----
+- 마이그레이션: `profiles.hdec_eng_name` 컬럼 추가, `handle_new_user()` 함수 업데이트
+- `supabase/functions/auto-create-master-user/index.ts`
+- `src/lib/defect-master-autocreate.ts`
+- `src/contexts/DefectImportContext.tsx`
+- `src/contexts/AuthContext.tsx` (Profile 인터페이스)
 
-## 동작 결과
-
-- 페이지 첫 진입 시 **By Subcontractor** 탭이 자동 선택됨 (URL에 `tab` 파라미터 없을 때).
-- 탭 순서: By Sub Trade · **By Subcontractor (기본)** · By Sub-Sub · By HDEC PIC · **By HDEC ENG (신규)** · By Team · By Work Type
-- HDEC ENG별 Plan vs Actual 집계가 표시되고, 그룹 클릭 시 `hdecEng=값` 파라미터로 Raw Data 페이지가 필터링되어 열림.
-- Excel export(`handleBreakdownExport`)도 새 탭에서 자동으로 동작 (헤더 "HDEC ENG").
+승인하시면 위 순서대로 적용합니다.
