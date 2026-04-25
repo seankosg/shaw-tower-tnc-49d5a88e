@@ -49,7 +49,7 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
     .select('id, name, is_active');
   const { data: profileData } = await supabase
     .from('profiles')
-    .select('user_type, subcontractor_name, subsub_name, hdec_pic_name');
+    .select('user_type, subcontractor_name, subsub_name, hdec_pic_name, hdec_eng_name');
 
   if (subError) warnings.push(`Master lookup failed (subcontractor): ${subError.message}`);
   if (hdecError) warnings.push(`Master lookup failed (HDEC PIC): ${hdecError.message}`);
