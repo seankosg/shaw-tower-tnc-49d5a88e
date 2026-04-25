@@ -124,12 +124,15 @@ describe('reconcileClosureCompletion', () => {
     expect(r.conflict).toBe(true);
   });
 
-  it('skips auto-fix when Excel explicitly provides actual_completion_date', () => {
+  it('skips auto-fix when Excel explicitly provides actual_completion_date but progress < 100', () => {
+    // completion_date set + pct=80 → completion is Done by date rule, no conflict path triggered.
+    // Real conflict: closure done via LL status="Closed" (no closure_date) but Excel says pct=80, no completion_date.
     const r = reconcileClosureCompletion(
-      { ...base, actual_closure_date: '2026-04-20', actual_completion_date: '2026-04-22', actual_progress_pct: 80 },
+      { ...base, status: 'Closed', actual_progress_pct: 80 },
       asOf,
-      { actual_progress_pct: 80, actual_completion_date: '2026-04-22' },
+      { actual_progress_pct: 80, actual_completion_date: null },
     );
+    expect(r.closure_status).toBe('Done');
     expect(r.conflict).toBe(true);
     expect(r.patch).toBeUndefined();
   });
