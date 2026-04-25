@@ -56,6 +56,8 @@ export function computeClosureStatus(
   completionStatus: DefectStatusValue,
 ): DefectStatusValue {
   if (input.actual_closure_date) return 'Done';
+  // LL Status === "Closed" → treat as closure Done even when no actual_closure_date is present
+  if (isStatusClosed(input.status)) return 'Done';
   if (input.planned_closure_date && input.planned_closure_date < asOf) return 'Delay';
   if (completionStatus === 'Done' && !input.actual_closure_date) return 'WIP';
   return 'Planned';
