@@ -19,6 +19,9 @@ import { TC_STATUS_OPTIONS, TEAM_LABELS } from '@/types/enums';
 import type { TcStatus, DataSource, ChangeSource, TeamType } from '@/types/enums';
 import { invalidateSubtestCache } from '@/lib/subtest-cache';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
+import { SubtestComments } from '@/components/defects/SubtestComments';
+import { Badge } from '@/components/ui/badge';
+import { MessageSquare } from 'lucide-react';
 
 interface SubtestDetail {
   id: string;
