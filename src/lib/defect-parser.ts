@@ -175,16 +175,138 @@ export function stripHeaderMarker(header: string): string {
   return cleanHeader(header);
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Area parsing — extract Type / Level / Location from the raw area path.
+//
+// Real LL data follows the pattern:  "Project > Discipline > Level NN [> Detail...]"
+// but parts.length varies. We must NOT use a fixed index for "level"; instead we
+// detect the actual Level token, and explicitly prevent the Level value from
+// being duplicated into Location. ────────────────────────────────────────────────
+
+const LEVEL_REGEXES: RegExp[] = [
+  /^level\s*[-]?\s*\d+[a-z]?$/i,        // Level 1, Level 07, Level-1, Level2A
+  /^lvl\s*[-]?\s*\d+[a-z]?$/i,          // Lvl 12
+  /^l\s*\d+[a-z]?$/i,                   // L1, L07, L2A
+  /^b\s*\d+$/i,                         // B1, B2 (basement)
+  /^basement(\s*\d+)?$/i,               // Basement, Basement 2
+  /^roof(\s|$)/i,                       // Roof, Roof Top
+  /^rf$/i,
+  /^ground(\s+floor)?$/i,               // Ground, Ground Floor
+  /^gf$/i,
+  /^mezzanine(\s*\d*)?$/i,
+  /^attic$/i,
+  /^penthouse$/i,
+  /^ph$/i,
+];
+
+export function isLevelToken(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  return LEVEL_REGEXES.some((rx) => rx.test(trimmed));
+}
+
+/** Normalize a level token so "Level 7", "level 07", "L7", "Lvl 7" all match. */
+export function canonicalLevel(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  // Numeric Level forms → "Level NN" (zero-padded to 2 digits if pure number)
+  const numMatch = trimmed.match(/^(?:level|lvl|l)\s*[-]?\s*(\d+)([a-z]?)$/i);
+  if (numMatch) {
+    const num = numMatch[1].padStart(2, '0');
+    const suffix = numMatch[2] ? numMatch[2].toUpperCase() : '';
+    return `Level ${num}${suffix}`;
+  }
+  const bMatch = trimmed.match(/^b\s*(\d+)$/i);
+  if (bMatch) return `B${bMatch[1]}`;
+  // Title-case named levels
+  return trimmed.replace(/\s+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const compareKey = (value: string | null | undefined) =>
+  (value ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+
 export function parseArea(area: string | null): Pick<ParsedDefectRow, 'area_type' | 'area_level' | 'area_location'> {
   if (!area) return { area_type: null, area_level: null, area_location: null };
   const parts = area.split('>').map((part) => part.trim()).filter(Boolean);
+  if (parts.length === 0) return { area_type: null, area_level: null, area_location: null };
+
+  const levelIdx = parts.findIndex(isLevelToken);
+
+  if (levelIdx >= 0) {
+    const levelCanonical = canonicalLevel(parts[levelIdx]);
+    // type = the discipline immediately before the level token; fall back to first part.
+    const area_type = levelIdx > 0 ? parts[levelIdx - 1] : (parts[0] ?? null);
+    // location = everything AFTER the level token, with any duplicate level tokens removed.
+    const tail = parts.slice(levelIdx + 1).filter((p) => {
+      if (isLevelToken(p)) return false;
+      if (compareKey(p) === compareKey(levelCanonical)) return false;
+      return true;
+    });
+    const area_location = tail.length > 0 ? tail.join(' > ') : null;
+    return { area_type, area_level: levelCanonical, area_location };
+  }
+
+  // No level token detected — preserve the old behavior for backward compatibility,
+  // but DO NOT promote a non-level token (e.g. "STR") into the level field.
+  if (parts.length === 1) {
+    return { area_type: parts[0], area_level: null, area_location: null };
+  }
   const useful = parts.length >= 4 ? parts.slice(1) : parts;
-  return {
-    area_type: useful[0] ?? null,
-    area_level: useful[1] ?? null,
-    area_location: useful.length > 2 ? useful.slice(2).join(' > ') : null,
-  };
+  const area_type = useful[0] ?? null;
+  const area_location = useful.length > 1 ? useful.slice(1).join(' > ') : null;
+  return { area_type, area_level: null, area_location };
 }
+
+/**
+ * Reconcile parsed area_raw fields with explicit "Level"/"Location" columns
+ * from the spreadsheet. Explicit columns are noisy (free-text, status strings,
+ * other rows' raw paths, even just numbers), so we validate them before using.
+ */
+export function reconcileAreaFields(
+  parsed: { area_type: string | null; area_level: string | null; area_location: string | null },
+  explicitLevel: string | null,
+  explicitLocation: string | null,
+) {
+  let area_level = parsed.area_level;
+  let area_location = parsed.area_location;
+
+  // Level: only override when the explicit value actually looks like a level token.
+  if (explicitLevel) {
+    if (isLevelToken(explicitLevel)) {
+      area_level = canonicalLevel(explicitLevel);
+    } else if (!area_level && /^[A-Za-z0-9 \-]{1,30}$/.test(explicitLevel)) {
+      // raw didn't yield a level and explicit is a short alphanumeric label; accept as-is.
+      area_level = explicitLevel.trim();
+    }
+  }
+
+  // Location: only adopt explicit when it is a sane detail string.
+  if (explicitLocation) {
+    const trimmed = explicitLocation.trim();
+    const looksLikeLevel = isLevelToken(trimmed);
+    const sameAsLevel = area_level && compareKey(trimmed) === compareKey(area_level);
+    const looksLikeStatus = /^(closed|open|n\/a|cancel|pending)\b/i.test(trimmed);
+    const looksLikeOtherAreaPath = trimmed.includes('>'); // entire raw path → reject
+    const isJustNumber = /^\d+$/.test(trimmed);
+    if (!looksLikeLevel && !sameAsLevel && !looksLikeStatus && !looksLikeOtherAreaPath && !isJustNumber) {
+      area_location = trimmed;
+    }
+    // else: keep parsed value (which may already be null) — explicit is rejected.
+  }
+
+  // Final guard: never let location duplicate the level value.
+  if (area_location && area_level && compareKey(area_location) === compareKey(area_level)) {
+    area_location = null;
+  }
+  if (area_location && isLevelToken(area_location)) {
+    area_location = null;
+  }
+
+  return { area_type: parsed.area_type, area_level, area_location };
+}
+
 
 function normalizeTeam(value: unknown): TeamType | null {
   return normalizeTeamValue(value);
