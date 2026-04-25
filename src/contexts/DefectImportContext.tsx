@@ -496,8 +496,21 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
 
       await masterEnsurer.ensureForRow(row);
 
+      // Look up existing row FIRST so we can apply "blank in Excel = keep DB value" policy
+      // before any downstream logic (auto-progress, classifier, status, etc.) reads the row.
+      // For re-import: prefer matching by id (which is included in the export);
+      // fall back to issue_no for backward compatibility.
+      const existing = (isReimport && row.id ? existingById.get(String(row.id)) : null)
+        ?? existingByIssueNo.get(row.issue_no)
+        ?? null;
+
+      // Apply blank-preservation for general data fields (description, dates, PIC, etc.)
+      preserveExistingForBlank(row, existing);
+
+      // Recompute planned_progress_pct from (possibly preserved) planned dates.
+      // If still not computable, fall back to existing DB value rather than overwriting with null.
       const computedPlanned = computePlannedProgressPct(row.planned_start_date, row.planned_completion_date, dataDate);
-      row.planned_progress_pct = computedPlanned;
+      row.planned_progress_pct = computedPlanned ?? existing?.planned_progress_pct ?? null;
       if (computedPlanned == null) {
         if (!row.planned_start_date || !row.planned_completion_date) {
           await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_not_computable', reason_detail: 'Missing planned_start_date or planned_completion_date' });
@@ -507,12 +520,6 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
           await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_not_started', reason_detail: 'Data date is before planned start date' });
         }
       }
-
-      // For re-import: prefer matching by id (which is included in the export);
-      // fall back to issue_no for backward compatibility.
-      const existing = (isReimport && row.id ? existingById.get(String(row.id)) : null)
-        ?? existingByIssueNo.get(row.issue_no)
-        ?? null;
 
       // Classification priority for main_trade / sub_trade / work_type:
       //   1) Excel value (if present)            -> use it (source: 'manual')
