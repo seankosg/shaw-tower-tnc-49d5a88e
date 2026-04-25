@@ -411,8 +411,17 @@ export default function DefectRawDataPage() {
       issueNo: 'issue_no',
       subcontractorIssueNo: 'subcontractor_issue_no',
     };
-    const hasUrlFilters = ['q', 'dateStart', 'dateEnd', 'dateField', 'actualComplete', 'closureComplete', 'overdue', 'stage', 'atRisk', ...Object.keys(urlMap)].some((key) => searchParams.has(key));
-    const nextFilters = hasUrlFilters ? [] : baseFilters.filter((filter) => !Object.values(urlMap).includes(filter.id));
+    // Merge: keep saved column filters except those that the URL is going to override.
+    // Previously, the presence of ANY URL filter wiped all saved column filters.
+    const urlOverriddenColIds = new Set<string>();
+    for (const [param, col] of Object.entries(urlMap)) {
+      if (searchParams.has(param)) urlOverriddenColIds.add(col);
+    }
+    const urlDateField = searchParams.get('dateField');
+    if ((searchParams.has('dateStart') || searchParams.has('dateEnd')) && urlDateField && DATE_FILTER_FIELDS.has(urlDateField)) {
+      urlOverriddenColIds.add(urlDateField);
+    }
+    const nextFilters = baseFilters.filter((filter) => !urlOverriddenColIds.has(filter.id));
 
     for (const [param, col] of Object.entries(urlMap)) {
       const value = searchParams.get(param);
@@ -423,16 +432,16 @@ export default function DefectRawDataPage() {
 
     const dateStart = searchParams.get('dateStart');
     const dateEnd = searchParams.get('dateEnd');
-    const urlDateField = searchParams.get('dateField');
     if ((dateStart || dateEnd) && urlDateField && DATE_FILTER_FIELDS.has(urlDateField)) {
       nextFilters.push({ id: urlDateField, value: { from: dateStart || undefined, to: dateEnd || undefined } });
     }
 
-    const q = searchParams.get('q') ?? '';
+    const urlQ = searchParams.get('q');
+    const effectiveGlobal = urlQ !== null ? urlQ : baseGlobal;
     setSorting(baseSorting);
     setColumnFilters(nextFilters);
-    setGlobalFilter(hasUrlFilters ? q : baseGlobal);
-    setSearchInput(hasUrlFilters ? q : baseGlobal);
+    setGlobalFilter(effectiveGlobal);
+    setSearchInput(effectiveGlobal);
     setColumnSizing(baseSizing);
     setStateLoaded(true);
   }, [storageKey, searchParams]);
