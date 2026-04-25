@@ -1105,7 +1105,7 @@ function SubtestTableView({
   table, loading, columns, sorting, autoSizeColumn, navigate, tableRef, delayAsOfDate,
 }: SubtestTableViewProps) {
   const isMobile = useIsMobile();
-  const FROZEN_COUNT = isMobile ? 1 : 4;
+  const FROZEN_COUNT = (isMobile ? 1 : 4) + 1; // +1 for the always-on selection column
   const leafCols = table.getVisibleLeafColumns();
   const frozenCols = useMemo(() => leafCols.slice(0, FROZEN_COUNT), [leafCols]);
   const scrollCols = useMemo(() => leafCols.slice(FROZEN_COUNT), [leafCols]);
