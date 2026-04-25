@@ -9,6 +9,13 @@ export interface DefectStatusInputs {
   actual_closure_date: string | null;
   planned_progress_pct: number | null;
   actual_progress_pct: number | null;
+  /** LL original Status field. When equal to "Closed" (case-insensitive), closure is treated as Done. */
+  status?: string | null;
+}
+
+/** Returns true when the LL `Status` column indicates the defect is closed. */
+export function isStatusClosed(status: string | null | undefined): boolean {
+  return String(status ?? '').trim().toLowerCase() === 'closed';
 }
 
 export function isValidDefectStatus(value: unknown): value is DefectStatusValue {
