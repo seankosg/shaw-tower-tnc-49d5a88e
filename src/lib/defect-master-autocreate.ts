@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { suggestOwnerCode } from '@/lib/defect-utils';
 
-type MasterType = 'subcontractor' | 'subsub' | 'hdec_pic';
+type MasterType = 'subcontractor' | 'subsub' | 'hdec_pic' | 'hdec_eng';
 
 type MasterRow = {
   id: string;
