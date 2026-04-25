@@ -98,6 +98,9 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
     if (profile.user_type === 'hdec' && profile.hdec_pic_name) {
       profileKeys.add(`hdec:${keyOf(profile.hdec_pic_name)}`);
     }
+    if (profile.user_type === 'hdec' && profile.hdec_eng_name) {
+      profileKeys.add(`hdec_eng:${keyOf(profile.hdec_eng_name)}`);
+    }
   });
 
   async function createMasterUser(type: MasterType, name: string, parentName?: string | null) {
@@ -107,7 +110,9 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
         ? `subsub:${subsubKey(parentName, name)}`
         : type === 'hdec_pic'
           ? `hdec:${keyOf(name)}`
-          : null;
+          : type === 'hdec_eng'
+            ? `hdec_eng:${keyOf(name)}`
+            : null;
 
     if (profileKey && profileKeys.has(profileKey)) return;
 
@@ -118,6 +123,7 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
         subcontractor_name: type === 'subcontractor' ? name : parentName ?? null,
         subsub_name: type === 'subsub' ? name : null,
         hdec_pic_name: type === 'hdec_pic' ? name : null,
+        hdec_eng_name: type === 'hdec_eng' ? name : null,
       },
     });
 
