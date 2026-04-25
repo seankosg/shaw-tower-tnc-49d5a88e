@@ -21,6 +21,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { formatDateTimeDdMmmYyyy, formatDdMmm, formatSignedDays } from '@/lib/format';
+import { RollbackDialog } from '@/components/import/RollbackDialog';
 
 interface DefectBatch {
   id: string;
