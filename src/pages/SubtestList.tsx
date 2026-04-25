@@ -779,7 +779,7 @@ export default function SubtestList() {
     { accessorKey: 'updated_at', header: 'Updated', size: 140, filterFn: dateRangeFilterFn,
       meta: { filterType: 'date-range' },
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
-  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions, dataDate]);
+  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions, dataDate, commentSummary]);
 
   // Apply status (overdue / at_risk) + date URL filters at data level
   const urlT1PlannedTo = searchParams.get('t1_planned_to');
