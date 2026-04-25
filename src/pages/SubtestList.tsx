@@ -1066,6 +1066,14 @@ export default function SubtestList() {
         <div className="ml-auto"><StageProgressLegend /></div>
       </div>
 
+      <BulkEditBar
+        selectedRows={selectedRows}
+        fields={bulkFields}
+        table="subtests"
+        onApplied={handleBulkApplied}
+        onClearSelection={() => setRowSelection({})}
+      />
+
       <SubtestTableView
         table={table}
         loading={loading}
