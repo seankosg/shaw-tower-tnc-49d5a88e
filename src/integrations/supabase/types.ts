@@ -620,6 +620,54 @@ export type Database = {
         }
         Relationships: []
       }
+      event_log: {
+        Row: {
+          action: string
+          actor_login_id: string | null
+          actor_name: string | null
+          actor_role: string
+          actor_user_id: string | null
+          after_data: Json | null
+          before_data: Json | null
+          changed_fields: string[]
+          id: string
+          occurred_at: string
+          record_id: string | null
+          summary: string | null
+          table_name: string
+        }
+        Insert: {
+          action: string
+          actor_login_id?: string | null
+          actor_name?: string | null
+          actor_role: string
+          actor_user_id?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          changed_fields?: string[]
+          id?: string
+          occurred_at?: string
+          record_id?: string | null
+          summary?: string | null
+          table_name: string
+        }
+        Update: {
+          action?: string
+          actor_login_id?: string | null
+          actor_name?: string | null
+          actor_role?: string
+          actor_user_id?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          changed_fields?: string[]
+          id?: string
+          occurred_at?: string
+          record_id?: string | null
+          summary?: string | null
+          table_name?: string
+        }
+        Relationships: []
+      }
       field_config: {
         Row: {
           display_name: string
@@ -1478,6 +1526,7 @@ export type Database = {
     Functions: {
       _canonical_level: { Args: { v: string }; Returns: string }
       _compare_key: { Args: { v: string }; Returns: string }
+      _event_log_actor_role: { Args: { _user_id: string }; Returns: string }
       _is_level_token: { Args: { v: string }; Returns: boolean }
       _parse_area: {
         Args: { area: string }
@@ -1562,6 +1611,7 @@ export type Database = {
         Args: { _batch_id: string }
         Returns: Json
       }
+      purge_old_event_log: { Args: never; Returns: number }
       rollback_defect_import_batch: {
         Args: { _batch_id: string; _force?: boolean }
         Returns: Json
