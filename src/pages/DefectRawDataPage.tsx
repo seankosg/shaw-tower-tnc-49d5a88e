@@ -930,7 +930,9 @@ interface DefectRawTableViewProps {
 function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate, tableRef }: DefectRawTableViewProps) {
   const isMobile = useIsMobile();
   const { value: frozenSetting } = useFrozenColumnCount();
-  const frozenCount = isMobile ? 1 : Math.min(Math.max(Number(frozenSetting) || 1, 1), 4);
+  // Account for the always-on selection column at the start
+  const userFrozenCount = isMobile ? 1 : Math.min(Math.max(Number(frozenSetting) || 1, 1), 4);
+  const frozenCount = userFrozenCount + 1;
   const leafColumns = table.getVisibleLeafColumns();
   const frozenColumns = useMemo(() => leafColumns.slice(0, frozenCount), [leafColumns, frozenCount]);
   const scrollColumns = useMemo(() => leafColumns.slice(frozenCount), [leafColumns, frozenCount]);
