@@ -94,6 +94,39 @@ export default function DefectDetailPage() {
     loadMasters();
   }, []);
 
+  // Pull existing distinct values for free-text fields, scoped to current project,
+  // to power Combobox suggestions while still allowing free-text entry.
+  useEffect(() => {
+    if (!record?.project_id) return;
+    let cancelled = false;
+    async function loadSuggestions() {
+      const { data } = await (supabase as any)
+        .from('defect_items')
+        .select('area_level, area_location, main_trade, sub_trade, work_type')
+        .eq('project_id', record!.project_id)
+        .eq('is_active', true)
+        .limit(5000);
+      if (cancelled) return;
+      const collect = (key: 'area_level' | 'area_location' | 'main_trade' | 'sub_trade' | 'work_type') => {
+        const set = new Set<string>();
+        for (const row of (data ?? []) as any[]) {
+          const v = (row?.[key] ?? '').toString().trim();
+          if (v) set.add(v);
+        }
+        return Array.from(set);
+      };
+      setSuggestPool({
+        area_level: collect('area_level'),
+        area_location: collect('area_location'),
+        main_trade: collect('main_trade'),
+        sub_trade: collect('sub_trade'),
+        work_type: collect('work_type'),
+      });
+    }
+    loadSuggestions();
+    return () => { cancelled = true; };
+  }, [record?.project_id]);
+
   const canEdit = scope !== 'none';
   const canEditResponsibility = scope === 'team' || scope === 'full';
 
