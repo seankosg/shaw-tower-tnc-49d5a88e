@@ -1476,6 +1476,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _canonical_level: { Args: { v: string }; Returns: string }
+      _compare_key: { Args: { v: string }; Returns: string }
+      _is_level_token: { Args: { v: string }; Returns: boolean }
+      _parse_area: {
+        Args: { area: string }
+        Returns: {
+          area_level: string
+          area_location: string
+          area_type: string
+        }[]
+      }
       can_edit_subtest: {
         Args: {
           _project_id: string
