@@ -217,20 +217,24 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
     const name = normalizeName(value);
     if (!name) return;
     const key = keyOf(name);
-    if (hdecEngs.has(key)) return;
 
-    const { data, error } = await supabase
-      .from('hdec_eng_master')
-      .insert({ name })
-      .select('id')
-      .single();
+    if (!hdecEngs.has(key)) {
+      const { data, error } = await supabase
+        .from('hdec_eng_master')
+        .insert({ name })
+        .select('id')
+        .single();
 
-    if (error || !data) {
-      warnings.push(`${name} (hdec_eng): ${error?.message ?? 'master insert failed'}`);
-      return;
+      if (error || !data) {
+        warnings.push(`${name} (hdec_eng): ${error?.message ?? 'master insert failed'}`);
+        return;
+      }
+
+      hdecEngs.add(key);
     }
 
-    hdecEngs.add(key);
+    // Always attempt user creation; createMasterUser is idempotent via profileKeys check
+    await createMasterUser('hdec_eng', name, null);
   }
 
   return {
