@@ -536,6 +536,7 @@ export default function DefectRawDataPage() {
     hdec_eng_name: uniqueOptions(items, 'hdec_eng_name' as any),
     area_type: uniqueOptions(items, 'area_type'),
     area_level: uniqueOptions(items, 'area_level'),
+    area_location: uniqueOptions(items, 'area_location'),
     main_trade: uniqueOptions(items, 'main_trade'),
     sub_trade: uniqueOptions(items, 'sub_trade'),
     work_type: uniqueOptions(items, 'work_type'),
@@ -688,6 +689,9 @@ export default function DefectRawDataPage() {
   );
 
   const bulkFields = useMemo<BulkEditableField[]>(() => [
+    // Location
+    { field: 'area_level', label: getLabel('area_level'), inputType: 'select', group: 'Location', options: optionFields.area_level },
+    { field: 'area_location', label: getLabel('area_location'), inputType: 'select', group: 'Location', options: optionFields.area_location },
     // Classification
     { field: 'team', label: getLabel('team'), inputType: 'select', group: 'Classification', options: optionFields.team },
     { field: 'main_trade', label: getLabel('main_trade'), inputType: 'select', group: 'Classification', options: optionFields.main_trade },
