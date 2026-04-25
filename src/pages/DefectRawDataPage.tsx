@@ -707,7 +707,7 @@ export default function DefectRawDataPage() {
     });
 
     return [selectColumn, ...dataColumns];
-  }, [getLabel, optionFields]);
+  }, [getLabel, optionFields, commentSummary]);
 
   const columnVisibility = useMemo<VisibilityState>(() => {
     const visibility: VisibilityState = { __select: true };
