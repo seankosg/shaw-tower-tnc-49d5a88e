@@ -199,7 +199,10 @@ function getMapped(row: Record<string, unknown>, field: string): unknown {
 const HEADER_SCAN_LIMIT = 20;
 
 function detectHeaderRow(worksheet: XLSX.WorkSheet): { headerRowIdx: number; headers: string[] } | null {
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '', blankrows: false });
+  // IMPORTANT: do NOT use blankrows:false here — it compresses indices and causes
+  // them to drift away from the actual sheet coordinates that sheet_to_json({range})
+  // expects. We need raw sheet-coordinate row indices.
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '', blankrows: true });
   const limit = Math.min(matrix.length, HEADER_SCAN_LIMIT);
   for (let i = 0; i < limit; i += 1) {
     const row = matrix[i] ?? [];
@@ -213,7 +216,7 @@ function detectHeaderRow(worksheet: XLSX.WorkSheet): { headerRowIdx: number; hea
 
 /** Scan the first ~20 rows of a worksheet for the SHAW_DEFECT_REIMPORT_V1 marker. */
 function detectReimportMarker(worksheet: XLSX.WorkSheet): boolean {
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '', blankrows: false });
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '', blankrows: true });
   const limit = Math.min(matrix.length, HEADER_SCAN_LIMIT);
   for (let i = 0; i < limit; i += 1) {
     const row = matrix[i] ?? [];
