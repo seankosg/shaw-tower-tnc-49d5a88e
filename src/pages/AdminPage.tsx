@@ -28,6 +28,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import EventLogTab from './admin/EventLogTab';
 
 /* ───── Types ───── */
 interface Profile {
