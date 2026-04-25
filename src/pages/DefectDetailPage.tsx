@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SuggestField } from '@/components/ui/suggest-field';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -47,6 +48,7 @@ export default function DefectDetailPage() {
   const [subsubOptions, setSubsubOptions] = useState<SubMaster[]>([]);
   const [hdecOptions, setHdecOptions] = useState<HdecMaster[]>([]);
   const [hdecEngOptions, setHdecEngOptions] = useState<HdecMaster[]>([]);
+  const [suggestPool, setSuggestPool] = useState<{ area_level: string[]; area_location: string[]; main_trade: string[]; sub_trade: string[]; work_type: string[] }>({ area_level: [], area_location: [], main_trade: [], sub_trade: [], work_type: [] });
   const { isFieldVisible, isFieldRequired, getLabel } = useDefectFieldConfig();
 
   const loadScHistory = async (defectId: string) => {
@@ -91,6 +93,39 @@ export default function DefectDetailPage() {
     }
     loadMasters();
   }, []);
+
+  // Pull existing distinct values for free-text fields, scoped to current project,
+  // to power Combobox suggestions while still allowing free-text entry.
+  useEffect(() => {
+    if (!record?.project_id) return;
+    let cancelled = false;
+    async function loadSuggestions() {
+      const { data } = await (supabase as any)
+        .from('defect_items')
+        .select('area_level, area_location, main_trade, sub_trade, work_type')
+        .eq('project_id', record!.project_id)
+        .eq('is_active', true)
+        .limit(5000);
+      if (cancelled) return;
+      const collect = (key: 'area_level' | 'area_location' | 'main_trade' | 'sub_trade' | 'work_type') => {
+        const set = new Set<string>();
+        for (const row of (data ?? []) as any[]) {
+          const v = (row?.[key] ?? '').toString().trim();
+          if (v) set.add(v);
+        }
+        return Array.from(set);
+      };
+      setSuggestPool({
+        area_level: collect('area_level'),
+        area_location: collect('area_location'),
+        main_trade: collect('main_trade'),
+        sub_trade: collect('sub_trade'),
+        work_type: collect('work_type'),
+      });
+    }
+    loadSuggestions();
+    return () => { cancelled = true; };
+  }, [record?.project_id]);
 
   const canEdit = scope !== 'none';
   const canEditResponsibility = scope === 'team' || scope === 'full';
@@ -416,11 +451,11 @@ export default function DefectDetailPage() {
         )}
         <Field label="Item Description" value={itemDescription} disabled={!canEdit} onChange={(v) => updateField('item_description' as any, v)} />
         <SelectField label="Team" value={form.team} options={teamOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('team', v as any)} />
-        <Field label="Level" value={form.area_level} disabled={!canEdit} onChange={(v) => updateField('area_level', v)} />
-        <Field label="Location" value={form.area_location} disabled={!canEdit} onChange={(v) => updateField('area_location', v)} />
-        <Field label="Main Trade" value={form.main_trade} disabled={!canEdit} onChange={(v) => updateField('main_trade', v)} />
-        <Field label="Sub Trade" value={form.sub_trade} disabled={!canEdit} onChange={(v) => updateField('sub_trade', v)} />
-        <Field label="Work Type" value={workType} disabled={!canEdit} onChange={(v) => updateField('work_type', v)} />
+        <SuggestField label="Level" value={form.area_level ?? null} options={suggestPool.area_level} disabled={!canEdit} onChange={(v) => updateField('area_level', v)} />
+        <SuggestField label="Location" value={form.area_location ?? null} options={suggestPool.area_location} disabled={!canEdit} onChange={(v) => updateField('area_location', v)} />
+        <SuggestField label="Main Trade" value={form.main_trade ?? null} options={suggestPool.main_trade} disabled={!canEdit} onChange={(v) => updateField('main_trade', v)} />
+        <SuggestField label="Sub Trade" value={form.sub_trade ?? null} options={suggestPool.sub_trade} disabled={!canEdit} onChange={(v) => updateField('sub_trade', v)} />
+        <SuggestField label="Work Type" value={(workType ?? null) as any} options={suggestPool.work_type} disabled={!canEdit} onChange={(v) => updateField('work_type', v)} />
         <ReadonlyField label="Classification Source" value={form.classification_source ?? record.classification_source} />
         <div className="md:col-span-3 flex items-center gap-2">
           <Button variant="outline" size="sm" disabled={!canEdit} onClick={async () => {
