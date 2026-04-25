@@ -1254,7 +1254,7 @@ function SubtestTableView({
                       )}
                       onMouseEnter={() => setHoveredIndex(virtualRow.index)}
                       onMouseLeave={() => setHoveredIndex(null)}
-                      onClick={() => navigate(`/subtests/${r.id}`)}
+                      onClick={() => navigate(`/subtests/${r.id}${location.search}`)}
                     >
                       {row.getVisibleCells().slice(0, FROZEN_COUNT).map(cell => (
                         <TableCell
@@ -1330,7 +1330,7 @@ function SubtestTableView({
                       )}
                       onMouseEnter={() => setHoveredIndex(virtualRow.index)}
                       onMouseLeave={() => setHoveredIndex(null)}
-                      onClick={() => navigate(`/subtests/${r.id}`)}
+                      onClick={() => navigate(`/subtests/${r.id}${location.search}`)}
                     >
                       {row.getVisibleCells().slice(FROZEN_COUNT).map(cell => (
                         <TableCell
