@@ -337,6 +337,7 @@ export default function SubtestList() {
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
   const [dataDate, setDataDate] = useState<string | null>(null);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const urlStatusFilter = searchParams.get('status');
   const urlAtRiskDays = Number(searchParams.get('at_risk_days') ?? '2');
   const tableRef = useRef<HTMLDivElement>(null);
