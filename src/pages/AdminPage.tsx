@@ -1349,9 +1349,9 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master' | 'hdec_eng_ma
     const name = newName.trim();
     const { error } = await supabase.from(table).insert({ name });
     if (error) { toast({ title: 'Add failed', description: error.message, variant: 'destructive' }); return; }
-    if (table === 'hdec_pic_master') {
+    if (table === 'hdec_pic_master' || table === 'hdec_eng_master') {
       const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
-        body: { name, master_type: 'hdec_pic', hdec_pic_name: name },
+        body: { name, master_type: masterTypeKey, [profileField]: name },
       });
       if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
       else toast({ title: 'Added', description: `User account created (PW: ${DEFAULT_PASSWORD})` });
@@ -1366,8 +1366,8 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master' | 'hdec_eng_ma
   const startToggleActive = async (r: MasterRow) => {
     if (r.is_active) {
       // Deactivating — check linked users
-      if (table === 'hdec_pic_master') {
-        const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name).eq('is_active', true);
+      if (table === 'hdec_pic_master' || table === 'hdec_eng_master') {
+        const { count } = await (supabase.from('profiles') as any).select('id', { count: 'exact', head: true }).eq(profileField, r.name).eq('is_active', true);
         setPendingToggle({ row: r, linkedCount: count ?? 0 });
       } else {
         // Just deactivate master directly
@@ -1391,11 +1391,11 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master' | 'hdec_eng_ma
       setPendingToggle(null);
       return;
     }
-    if (cascade && table === 'hdec_pic_master') {
-      const { data: linked, error: cascadeErr } = await supabase
-        .from('profiles')
-        .update({ is_active: false } as any)
-        .eq('hdec_pic_name', r.name)
+    if (cascade && (table === 'hdec_pic_master' || table === 'hdec_eng_master')) {
+      const { data: linked, error: cascadeErr } = await (supabase
+        .from('profiles') as any)
+        .update({ is_active: false })
+        .eq(profileField, r.name)
         .select('id');
       if (cascadeErr) {
         toast({ title: 'Master deactivated, but cascade failed', description: cascadeErr.message, variant: 'destructive' });
@@ -1414,19 +1414,24 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master' | 'hdec_eng_ma
     if (!trimmed || trimmed === r.name) return;
     const { error } = await supabase.from(table).update({ name: trimmed }).eq('id', r.id);
     if (error) { toast({ title: 'Rename failed', description: error.message, variant: 'destructive' }); return; }
-    if (table === 'hdec_pic_master') {
-      await supabase.from('subtests').update({ hdec_pic_name: trimmed } as any).eq('hdec_pic_name', r.name);
-      await supabase.from('profiles').update({ hdec_pic_name: trimmed } as any).eq('hdec_pic_name', r.name);
+    if (table === 'hdec_pic_master' || table === 'hdec_eng_master') {
+      if (updatesSubtests) {
+        await supabase.from('subtests').update({ hdec_pic_name: trimmed } as any).eq('hdec_pic_name', r.name);
+      }
+      await (supabase.from('profiles') as any).update({ [profileField]: trimmed }).eq(profileField, r.name);
     }
     toast({ title: 'Renamed', description: 'Linked records updated' });
     load();
   };
 
   const remove = async (r: MasterRow) => {
-    if (table === 'hdec_pic_master') {
+    if (table === 'hdec_pic_master' || table === 'hdec_eng_master') {
+      const subtestQuery = updatesSubtests
+        ? supabase.from('subtests').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name)
+        : Promise.resolve({ count: 0 } as any);
       const [{ count: subtestCount }, { count: profileCount }] = await Promise.all([
-        supabase.from('subtests').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name),
-        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name),
+        subtestQuery,
+        (supabase.from('profiles') as any).select('id', { count: 'exact', head: true }).eq(profileField, r.name),
       ]);
       const refs: string[] = [];
       if (subtestCount) refs.push(`${subtestCount} subtest(s)`);
