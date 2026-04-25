@@ -815,6 +815,14 @@ export default function DefectRawDataPage() {
         </span>
       </div>
 
+      <BulkEditBar
+        selectedRows={selectedRows}
+        fields={bulkFields}
+        table="defect_items"
+        onApplied={handleBulkApplied}
+        onClearSelection={() => setRowSelection({})}
+      />
+
       <DefectRawTableView table={table} loading={loading} sorting={sorting.length ? sorting : DEFAULT_SORTING} autoSizeColumn={autoSizeColumn} navigate={navigate} tableRef={tableRef} />
 
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
