@@ -1,46 +1,46 @@
-# 자유 입력 필드를 Combobox(검색 + 자유 입력)로 전환
+# Row Data 일괄 수정에 Level/Location 추가
 
-## 목적
-DefectDetailPage 상세 편집에서 5개 자유 입력 필드를 **Combobox**로 바꿔, 기존 데이터에 이미 사용 중인 값을 풀다운에서 빠르게 선택할 수 있게 하면서 새 값도 자유롭게 입력 가능하도록 합니다.
+## 요청 내용
+Defect Row Data 화면(`/defects/raw-data`)의 Bulk Edit에 **Level (`area_level`)** 과 **Location (`area_location`)** 두 필드를 추가합니다.
 
-## 적용 대상
-DefectDetailPage(`src/pages/DefectDetailPage.tsx`)의 다음 5개 필드:
-- Level (`area_level`)
-- Location (`area_location`)
-- Main Trade (`main_trade`)
-- Sub Trade (`sub_trade`)
-- Work Type (`work_type`)
+## 현재 상태
+- `BulkEditBar`가 받는 `fields` 목록은 `DefectRawDataPage.tsx`의 `bulkFields` (라인 690~719)에서 정의.
+- 현재 그룹: Classification / Assignment / Status / Schedule / Notes — **Location 그룹 없음**.
+- `optionFields`에 `area_level`은 이미 있고, **`area_location`은 누락**.
 
-(Subcontractor / HDEC PIC / Status 등은 이미 풀다운이라 변경 없음.)
+## 변경
+**`src/pages/DefectRawDataPage.tsx`** 단일 파일.
 
-## 동작 사양
-- 입력창처럼 보이고, 포커스/클릭 시 풀다운이 열림.
-- 풀다운 옵션은 **현재 프로젝트(`record.project_id`)** 의 `defect_items` 중 `is_active = true`인 row에서 해당 컬럼의 distinct 값(공백/널 제외, 알파벳 정렬).
-- 검색어 입력 시 옵션 필터링(부분 일치, 대소문자 무시).
-- 옵션에 없는 값을 입력해도 그대로 저장됨(자유 입력 허용).
-- "Clear" 옵션으로 값 비우기.
-- shadcn `Command` + `Popover` 조합 사용(프로젝트 내 기존 패턴과 일치).
+### 1) `optionFields`에 `area_location` 추가 (538라인 근처)
+```ts
+area_type: uniqueOptions(items, 'area_type'),
+area_level: uniqueOptions(items, 'area_level'),
+area_location: uniqueOptions(items, 'area_location'),   // ← 추가
+main_trade: uniqueOptions(items, 'main_trade'),
+...
+```
 
-## 데이터 로딩 전략
-- 상세 페이지가 `record`를 로드한 이후, 한 번 `defect_items`에서 5개 컬럼만 `select`해서 클라이언트에서 distinct 계산 → 메모리에 보관.
-- 쿼리: `select area_level, area_location, main_trade, sub_trade, work_type from defect_items where project_id = ? and is_active = true limit 5000`.
-- 5개 옵션 리스트를 `useMemo`로 분리해 SuggestField에 전달.
-- 같은 페이지 내 저장 후엔 옵션이 약간 stale일 수 있으나, 사용자가 방금 입력한 값은 자유 입력으로 항상 통과되므로 UX에 문제 없음.
+### 2) `bulkFields` 맨 앞에 "Location" 그룹 추가 (690라인 근처)
+```ts
+const bulkFields = useMemo<BulkEditableField[]>(() => [
+  // Location  ← 신규 그룹
+  { field: 'area_level',    label: getLabel('area_level'),    inputType: 'select', group: 'Location', options: optionFields.area_level },
+  { field: 'area_location', label: getLabel('area_location'), inputType: 'select', group: 'Location', options: optionFields.area_location },
+  // Classification
+  { field: 'team', ... },
+  ...
+], [getLabel, optionFields]);
+```
 
-## 구현 변경
-1. **`src/components/ui/SuggestField.tsx`** (신규)
-   - props: `label`, `value`, `options: string[]`, `onChange(value: string | null)`, `disabled`, `placeholder`.
-   - Popover + Command(CommandInput / CommandList / CommandItem) + 자유 입력 fallback.
-   - 입력값이 옵션에 없을 때 "Use \"<typed>\"" 항목 노출 → 선택 시 그 문자열 그대로 저장.
-
-2. **`src/pages/DefectDetailPage.tsx`**
-   - `record` 로드 직후 5개 컬럼 distinct 옵션 fetch (effect 추가).
-   - 419~423 라인의 `<Field>` 5개를 `<SuggestField>`로 교체, 각 필드별 옵션 전달.
-   - 기존 `Field` 컴포넌트는 다른 자유 입력에 그대로 사용.
-
-3. **검증**: `bunx tsc --noEmit` 통과 확인.
+### 동작
+- 행 선택 후 BulkEditBar의 "Choose field to edit…"에 새로운 **Location** 그룹이 노출되고, 그 안에 **Level / Location** 항목이 추가됩니다.
+- 값은 현재 데이터에서 distinct로 수집된 풀다운 옵션에서 선택. "Clear (set blank)" 체크박스로 빈 값 일괄 적용 가능.
+- 변경 사항은 기존과 동일하게 `defect_change_log`에 자동 기록되고, RLS로 권한 없는 row는 자동 skip되어 Apply 결과 토스트에 "blocked by permission" 카운트로 표시됩니다.
+- Event Log에도 자동 기록(senior_user / superuser 트리거 정책 그대로 적용).
 
 ## 영향 / 위험
-- 저장 로직은 변경 없음(여전히 string 그대로 저장). 자동 상태 재계산 정책에도 영향 없음.
-- Quick Update 페이지는 이번 범위 외(요청에 따름).
-- DB 변경 없음, 마이그레이션 없음.
+- 다른 일괄 편집 동작(다른 필드, 권한 체크, 변경 로그)은 변경 없음.
+- DB 마이그레이션 없음. UI에만 옵션 2개 추가.
+- 자동 상태 재계산(Closure/Completion Status)은 일괄 수정 경로에는 적용되지 않으므로 부작용 없음.
+
+승인 시 즉시 위 두 곳을 수정합니다.
