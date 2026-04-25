@@ -93,11 +93,15 @@ export function isOverdueDefect(
   item: Pick<DefectItem,
     'planned_start_date' | 'planned_completion_date' | 'planned_closure_date'
     | 'actual_start_date' | 'actual_completion_date' | 'actual_closure_date'
-    | 'closure_status'
+    | 'closure_status' | 'status'
   >,
   asOf = todayIso(),
 ): boolean {
-  if (Boolean(item.actual_closure_date) || String(item.closure_status ?? '') === 'Done') return false;
+  if (
+    Boolean(item.actual_closure_date)
+    || String(item.closure_status ?? '') === 'Done'
+    || String(item.status ?? '').trim().toLowerCase() === 'closed'
+  ) return false;
   if (item.planned_start_date && item.planned_start_date < asOf && !item.actual_start_date) return true;
   if (item.planned_completion_date && item.planned_completion_date < asOf && !item.actual_completion_date) return true;
   if (item.planned_closure_date && item.planned_closure_date < asOf && !item.actual_closure_date) return true;
