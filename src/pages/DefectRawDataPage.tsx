@@ -465,14 +465,20 @@ export default function DefectRawDataPage() {
 
   useEffect(() => {
     if (!stateLoaded) return;
+    if (loading) return;
     const element = tableRef.current;
     if (!element) return;
     const raw = localStorage.getItem(`${storageKey}:scroll`);
     if (raw) {
       try {
         const saved = JSON.parse(raw);
-        element.scrollTop = Number(saved.top) || 0;
-        element.scrollLeft = Number(saved.left) || 0;
+        // Apply once now, then again on the next frame so virtualised rows can settle.
+        const apply = () => {
+          element.scrollTop = Number(saved.top) || 0;
+          element.scrollLeft = Number(saved.left) || 0;
+        };
+        apply();
+        requestAnimationFrame(apply);
       } catch {
         // ignore invalid saved scroll
       }
@@ -480,7 +486,7 @@ export default function DefectRawDataPage() {
     const save = () => localStorage.setItem(`${storageKey}:scroll`, JSON.stringify({ top: element.scrollTop, left: element.scrollLeft }));
     element.addEventListener('scroll', save, { passive: true });
     return () => element.removeEventListener('scroll', save);
-  }, [stateLoaded, storageKey]);
+  }, [stateLoaded, storageKey, loading]);
 
   const filteredBaseData = useMemo(() => {
     const dateStart = searchParams.get('dateStart');
