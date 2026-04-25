@@ -8,6 +8,7 @@ import {
   type ColumnDef,
   type ColumnFiltersState,
   type ColumnSizingState,
+  type RowSelectionState,
   type SortingState,
   type VisibilityState,
   useReactTable,
@@ -34,6 +35,8 @@ import { exportDefectRawToExcel, exportDefectRawToExcelBySubcontractor } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
+import type { BulkEditableField } from '@/lib/bulk-edit';
 
 const EMPTY_TOKEN = '__EMPTY__';
 const DEFAULT_SORTING: SortingState = [{ id: 'issue_no', desc: false }];
@@ -323,6 +326,7 @@ export default function DefectRawDataPage() {
   const [exportMode, setExportMode] = useState<'single' | 'per-subcon'>('single');
   const [exportFormat, setExportFormat] = useState<'view' | 'reimport'>('view');
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const tableRef = useRef<HTMLDivElement>(null);
 
   const autoSizeColumn = (columnId: string) => {
@@ -528,67 +532,100 @@ export default function DefectRawDataPage() {
     priority: uniqueOptions(items, 'priority'),
   }), [items]);
 
-  const columns = useMemo<ColumnDef<DefectRawRow>[]>(() => DEFECT_RAW_FIELDS.map((field) => {
-    const sizeByField: Record<string, number> = {
-      issue_no: 120,
-      subcontractor_issue_no: 170,
-      closure_status: 130,
-      completion_status: 130,
-      team: 80,
-      subcontractor_issue_source: 170,
-      description: 260,
-      area_location: 220,
-      area_raw: 180,
-      remarks: 220,
-      hdec_comments: 220,
-      updated_at: 130,
-      created_at: 130,
-      classified_at: 130,
-      planned_start_date: 110,
-      planned_completion_date: 110,
-      planned_closure_date: 110,
-      actual_start_date: 110,
-      actual_completion_date: 110,
-      actual_closure_date: 110,
-      planned_progress_pct: 100,
-      actual_progress_pct: 100,
+  const columns = useMemo<ColumnDef<DefectRawRow>[]>(() => {
+    const selectColumn: ColumnDef<DefectRawRow> = {
+      id: '__select',
+      size: 36,
+      enableSorting: false,
+      enableColumnFilter: false,
+      enableResizing: false,
+      header: ({ table: t }) => (
+        <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+          <Checkbox
+            checked={t.getIsAllRowsSelected() ? true : t.getIsSomeRowsSelected() ? 'indeterminate' : false}
+            onCheckedChange={(checked) => t.toggleAllRowsSelected(!!checked)}
+            aria-label="Select all rows in current view"
+            className="h-3.5 w-3.5"
+          />
+        </span>
+      ),
+      cell: ({ row }) => (
+        <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(checked) => row.toggleSelected(!!checked)}
+            aria-label="Select row"
+            className="h-3.5 w-3.5"
+          />
+        </span>
+      ),
+      meta: { isSelectColumn: true },
     };
-    const base: ColumnDef<DefectRawRow> = {
-      accessorKey: field,
-      header: getLabel(field),
-      size: sizeByField[field] ?? 130,
-      filterFn: DATE_FILTER_FIELDS.has(field) ? dateRangeFilterFn : PROGRESS_FIELDS.has(field) ? progressFilterFn : TEXT_FILTER_FIELDS.has(field) ? textFilterFn : multiSelectFilterFn,
-      meta: {
-        filterType: DATE_FILTER_FIELDS.has(field) ? 'date-range' : TEXT_FILTER_FIELDS.has(field) || PROGRESS_FIELDS.has(field) ? 'text' : 'multi-select',
-        filterOptions: (optionFields as any)[field] ?? [],
-      },
-      cell: ({ row, getValue }) => {
-        const value = getValue() as any;
-        if (field === 'closure_status') return <DefectStatusBadge status={row.original.closure_status ?? row.original.status} />;
-        if (field === 'status') return <DefectStatusBadge status={row.original.status} />;
-        if (field === 'completion_status') return <DefectStatusBadge status={row.original.completion_status} />;
-        if (field === 'team') return formatTeamLabel(value);
-        if (PROGRESS_FIELDS.has(field)) return formatPct(value);
-        if (field === 'classification_source') {
-          const src = String(value ?? '').toLowerCase();
-          if (!src) return '—';
-          const cls = src === 'rule' ? 'bg-primary/10 text-primary border-primary/30'
-            : src === 'discipline' ? 'bg-accent text-accent-foreground border-border'
-            : src === 'manual' ? 'bg-muted text-foreground border-border'
-            : 'bg-destructive/10 text-destructive border-destructive/30';
-          return <span className={cn('inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold', cls)}>{src}</span>;
-        }
-        if (DATE_FILTER_FIELDS.has(field)) return formatDdMmm(value ? String(value).slice(0, 10) : null);
-        const text = String(value ?? '—');
-        if (['description', 'area_location', 'area_raw', 'remarks', 'hdec_comments'].includes(field)) return <span className="block truncate">{text}</span>;
-        return text;
-      },
-    };
-    return base;
-  }), [getLabel, optionFields]);
+
+    const dataColumns: ColumnDef<DefectRawRow>[] = DEFECT_RAW_FIELDS.map((field) => {
+      const sizeByField: Record<string, number> = {
+        issue_no: 120,
+        subcontractor_issue_no: 170,
+        closure_status: 130,
+        completion_status: 130,
+        team: 80,
+        subcontractor_issue_source: 170,
+        description: 260,
+        area_location: 220,
+        area_raw: 180,
+        remarks: 220,
+        hdec_comments: 220,
+        updated_at: 130,
+        created_at: 130,
+        classified_at: 130,
+        planned_start_date: 110,
+        planned_completion_date: 110,
+        planned_closure_date: 110,
+        actual_start_date: 110,
+        actual_completion_date: 110,
+        actual_closure_date: 110,
+        planned_progress_pct: 100,
+        actual_progress_pct: 100,
+      };
+      const base: ColumnDef<DefectRawRow> = {
+        accessorKey: field,
+        header: getLabel(field),
+        size: sizeByField[field] ?? 130,
+        filterFn: DATE_FILTER_FIELDS.has(field) ? dateRangeFilterFn : PROGRESS_FIELDS.has(field) ? progressFilterFn : TEXT_FILTER_FIELDS.has(field) ? textFilterFn : multiSelectFilterFn,
+        meta: {
+          filterType: DATE_FILTER_FIELDS.has(field) ? 'date-range' : TEXT_FILTER_FIELDS.has(field) || PROGRESS_FIELDS.has(field) ? 'text' : 'multi-select',
+          filterOptions: (optionFields as any)[field] ?? [],
+        },
+        cell: ({ row, getValue }) => {
+          const value = getValue() as any;
+          if (field === 'closure_status') return <DefectStatusBadge status={row.original.closure_status ?? row.original.status} />;
+          if (field === 'status') return <DefectStatusBadge status={row.original.status} />;
+          if (field === 'completion_status') return <DefectStatusBadge status={row.original.completion_status} />;
+          if (field === 'team') return formatTeamLabel(value);
+          if (PROGRESS_FIELDS.has(field)) return formatPct(value);
+          if (field === 'classification_source') {
+            const src = String(value ?? '').toLowerCase();
+            if (!src) return '—';
+            const cls = src === 'rule' ? 'bg-primary/10 text-primary border-primary/30'
+              : src === 'discipline' ? 'bg-accent text-accent-foreground border-border'
+              : src === 'manual' ? 'bg-muted text-foreground border-border'
+              : 'bg-destructive/10 text-destructive border-destructive/30';
+            return <span className={cn('inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold', cls)}>{src}</span>;
+          }
+          if (DATE_FILTER_FIELDS.has(field)) return formatDdMmm(value ? String(value).slice(0, 10) : null);
+          const text = String(value ?? '—');
+          if (['description', 'area_location', 'area_raw', 'remarks', 'hdec_comments'].includes(field)) return <span className="block truncate">{text}</span>;
+          return text;
+        },
+      };
+      return base;
+    });
+
+    return [selectColumn, ...dataColumns];
+  }, [getLabel, optionFields]);
 
   const columnVisibility = useMemo<VisibilityState>(() => {
-    const visibility: VisibilityState = {};
+    const visibility: VisibilityState = { __select: true };
     for (const field of DEFECT_RAW_FIELDS) visibility[field] = field === 'issue_no' ? true : isFieldVisible(field);
     return visibility;
   }, [isFieldVisible]);
@@ -596,17 +633,20 @@ export default function DefectRawDataPage() {
   const columnOrder = useMemo(() => {
     const allIds = [...DEFECT_RAW_FIELDS] as string[];
     const remaining = allIds.filter((id) => id !== 'issue_no');
-    return ['issue_no', ...sortFieldNames(remaining)];
+    return ['__select', 'issue_no', ...sortFieldNames(remaining)];
   }, [sortFieldNames]);
 
   const table = useReactTable({
     data: filteredBaseData,
     columns,
-    state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder },
+    state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,
     onColumnSizingChange: setColumnSizing,
+    onRowSelectionChange: setRowSelection,
+    getRowId: (row) => row.id,
+    enableRowSelection: true,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -619,6 +659,53 @@ export default function DefectRawDataPage() {
     columnResizeMode: 'onEnd',
     defaultColumn: { minSize: 64, maxSize: 640 },
   });
+
+  // Clear selection when filters/search/url change to avoid acting on hidden rows
+  useEffect(() => {
+    setRowSelection({});
+  }, [columnFilters, globalFilter, searchParams]);
+
+  const selectedRows = useMemo(
+    () => table.getSelectedRowModel().rows.map((r) => r.original),
+    [rowSelection, filteredBaseData],
+  );
+
+  const bulkFields = useMemo<BulkEditableField[]>(() => [
+    // Classification
+    { field: 'team', label: getLabel('team'), inputType: 'select', group: 'Classification', options: optionFields.team },
+    { field: 'main_trade', label: getLabel('main_trade'), inputType: 'select', group: 'Classification', options: optionFields.main_trade },
+    { field: 'sub_trade', label: getLabel('sub_trade'), inputType: 'select', group: 'Classification', options: optionFields.sub_trade },
+    { field: 'work_type', label: getLabel('work_type'), inputType: 'select', group: 'Classification', options: optionFields.work_type },
+    { field: 'priority', label: getLabel('priority'), inputType: 'select', group: 'Classification', options: optionFields.priority },
+    { field: 'defect_type', label: getLabel('defect_type'), inputType: 'select', group: 'Classification', options: optionFields.defect_type },
+    // Assignment
+    { field: 'subcontractor_name', label: getLabel('subcontractor_name'), inputType: 'select', group: 'Assignment', options: optionFields.subcontractor_name },
+    { field: 'subsub_name', label: getLabel('subsub_name'), inputType: 'select', group: 'Assignment', options: optionFields.subsub_name },
+    { field: 'hdec_pic_name', label: getLabel('hdec_pic_name'), inputType: 'select', group: 'Assignment', options: optionFields.hdec_pic_name },
+    { field: 'hdec_eng_name', label: getLabel('hdec_eng_name'), inputType: 'select', group: 'Assignment', options: optionFields.hdec_eng_name },
+    // Status
+    { field: 'status', label: getLabel('status'), inputType: 'select', group: 'Status', options: optionFields.status },
+    { field: 'closure_status', label: getLabel('closure_status'), inputType: 'select', group: 'Status', options: optionFields.closure_status },
+    { field: 'completion_status', label: getLabel('completion_status'), inputType: 'select', group: 'Status', options: [
+      { value: 'Planned', label: 'Planned' }, { value: 'WIP', label: 'WIP' }, { value: 'Done', label: 'Done' }, { value: 'Delay', label: 'Delay' },
+    ] },
+    // Schedule
+    { field: 'planned_start_date', label: getLabel('planned_start_date'), inputType: 'date', group: 'Schedule' },
+    { field: 'planned_completion_date', label: getLabel('planned_completion_date'), inputType: 'date', group: 'Schedule' },
+    { field: 'planned_closure_date', label: getLabel('planned_closure_date'), inputType: 'date', group: 'Schedule' },
+    { field: 'actual_start_date', label: getLabel('actual_start_date'), inputType: 'date', group: 'Schedule' },
+    { field: 'actual_completion_date', label: getLabel('actual_completion_date'), inputType: 'date', group: 'Schedule' },
+    { field: 'actual_closure_date', label: getLabel('actual_closure_date'), inputType: 'date', group: 'Schedule' },
+    // Notes
+    { field: 'remarks', label: getLabel('remarks'), inputType: 'text', group: 'Notes' },
+    { field: 'hdec_comments', label: getLabel('hdec_comments'), inputType: 'text', group: 'Notes' },
+  ], [getLabel, optionFields]);
+
+  const handleBulkApplied = useCallback(({ field, value, ids }: { field: string; value: string | number | null; ids: string[] }) => {
+    // Optimistically apply changes locally so the table reflects updates without a full refetch
+    setItems((prev) => prev.map((row) => (ids.includes(row.id) ? ({ ...row, [field]: value as any }) : row)));
+    setRowSelection({});
+  }, []);
 
   const activeUrlFilters = useMemo(() => {
     const labels: Record<string, string> = {
@@ -728,6 +815,14 @@ export default function DefectRawDataPage() {
         </span>
       </div>
 
+      <BulkEditBar
+        selectedRows={selectedRows}
+        fields={bulkFields}
+        table="defect_items"
+        onApplied={handleBulkApplied}
+        onClearSelection={() => setRowSelection({})}
+      />
+
       <DefectRawTableView table={table} loading={loading} sorting={sorting.length ? sorting : DEFAULT_SORTING} autoSizeColumn={autoSizeColumn} navigate={navigate} tableRef={tableRef} />
 
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
@@ -835,7 +930,9 @@ interface DefectRawTableViewProps {
 function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate, tableRef }: DefectRawTableViewProps) {
   const isMobile = useIsMobile();
   const { value: frozenSetting } = useFrozenColumnCount();
-  const frozenCount = isMobile ? 1 : Math.min(Math.max(Number(frozenSetting) || 1, 1), 4);
+  // Account for the always-on selection column at the start
+  const userFrozenCount = isMobile ? 1 : Math.min(Math.max(Number(frozenSetting) || 1, 1), 4);
+  const frozenCount = userFrozenCount + 1;
   const leafColumns = table.getVisibleLeafColumns();
   const frozenColumns = useMemo(() => leafColumns.slice(0, frozenCount), [leafColumns, frozenCount]);
   const scrollColumns = useMemo(() => leafColumns.slice(frozenCount), [leafColumns, frozenCount]);

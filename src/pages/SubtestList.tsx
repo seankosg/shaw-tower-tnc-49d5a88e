@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel,
   flexRender, type ColumnDef, type SortingState, type ColumnFiltersState,
-  type ColumnSizingState, type VisibilityState,
+  type ColumnSizingState, type RowSelectionState, type VisibilityState,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { supabase } from '@/integrations/supabase/client';
@@ -38,6 +38,8 @@ import {
   todayIso,
   type StageKey,
 } from '@/lib/stage-metrics';
+import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
+import type { BulkEditableField } from '@/lib/bulk-edit';
 
 interface SubtestRow {
   id: string;
@@ -335,6 +337,7 @@ export default function SubtestList() {
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
   const [dataDate, setDataDate] = useState<string | null>(null);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const urlStatusFilter = searchParams.get('status');
   const urlAtRiskDays = Number(searchParams.get('at_risk_days') ?? '2');
   const tableRef = useRef<HTMLDivElement>(null);
@@ -558,6 +561,33 @@ export default function SubtestList() {
   );
 
   const columns = useMemo<ColumnDef<SubtestRow>[]>(() => [
+    {
+      id: '__select',
+      size: 36,
+      enableSorting: false,
+      enableColumnFilter: false,
+      enableResizing: false,
+      header: ({ table: t }) => (
+        <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+          <Checkbox
+            checked={t.getIsAllRowsSelected() ? true : t.getIsSomeRowsSelected() ? 'indeterminate' : false}
+            onCheckedChange={(checked) => t.toggleAllRowsSelected(!!checked)}
+            aria-label="Select all rows in current view"
+            className="h-3.5 w-3.5"
+          />
+        </span>
+      ),
+      cell: ({ row }) => (
+        <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(checked) => row.toggleSelected(!!checked)}
+            aria-label="Select row"
+            className="h-3.5 w-3.5"
+          />
+        </span>
+      ),
+    },
     { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn,
       meta: { filterType: 'text' } },
     {
@@ -802,7 +832,7 @@ export default function SubtestList() {
     const allIds = columns
       .map(c => (c as any).id ?? (c as any).accessorKey)
       .filter(Boolean) as string[];
-    const PINNED_FRONT = ['item_no', 'stage_progress', 'system_code', 'subtest_id', 'mos_code'];
+    const PINNED_FRONT = ['__select', 'item_no', 'stage_progress', 'system_code', 'subtest_id', 'mos_code'];
     const pinned = PINNED_FRONT.filter(id => allIds.includes(id));
     const remaining = new Set(allIds.filter(id => !pinned.includes(id)));
     const ordered: string[] = [];
@@ -826,11 +856,14 @@ export default function SubtestList() {
   const table = useReactTable({
     data: filteredData,
     columns,
-    state: { sorting, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder },
+    state: { sorting, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,
     onColumnSizingChange: setColumnSizing,
+    onRowSelectionChange: setRowSelection,
+    getRowId: (row) => row.id,
+    enableRowSelection: true,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -842,6 +875,37 @@ export default function SubtestList() {
     columnResizeMode: 'onEnd',
     defaultColumn: { minSize: 60, maxSize: 600 },
   });
+
+  // Clear selection on filter/search/url change
+  useEffect(() => { setRowSelection({}); }, [columnFilters, globalFilter, searchParams]);
+
+  const selectedRows = useMemo(
+    () => table.getSelectedRowModel().rows.map((r) => r.original),
+    [rowSelection, filteredData],
+  );
+
+  const bulkFields = useMemo<BulkEditableField[]>(() => [
+    { field: 'subcontractor_name', label: 'Subcontractor', inputType: 'select', group: 'Assignment', options: subcontractorOptions },
+    { field: 'subsub_name', label: 'Sub-Sub', inputType: 'select', group: 'Assignment', options: subsubOptions },
+    { field: 'hdec_pic_name', label: 'HDEC PIC', inputType: 'select', group: 'Assignment', options: hdecPicOptions },
+    { field: 'team', label: 'Team', inputType: 'select', group: 'Assignment', options: teamOptions },
+    { field: 't1_status', label: 'T1 Status', inputType: 'select', group: 'Status', options: statusOptions },
+    { field: 't2_status', label: 'T2 Status', inputType: 'select', group: 'Status', options: statusOptions },
+    { field: 'pred_status', label: 'Pred Status', inputType: 'select', group: 'Status', options: statusOptions },
+    { field: 't1_planned_date', label: 'T1 Planned', inputType: 'date', group: 'Schedule' },
+    { field: 't1_actual_date', label: 'T1 Actual', inputType: 'date', group: 'Schedule' },
+    { field: 't2_planned_date', label: 'T2 Planned', inputType: 'date', group: 'Schedule' },
+    { field: 't2_actual_date', label: 'T2 Actual', inputType: 'date', group: 'Schedule' },
+    { field: 'pred_planned_date', label: 'Pred Planned', inputType: 'date', group: 'Schedule' },
+    { field: 'pred_actual_date', label: 'Pred Actual', inputType: 'date', group: 'Schedule' },
+    { field: 'remarks', label: 'Remarks', inputType: 'text', group: 'Notes' },
+    { field: 'punchlist_comments', label: 'Punchlist Comments', inputType: 'text', group: 'Notes' },
+  ], [subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions, statusOptions]);
+
+  const handleBulkApplied = useCallback(({ field, value, ids }: { field: string; value: string | number | null; ids: string[] }) => {
+    setData((prev) => prev.map((row) => (ids.includes(row.id) ? ({ ...row, [field]: value as any }) : row)));
+    setRowSelection({});
+  }, []);
 
   const activeUrlFilters = useMemo(() => {
     const out: { label: string; param: string; clears?: string[] }[] = [];
@@ -1002,6 +1066,14 @@ export default function SubtestList() {
         <div className="ml-auto"><StageProgressLegend /></div>
       </div>
 
+      <BulkEditBar
+        selectedRows={selectedRows}
+        fields={bulkFields}
+        table="subtests"
+        onApplied={handleBulkApplied}
+        onClearSelection={() => setRowSelection({})}
+      />
+
       <SubtestTableView
         table={table}
         loading={loading}
@@ -1033,7 +1105,7 @@ function SubtestTableView({
   table, loading, columns, sorting, autoSizeColumn, navigate, tableRef, delayAsOfDate,
 }: SubtestTableViewProps) {
   const isMobile = useIsMobile();
-  const FROZEN_COUNT = isMobile ? 1 : 4;
+  const FROZEN_COUNT = (isMobile ? 1 : 4) + 1; // +1 for the always-on selection column
   const leafCols = table.getVisibleLeafColumns();
   const frozenCols = useMemo(() => leafCols.slice(0, FROZEN_COUNT), [leafCols]);
   const scrollCols = useMemo(() => leafCols.slice(FROZEN_COUNT), [leafCols]);
