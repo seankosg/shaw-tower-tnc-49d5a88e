@@ -856,11 +856,14 @@ export default function SubtestList() {
   const table = useReactTable({
     data: filteredData,
     columns,
-    state: { sorting, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder },
+    state: { sorting, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,
     onColumnSizingChange: setColumnSizing,
+    onRowSelectionChange: setRowSelection,
+    getRowId: (row) => row.id,
+    enableRowSelection: true,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -872,6 +875,37 @@ export default function SubtestList() {
     columnResizeMode: 'onEnd',
     defaultColumn: { minSize: 60, maxSize: 600 },
   });
+
+  // Clear selection on filter/search/url change
+  useEffect(() => { setRowSelection({}); }, [columnFilters, globalFilter, searchParams]);
+
+  const selectedRows = useMemo(
+    () => table.getSelectedRowModel().rows.map((r) => r.original),
+    [rowSelection, filteredData],
+  );
+
+  const bulkFields = useMemo<BulkEditableField[]>(() => [
+    { field: 'subcontractor_name', label: 'Subcontractor', inputType: 'select', group: 'Assignment', options: subcontractorOptions },
+    { field: 'subsub_name', label: 'Sub-Sub', inputType: 'select', group: 'Assignment', options: subsubOptions },
+    { field: 'hdec_pic_name', label: 'HDEC PIC', inputType: 'select', group: 'Assignment', options: hdecPicOptions },
+    { field: 'team', label: 'Team', inputType: 'select', group: 'Assignment', options: teamOptions },
+    { field: 't1_status', label: 'T1 Status', inputType: 'select', group: 'Status', options: statusOptions },
+    { field: 't2_status', label: 'T2 Status', inputType: 'select', group: 'Status', options: statusOptions },
+    { field: 'pred_status', label: 'Pred Status', inputType: 'select', group: 'Status', options: statusOptions },
+    { field: 't1_planned_date', label: 'T1 Planned', inputType: 'date', group: 'Schedule' },
+    { field: 't1_actual_date', label: 'T1 Actual', inputType: 'date', group: 'Schedule' },
+    { field: 't2_planned_date', label: 'T2 Planned', inputType: 'date', group: 'Schedule' },
+    { field: 't2_actual_date', label: 'T2 Actual', inputType: 'date', group: 'Schedule' },
+    { field: 'pred_planned_date', label: 'Pred Planned', inputType: 'date', group: 'Schedule' },
+    { field: 'pred_actual_date', label: 'Pred Actual', inputType: 'date', group: 'Schedule' },
+    { field: 'remarks', label: 'Remarks', inputType: 'text', group: 'Notes' },
+    { field: 'punchlist_comments', label: 'Punchlist Comments', inputType: 'text', group: 'Notes' },
+  ], [subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions, statusOptions]);
+
+  const handleBulkApplied = useCallback(({ field, value, ids }: { field: string; value: string | number | null; ids: string[] }) => {
+    setData((prev) => prev.map((row) => (ids.includes(row.id) ? ({ ...row, [field]: value as any }) : row)));
+    setRowSelection({});
+  }, []);
 
   const activeUrlFilters = useMemo(() => {
     const out: { label: string; param: string; clears?: string[] }[] = [];
