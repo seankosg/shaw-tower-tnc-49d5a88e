@@ -89,17 +89,19 @@ async function findExistingMasterUser(
     ? 'hdec'
     : body.master_type === 'subsub' ? 'subsub' : 'subcontractor';
 
+  // Case-insensitive exact match — escape PostgREST wildcards (%, _, \)
+  const ciEq = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
   let query = admin.from('profiles').select('user_id, login_id').eq('user_type', userType).limit(1);
 
   if (body.master_type === 'subcontractor') {
-    query = query.eq('subcontractor_name', body.name.trim()).is('subsub_name', null);
+    query = query.ilike('subcontractor_name', ciEq(body.name.trim())).is('subsub_name', null);
   } else if (body.master_type === 'subsub') {
-    query = query.eq('subcontractor_name', body.subcontractor_name ?? '').eq('subsub_name', body.name.trim());
+    query = query.ilike('subcontractor_name', ciEq(body.subcontractor_name ?? '')).ilike('subsub_name', ciEq(body.name.trim()));
   } else if (body.master_type === 'hdec_pic') {
-    query = query.eq('hdec_pic_name', body.name.trim());
+    query = query.ilike('hdec_pic_name', ciEq(body.name.trim()));
   } else {
     // hdec_eng
-    query = query.eq('hdec_eng_name', body.name.trim());
+    query = query.ilike('hdec_eng_name', ciEq(body.name.trim()));
   }
 
   const { data, error } = await query.maybeSingle();

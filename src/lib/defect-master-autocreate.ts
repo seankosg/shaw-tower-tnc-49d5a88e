@@ -135,6 +135,8 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
     if (profileKey) profileKeys.add(profileKey);
   }
 
+  const ciEqArg = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
+
   async function ensureSubcontractor(value?: string | null): Promise<string | null> {
     const name = normalizeName(value);
     if (!name) return null;
@@ -149,6 +151,19 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
       .single();
 
     if (error || !data) {
+      // Fallback: case-insensitive lookup (handles unique-index conflict and racing inserts)
+      const { data: existingRow } = await supabase
+        .from('subcontractor_master')
+        .select('id, name')
+        .eq('type', 'sub')
+        .ilike('name', ciEqArg(name))
+        .eq('is_active', true)
+        .maybeSingle();
+      if (existingRow) {
+        subcontractors.set(key, { id: existingRow.id, name: existingRow.name });
+        subIdToName.set(existingRow.id, existingRow.name);
+        return existingRow.id;
+      }
       warnings.push(`${name} (subcontractor): ${error?.message ?? 'master insert failed'}`);
       return null;
     }
@@ -184,6 +199,18 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
       .single();
 
     if (error || !data) {
+      const { data: existingRow } = await supabase
+        .from('subcontractor_master')
+        .select('id')
+        .eq('type', 'subsub')
+        .eq('parent_subcontractor_id', parentId)
+        .ilike('name', ciEqArg(name))
+        .eq('is_active', true)
+        .maybeSingle();
+      if (existingRow) {
+        subsubs.add(key);
+        return;
+      }
       warnings.push(`${name} (subsub): ${error?.message ?? 'master insert failed'}`);
       return;
     }
@@ -205,6 +232,16 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
       .single();
 
     if (error || !data) {
+      const { data: existingRow } = await supabase
+        .from('hdec_pic_master')
+        .select('id')
+        .ilike('name', ciEqArg(name))
+        .eq('is_active', true)
+        .maybeSingle();
+      if (existingRow) {
+        hdecPics.add(key);
+        return;
+      }
       warnings.push(`${name} (hdec_pic): ${error?.message ?? 'master insert failed'}`);
       return;
     }
@@ -226,16 +263,27 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
         .single();
 
       if (error || !data) {
-        warnings.push(`${name} (hdec_eng): ${error?.message ?? 'master insert failed'}`);
-        return;
+        const { data: existingRow } = await supabase
+          .from('hdec_eng_master')
+          .select('id')
+          .ilike('name', ciEqArg(name))
+          .eq('is_active', true)
+          .maybeSingle();
+        if (existingRow) {
+          hdecEngs.add(key);
+        } else {
+          warnings.push(`${name} (hdec_eng): ${error?.message ?? 'master insert failed'}`);
+          return;
+        }
+      } else {
+        hdecEngs.add(key);
       }
-
-      hdecEngs.add(key);
     }
 
     // Always attempt user creation; createMasterUser is idempotent via profileKeys check
     await createMasterUser('hdec_eng', name, null);
   }
+
 
   return {
     warnings,

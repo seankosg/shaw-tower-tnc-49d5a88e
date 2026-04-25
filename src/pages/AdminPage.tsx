@@ -1377,7 +1377,7 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master' | 'hdec_eng_ma
     if (r.is_active) {
       // Deactivating — check linked users
       if (table === 'hdec_pic_master' || table === 'hdec_eng_master') {
-        const { count } = await (supabase.from('profiles') as any).select('id', { count: 'exact', head: true }).eq(profileField, r.name).eq('is_active', true);
+        const { count } = await (supabase.from('profiles') as any).select('id', { count: 'exact', head: true }).ilike(profileField, r.name.replace(/[\\%_]/g, (c: string) => `\\${c}`)).eq('is_active', true);
         setPendingToggle({ row: r, linkedCount: count ?? 0 });
       } else {
         // Just deactivate master directly
@@ -1405,7 +1405,7 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master' | 'hdec_eng_ma
       const { data: linked, error: cascadeErr } = await (supabase
         .from('profiles') as any)
         .update({ is_active: false })
-        .eq(profileField, r.name)
+        .ilike(profileField, r.name.replace(/[\\%_]/g, (c: string) => `\\${c}`))
         .select('id');
       if (cascadeErr) {
         toast({ title: 'Master deactivated, but cascade failed', description: cascadeErr.message, variant: 'destructive' });
@@ -1419,6 +1419,9 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master' | 'hdec_eng_ma
     load();
   };
 
+  // Case-insensitive exact match for PostgREST ilike — escape wildcards
+  const ciEq = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
+
   const renameRow = async (r: MasterRow, newName: string) => {
     const trimmed = newName.trim();
     if (!trimmed || trimmed === r.name) return;
@@ -1426,9 +1429,10 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master' | 'hdec_eng_ma
     if (error) { toast({ title: 'Rename failed', description: error.message, variant: 'destructive' }); return; }
     if (table === 'hdec_pic_master' || table === 'hdec_eng_master') {
       if (updatesSubtests) {
-        await supabase.from('subtests').update({ hdec_pic_name: trimmed } as any).eq('hdec_pic_name', r.name);
+        await supabase.from('subtests').update({ [profileField]: trimmed } as any).ilike(profileField, ciEq(r.name));
       }
-      await (supabase.from('profiles') as any).update({ [profileField]: trimmed }).eq(profileField, r.name);
+      await supabase.from('defect_items').update({ [profileField]: trimmed } as any).ilike(profileField, ciEq(r.name));
+      await (supabase.from('profiles') as any).update({ [profileField]: trimmed }).ilike(profileField, ciEq(r.name));
     }
     toast({ title: 'Renamed', description: 'Linked records updated' });
     load();
@@ -1436,12 +1440,13 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master' | 'hdec_eng_ma
 
   const remove = async (r: MasterRow) => {
     if (table === 'hdec_pic_master' || table === 'hdec_eng_master') {
+      const escName = r.name.replace(/[\\%_]/g, (c: string) => `\\${c}`);
       const subtestQuery = updatesSubtests
-        ? supabase.from('subtests').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name)
+        ? supabase.from('subtests').select('id', { count: 'exact', head: true }).ilike(profileField, escName)
         : Promise.resolve({ count: 0 } as any);
       const [{ count: subtestCount }, { count: profileCount }] = await Promise.all([
         subtestQuery,
-        (supabase.from('profiles') as any).select('id', { count: 'exact', head: true }).eq(profileField, r.name),
+        (supabase.from('profiles') as any).select('id', { count: 'exact', head: true }).ilike(profileField, escName),
       ]);
       const refs: string[] = [];
       if (subtestCount) refs.push(`${subtestCount} subtest(s)`);
