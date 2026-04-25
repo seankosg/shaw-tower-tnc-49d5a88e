@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel,
   flexRender, type ColumnDef, type SortingState, type ColumnFiltersState,
@@ -318,6 +318,7 @@ const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
 
 export default function SubtestList() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
