@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SuggestField } from '@/components/ui/suggest-field';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -47,6 +48,7 @@ export default function DefectDetailPage() {
   const [subsubOptions, setSubsubOptions] = useState<SubMaster[]>([]);
   const [hdecOptions, setHdecOptions] = useState<HdecMaster[]>([]);
   const [hdecEngOptions, setHdecEngOptions] = useState<HdecMaster[]>([]);
+  const [suggestPool, setSuggestPool] = useState<{ area_level: string[]; area_location: string[]; main_trade: string[]; sub_trade: string[]; work_type: string[] }>({ area_level: [], area_location: [], main_trade: [], sub_trade: [], work_type: [] });
   const { isFieldVisible, isFieldRequired, getLabel } = useDefectFieldConfig();
 
   const loadScHistory = async (defectId: string) => {
