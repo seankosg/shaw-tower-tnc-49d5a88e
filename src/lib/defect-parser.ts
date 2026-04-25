@@ -116,6 +116,11 @@ const FIELD_ALIASES: Record<string, string> = {
   'actual start date': 'actual_start_date',
   'actual completion date': 'actual_completion_date',
   'actual closure date': 'actual_closure_date',
+  // LL original "Closed On" column → treated as actual closure date
+  'closed on': 'actual_closure_date',
+  'closed date': 'actual_closure_date',
+  'date closed': 'actual_closure_date',
+  'closure date': 'actual_closure_date',
   'planned progress %': 'planned_progress_pct',
   'planned progress': 'planned_progress_pct',
   'actual progress %': 'actual_progress_pct',
