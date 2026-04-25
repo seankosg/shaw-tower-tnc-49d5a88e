@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   flexRender,
   getCoreRowModel,
@@ -310,6 +310,7 @@ function ColumnFilterDropdown({ column }: { column: any }) {
 
 export default function DefectRawDataPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -410,8 +411,17 @@ export default function DefectRawDataPage() {
       issueNo: 'issue_no',
       subcontractorIssueNo: 'subcontractor_issue_no',
     };
-    const hasUrlFilters = ['q', 'dateStart', 'dateEnd', 'dateField', 'actualComplete', 'closureComplete', 'overdue', 'stage', 'atRisk', ...Object.keys(urlMap)].some((key) => searchParams.has(key));
-    const nextFilters = hasUrlFilters ? [] : baseFilters.filter((filter) => !Object.values(urlMap).includes(filter.id));
+    // Merge: keep saved column filters except those that the URL is going to override.
+    // Previously, the presence of ANY URL filter wiped all saved column filters.
+    const urlOverriddenColIds = new Set<string>();
+    for (const [param, col] of Object.entries(urlMap)) {
+      if (searchParams.has(param)) urlOverriddenColIds.add(col);
+    }
+    const urlDateField = searchParams.get('dateField');
+    if ((searchParams.has('dateStart') || searchParams.has('dateEnd')) && urlDateField && DATE_FILTER_FIELDS.has(urlDateField)) {
+      urlOverriddenColIds.add(urlDateField);
+    }
+    const nextFilters = baseFilters.filter((filter) => !urlOverriddenColIds.has(filter.id));
 
     for (const [param, col] of Object.entries(urlMap)) {
       const value = searchParams.get(param);
@@ -422,16 +432,16 @@ export default function DefectRawDataPage() {
 
     const dateStart = searchParams.get('dateStart');
     const dateEnd = searchParams.get('dateEnd');
-    const urlDateField = searchParams.get('dateField');
     if ((dateStart || dateEnd) && urlDateField && DATE_FILTER_FIELDS.has(urlDateField)) {
       nextFilters.push({ id: urlDateField, value: { from: dateStart || undefined, to: dateEnd || undefined } });
     }
 
-    const q = searchParams.get('q') ?? '';
+    const urlQ = searchParams.get('q');
+    const effectiveGlobal = urlQ !== null ? urlQ : baseGlobal;
     setSorting(baseSorting);
     setColumnFilters(nextFilters);
-    setGlobalFilter(hasUrlFilters ? q : baseGlobal);
-    setSearchInput(hasUrlFilters ? q : baseGlobal);
+    setGlobalFilter(effectiveGlobal);
+    setSearchInput(effectiveGlobal);
     setColumnSizing(baseSizing);
     setStateLoaded(true);
   }, [storageKey, searchParams]);
@@ -455,14 +465,20 @@ export default function DefectRawDataPage() {
 
   useEffect(() => {
     if (!stateLoaded) return;
+    if (loading) return;
     const element = tableRef.current;
     if (!element) return;
     const raw = localStorage.getItem(`${storageKey}:scroll`);
     if (raw) {
       try {
         const saved = JSON.parse(raw);
-        element.scrollTop = Number(saved.top) || 0;
-        element.scrollLeft = Number(saved.left) || 0;
+        // Apply once now, then again on the next frame so virtualised rows can settle.
+        const apply = () => {
+          element.scrollTop = Number(saved.top) || 0;
+          element.scrollLeft = Number(saved.left) || 0;
+        };
+        apply();
+        requestAnimationFrame(apply);
       } catch {
         // ignore invalid saved scroll
       }
@@ -470,7 +486,7 @@ export default function DefectRawDataPage() {
     const save = () => localStorage.setItem(`${storageKey}:scroll`, JSON.stringify({ top: element.scrollTop, left: element.scrollLeft }));
     element.addEventListener('scroll', save, { passive: true });
     return () => element.removeEventListener('scroll', save);
-  }, [stateLoaded, storageKey]);
+  }, [stateLoaded, storageKey, loading]);
 
   const filteredBaseData = useMemo(() => {
     const dateStart = searchParams.get('dateStart');
@@ -1009,7 +1025,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
                 {virtualRows.map((virtualRow) => {
                   const row = rows[virtualRow.index];
                   return (
-                    <TableRow key={row.id} data-index={virtualRow.index} style={{ height: virtualRow.size }} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}`)}>
+                    <TableRow key={row.id} data-index={virtualRow.index} style={{ height: virtualRow.size }} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}${location.search}`)}>
                       {row.getVisibleCells().slice(0, frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize() }} className="truncate py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
                     </TableRow>
                   );
@@ -1031,7 +1047,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
                 {virtualRows.map((virtualRow) => {
                   const row = rows[virtualRow.index];
                   return (
-                    <TableRow key={row.id} data-index={virtualRow.index} ref={(element) => element && rowVirtualizer.measureElement(element)} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}`)}>
+                    <TableRow key={row.id} data-index={virtualRow.index} ref={(element) => element && rowVirtualizer.measureElement(element)} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}${location.search}`)}>
                       {row.getVisibleCells().slice(frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize() }} className="truncate py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
                     </TableRow>
                   );

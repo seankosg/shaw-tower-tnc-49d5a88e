@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel,
   flexRender, type ColumnDef, type SortingState, type ColumnFiltersState,
@@ -318,6 +318,7 @@ const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
 
 export default function SubtestList() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -389,19 +390,12 @@ export default function SubtestList() {
       t1_status: 't1_status',
       t2_status: 't2_status',
     };
-    const dataUrlFilterKeys = [
-      ...Object.keys(urlMap),
-      'source', 'status', 'at_risk_days', 'as_of',
-      'date_from', 'date_to', 'date_field', 'stage', 'cell_status',
-      'pred_planned_to', 't1_planned_to', 't2_planned_to',
-      'pred_actual_to', 't1_actual_to', 't2_actual_to',
-      'pred_planned_on', 't1_planned_on', 't2_planned_on',
-      'pred_actual_on', 't1_actual_on', 't2_actual_on',
-      'pred_delay_asof', 't1_delay_asof', 't2_delay_asof',
-      'pred_delay_on', 't1_delay_on', 't2_delay_on',
-    ];
-    const hasDataUrlFilters = dataUrlFilterKeys.some(k => searchParams.has(k));
-    const next = hasDataUrlFilters ? [] : baseFilters.filter(f => !Object.values(urlMap).includes(f.id));
+    // Merge: keep saved column filters except those that the URL is going to override.
+    const urlOverriddenColIds = new Set<string>();
+    for (const [param, col] of Object.entries(urlMap)) {
+      if (searchParams.has(param)) urlOverriddenColIds.add(col);
+    }
+    const next = baseFilters.filter(f => !urlOverriddenColIds.has(f.id));
     for (const [param, col] of Object.entries(urlMap)) {
       const v = searchParams.get(param);
       if (v) {
@@ -415,8 +409,8 @@ export default function SubtestList() {
     }
     setSorting(baseSorting);
     setColumnFilters(next);
-    setGlobalFilter(hasDataUrlFilters ? '' : baseGlobal);
-    setSearchInput(hasDataUrlFilters ? '' : baseGlobal);
+    setGlobalFilter(baseGlobal);
+    setSearchInput(baseGlobal);
     setColumnSizing(baseSizing);
     setStateLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -441,14 +435,19 @@ export default function SubtestList() {
 
   useEffect(() => {
     if (!stateLoaded) return;
+    if (loading) return;
     const el = tableRef.current;
     if (!el) return;
     const raw = localStorage.getItem(`${storageKey}:scroll`);
     if (raw) {
       try {
         const saved = JSON.parse(raw);
-        el.scrollTop = Number(saved.top) || 0;
-        el.scrollLeft = Number(saved.left) || 0;
+        const apply = () => {
+          el.scrollTop = Number(saved.top) || 0;
+          el.scrollLeft = Number(saved.left) || 0;
+        };
+        apply();
+        requestAnimationFrame(apply);
       } catch {
         // ignore
       }
@@ -458,7 +457,7 @@ export default function SubtestList() {
     };
     el.addEventListener('scroll', save, { passive: true });
     return () => el.removeEventListener('scroll', save);
-  }, [stateLoaded, storageKey]);
+  }, [stateLoaded, storageKey, loading]);
 
   useEffect(() => {
     fetchData();
@@ -1255,7 +1254,7 @@ function SubtestTableView({
                       )}
                       onMouseEnter={() => setHoveredIndex(virtualRow.index)}
                       onMouseLeave={() => setHoveredIndex(null)}
-                      onClick={() => navigate(`/subtests/${r.id}`)}
+                      onClick={() => navigate(`/subtests/${r.id}${location.search}`)}
                     >
                       {row.getVisibleCells().slice(0, FROZEN_COUNT).map(cell => (
                         <TableCell
@@ -1331,7 +1330,7 @@ function SubtestTableView({
                       )}
                       onMouseEnter={() => setHoveredIndex(virtualRow.index)}
                       onMouseLeave={() => setHoveredIndex(null)}
-                      onClick={() => navigate(`/subtests/${r.id}`)}
+                      onClick={() => navigate(`/subtests/${r.id}${location.search}`)}
                     >
                       {row.getVisibleCells().slice(FROZEN_COUNT).map(cell => (
                         <TableCell
