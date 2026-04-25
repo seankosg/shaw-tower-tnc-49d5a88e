@@ -143,6 +143,86 @@ export type Database = {
         }
         Relationships: []
       }
+      defect_comment_reads: {
+        Row: {
+          defect_id: string
+          id: string
+          last_read_at: string
+          user_id: string
+        }
+        Insert: {
+          defect_id: string
+          id?: string
+          last_read_at?: string
+          user_id: string
+        }
+        Update: {
+          defect_id?: string
+          id?: string
+          last_read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "defect_comment_reads_defect_id_fkey"
+            columns: ["defect_id"]
+            isOneToOne: false
+            referencedRelation: "defect_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      defect_comments: {
+        Row: {
+          author_user_id: string
+          created_at: string
+          defect_id: string
+          edited: boolean
+          id: string
+          message: string
+          parent_comment_id: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          author_user_id: string
+          created_at?: string
+          defect_id: string
+          edited?: boolean
+          id?: string
+          message: string
+          parent_comment_id?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          author_user_id?: string
+          created_at?: string
+          defect_id?: string
+          edited?: boolean
+          id?: string
+          message?: string
+          parent_comment_id?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "defect_comments_defect_id_fkey"
+            columns: ["defect_id"]
+            isOneToOne: false
+            referencedRelation: "defect_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "defect_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "defect_comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       defect_daily_snapshots: {
         Row: {
           actual_closure_date: string | null
@@ -1546,6 +1626,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      can_modify_defect_comment: {
+        Args: { _comment_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_update_defect: {
         Args: { _defect_id: string; _user_id: string }
         Returns: boolean
@@ -1565,6 +1649,15 @@ export type Database = {
       delete_defect_import_batch: {
         Args: { _batch_id: string }
         Returns: undefined
+      }
+      get_defect_comment_summary: {
+        Args: { _defect_ids: string[] }
+        Returns: {
+          comment_count: number
+          defect_id: string
+          has_unread: boolean
+          last_comment_at: string
+        }[]
       }
       get_defect_edit_scope: {
         Args: { _defect_id: string; _user_id: string }
