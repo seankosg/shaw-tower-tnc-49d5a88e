@@ -108,6 +108,7 @@ export default function AdminPage() {
           <TabsTrigger value="settings">Settings</TabsTrigger>
           <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
+          <TabsTrigger value="events">Event Log</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users"><UsersTab /></TabsContent>
@@ -118,6 +119,7 @@ export default function AdminPage() {
         <TabsContent value="settings"><SettingsTab /></TabsContent>
         <TabsContent value="backup"><BackupTab /></TabsContent>
         <TabsContent value="audit"><AuditTab /></TabsContent>
+        <TabsContent value="events"><EventLogTab /></TabsContent>
       </Tabs>
     </div>
   );
