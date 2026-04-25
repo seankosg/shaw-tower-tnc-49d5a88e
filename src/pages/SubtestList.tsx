@@ -561,6 +561,33 @@ export default function SubtestList() {
   );
 
   const columns = useMemo<ColumnDef<SubtestRow>[]>(() => [
+    {
+      id: '__select',
+      size: 36,
+      enableSorting: false,
+      enableColumnFilter: false,
+      enableResizing: false,
+      header: ({ table: t }) => (
+        <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+          <Checkbox
+            checked={t.getIsAllRowsSelected() ? true : t.getIsSomeRowsSelected() ? 'indeterminate' : false}
+            onCheckedChange={(checked) => t.toggleAllRowsSelected(!!checked)}
+            aria-label="Select all rows in current view"
+            className="h-3.5 w-3.5"
+          />
+        </span>
+      ),
+      cell: ({ row }) => (
+        <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(checked) => row.toggleSelected(!!checked)}
+            aria-label="Select row"
+            className="h-3.5 w-3.5"
+          />
+        </span>
+      ),
+    },
     { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn,
       meta: { filterType: 'text' } },
     {
