@@ -1,165 +1,98 @@
-## 목표
 
-Defect Management 시스템에 **`HDEC Eng`** 라는 신규 독립 필드를 추가하고, Excel Import 시 **"Engineer"가 포함된 모든 헤더**는 이 새 필드로, 나머지 PIC 계열은 기존 `HDEC PIC` 필드로 분리 매핑합니다.
+# Closure 판정 규칙 추가: LL `Status = Closed` 인식 + `Closed On` → Actual Closure Date
 
----
+LL(원본 엑셀)에서 내려오는 두 개의 신호를 Closure 판정에 정식으로 반영합니다.
 
-## 헤더 매핑 분리 규칙
+1. **`Status` 컬럼 값이 `"Closed"`** → 해당 결함은 마감(Closure = Done)으로 인정
+2. **`Closed On` 컬럼의 날짜** → `actual_closure_date`로 저장 (시스템의 실제 마감일로 인식)
 
-현재 모든 변형이 `hdec_pic_name` 한 곳으로 매핑되고 있는 것을 다음과 같이 분리합니다:
+## 변경 후 Closure 판정 우선순위
 
-### → 신규 `hdec_eng_name` (Engineer 계열)
-- `HDEC ENG`, `HDEC Eng`, `HDEC_Eng`, `HDEC Eng Name`
-- `HDEC Engineer`
-- **`Responsible Engineer`**
-- **`Engineer In Charge`**
+```text
+1. actual_closure_date 가 있으면              → "Done"
+2. status == "Closed" (대소문자 무시)          → "Done"   ← 신규
+3. planned_closure_date < asOf (기한 초과)     → "Delay"
+4. completion_status == "Done" 이고
+   actual_closure_date 가 없음                → "WIP"
+5. 그 외                                       → "Planned"
+```
 
-### → 기존 `hdec_pic_name` (PIC 계열, 변경 없음)
-- `HDEC PIC`, `HDEC P.I.C`, `HDEC PIC Name`, `HDEC_PIC`
-- `HDEC In Charge`, `HDEC Person In Charge`
-- `Responsible PIC`, `Person In Charge`, `In Charge`, `PIC Name`, `PIC`
-- `담당자`, `담당`, `HDEC 담당자`
-
----
+> `Closed On` 날짜가 들어오면 즉시 `actual_closure_date`로 저장되므로, 사실상 1번 규칙으로 흡수됩니다.
+> `Closed On`이 비어있고 `Status=Closed`만 있는 경우를 위해 2번 규칙을 추가합니다.
 
 ## 변경 사항
 
-### 1. 데이터베이스 (Migration)
+### 1. Excel 헤더 매핑 추가 (`src/lib/defect-parser.ts`)
+`FIELD_ALIASES`에 다음 별칭 추가:
+- `'closed on'` → `actual_closure_date`
+- `'closed date'`, `'closure date'`, `'date closed'` → `actual_closure_date` (혹시 모를 변형 대비)
 
-#### A. `defect_items` 컬럼 추가
-```sql
-ALTER TABLE public.defect_items ADD COLUMN hdec_eng_name text;
-```
+파서 동작 변경:
+- `actual_closure_date` 매핑 시 기존 "Actual Closure Date" 컬럼이 비어있고 `Closed On` 컬럼에 값이 있으면 그 값을 사용 (fallback 우선순위: 명시적 actual_closure_date → closed on → null)
+- 추가로, `status` 값이 "Closed"인데 `actual_closure_date`가 비어있는 경우 `actual_closure_date`는 그대로 null 유지하되, 아래 status.ts 규칙에서 Done으로 판정되도록 함
 
-#### B. 신규 마스터 테이블 `hdec_eng_master`
-`hdec_pic_master`와 동일한 구조 + RLS:
-- 컬럼: `id`, `name`, `is_active`, `created_at`
-- RLS: 인증 사용자 read / admin·superuser manage·insert
-- `name`에 case-insensitive UNIQUE 인덱스
+### 2. Closure 판정 함수 수정 (`src/lib/defect-status.ts`)
+`computeClosureStatus()` 시그니처에 `status` 입력값 추가:
 
-#### C. `defect_field_config` 등록
-- `field_name = 'hdec_eng_name'`, `display_name = 'HDEC Eng'`, `source_origin = 'system'`
-- visible/editable roles는 `hdec_pic_name`과 동일
-
-> `defect_change_log` / `defect_schedule_change_audit` / Rollback 함수는 동적 필드명 기반이라 자동 동작.
-
----
-
-### 2. Parser (`src/lib/defect-parser.ts`)
-
-`FIELD_ALIASES` 분리:
 ```ts
-// → hdec_eng_name (신규)
-'hdec eng': 'hdec_eng_name',
-'hdec engineer': 'hdec_eng_name',
-'hdec_eng': 'hdec_eng_name',
-'hdec eng name': 'hdec_eng_name',
-'responsible engineer': 'hdec_eng_name',
-'engineer in charge': 'hdec_eng_name',
+export interface DefectStatusInputs {
+  // 기존 필드들...
+  status?: string | null;   // ← 신규
+}
 
-// → hdec_pic_name (기존 유지, 위 6개 제거)
-'hdec pic': 'hdec_pic_name',
-'hdec p i c': 'hdec_pic_name',
-'hdec_pic': 'hdec_pic_name',
-'hdec pic name': 'hdec_pic_name',
-'hdec in charge': 'hdec_pic_name',
-'hdec person in charge': 'hdec_pic_name',
-'responsible pic': 'hdec_pic_name',
-'person in charge': 'hdec_pic_name',
-'in charge': 'hdec_pic_name',
-'pic name': 'hdec_pic_name',
-pic: 'hdec_pic_name',
-'담당자': 'hdec_pic_name',
-'담당': 'hdec_pic_name',
-'hdec 담당자': 'hdec_pic_name',
+export function computeClosureStatus(input, asOf, completionStatus) {
+  if (input.actual_closure_date) return 'Done';
+  if (String(input.status ?? '').trim().toLowerCase() === 'closed') return 'Done';  // ← 신규
+  if (input.planned_closure_date && input.planned_closure_date < asOf) return 'Delay';
+  if (completionStatus === 'Done' && !input.actual_closure_date) return 'WIP';
+  return 'Planned';
+}
 ```
 
-- `ParsedDefectRow`에 `hdec_eng_name: string | null` 추가
-- `rows.map()`에 `hdec_eng_name: toText(getMapped(raw, 'hdec_eng_name'))` 추가
+`computeDefectStatuses()` 호출부도 `status`를 함께 전달하도록 정리.
 
----
+### 3. 마감 판정 보조 함수 (`src/lib/defect-utils.ts`)
+`isClosedDefect()`에 `status === 'Closed'` 조건 추가:
 
-### 3. Import Context (`src/contexts/DefectImportContext.tsx`)
+```ts
+export function isClosedDefect(item) {
+  return Boolean(item.actual_closure_date)
+      || String(item.closure_status ?? '') === 'Done'
+      || String(item.status ?? '').trim().toLowerCase() === 'closed';   // ← 신규
+}
+```
+지연(overdue) 판정 함수도 동일 조건으로 "마감된 건은 지연 아님" 처리에 반영.
 
-- Insert/Update payload에 `hdec_eng_name` 포함
-- Update 비교 대상에 추가 → `defect_change_log` 자동 기록
-- Re-import(update-only) 모드에서도 동일 처리
-
----
-
-### 4. Master 자동 등록 (`src/lib/defect-master-autocreate.ts`)
-
-`ensureHdecPic` 패턴을 본떠 **`ensureHdecEng`** 함수 추가:
-- `hdec_eng_master`에서 기존 이름 조회
-- 신규 이름이면 자동 insert
-- 캐싱으로 동시 import 중복 방지
-
----
-
-### 5. 타입 (`src/lib/defect-utils.ts`)
-
-- `DefectItem`에 `hdec_eng_name: string | null` 추가
-- `DEFECT_RESPONSIBILITY_FIELDS`에는 **포함하지 않음** (기존 권한 정책 유지)
-
----
-
-### 6. UI
-
-#### `src/pages/DefectDetailPage.tsx`
-- 폼 state에 `hdec_eng_name` 추가
-- "HDEC PIC" 셀렉트 아래 **"HDEC Eng"** 셀렉트 신규 추가 (옵션은 `hdec_eng_master`)
-- Save payload에 포함
-
-#### `src/pages/DefectRawDataPage.tsx`
-- 컬럼 키 목록(`COLUMN_KEYS` 등)에 `hdec_eng_name` 추가
-- 필터 옵션 / 정렬 / 표시 라벨("HDEC Eng") 추가
-
-#### Export (`defect-export-utils.ts`, `defect-excel-export.ts`)
-- `responsibility` 그룹에 `hdec_eng_name` 포함
-- Re-import ready export에도 컬럼 포함 (round-trip 보장)
-
----
-
-### 7. 자동 갱신 파일
-- `src/integrations/supabase/types.ts` — 마이그레이션 후 자동 갱신 (편집 X)
-
----
-
-## 동작 시나리오 예시
-
-Excel 한 파일에 두 컬럼이 모두 있을 때:
-
-| Excel 헤더 | 값 | 저장 위치 |
-|---|---|---|
-| `HDEC PIC` | "Kim, J.S." | `hdec_pic_name` |
-| `Responsible Engineer` | "Lee, K.H." | `hdec_eng_name` |
-| `Engineer In Charge` | (위와 동일 컬럼이면) "Lee, K.H." | `hdec_eng_name` |
-
-두 필드는 완전히 독립이며, 마스터도 각각 자동 등록됩니다.
-
----
-
-## 변경/생성 파일
-
-**신규**
-- `supabase/migrations/<ts>_add_hdec_eng_field.sql`
-
-**수정**
-- `src/lib/defect-parser.ts`
-- `src/lib/defect-utils.ts`
-- `src/lib/defect-master-autocreate.ts`
-- `src/contexts/DefectImportContext.tsx`
-- `src/pages/DefectDetailPage.tsx`
+### 4. 호출부 정합성 점검
+다음 파일에서 `computeClosureStatus` / `computeDefectStatuses` / `isClosedDefect` 사용처 확인 후 `status` 필드 전달 여부 보정:
 - `src/pages/DefectRawDataPage.tsx`
-- `src/lib/defect-export-utils.ts`
-- `src/lib/defect-excel-export.ts`
+- `src/pages/DefectDashboardPage.tsx`
+- `src/pages/DefectDetailPage.tsx`
+- `src/pages/DefectQuickUpdatePage.tsx`
+- `src/pages/DefectProgressPage.tsx`
+- `src/lib/defect-dashboard-utils.ts`
+- `src/lib/defect-chart-utils.ts`
+- `src/lib/defect-progress-utils.ts`
 
----
+대부분 이미 `defect_items` 객체 전체를 넘기고 있어 자동으로 `status`가 포함될 것이며, 부족한 곳만 보정합니다.
 
-## 영향 범위 / 주의
+### 5. 테스트 보강 (`src/test/defect-status.test.ts`)
+다음 케이스 추가:
+- `Status='Closed'` + `actual_closure_date=null` → Closure 'Done'
+- `Status='Closed'` + `Closed On` 날짜 있음 → `actual_closure_date`로 저장됨 + Closure 'Done'
+- `Status='Open'` 이고 다른 조건 미충족 → Closure 'Planned' (기존 동작 유지)
+- 대소문자/공백 변형 (`closed`, `CLOSED`, ` Closed `) 모두 'Done' 인식
 
-- **기존 데이터**: 기존 행의 `hdec_eng_name`은 NULL로 시작. `hdec_pic_name` 기존 값은 손대지 않음.
-- **이미 PIC로 들어간 Engineer 데이터**: 과거 import에서 `Responsible Engineer` 등이 `hdec_pic_name`으로 들어가 있을 수 있음 → **자동 마이그레이션 없음**. 필요 시 별도 정리 작업 요청 가능.
-- **재import 호환성**: 이전 export 파일을 그대로 다시 올리면 ENG 컬럼이 없어 NULL 유지(안전).
-- **권한**: `validate_defect_responsibility_update`는 PIC 3필드만 검증 → Engineer 필드는 일반 편집 권한으로 수정 가능.
-- **T&C(subtests) 모듈**: 영향 없음. Defect 모듈에만 적용.
+## 영향 범위
+
+- **Import 시**: 새 엑셀이나 재임포트 모두에서 `Closed On`이 자동으로 `Actual Closure Date`로 들어가고, `Status=Closed` 행은 마감 처리됨
+- **대시보드/Raw Data**: 기존 마감 건 + LL에서 Closed로 표시된 건이 모두 "Done"으로 집계
+- **하위호환**: 기존 데이터 동작은 변경 없음 (추가 규칙만 적용)
+
+## 변경 파일 요약
+
+- `src/lib/defect-parser.ts` — `Closed On` 헤더 매핑 + status 처리
+- `src/lib/defect-status.ts` — `computeClosureStatus`에 status="Closed" 규칙 추가
+- `src/lib/defect-utils.ts` — `isClosedDefect` 조건 확장
+- 호출부 페이지/유틸 — 필요 시 `status` 전달 보정
+- `src/test/defect-status.test.ts` — 신규 케이스 4건 추가

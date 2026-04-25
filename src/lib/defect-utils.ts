@@ -70,8 +70,10 @@ export const DEFECT_REVISION_FIELDS = [
 
 const OWNER_CODE_STOP_WORDS = new Set(['CO', 'LTD', 'INC', 'CORP', 'CORPORATION', 'COMPANY', 'LLC', 'GROUP', 'ENG', 'ENGINEERING', 'THE', 'AND']);
 
-export function isClosedDefect(item: Pick<DefectItem, 'actual_closure_date' | 'closure_status'>): boolean {
-  return Boolean(item.actual_closure_date) || String(item.closure_status ?? '') === 'Done';
+export function isClosedDefect(item: Pick<DefectItem, 'actual_closure_date' | 'closure_status' | 'status'>): boolean {
+  return Boolean(item.actual_closure_date)
+    || String(item.closure_status ?? '') === 'Done'
+    || String(item.status ?? '').trim().toLowerCase() === 'closed';
 }
 
 export function formatPct(value: number | null | undefined): string {
@@ -91,11 +93,15 @@ export function isOverdueDefect(
   item: Pick<DefectItem,
     'planned_start_date' | 'planned_completion_date' | 'planned_closure_date'
     | 'actual_start_date' | 'actual_completion_date' | 'actual_closure_date'
-    | 'closure_status'
+    | 'closure_status' | 'status'
   >,
   asOf = todayIso(),
 ): boolean {
-  if (Boolean(item.actual_closure_date) || String(item.closure_status ?? '') === 'Done') return false;
+  if (
+    Boolean(item.actual_closure_date)
+    || String(item.closure_status ?? '') === 'Done'
+    || String(item.status ?? '').trim().toLowerCase() === 'closed'
+  ) return false;
   if (item.planned_start_date && item.planned_start_date < asOf && !item.actual_start_date) return true;
   if (item.planned_completion_date && item.planned_completion_date < asOf && !item.actual_completion_date) return true;
   if (item.planned_closure_date && item.planned_closure_date < asOf && !item.actual_closure_date) return true;
