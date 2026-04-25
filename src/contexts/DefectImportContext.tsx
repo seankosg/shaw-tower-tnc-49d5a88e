@@ -505,6 +505,13 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         ?? existingByIssueNo.get(row.issue_no)
         ?? null;
 
+      // Capture Excel-explicit values BEFORE preservation merges in existing DB values.
+      // Used by reconcileClosureCompletion to enforce "Excel value wins" on closure/completion conflicts.
+      const excelExplicit = {
+        actual_progress_pct: row.actual_progress_pct ?? null,
+        actual_completion_date: row.actual_completion_date ?? null,
+      };
+
       // Apply blank-preservation for general data fields (description, dates, PIC, etc.)
       preserveExistingForBlank(row, existing);
 
