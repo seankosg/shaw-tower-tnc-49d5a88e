@@ -589,9 +589,9 @@ function UsersTab() {
 
 /* ───── Create User Dialog ───── */
 function CreateUserDialog({
-  subcons, subsubs, hdecPics, onCreated,
+  subcons, subsubs, hdecPics, hdecEngs, onCreated,
 }: {
-  subcons: MasterRow[]; subsubs: MasterRow[]; hdecPics: MasterRow[]; onCreated: () => void;
+  subcons: MasterRow[]; subsubs: MasterRow[]; hdecPics: MasterRow[]; hdecEngs: MasterRow[]; onCreated: () => void;
 }) {
   const { toast } = useToast();
   const [loginId, setLoginId] = useState('');
@@ -601,6 +601,7 @@ function CreateUserDialog({
   const [subconName, setSubconName] = useState<string>('');
   const [subsubId, setSubsubId] = useState<string>('');
   const [hdecPicName, setHdecPicName] = useState<string>('');
+  const [hdecEngName, setHdecEngName] = useState<string>('');
   const [team, setTeam] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -755,12 +756,13 @@ function CreateUserDialog({
 
 /* ───── Edit User Dialog ───── */
 function EditUserDialog({
-  profile, subcons, subsubs, hdecPics, onClose, onSaved,
+  profile, subcons, subsubs, hdecPics, hdecEngs, onClose, onSaved,
 }: {
   profile: Profile;
   subcons: MasterRow[];
   subsubs: MasterRow[];
   hdecPics: MasterRow[];
+  hdecEngs: MasterRow[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -771,6 +773,7 @@ function EditUserDialog({
   const initialSubsubId = subsubs.find(s => s.name === profile.subsub_name)?.id ?? '';
   const [subsubId, setSubsubId] = useState<string>(initialSubsubId);
   const [hdecPicName, setHdecPicName] = useState<string>(profile.hdec_pic_name ?? '');
+  const [hdecEngName, setHdecEngName] = useState<string>(profile.hdec_eng_name ?? '');
   const [team, setTeam] = useState<string>(profile.team ?? '');
   const [saving, setSaving] = useState(false);
 
