@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
 import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, suggestOwnerCode } from '@/lib/defect-utils';
-import { computeDefectStatuses, isValidDefectStatus } from '@/lib/defect-status';
+import { isValidDefectStatus, reconcileClosureCompletion } from '@/lib/defect-status';
 import { computePlannedProgressPct } from '@/lib/defect-progress-calc';
 import { classifyDefect, type ClassificationRule, type DisciplineFallback } from '@/lib/defect-classifier';
 import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
@@ -505,6 +505,13 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         ?? existingByIssueNo.get(row.issue_no)
         ?? null;
 
+      // Capture Excel-explicit values BEFORE preservation merges in existing DB values.
+      // Used by reconcileClosureCompletion to enforce "Excel value wins" on closure/completion conflicts.
+      const excelExplicit = {
+        actual_progress_pct: row.actual_progress_pct ?? null,
+        actual_completion_date: row.actual_completion_date ?? null,
+      };
+
       // Apply blank-preservation for general data fields (description, dates, PIC, etc.)
       preserveExistingForBlank(row, existing);
 
@@ -612,9 +619,10 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       const logReason = resolvedTeam ? {} : { reason_code: 'team_unresolved', reason_detail: 'Team could not be resolved from Field Discipline or User Management profile.' };
       if (!resolvedTeam) teamUnresolved++;
       // actual_completion_date: when progress < 100 and Excel is blank, keep existing DB value.
-      const actualCompletionDate = Number(row.actual_progress_pct ?? 0) >= 100
+      let actualCompletionDate = Number(row.actual_progress_pct ?? 0) >= 100
         ? (row.actual_completion_date ?? existing?.actual_completion_date ?? dataDate)
         : (row.actual_completion_date ?? existing?.actual_completion_date ?? null);
+      let actualProgressPct: number | null = row.actual_progress_pct ?? null;
 
       const statusInputs = {
         planned_start_date: row.planned_start_date,
@@ -624,15 +632,34 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         actual_completion_date: actualCompletionDate,
         actual_closure_date: row.actual_closure_date,
         planned_progress_pct: row.planned_progress_pct,
-        actual_progress_pct: row.actual_progress_pct,
+        actual_progress_pct: actualProgressPct,
+        status: row.status,
       };
-      const auto = computeDefectStatuses(statusInputs, dataDate);
-      let completionStatus: string | null = auto.completion_status;
-      let closureStatus: string | null = auto.closure_status;
+      // Reconcile: if closure becomes Done but completion lags, auto-fix
+      // (unless Excel explicitly provided non-Done values — then log conflict and keep Excel values).
+      const reconciled = reconcileClosureCompletion(statusInputs, dataDate, excelExplicit);
+      let completionStatus: string | null = reconciled.completion_status;
+      let closureStatus: string | null = reconciled.closure_status;
+      let autoReconciled = false;
+      if (reconciled.patch) {
+        actualCompletionDate = reconciled.patch.actual_completion_date;
+        actualProgressPct = reconciled.patch.actual_progress_pct;
+        autoReconciled = true;
+      }
+      if (reconciled.conflict) {
+        await (supabase as any).from('defect_upload_row_logs').insert({
+          upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no,
+          action_taken: existing ? 'updated' : 'inserted',
+          reason_code: 'closure_completion_conflict',
+          reason_detail: reconciled.conflictDetail,
+        });
+      }
+
+      // Excel-provided explicit status overrides reconciled values (existing precedence rule preserved).
       if (row.completion_status) {
         if (isValidDefectStatus(row.completion_status)) completionStatus = row.completion_status;
         else await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'invalid_status_value', reason_detail: `completion_status="${row.completion_status}" not in Planned/Delay/Done/WIP. Auto-computed.` });
-      } else if (!row.planned_completion_date && !row.planned_closure_date) {
+      } else if (!row.planned_completion_date && !row.planned_closure_date && !autoReconciled) {
         // No planned dates: prefer existing DB status over forcing null.
         completionStatus = existing?.completion_status ?? null;
         if (completionStatus == null) {
@@ -646,7 +673,13 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         closureStatus = existing?.closure_status ?? null;
       }
 
-      const payload = { ...row, id: undefined, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, completion_status: completionStatus, closure_status: closureStatus, team: resolvedTeam, classification_source: classificationSource, classified_at: classifiedAt, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
+      // Persist auto-reconciled progress back into the row so audit/snapshot logic sees the final value.
+      if (autoReconciled) {
+        row.actual_progress_pct = actualProgressPct;
+        row.actual_completion_date = actualCompletionDate;
+      }
+
+      const payload = { ...row, id: undefined, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, actual_progress_pct: actualProgressPct, completion_status: completionStatus, closure_status: closureStatus, team: resolvedTeam, classification_source: classificationSource, classified_at: classifiedAt, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
 
       if (existing) {
         const hasAnyChange = Object.entries(payload).some(([key, value]) => key !== 'raw_payload' && key !== 'row_version' && key !== 'updated_by' && key !== 'source_upload_id' && changed(existing[key], value));

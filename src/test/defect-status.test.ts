@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeCompletionStatus, computeClosureStatus, computeDefectStatuses, isValidDefectStatus } from '@/lib/defect-status';
+import { computeCompletionStatus, computeClosureStatus, computeDefectStatuses, isValidDefectStatus, reconcileClosureCompletion } from '@/lib/defect-status';
 
 const base = {
   planned_start_date: null,
@@ -82,5 +82,81 @@ describe('computeDefectStatuses', () => {
     const r = computeDefectStatuses({ ...base, actual_progress_pct: 100, planned_closure_date: '2026-12-01' }, '2026-04-24');
     expect(r.completion_status).toBe('Done');
     expect(r.closure_status).toBe('WIP');
+  });
+});
+
+describe('reconcileClosureCompletion', () => {
+  const asOf = '2026-04-25';
+  const noExcel = { actual_progress_pct: null, actual_completion_date: null };
+
+  it('auto-fixes completion when closure_date triggers Done', () => {
+    const r = reconcileClosureCompletion(
+      { ...base, actual_closure_date: '2026-04-20' },
+      asOf,
+      noExcel,
+    );
+    expect(r.closure_status).toBe('Done');
+    expect(r.completion_status).toBe('Done');
+    expect(r.patch).toEqual({ actual_completion_date: '2026-04-20', actual_progress_pct: 100 });
+  });
+
+  it('uses asOf as completion_date when LL Status="Closed" but no closure_date', () => {
+    const r = reconcileClosureCompletion(
+      { ...base, status: 'Closed' },
+      asOf,
+      noExcel,
+    );
+    expect(r.closure_status).toBe('Done');
+    expect(r.completion_status).toBe('Done');
+    expect(r.patch?.actual_completion_date).toBe(asOf);
+    expect(r.patch?.actual_progress_pct).toBe(100);
+  });
+
+  it('skips auto-fix when Excel explicitly provides actual_progress_pct < 100', () => {
+    const r = reconcileClosureCompletion(
+      { ...base, actual_closure_date: '2026-04-20', actual_progress_pct: 50 },
+      asOf,
+      { actual_progress_pct: 50, actual_completion_date: null },
+    );
+    expect(r.closure_status).toBe('Done');
+    expect(r.completion_status).not.toBe('Done');
+    expect(r.patch).toBeUndefined();
+    expect(r.conflict).toBe(true);
+  });
+
+  it('skips auto-fix when Excel explicitly provides actual_completion_date but progress < 100', () => {
+    // completion_date set + pct=80 → completion is Done by date rule, no conflict path triggered.
+    // Real conflict: closure done via LL status="Closed" (no closure_date) but Excel says pct=80, no completion_date.
+    const r = reconcileClosureCompletion(
+      { ...base, status: 'Closed', actual_progress_pct: 80 },
+      asOf,
+      { actual_progress_pct: 80, actual_completion_date: null },
+    );
+    expect(r.closure_status).toBe('Done');
+    expect(r.conflict).toBe(true);
+    expect(r.patch).toBeUndefined();
+  });
+
+  it('does nothing when closure is not Done', () => {
+    const r = reconcileClosureCompletion(
+      { ...base, planned_closure_date: '2026-12-01' },
+      asOf,
+      noExcel,
+    );
+    expect(r.closure_status).not.toBe('Done');
+    expect(r.patch).toBeUndefined();
+    expect(r.conflict).toBeUndefined();
+  });
+
+  it('does nothing when both already Done', () => {
+    const r = reconcileClosureCompletion(
+      { ...base, actual_closure_date: '2026-04-20', actual_completion_date: '2026-04-15', actual_progress_pct: 100 },
+      asOf,
+      { actual_progress_pct: 100, actual_completion_date: '2026-04-15' },
+    );
+    expect(r.completion_status).toBe('Done');
+    expect(r.closure_status).toBe('Done');
+    expect(r.patch).toBeUndefined();
+    expect(r.conflict).toBeUndefined();
   });
 });

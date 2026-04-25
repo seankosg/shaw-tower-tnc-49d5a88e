@@ -71,3 +71,67 @@ export function computeDefectStatuses(input: DefectStatusInputs, asOf: string) {
   const closure = computeClosureStatus(input, asOf, completion);
   return { completion_status: completion, closure_status: closure };
 }
+
+export interface ReconcileClosureCompletionResult {
+  completion_status: DefectStatusValue;
+  closure_status: DefectStatusValue;
+  /** When present, importer should overwrite these fields on the row. */
+  patch?: {
+    actual_completion_date: string;
+    actual_progress_pct: 100;
+  };
+  /** True when closure is Done but Excel explicitly provided non-Done completion data — auto-fix skipped. */
+  conflict?: boolean;
+  conflictDetail?: string;
+}
+
+/**
+ * Auto-reconcile rule: if Closure is Done but Completion is not, force Completion to Done
+ * by populating actual_completion_date and actual_progress_pct=100.
+ *
+ * "Excel-explicit values win" policy:
+ *   - If Excel row carries an explicit actual_progress_pct (any non-null number < 100) OR
+ *     an explicit actual_completion_date, do NOT auto-fix; flag conflict instead.
+ *
+ * @param input        Row's date/progress/status inputs (post merge with existing values).
+ * @param asOf         Data date — used as fallback completion date when no closure date exists.
+ * @param excelExplicit Original Excel-provided (raw) values to detect user-supplied conflicts.
+ */
+export function reconcileClosureCompletion(
+  input: DefectStatusInputs,
+  asOf: string,
+  excelExplicit: { actual_progress_pct: number | null | undefined; actual_completion_date: string | null | undefined },
+): ReconcileClosureCompletionResult {
+  const completion = computeCompletionStatus(input, asOf);
+  const closure = computeClosureStatus(input, asOf, completion);
+
+  if (closure !== 'Done' || completion === 'Done') {
+    return { completion_status: completion, closure_status: closure };
+  }
+
+  // Closure=Done, Completion!=Done → check for Excel conflict
+  const excelPct = excelExplicit.actual_progress_pct;
+  const excelDate = excelExplicit.actual_completion_date;
+  const hasExplicitPct = excelPct !== null && excelPct !== undefined && Number(excelPct) < 100;
+  const hasExplicitDate = excelDate !== null && excelDate !== undefined && String(excelDate).trim() !== '';
+
+  if (hasExplicitPct || hasExplicitDate) {
+    return {
+      completion_status: completion,
+      closure_status: closure,
+      conflict: true,
+      conflictDetail: `Closure=Done but Excel provided actual_progress_pct=${excelPct ?? 'null'}, actual_completion_date=${excelDate ?? 'null'}. Auto-reconcile skipped (Excel value wins).`,
+    };
+  }
+
+  // Auto-fix: derive completion date from closure date or fall back to data date
+  const completionDate = input.actual_closure_date ?? asOf;
+  return {
+    completion_status: 'Done',
+    closure_status: closure,
+    patch: {
+      actual_completion_date: completionDate,
+      actual_progress_pct: 100,
+    },
+  };
+}
