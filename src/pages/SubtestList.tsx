@@ -38,6 +38,8 @@ import {
   todayIso,
   type StageKey,
 } from '@/lib/stage-metrics';
+import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
+import type { BulkEditableField } from '@/lib/bulk-edit';
 
 interface SubtestRow {
   id: string;
