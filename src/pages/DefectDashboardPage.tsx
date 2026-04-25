@@ -69,7 +69,7 @@ export default function DefectDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [dataDate, setDataDate] = useState(todayIso());
   const [teamFilter, setTeamFilter] = useState(searchParams.get('team') || 'all');
-  const [breakdownTab, setBreakdownTab] = useState(searchParams.get('tab') || 'subTrade');
+  const [breakdownTab, setBreakdownTab] = useState(searchParams.get('tab') || 'subcon');
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>((searchParams.get('bucket') as 'day' | 'week') || 'day');
   const [scurveStart, setScurveStart] = useState(searchParams.get('scurve_start') || '2026-04-15');
   const [scurveEnd, setScurveEnd] = useState(searchParams.get('scurve_end') || '2026-06-07');
@@ -123,6 +123,7 @@ export default function DefectDashboardPage() {
   const bySubcon = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.subcontractor_name ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
   const bySubsub = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.subsub_name ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
   const byHdec = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.hdec_pic_name ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
+  const byHdecEng = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => (i as any).hdec_eng_name ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
   const byTeam = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.team ?? NONE_LABEL, k => k === NONE_LABEL ? k : (TEAM_LABELS[k as keyof typeof TEAM_LABELS] ?? k)), [filteredItems, today, dataDate]);
   const byWorkType = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => (i as any).work_type ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
   const subTradeFilterOptions = useMemo(() => Array.from(new Set(bySubTrade.map(row => row.label))).sort((a, b) => a.localeCompare(b)), [bySubTrade]);
@@ -136,6 +137,7 @@ export default function DefectDashboardPage() {
     subcon: { rows: bySubcon, header: 'Subcontractor', param: 'subcontractor' },
     subsub: { rows: bySubsub, header: 'Sub-Sub', param: 'subsub' },
     hdec: { rows: byHdec, header: 'HDEC PIC', param: 'hdecPic' },
+    hdecEng: { rows: byHdecEng, header: 'HDEC ENG', param: 'hdecEng' },
     team: { rows: byTeam, header: 'Team', param: 'team' },
     workType: { rows: byWorkType, header: 'Work Type', param: 'workType' },
   };
@@ -149,7 +151,7 @@ export default function DefectDashboardPage() {
     const next = new URLSearchParams(searchParams);
     const setOrDelete = (key: string, value: string, defaultValue: string) => value && value !== defaultValue ? next.set(key, value) : next.delete(key);
     setOrDelete('team', teamFilter, 'all');
-    setOrDelete('tab', breakdownTab, 'subTrade');
+    setOrDelete('tab', breakdownTab, 'subcon');
     setOrDelete('bucket', scurveBucket, 'day');
     setOrDelete('scurve_start', scurveStart, '2026-04-15');
     setOrDelete('scurve_end', scurveEnd, '2026-06-07');
@@ -160,7 +162,7 @@ export default function DefectDashboardPage() {
 
   const goRaw = (params: Record<string, string>) => navigate(`/defects/raw-data?${new URLSearchParams({ source: 'dashboard', ...params }).toString()}`);
   const handleBreakdownExport = () => {
-    const { rows, header } = breakdownDataMap[breakdownTab] ?? breakdownDataMap.subTrade;
+    const { rows, header } = breakdownDataMap[breakdownTab] ?? breakdownDataMap.subcon;
     if (!rows.length) return toast({ title: 'No data to export', variant: 'destructive' });
     const { rowCount, fileName } = exportDefectPlanActualToExcel(rows, header, today, dataDate);
     toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
@@ -212,11 +214,12 @@ export default function DefectDashboardPage() {
         <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-base">Plan vs Actual - Summary</CardTitle><Button variant="outline" size="sm" onClick={handleBreakdownExport}><Download className="mr-1.5 h-4 w-4" />Excel</Button></CardHeader>
         <CardContent>
           <Tabs value={breakdownTab} onValueChange={setBreakdownTab}>
-            <TabsList className="h-auto flex-wrap"><TabsTrigger value="subTrade">By Sub Trade</TabsTrigger><TabsTrigger value="subcon">By Subcontractor</TabsTrigger><TabsTrigger value="subsub">By Sub-Sub</TabsTrigger><TabsTrigger value="hdec">By HDEC PIC</TabsTrigger><TabsTrigger value="team">By Team</TabsTrigger><TabsTrigger value="workType">By Work Type</TabsTrigger></TabsList>
+            <TabsList className="h-auto flex-wrap"><TabsTrigger value="subTrade">By Sub Trade</TabsTrigger><TabsTrigger value="subcon">By Subcontractor</TabsTrigger><TabsTrigger value="subsub">By Sub-Sub</TabsTrigger><TabsTrigger value="hdec">By HDEC PIC</TabsTrigger><TabsTrigger value="hdecEng">By HDEC ENG</TabsTrigger><TabsTrigger value="team">By Team</TabsTrigger><TabsTrigger value="workType">By Work Type</TabsTrigger></TabsList>
             <TabsContent value="subTrade"><PlanActualTable rows={filteredBySubTrade} groupParam="subTrade" groupHeader="Sub Trade" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} filter={{ text: subTradeTextFilter, selected: selectedSubTradeFilters, options: subTradeFilterOptions, onTextChange: setSubTradeTextFilter, onSelectedChange: setSelectedSubTradeFilters }} /></TabsContent>
             <TabsContent value="subcon"><PlanActualTable rows={bySubcon} groupParam="subcontractor" groupHeader="Subcontractor" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
             <TabsContent value="subsub"><PlanActualTable rows={bySubsub} groupParam="subsub" groupHeader="Sub-Sub" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
             <TabsContent value="hdec"><PlanActualTable rows={byHdec} groupParam="hdecPic" groupHeader="HDEC PIC" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
+            <TabsContent value="hdecEng"><PlanActualTable rows={byHdecEng} groupParam="hdecEng" groupHeader="HDEC ENG" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
             <TabsContent value="team"><PlanActualTable rows={byTeam} groupParam="team" groupHeader="Team" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
             <TabsContent value="workType"><PlanActualTable rows={byWorkType} groupParam="workType" groupHeader="Work Type" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
           </Tabs>
@@ -236,7 +239,7 @@ export default function DefectDashboardPage() {
   );
 }
 
-type GroupParam = 'subTrade' | 'subcontractor' | 'subsub' | 'hdecPic' | 'team' | 'workType';
+type GroupParam = 'subTrade' | 'subcontractor' | 'subsub' | 'hdecPic' | 'hdecEng' | 'team' | 'workType';
 type StageKey = 'completion' | 'closure' | 'difference';
 
 function KpiCard({ icon, label, value, sub, accent, onClick }: { icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: 'destructive'; onClick?: () => void }) {
