@@ -17,6 +17,7 @@ type ProfileRow = {
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
+  hdec_eng_name: string | null;
 };
 
 export type DefectMasterRowInput = {
