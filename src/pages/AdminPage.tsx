@@ -806,6 +806,7 @@ function EditUserDialog({
     let payloadSubconName: string | null = null;
     let payloadSubsubName: string | null = null;
     let payloadHdecPicName: string | null = null;
+    let payloadHdecEngName: string | null = null;
 
     if (userType === 'subcontractor') {
       if (!subconName) { toast({ title: 'Subcontractor required', variant: 'destructive' }); return; }
@@ -819,6 +820,7 @@ function EditUserDialog({
       payloadSubconName = subsubParent.name;
     } else if (userType === 'hdec' || userType === 'pm_pd') {
       payloadHdecPicName = hdecPicName || null;
+      payloadHdecEngName = hdecEngName || null;
     }
 
     setSaving(true);
@@ -830,6 +832,7 @@ function EditUserDialog({
         subcontractor_name: payloadSubconName,
         subsub_name: payloadSubsubName,
         hdec_pic_name: payloadHdecPicName,
+        hdec_eng_name: payloadHdecEngName,
         team: team === '__none' || team === '' ? null : team,
       },
     });
@@ -896,15 +899,28 @@ function EditUserDialog({
           </div>
         )}
           {(userType === 'hdec' || userType === 'pm_pd') && (
-            <div className="space-y-1.5">
-              <Label>HDEC PIC (optional)</Label>
-              <Select value={hdecPicName} onValueChange={setHdecPicName}>
-                <SelectTrigger><SelectValue placeholder="Select HDEC PIC" /></SelectTrigger>
-                <SelectContent>
-                  {hdecPics.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            <>
+              <div className="space-y-1.5">
+                <Label>HDEC PIC (optional)</Label>
+                <Select value={hdecPicName || '__none'} onValueChange={(v) => setHdecPicName(v === '__none' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="Select HDEC PIC" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— None —</SelectItem>
+                    {hdecPics.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>HDEC ENG (optional)</Label>
+                <Select value={hdecEngName || '__none'} onValueChange={(v) => setHdecEngName(v === '__none' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="Select HDEC ENG" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— None —</SelectItem>
+                    {hdecEngs.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
           )}
           <div className="space-y-1.5">
             <Label>Team (optional)</Label>
