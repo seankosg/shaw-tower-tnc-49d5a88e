@@ -526,6 +526,26 @@ export default function DefectDetailPage() {
           )}
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Comments
+            {commentCount > 0 && (
+              <span className="ml-1 inline-flex items-center justify-center rounded-full bg-muted text-xs font-medium px-2 py-0.5">
+                {commentCount}
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DefectComments
+            defectId={record.id}
+            defectTeam={record.team ?? null}
+            onCountChange={setCommentCount}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }
