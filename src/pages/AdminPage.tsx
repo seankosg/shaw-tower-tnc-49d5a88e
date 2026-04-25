@@ -642,6 +642,7 @@ function CreateUserDialog({
         subcontractor_name: payloadSubconName,
         subsub_name: payloadSubsubName,
         hdec_pic_name: (userType === 'hdec' || userType === 'pm_pd') ? (hdecPicName || null) : null,
+        hdec_eng_name: (userType === 'hdec' || userType === 'pm_pd') ? (hdecEngName || null) : null,
         team: team === '__none' || team === '' ? null : team,
       },
     });
@@ -651,7 +652,7 @@ function CreateUserDialog({
       return;
     }
     toast({ title: 'User created', description: `Initial password: ${DEFAULT_PASSWORD}` });
-    setLoginId(''); setName(''); setSubconName(''); setSubsubId(''); setHdecPicName(''); setTeam('');
+    setLoginId(''); setName(''); setSubconName(''); setSubsubId(''); setHdecPicName(''); setHdecEngName(''); setTeam('');
     onCreated();
   };
 
@@ -724,16 +725,29 @@ function CreateUserDialog({
           </div>
         )}
         {(userType === 'hdec' || userType === 'pm_pd') && (
-          <div className="space-y-1.5">
-            <Label>HDEC PIC (optional)</Label>
-            <Select value={hdecPicName} onValueChange={setHdecPicName}>
-              <SelectTrigger><SelectValue placeholder="Select HDEC PIC" /></SelectTrigger>
-              <SelectContent>
-                {hdecPics.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">Owner Code: <span className="font-mono">{selectedOwnerCode ?? '—'}</span></p>
-          </div>
+          <>
+            <div className="space-y-1.5">
+              <Label>HDEC PIC (optional)</Label>
+              <Select value={hdecPicName || '__none'} onValueChange={(v) => setHdecPicName(v === '__none' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder="Select HDEC PIC" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">— None —</SelectItem>
+                  {hdecPics.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Owner Code: <span className="font-mono">{selectedOwnerCode ?? '—'}</span></p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>HDEC ENG (optional)</Label>
+              <Select value={hdecEngName || '__none'} onValueChange={(v) => setHdecEngName(v === '__none' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder="Select HDEC ENG" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">— None —</SelectItem>
+                  {hdecEngs.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
         )}
         <div className="space-y-1.5">
           <Label>Team (optional)</Label>
