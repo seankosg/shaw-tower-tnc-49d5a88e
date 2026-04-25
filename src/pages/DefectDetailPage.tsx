@@ -232,6 +232,7 @@ export default function DefectDetailPage() {
       closure_status: form.closure_status || null,
       description: form.description || null,
       remarks: form.remarks || null,
+      hdec_eng_name: form.hdec_eng_name || null,
       classification_source: 'manual',
       classified_at: new Date().toISOString(),
       updated_by: user.id,
@@ -364,6 +365,12 @@ export default function DefectDetailPage() {
     const list = cur && !names.includes(cur) ? [{ name: cur }, ...hdecOptions] : hdecOptions;
     return list.map((o) => ({ value: o.name, label: o.name }));
   }, [hdecOptions, form.hdec_pic_name]);
+  const hdecEngOptionsList = useMemo(() => {
+    const names = hdecEngOptions.map((o) => o.name);
+    const cur = (form.hdec_eng_name ?? '').trim();
+    const list = cur && !names.includes(cur) ? [{ name: cur }, ...hdecEngOptions] : hdecEngOptions;
+    return list.map((o) => ({ value: o.name, label: o.name }));
+  }, [hdecEngOptions, form.hdec_eng_name]);
   const statusOptionsList = DEFECT_STATUS_VALUES.map((s) => ({ value: s, label: s }));
   const teamOptionsList = ALL_TEAMS.map((t) => ({ value: t, label: TEAM_LABELS[t] }));
 
@@ -423,6 +430,7 @@ export default function DefectDetailPage() {
         <SelectField label="Subcontractor" value={form.subcontractor_name} options={subOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('subcontractor_name', v)} />
         <SelectField label="Sub-Sub" value={form.subsub_name} options={subsubOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('subsub_name', v)} />
         <SelectField label="HDEC PIC" value={form.hdec_pic_name} options={hdecOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('hdec_pic_name', v)} />
+        <SelectField label="HDEC Eng" value={form.hdec_eng_name} options={hdecEngOptionsList} disabled={!canEdit} onChange={(v) => updateField('hdec_eng_name', v)} />
         <Field label="Captured on" type="date" value={toDateInput(capturedOn)} disabled={!canEdit} onChange={(v) => updateField('captured_on' as any, v)} />
         <Field label="Planned Start Date" type="date" value={toDateInput(form.planned_start_date)} disabled={!canEdit} onChange={(v) => updateField('planned_start_date', v)} />
         <Field label="Planned Completion Date" type="date" value={toDateInput(form.planned_completion_date)} disabled={!canEdit} onChange={(v) => updateField('planned_completion_date', v)} />
