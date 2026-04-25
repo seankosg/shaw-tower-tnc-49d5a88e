@@ -832,7 +832,7 @@ export default function SubtestList() {
     const allIds = columns
       .map(c => (c as any).id ?? (c as any).accessorKey)
       .filter(Boolean) as string[];
-    const PINNED_FRONT = ['item_no', 'stage_progress', 'system_code', 'subtest_id', 'mos_code'];
+    const PINNED_FRONT = ['__select', 'item_no', 'stage_progress', 'system_code', 'subtest_id', 'mos_code'];
     const pinned = PINNED_FRONT.filter(id => allIds.includes(id));
     const remaining = new Set(allIds.filter(id => !pinned.includes(id)));
     const ordered: string[] = [];
