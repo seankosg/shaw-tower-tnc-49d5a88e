@@ -38,11 +38,27 @@ interface DefectCommentsProps {
 }
 
 export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCommentsProps) {
-  const { user, profile, isAdmin, isSuperuser, roles } = useAuth();
+  const { user, isAdmin, isSuperuser, roles } = useAuth();
   const { toast } = useToast();
   const isSenior = roles.includes('senior_user');
   const canPostInstruction = isAdmin || isSuperuser || isSenior;
-  const sameTeamSenior = isSenior && !!defectTeam && !!profile?.team && defectTeam === profile.team;
+  const [myTeam, setMyTeam] = useState<string | null>(null);
+  const sameTeamSenior = isSenior && !!defectTeam && !!myTeam && defectTeam === myTeam;
+
+  // Load own team from profiles for senior_user permission check
+  useEffect(() => {
+    if (!user || !isSenior) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('team')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!cancelled) setMyTeam((data as any)?.team ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [user, isSenior]);
 
   const [comments, setComments] = useState<DefectComment[]>([]);
   const [authors, setAuthors] = useState<AuthorInfo[]>([]);
