@@ -46,6 +46,7 @@ export default function DefectDetailPage() {
   const [subOptions, setSubOptions] = useState<SubMaster[]>([]);
   const [subsubOptions, setSubsubOptions] = useState<SubMaster[]>([]);
   const [hdecOptions, setHdecOptions] = useState<HdecMaster[]>([]);
+  const [hdecEngOptions, setHdecEngOptions] = useState<HdecMaster[]>([]);
   const { isFieldVisible, isFieldRequired, getLabel } = useDefectFieldConfig();
 
   const loadScHistory = async (defectId: string) => {
@@ -77,14 +78,16 @@ export default function DefectDetailPage() {
 
   useEffect(() => {
     async function loadMasters() {
-      const [subRes, hdecRes] = await Promise.all([
+      const [subRes, hdecRes, hdecEngRes] = await Promise.all([
         (supabase as any).from('subcontractor_master').select('id, name, parent_subcontractor_id, type').eq('is_active', true).order('name'),
         (supabase as any).from('hdec_pic_master').select('name').eq('is_active', true).order('name'),
+        (supabase as any).from('hdec_eng_master').select('name').eq('is_active', true).order('name'),
       ]);
       const allSubs = (subRes.data ?? []) as Array<SubMaster & { type: string }>;
       setSubOptions(allSubs.filter((r) => r.type === 'sub').map(({ id, name, parent_subcontractor_id }) => ({ id, name, parent_subcontractor_id })));
       setSubsubOptions(allSubs.filter((r) => r.type === 'subsub').map(({ id, name, parent_subcontractor_id }) => ({ id, name, parent_subcontractor_id })));
       setHdecOptions((hdecRes.data ?? []) as HdecMaster[]);
+      setHdecEngOptions((hdecEngRes.data ?? []) as HdecMaster[]);
     }
     loadMasters();
   }, []);
@@ -133,7 +136,7 @@ export default function DefectDetailPage() {
       'actual_start_date', 'actual_completion_date', 'actual_closure_date',
       'planned_progress_pct', 'actual_progress_pct', 'completion_status', 'closure_status',
       'description', 'remarks',
-      'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'team',
+      'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'hdec_eng_name', 'team',
     ] as const;
 
     const changes = editableFields
