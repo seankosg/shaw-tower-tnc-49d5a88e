@@ -535,6 +535,9 @@ export type Database = {
           processed_rows: number | null
           project_id: string | null
           rejected_rows: number | null
+          rollback_force: boolean | null
+          rolled_back_at: string | null
+          rolled_back_by: string | null
           skipped_rows: number | null
           status: Database["public"]["Enums"]["upload_status"]
           success_rows: number | null
@@ -550,6 +553,9 @@ export type Database = {
           processed_rows?: number | null
           project_id?: string | null
           rejected_rows?: number | null
+          rollback_force?: boolean | null
+          rolled_back_at?: string | null
+          rolled_back_by?: string | null
           skipped_rows?: number | null
           status?: Database["public"]["Enums"]["upload_status"]
           success_rows?: number | null
@@ -565,6 +571,9 @@ export type Database = {
           processed_rows?: number | null
           project_id?: string | null
           rejected_rows?: number | null
+          rollback_force?: boolean | null
+          rolled_back_at?: string | null
+          rolled_back_by?: string | null
           skipped_rows?: number | null
           status?: Database["public"]["Enums"]["upload_status"]
           success_rows?: number | null
@@ -1245,6 +1254,9 @@ export type Database = {
           processed_rows: number | null
           project_id: string
           rejected_rows: number | null
+          rollback_force: boolean | null
+          rolled_back_at: string | null
+          rolled_back_by: string | null
           skipped_rows: number | null
           source_type: string | null
           status: Database["public"]["Enums"]["upload_status"]
@@ -1263,6 +1275,9 @@ export type Database = {
           processed_rows?: number | null
           project_id: string
           rejected_rows?: number | null
+          rollback_force?: boolean | null
+          rolled_back_at?: string | null
+          rolled_back_by?: string | null
           skipped_rows?: number | null
           source_type?: string | null
           status?: Database["public"]["Enums"]["upload_status"]
@@ -1281,6 +1296,9 @@ export type Database = {
           processed_rows?: number | null
           project_id?: string
           rejected_rows?: number | null
+          rollback_force?: boolean | null
+          rolled_back_at?: string | null
+          rolled_back_by?: string | null
           skipped_rows?: number | null
           source_type?: string | null
           status?: Database["public"]["Enums"]["upload_status"]
@@ -1498,6 +1516,22 @@ export type Database = {
       }
       is_admin_or_superuser: { Args: { _user_id: string }; Returns: boolean }
       normalize_owner_code: { Args: { _value: string }; Returns: string }
+      preview_rollback_defect_import_batch: {
+        Args: { _batch_id: string }
+        Returns: Json
+      }
+      preview_rollback_upload_batch: {
+        Args: { _batch_id: string }
+        Returns: Json
+      }
+      rollback_defect_import_batch: {
+        Args: { _batch_id: string; _force?: boolean }
+        Returns: Json
+      }
+      rollback_upload_batch: {
+        Args: { _batch_id: string; _force?: boolean }
+        Returns: Json
+      }
       suggest_owner_code: { Args: { _name: string }; Returns: string }
     }
     Enums: {
@@ -1514,6 +1548,7 @@ export type Database = {
         | "mobile_input"
         | "excel_import"
         | "admin_edit"
+        | "rollback"
       data_source:
         | "legacy_import_inherited"
         | "app_direct_input"
@@ -1523,7 +1558,12 @@ export type Database = {
       import_type: "legacy" | "standard"
       tc_status: "Planned" | "WIP" | "Done" | "Hold"
       team_type: "Mech" | "Elec" | "Arch" | "Supp"
-      upload_status: "pending" | "processing" | "completed" | "failed"
+      upload_status:
+        | "pending"
+        | "processing"
+        | "completed"
+        | "failed"
+        | "rolled_back"
       user_type: "subcontractor" | "hdec" | "pm_pd" | "admin" | "subsub"
     }
     CompositeTypes: {
@@ -1666,6 +1706,7 @@ export const Constants = {
         "mobile_input",
         "excel_import",
         "admin_edit",
+        "rollback",
       ],
       data_source: [
         "legacy_import_inherited",
@@ -1677,7 +1718,13 @@ export const Constants = {
       import_type: ["legacy", "standard"],
       tc_status: ["Planned", "WIP", "Done", "Hold"],
       team_type: ["Mech", "Elec", "Arch", "Supp"],
-      upload_status: ["pending", "processing", "completed", "failed"],
+      upload_status: [
+        "pending",
+        "processing",
+        "completed",
+        "failed",
+        "rolled_back",
+      ],
       user_type: ["subcontractor", "hdec", "pm_pd", "admin", "subsub"],
     },
   },
