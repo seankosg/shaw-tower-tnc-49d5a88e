@@ -98,14 +98,14 @@ type ProfileTeamMap = Map<string, TeamType>;
 async function buildProfileTeamMap(): Promise<ProfileTeamMap> {
   const { data } = await (supabase as any)
     .from('profiles')
-    .select('subcontractor_name, subsub_name, team')
+    .select('subcontractor_name, subsub_name, hdec_eng_name, team')
     .eq('is_active', true);
   const buckets = new Map<string, Set<TeamType>>();
 
   for (const profile of data ?? []) {
     const team = normalizeTeamValue(profile.team);
     if (!team) continue;
-    for (const name of [profile.subcontractor_name, profile.subsub_name]) {
+    for (const name of [profile.subcontractor_name, profile.subsub_name, profile.hdec_eng_name]) {
       const key = masterNameKey(name);
       if (!key) continue;
       if (!buckets.has(key)) buckets.set(key, new Set<TeamType>());
@@ -126,6 +126,7 @@ function resolveDefectTeam(row: ParsedDefectRow, profileTeamMap: ProfileTeamMap)
   return normalizeTeamValue(row.trade_detail)
     ?? profileTeamMap.get(masterNameKey(row.subcontractor_name))
     ?? profileTeamMap.get(masterNameKey(row.subsub_name))
+    ?? profileTeamMap.get(masterNameKey((row as any).hdec_eng_name))
     ?? null;
 }
 

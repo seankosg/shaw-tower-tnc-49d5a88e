@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { suggestOwnerCode } from '@/lib/defect-utils';
 
-type MasterType = 'subcontractor' | 'subsub' | 'hdec_pic';
+type MasterType = 'subcontractor' | 'subsub' | 'hdec_pic' | 'hdec_eng';
 
 type MasterRow = {
   id: string;
@@ -17,6 +17,7 @@ type ProfileRow = {
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
+  hdec_eng_name: string | null;
 };
 
 export type DefectMasterRowInput = {
@@ -48,7 +49,7 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
     .select('id, name, is_active');
   const { data: profileData } = await supabase
     .from('profiles')
-    .select('user_type, subcontractor_name, subsub_name, hdec_pic_name');
+    .select('user_type, subcontractor_name, subsub_name, hdec_pic_name, hdec_eng_name');
 
   if (subError) warnings.push(`Master lookup failed (subcontractor): ${subError.message}`);
   if (hdecError) warnings.push(`Master lookup failed (HDEC PIC): ${hdecError.message}`);
@@ -97,6 +98,9 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
     if (profile.user_type === 'hdec' && profile.hdec_pic_name) {
       profileKeys.add(`hdec:${keyOf(profile.hdec_pic_name)}`);
     }
+    if (profile.user_type === 'hdec' && profile.hdec_eng_name) {
+      profileKeys.add(`hdec_eng:${keyOf(profile.hdec_eng_name)}`);
+    }
   });
 
   async function createMasterUser(type: MasterType, name: string, parentName?: string | null) {
@@ -106,7 +110,9 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
         ? `subsub:${subsubKey(parentName, name)}`
         : type === 'hdec_pic'
           ? `hdec:${keyOf(name)}`
-          : null;
+          : type === 'hdec_eng'
+            ? `hdec_eng:${keyOf(name)}`
+            : null;
 
     if (profileKey && profileKeys.has(profileKey)) return;
 
@@ -117,6 +123,7 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
         subcontractor_name: type === 'subcontractor' ? name : parentName ?? null,
         subsub_name: type === 'subsub' ? name : null,
         hdec_pic_name: type === 'hdec_pic' ? name : null,
+        hdec_eng_name: type === 'hdec_eng' ? name : null,
       },
     });
 
@@ -210,20 +217,24 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
     const name = normalizeName(value);
     if (!name) return;
     const key = keyOf(name);
-    if (hdecEngs.has(key)) return;
 
-    const { data, error } = await supabase
-      .from('hdec_eng_master')
-      .insert({ name })
-      .select('id')
-      .single();
+    if (!hdecEngs.has(key)) {
+      const { data, error } = await supabase
+        .from('hdec_eng_master')
+        .insert({ name })
+        .select('id')
+        .single();
 
-    if (error || !data) {
-      warnings.push(`${name} (hdec_eng): ${error?.message ?? 'master insert failed'}`);
-      return;
+      if (error || !data) {
+        warnings.push(`${name} (hdec_eng): ${error?.message ?? 'master insert failed'}`);
+        return;
+      }
+
+      hdecEngs.add(key);
     }
 
-    hdecEngs.add(key);
+    // Always attempt user creation; createMasterUser is idempotent via profileKeys check
+    await createMasterUser('hdec_eng', name, null);
   }
 
   return {

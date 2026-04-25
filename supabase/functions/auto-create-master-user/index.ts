@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.95.0';
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.95.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,7 +13,7 @@ const STOP_WORDS = new Set([
   'group', 'eng', 'engineering', 'the', 'and',
 ]);
 
-type MasterType = 'subcontractor' | 'subsub' | 'hdec_pic';
+type MasterType = 'subcontractor' | 'subsub' | 'hdec_pic' | 'hdec_eng';
 
 interface Body {
   name: string;
@@ -21,6 +21,7 @@ interface Body {
   subcontractor_name?: string | null;
   subsub_name?: string | null;
   hdec_pic_name?: string | null;
+  hdec_eng_name?: string | null;
 }
 
 function abbreviate6(name: string): string | null {
@@ -30,7 +31,6 @@ function abbreviate6(name: string): string | null {
   if (allWords.length === 0) return null;
 
   let words = allWords.filter(w => !STOP_WORDS.has(w));
-  // If stop-word removal leaves <3 chars worth, fall back to all words
   const totalLen = words.reduce((s, w) => s + w.length, 0);
   if (words.length === 0 || totalLen < 3) words = allWords;
 
@@ -40,14 +40,12 @@ function abbreviate6(name: string): string | null {
   } else if (words.length === 2) {
     id = words[0].slice(0, 3) + words[1].slice(0, 3);
   } else {
-    // 3+ words: take 2 chars from each until we hit 6
     for (const w of words) {
       id += w.slice(0, 2);
       if (id.length >= 6) break;
     }
     id = id.slice(0, 6);
   }
-  // Pad if short
   if (id.length < 6) {
     const pool = cleaned.replace(/[^a-z0-9]/g, '');
     id = (id + pool).slice(0, 6);
@@ -64,7 +62,7 @@ function picSnake(name: string): string | null {
   return id;
 }
 
-function randomFallback(prefix: 'sub' | 'pic'): string {
+function randomFallback(prefix: 'sub' | 'pic' | 'eng'): string {
   return `${prefix}_${Math.floor(100000 + Math.random() * 900000)}`;
 }
 
@@ -72,35 +70,45 @@ function suggestBase(name: string, type: MasterType): string {
   if (type === 'hdec_pic') {
     return picSnake(name) ?? randomFallback('pic');
   }
+  if (type === 'hdec_eng') {
+    return picSnake(name) ?? randomFallback('eng');
+  }
   return abbreviate6(name) ?? randomFallback('sub');
 }
 
-async function loginIdTaken(admin: ReturnType<typeof createClient>, lid: string): Promise<boolean> {
+async function loginIdTaken(admin: SupabaseClient, lid: string): Promise<boolean> {
   const { data } = await admin.from('profiles').select('id').eq('login_id', lid).maybeSingle();
   return !!data;
 }
 
 async function findExistingMasterUser(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient,
   body: Body,
 ): Promise<{ user_id: string; login_id: string } | null> {
-  let query = admin.from('profiles').select('user_id, login_id').eq('user_type', body.master_type === 'hdec_pic' ? 'hdec' : body.master_type === 'subsub' ? 'subsub' : 'subcontractor').limit(1);
+  const userType = body.master_type === 'hdec_pic' || body.master_type === 'hdec_eng'
+    ? 'hdec'
+    : body.master_type === 'subsub' ? 'subsub' : 'subcontractor';
+
+  let query = admin.from('profiles').select('user_id, login_id').eq('user_type', userType).limit(1);
 
   if (body.master_type === 'subcontractor') {
     query = query.eq('subcontractor_name', body.name.trim()).is('subsub_name', null);
   } else if (body.master_type === 'subsub') {
     query = query.eq('subcontractor_name', body.subcontractor_name ?? '').eq('subsub_name', body.name.trim());
-  } else {
+  } else if (body.master_type === 'hdec_pic') {
     query = query.eq('hdec_pic_name', body.name.trim());
+  } else {
+    // hdec_eng
+    query = query.eq('hdec_eng_name', body.name.trim());
   }
 
   const { data, error } = await query.maybeSingle();
   if (error) throw error;
-  return data ?? null;
+  return (data as { user_id: string; login_id: string } | null) ?? null;
 }
 
 async function findUniqueLoginId(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient,
   base: string,
 ): Promise<string> {
   if (!(await loginIdTaken(admin, base))) return base;
@@ -128,7 +136,6 @@ Deno.serve(async (req) => {
     const token = authHeader.replace('Bearer ', '');
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-    const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
     const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     const admin = createClient(SUPABASE_URL, SERVICE);
@@ -154,13 +161,16 @@ Deno.serve(async (req) => {
       subcontractor_name: body.subcontractor_name?.trim() ?? null,
       subsub_name: body.subsub_name?.trim() ?? null,
       hdec_pic_name: body.hdec_pic_name?.trim() ?? null,
+      hdec_eng_name: body.hdec_eng_name?.trim() ?? null,
     });
     if (existing) {
       return json({ ok: true, user_id: existing.user_id, login_id: existing.login_id, already_exists: true });
     }
 
     const base = suggestBase(trimmedName, body.master_type);
-    const userType = body.master_type === 'hdec_pic' ? 'hdec' : body.master_type === 'subsub' ? 'subsub' : 'subcontractor';
+    const userType = body.master_type === 'hdec_pic' || body.master_type === 'hdec_eng'
+      ? 'hdec'
+      : body.master_type === 'subsub' ? 'subsub' : 'subcontractor';
 
     let loginId = '';
     let createdUser: any = null;
@@ -179,6 +189,7 @@ Deno.serve(async (req) => {
           subcontractor_name: body.subcontractor_name ?? null,
           subsub_name: body.subsub_name ?? null,
           hdec_pic_name: body.hdec_pic_name ?? null,
+          hdec_eng_name: body.hdec_eng_name ?? null,
           must_change_password: true,
         },
       });
