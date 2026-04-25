@@ -34,6 +34,7 @@ export const DEFECT_DEFAULT_FIELD_LABELS: Record<string, string> = {
   subcontractor_name: 'Subcontractor',
   subsub_name: 'Sub-Subcontractor',
   hdec_pic_name: 'HDEC PIC',
+  hdec_eng_name: 'HDEC Eng',
   planned_start_date: 'Planned Start Date',
   planned_completion_date: 'Planned Completion Date',
   planned_closure_date: 'Planned Closure Date',
