@@ -51,6 +51,7 @@ export default function DefectDetailPage() {
   const [hdecOptions, setHdecOptions] = useState<HdecMaster[]>([]);
   const [hdecEngOptions, setHdecEngOptions] = useState<HdecMaster[]>([]);
   const [suggestPool, setSuggestPool] = useState<{ area_level: string[]; area_location: string[]; main_trade: string[]; sub_trade: string[]; work_type: string[] }>({ area_level: [], area_location: [], main_trade: [], sub_trade: [], work_type: [] });
+  const [commentCount, setCommentCount] = useState(0);
   const { isFieldVisible, isFieldRequired, getLabel } = useDefectFieldConfig();
 
   const loadScHistory = async (defectId: string) => {
