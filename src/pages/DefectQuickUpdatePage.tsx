@@ -29,23 +29,36 @@ export default function DefectQuickUpdatePage() {
     if (!user || item.scope === 'none') return;
     const patch = edits[item.id] ?? {};
     const merged = { ...item, ...patch } as DefectItem;
-    // Recompute statuses unless user explicitly entered them in this edit
+    // Recompute statuses ONLY when status-affecting inputs (dates / actual progress) were actually edited.
+    // Otherwise unrelated edits (e.g. remarks, work_type) would silently flip closure_status back to "Planned".
     const userSetCompletion = 'completion_status' in patch;
     const userSetClosure = 'closure_status' in patch;
-    const asOf = new Date().toISOString().slice(0, 10);
-    const computed = computeDefectStatuses({
-      planned_start_date: merged.planned_start_date,
-      planned_completion_date: merged.planned_completion_date,
-      planned_closure_date: merged.planned_closure_date,
-      actual_start_date: merged.actual_start_date,
-      actual_completion_date: merged.actual_completion_date,
-      actual_closure_date: merged.actual_closure_date,
-      planned_progress_pct: merged.planned_progress_pct,
-      actual_progress_pct: merged.actual_progress_pct,
-    }, asOf);
+    const STATUS_INPUT_KEYS = [
+      'planned_start_date',
+      'planned_completion_date',
+      'planned_closure_date',
+      'actual_start_date',
+      'actual_completion_date',
+      'actual_closure_date',
+      'actual_progress_pct',
+    ] as const;
+    const statusInputsChanged = STATUS_INPUT_KEYS.some((k) => k in patch);
     const finalPatch: any = { ...patch };
-    if (!userSetCompletion) finalPatch.completion_status = computed.completion_status;
-    if (!userSetClosure) finalPatch.closure_status = computed.closure_status;
+    if (statusInputsChanged) {
+      const asOf = new Date().toISOString().slice(0, 10);
+      const computed = computeDefectStatuses({
+        planned_start_date: merged.planned_start_date,
+        planned_completion_date: merged.planned_completion_date,
+        planned_closure_date: merged.planned_closure_date,
+        actual_start_date: merged.actual_start_date,
+        actual_completion_date: merged.actual_completion_date,
+        actual_closure_date: merged.actual_closure_date,
+        planned_progress_pct: merged.planned_progress_pct,
+        actual_progress_pct: merged.actual_progress_pct,
+      }, asOf);
+      if (!userSetCompletion) finalPatch.completion_status = computed.completion_status;
+      if (!userSetClosure) finalPatch.closure_status = computed.closure_status;
+    }
     const { error } = await (supabase as any).from('defect_items').update({ ...finalPatch, updated_by: user.id, data_source_type: 'quick_update', row_version: item.row_version + 1 }).eq('id', item.id);
     if (error) toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
     else toast({ title: 'Quick update saved' });

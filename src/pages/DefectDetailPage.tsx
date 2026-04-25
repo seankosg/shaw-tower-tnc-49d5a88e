@@ -239,10 +239,20 @@ export default function DefectDetailPage() {
       data_source_type: 'app_direct_input',
       row_version: record.row_version + 1,
     };
-    // Auto-recompute statuses if user did not change them manually
+    // Auto-recompute statuses ONLY when status-affecting inputs (dates / actual progress) actually changed.
+    // Otherwise keep the existing DB values to avoid silently overwriting closure_status to "Planned"
+    // when the user edited an unrelated field (description, remarks, trade, etc.).
     const userChangedCompletion = (form.completion_status ?? null) !== (record.completion_status ?? null);
     const userChangedClosure = (form.closure_status ?? null) !== (record.closure_status ?? null);
-    if (!userChangedCompletion || !userChangedClosure) {
+    const statusInputsChanged =
+      (record.planned_start_date ?? null) !== (payload.planned_start_date ?? null) ||
+      (record.planned_completion_date ?? null) !== (payload.planned_completion_date ?? null) ||
+      (record.planned_closure_date ?? null) !== (payload.planned_closure_date ?? null) ||
+      (record.actual_start_date ?? null) !== (payload.actual_start_date ?? null) ||
+      (record.actual_completion_date ?? null) !== (payload.actual_completion_date ?? null) ||
+      (record.actual_closure_date ?? null) !== (payload.actual_closure_date ?? null) ||
+      (record.actual_progress_pct ?? null) !== (payload.actual_progress_pct ?? null);
+    if (statusInputsChanged) {
       const asOf = new Date().toISOString().slice(0, 10);
       const auto = computeDefectStatuses({
         planned_start_date: payload.planned_start_date,
