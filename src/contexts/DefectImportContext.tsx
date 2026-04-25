@@ -13,6 +13,43 @@ import { normalizeTeamValue, type TeamType } from '@/types/enums';
 
 const trackedFields = ['planned_start_date', 'planned_completion_date', 'planned_closure_date', 'actual_start_date', 'actual_completion_date', 'actual_closure_date', 'planned_progress_pct', 'actual_progress_pct', 'completion_status', 'closure_status'] as const;
 
+/**
+ * Fields where "blank in Excel = keep existing DB value" policy applies.
+ * Excluded (handled separately):
+ *   - planned_progress_pct, actual_completion_date, completion_status, closure_status (auto-computed)
+ *   - team, subcontractor_issue_no/source, classification_source/classified_at (system-resolved)
+ *   - main_trade, sub_trade, work_type (handled by classifier with the same 3-tier rule)
+ *   - id, issue_no, project_id, raw_payload, source_upload_id, data_source_type, updated_by, row_version
+ */
+const PRESERVE_BLANK_FIELDS = [
+  'description', 'defect_type', 'status', 'priority',
+  'area_raw', 'area_type', 'area_level', 'area_location',
+  'trade_detail',
+  'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'hdec_eng_name',
+  'planned_start_date', 'planned_completion_date', 'planned_closure_date',
+  'actual_start_date', 'actual_closure_date',
+  'actual_progress_pct',
+  'remarks', 'hdec_comments',
+] as const;
+
+function isBlankValue(v: unknown): boolean {
+  if (v === null || v === undefined) return true;
+  if (typeof v === 'string' && v.trim() === '') return true;
+  return false;
+}
+
+/** For each PRESERVE_BLANK_FIELDS: if Excel value is blank and existing DB has a value,
+ *  keep the existing DB value (do not overwrite with null). Mutates `row` in place. */
+function preserveExistingForBlank(row: ParsedDefectRow, existing: any | null): void {
+  if (!existing) return;
+  for (const field of PRESERVE_BLANK_FIELDS) {
+    const current = (row as any)[field];
+    if (isBlankValue(current) && existing[field] != null) {
+      (row as any)[field] = existing[field];
+    }
+  }
+}
+
 export type DefectFileStatus = 'pending' | 'parsing' | 'ready' | 'processing' | 'done' | 'failed';
 
 export interface DefectImportFile {
