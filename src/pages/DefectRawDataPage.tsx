@@ -378,6 +378,49 @@ export default function DefectRawDataPage() {
     return () => { cancelled = true; };
   }, []);
 
+  // Load comment summary (count + unread) for visible defects, and refresh on realtime changes
+  useEffect(() => {
+    if (!user || items.length === 0) {
+      setCommentSummary({});
+      return;
+    }
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const refresh = async () => {
+      const ids = items.map((i) => i.id);
+      const chunkSize = 500;
+      const next: Record<string, { count: number; hasUnread: boolean }> = {};
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const { data, error } = await (supabase as any).rpc('get_defect_comment_summary', { _defect_ids: chunk });
+        if (error || !data) continue;
+        for (const row of data as Array<{ defect_id: string; comment_count: number; has_unread: boolean }>) {
+          next[row.defect_id] = { count: row.comment_count, hasUnread: row.has_unread };
+        }
+      }
+      if (!cancelled) setCommentSummary(next);
+    };
+
+    const debouncedRefresh = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(refresh, 400);
+    };
+
+    refresh();
+
+    const channel = supabase
+      .channel('defect-comments-summary')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'defect_comments' }, debouncedRefresh)
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [user, items]);
+
   useEffect(() => {
     setStateLoaded(false);
     let baseFilters: ColumnFiltersState = [];
