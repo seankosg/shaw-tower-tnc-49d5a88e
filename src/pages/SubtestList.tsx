@@ -435,14 +435,19 @@ export default function SubtestList() {
 
   useEffect(() => {
     if (!stateLoaded) return;
+    if (loading) return;
     const el = tableRef.current;
     if (!el) return;
     const raw = localStorage.getItem(`${storageKey}:scroll`);
     if (raw) {
       try {
         const saved = JSON.parse(raw);
-        el.scrollTop = Number(saved.top) || 0;
-        el.scrollLeft = Number(saved.left) || 0;
+        const apply = () => {
+          el.scrollTop = Number(saved.top) || 0;
+          el.scrollLeft = Number(saved.left) || 0;
+        };
+        apply();
+        requestAnimationFrame(apply);
       } catch {
         // ignore
       }
@@ -452,7 +457,7 @@ export default function SubtestList() {
     };
     el.addEventListener('scroll', save, { passive: true });
     return () => el.removeEventListener('scroll', save);
-  }, [stateLoaded, storageKey]);
+  }, [stateLoaded, storageKey, loading]);
 
   useEffect(() => {
     fetchData();
