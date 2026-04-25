@@ -1025,7 +1025,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
                 {virtualRows.map((virtualRow) => {
                   const row = rows[virtualRow.index];
                   return (
-                    <TableRow key={row.id} data-index={virtualRow.index} style={{ height: virtualRow.size }} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}`)}>
+                    <TableRow key={row.id} data-index={virtualRow.index} style={{ height: virtualRow.size }} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}${location.search}`)}>
                       {row.getVisibleCells().slice(0, frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize() }} className="truncate py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
                     </TableRow>
                   );
@@ -1047,7 +1047,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
                 {virtualRows.map((virtualRow) => {
                   const row = rows[virtualRow.index];
                   return (
-                    <TableRow key={row.id} data-index={virtualRow.index} ref={(element) => element && rowVirtualizer.measureElement(element)} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}`)}>
+                    <TableRow key={row.id} data-index={virtualRow.index} ref={(element) => element && rowVirtualizer.measureElement(element)} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}${location.search}`)}>
                       {row.getVisibleCells().slice(frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize() }} className="truncate py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
                     </TableRow>
                   );
