@@ -283,7 +283,7 @@ export default function SubtestDetailPage() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="sm" onClick={() => { if (window.history.length > 1) navigate(-1); else navigate('/tc/raw-data'); }}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
         <h1 className="text-lg font-semibold">{record.subtest_id}</h1>
