@@ -632,7 +632,32 @@ export default function SubtestList() {
       ),
     },
     { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn,
-      meta: { filterType: 'text' } },
+      meta: { filterType: 'text' },
+      cell: ({ row, getValue }) => {
+        const value = getValue() as any;
+        const summary = commentSummary[row.original.id];
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="truncate">{String(value ?? '—')}</span>
+            {summary && summary.count > 0 && (
+              <span
+                title={`${summary.count} comment${summary.count > 1 ? 's' : ''}${summary.hasUnread ? ' · unread' : ''}`}
+                className={cn(
+                  'inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] leading-none',
+                  summary.hasUnread
+                    ? 'text-amber-600 font-bold bg-amber-500/10'
+                    : 'text-muted-foreground',
+                )}
+              >
+                {summary.hasUnread && <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                <MessageSquare className="h-3 w-3" />
+                {summary.count}
+              </span>
+            )}
+          </span>
+        );
+      },
+    },
     {
       id: 'stage_progress',
       header: 'Progress',
