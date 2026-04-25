@@ -12,7 +12,7 @@ import { useFieldConfig } from '@/hooks/useFieldConfig';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { DataSourceTag } from '@/components/shared/DataSourceTag';
 import { StageProgress, StageProgressLegend } from '@/components/shared/StageProgress';
-import { Check, Filter, X } from 'lucide-react';
+import { Check, Filter, MessageSquare, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -339,6 +339,7 @@ export default function SubtestList() {
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
   const [dataDate, setDataDate] = useState<string | null>(null);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [commentSummary, setCommentSummary] = useState<Record<string, { count: number; hasUnread: boolean }>>({});
   const urlStatusFilter = searchParams.get('status');
   const urlAtRiskDays = Number(searchParams.get('at_risk_days') ?? '2');
   const tableRef = useRef<HTMLDivElement>(null);
@@ -465,6 +466,49 @@ export default function SubtestList() {
     fetchDataDate();
   }, []);
 
+  // Load comment summary (count + unread) for visible subtests, refresh on realtime changes
+  useEffect(() => {
+    if (!user || data.length === 0) {
+      setCommentSummary({});
+      return;
+    }
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const refresh = async () => {
+      const ids = data.map((r) => r.id);
+      const chunkSize = 500;
+      const next: Record<string, { count: number; hasUnread: boolean }> = {};
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const { data: rows, error } = await (supabase as any).rpc('get_subtest_comment_summary', { _subtest_ids: chunk });
+        if (error || !rows) continue;
+        for (const row of rows as Array<{ subtest_id: string; comment_count: number; has_unread: boolean }>) {
+          next[row.subtest_id] = { count: row.comment_count, hasUnread: row.has_unread };
+        }
+      }
+      if (!cancelled) setCommentSummary(next);
+    };
+
+    const debouncedRefresh = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(refresh, 400);
+    };
+
+    refresh();
+
+    const channel = supabase
+      .channel('subtest-comments-summary')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'subtest_comments' }, debouncedRefresh)
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [user, data]);
+
   const fetchDataDate = async () => {
     const { data } = await supabase
       .from('upload_batches')
@@ -588,7 +632,32 @@ export default function SubtestList() {
       ),
     },
     { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn,
-      meta: { filterType: 'text' } },
+      meta: { filterType: 'text' },
+      cell: ({ row, getValue }) => {
+        const value = getValue() as any;
+        const summary = commentSummary[row.original.id];
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="truncate">{String(value ?? '—')}</span>
+            {summary && summary.count > 0 && (
+              <span
+                title={`${summary.count} comment${summary.count > 1 ? 's' : ''}${summary.hasUnread ? ' · unread' : ''}`}
+                className={cn(
+                  'inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] leading-none',
+                  summary.hasUnread
+                    ? 'text-amber-600 font-bold bg-amber-500/10'
+                    : 'text-muted-foreground',
+                )}
+              >
+                {summary.hasUnread && <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                <MessageSquare className="h-3 w-3" />
+                {summary.count}
+              </span>
+            )}
+          </span>
+        );
+      },
+    },
     {
       id: 'stage_progress',
       header: 'Progress',
@@ -710,7 +779,7 @@ export default function SubtestList() {
     { accessorKey: 'updated_at', header: 'Updated', size: 140, filterFn: dateRangeFilterFn,
       meta: { filterType: 'date-range' },
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
-  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions, dataDate]);
+  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions, dataDate, commentSummary]);
 
   // Apply status (overdue / at_risk) + date URL filters at data level
   const urlT1PlannedTo = searchParams.get('t1_planned_to');

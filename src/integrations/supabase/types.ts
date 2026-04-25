@@ -1112,6 +1112,63 @@ export type Database = {
           },
         ]
       }
+      subtest_comment_reads: {
+        Row: {
+          id: string
+          last_read_at: string
+          subtest_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          last_read_at?: string
+          subtest_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          last_read_at?: string
+          subtest_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subtest_comments: {
+        Row: {
+          author_user_id: string
+          created_at: string
+          edited: boolean
+          id: string
+          message: string
+          parent_comment_id: string | null
+          subtest_id: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          author_user_id: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          message: string
+          parent_comment_id?: string | null
+          subtest_id: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          author_user_id?: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          message?: string
+          parent_comment_id?: string | null
+          subtest_id?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       subtests: {
         Row: {
           aconex_ref_no: string | null
@@ -1630,6 +1687,10 @@ export type Database = {
         Args: { _comment_id: string; _user_id: string }
         Returns: boolean
       }
+      can_modify_subtest_comment: {
+        Args: { _comment_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_update_defect: {
         Args: { _defect_id: string; _user_id: string }
         Returns: boolean
@@ -1662,6 +1723,15 @@ export type Database = {
       get_defect_edit_scope: {
         Args: { _defect_id: string; _user_id: string }
         Returns: string
+      }
+      get_subtest_comment_summary: {
+        Args: { _subtest_ids: string[] }
+        Returns: {
+          comment_count: number
+          has_unread: boolean
+          last_comment_at: string
+          subtest_id: string
+        }[]
       }
       get_subtest_edit_scope: {
         Args: { _subtest_id: string; _user_id: string }
