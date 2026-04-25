@@ -13,6 +13,43 @@ import { normalizeTeamValue, type TeamType } from '@/types/enums';
 
 const trackedFields = ['planned_start_date', 'planned_completion_date', 'planned_closure_date', 'actual_start_date', 'actual_completion_date', 'actual_closure_date', 'planned_progress_pct', 'actual_progress_pct', 'completion_status', 'closure_status'] as const;
 
+/**
+ * Fields where "blank in Excel = keep existing DB value" policy applies.
+ * Excluded (handled separately):
+ *   - planned_progress_pct, actual_completion_date, completion_status, closure_status (auto-computed)
+ *   - team, subcontractor_issue_no/source, classification_source/classified_at (system-resolved)
+ *   - main_trade, sub_trade, work_type (handled by classifier with the same 3-tier rule)
+ *   - id, issue_no, project_id, raw_payload, source_upload_id, data_source_type, updated_by, row_version
+ */
+const PRESERVE_BLANK_FIELDS = [
+  'description', 'defect_type', 'status', 'priority',
+  'area_raw', 'area_type', 'area_level', 'area_location',
+  'trade_detail',
+  'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'hdec_eng_name',
+  'planned_start_date', 'planned_completion_date', 'planned_closure_date',
+  'actual_start_date', 'actual_closure_date',
+  'actual_progress_pct',
+  'remarks', 'hdec_comments',
+] as const;
+
+function isBlankValue(v: unknown): boolean {
+  if (v === null || v === undefined) return true;
+  if (typeof v === 'string' && v.trim() === '') return true;
+  return false;
+}
+
+/** For each PRESERVE_BLANK_FIELDS: if Excel value is blank and existing DB has a value,
+ *  keep the existing DB value (do not overwrite with null). Mutates `row` in place. */
+function preserveExistingForBlank(row: ParsedDefectRow, existing: any | null): void {
+  if (!existing) return;
+  for (const field of PRESERVE_BLANK_FIELDS) {
+    const current = (row as any)[field];
+    if (isBlankValue(current) && existing[field] != null) {
+      (row as any)[field] = existing[field];
+    }
+  }
+}
+
 export type DefectFileStatus = 'pending' | 'parsing' | 'ready' | 'processing' | 'done' | 'failed';
 
 export interface DefectImportFile {
@@ -459,8 +496,21 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
 
       await masterEnsurer.ensureForRow(row);
 
+      // Look up existing row FIRST so we can apply "blank in Excel = keep DB value" policy
+      // before any downstream logic (auto-progress, classifier, status, etc.) reads the row.
+      // For re-import: prefer matching by id (which is included in the export);
+      // fall back to issue_no for backward compatibility.
+      const existing = (isReimport && row.id ? existingById.get(String(row.id)) : null)
+        ?? existingByIssueNo.get(row.issue_no)
+        ?? null;
+
+      // Apply blank-preservation for general data fields (description, dates, PIC, etc.)
+      preserveExistingForBlank(row, existing);
+
+      // Recompute planned_progress_pct from (possibly preserved) planned dates.
+      // If still not computable, fall back to existing DB value rather than overwriting with null.
       const computedPlanned = computePlannedProgressPct(row.planned_start_date, row.planned_completion_date, dataDate);
-      row.planned_progress_pct = computedPlanned;
+      row.planned_progress_pct = computedPlanned ?? existing?.planned_progress_pct ?? null;
       if (computedPlanned == null) {
         if (!row.planned_start_date || !row.planned_completion_date) {
           await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_not_computable', reason_detail: 'Missing planned_start_date or planned_completion_date' });
@@ -470,12 +520,6 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
           await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_not_started', reason_detail: 'Data date is before planned start date' });
         }
       }
-
-      // For re-import: prefer matching by id (which is included in the export);
-      // fall back to issue_no for backward compatibility.
-      const existing = (isReimport && row.id ? existingById.get(String(row.id)) : null)
-        ?? existingByIssueNo.get(row.issue_no)
-        ?? null;
 
       // Classification priority for main_trade / sub_trade / work_type:
       //   1) Excel value (if present)            -> use it (source: 'manual')
@@ -561,12 +605,15 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `${issueAssignment.subcontractor_issue_no} already exists in this project.` });
         continue;
       }
-      const resolvedTeam = resolveDefectTeam(row, profileTeamMap);
+      // Team: if neither Excel value nor Field Discipline / Profile mapping resolves a team,
+      // keep the existing DB team rather than overwriting with null.
+      const resolvedTeam = resolveDefectTeam(row, profileTeamMap) ?? existing?.team ?? null;
       const logReason = resolvedTeam ? {} : { reason_code: 'team_unresolved', reason_detail: 'Team could not be resolved from Field Discipline or User Management profile.' };
       if (!resolvedTeam) teamUnresolved++;
+      // actual_completion_date: when progress < 100 and Excel is blank, keep existing DB value.
       const actualCompletionDate = Number(row.actual_progress_pct ?? 0) >= 100
         ? (row.actual_completion_date ?? existing?.actual_completion_date ?? dataDate)
-        : (row.actual_completion_date ?? null);
+        : (row.actual_completion_date ?? existing?.actual_completion_date ?? null);
 
       const statusInputs = {
         planned_start_date: row.planned_start_date,
@@ -585,14 +632,17 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         if (isValidDefectStatus(row.completion_status)) completionStatus = row.completion_status;
         else await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'invalid_status_value', reason_detail: `completion_status="${row.completion_status}" not in Planned/Delay/Done/WIP. Auto-computed.` });
       } else if (!row.planned_completion_date && !row.planned_closure_date) {
-        completionStatus = null;
-        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'missing_planned_dates', reason_detail: 'No planned dates; completion_status set to null.' });
+        // No planned dates: prefer existing DB status over forcing null.
+        completionStatus = existing?.completion_status ?? null;
+        if (completionStatus == null) {
+          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'missing_planned_dates', reason_detail: 'No planned dates; completion_status set to null.' });
+        }
       }
       if (row.closure_status) {
         if (isValidDefectStatus(row.closure_status)) closureStatus = row.closure_status;
         else await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'invalid_status_value', reason_detail: `closure_status="${row.closure_status}" not in Planned/Delay/Done/WIP. Auto-computed.` });
       } else if (!row.planned_completion_date && !row.planned_closure_date) {
-        closureStatus = null;
+        closureStatus = existing?.closure_status ?? null;
       }
 
       const payload = { ...row, id: undefined, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, completion_status: completionStatus, closure_status: closureStatus, team: resolvedTeam, classification_source: classificationSource, classified_at: classifiedAt, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
