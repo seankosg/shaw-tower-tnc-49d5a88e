@@ -471,30 +471,75 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      const classification = classifyDefect(
-        { description: row.description, field_discipline: row.trade_detail },
-        rules,
-        fallbacks,
-      );
-      if (!row.main_trade) row.main_trade = classification.main_trade;
-      if (!row.sub_trade) row.sub_trade = classification.sub_trade;
-      row.work_type = classification.work_type;
-      const classificationSource = classification.source;
-      const classifiedAt = new Date().toISOString();
-      if (classification.source === 'rule') classifiedRule++;
-      else if (classification.source === 'discipline') {
-        classifiedDiscipline++;
-        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'discipline_fallback', reason_detail: `Auto-classified via Field Discipline fallback (${row.trade_detail ?? ''}).` });
-      } else {
-        unclassified++;
-        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'unclassified_defect', reason_detail: 'Could not classify from description or Field Discipline.' });
-      }
-
       // For re-import: prefer matching by id (which is included in the export);
       // fall back to issue_no for backward compatibility.
       const existing = (isReimport && row.id ? existingById.get(String(row.id)) : null)
         ?? existingByIssueNo.get(row.issue_no)
         ?? null;
+
+      // Classification priority for main_trade / sub_trade / work_type:
+      //   1) Excel value (if present)            -> use it (source: 'manual')
+      //   2) Existing DB value (if present)      -> keep it (preserve previous source/timestamp)
+      //   3) Otherwise                           -> run classifyDefect() and use its result
+      const excelHasMain = !!row.main_trade;
+      const excelHasSub = !!row.sub_trade;
+      const excelHasWork = !!row.work_type;
+      const dbHasMain = !!existing?.main_trade;
+      const dbHasSub = !!existing?.sub_trade;
+      const dbHasWork = !!existing?.work_type;
+
+      // Only run the classifier if at least one field still needs to be filled
+      // (i.e. neither Excel nor DB provides a value for it).
+      const needClassify =
+        (!excelHasMain && !dbHasMain) ||
+        (!excelHasSub && !dbHasSub) ||
+        (!excelHasWork && !dbHasWork);
+
+      const classification = needClassify
+        ? classifyDefect(
+            { description: row.description, field_discipline: row.trade_detail },
+            rules,
+            fallbacks,
+          )
+        : null;
+
+      if (!excelHasMain) row.main_trade = existing?.main_trade ?? classification?.main_trade ?? null;
+      if (!excelHasSub) row.sub_trade = existing?.sub_trade ?? classification?.sub_trade ?? null;
+      if (!excelHasWork) row.work_type = existing?.work_type ?? classification?.work_type ?? null;
+
+      // Determine which source/timestamp to record:
+      //  - If the classifier was actually applied to at least one field that had
+      //    no Excel value AND no DB value, record the new classification result.
+      //  - Else if Excel directly provided values, record 'manual'.
+      //  - Else preserve the existing classification metadata.
+      const classifierApplied = !!classification && (
+        (!excelHasMain && !dbHasMain) ||
+        (!excelHasSub && !dbHasSub) ||
+        (!excelHasWork && !dbHasWork)
+      );
+      const excelProvidedAny = excelHasMain || excelHasSub || excelHasWork;
+
+      let classificationSource: string | null;
+      let classifiedAt: string | null;
+      if (classifierApplied && classification) {
+        classificationSource = classification.source;
+        classifiedAt = new Date().toISOString();
+        if (classification.source === 'rule') classifiedRule++;
+        else if (classification.source === 'discipline') {
+          classifiedDiscipline++;
+          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'discipline_fallback', reason_detail: `Auto-classified via Field Discipline fallback (${row.trade_detail ?? ''}).` });
+        } else {
+          unclassified++;
+          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'unclassified_defect', reason_detail: 'Could not classify from description or Field Discipline.' });
+        }
+      } else if (excelProvidedAny && !existing) {
+        classificationSource = 'manual';
+        classifiedAt = new Date().toISOString();
+      } else {
+        // Preserve previous metadata (existing row) or leave null (new row with everything from DB? not possible)
+        classificationSource = existing?.classification_source ?? 'manual';
+        classifiedAt = existing?.classified_at ?? new Date().toISOString();
+      }
 
       if (isReimport && !existing) {
         rejected++;
