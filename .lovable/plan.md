@@ -1,60 +1,70 @@
-## T&C(Subtest) 댓글 시스템 구현 계획
+# One-Time Migration: T&C Remarks → Comments
 
-Defect 댓글 시스템과 동일한 구조를 T&C(subtests) 페이지에도 적용합니다.
+Move existing `remarks` content from the `subtests` table into the new `subtest_comments` system as proper threaded comments.
 
-### 1. 데이터베이스 (마이그레이션)
+## Scope
 
-**새 테이블 2개 생성** — 기존 `defect_comments` / `defect_comment_reads`와 동일 구조:
+- **Source**: `subtests.remarks` (38 active rows with non-empty remarks)
+- **Destination**: `subtest_comments` table as `type = 'comment'`
+- **One-time only**: Idempotent — safe to re-run without creating duplicates
 
-- **`subtest_comments`**: `id, subtest_id, parent_comment_id, author_user_id, type ('comment'|'instruction'|'reply'), message, edited, created_at, updated_at`
-- **`subtest_comment_reads`**: `user_id, subtest_id, last_read_at` (사용자별 마지막 읽음 시각)
+## Migration Logic
 
-**RLS 정책**:
-- 모든 인증 사용자: 댓글 읽기 가능
-- 본인만 자신의 댓글 작성 가능
-- 수정/삭제는 `can_modify_subtest_comment(_user_id, _comment_id)` SECURITY DEFINER 함수로 검사
-  - 권한: 본인 OR admin/superuser OR 같은 team 의 senior_user
-- `subtest_comment_reads`는 본인 행만 select/insert/update
+For each active subtest where `remarks` is not null/empty:
 
-**RPC 함수**: `get_subtest_comment_summary(_subtest_ids uuid[])`
-- 반환: `subtest_id, comment_count, last_comment_at, has_unread`
-- Raw Data 표에서 보이는 행들의 댓글 개수 + 미읽음 여부를 한 번에 조회
+1. **Author resolution**:
+   - Use `subtests.updated_by` if set (12 rows)
+   - Fallback to admin (`5633327d-5c37-4188-b96d-7814bc83ef42`) if null (26 rows)
 
-**트리거**: `fn_subtest_comments_touch` — `updated_at` 자동 갱신, message 변경 시 `edited=true`
+2. **Duplicate protection**:
+   - Skip if a comment with the same trimmed message already exists for that subtest
 
-**Realtime**: `subtest_comments` 테이블을 `supabase_realtime` publication에 추가
+3. **Insert**:
+   - `subtest_id`, `author_user_id`, `message = trim(remarks)`, `type = 'comment'`, `parent_comment_id = NULL`
+   - `created_at` = original `subtests.updated_at` (preserves chronological context)
 
-### 2. 프론트엔드
+4. **Clear remarks** (optional — included): After successful insert, set `subtests.remarks = NULL` so the data isn't duplicated in two places. The Raw Data view will then show comments as the source of truth.
 
-**새 컴포넌트** `src/components/defects/SubtestComments.tsx`
-- `DefectComments.tsx`를 그대로 복제하되 `defect_id` → `subtest_id`, 테이블명/RPC명 변경
-- `defectTeam` 대신 `subtestTeam` prop 받음 (senior_user 같은 팀 권한 검사용)
+## Technical Steps
 
-**`src/pages/SubtestDetail.tsx` 수정**
-- 페이지 하단(Change History 카드 다음)에 "Comments" 카드 추가
-- 카드 헤더: `Comments (N)` 형태로 카운트 뱃지 표시
-- `<SubtestComments subtestId={...} subtestTeam={...} />` 렌더링
+A single SQL migration file:
 
-**`src/pages/SubtestList.tsx` 수정** (T&C Raw Data 표)
-- 마운트 시 보이는 행들의 `subtest_id`로 `get_subtest_comment_summary` 호출 → `commentSummary` 상태 저장
-- 필터/페이지가 바뀔 때 visible row 변경 감지 후 재조회
-- `item_no` 컬럼 cell 안에 💬 아이콘 + 개수 표시
-- 미읽음 있으면 amber dot + bold amber 색상 (Defect와 동일 스타일)
-- Realtime 채널로 `subtest_comments` INSERT 감지 시 summary 갱신
+```sql
+-- Insert remarks as comments
+INSERT INTO public.subtest_comments
+  (subtest_id, author_user_id, message, type, created_at, updated_at)
+SELECT
+  s.id,
+  COALESCE(s.updated_by, '5633327d-5c37-4188-b96d-7814bc83ef42'::uuid),
+  trim(s.remarks),
+  'comment',
+  COALESCE(s.updated_at, now()),
+  COALESCE(s.updated_at, now())
+FROM public.subtests s
+WHERE s.is_active = true
+  AND s.remarks IS NOT NULL
+  AND trim(s.remarks) <> ''
+  AND NOT EXISTS (
+    SELECT 1 FROM public.subtest_comments sc
+    WHERE sc.subtest_id = s.id
+      AND sc.message = trim(s.remarks)
+  );
 
-### 3. 권한 요약 (Defect와 동일)
+-- Clear migrated remarks
+UPDATE public.subtests
+SET remarks = NULL
+WHERE is_active = true
+  AND remarks IS NOT NULL
+  AND trim(remarks) <> '';
+```
 
-| 행위 | 허용 대상 |
-|------|----------|
-| 댓글 보기 | 모든 인증 사용자 |
-| 댓글 작성 | 모든 인증 사용자 |
-| Instruction 작성 | admin / superuser / senior_user |
-| 댓글 수정/삭제 | 본인 + admin/superuser + 같은 팀 senior_user |
-| 미읽음 표시 | 사용자별로 자동 추적 (상세 진입 시 읽음 처리) |
+## Expected Outcome
 
-### 변경 파일
+- ~38 new rows in `subtest_comments`
+- 38 rows in `subtests` will have `remarks` cleared
+- All comments visible in the new T&C comment UI on the Subtest Detail page
+- Comment count badges appear in the Subtest List view
 
-- 마이그레이션 1개 (테이블 2개, RLS, 함수 2개, 트리거, realtime)
-- 신규: `src/components/defects/SubtestComments.tsx`
-- 수정: `src/pages/SubtestDetail.tsx`
-- 수정: `src/pages/SubtestList.tsx`
+## Confirm Before Proceeding
+
+Do you want to **clear** `subtests.remarks` after migration (recommended, avoids duplicate display), or **keep** the original `remarks` values intact alongside the new comments?
