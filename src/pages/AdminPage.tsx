@@ -34,6 +34,7 @@ interface Profile {
   id: string; user_id: string; name: string | null; email: string | null;
   login_id: string | null; user_type: UserType;
   subcontractor_name: string | null; subsub_name: string | null; hdec_pic_name: string | null;
+  hdec_eng_name: string | null;
   must_change_password: boolean; is_active: boolean;
   team: TeamType | null;
 }
@@ -100,7 +101,7 @@ export default function AdminPage() {
       <Tabs defaultValue="users">
         <TabsList className="flex-wrap">
           <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="masters">Subcontractor / HDEC PIC</TabsTrigger>
+          <TabsTrigger value="masters">Subcontractor / HDEC PIC / ENG</TabsTrigger>
           <TabsTrigger value="systems">Systems</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="fields">Field Config</TabsTrigger>
@@ -226,6 +227,7 @@ function UsersTab() {
   const [subcons, setSubcons] = useState<MasterRow[]>([]);
   const [subsubs, setSubsubs] = useState<MasterRow[]>([]);
   const [hdecPics, setHdecPics] = useState<MasterRow[]>([]);
+  const [hdecEngs, setHdecEngs] = useState<MasterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Profile | null>(null);
@@ -244,11 +246,12 @@ function UsersTab() {
 
   const load = async () => {
     setLoading(true);
-    const [p, r, s, h] = await Promise.all([
+    const [p, r, s, h, he] = await Promise.all([
       supabase.from('profiles').select('*').order('login_id'),
       supabase.from('user_roles').select('*'),
       supabase.from('subcontractor_master').select('*').eq('is_active', true).order('name'),
       supabase.from('hdec_pic_master').select('*').eq('is_active', true).order('name'),
+      supabase.from('hdec_eng_master').select('*').eq('is_active', true).order('name'),
     ]);
     if (p.data) setProfiles(p.data as Profile[]);
     if (r.data) setRoles(r.data as UserRole[]);
@@ -258,6 +261,7 @@ function UsersTab() {
       setSubsubs(all.filter(m => m.type === 'subsub'));
     }
     if (h.data) setHdecPics(h.data as MasterRow[]);
+    if (he.data) setHdecEngs(he.data as MasterRow[]);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -347,8 +351,8 @@ function UsersTab() {
         bVal = b.team ? TEAM_LABELS[b.team] : null;
         break;
       case 'linked':
-        aVal = a.user_type === 'subcontractor' || a.user_type === 'subsub' ? a.subcontractor_name : (a.user_type === 'hdec' || a.user_type === 'pm_pd' ? a.hdec_pic_name : null);
-        bVal = b.user_type === 'subcontractor' || b.user_type === 'subsub' ? b.subcontractor_name : (b.user_type === 'hdec' || b.user_type === 'pm_pd' ? b.hdec_pic_name : null);
+        aVal = a.user_type === 'subcontractor' || a.user_type === 'subsub' ? a.subcontractor_name : (a.user_type === 'hdec' || a.user_type === 'pm_pd' ? (a.hdec_pic_name ?? a.hdec_eng_name) : null);
+        bVal = b.user_type === 'subcontractor' || b.user_type === 'subsub' ? b.subcontractor_name : (b.user_type === 'hdec' || b.user_type === 'pm_pd' ? (b.hdec_pic_name ?? b.hdec_eng_name) : null);
         break;
       case 'owner_code':
         aVal = getLinkedOwnerCode(a, allMastersForSort);
@@ -385,7 +389,7 @@ function UsersTab() {
                 p.team ? TEAM_LABELS[p.team] : '',
                 p.user_type === 'subcontractor' ? (p.subcontractor_name ?? '') :
                   p.user_type === 'subsub' ? (p.subcontractor_name ?? '') :
-                  (p.user_type === 'hdec' || p.user_type === 'pm_pd') ? (p.hdec_pic_name ?? '') : '',
+                  (p.user_type === 'hdec' || p.user_type === 'pm_pd') ? (p.hdec_pic_name ?? p.hdec_eng_name ?? '') : '',
                 getLinkedOwnerCode(p, allMasters) ?? '',
                 ROLE_LABELS[getUserRole(p.user_id) as AppRole] ?? '',
                 p.is_active ? 'Yes' : 'No',
@@ -466,6 +470,7 @@ function UsersTab() {
             subcons={subcons}
             subsubs={subsubs}
             hdecPics={hdecPics}
+            hdecEngs={hdecEngs}
             onCreated={() => { setCreateOpen(false); load(); }}
           />
         </Dialog>
@@ -493,7 +498,7 @@ function UsersTab() {
                 const linked =
                   p.user_type === 'subcontractor' ? p.subcontractor_name :
                   p.user_type === 'subsub' ? p.subcontractor_name :
-                  p.user_type === 'hdec' || p.user_type === 'pm_pd' ? p.hdec_pic_name : null;
+                  p.user_type === 'hdec' || p.user_type === 'pm_pd' ? (p.hdec_pic_name ?? p.hdec_eng_name) : null;
                 const ownerCode = getLinkedOwnerCode(p, [...subcons, ...subsubs]);
                 return (
                   <TableRow key={p.id}>
@@ -553,6 +558,7 @@ function UsersTab() {
           subcons={subcons}
           subsubs={subsubs}
           hdecPics={hdecPics}
+          hdecEngs={hdecEngs}
           onClose={() => setEditTarget(null)}
           onSaved={() => { setEditTarget(null); load(); }}
         />
@@ -583,9 +589,9 @@ function UsersTab() {
 
 /* ───── Create User Dialog ───── */
 function CreateUserDialog({
-  subcons, subsubs, hdecPics, onCreated,
+  subcons, subsubs, hdecPics, hdecEngs, onCreated,
 }: {
-  subcons: MasterRow[]; subsubs: MasterRow[]; hdecPics: MasterRow[]; onCreated: () => void;
+  subcons: MasterRow[]; subsubs: MasterRow[]; hdecPics: MasterRow[]; hdecEngs: MasterRow[]; onCreated: () => void;
 }) {
   const { toast } = useToast();
   const [loginId, setLoginId] = useState('');
@@ -595,6 +601,7 @@ function CreateUserDialog({
   const [subconName, setSubconName] = useState<string>('');
   const [subsubId, setSubsubId] = useState<string>('');
   const [hdecPicName, setHdecPicName] = useState<string>('');
+  const [hdecEngName, setHdecEngName] = useState<string>('');
   const [team, setTeam] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -635,6 +642,7 @@ function CreateUserDialog({
         subcontractor_name: payloadSubconName,
         subsub_name: payloadSubsubName,
         hdec_pic_name: (userType === 'hdec' || userType === 'pm_pd') ? (hdecPicName || null) : null,
+        hdec_eng_name: (userType === 'hdec' || userType === 'pm_pd') ? (hdecEngName || null) : null,
         team: team === '__none' || team === '' ? null : team,
       },
     });
@@ -644,7 +652,7 @@ function CreateUserDialog({
       return;
     }
     toast({ title: 'User created', description: `Initial password: ${DEFAULT_PASSWORD}` });
-    setLoginId(''); setName(''); setSubconName(''); setSubsubId(''); setHdecPicName(''); setTeam('');
+    setLoginId(''); setName(''); setSubconName(''); setSubsubId(''); setHdecPicName(''); setHdecEngName(''); setTeam('');
     onCreated();
   };
 
@@ -717,16 +725,29 @@ function CreateUserDialog({
           </div>
         )}
         {(userType === 'hdec' || userType === 'pm_pd') && (
-          <div className="space-y-1.5">
-            <Label>HDEC PIC (optional)</Label>
-            <Select value={hdecPicName} onValueChange={setHdecPicName}>
-              <SelectTrigger><SelectValue placeholder="Select HDEC PIC" /></SelectTrigger>
-              <SelectContent>
-                {hdecPics.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">Owner Code: <span className="font-mono">{selectedOwnerCode ?? '—'}</span></p>
-          </div>
+          <>
+            <div className="space-y-1.5">
+              <Label>HDEC PIC (optional)</Label>
+              <Select value={hdecPicName || '__none'} onValueChange={(v) => setHdecPicName(v === '__none' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder="Select HDEC PIC" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">— None —</SelectItem>
+                  {hdecPics.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Owner Code: <span className="font-mono">{selectedOwnerCode ?? '—'}</span></p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>HDEC ENG (optional)</Label>
+              <Select value={hdecEngName || '__none'} onValueChange={(v) => setHdecEngName(v === '__none' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder="Select HDEC ENG" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">— None —</SelectItem>
+                  {hdecEngs.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
         )}
         <div className="space-y-1.5">
           <Label>Team (optional)</Label>
@@ -749,12 +770,13 @@ function CreateUserDialog({
 
 /* ───── Edit User Dialog ───── */
 function EditUserDialog({
-  profile, subcons, subsubs, hdecPics, onClose, onSaved,
+  profile, subcons, subsubs, hdecPics, hdecEngs, onClose, onSaved,
 }: {
   profile: Profile;
   subcons: MasterRow[];
   subsubs: MasterRow[];
   hdecPics: MasterRow[];
+  hdecEngs: MasterRow[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -765,6 +787,7 @@ function EditUserDialog({
   const initialSubsubId = subsubs.find(s => s.name === profile.subsub_name)?.id ?? '';
   const [subsubId, setSubsubId] = useState<string>(initialSubsubId);
   const [hdecPicName, setHdecPicName] = useState<string>(profile.hdec_pic_name ?? '');
+  const [hdecEngName, setHdecEngName] = useState<string>(profile.hdec_eng_name ?? '');
   const [team, setTeam] = useState<string>(profile.team ?? '');
   const [saving, setSaving] = useState(false);
 
@@ -783,6 +806,7 @@ function EditUserDialog({
     let payloadSubconName: string | null = null;
     let payloadSubsubName: string | null = null;
     let payloadHdecPicName: string | null = null;
+    let payloadHdecEngName: string | null = null;
 
     if (userType === 'subcontractor') {
       if (!subconName) { toast({ title: 'Subcontractor required', variant: 'destructive' }); return; }
@@ -796,6 +820,7 @@ function EditUserDialog({
       payloadSubconName = subsubParent.name;
     } else if (userType === 'hdec' || userType === 'pm_pd') {
       payloadHdecPicName = hdecPicName || null;
+      payloadHdecEngName = hdecEngName || null;
     }
 
     setSaving(true);
@@ -807,6 +832,7 @@ function EditUserDialog({
         subcontractor_name: payloadSubconName,
         subsub_name: payloadSubsubName,
         hdec_pic_name: payloadHdecPicName,
+        hdec_eng_name: payloadHdecEngName,
         team: team === '__none' || team === '' ? null : team,
       },
     });
@@ -873,15 +899,28 @@ function EditUserDialog({
           </div>
         )}
           {(userType === 'hdec' || userType === 'pm_pd') && (
-            <div className="space-y-1.5">
-              <Label>HDEC PIC (optional)</Label>
-              <Select value={hdecPicName} onValueChange={setHdecPicName}>
-                <SelectTrigger><SelectValue placeholder="Select HDEC PIC" /></SelectTrigger>
-                <SelectContent>
-                  {hdecPics.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            <>
+              <div className="space-y-1.5">
+                <Label>HDEC PIC (optional)</Label>
+                <Select value={hdecPicName || '__none'} onValueChange={(v) => setHdecPicName(v === '__none' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="Select HDEC PIC" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— None —</SelectItem>
+                    {hdecPics.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>HDEC ENG (optional)</Label>
+                <Select value={hdecEngName || '__none'} onValueChange={(v) => setHdecEngName(v === '__none' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="Select HDEC ENG" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">— None —</SelectItem>
+                    {hdecEngs.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
           )}
           <div className="space-y-1.5">
             <Label>Team (optional)</Label>
@@ -946,14 +985,16 @@ function MastersTab() {
     setSyncing(true);
     let created = 0, failed = 0, skipped = 0;
     try {
-      const [{ data: subs }, { data: pics }, { data: profiles }] = await Promise.all([
+      const [{ data: subs }, { data: pics }, { data: engs }, { data: profiles }] = await Promise.all([
         supabase.from('subcontractor_master').select('id, name, type, parent_subcontractor_id, is_active').eq('is_active', true),
         supabase.from('hdec_pic_master').select('id, name, is_active').eq('is_active', true),
-        supabase.from('profiles').select('subcontractor_name, subsub_name, hdec_pic_name'),
+        supabase.from('hdec_eng_master').select('id, name, is_active').eq('is_active', true),
+        supabase.from('profiles').select('subcontractor_name, subsub_name, hdec_pic_name, hdec_eng_name'),
       ]);
       const subProfiles = new Set((profiles || []).map(p => (p.subcontractor_name || '').toLowerCase().trim()).filter(Boolean));
       const subsubProfiles = new Set((profiles || []).map(p => (p.subsub_name || '').toLowerCase().trim()).filter(Boolean));
       const picProfiles = new Set((profiles || []).map(p => (p.hdec_pic_name || '').toLowerCase().trim()).filter(Boolean));
+      const engProfiles = new Set((profiles || []).map(p => ((p as any).hdec_eng_name || '').toLowerCase().trim()).filter(Boolean));
       const subById = new Map((subs || []).map(s => [s.id, s.name]));
 
       for (const s of subs || []) {
@@ -980,6 +1021,14 @@ function MastersTab() {
         });
         if (error) failed++; else created++;
       }
+      for (const e of engs || []) {
+        const key = e.name.toLowerCase().trim();
+        if (engProfiles.has(key)) { skipped++; continue; }
+        const { error } = await supabase.functions.invoke('auto-create-master-user', {
+          body: { name: e.name, master_type: 'hdec_eng', hdec_eng_name: e.name },
+        });
+        if (error) failed++; else created++;
+      }
       toast({
         title: 'Sync complete',
         description: `${created} created, ${skipped} already exist, ${failed} failed`,
@@ -999,9 +1048,10 @@ function MastersTab() {
           {syncing ? 'Syncing...' : 'Sync Missing Users'}
         </Button>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <SubcontractorMasterTable />
         <MasterTable table="hdec_pic_master" title="HDEC PIC Master" />
+        <MasterTable table="hdec_eng_master" title="HDEC ENG Master" />
       </div>
     </div>
   );
@@ -1286,7 +1336,10 @@ function SubcontractorMasterTable() {
   );
 }
 
-function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string }) {
+function MasterTable({ table, title }: { table: 'hdec_pic_master' | 'hdec_eng_master'; title: string }) {
+  const profileField = table === 'hdec_pic_master' ? 'hdec_pic_name' : 'hdec_eng_name';
+  const masterTypeKey = table === 'hdec_pic_master' ? 'hdec_pic' : 'hdec_eng';
+  const updatesSubtests = table === 'hdec_pic_master'; // subtests has hdec_pic_name only
   const { toast } = useToast();
   const [rows, setRows] = useState<MasterRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1306,9 +1359,9 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
     const name = newName.trim();
     const { error } = await supabase.from(table).insert({ name });
     if (error) { toast({ title: 'Add failed', description: error.message, variant: 'destructive' }); return; }
-    if (table === 'hdec_pic_master') {
+    if (table === 'hdec_pic_master' || table === 'hdec_eng_master') {
       const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
-        body: { name, master_type: 'hdec_pic', hdec_pic_name: name },
+        body: { name, master_type: masterTypeKey, [profileField]: name },
       });
       if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
       else toast({ title: 'Added', description: `User account created (PW: ${DEFAULT_PASSWORD})` });
@@ -1323,8 +1376,8 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
   const startToggleActive = async (r: MasterRow) => {
     if (r.is_active) {
       // Deactivating — check linked users
-      if (table === 'hdec_pic_master') {
-        const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name).eq('is_active', true);
+      if (table === 'hdec_pic_master' || table === 'hdec_eng_master') {
+        const { count } = await (supabase.from('profiles') as any).select('id', { count: 'exact', head: true }).eq(profileField, r.name).eq('is_active', true);
         setPendingToggle({ row: r, linkedCount: count ?? 0 });
       } else {
         // Just deactivate master directly
@@ -1348,11 +1401,11 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
       setPendingToggle(null);
       return;
     }
-    if (cascade && table === 'hdec_pic_master') {
-      const { data: linked, error: cascadeErr } = await supabase
-        .from('profiles')
-        .update({ is_active: false } as any)
-        .eq('hdec_pic_name', r.name)
+    if (cascade && (table === 'hdec_pic_master' || table === 'hdec_eng_master')) {
+      const { data: linked, error: cascadeErr } = await (supabase
+        .from('profiles') as any)
+        .update({ is_active: false })
+        .eq(profileField, r.name)
         .select('id');
       if (cascadeErr) {
         toast({ title: 'Master deactivated, but cascade failed', description: cascadeErr.message, variant: 'destructive' });
@@ -1371,19 +1424,24 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string
     if (!trimmed || trimmed === r.name) return;
     const { error } = await supabase.from(table).update({ name: trimmed }).eq('id', r.id);
     if (error) { toast({ title: 'Rename failed', description: error.message, variant: 'destructive' }); return; }
-    if (table === 'hdec_pic_master') {
-      await supabase.from('subtests').update({ hdec_pic_name: trimmed } as any).eq('hdec_pic_name', r.name);
-      await supabase.from('profiles').update({ hdec_pic_name: trimmed } as any).eq('hdec_pic_name', r.name);
+    if (table === 'hdec_pic_master' || table === 'hdec_eng_master') {
+      if (updatesSubtests) {
+        await supabase.from('subtests').update({ hdec_pic_name: trimmed } as any).eq('hdec_pic_name', r.name);
+      }
+      await (supabase.from('profiles') as any).update({ [profileField]: trimmed }).eq(profileField, r.name);
     }
     toast({ title: 'Renamed', description: 'Linked records updated' });
     load();
   };
 
   const remove = async (r: MasterRow) => {
-    if (table === 'hdec_pic_master') {
+    if (table === 'hdec_pic_master' || table === 'hdec_eng_master') {
+      const subtestQuery = updatesSubtests
+        ? supabase.from('subtests').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name)
+        : Promise.resolve({ count: 0 } as any);
       const [{ count: subtestCount }, { count: profileCount }] = await Promise.all([
-        supabase.from('subtests').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name),
-        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('hdec_pic_name', r.name),
+        subtestQuery,
+        (supabase.from('profiles') as any).select('id', { count: 'exact', head: true }).eq(profileField, r.name),
       ]);
       const refs: string[] = [];
       if (subtestCount) refs.push(`${subtestCount} subtest(s)`);
