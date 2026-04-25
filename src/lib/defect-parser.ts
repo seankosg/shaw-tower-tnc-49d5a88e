@@ -404,6 +404,7 @@ export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
     const parsedArea = parseArea(areaRaw);
     const explicitLevel = toText(getMapped(raw, 'area_level'));
     const explicitLocation = toText(getMapped(raw, 'area_location'));
+    const reconciledArea = reconcileAreaFields(parsedArea, explicitLevel, explicitLocation);
     const status = toText(getMapped(raw, 'status'));
 
     return {
@@ -416,9 +417,9 @@ export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
       sub_trade: toText(getMapped(raw, 'sub_trade')),
       trade_detail: toText(getMapped(raw, 'trade_detail')),
       area_raw: areaRaw,
-      area_type: parsedArea.area_type,
-      area_level: explicitLevel ?? parsedArea.area_level,
-      area_location: explicitLocation ?? parsedArea.area_location,
+      area_type: reconciledArea.area_type,
+      area_level: reconciledArea.area_level,
+      area_location: reconciledArea.area_location,
       description: toText(getMapped(raw, 'description')),
       defect_type: toText(getMapped(raw, 'defect_type')),
       status,
