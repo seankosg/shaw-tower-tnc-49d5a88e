@@ -70,8 +70,10 @@ export const DEFECT_REVISION_FIELDS = [
 
 const OWNER_CODE_STOP_WORDS = new Set(['CO', 'LTD', 'INC', 'CORP', 'CORPORATION', 'COMPANY', 'LLC', 'GROUP', 'ENG', 'ENGINEERING', 'THE', 'AND']);
 
-export function isClosedDefect(item: Pick<DefectItem, 'actual_closure_date' | 'closure_status'>): boolean {
-  return Boolean(item.actual_closure_date) || String(item.closure_status ?? '') === 'Done';
+export function isClosedDefect(item: Pick<DefectItem, 'actual_closure_date' | 'closure_status' | 'status'>): boolean {
+  return Boolean(item.actual_closure_date)
+    || String(item.closure_status ?? '') === 'Done'
+    || String(item.status ?? '').trim().toLowerCase() === 'closed';
 }
 
 export function formatPct(value: number | null | undefined): string {
