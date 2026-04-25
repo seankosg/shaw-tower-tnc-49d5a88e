@@ -1038,9 +1038,10 @@ function MastersTab() {
           {syncing ? 'Syncing...' : 'Sync Missing Users'}
         </Button>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <SubcontractorMasterTable />
         <MasterTable table="hdec_pic_master" title="HDEC PIC Master" />
+        <MasterTable table="hdec_eng_master" title="HDEC ENG Master" />
       </div>
     </div>
   );
@@ -1325,7 +1326,10 @@ function SubcontractorMasterTable() {
   );
 }
 
-function MasterTable({ table, title }: { table: 'hdec_pic_master'; title: string }) {
+function MasterTable({ table, title }: { table: 'hdec_pic_master' | 'hdec_eng_master'; title: string }) {
+  const profileField = table === 'hdec_pic_master' ? 'hdec_pic_name' : 'hdec_eng_name';
+  const masterTypeKey = table === 'hdec_pic_master' ? 'hdec_pic' : 'hdec_eng';
+  const updatesSubtests = table === 'hdec_pic_master'; // subtests has hdec_pic_name only
   const { toast } = useToast();
   const [rows, setRows] = useState<MasterRow[]>([]);
   const [loading, setLoading] = useState(true);
