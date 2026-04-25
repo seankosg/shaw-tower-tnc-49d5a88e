@@ -87,6 +87,7 @@ export default function SubtestDetailPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [commentCount, setCommentCount] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -535,6 +536,30 @@ export default function SubtestDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Comments */}
+      {record && (
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Comments
+              {commentCount > 0 && (
+                <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+                  {commentCount}
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SubtestComments
+              subtestId={record.id}
+              subtestTeam={(record as any).team ?? null}
+              onCountChange={setCommentCount}
+            />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
