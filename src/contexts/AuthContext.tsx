@@ -13,6 +13,7 @@ interface Profile {
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
+  hdec_eng_name: string | null;
   must_change_password: boolean;
   is_active: boolean;
 }
