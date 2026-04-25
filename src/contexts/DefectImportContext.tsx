@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
 import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, suggestOwnerCode } from '@/lib/defect-utils';
-import { computeDefectStatuses, isValidDefectStatus } from '@/lib/defect-status';
+import { computeDefectStatuses, isValidDefectStatus, reconcileClosureCompletion } from '@/lib/defect-status';
 import { computePlannedProgressPct } from '@/lib/defect-progress-calc';
 import { classifyDefect, type ClassificationRule, type DisciplineFallback } from '@/lib/defect-classifier';
 import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
