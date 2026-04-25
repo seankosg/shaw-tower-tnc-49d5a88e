@@ -1,109 +1,64 @@
+# Raw Data 필터 상태 유지 (T&C / Defect)
 
-# Raw Data 일괄(Bulk) 편집 기능
+## 목적
 
-Defect Raw Data 와 Subtest Raw Data 두 화면에서, 체크박스로 다수 행을 선택한 뒤 **하나의 필드를 한 번에 동일 값으로 수정**할 수 있도록 합니다.
+사용자가 Raw Data 페이지(T&C: `/tc/raw-data`, Defect: `/defects/raw-data`)에서 컬럼 필터/검색/정렬을 적용한 뒤 행을 클릭해 상세 페이지로 들어가고, 상세 페이지의 **Back** 버튼이나 브라우저 뒤로 가기로 돌아왔을 때 **직전에 적용해 두었던 모든 필터·검색·정렬·스크롤 위치가 그대로 복원**되도록 합니다.
 
-## 사용자 흐름
+## 현재 동작과 문제점
 
-```text
-1. Raw Data 페이지 진입
-2. 좌측 첫 컬럼에 행 체크박스 + 헤더의 "전체 선택"(현재 필터 결과 한정)
-3. 1개 이상 선택되면 상단에 sticky 액션바 표시:
-   "N개 선택됨   [필드 선택 ▼] [새 값 입력]   [Apply] [Clear]"
-4. Apply 클릭 → 확인 다이얼로그(영향 행 수, 변경 전/후 미리보기 5건) → 일괄 업데이트
-5. 변경 이력 자동 기록 (defect_change_log / subtest_change_log)
-6. 토스트로 성공/실패 건수 표시 후 데이터 자동 새로고침
-```
+두 페이지(`SubtestList.tsx`, `DefectRawDataPage.tsx`) 모두 이미 `localStorage`에 `sorting / columnFilters / globalFilter / columnSizing` 을 저장하고, 마운트 시 복원하는 로직이 있습니다. 하지만 다음과 같은 시나리오에서 필터가 사라지는 문제가 있습니다.
 
-## 편집 가능 필드 (화이트리스트)
+1. **Dashboard 등에서 URL 매개변수로 진입 후 추가 필터 적용 → 상세 → Back**
+   - 진입 URL 예: `/defects/raw-data?team=ME`
+   - 사용자가 추가로 `subcontractor=ABC` 같은 컬럼 필터를 손으로 적용
+   - 행 클릭 → 상세 → Back 으로 복귀하면 URL은 `?team=ME` 만 복원되고, 복원 로직이 `hasUrlFilters=true`로 판단해 **localStorage에 저장된 사용자 추가 컬럼 필터를 모두 버립니다.**
+2. **행 클릭 시 query string 미보존**
+   - `navigate('/defects/{id}')` / `navigate('/subtests/{id}')` 가 query string을 가져가지 않아, 상세 페이지에서 명시적으로 “목록으로 돌아가기”를 눌러도 원래 URL을 복원하지 못합니다.
+3. **마운트 직후 빈 상태로 한 번 렌더되는 타이밍 이슈**
+   - `setStateLoaded(false)` → 복원 → `setStateLoaded(true)` 사이에 빈 `columnFilters`로 한 프레임 그려진 뒤 자동 저장 effect가 트리거되어, 일부 환경에서 빈 상태가 저장되는 경합이 발생할 수 있습니다.
 
-권한별로 무분별한 일괄 변경을 막기 위해, **드롭다운/카테고리형 + 운영 필수 필드**만 허용합니다.
+## 변경 계획
 
-### Defect Raw Data
-- 분류: `team`, `main_trade`, `sub_trade`, `work_type`, `priority`, `defect_type`
-- 담당: `subcontractor_name`, `subsub_name`, `hdec_pic_name`, `hdec_eng_name`
-- 상태: `status`, `closure_status`, `completion_status`
-- 일정: `planned_start_date`, `planned_completion_date`, `planned_closure_date`,
-  `actual_start_date`, `actual_completion_date`, `actual_closure_date`
-- 메모: `remarks`, `hdec_comments`
+### 1. URL 매개변수 + 사용자 컬럼 필터를 “병합 복원”하도록 수정
 
-> `issue_no`, `subcontractor_issue_no`, `id`, `created_at`, `updated_at`, 자동 분류 결과(`classification_source`, `classified_at`) 등 시스템 식별/감사 필드는 **불가**.
+`DefectRawDataPage.tsx`, `SubtestList.tsx` 의 마운트 복원 effect를 다음과 같이 변경합니다.
 
-### Subtest Raw Data
-- 담당: `subcontractor_name`, `subsub_name`, `hdec_pic_name`, `team`
-- 상태: `t1_status`, `t2_status`, `pred_status`
-- 일정: `t1_planned_date`, `t1_actual_date`, `t2_planned_date`, `t2_actual_date`,
-  `pred_planned_date`, `pred_actual_date`
-- 메모: `remarks`, `punchlist_comments`
+- `hasUrlFilters` 가 true 라도 **localStorage에 저장된 컬럼 필터 중 URL이 덮어쓰는 컬럼만 제외**하고 나머지는 보존합니다. (현재 로직: 전체를 버림 → 변경: URL이 다루는 컬럼 id만 제외)
+- `globalFilter` 도 마찬가지로 URL `q` 가 없으면 localStorage 값을 사용하도록 통일합니다.
+- 정렬과 컬럼 사이즈는 현재대로 localStorage에서 복원합니다.
 
-## 입력 컨트롤 (필드 타입에 따라 자동 전환)
+### 2. 행 클릭 시 query string 보존
 
-- **multi-select 옵션 필드** (예: subcontractor, team, status) → `Select` 드롭다운 (기존 옵션 + "(Blank)로 비우기" 옵션 포함)
-- **날짜 필드** → `Input type="date"` + "비우기" 토글
-- **텍스트 필드** (remarks, comments) → `Textarea` + "비우기" 토글
+- `DefectRawDataPage`: `navigate('/defects/${id}')` → `` navigate(`/defects/${id}${location.search}`) `` 로 변경하고 `useLocation` 추가 import.
+- `SubtestList`: 동일하게 `` navigate(`/subtests/${id}${location.search}`) `` 로 변경.
+- 이렇게 하면 상세 페이지의 Back(=`navigate(-1)`) 시 URL search 가 자연스럽게 복원되어, 그 위에 localStorage 복원이 얹어지면서 사용자 적용 필터가 100% 살아납니다.
 
-값을 비우는 동작은 `null`로 명시 저장합니다.
+### 3. 자동 저장 effect의 경합 방지
 
-## 권한
+- 자동 저장 effect의 `if (!stateLoaded) return;` 가드는 이미 있으나, 안전하게 `columnFilters` 등을 “복원이 끝난 후” 한 번이라도 사용자가 변경한 경우에만 저장하도록 `hasUserInteractedRef` 같은 ref 가드를 추가하거나, 단순히 디바운스 시간을 200ms로 줄이고 첫 저장에서 빈 상태가 직전 저장값을 덮어쓰지 못하도록 “현재 복원된 값과 동일하면 skip” 로직을 추가합니다.
+- 두 페이지 모두 동일한 패턴으로 적용.
 
-- 기본: `admin`, `superuser`, `senior_user`, `user` 모두 일괄 편집 가능 (개별 편집과 동일 정책)
-- RLS가 거부하는 행(예: 권한 없는 subtest)은 자동으로 실패 카운트로 분리, 토스트에 "성공 N / 거부 M" 표시
+### 4. 스크롤 위치 복원 강화
 
-## 안전장치
+- 현재도 `${storageKey}:scroll` 로 저장/복원 하지만, 데이터 로드(`loading=true` → `false`) 직후에 한 번 더 적용해야 가상 스크롤(virtualizer)이 행을 그린 뒤 정확한 위치로 스냅됩니다.
+- `useEffect` 에 `loading` 을 의존성으로 추가하여 데이터가 모두 그려진 시점에 한 번 더 `scrollTop / scrollLeft` 를 세팅합니다.
 
-- **상한**: 한 번에 최대 500건. 초과 시 차단 메시지.
-- **확인 다이얼로그 필수**: 영향 행 수, 변경 필드, 새 값, 샘플 5행의 before/after 표시.
-- **변경 이력 자동 기록**: 행마다 한 줄씩 `defect_change_log`/`subtest_change_log`에 기록 (`change_source = 'bulk_edit'`).
-- **빈 값 방지**: 새 값을 입력하지 않고 Apply 누르면 에러.
-- **선택 상태 보존 정책**: 페이지 새로고침/필터 변경 시 선택 해제(혼동 방지).
+### 5. 상세 페이지 Back 동작 통일
 
-## 기술 구현
+- `DefectDetailPage` Back 버튼: 현재 `navigate(-1)` 유지 (history 기반 복원이 가장 자연스러움).
+- `SubtestDetail` Back 버튼: 현재 `navigate(-1)` 유지. 단, 새 탭 등에서 history가 비어있을 때를 대비해 fallback으로 각각 `/defects/raw-data`, `/tc/raw-data` 로 이동하도록 보정합니다 (`if (window.history.length > 1) navigate(-1); else navigate('/...raw-data')`).
 
-### 1. 공통 컴포넌트 (신규)
-- `src/components/raw-data/BulkEditBar.tsx` — sticky 상단 액션바
-- `src/components/raw-data/BulkEditDialog.tsx` — 확인/미리보기 다이얼로그
-- `src/lib/bulk-edit.ts` — 공통 로직
-  - `applyBulkUpdate({ table, ids, field, value, userId, changeSource })`
-  - 1) 기존 값 SELECT (이력 기록용) 2) UPDATE 3) change_log INSERT를 한 번의 RPC가 아니라 트랜잭션이 없는 PostgREST 환경이므로 chunk(100건씩) 순차 처리
+## 변경 파일
 
-### 2. `DefectRawDataPage.tsx`
-- 체크박스 컬럼(고정) 추가: TanStack Table의 row selection 활성화 (`enableRowSelection: true`)
-- 헤더 "전체 선택"은 현재 필터된 `table.getFilteredRowModel().rows` 기준
-- 행 클릭은 기존대로 상세 이동, 단 체크박스 칸 클릭은 `event.stopPropagation`
-- 선택된 ID 1개 이상이면 페이지 상단 sticky `BulkEditBar` 노출
-- 편집 가능 필드 메타데이터: 위 화이트리스트
-- 변경 후 `setItems` 로컬 갱신 + 토스트
+- `src/pages/DefectRawDataPage.tsx` — 복원 로직 병합, 행 클릭 navigate에 `location.search` 부착, 스크롤 복원 보강.
+- `src/pages/SubtestList.tsx` — 동일 변경.
+- `src/pages/DefectDetailPage.tsx` — Back 버튼 history 길이 fallback.
+- `src/pages/SubtestDetail.tsx` — Back 버튼 history 길이 fallback.
 
-### 3. `SubtestList.tsx`
-- 동일 패턴 (단, 테이블이 `subtests`, 변경 로그는 `subtest_change_log`)
-- subtest의 RLS는 `can_update_subtest`로 행별 권한이 다르므로, 응답 카운트로 거부 건 분리
+## 동작 검증 시나리오 (수동)
 
-### 4. 타입/유틸
-- `BulkEditableField` 타입과 각 화면의 `BULK_FIELDS` 상수 정의 (label, type, options 함수)
-- 옵션은 기존 `optionFields` / `subcontractorOptions` 등 재사용
-
-### 5. 테스트
-`src/test/bulk-edit.test.ts` 추가
-- 1건/여러건/빈값/권한거부 시 chunk 처리
-- change_log 페이로드 형태 검증
-
-## DB 변경
-
-**없음**. 기존 `defect_items`, `subtests`, `defect_change_log`, `subtest_change_log` 테이블과 RLS만 사용합니다.
-
-## 변경 파일 요약
-
-신규
-- `src/components/raw-data/BulkEditBar.tsx`
-- `src/components/raw-data/BulkEditDialog.tsx`
-- `src/lib/bulk-edit.ts`
-- `src/test/bulk-edit.test.ts`
-
-수정
-- `src/pages/DefectRawDataPage.tsx` — 선택 컬럼, 액션바 통합, 화이트리스트
-- `src/pages/SubtestList.tsx` — 선택 컬럼, 액션바 통합, 화이트리스트
-
-## 향후 확장 (이 PR 범위 밖)
-- 다중 필드 동시 변경 (현재는 1회 1필드)
-- "현재 필터 전체에 적용" (선택 없이도 적용) 토글
-- Undo (직전 변경 되돌리기) — `defect_change_log` 기반
+1. `/defects/raw-data` 진입 → 컬럼 필터 + 텍스트 검색 + 정렬 적용 → 행 클릭 → 상세 → Back → 동일 상태 복원 확인.
+2. `/defects/raw-data?team=ME` 로 dashboard에서 진입 → 추가 컬럼 필터 적용 → 상세 → Back → URL 의 team 필터와 사용자 추가 필터 모두 유지 확인.
+3. `/tc/raw-data` 도 동일 시나리오 검증.
+4. 새 탭에서 상세를 직접 열고 Back 누름 → fallback 으로 raw data 페이지로 이동.
+5. 스크롤을 아래로 한 뒤 상세 → Back → 같은 스크롤 위치로 복귀.
