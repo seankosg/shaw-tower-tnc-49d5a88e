@@ -17,6 +17,7 @@ interface Body {
   subcontractor_name?: string | null;
   subsub_name?: string | null;
   hdec_pic_name?: string | null;
+  hdec_eng_name?: string | null;
   team?: 'Mech' | 'Elec' | 'Arch' | 'Supp' | null;
 }
 
@@ -71,6 +72,7 @@ Deno.serve(async (req) => {
         subcontractor_name: body.subcontractor_name ?? null,
         subsub_name: body.subsub_name ?? null,
         hdec_pic_name: body.hdec_pic_name ?? null,
+        hdec_eng_name: body.hdec_eng_name ?? null,
         team: body.team ?? null,
         must_change_password: true,
       },
