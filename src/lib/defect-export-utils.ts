@@ -33,7 +33,7 @@ export type DefectColumnMode = 'all' | 'visible' | 'responsibility' | 'schedule'
 
 export const DEFECT_EXPORT_FIELDS = Object.keys(DEFECT_DEFAULT_FIELD_LABELS);
 export const DEFECT_EXPORT_GROUPS: Record<Exclude<DefectColumnMode, 'all' | 'visible'>, string[]> = {
-  responsibility: ['issue_no', 'subcontractor_issue_no', 'subcontractor_issue_source', 'team', 'subcontractor_name', 'subsub_name', 'hdec_pic_name'],
+  responsibility: ['issue_no', 'subcontractor_issue_no', 'subcontractor_issue_source', 'team', 'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'hdec_eng_name'],
   schedule: [
     'issue_no',
     'planned_start_date', 'planned_completion_date', 'planned_closure_date',
