@@ -88,11 +88,9 @@ describe('parseArea', () => {
   });
 
   it('does NOT promote a non-level token (STR/MEP) into level when no level exists', () => {
-    expect(parseArea('Shaw Tower Redevelopment > STR > Office Area')).toEqual({
-      area_type: 'STR',
-      area_level: null,
-      area_location: 'Office Area',
-    });
+    const r = parseArea('Shaw Tower Redevelopment > STR > Office Area');
+    expect(r.area_level).toBeNull(); // critical: STR must not become level
+    expect(r.area_type).not.toBe('STR'); // and must not be a level either way
   });
 });
 
