@@ -56,6 +56,16 @@ describe('computeClosureStatus', () => {
   it('returns Done when actual_closure_date present', () => {
     expect(computeClosureStatus({ ...base, actual_closure_date: '2026-04-20' }, asOf, 'Done')).toBe('Done');
   });
+  it('returns Done when LL Status === "Closed" even without actual_closure_date', () => {
+    expect(computeClosureStatus({ ...base, status: 'Closed' }, asOf, 'Planned')).toBe('Done');
+  });
+  it('treats Status="Closed" case-insensitively and trims whitespace', () => {
+    expect(computeClosureStatus({ ...base, status: 'closed' }, asOf, 'Planned')).toBe('Done');
+    expect(computeClosureStatus({ ...base, status: '  CLOSED  ' }, asOf, 'Planned')).toBe('Done');
+  });
+  it('does not force Done when Status is Open / other', () => {
+    expect(computeClosureStatus({ ...base, status: 'Open', planned_closure_date: '2026-12-01' }, asOf, 'WIP')).toBe('Planned');
+  });
   it('returns Delay when planned_closure_date is past and no actual', () => {
     expect(computeClosureStatus({ ...base, planned_closure_date: '2026-04-01' }, asOf, 'Done')).toBe('Delay');
   });
