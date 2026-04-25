@@ -1,82 +1,147 @@
 ## 목표
 
-업체명(subcontractor / subsub), HDEC 사람 이름(PIC/ENG), 팀 이름 등의 텍스트 식별자를 시스템 전반에서 **대소문자 구분 없이(case-insensitive)** 동일한 값으로 취급합니다. 이미 일부 import 경로(`masterNameKey`, `keyOf`)는 lowercase 매칭을 하지만, **여전히 case-sensitive로 비교/조회되는 지점들이 남아있어** 같은 업체가 대소문자 차이로 중복 등록되거나, 사용자 동기화 시 매칭이 실패하는 현상이 발생합니다.
+Defect 엑셀 import 시 **Area 값을 Level 필드와 Location 필드로 안정적으로 분류**하고, **Level을 의미하는 토큰이 Location에 중복 저장되지 않도록** 분류 로직을 재설계합니다.
 
-## 현재 상태 (조사 결과)
+## 현재 로직과 실제 데이터 분석
 
-| 위치 | 현재 동작 | 문제 여부 |
-|---|---|---|
-| `src/lib/master-name-match.ts` | `masterNameKey`가 lowercase + trim | OK |
-| `src/contexts/ImportContext.tsx` (subtest import) | 모든 캐시 키 lowercase | OK |
-| `src/lib/defect-master-autocreate.ts` | `keyOf`로 캐시 비교는 lowercase | OK |
-| `src/contexts/DefectImportContext.tsx` | profile/master 키는 lowercase, team enum은 정규화됨 | OK |
-| **`supabase/functions/auto-create-master-user/index.ts`** | `.eq('subcontractor_name', name)` 등 **case-sensitive 비교** | **버그** |
-| **`src/pages/AdminPage.tsx` (PIC/ENG 마스터 rename)** | `.eq('hdec_pic_name', r.name)` cascade | **버그** |
-| **DB unique 제약** | 마스터 테이블에 case-insensitive unique 인덱스 없음 → 'ABC'와 'abc' 별개 행으로 INSERT 가능 | **버그** |
-| Subcontractor master 매칭 (대소문자만 다른 경우) | exact set 비교는 lowercase지만 INSERT 시 충돌 방지 없음 | **버그** |
+### 현재 코드 (`src/lib/defect-parser.ts`)
 
-## 변경 범위
-
-### 1. DB 레벨 — case-insensitive unique 인덱스 추가 (마이그레이션)
-
-가장 중요한 단일 보호선. 같은 이름의 대소문자 변형으로 마스터가 중복 생성되지 않도록 강제:
-
-- `subcontractor_master`: `(type, lower(name), coalesce(parent_subcontractor_id, '00000000-...'))` unique
-- `hdec_pic_master`: `lower(name)` unique
-- `hdec_eng_master`: `lower(name)` unique
-
-기존 데이터 정합성 정리 — 이미 대소문자만 다른 중복 row가 있다면 첫 번째(가장 오래된)를 유지하고 나머지는 비활성화하지 않고 그대로 두되, 새 unique 인덱스는 partial(`WHERE is_active = true`)로 만들어 충돌을 회피합니다. 필요하면 admin이 수동 정리.
-
-### 2. Profile / 마스터 조회를 case-insensitive로 통일
-
-**`supabase/functions/auto-create-master-user/index.ts`**
-- 모든 `.eq('subcontractor_name', x)`, `.eq('subsub_name', x)`, `.eq('hdec_pic_name', x)`, `.eq('hdec_eng_name', x)`를 `.ilike(field, name)`로 변경 (정확히 같은 문자열만 다른 케이스 — wildcard 미사용).
-
-**`src/pages/AdminPage.tsx`**
-- PIC/ENG 마스터 이름 변경 시 cascade 업데이트(`subtests`, `defect_items`)에 사용되는 `.eq(...)`를 `.ilike(...)`로 변경.
-- 마스터 카운트 조회도 동일.
-
-**`src/lib/defect-master-autocreate.ts`**
-- `ensureSubcontractor` / `ensureSubsub` / `ensureHdecPic` / `ensureHdecEng`에서 INSERT 전 `ilike`로 한 번 더 확인 → 캐시 미스 + 다른 케이스 기존 행이 있을 때 그 row를 재사용 (DB unique 인덱스 충돌 방지).
-
-### 3. Defect 분류 / 팀 매칭
-
-`DefectImportContext.tsx` `resolveTeam` / `resolveOwnerCode`는 이미 `masterNameKey`(lowercase) 기반이라 변경 없음.
-
-### 4. UI 표시 정책
-
-저장된 원본 이름(대소문자 그대로)을 사용자가 입력한 형태로 보존합니다. 즉:
-- 비교는 case-insensitive
-- 표시는 원래 입력된 대로 (예: 'ACME Corp'이 마스터에 있으면 'acme corp'으로 들어와도 'ACME Corp'로 매칭)
-
-## 기술 세부 — 마이그레이션 SQL 예시
-
-```sql
--- subcontractor: type + lower(name) + parent unique (active만)
-CREATE UNIQUE INDEX subcontractor_master_ci_unique
-  ON public.subcontractor_master (
-    type,
-    lower(name),
-    COALESCE(parent_subcontractor_id, '00000000-0000-0000-0000-000000000000'::uuid)
-  )
-  WHERE is_active = true;
-
-CREATE UNIQUE INDEX hdec_pic_master_ci_unique
-  ON public.hdec_pic_master (lower(name)) WHERE is_active = true;
-
-CREATE UNIQUE INDEX hdec_eng_master_ci_unique
-  ON public.hdec_eng_master (lower(name)) WHERE is_active = true;
+```ts
+export function parseArea(area: string | null) {
+  const parts = area.split('>').map(s => s.trim()).filter(Boolean);
+  const useful = parts.length >= 4 ? parts.slice(1) : parts;  // ← 위치 기반 가정
+  return {
+    area_type:     useful[0] ?? null,
+    area_level:    useful[1] ?? null,           // ← 항상 인덱스 1
+    area_location: useful.length > 2 ? useful.slice(2).join(' > ') : null,
+  };
+}
+// 그리고:
+area_level    = explicitLevel    ?? parsedArea.area_level;     // 엑셀에 Level 컬럼 있으면 우선
+area_location = explicitLocation ?? parsedArea.area_location;  // Location/Location Detail 컬럼 우선
 ```
 
-## 변경 파일 요약
+### 실제 DB 샘플에서 발견된 문제
 
-- `supabase/migrations/<new>.sql` — case-insensitive unique 인덱스 3개
-- `supabase/functions/auto-create-master-user/index.ts` — 4개 `.eq` → `.ilike`
-- `src/pages/AdminPage.tsx` — PIC/ENG cascade 업데이트와 카운트 조회 `.eq` → `.ilike`
-- `src/lib/defect-master-autocreate.ts` — 각 ensure 함수에서 INSERT 전 `ilike` 중복 확인 + 발견 시 캐시에 흡수
+| `area_raw` | 현재 결과 | 문제 |
+|---|---|---|
+| `Shaw Tower Redevelopment > STR > Level 24` | type=Project, level=**STR**, loc=**Level 24** | parts<4라 분기 실패. Discipline이 Level로, Level이 Location으로 들어감 (사용자가 우려한 바로 그 케이스) |
+| `Shaw Tower > STR > Level 07 > Office Area` (엑셀에 Location="Level 07"도 있음) | type=STR, level=Level 07, loc=**Level 07** | explicitLocation이 우선되어 Level 값이 Location에 중복 |
+| `Shaw Tower > STR > Level 14 > Lift Lobby (Low Zone)` (엑셀에 Location=다른 area 전체 경로) | level=Level 14, loc=`Shaw Tower > STR > Level 12 > Fire Lift Lobby 2` | LL "Location" 컬럼이 신뢰 못 할 자유 입력. 다른 area의 raw를 그대로 받기도 함 |
+| `Shaw Tower > STR > Level 17` + Location="Closed By Organization" | loc="Closed By Organization" | 상태 정보가 Location에 |
+| `Shaw Tower Redevelopment` (parts=1) | level=null, loc=null | 정상 |
+
+### 패턴 정리
+
+LL 엑셀의 area는 일관되게 **`Project > Discipline > Level XX [> Detail Location...]`** 구조입니다. 즉:
+- **마지막 토큰이 "Level NN" 형태이면 Level만 있고 Location은 없음**
+- **"Level NN" 다음 토큰들이 진짜 Location**
+- 별도 "Level"/"Location" 컬럼은 **신뢰성이 낮음** (자유 입력, 다른 area의 raw, 상태 텍스트 등)
+
+## 새 분류 로직
+
+### 1. Area_raw 우선 파싱 (구조 인식 기반)
+
+```ts
+function parseArea(area: string | null) {
+  if (!area) return { area_type: null, area_level: null, area_location: null };
+  const parts = area.split('>').map(s => s.trim()).filter(Boolean);
+  if (parts.length === 0) return { area_type: null, area_level: null, area_location: null };
+
+  // Level 토큰 탐지 — "Level 5", "L05", "Lvl 12", "B1", "Basement 1", "Roof",
+  // "Mezzanine", "Ground", "GF", "M&E Floor" 등
+  const levelIdx = parts.findIndex(isLevelToken);
+
+  let area_type: string | null = null;
+  let area_level: string | null = null;
+  let area_location: string | null = null;
+
+  if (levelIdx >= 0) {
+    // type = level 직전 토큰 (Discipline). 없으면 첫 번째 토큰.
+    area_type = levelIdx > 0 ? parts[levelIdx - 1] : null;
+    area_level = canonicalLevel(parts[levelIdx]);
+    // location = level 이후 모든 토큰을 join. Level과 동일하면 비움.
+    const tail = parts.slice(levelIdx + 1)
+      .filter(p => !isLevelToken(p))                        // 뒤에 또 Level이 와도 제외
+      .filter(p => normalizeForCompare(p) !== normalizeForCompare(area_level)); // 중복 제거
+    area_location = tail.length > 0 ? tail.join(' > ') : null;
+  } else {
+    // Level 토큰이 없는 경우: 기존 인덱스 기반 fallback
+    const useful = parts.length >= 4 ? parts.slice(1) : parts;
+    area_type = useful[0] ?? null;
+    area_level = null;                                       // Discipline을 Level로 잘못 넣지 않음
+    area_location = useful.length > 1 ? useful.slice(1).join(' > ') : null;
+  }
+  return { area_type, area_level, area_location };
+}
+```
+
+`isLevelToken` 패턴:
+- `^level\s*\d+` (Level 1, Level 07)
+- `^l\s*\d+$` / `^lvl\s*\d+` (L1, L05, Lvl 12)
+- `^b\s*\d+$` / `^basement\s*\d+?` (B1, Basement 2)
+- `^roof(\s|$)` / `^rf$` / `^ground(\s|floor|$)` / `^gf$` / `^mezzanine` / `^attic`
+
+### 2. Explicit "Level"/"Location" 컬럼 안전 병합
+
+엑셀의 별도 컬럼 값을 무조건 우선시키던 동작을 **검증 후 병합**으로 변경:
+
+```ts
+function reconcileAreaFields(
+  parsedFromRaw: { area_type, area_level, area_location },
+  explicitLevel: string | null,
+  explicitLocation: string | null,
+  areaRaw: string | null,
+) {
+  // Level: explicit가 진짜 Level 토큰 형태이고 raw에서도 매칭되면 채택, 아니면 raw 우선
+  let level = parsedFromRaw.area_level;
+  if (explicitLevel && isLevelToken(explicitLevel)) {
+    level = canonicalLevel(explicitLevel);
+  } else if (!level && explicitLevel) {
+    // raw에서 못 찾았고 explicit가 있다면 그래도 사용 (단, "STR"같은 비-level은 거부)
+    level = isPlausibleLevel(explicitLevel) ? canonicalLevel(explicitLevel) : null;
+  }
+
+  // Location: explicit가 raw 안에 포함된 부분문자열이거나 raw가 비어있을 때만 채택.
+  //           Level 값과 동일하면 버림. Status text/숫자만 있으면 버림.
+  let location = parsedFromRaw.area_location;
+  if (explicitLocation) {
+    const same = level && normalizeForCompare(explicitLocation) === normalizeForCompare(level);
+    const looksLikeStatus = /^(closed|open|n\/a)/i.test(explicitLocation);
+    const looksLikeOtherArea = explicitLocation.includes('>'); // 다른 area의 raw 통째 → 거부
+    const isJustNumber = /^\d+$/.test(explicitLocation);
+    if (!same && !looksLikeStatus && !looksLikeOtherArea && !isJustNumber) {
+      location = explicitLocation;
+    }
+  }
+
+  // 최종 안전장치: location이 level과 동일하거나 level 토큰만 포함하면 비움
+  if (location && level && normalizeForCompare(location) === normalizeForCompare(level)) {
+    location = null;
+  }
+  if (location && isLevelToken(location)) {
+    location = null;
+  }
+
+  return { area_type: parsedFromRaw.area_type, area_level: level, area_location: location };
+}
+```
+
+### 3. Canonical Level
+
+`Level 7`, `Level 07`, `LEVEL 7`, `L7`, `L07` → 모두 `Level 07`로 정규화 (2자리 zero-pad). 이렇게 하면 dashboard/grouping에서도 일관됩니다.
+
+### 4. 기존 데이터 마이그레이션 (선택)
+
+새 로직만으로는 이미 잘못 저장된 12,000+ row가 그대로 남습니다. 동일 로직을 SQL/스크립트로 일괄 재처리하는 일회성 마이그레이션을 함께 실행해 모든 기존 row의 `area_type/area_level/area_location`을 `area_raw`로부터 재계산합니다.
+
+## 변경 파일
+
+- `src/lib/defect-parser.ts` — `parseArea` 재작성, `isLevelToken`/`canonicalLevel`/`reconcileAreaFields` 신규, 호출부(line 281–299) 갱신
+- `src/test/defect-parser.test.ts` (신규 또는 기존 확장) — 위 표의 케이스들을 회귀 테스트로 추가
+- 일회성 데이터 정리 — 새 로직을 노드 스크립트로 실행하여 기존 `defect_items`의 area_* 3개 컬럼 재계산 후 update (사용자가 원하면 진행)
 
 ## 적용되지 않는 것
 
-- 이미 저장된 마스터의 표기를 일괄 normalize 하지 않음 (사용자가 의도적으로 입력한 표기 보존).
-- `team`, `user_type` 등 enum 컬럼은 변경 없음 — 이미 정규화되어 들어옴.
-- `login_id`/`email`은 별개 도메인 — 본 플랜 범위 외.
+- `area_raw` 컬럼 자체는 변경하지 않음 (원본 보존).
+- 미래 import의 분류만 바꾸는 것이 우선; 기존 데이터 재처리는 사용자 승인 후 별도 단계로.
