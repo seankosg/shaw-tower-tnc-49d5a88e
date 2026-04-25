@@ -401,8 +401,12 @@ export default function SubtestList() {
       'pred_delay_asof', 't1_delay_asof', 't2_delay_asof',
       'pred_delay_on', 't1_delay_on', 't2_delay_on',
     ];
-    const hasDataUrlFilters = dataUrlFilterKeys.some(k => searchParams.has(k));
-    const next = hasDataUrlFilters ? [] : baseFilters.filter(f => !Object.values(urlMap).includes(f.id));
+    // Merge: keep saved column filters except those that the URL is going to override.
+    const urlOverriddenColIds = new Set<string>();
+    for (const [param, col] of Object.entries(urlMap)) {
+      if (searchParams.has(param)) urlOverriddenColIds.add(col);
+    }
+    const next = baseFilters.filter(f => !urlOverriddenColIds.has(f.id));
     for (const [param, col] of Object.entries(urlMap)) {
       const v = searchParams.get(param);
       if (v) {
@@ -416,8 +420,8 @@ export default function SubtestList() {
     }
     setSorting(baseSorting);
     setColumnFilters(next);
-    setGlobalFilter(hasDataUrlFilters ? '' : baseGlobal);
-    setSearchInput(hasDataUrlFilters ? '' : baseGlobal);
+    setGlobalFilter(baseGlobal);
+    setSearchInput(baseGlobal);
     setColumnSizing(baseSizing);
     setStateLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
