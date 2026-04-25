@@ -625,7 +625,7 @@ export default function DefectRawDataPage() {
   }, [getLabel, optionFields]);
 
   const columnVisibility = useMemo<VisibilityState>(() => {
-    const visibility: VisibilityState = {};
+    const visibility: VisibilityState = { __select: true };
     for (const field of DEFECT_RAW_FIELDS) visibility[field] = field === 'issue_no' ? true : isFieldVisible(field);
     return visibility;
   }, [isFieldVisible]);
@@ -633,17 +633,20 @@ export default function DefectRawDataPage() {
   const columnOrder = useMemo(() => {
     const allIds = [...DEFECT_RAW_FIELDS] as string[];
     const remaining = allIds.filter((id) => id !== 'issue_no');
-    return ['issue_no', ...sortFieldNames(remaining)];
+    return ['__select', 'issue_no', ...sortFieldNames(remaining)];
   }, [sortFieldNames]);
 
   const table = useReactTable({
     data: filteredBaseData,
     columns,
-    state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder },
+    state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,
     onColumnSizingChange: setColumnSizing,
+    onRowSelectionChange: setRowSelection,
+    getRowId: (row) => row.id,
+    enableRowSelection: true,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -656,6 +659,53 @@ export default function DefectRawDataPage() {
     columnResizeMode: 'onEnd',
     defaultColumn: { minSize: 64, maxSize: 640 },
   });
+
+  // Clear selection when filters/search/url change to avoid acting on hidden rows
+  useEffect(() => {
+    setRowSelection({});
+  }, [columnFilters, globalFilter, searchParams]);
+
+  const selectedRows = useMemo(
+    () => table.getSelectedRowModel().rows.map((r) => r.original),
+    [rowSelection, filteredBaseData],
+  );
+
+  const bulkFields = useMemo<BulkEditableField[]>(() => [
+    // Classification
+    { field: 'team', label: getLabel('team'), inputType: 'select', group: 'Classification', options: optionFields.team },
+    { field: 'main_trade', label: getLabel('main_trade'), inputType: 'select', group: 'Classification', options: optionFields.main_trade },
+    { field: 'sub_trade', label: getLabel('sub_trade'), inputType: 'select', group: 'Classification', options: optionFields.sub_trade },
+    { field: 'work_type', label: getLabel('work_type'), inputType: 'select', group: 'Classification', options: optionFields.work_type },
+    { field: 'priority', label: getLabel('priority'), inputType: 'select', group: 'Classification', options: optionFields.priority },
+    { field: 'defect_type', label: getLabel('defect_type'), inputType: 'select', group: 'Classification', options: optionFields.defect_type },
+    // Assignment
+    { field: 'subcontractor_name', label: getLabel('subcontractor_name'), inputType: 'select', group: 'Assignment', options: optionFields.subcontractor_name },
+    { field: 'subsub_name', label: getLabel('subsub_name'), inputType: 'select', group: 'Assignment', options: optionFields.subsub_name },
+    { field: 'hdec_pic_name', label: getLabel('hdec_pic_name'), inputType: 'select', group: 'Assignment', options: optionFields.hdec_pic_name },
+    { field: 'hdec_eng_name', label: getLabel('hdec_eng_name'), inputType: 'select', group: 'Assignment', options: optionFields.hdec_eng_name },
+    // Status
+    { field: 'status', label: getLabel('status'), inputType: 'select', group: 'Status', options: optionFields.status },
+    { field: 'closure_status', label: getLabel('closure_status'), inputType: 'select', group: 'Status', options: optionFields.closure_status },
+    { field: 'completion_status', label: getLabel('completion_status'), inputType: 'select', group: 'Status', options: [
+      { value: 'Planned', label: 'Planned' }, { value: 'WIP', label: 'WIP' }, { value: 'Done', label: 'Done' }, { value: 'Delay', label: 'Delay' },
+    ] },
+    // Schedule
+    { field: 'planned_start_date', label: getLabel('planned_start_date'), inputType: 'date', group: 'Schedule' },
+    { field: 'planned_completion_date', label: getLabel('planned_completion_date'), inputType: 'date', group: 'Schedule' },
+    { field: 'planned_closure_date', label: getLabel('planned_closure_date'), inputType: 'date', group: 'Schedule' },
+    { field: 'actual_start_date', label: getLabel('actual_start_date'), inputType: 'date', group: 'Schedule' },
+    { field: 'actual_completion_date', label: getLabel('actual_completion_date'), inputType: 'date', group: 'Schedule' },
+    { field: 'actual_closure_date', label: getLabel('actual_closure_date'), inputType: 'date', group: 'Schedule' },
+    // Notes
+    { field: 'remarks', label: getLabel('remarks'), inputType: 'text', group: 'Notes' },
+    { field: 'hdec_comments', label: getLabel('hdec_comments'), inputType: 'text', group: 'Notes' },
+  ], [getLabel, optionFields]);
+
+  const handleBulkApplied = useCallback(({ field, value, ids }: { field: string; value: string | number | null; ids: string[] }) => {
+    // Optimistically apply changes locally so the table reflects updates without a full refetch
+    setItems((prev) => prev.map((row) => (ids.includes(row.id) ? ({ ...row, [field]: value as any }) : row)));
+    setRowSelection({});
+  }, []);
 
   const activeUrlFilters = useMemo(() => {
     const labels: Record<string, string> = {
