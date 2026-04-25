@@ -1419,6 +1419,9 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master' | 'hdec_eng_ma
     load();
   };
 
+  // Case-insensitive exact match for PostgREST ilike — escape wildcards
+  const ciEq = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
+
   const renameRow = async (r: MasterRow, newName: string) => {
     const trimmed = newName.trim();
     if (!trimmed || trimmed === r.name) return;
@@ -1426,9 +1429,10 @@ function MasterTable({ table, title }: { table: 'hdec_pic_master' | 'hdec_eng_ma
     if (error) { toast({ title: 'Rename failed', description: error.message, variant: 'destructive' }); return; }
     if (table === 'hdec_pic_master' || table === 'hdec_eng_master') {
       if (updatesSubtests) {
-        await supabase.from('subtests').update({ hdec_pic_name: trimmed } as any).eq('hdec_pic_name', r.name);
+        await supabase.from('subtests').update({ [profileField]: trimmed } as any).ilike(profileField, ciEq(r.name));
       }
-      await (supabase.from('profiles') as any).update({ [profileField]: trimmed }).eq(profileField, r.name);
+      await supabase.from('defect_items').update({ [profileField]: trimmed } as any).ilike(profileField, ciEq(r.name));
+      await (supabase.from('profiles') as any).update({ [profileField]: trimmed }).ilike(profileField, ciEq(r.name));
     }
     toast({ title: 'Renamed', description: 'Linked records updated' });
     load();
