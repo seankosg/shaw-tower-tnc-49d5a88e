@@ -605,12 +605,15 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `${issueAssignment.subcontractor_issue_no} already exists in this project.` });
         continue;
       }
-      const resolvedTeam = resolveDefectTeam(row, profileTeamMap);
+      // Team: if neither Excel value nor Field Discipline / Profile mapping resolves a team,
+      // keep the existing DB team rather than overwriting with null.
+      const resolvedTeam = resolveDefectTeam(row, profileTeamMap) ?? existing?.team ?? null;
       const logReason = resolvedTeam ? {} : { reason_code: 'team_unresolved', reason_detail: 'Team could not be resolved from Field Discipline or User Management profile.' };
       if (!resolvedTeam) teamUnresolved++;
+      // actual_completion_date: when progress < 100 and Excel is blank, keep existing DB value.
       const actualCompletionDate = Number(row.actual_progress_pct ?? 0) >= 100
         ? (row.actual_completion_date ?? existing?.actual_completion_date ?? dataDate)
-        : (row.actual_completion_date ?? null);
+        : (row.actual_completion_date ?? existing?.actual_completion_date ?? null);
 
       const statusInputs = {
         planned_start_date: row.planned_start_date,
