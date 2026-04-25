@@ -326,6 +326,7 @@ export default function DefectRawDataPage() {
   const [exportMode, setExportMode] = useState<'single' | 'per-subcon'>('single');
   const [exportFormat, setExportFormat] = useState<'view' | 'reimport'>('view');
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const tableRef = useRef<HTMLDivElement>(null);
 
   const autoSizeColumn = (columnId: string) => {
