@@ -466,6 +466,49 @@ export default function SubtestList() {
     fetchDataDate();
   }, []);
 
+  // Load comment summary (count + unread) for visible subtests, refresh on realtime changes
+  useEffect(() => {
+    if (!user || data.length === 0) {
+      setCommentSummary({});
+      return;
+    }
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const refresh = async () => {
+      const ids = data.map((r) => r.id);
+      const chunkSize = 500;
+      const next: Record<string, { count: number; hasUnread: boolean }> = {};
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const { data: rows, error } = await (supabase as any).rpc('get_subtest_comment_summary', { _subtest_ids: chunk });
+        if (error || !rows) continue;
+        for (const row of rows as Array<{ subtest_id: string; comment_count: number; has_unread: boolean }>) {
+          next[row.subtest_id] = { count: row.comment_count, hasUnread: row.has_unread };
+        }
+      }
+      if (!cancelled) setCommentSummary(next);
+    };
+
+    const debouncedRefresh = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(refresh, 400);
+    };
+
+    refresh();
+
+    const channel = supabase
+      .channel('subtest-comments-summary')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'subtest_comments' }, debouncedRefresh)
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [user, data]);
+
   const fetchDataDate = async () => {
     const { data } = await supabase
       .from('upload_batches')
