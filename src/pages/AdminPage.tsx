@@ -470,6 +470,7 @@ function UsersTab() {
             subcons={subcons}
             subsubs={subsubs}
             hdecPics={hdecPics}
+            hdecEngs={hdecEngs}
             onCreated={() => { setCreateOpen(false); load(); }}
           />
         </Dialog>
@@ -557,6 +558,7 @@ function UsersTab() {
           subcons={subcons}
           subsubs={subsubs}
           hdecPics={hdecPics}
+          hdecEngs={hdecEngs}
           onClose={() => setEditTarget(null)}
           onSaved={() => { setEditTarget(null); load(); }}
         />
