@@ -8,6 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SuggestField } from '@/components/ui/suggest-field';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { MessageSquare } from 'lucide-react';
+import { DefectComments } from '@/components/defects/DefectComments';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
@@ -49,6 +51,7 @@ export default function DefectDetailPage() {
   const [hdecOptions, setHdecOptions] = useState<HdecMaster[]>([]);
   const [hdecEngOptions, setHdecEngOptions] = useState<HdecMaster[]>([]);
   const [suggestPool, setSuggestPool] = useState<{ area_level: string[]; area_location: string[]; main_trade: string[]; sub_trade: string[]; work_type: string[] }>({ area_level: [], area_location: [], main_trade: [], sub_trade: [], work_type: [] });
+  const [commentCount, setCommentCount] = useState(0);
   const { isFieldVisible, isFieldRequired, getLabel } = useDefectFieldConfig();
 
   const loadScHistory = async (defectId: string) => {
@@ -524,6 +527,26 @@ export default function DefectDetailPage() {
               </TableBody>
             </Table>
           )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Comments
+            {commentCount > 0 && (
+              <span className="ml-1 inline-flex items-center justify-center rounded-full bg-muted text-xs font-medium px-2 py-0.5">
+                {commentCount}
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DefectComments
+            defectId={record.id}
+            defectTeam={record.team ?? null}
+            onCountChange={setCommentCount}
+          />
         </CardContent>
       </Card>
     </div>

@@ -14,7 +14,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Download, Filter, Search, Upload, X } from 'lucide-react';
+import { Download, Filter, MessageSquare, Search, Upload, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -328,6 +328,7 @@ export default function DefectRawDataPage() {
   const [exportFormat, setExportFormat] = useState<'view' | 'reimport'>('view');
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [commentSummary, setCommentSummary] = useState<Record<string, { count: number; hasUnread: boolean }>>({});
   const tableRef = useRef<HTMLDivElement>(null);
 
   const autoSizeColumn = (columnId: string) => {
@@ -376,6 +377,49 @@ export default function DefectRawDataPage() {
     load();
     return () => { cancelled = true; };
   }, []);
+
+  // Load comment summary (count + unread) for visible defects, and refresh on realtime changes
+  useEffect(() => {
+    if (!user || items.length === 0) {
+      setCommentSummary({});
+      return;
+    }
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const refresh = async () => {
+      const ids = items.map((i) => i.id);
+      const chunkSize = 500;
+      const next: Record<string, { count: number; hasUnread: boolean }> = {};
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const { data, error } = await (supabase as any).rpc('get_defect_comment_summary', { _defect_ids: chunk });
+        if (error || !data) continue;
+        for (const row of data as Array<{ defect_id: string; comment_count: number; has_unread: boolean }>) {
+          next[row.defect_id] = { count: row.comment_count, hasUnread: row.has_unread };
+        }
+      }
+      if (!cancelled) setCommentSummary(next);
+    };
+
+    const debouncedRefresh = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(refresh, 400);
+    };
+
+    refresh();
+
+    const channel = supabase
+      .channel('defect-comments-summary')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'defect_comments' }, debouncedRefresh)
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [user, items]);
 
   useEffect(() => {
     setStateLoaded(false);
@@ -616,6 +660,29 @@ export default function DefectRawDataPage() {
         },
         cell: ({ row, getValue }) => {
           const value = getValue() as any;
+          if (field === 'issue_no') {
+            const summary = commentSummary[row.original.id];
+            return (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="truncate">{String(value ?? '—')}</span>
+                {summary && summary.count > 0 && (
+                  <span
+                    title={`${summary.count} comment${summary.count > 1 ? 's' : ''}${summary.hasUnread ? ' · unread' : ''}`}
+                    className={cn(
+                      'inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] leading-none',
+                      summary.hasUnread
+                        ? 'text-amber-600 font-bold bg-amber-500/10'
+                        : 'text-muted-foreground',
+                    )}
+                  >
+                    {summary.hasUnread && <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                    <MessageSquare className="h-3 w-3" />
+                    {summary.count}
+                  </span>
+                )}
+              </span>
+            );
+          }
           if (field === 'closure_status') return <DefectStatusBadge status={row.original.closure_status ?? row.original.status} />;
           if (field === 'status') return <DefectStatusBadge status={row.original.status} />;
           if (field === 'completion_status') return <DefectStatusBadge status={row.original.completion_status} />;
@@ -640,7 +707,7 @@ export default function DefectRawDataPage() {
     });
 
     return [selectColumn, ...dataColumns];
-  }, [getLabel, optionFields]);
+  }, [getLabel, optionFields, commentSummary]);
 
   const columnVisibility = useMemo<VisibilityState>(() => {
     const visibility: VisibilityState = { __select: true };
