@@ -34,6 +34,7 @@ interface Profile {
   id: string; user_id: string; name: string | null; email: string | null;
   login_id: string | null; user_type: UserType;
   subcontractor_name: string | null; subsub_name: string | null; hdec_pic_name: string | null;
+  hdec_eng_name: string | null;
   must_change_password: boolean; is_active: boolean;
   team: TeamType | null;
 }
@@ -100,7 +101,7 @@ export default function AdminPage() {
       <Tabs defaultValue="users">
         <TabsList className="flex-wrap">
           <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="masters">Subcontractor / HDEC PIC</TabsTrigger>
+          <TabsTrigger value="masters">Subcontractor / HDEC PIC / ENG</TabsTrigger>
           <TabsTrigger value="systems">Systems</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="fields">Field Config</TabsTrigger>
