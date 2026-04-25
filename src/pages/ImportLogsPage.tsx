@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { formatDateTimeDdMmmYyyy, formatDdMmm, formatSignedDays } from '@/lib/format';
+import { RollbackDialog } from '@/components/import/RollbackDialog';
 
 interface UploadBatch {
   id: string;
