@@ -285,6 +285,7 @@ export type Database = {
           defect_type: string | null
           description: string | null
           hdec_comments: string | null
+          hdec_eng_name: string | null
           hdec_pic_name: string | null
           id: string
           is_active: boolean
@@ -330,6 +331,7 @@ export type Database = {
           defect_type?: string | null
           description?: string | null
           hdec_comments?: string | null
+          hdec_eng_name?: string | null
           hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
@@ -375,6 +377,7 @@ export type Database = {
           defect_type?: string | null
           description?: string | null
           hdec_comments?: string | null
+          hdec_eng_name?: string | null
           hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
@@ -647,6 +650,27 @@ export type Database = {
           is_required?: boolean
           sort_order?: number
           visible_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Relationships: []
+      }
+      hdec_eng_master: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
         }
         Relationships: []
       }
