@@ -135,8 +135,8 @@ export default function DashboardPage() {
     const overdueCountAll = filteredSubtests.filter(s => isOverdueAllStages(s, dataDate)).length;
     const atRiskCountAll = filteredSubtests.filter(s => isAtRiskAllStages(s, today, atRiskDays)).length;
 
-    // Stage-specific
-    const stageStat = (stage: 'pred' | 't1' | 't2' | 'r1' | 'r2', plannedField: keyof SubtestForDashboard) => {
+    // Stage-specific. R2 here = R2 Approval milestone (r2a).
+    const stageStat = (stage: 'pred' | 't1' | 't2' | 'r1' | 'r2a', plannedField: keyof SubtestForDashboard) => {
       const done = filteredSubtests.filter(s => isStageDone(s, stage)).length;
       const overdue = filteredSubtests.filter(s => {
         const planned = s[plannedField] as string | null | undefined;

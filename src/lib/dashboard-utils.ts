@@ -81,11 +81,12 @@ export function maxDelayDays(s: SubtestForDashboard, today: string): number {
 }
 
 /**
- * All 5 workflow stages — used by the dedicated all-stage Overdue / At-Risk
+ * All workflow stages — used by the dedicated all-stage Overdue / At-Risk
  * alert banner (Tier 3) which intentionally surfaces R1/R2 report delays
  * alongside Pred/T1/T2 execution delays.
+ * R2 is split into Submission (r2s) and Approval (r2a) milestones.
  */
-const ALL_STAGES: StageKey[] = ['pred', 't1', 't2', 'r1', 'r2'];
+const ALL_STAGES: StageKey[] = ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'];
 
 /** True if any of the 5 stages has planned date on/before as-of date and not Done. */
 export function isOverdueAllStages(s: SubtestForDashboard, asOfDate: string): boolean {
@@ -276,7 +277,8 @@ export function aggregatePlanActualByGroup(
       t1: calc('t1'),
       t2: calc('t2'),
       r1: calc('r1'),
-      r2: calc('r2'),
+      // r2 entry uses the final approval milestone (r2a) for back-compat.
+      r2: calc('r2a'),
     });
   }
   // default sort: most-delayed (largest negative cumulative variance T2 then T1) first
