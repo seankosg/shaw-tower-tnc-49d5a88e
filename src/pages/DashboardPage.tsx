@@ -126,9 +126,12 @@ export default function DashboardPage() {
     const remaining = total - totalDone;
     const progressPct = total ? Math.round((totalDone / total) * 1000) / 10 : 0;
 
-    // Overdue (any stage) as of Data Date
+    // Overdue (any stage) as of Data Date — KPI uses Pred/T1/T2 only
     const overdueCount = filteredSubtests.filter(s => isOverdue(s, dataDate)).length;
     const atRiskCount = filteredSubtests.filter(s => isAtRisk(s, today, atRiskDays)).length;
+    // All-stage Overdue/At-Risk (Pred/T1/T2/R1/R2) — used by Tier 3 alert banner
+    const overdueCountAll = filteredSubtests.filter(s => isOverdueAllStages(s, dataDate)).length;
+    const atRiskCountAll = filteredSubtests.filter(s => isAtRiskAllStages(s, today, atRiskDays)).length;
 
     // Stage-specific
     const stageStat = (stage: 'pred' | 't1' | 't2' | 'r1' | 'r2', plannedField: keyof SubtestForDashboard) => {
