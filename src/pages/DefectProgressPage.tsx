@@ -3,10 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { DefectProgressMatrix } from '@/components/defects/DefectProgressMatrix';
 import { DefectDailyCumulativeChart } from '@/components/defects/DefectDailyCumulativeChart';
 import { aggregateDefectProgress, defaultDefectDateRange, type DefectProgressBucket, type DefectProgressDateField, type DefectProgressGroupBy } from '@/lib/defect-progress-utils';
 import { type DefectItem } from '@/lib/defect-utils';
+import { useLatestDataDate } from '@/hooks/useLatestDataDate';
+import { formatDdMmm } from '@/lib/format';
 
 const GROUP_LABELS: Record<DefectProgressGroupBy, string> = {
   team: 'Team',
