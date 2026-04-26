@@ -195,8 +195,12 @@ export function SubtestComments({
       authorId: c.author_user_id,
       authorName: getAuthorName(c.author_user_id),
       message: c.message,
+      recipients: c.recipients ?? [],
     });
+    // Inherit parent recipients by default; user can adjust before sending.
+    setRecipients(((c.recipients ?? []) as RecipientKey[]).filter((r) => RECIPIENT_KEYS.has(r)));
   };
+
 
   const handleEdit = (c: SubtestComment) => {
     setEditingId(c.id);
