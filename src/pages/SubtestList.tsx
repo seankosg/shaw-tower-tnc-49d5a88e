@@ -350,6 +350,7 @@ export default function SubtestList() {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [commentSummary, setCommentSummary] = useState<Record<string, { count: number; hasUnread: boolean }>>({});
   const urlStatusFilter = searchParams.get('status');
+  const urlScope = searchParams.get('scope');
   const urlAtRiskDays = Number(searchParams.get('at_risk_days') ?? '2');
   const tableRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
