@@ -283,7 +283,28 @@ function VarianceCell({ value, invert = false }: { value: number; invert?: boole
   if (value > 0) return <span className={cn('tabular-nums', positiveBad ? 'font-semibold text-destructive' : 'text-green-700 dark:text-green-400')}>+{value}</span>;
   return <span className={cn('tabular-nums', positiveBad ? 'text-green-700 dark:text-green-400' : 'font-semibold text-destructive')}>{value}</span>;
 }
-function ClickNum({ value, onClick, hideZero = false }: { value: number; onClick?: () => void; hideZero?: boolean }) { if (hideZero && value === 0) return <span className="tabular-nums text-muted-foreground/40" />; return onClick ? <button type="button" className={cn('tabular-nums hover:underline', value === 0 && 'text-muted-foreground/40')} onClick={(e) => { e.stopPropagation(); onClick(); }}>{value}</button> : <span className={cn('tabular-nums', value === 0 && 'text-muted-foreground/40')}>{value}</span>; }
+function ClickNum({ value, onClick, hideZero = false }: { value: number; onClick?: () => void; hideZero?: boolean }) {
+  if (hideZero && value === 0) return <span className="tabular-nums text-muted-foreground/40" />;
+  return onClick
+    ? <button
+        type="button"
+        className={cn(
+          'tabular-nums hover:underline',
+          value === 0 && 'text-muted-foreground/40',
+          value !== 0 && 'underline decoration-dotted decoration-muted-foreground/30 underline-offset-2 hover:decoration-foreground'
+        )}
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
+      >{value}</button>
+    : <span className={cn('tabular-nums', value === 0 && 'text-muted-foreground/40')}>{value}</span>;
+}
+function ClickVariance({ value, invert = false, onClick }: { value: number; invert?: boolean; onClick?: () => void }) {
+  if (!onClick) return <VarianceCell value={value} invert={invert} />;
+  return (
+    <button type="button" className="hover:underline" onClick={(e) => { e.stopPropagation(); onClick(); }}>
+      <VarianceCell value={value} invert={invert} />
+    </button>
+  );
+}
 function StageBadge({ stage, label }: { stage: StageKey; label: string }) {
   const cls = stage === 'completion'
     ? 'bg-primary/10 text-primary border-primary/30'
