@@ -357,7 +357,40 @@ export async function getDefectExcelSheetNames(file: File): Promise<string[]> {
   return workbook.SheetNames ?? [];
 }
 
-export async function parseDefectExcel(file: File, sheetName?: string): Promise<ParseDefectResult> {
+/**
+ * Quickly extract just the header row + first sample row from a Defect Excel file
+ * (without parsing all data rows). Used to populate the "Select Columns" dialog
+ * without paying the full parse cost.
+ */
+export async function getDefectExcelHeaders(
+  file: File,
+  sheetName?: string,
+): Promise<{ headers: string[]; sample: Record<string, unknown>; isReimport: boolean; sheetName: string } | null> {
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: false });
+  const sheetsToScan = sheetName && workbook.SheetNames.includes(sheetName)
+    ? [sheetName]
+    : workbook.SheetNames;
+
+  for (const name of sheetsToScan) {
+    const ws = workbook.Sheets[name];
+    if (!ws) continue;
+    const detected = detectHeaderRow(ws);
+    if (!detected) continue;
+    const candidateRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+      range: detected.headerRowIdx,
+      defval: '',
+      blankrows: false,
+    });
+    const headers = Object.keys(candidateRows[0] ?? {});
+    const sample = candidateRows[0] ?? {};
+    const isReimport = detectReimportMarker(ws);
+    return { headers, sample, isReimport, sheetName: name };
+  }
+  return null;
+}
+
+export async function parseDefectExcel(file: File, sheetName?: string, excludedHeaders?: string[]): Promise<ParseDefectResult> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: false });
 
