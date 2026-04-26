@@ -305,6 +305,7 @@ interface DefectImportContextValue {
   clearAll: () => void;
   setFileDataDate: (id: string, dataDate: string) => void;
   setFileSheet: (id: string, sheetName: string) => Promise<void>;
+  setFileExcludedHeaders: (id: string, excluded: string[]) => Promise<void>;
   startImport: () => Promise<void>;
   setDecisionAction: (key: string, action: SimilarDecisionAction) => void;
   confirmSimilarDecisions: () => Promise<void>;
@@ -328,10 +329,10 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
   const [pendingImportFiles, setPendingImportFiles] = useState<DefectImportFile[] | null>(null);
   const [confirmedDecisions, setConfirmedDecisions] = useState<MasterNameDecisions>({});
 
-  /** Parse a defect file (optionally with explicit sheet) and update file state. */
-  const parseAndApply = useCallback(async (id: string, file: File, sheetName?: string) => {
+  /** Parse a defect file (optionally with explicit sheet + excluded headers) and update file state. */
+  const parseAndApply = useCallback(async (id: string, file: File, sheetName?: string, excludedHeaders?: string[]) => {
     try {
-      const parsed = await parseDefectExcel(file, sheetName);
+      const parsed = await parseDefectExcel(file, sheetName, excludedHeaders);
       setFiles((current) => current.map((f) => f.id === id ? {
         ...f,
         status: 'ready',
