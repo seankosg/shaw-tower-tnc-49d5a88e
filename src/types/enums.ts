@@ -8,15 +8,25 @@ export const TC_STATUS_OPTIONS: TcStatus[] = ['Planned', 'WIP', 'Done', 'Hold'];
 
 // R1/R2 Report Status (mirrors PostgreSQL enum public.report_status)
 export type ReportStatus = 'Planned' | 'Submitted' | 'Under Review' | 'Approved' | 'Returned';
+// Full enum value list — used for legacy reads and admin tools.
 export const REPORT_STATUS_OPTIONS: ReportStatus[] = ['Planned', 'Submitted', 'Under Review', 'Approved', 'Returned'];
+
+// Stage-specific input options shown in dropdowns.
+export const R1_STATUS_OPTIONS: ReportStatus[] = ['Planned', 'Submitted', 'Under Review', 'Approved', 'Returned'];
+// R2 is simplified to a 3-state lifecycle in the UI.
+export const R2_STATUS_OPTIONS: ReportStatus[] = ['Planned', 'Submitted', 'Approved'];
 
 // R1 is considered "submitted/done" once it has left contractor's hand
 export const R1_DONE_STATUSES: ReportStatus[] = ['Submitted', 'Under Review', 'Approved'];
+// R2 submission milestone reached when status >= Submitted
+export const R2_SUBMITTED_STATUSES: ReportStatus[] = ['Submitted', 'Approved'];
 // R2 final completion = HDEC report Approved by client
 export const R2_DONE_STATUSES: ReportStatus[] = ['Approved'];
 
 export const isR1Done = (s: ReportStatus | string | null | undefined): boolean =>
   !!s && (R1_DONE_STATUSES as string[]).includes(s);
+export const isR2Submitted = (s: ReportStatus | string | null | undefined): boolean =>
+  !!s && (R2_SUBMITTED_STATUSES as string[]).includes(s);
 export const isR2Done = (s: ReportStatus | string | null | undefined): boolean =>
   !!s && (R2_DONE_STATUSES as string[]).includes(s);
 
