@@ -897,7 +897,7 @@ function PlanActualTable({
   }, [rows]);
 
   type StageDef = {
-    stage: 'pred' | 't1' | 't2';
+    stage: 'pred' | 't1' | 't2' | 'r1' | 'r2';
     label: string;
     metrics: PlanActualMetrics;
     planTo?: string;
