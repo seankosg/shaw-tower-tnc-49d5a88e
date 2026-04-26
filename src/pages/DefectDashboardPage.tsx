@@ -529,6 +529,9 @@ function PlanActualTable({
           </Table>
         </div>
       </div>
+
+      {/* ─── Recent Comments Feed ─── */}
+      <RecentDefectComments />
     </div>
   );
 }
