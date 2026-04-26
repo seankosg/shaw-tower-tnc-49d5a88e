@@ -952,7 +952,7 @@ export default function SubtestList() {
 
       return true;
     });
-  }, [data, urlStatusFilter, urlAtRiskDays,
+  }, [data, urlStatusFilter, urlAtRiskDays, urlScope,
       urlPredPlannedTo, urlT1PlannedTo, urlT2PlannedTo, urlPredActualTo, urlT1ActualTo, urlT2ActualTo,
       urlPredPlannedOn, urlT1PlannedOn, urlT2PlannedOn, urlPredActualOn, urlT1ActualOn, urlT2ActualOn,
       urlPredDelayAsOf, urlT1DelayAsOf, urlT2DelayAsOf, urlPredDelayOn, urlT1DelayOn, urlT2DelayOn,
