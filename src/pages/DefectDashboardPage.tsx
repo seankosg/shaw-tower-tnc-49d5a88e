@@ -534,7 +534,21 @@ function PlanActualTable({
                             ? <ClickNum value={metrics.dataDateActual} onClick={rowClick} />
                             : <ClickNum value={metrics.dataDateActual} onClick={() => go(row.key, { dateField: stage.actualField!, dateStart: dataDate, dateEnd: dataDate, [stage.doneParam!]: 'true' })} />}
                         </TableCell>
-                        <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={dataDateDelta} invert={isDiff} /></TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs">
+                          <ClickVariance
+                            value={dataDateDelta}
+                            invert={isDiff}
+                            onClick={
+                              isDiff
+                                ? rowClick
+                                : dataDateDelta < 0
+                                  ? () => go(row.key, { dueOn: dataDate, stage: stage.stage })
+                                  : dataDateDelta > 0
+                                    ? () => go(row.key, { unplannedActualOn: dataDate, stage: stage.stage })
+                                    : undefined
+                            }
+                          />
+                        </TableCell>
                         <TableCell className="px-2 py-1.5 text-right text-xs font-semibold text-destructive">
                           <ClickNum value={metrics.dataDateDelay} hideZero onClick={isDiff ? rowClick : () => go(row.key, { dueOn: dataDate, stage: stage.stage })} />
                         </TableCell>
