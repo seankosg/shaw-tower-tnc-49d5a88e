@@ -85,7 +85,7 @@ export default function SchedulePage() {
     };
     setOrDelete('group', groupBy, 'system');
     setOrDelete('bucket', bucket, 'day');
-    setOrDelete('stage_view', stageFilter, 'all');
+    setOrDelete('stage_view', isAllStages ? '' : stageFilter.join(','), '');
     setOrDelete('asof_mode', asOfMode, 'dataDate');
     setOrDelete('team', teamFilter, 'all');
     setOrDelete('system_text', systemTextFilter, '');
@@ -96,7 +96,7 @@ export default function SchedulePage() {
     setOrDelete('picked', pickedDate ? format(pickedDate, 'yyyy-MM-dd') : '', format(new Date(), 'yyyy-MM-dd'));
     setOrDelete('picked_field', pickedField, 'planned');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [groupBy, bucket, stageFilter, asOfMode, teamFilter, systemTextFilter, selectedSystemFilters, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, searchParams, setSearchParams]);
+  }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, systemTextFilter, selectedSystemFilters, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (groupBy === 'system') return;
