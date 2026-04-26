@@ -570,12 +570,106 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
     let classifiedDiscipline = 0;
     let unclassified = 0;
 
+    // Honor the user's column selection from the dialog: only fields actually
+    // mapped from Excel participate in change-detection / audit. This makes
+    // "Subcontractor only" imports orders-of-magnitude faster than "all 32 columns".
+    const excludedFields = item.excludedFields ?? new Set<string>();
+    const isFieldExcluded = (field: string) => excludedFields.has(field);
+    // Tracked fields restricted to the user's column selection.
+    const activeTrackedFields = (trackedFields as readonly string[]).filter((f) => !isFieldExcluded(f));
+
+    // ── Batch buffers (flushed in chunks to dramatically cut HTTP round-trips) ──
+    type LogRow = Record<string, any>;
+    type AuditRow = Record<string, any>;
+    type SnapshotRow = Record<string, any>;
+    type UpdateOp = { id: string; payload: Record<string, any> };
+    type InsertOp = { payload: Record<string, any>; rawRowNo: number; issueNo: string; snapshotBase: SnapshotRow };
+
+    const pendingLogs: LogRow[] = [];
+    const pendingAudits: AuditRow[] = [];
+    const pendingSnapshots: SnapshotRow[] = [];
+    const pendingUpdates: UpdateOp[] = [];
+    const pendingInserts: InsertOp[] = [];
+
+    const FLUSH_THRESHOLD = 250;       // rows of accumulated work before we flush
+    const INSERT_CHUNK = 200;          // PostgREST batch size for inserts
+    const UPDATE_CONCURRENCY = 8;      // parallel updates per chunk
+
+    const flushLogs = async () => {
+      if (pendingLogs.length === 0) return;
+      const batch = pendingLogs.splice(0, pendingLogs.length);
+      for (let i = 0; i < batch.length; i += INSERT_CHUNK) {
+        await (supabase as any).from('defect_upload_row_logs').insert(batch.slice(i, i + INSERT_CHUNK));
+      }
+    };
+    const flushAudits = async () => {
+      if (pendingAudits.length === 0) return;
+      const batch = pendingAudits.splice(0, pendingAudits.length);
+      for (let i = 0; i < batch.length; i += INSERT_CHUNK) {
+        await (supabase as any).from('defect_schedule_change_audit').insert(batch.slice(i, i + INSERT_CHUNK));
+      }
+    };
+    const flushUpdates = async () => {
+      if (pendingUpdates.length === 0) return;
+      const batch = pendingUpdates.splice(0, pendingUpdates.length);
+      // Run updates with bounded concurrency (Supabase has no true bulk update).
+      for (let i = 0; i < batch.length; i += UPDATE_CONCURRENCY) {
+        await Promise.all(
+          batch.slice(i, i + UPDATE_CONCURRENCY).map((op) =>
+            (supabase as any).from('defect_items').update(op.payload).eq('id', op.id)
+          )
+        );
+      }
+    };
+    const flushInserts = async () => {
+      if (pendingInserts.length === 0) return;
+      const batch = pendingInserts.splice(0, pendingInserts.length);
+      for (let i = 0; i < batch.length; i += INSERT_CHUNK) {
+        const slice = batch.slice(i, i + INSERT_CHUNK);
+        const payloads = slice.map((op) => op.payload);
+        const res = await (supabase as any).from('defect_items').insert(payloads).select('id');
+        const newIds: Array<{ id: string }> = res.data ?? [];
+        // Map insert return order back to snapshot bases (Supabase preserves order).
+        for (let j = 0; j < slice.length; j++) {
+          const newId = newIds[j]?.id;
+          if (newId) pendingSnapshots.push({ ...slice[j].snapshotBase, defect_id: newId });
+        }
+      }
+    };
+    const flushSnapshots = async () => {
+      if (pendingSnapshots.length === 0) return;
+      const batch = pendingSnapshots.splice(0, pendingSnapshots.length);
+      for (let i = 0; i < batch.length; i += INSERT_CHUNK) {
+        await (supabase as any).from('defect_daily_snapshots').insert(batch.slice(i, i + INSERT_CHUNK));
+      }
+    };
+    const flushAll = async () => {
+      // Order matters: inserts first to materialize defect IDs for snapshots,
+      // then snapshots; updates and audits/logs are independent.
+      await flushInserts();
+      await flushSnapshots();
+      await flushUpdates();
+      await flushAudits();
+      await flushLogs();
+    };
+    const maybeFlush = async () => {
+      const total = pendingLogs.length + pendingAudits.length + pendingInserts.length + pendingUpdates.length;
+      if (total >= FLUSH_THRESHOLD) await flushAll();
+    };
+
+    // Progress is updated per chunk (not per row) to avoid React re-render thrashing.
+    const PROGRESS_TICK = Math.max(1, Math.floor(mappedRows.length / 50));
+
     for (let index = 0; index < mappedRows.length; index++) {
       const row = mappedRows[index];
-      setFiles((current) => current.map((file) => file.id === item.id ? { ...file, progress: Math.round(((index + 1) / mappedRows.length) * 100) } : file));
+      if (index % PROGRESS_TICK === 0 || index === mappedRows.length - 1) {
+        const pct = Math.round(((index + 1) / mappedRows.length) * 100);
+        setFiles((current) => current.map((file) => file.id === item.id ? { ...file, progress: pct } : file));
+      }
       if (!row.issue_no) {
         rejected++;
-        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, action_taken: 'rejected', reason_code: 'missing_issue_no', reason_detail: 'Issue No is required' });
+        pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, action_taken: 'rejected', reason_code: 'missing_issue_no', reason_detail: 'Issue No is required' });
+        await maybeFlush();
         continue;
       }
 
@@ -605,11 +699,11 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       row.planned_progress_pct = computedPlanned ?? existing?.planned_progress_pct ?? null;
       if (computedPlanned == null) {
         if (!row.planned_start_date || !row.planned_completion_date) {
-          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_not_computable', reason_detail: 'Missing planned_start_date or planned_completion_date' });
+          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_not_computable', reason_detail: 'Missing planned_start_date or planned_completion_date' });
         } else if (row.planned_completion_date < row.planned_start_date) {
-          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_invalid_dates', reason_detail: 'Planned completion is earlier than planned start' });
+          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_invalid_dates', reason_detail: 'Planned completion is earlier than planned start' });
         } else if (dataDate < row.planned_start_date) {
-          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_not_started', reason_detail: 'Data date is before planned start date' });
+          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_not_started', reason_detail: 'Data date is before planned start date' });
         }
       }
 
@@ -624,8 +718,6 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       const dbHasSub = !!existing?.sub_trade;
       const dbHasWork = !!existing?.work_type;
 
-      // Only run the classifier if at least one field still needs to be filled
-      // (i.e. neither Excel nor DB provides a value for it).
       const needClassify =
         (!excelHasMain && !dbHasMain) ||
         (!excelHasSub && !dbHasSub) ||
@@ -643,11 +735,6 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       if (!excelHasSub) row.sub_trade = existing?.sub_trade ?? classification?.sub_trade ?? null;
       if (!excelHasWork) row.work_type = existing?.work_type ?? classification?.work_type ?? null;
 
-      // Determine which source/timestamp to record:
-      //  - If the classifier was actually applied to at least one field that had
-      //    no Excel value AND no DB value, record the new classification result.
-      //  - Else if Excel directly provided values, record 'manual'.
-      //  - Else preserve the existing classification metadata.
       const classifierApplied = !!classification && (
         (!excelHasMain && !dbHasMain) ||
         (!excelHasSub && !dbHasSub) ||
@@ -663,23 +750,22 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         if (classification.source === 'rule') classifiedRule++;
         else if (classification.source === 'discipline') {
           classifiedDiscipline++;
-          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'discipline_fallback', reason_detail: `Auto-classified via Field Discipline fallback (${row.trade_detail ?? ''}).` });
+          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'discipline_fallback', reason_detail: `Auto-classified via Field Discipline fallback (${row.trade_detail ?? ''}).` });
         } else {
           unclassified++;
-          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'unclassified_defect', reason_detail: 'Could not classify from description or Field Discipline.' });
+          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'unclassified_defect', reason_detail: 'Could not classify from description or Field Discipline.' });
         }
       } else if (excelProvidedAny && !existing) {
         classificationSource = 'manual';
         classifiedAt = new Date().toISOString();
       } else {
-        // Preserve previous metadata (existing row) or leave null (new row with everything from DB? not possible)
         classificationSource = existing?.classification_source ?? 'manual';
         classifiedAt = existing?.classified_at ?? new Date().toISOString();
       }
 
       if (isReimport && !existing) {
         rejected++;
-        await (supabase as any).from('defect_upload_row_logs').insert({
+        pendingLogs.push({
           upload_id: uploadId,
           raw_row_no: row.rawRowNo,
           issue_no: row.issue_no,
@@ -687,6 +773,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
           reason_code: 'reimport_not_found',
           reason_detail: `Re-import row could not be matched to any existing defect (id=${row.id ?? 'n/a'}, issue_no=${row.issue_no}). New rows are not created in re-import mode.`,
         });
+        await maybeFlush();
         continue;
       }
 
@@ -694,15 +781,13 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         ?? reserveSubcontractorIssueNo(row, existing?.project_id ?? null, issueRegistry, existing);
       if (issueAssignment.duplicate) {
         rejected++;
-        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `${issueAssignment.subcontractor_issue_no} already exists in this project.` });
+        pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `${issueAssignment.subcontractor_issue_no} already exists in this project.` });
+        await maybeFlush();
         continue;
       }
-      // Team: if neither Excel value nor Field Discipline / Profile mapping resolves a team,
-      // keep the existing DB team rather than overwriting with null.
       const resolvedTeam = resolveDefectTeam(row, profileTeamMap) ?? existing?.team ?? null;
       const logReason = resolvedTeam ? {} : { reason_code: 'team_unresolved', reason_detail: 'Team could not be resolved from Field Discipline or User Management profile.' };
       if (!resolvedTeam) teamUnresolved++;
-      // actual_completion_date: when progress < 100 and Excel is blank, keep existing DB value.
       let actualCompletionDate = Number(row.actual_progress_pct ?? 0) >= 100
         ? (row.actual_completion_date ?? existing?.actual_completion_date ?? dataDate)
         : (row.actual_completion_date ?? existing?.actual_completion_date ?? null);
@@ -719,8 +804,6 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         actual_progress_pct: actualProgressPct,
         status: row.status,
       };
-      // Reconcile: if closure becomes Done but completion lags, auto-fix
-      // (unless Excel explicitly provided non-Done values — then log conflict and keep Excel values).
       const reconciled = reconcileClosureCompletion(statusInputs, dataDate, excelExplicit);
       let completionStatus: string | null = reconciled.completion_status;
       let closureStatus: string | null = reconciled.closure_status;
@@ -731,7 +814,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         autoReconciled = true;
       }
       if (reconciled.conflict) {
-        await (supabase as any).from('defect_upload_row_logs').insert({
+        pendingLogs.push({
           upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no,
           action_taken: existing ? 'updated' : 'inserted',
           reason_code: 'closure_completion_conflict',
@@ -739,25 +822,22 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         });
       }
 
-      // Excel-provided explicit status overrides reconciled values (existing precedence rule preserved).
       if (row.completion_status) {
         if (isValidDefectStatus(row.completion_status)) completionStatus = row.completion_status;
-        else await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'invalid_status_value', reason_detail: `completion_status="${row.completion_status}" not in Planned/Delay/Done/WIP. Auto-computed.` });
+        else pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'invalid_status_value', reason_detail: `completion_status="${row.completion_status}" not in Planned/Delay/Done/WIP. Auto-computed.` });
       } else if (!row.planned_completion_date && !row.planned_closure_date && !autoReconciled) {
-        // No planned dates: prefer existing DB status over forcing null.
         completionStatus = existing?.completion_status ?? null;
         if (completionStatus == null) {
-          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'missing_planned_dates', reason_detail: 'No planned dates; completion_status set to null.' });
+          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'missing_planned_dates', reason_detail: 'No planned dates; completion_status set to null.' });
         }
       }
       if (row.closure_status) {
         if (isValidDefectStatus(row.closure_status)) closureStatus = row.closure_status;
-        else await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'invalid_status_value', reason_detail: `closure_status="${row.closure_status}" not in Planned/Delay/Done/WIP. Auto-computed.` });
+        else pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'invalid_status_value', reason_detail: `closure_status="${row.closure_status}" not in Planned/Delay/Done/WIP. Auto-computed.` });
       } else if (!row.planned_completion_date && !row.planned_closure_date) {
         closureStatus = existing?.closure_status ?? null;
       }
 
-      // Persist auto-reconciled progress back into the row so audit/snapshot logic sees the final value.
       if (autoReconciled) {
         row.actual_progress_pct = actualProgressPct;
         row.actual_completion_date = actualCompletionDate;
@@ -766,14 +846,22 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       const payload = { ...row, id: undefined, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, actual_progress_pct: actualProgressPct, completion_status: completionStatus, closure_status: closureStatus, team: resolvedTeam, classification_source: classificationSource, classified_at: classifiedAt, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
 
       if (existing) {
-        const hasAnyChange = Object.entries(payload).some(([key, value]) => key !== 'raw_payload' && key !== 'row_version' && key !== 'updated_by' && key !== 'source_upload_id' && changed(existing[key], value));
+        // Change-detection skips fields the user did NOT map from Excel — without this,
+        // every "preserved" field would be re-compared and audited even though it never
+        // changed, which is the root cause of "4 columns and 32 columns take the same time".
+        const hasAnyChange = Object.entries(payload).some(([key, value]) => {
+          if (key === 'raw_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id') return false;
+          if (isFieldExcluded(key)) return false;
+          return changed(existing[key], value);
+        });
         if (!hasAnyChange) {
           skipped++;
-          await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'skipped', ...logReason });
+          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'skipped', ...logReason });
+          await maybeFlush();
           continue;
         }
-        await (supabase as any).from('defect_items').update(payload).eq('id', existing.id);
-        for (const field of trackedFields) {
+        pendingUpdates.push({ id: existing.id, payload });
+        for (const field of activeTrackedFields) {
           if (changed(existing[field], (row as any)[field])) {
             const isDate = field.endsWith('_date');
             const oldVal = (existing as any)[field] ?? null;
@@ -801,18 +889,38 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
               auditPayload.closure_status_old = oldVal;
               auditPayload.closure_status_new = newVal;
             }
-            await (supabase as any).from('defect_schedule_change_audit').insert(auditPayload);
+            pendingAudits.push(auditPayload);
           }
         }
         updatedCount++;
-        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', ...logReason });
+        pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', ...logReason });
       } else {
-        const inserted = await (supabase as any).from('defect_items').insert(payload).select('id').single();
+        pendingInserts.push({
+          payload,
+          rawRowNo: row.rawRowNo,
+          issueNo: row.issue_no,
+          snapshotBase: {
+            issue_no: row.issue_no,
+            snapshot_date: dataDate,
+            planned_completion_date: row.planned_completion_date,
+            actual_completion_date: row.actual_completion_date,
+            planned_closure_date: row.planned_closure_date,
+            actual_closure_date: row.actual_closure_date,
+            planned_progress_pct: payload.planned_progress_pct,
+            actual_progress_pct: row.actual_progress_pct,
+            completion_status: completionStatus,
+            closure_status: closureStatus,
+            created_by: user.id,
+          },
+        });
         insertedCount++;
-        await (supabase as any).from('defect_upload_row_logs').insert({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'inserted', ...logReason });
-        if (inserted.data?.id) await (supabase as any).from('defect_daily_snapshots').insert({ defect_id: inserted.data.id, issue_no: row.issue_no, snapshot_date: dataDate, planned_completion_date: row.planned_completion_date, actual_completion_date: row.actual_completion_date, planned_closure_date: row.planned_closure_date, actual_closure_date: row.actual_closure_date, planned_progress_pct: payload.planned_progress_pct, actual_progress_pct: row.actual_progress_pct, completion_status: completionStatus, closure_status: closureStatus, created_by: user.id });
+        pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'inserted', ...logReason });
       }
+      await maybeFlush();
     }
+
+    // Final flush of any leftovers from the last partial chunk.
+    await flushAll();
 
     await (supabase as any).from('defect_upload_batches').update({ status: 'completed', processed_rows: item.parsed.length, success_rows: insertedCount + updatedCount, skipped_rows: skipped, rejected_rows: rejected }).eq('id', uploadId);
     if (masterEnsurer.warnings.length > 0) {
