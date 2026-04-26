@@ -1,85 +1,83 @@
-## 문제 진단
+## D-Day 카운트다운 배지 추가 (T&C / Defect 대시보드, 싱가포르 표준시 기준)
 
-`src/pages/SubtestList.tsx`(T&C Raw Data 테이블)의 컬럼 정의가 `field_config` 테이블 설정과 **불일치**합니다.
-
-### 1) Field Config에 있으나 테이블 컬럼이 누락된 필드 (14개)
-
-데이터는 가져오지만 컬럼이 없어 화면에 표시 안 됨 / Field Config 토글이 무의미한 필드:
-
-| field_name | display_name | DB SELECT 여부 |
-|---|---|---|
-| `r1_status` | R1 Status | ✅ 가져옴 |
-| `r1_target_submission_date` | R1 Target Submission Date | ✅ |
-| `r1_actual_submission_date` | R1 Actual Submission Date | ✅ |
-| `r1_report_ref` | R1 Aconex Ref | ❌ 누락 |
-| `r2_status` | R2 Status | ✅ |
-| `r2_target_submission_date` | R2 Target Submission Date | ✅ |
-| `r2_actual_submission_date` | R2 Actual Submission Date | ✅ |
-| `r2_target_approval_date` | R2 Target Approval Date | ✅ |
-| `r2_actual_approval_date` | R2 Actual Approval Date | ✅ |
-| `aconex_ref_no` | Aconex Ref No | ❌ |
-| `remarks` | Remarks | ❌ |
-| `punchlist_comments` | Punchlist Comments | ❌ |
-| `mos_sequence` | MOS Sequence | ❌ |
-| `updated_by` | Updated By | ❌ |
-| `source_upload_id` | Source Upload ID | ❌ |
-
-### 2) `sort_order` 중복 (Field Config 자체 데이터 문제)
-
-DB에 동일 sort_order가 여러 행에 존재 → 정렬 순서가 비결정적:
-- `250`: remarks, r1_status
-- `260`: r1_target_submission_date, punchlist_comments
-- `270`: updated_by, r1_actual_submission_date
-- `280`: updated_at, r1_report_ref
-- `290`: source_upload_id, r2_status
-- `300`: data_source_type, r2_target_submission_date
-
-### 3) 핀고정(PINNED_FRONT) vs sort_order 충돌
-
-`SubtestList.tsx` line 987에서 `item_no, system_code, subtest_id, mos_code`를 항상 앞으로 고정하고 있어, Field Config의 sort_order(team=10이 최우선)를 무시함. 사용자가 sort_order로 정렬을 바꿔도 반영되지 않음.
+목표: **2026-06-15 (SGT, UTC+8)**를 D-Day로 두고, 두 대시보드 헤더 타이틀("T&C Executive Dashboard", "Defect Executive Dashboard") 옆에 카운트다운 배지를 표시. 사용자의 로컬 시간대와 무관하게 항상 싱가포르 시간 자정 기준으로 계산.
 
 ---
 
-## 수정 계획
+### 1) 공통 컴포넌트 신규 생성
 
-### A. SubtestList.tsx — 누락 컬럼 추가
-1. **SubtestRow 인터페이스 확장**: `r1_report_ref`, `aconex_ref_no`, `remarks`, `punchlist_comments`, `mos_sequence`, `updated_by`, `source_upload_id` 추가.
-2. **DB SELECT 쿼리에 누락 필드 추가** (line 557).
-3. **컬럼 정의 추가** (line 616~792 `columns` 배열에):
-   - R1: Status (badge), Target Submission Date, Actual Submission Date, Aconex Ref
-   - R2: Status (badge), Target Submission Date, Actual Submission Date, Target Approval Date, Actual Approval Date
-   - 기타: Aconex Ref No, Remarks(truncate), Punchlist Comments(truncate), MOS Sequence, Updated By, Source Upload ID
-   - 날짜 컬럼은 기존 `t2_planned_date`처럼 `dateRangeFilterFn` + `formatDdMmm` 사용
-   - Status 컬럼은 기존 `StatusBadge`(또는 ReportStatus 호환) 사용
+**파일**: `src/components/shared/DDayBadge.tsx`
 
-### B. SubtestList.tsx — 핀고정 로직 완화
-- `PINNED_FRONT`에서 `system_code, subtest_id, mos_code` 제거 → Field Config sort_order만 따르도록 변경.
-- 유지: `__select`, `item_no`(comments 인디케이터 때문에 좌측 고정), `stage_progress`(파생 컬럼).
-- 결과: Team(sort 10)이 최좌측으로 와서 Field Config 의도대로 표시됨.
+- Props: `targetDate: string` (ISO `YYYY-MM-DD`), `label?: string`
+- **싱가포르 시간(SGT, UTC+8) 기준 자정으로 잔여 일수 계산** — 사용자 PC 시간대가 KST/UTC/EST 어디든 결과 동일
+- 표시 규칙:
+  - D-Day 이전: `D-123`
+  - D-Day 당일: `D-Day`
+  - D-Day 이후: `D+45`
 
-### C. Field Config sort_order 재정렬 (DB 마이그레이션)
-`field_config` 테이블의 sort_order를 10단위로 재배치하여 중복 제거. 논리적 순서로 정리:
-```
-10 team, 20 system, 30 item_no, 40 subtest_id, 50 mos_code, 60 mos_sequence,
-70 hdec_pic_name, 80 subcontractor_name, 90 subsub_name,
-100 equipment, 110 description, 120 level,
-130 predecessor_status_raw, 140 pred_planned_date, 150 pred_actual_date,
-160 t1_planned_date, 170 t1_actual_date, 180 t1_status,
-190 t2_planned_date, 200 t2_actual_date, 210 t2_status,
-220 r1_status, 230 r1_target_submission_date, 240 r1_actual_submission_date, 250 r1_report_ref,
-260 r2_status, 270 r2_target_submission_date, 280 r2_actual_submission_date,
-290 r2_target_approval_date, 300 r2_actual_approval_date,
-310 aconex_ref_no, 320 remarks, 330 punchlist_comments,
-340 data_source_type, 350 source_upload_id, 360 updated_at, 370 updated_by
+**SGT 기준 일수 계산 핵심 코드**:
+```ts
+// 현재 시각을 SGT 자정으로 정규화 (사용자 시간대 무관)
+function sgtMidnight(date: Date): number {
+  // SGT = UTC+8. UTC 시각에 8시간 더한 뒤 day 단위로 floor → SGT 자정의 UTC epoch
+  const sgtMs = date.getTime() + 8 * 3600 * 1000;
+  const sgtDay = Math.floor(sgtMs / 86400000);
+  return sgtDay * 86400000 - 8 * 3600 * 1000; // 다시 UTC epoch로
+}
+
+const TARGET = '2026-06-15';
+// '2026-06-15T00:00:00+08:00' → SGT 자정의 UTC epoch
+const targetMs = Date.parse(`${TARGET}T00:00:00+08:00`);
+const todayMs = sgtMidnight(new Date());
+const diff = Math.round((targetMs - todayMs) / 86400000);
+
+const text = diff > 0 ? `D-${diff}` : diff === 0 ? 'D-Day' : `D+${-diff}`;
 ```
 
-### D. 검증
-- Admin → Field Config에서 toggle on/off 시 모든 R1/R2/기타 컬럼이 정상적으로 보이고/숨겨지는지 확인.
-- 컬럼 순서가 sort_order에 따라 좌→우로 바르게 정렬되는지 확인 (item_no/progress만 좌측 고정).
+- 디자인 — 헤더 `text-2xl font-semibold` 옆에 어울리는 톤:
+  - 컨테이너: `inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm font-semibold leading-none`
+  - 색상 톤 (잔여 일수 자동):
+    - `> 30일`: `bg-primary/10 text-primary border-primary/30`
+    - `8 ~ 30일`: `bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30`
+    - `≤ 7일 또는 D-Day`: `bg-destructive/10 text-destructive border-destructive/40 animate-pulse`
+    - `D+ (경과)`: `bg-muted text-muted-foreground border-border`
+  - 좌측 작은 도트 인디케이터
+  - 보조 라벨: `text-[10px] text-muted-foreground font-normal`로 `MC: 15-Jun-2026 (SGT)` 표기
+  - 툴팁: `Mechanical Completion target: 2026-06-15 (Singapore Time)`
+
+- 자정 자동 갱신: `setInterval`로 1분마다 재계산 (탭이 백그라운드에서도 SGT 자정 넘어가면 즉시 반영)
+
+### 2) 두 대시보드에 배치
+
+**`src/pages/DashboardPage.tsx` (line 291-292 부근)**
+```tsx
+<div className="flex flex-wrap items-center justify-between gap-3">
+  <div className="flex items-center gap-3 flex-wrap">
+    <h1 className="text-2xl font-semibold text-foreground">T&C Executive Dashboard</h1>
+    <DDayBadge targetDate={MECHANICAL_COMPLETION_DDAY} />
+  </div>
+  <div className="flex items-center gap-3">
+    {/* 기존 Team filter + at-risk threshold */}
+  </div>
+</div>
+```
+
+**`src/pages/DefectDashboardPage.tsx` (line 183-184 부근)** — 동일 패턴 적용.
+
+### 3) 상수 추출
+
+`src/lib/constants.ts`에 추가:
+```ts
+/** Mechanical Completion target date (Singapore Time, UTC+8). */
+export const MECHANICAL_COMPLETION_DDAY = '2026-06-15';
+```
+두 페이지에서 import — 향후 D-Day 변경 시 한 곳만 수정.
 
 ---
 
-## 영향 범위
-- `src/pages/SubtestList.tsx` (인터페이스, SELECT, columns, PINNED_FRONT)
-- DB 마이그레이션 1건 (`field_config.sort_order` UPDATE)
-- 기존 데이터/RLS/스키마는 변경 없음, 비파괴적 변경
+### 영향 범위
+- 신규: `src/components/shared/DDayBadge.tsx`
+- 수정: `src/pages/DashboardPage.tsx`, `src/pages/DefectDashboardPage.tsx`, `src/lib/constants.ts`
+- DB·라우팅·로직 변경 없음, 순수 UI 추가
+- **싱가포르 시간 기준 계산** → 한국에서 보든 두바이에서 보든 잔여 일수 동일
+- 다크모드 + 반응형 대응

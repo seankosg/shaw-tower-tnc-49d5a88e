@@ -18,6 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import { cn } from '@/lib/utils';
+import { DDayBadge } from '@/components/shared/DDayBadge';
+import { MECHANICAL_COMPLETION_DDAY } from '@/lib/constants';
 import { formatDdMmm } from '@/lib/format';
 import { exportDefectPlanActualToExcel } from '@/lib/defect-dashboard-excel-export';
 import { RecentDefectComments } from '@/components/dashboard/RecentDefectComments';
@@ -181,7 +183,10 @@ export default function DefectDashboardPage() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-foreground">Defect Executive Dashboard</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-semibold text-foreground">Defect Executive Dashboard</h1>
+          <DDayBadge targetDate={MECHANICAL_COMPLETION_DDAY} />
+        </div>
         <div className="flex items-center gap-3">
           <Select value={teamFilter} onValueChange={setTeamFilter}><SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Teams</SelectItem>{ALL_TEAMS.map(team => <SelectItem key={team} value={team}>{TEAM_LABELS[team]}</SelectItem>)}</SelectContent></Select>
           <p className="text-xs text-muted-foreground">At-Risk threshold: ≤ {atRiskDays} day{atRiskDays === 1 ? '' : 's'}</p>
