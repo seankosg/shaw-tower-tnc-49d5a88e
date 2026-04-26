@@ -26,6 +26,15 @@ export interface CachedSubtest {
   team: any;
   updated_at: string;
   system_code: string;
+  // R1 / R2 (report workflow)
+  r1_status: any;
+  r1_target_submission_date: string | null;
+  r1_actual_submission_date: string | null;
+  r2_status: any;
+  r2_target_submission_date: string | null;
+  r2_actual_submission_date: string | null;
+  r2_target_approval_date: string | null;
+  r2_actual_approval_date: string | null;
 }
 
 let cache: CachedSubtest[] | null = null;

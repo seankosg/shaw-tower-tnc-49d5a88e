@@ -1,156 +1,66 @@
-## 목표
-T&C 단계를 `pred → t1 → t2 → r1 → r2` 5단계로 확장. R1(협력사→HDEC), R2(HDEC→발주처). 최종 종결 = **R2 status = Approved**. R1/R2도 target date 기반 지연 모니터링.
+# R1/R2 셀 → Raw-Data 필터 링크 연결
 
-## 1. DB 스키마 변경 (마이그레이션 1회)
+현재 Dashboard의 Plan vs Actual 테이블에서 R1/R2 행의 숫자(Plan/Actual/Δ/Delay)는 클릭해도 행 단위 그룹 필터(시스템/팀 등)만 적용되고, R1/R2의 **시점·상태 조건**은 raw-data로 전달되지 않습니다. 본 작업은 보고 누락(예: T2 Done인데 R1 미제출, R1은 했는데 R2 승인 지연)을 한 번의 클릭으로 식별할 수 있도록 양쪽을 연결합니다.
 
-### 1-1. enum
-```sql
-CREATE TYPE public.report_status AS ENUM
-  ('Planned','Submitted','Under Review','Approved','Returned');
-```
+## 1. Dashboard 측 변경 — `src/pages/DashboardPage.tsx`
 
-### 1-2. `subtests` 컬럼 변경/추가
-| 컬럼 | 변경 |
+R1/R2 stages 정의에 누락된 URL 파라미터 키를 채워 넣습니다 (Pred/T1/T2와 동일한 7개 키):
+
+| 파라미터 | 의미 |
 |---|---|
-| 기존 `r1_status` (text) | → **`r1_report_ref` (text)** rename (1,114건 HDEC-ME-TES-### 보존) |
-| 기존 `r2_status` (text) | DROP (전부 비어있음) |
-| **신규** `r1_status` `report_status` |
-| **신규** `r1_target_submission_date` `date` |
-| **신규** `r1_actual_submission_date` `date` |
-| **신규** `r2_status` `report_status` |
-| **신규** `r2_target_submission_date` `date` |
-| **신규** `r2_actual_submission_date` `date` |
-| **신규** `r2_target_approval_date` `date` |
-| **신규** `r2_actual_approval_date` `date` |
+| `r1_planned_to` / `r2_planned_to` | 누적: 계획일 ≤ Data Date |
+| `r1_actual_to` / `r2_actual_to` | 누적: 실적일 ≤ Data Date |
+| `r1_planned_on` / `r2_planned_on` | 시점: 계획일 = 해당 날짜 |
+| `r1_actual_on` / `r2_actual_on` | 시점: 실적일 = 해당 날짜 |
+| `r1_delay_asof` / `r2_delay_asof` | 누적 지연: 계획일 ≤ asOf & 미완료 |
+| `r1_delay_on` / `r2_delay_on` | 시점 지연: 계획일 = 해당 날짜 & 미완료 |
+| `r1_actual_unplanned_on` / `r2_actual_unplanned_on` | 무계획 실적: 실적일 = 해당 날짜 & 계획일 ≠ 해당 날짜 |
 
-### 1-3. `field_config` 등록 (sort_order)
-- 250 R1 Status (pulldown)
-- 260 R1 Target Submission Date
-- 270 R1 Actual Submission Date
-- 280 R1 Aconex Ref
-- 290 R2 Status (pulldown)
-- 300 R2 Target Submission Date
-- 310 R2 Actual Submission Date
-- 320 R2 Target Approval Date
-- 330 R2 Actual Approval Date
+R1의 "계획일"은 `r1_target_submission_date`, "실적일"은 `r1_actual_submission_date`.
+R2의 "계획일"은 `r2_target_approval_date`, "실적일"은 `r2_actual_approval_date` (최종 승인 마일스톤 기준 — 기존 `getStagePlannedDate`/`getStageActualDate` 정의와 일치).
 
-### 1-4. 영업일 헬퍼 함수
-```sql
-CREATE OR REPLACE FUNCTION public.add_business_days_no_sun(_start date, _days int) RETURNS date
--- +1씩 더하며 일요일은 카운트 제외. 결과가 일요일이면 월요일로 미룸.
+## 2. SubtestList(raw-data) 측 변경 — `src/pages/SubtestList.tsx`
+
+### 2-1. 데이터 로드 확장
+`subtests` SELECT 쿼리에 R1/R2 컬럼 추가:
+```
+r1_status, r1_target_submission_date, r1_actual_submission_date,
+r2_status, r2_target_submission_date, r2_actual_submission_date,
+r2_target_approval_date, r2_actual_approval_date
 ```
 
-## 2. 일회성 데이터 마이그레이션
+### 2-2. URL 파라미터 파싱 (21개 추가)
+위 표의 14개 + `r1_status` / `r2_status` 직접 필터 2개. (`urlR1Status`, `urlR2Status`는 Stage Card 클릭에서 이미 사용 중.)
 
-대상: `is_active=true AND t2_planned_date IS NOT NULL` (~1,447건)
+### 2-3. 필터 적용 로직
+`useMemo` 필터 블록(820~882줄)에 R1/R2 조건 추가. Pred/T1/T2와 동일한 패턴이지만 **`isStageDone(r, 'r1' | 'r2')`** 와 **`getStagePlannedDate/getStageActualDate`** 헬퍼를 사용해 R1=Submitted+ / R2=Approved 정의를 일관되게 적용. URL 의존성 배열에도 신규 변수 추가.
 
-### 2-1. Target Date 산출
-- `r1_target_submission_date` = T2 + 3 영업일
-- `r2_target_submission_date` = R1_target + 3 영업일
-- `r2_target_approval_date`   = R2_target_submission + 5 영업일
+### 2-4. `urlStatusFilter === 'remaining'` 의미 보정 (선택)
+현재는 `r.t2_status === 'Done'`이면 제외 — 5단계 워크플로 기준에서는 **R2 Approved**가 최종이므로 `!isStageDone(r, 'r2')`로 변경. (Dashboard의 "Remaining" KPI가 R2 기준으로 바뀐 것과 일치.)
 
-기존 값 NULL인 행만 채움 (idempotent).
+### 2-5. `urlStatusFilter === 'at_risk'` & `'overdue'` (선택)
+Dashboard의 `isAtRisk`/`isOverdue`는 이미 5단계 모두를 평가하지만, SubtestList의 `at_risk` 분기는 Pred/T1/T2 3개만 검사 중. 일관성을 위해 R1/R2도 포함 (`getStageKeys('all').some(within)`).
 
-### 2-2. Status 초기값
-- `r1_status` = `'Planned'`
-- `r2_status` = `'Planned'`
+### 2-6. 활성 필터 라벨
+988~1006줄의 `LABELS` 매핑에 R1/R2 14개 키에 대한 한글/영문 라벨 추가 ("R1 Plan ≤", "R2 Delay =" 등) — 사용자가 "어떤 필터가 적용 중인지" 한눈에 보이도록.
 
-기존 값 NULL인 행만 채움.
+## 3. 검증
 
-## 3. 단계별 Plan/Actual/Done 매핑 (지연 판정 기준)
+- **TypeScript**: `bunx tsc --noEmit`
+- **테스트**: `bunx vitest run src/test/dashboard-utils.test.ts`
+- **수동 시나리오**:
+  1. Dashboard → R1 행의 "Today Δ" 음수값 클릭 → raw-data가 R1 지연 항목만 표시
+  2. Dashboard → R2 행의 "Cumulative Delay" 클릭 → R2 미승인(Approved 아님) & 계획일 도래 항목만 표시
+  3. T2 Done 셀 클릭 후 화면에서 R1 Planned 상태인 행을 식별 가능
 
-| Stage | Plan Date | Actual Date | Done 판정 |
-|---|---|---|---|
-| pred | pred_planned_date | pred_actual_date | pred_status='Done' |
-| t1 | t1_planned_date | t1_actual_date | t1_status='Done' |
-| t2 | t2_planned_date | t2_actual_date | t2_status='Done' |
-| **r1** | **r1_target_submission_date** | r1_actual_submission_date | r1_status IN ('Submitted','Under Review','Approved') |
-| **r2** | **r2_target_approval_date** | r2_actual_approval_date | **r2_status='Approved'** |
+## 4. 변경 범위
 
-### Delay 정의 (5단계 공통)
-- Today Plan: planned date = today
-- Today Delay: planned date = today AND not done
-- Data Date Plan/Delay: dataDate 기준 동일
-- Cum Plan: planned date ≤ dataDate
-- Cum Actual: actual date ≤ dataDate
-- Overdue: planned date < today AND not done (R1/R2 누적 지연 모니터링)
+- 수정: `src/pages/DashboardPage.tsx`, `src/pages/SubtestList.tsx`
+- 신규 파일/스키마/마이그레이션: 없음
+- DB 컬럼은 이미 존재 (Phase 1에서 추가됨)
 
-## 4. UI / 코드 변경
+## 5. 영향 없음
 
-### 4-1. `src/types/enums.ts`
-```ts
-export type ReportStatus = 'Planned'|'Submitted'|'Under Review'|'Approved'|'Returned';
-export const REPORT_STATUS_OPTIONS: ReportStatus[] = [...];
-```
-StatusBadge 색상: Planned=blue, Submitted=amber, Under Review=violet, Approved=green, Returned=red.
-
-### 4-2. `src/lib/business-days.ts` (신규)
-JS 측 영업일 산출 — 신규 subtest 생성 시 자동 R1/R2 target date 계산용.
-
-### 4-3. `src/lib/stage-metrics.ts`
-Stage union: `'pred'|'t1'|'t2'|'r1'|'r2'`. getStagePlannedDate/Actual/Done 위 표대로 확장.
-
-### 4-4. `src/lib/dashboard-utils.ts` & `DashboardPage.tsx`
-`aggregatePlanActualByGroup` 결과에 `r1`, `r2` 키 추가 (기존 t1/t2 셀 동일 구조). R1/R2도 자동으로 Today Delay / Data Date Delay 표시.
-
-### 4-5. `SubtestDetail.tsx`
-- R1: Target/Actual Submission Date, Status (Select), Aconex Ref
-- R2: Target/Actual Submission Date, Target/Actual Approval Date, Status (Select)
-
-### 4-6. Import (`import-parser.ts`, `ImportContext.tsx`)
-HEADER_MAP에 신규 9개 헤더 추가. 옛 `r1`/`r2` 헤더 값이 `^HDEC-` 패턴이면 `r1_report_ref`로 라우팅, 그 외 텍스트는 status 컬럼으로. change_log 추적 필드에 신규 컬럼 포함.
-
-### 4-7. Schedule / Progress
-stageFilter union에 r1, r2 추가. ScheduleMatrix, aggregateSchedule 5단계 확장.
-
-### 4-8. Excel export
-dashboard-excel-export, schedule-excel-export에 R1/R2 열 추가.
-
-## 5. Dashboard 구성
-
-### KPI 카드 (모바일 2열)
-1. Total Subtests
-2. T2 Done %
-3. R1 Approved %
-4. **R2 Approved % (최종 종결률)**
-5. Total Today Delay (5단계 합산)
-6. **R1+R2 Overdue** (planned < today AND not done)
-
-### Plan vs Actual Summary 테이블 (5단계)
-```text
-              Pred           T1            T2            R1            R2
-Group │DD-P│DD-A│Δ│TD-P│TD-A│Δ│ … 동일 패턴 × 5단계 …                  │Done│Rem
-```
-- DD=Data Date, TD=Today, Δ=Actual−Plan
-- Done/Remain은 **R2 Approved 기준** (최종 종결)
-- 그룹: System / Subcontractor / HDEC PIC 토글
-- 가로 스크롤 + 첫 컬럼 sticky
-
-### R1/R2 Watchlist 카드
-| Subtest | Stage | Target Date | Days Overdue | Status | Owner |
-- planned < today AND not done. Days Overdue 내림차순.
-
-### 차트
-- 5-Stage Funnel (단계별 Done 가로 막대)
-- R1/R2 Status 도넛 2개
-- R2 Approval Trend (계획 vs 실적 누적 라인)
-
-## 6. 모바일 UX
-- KPI 2열, Summary 테이블 horizontal scroll + sticky 첫 컬럼
-- 단계 표시 토글 (전체 / T단계만 / R단계만)
-
-## 7. 기술 메모
-- R1 Done 판정: Submitted+ (협력사 관점 완료). 운영 정책 변경 시 단일 함수에서 조정.
-- R2는 Approved만 Done.
-- 영업일 함수 DB·JS 양쪽 보유. T2 수정 시 R1/R2 target 자동 재계산은 옵션 (수동 override 허용).
-- 모든 신규 컬럼은 field_config로 가시성 제어.
-
-## 8. 작업 순서
-1. 마이그레이션 (enum, 컬럼 rename/drop/add, field_config, business-day 함수)
-2. 일회성 데이터 마이그레이션 (target date 3종 + status='Planned' 2종)
-3. types.ts 자동 재생성 대기
-4. enums.ts, business-days.ts 추가
-5. SubtestDetail, parser, ImportContext 업데이트
-6. stage-metrics, dashboard-utils 5단계 확장 + 단위테스트
-7. DashboardPage: KPI/Summary/Watchlist/Funnel/Trend
-8. Schedule/Progress/Export 5단계 확장
+- 기존 Pred/T1/T2 셀 클릭 동작
+- Excel export
+- Schedule / SubtestDetail / Import

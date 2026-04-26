@@ -19,7 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Search, Upload, Download, ChevronDown } from 'lucide-react';
-import type { TcStatus, DataSource, TeamType } from '@/types/enums';
+import type { TcStatus, DataSource, TeamType, ReportStatus } from '@/types/enums';
 import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS, ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
@@ -66,6 +66,15 @@ interface SubtestRow {
   team: TeamType | null;
   updated_at: string;
   system_code: string;
+  // R1 / R2 (report workflow)
+  r1_status: ReportStatus | null;
+  r1_target_submission_date: string | null;
+  r1_actual_submission_date: string | null;
+  r2_status: ReportStatus | null;
+  r2_target_submission_date: string | null;
+  r2_actual_submission_date: string | null;
+  r2_target_approval_date: string | null;
+  r2_actual_approval_date: string | null;
 }
 
 // ---- Filter functions ----
@@ -544,7 +553,7 @@ export default function SubtestList() {
     while (hasMore) {
       const { data } = await supabase
         .from('subtests')
-        .select('id, subtest_id, item_no, mos_code, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, team, updated_at, system_id, system_master!inner(system_code)' as any)
+        .select('id, subtest_id, item_no, mos_code, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, team, updated_at, system_id, r1_status, r1_target_submission_date, r1_actual_submission_date, r2_status, r2_target_submission_date, r2_actual_submission_date, r2_target_approval_date, r2_actual_approval_date, system_master!inner(system_code)' as any)
         .eq('is_active', true)
         .order('updated_at', { ascending: false })
         .range(from, from + PAGE_SIZE - 1);
@@ -803,6 +812,21 @@ export default function SubtestList() {
   const urlPredActualUnplannedOn = searchParams.get('pred_actual_unplanned_on');
   const urlT1ActualUnplannedOn = searchParams.get('t1_actual_unplanned_on');
   const urlT2ActualUnplannedOn = searchParams.get('t2_actual_unplanned_on');
+  // R1 / R2 cell-link filters (mirror Pred/T1/T2)
+  const urlR1PlannedTo = searchParams.get('r1_planned_to');
+  const urlR2PlannedTo = searchParams.get('r2_planned_to');
+  const urlR1ActualTo = searchParams.get('r1_actual_to');
+  const urlR2ActualTo = searchParams.get('r2_actual_to');
+  const urlR1PlannedOn = searchParams.get('r1_planned_on');
+  const urlR2PlannedOn = searchParams.get('r2_planned_on');
+  const urlR1ActualOn = searchParams.get('r1_actual_on');
+  const urlR2ActualOn = searchParams.get('r2_actual_on');
+  const urlR1DelayAsOf = searchParams.get('r1_delay_asof');
+  const urlR2DelayAsOf = searchParams.get('r2_delay_asof');
+  const urlR1DelayOn = searchParams.get('r1_delay_on');
+  const urlR2DelayOn = searchParams.get('r2_delay_on');
+  const urlR1ActualUnplannedOn = searchParams.get('r1_actual_unplanned_on');
+  const urlR2ActualUnplannedOn = searchParams.get('r2_actual_unplanned_on');
 
   const urlDateFrom = searchParams.get('date_from');
   const urlDateTo = searchParams.get('date_to');
@@ -828,7 +852,8 @@ export default function SubtestList() {
       if (urlStatusFilter) {
         const overdue = getAnyStageDelayedAsOf(r, getStageKeys('all'), delayAsOfDate);
         if (urlStatusFilter === 'overdue' && !overdue) return false;
-        if (urlStatusFilter === 'remaining' && r.t2_status === 'Done') return false;
+        // 5-stage workflow: final completion = R2 Approved
+        if (urlStatusFilter === 'remaining' && isStageDone(r, 'r2')) return false;
         if (urlStatusFilter === 'at_risk') {
           if (overdue) return false;
           const within = (stage: StageKey) => {
@@ -837,9 +862,10 @@ export default function SubtestList() {
             const d = daysFromToday(planned);
             return d >= 0 && d <= urlAtRiskDays;
           };
-          if (!within('pred') && !within('t1') && !within('t2')) return false;
+          if (!getStageKeys('all').some(within)) return false;
         }
       }
+      // Pred/T1/T2 cell-link filters
       if (urlPredPlannedTo && !(r.pred_planned_date && r.pred_planned_date <= urlPredPlannedTo)) return false;
       if (urlT1PlannedTo && !(r.t1_planned_date && r.t1_planned_date <= urlT1PlannedTo)) return false;
       if (urlT2PlannedTo && !(r.t2_planned_date && r.t2_planned_date <= urlT2PlannedTo)) return false;
@@ -861,6 +887,44 @@ export default function SubtestList() {
       if (urlPredActualUnplannedOn && !(r.pred_actual_date === urlPredActualUnplannedOn && r.pred_planned_date !== urlPredActualUnplannedOn)) return false;
       if (urlT1ActualUnplannedOn && !(r.t1_actual_date === urlT1ActualUnplannedOn && r.t1_planned_date !== urlT1ActualUnplannedOn)) return false;
       if (urlT2ActualUnplannedOn && !(r.t2_actual_date === urlT2ActualUnplannedOn && r.t2_planned_date !== urlT2ActualUnplannedOn)) return false;
+
+      // R1 cell-link filters (planned = r1_target_submission_date, actual = r1_actual_submission_date)
+      if (urlR1PlannedTo) {
+        const p = getStagePlannedDate(r, 'r1');
+        if (!(p && p <= urlR1PlannedTo)) return false;
+      }
+      if (urlR1ActualTo) {
+        const a = getStageActualDate(r, 'r1');
+        if (!(a && a <= urlR1ActualTo)) return false;
+      }
+      if (urlR1PlannedOn && getStagePlannedDate(r, 'r1') !== urlR1PlannedOn) return false;
+      if (urlR1ActualOn && getStageActualDate(r, 'r1') !== urlR1ActualOn) return false;
+      if (urlR1DelayAsOf && !isStageDelayedAsOf(r, 'r1', urlR1DelayAsOf)) return false;
+      if (urlR1DelayOn && !(getStagePlannedDate(r, 'r1') === urlR1DelayOn && !isStageDone(r, 'r1'))) return false;
+      if (urlR1ActualUnplannedOn) {
+        const a = getStageActualDate(r, 'r1');
+        const p = getStagePlannedDate(r, 'r1');
+        if (!(a === urlR1ActualUnplannedOn && p !== urlR1ActualUnplannedOn)) return false;
+      }
+
+      // R2 cell-link filters (planned = r2_target_approval_date, actual = r2_actual_approval_date)
+      if (urlR2PlannedTo) {
+        const p = getStagePlannedDate(r, 'r2');
+        if (!(p && p <= urlR2PlannedTo)) return false;
+      }
+      if (urlR2ActualTo) {
+        const a = getStageActualDate(r, 'r2');
+        if (!(a && a <= urlR2ActualTo)) return false;
+      }
+      if (urlR2PlannedOn && getStagePlannedDate(r, 'r2') !== urlR2PlannedOn) return false;
+      if (urlR2ActualOn && getStageActualDate(r, 'r2') !== urlR2ActualOn) return false;
+      if (urlR2DelayAsOf && !isStageDelayedAsOf(r, 'r2', urlR2DelayAsOf)) return false;
+      if (urlR2DelayOn && !(getStagePlannedDate(r, 'r2') === urlR2DelayOn && !isStageDone(r, 'r2'))) return false;
+      if (urlR2ActualUnplannedOn) {
+        const a = getStageActualDate(r, 'r2');
+        const p = getStagePlannedDate(r, 'r2');
+        if (!(a === urlR2ActualUnplannedOn && p !== urlR2ActualUnplannedOn)) return false;
+      }
 
       if (urlDateFrom || urlDateTo) {
         const stages: Array<'pred' | 't1' | 't2'> = urlStage ? [urlStage] : ['pred', 't1', 't2'];
@@ -885,6 +949,10 @@ export default function SubtestList() {
       urlPredPlannedOn, urlT1PlannedOn, urlT2PlannedOn, urlPredActualOn, urlT1ActualOn, urlT2ActualOn,
       urlPredDelayAsOf, urlT1DelayAsOf, urlT2DelayAsOf, urlPredDelayOn, urlT1DelayOn, urlT2DelayOn,
       urlPredActualUnplannedOn, urlT1ActualUnplannedOn, urlT2ActualUnplannedOn,
+      urlR1PlannedTo, urlR2PlannedTo, urlR1ActualTo, urlR2ActualTo,
+      urlR1PlannedOn, urlR2PlannedOn, urlR1ActualOn, urlR2ActualOn,
+      urlR1DelayAsOf, urlR2DelayAsOf, urlR1DelayOn, urlR2DelayOn,
+      urlR1ActualUnplannedOn, urlR2ActualUnplannedOn,
       urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, delayAsOfDate, localToday]);
 
   const columnIdToFieldName: Record<string, string> = {
@@ -990,7 +1058,8 @@ export default function SubtestList() {
     const formatValue = (v: string) => v === EMPTY_TOKEN ? '(Empty)' : v;
     const map: Record<string, string> = {
       system: 'System', subcon: 'Subcon', subsub: 'Sub-Sub',
-      hdec_pic: 'HDEC PIC', pred_status: 'Pred', t1_status: 'T1', t2_status: 'T2', status: 'Status',
+      hdec_pic: 'HDEC PIC', pred_status: 'Pred', t1_status: 'T1', t2_status: 'T2',
+      r1_status: 'R1', r2_status: 'R2', status: 'Status',
       pred_planned_to: 'Pred Plan ≤', pred_actual_to: 'Pred Actual ≤',
       t1_planned_to: 'T1 Plan ≤', t2_planned_to: 'T2 Plan ≤',
       t1_actual_to: 'T1 Actual ≤', t2_actual_to: 'T2 Actual ≤',
@@ -999,6 +1068,15 @@ export default function SubtestList() {
       t1_actual_on: 'T1 Actual =', t2_actual_on: 'T2 Actual =',
       pred_delay_asof: 'Pred Delay ≤', t1_delay_asof: 'T1 Delay ≤', t2_delay_asof: 'T2 Delay ≤',
       pred_delay_on: 'Pred Delay =', t1_delay_on: 'T1 Delay =', t2_delay_on: 'T2 Delay =',
+      pred_actual_unplanned_on: 'Pred Unplanned =', t1_actual_unplanned_on: 'T1 Unplanned =', t2_actual_unplanned_on: 'T2 Unplanned =',
+      // R1 / R2 cell-link filters
+      r1_planned_to: 'R1 Plan ≤', r2_planned_to: 'R2 Plan ≤',
+      r1_actual_to: 'R1 Actual ≤', r2_actual_to: 'R2 Actual ≤',
+      r1_planned_on: 'R1 Plan =', r2_planned_on: 'R2 Plan =',
+      r1_actual_on: 'R1 Actual =', r2_actual_on: 'R2 Actual =',
+      r1_delay_asof: 'R1 Delay ≤', r2_delay_asof: 'R2 Delay ≤',
+      r1_delay_on: 'R1 Delay =', r2_delay_on: 'R2 Delay =',
+      r1_actual_unplanned_on: 'R1 Unplanned =', r2_actual_unplanned_on: 'R2 Unplanned =',
       stage: 'Stage', cell_status: 'Cell Status',
     };
     for (const [k, lbl] of Object.entries(map)) {

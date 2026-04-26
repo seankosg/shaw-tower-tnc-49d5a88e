@@ -1024,9 +1024,23 @@ function PlanActualTable({
               },
               {
                 stage: 'r1', label: 'R1', metrics: r.r1,
+                planTo: 'r1_planned_to',
+                actualTo: 'r1_actual_to',
+                planOn: 'r1_planned_on',
+                actualOn: 'r1_actual_on',
+                delayAsOf: 'r1_delay_asof',
+                delayOn: 'r1_delay_on',
+                actualUnplannedOn: 'r1_actual_unplanned_on',
               },
               {
                 stage: 'r2', label: 'R2', metrics: r.r2,
+                planTo: 'r2_planned_to',
+                actualTo: 'r2_actual_to',
+                planOn: 'r2_planned_on',
+                actualOn: 'r2_actual_on',
+                delayAsOf: 'r2_delay_asof',
+                delayOn: 'r2_delay_on',
+                actualUnplannedOn: 'r2_actual_unplanned_on',
               },
             ];
 
