@@ -12,7 +12,9 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { containsKorean } from '@/hooks/useTranslateToEnglish';
 import { TranslatePanel } from '@/components/comments/TranslatePanel';
-import { RecipientSelector, RecipientBadges, type RecipientKey } from '@/components/comments/RecipientSelector';
+import { RecipientSelector, RecipientBadges, RECIPIENT_ORDER, type RecipientKey } from '@/components/comments/RecipientSelector';
+
+const RECIPIENT_KEYS = new Set<string>(RECIPIENT_ORDER);
 
 type CommentType = 'comment' | 'instruction' | 'reply';
 
