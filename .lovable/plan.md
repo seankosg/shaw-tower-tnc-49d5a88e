@@ -1,100 +1,117 @@
-# Defect 임포트 — 컬럼 선택(Include/Exclude) 기능 [최종 확정안 v3]
+# 대시보드 하단 댓글 리스트 구현
 
-> 매핑 로직 / `FIELD_ALIASES` / 자동 정규화 **그대로 유지**.
-> 추가: 엑셀 헤더 목록을 보여주고 **체크박스로 임포트할 컬럼만 선택**.
-> **필수 컬럼은 기본 체크 + 해제 시 경고 표시(차단 X)**.
+## 1. 어떤 댓글을 보여줄지 (제안)
 
-## 결정사항
-- (a) DB 기록 안 함 — UI 세션에만 유지
-- (b) Defect 임포트만 먼저
-- (c) 기본값 = 전체 선택
-- (d) 필수 컬럼은 기본 체크 + 해제 시 **경고만** (해제 자체는 허용)
+전체 댓글을 모두 보여주는 건 비효율적이라, 다음 기준의 **"최근 활동 피드(Recent Activity Feed)"** 형태를 제안합니다.
+
+### 기본 표시 규칙 (제안하는 디폴트)
+- **최근 30일** 이내 작성된 댓글
+- **최대 50건** (스크롤 영역 내)
+- 작성일시 **내림차순**
+- **현재 사용자가 권한으로 볼 수 있는 항목**의 댓글만 (Subtest는 RLS의 `can_view_subtest`가 자동으로 필터링됨)
+
+### 상단 필터/탭 (UI 제어)
+1. **타입 탭**:
+   - `전체 (All)`
+   - `Instructions only` — 지시사항만 (관리자/시니어가 내린 결정사항)
+   - `My team` — 내 team의 항목 댓글
+   - `Mentions/Replies to me` — 내가 작성한 댓글에 달린 답글, 또는 내가 쓴 댓글 (선택)
+   - `Unread` — 내가 아직 안 읽은 댓글 (이미 `*_comment_reads` 테이블 존재)
+2. **기간 선택**: 7일 / 30일 / 90일 (기본 30일)
+3. **검색**: 메시지 본문 키워드 검색 (선택)
+
+### 정렬 우선순위 보너스 (선택 적용)
+- `Unread` + `instruction` 타입 댓글은 상단에 핀처럼 보이도록 강조 (배지)
+- 같은 항목에 여러 댓글이 있으면 가장 최근 1건만 묶어 보여주고 "외 N건" 표시 (선택)
+
+> 위 기본값(최근 30일 / 50건 / 전체+Unread+Instructions 탭)을 권장합니다.
 
 ---
 
-## 1. "필수 컬럼" 정의
+## 2. 동작
 
-| 분류 | 조건 | 경고 메시지 (해제 시) |
-|---|---|---|
-| **시스템 필수** | `toFieldName(header) === 'issue_no'` | `"⚠ Issue No is required for header detection. Excluding it will likely cause the import to fail."` |
-| **Re-import 필수** | reimport 마커 있음 + `toFieldName(header) === 'id'` | `"⚠ Excluding 'id' on a Re-import file will create new rows instead of updating existing ones."` |
-| **Field Config 필수** | `defect_field_config.is_required = true` 인 필드로 매핑 | `"⚠ '{label}' is marked as required in Field Config. Excluding it may leave required fields empty."` |
+- **T&C Dashboard (`/tc/dashboard`)**: 하단에 **"최근 Subtest 댓글"** 섹션
+  - 댓글 행 클릭 → `/subtests/:id` 이동 (해당 Subtest 상세에 댓글 섹션이 이미 있음)
+- **Defects Dashboard (`/defects/dashboard`)**: 하단에 **"최근 Defect 댓글"** 섹션
+  - 댓글 행 클릭 → `/defects/:id` 이동
+- 항목 컨텍스트(예: subtest의 `item_no`/`mos_code`, defect의 `issue_no`/`description`)도 함께 표시해서 어떤 항목인지 한눈에 인식 가능
 
-## 2. UI 동작
+---
+
+## 3. 표시 카드 레이아웃 (행 단위)
 
 ```text
-┌─ Select Columns: defect_q1.xlsx ─────────────────┐
-│  [✓ Select all]                  [Reset]          │
-│  ─────────────────────────────────────────────── │
-│  ✓  Issue No              → issue_no    ★ Required│
-│  ✓  Main Trade            → main_trade  ★ Required│
-│  ✓  Area                  → area_raw              │
-│  ✓  Cost Code             → (unmapped)            │
-│  ☐  HDEC PIC              → hdec_pic_name         │
-│  ...                                              │
-│  ─────────────────────────────────────────────── │
-│  ⚠ 'Main Trade' is marked as required. Excluding  │
-│    it may leave required fields empty.            │
-│                                                   │
-│  Selected: 11/14  ·  Required excluded: 1         │
-│         [Cancel]              [Apply]             │
-└───────────────────────────────────────────────────┘
+[작성자]  [type 배지: comment/instruction]  [unread 배지]   2025-04-25 14:03
+└─ "댓글 메시지 본문 한 줄 요약 (최대 2줄, ellipsis)..."
+   → 항목: ITEM-123 / MOS-A02   (클릭 시 상세 이동)
 ```
 
-- 필수 행: 항상 ★ Required 배지 표시 (체크박스 자체는 활성)
-- 사용자가 필수 컬럼 체크 해제 → **즉시 inline 경고 박스**(노란색, 다이얼로그 하단)에 누적 표시
-- toast 알림도 1회 발생 (`toast.warning` from sonner)
-- Apply 버튼은 활성 상태 유지 (차단하지 않음)
-- 헤더 카운터에 `Required excluded: N` 표시로 시각적 환기
+---
 
-## 3. 코드 변경
+## 4. 기술 구현
 
-### A. `src/lib/defect-parser.ts`
-- 신규 export: `getDefectExcelHeaders(file, sheetName?)` → `{ headers, sample, isReimport }`
-- 신규 export: `toFieldName`
-- `parseDefectExcel(file, sheetName?, excludedHeaders?: string[])` — 세 번째 인자 추가. raw에서 제외 키 삭제 후 기존 흐름
+### 신규 컴포넌트
+- `src/components/dashboard/RecentSubtestComments.tsx`
+- `src/components/dashboard/RecentDefectComments.tsx`
 
-### B. `src/contexts/DefectImportContext.tsx`
-- `ImportFileItem`에 추가: `availableHeaders?`, `headerSamples?`, `excludedHeaders?: string[]`, `isReimport?: boolean`
-- `addFiles` 흐름: 시트 확정 → `getDefectExcelHeaders` → 상태 저장 → `parseDefectExcel` 호출
-- 신규 액션: `setFileExcludedHeaders(id, excluded)` → 자동 재파싱
-- 시트 변경 시 `excludedHeaders` 초기화
+공통 props/구조:
+- 내부에서 `subtest_comments` / `defect_comments` 를 join 해서 fetch
+- 항목 메타(item_no, mos_code, issue_no 등) 함께 select
+- 작성자 이름은 `profiles` 에서 별도 조회 후 in-memory join (기존 `DefectComments.tsx` 패턴 그대로)
+- `*_comment_reads` 의 `last_read_at` 과 비교해 `hasUnread` 계산
+- Realtime: `postgres_changes` on `subtest_comments` / `defect_comments` 로 자동 새로고침 (기존 `SubtestList` 패턴 참고)
 
-### C. `src/components/import/ColumnSelectDialog.tsx` (**신규**)
-- props: `headers`, `samples`, `defaultExcluded`, `isReimport`, `onApply`, `onCancel`
-- `useDefectFieldConfig()`로 필수 필드 판정
-- `getRequirement(header)` 헬퍼:
-  ```ts
-  const field = toFieldName(header);
-  if (field === 'issue_no') return { required: true, reason: 'system', message: '...' };
-  if (isReimport && field === 'id') return { required: true, reason: 'reimport', message: '...' };
-  if (isFieldRequired(field)) return { required: true, reason: 'config', message: '...' };
-  return { required: false };
-  ```
-- 체크 해제 핸들러:
-  ```ts
-  const onToggle = (header, nextChecked) => {
-    const req = getRequirement(header);
-    if (req.required && !nextChecked) {
-      toast.warning(req.message);   // sonner
-    }
-    setExcluded(...);
-  };
-  ```
-- 다이얼로그 하단에 현재 제외된 필수 컬럼들의 경고 누적 박스 (Alert 컴포넌트, variant=warning 스타일)
-- area_raw 제외 시 안내: *"Excluding 'Area' will also clear Type/Level/Location"*
+### 쿼리 개요
+```ts
+// Subtest
+supabase
+  .from('subtest_comments')
+  .select('id, subtest_id, type, message, created_at, author_user_id, edited, subtests!inner(id, item_no, mos_code, team, subcontractor_name, subsub_name)')
+  .gte('created_at', thirtyDaysAgo)
+  .order('created_at', { ascending: false })
+  .limit(50)
+```
+RLS가 본인이 볼 수 없는 subtest의 댓글은 자동 필터링.
 
-### D. `src/pages/DefectImportPage.tsx`
-- 파일 행에 **"Select Columns (n/N)"** 버튼 (Settings2 아이콘)
-- 헤더 로딩 전엔 disabled
+```ts
+// Defect — 동일 패턴, defects(id, issue_no, description, team) join
+```
 
-## 4. 영향 파일
+### 페이지 통합
+- `DashboardPage.tsx` 맨 아래에 `<RecentSubtestComments />` 카드 추가
+- `DefectDashboardPage.tsx` 맨 아래에 `<RecentDefectComments />` 카드 추가
+- 카드 헤더: 제목 + 탭(All / Instructions / Unread) + 기간 셀렉트
+- 본문: `ScrollArea` 안에 행 리스트, 행 클릭 시 `navigate(...)`
 
-| 파일 | 종류 |
-|---|---|
-| `src/lib/defect-parser.ts` | 수정 |
-| `src/contexts/DefectImportContext.tsx` | 수정 |
-| `src/components/import/ColumnSelectDialog.tsx` | **신규** |
-| `src/pages/DefectImportPage.tsx` | 수정 |
+### 읽음 처리 (선택)
+- 행을 클릭해서 상세로 이동할 때 해당 항목의 `*_comment_reads.last_read_at` 을 `now()` 로 upsert (기존 상세 페이지 진입 시 처리 로직이 있다면 중복 방지)
+- 본 작업에서는 **상세 페이지 기존 로직에 위임**하고 피드에서는 표시만 함
 
-DB 마이그레이션 없음. T&C 임포트 변경 없음. 매핑 로직/별칭 사전 변경 없음.
+---
+
+## 5. 권한/RLS
+
+- `defect_comments` / `subtest_comments` 모두 SELECT는 authenticated 전체 허용. 단, `subtests` join은 `can_view_subtest` RLS가 적용되어 자동으로 권한 외 항목은 제거됨.
+- `defect_items` 도 authenticated 전체 read 가능 → 모든 사용자가 모든 defect 댓글을 볼 수 있음. 필요 시 team 필터로 1차 제한 권장.
+
+---
+
+## 6. 변경 파일 요약
+
+**신규**
+- `src/components/dashboard/RecentSubtestComments.tsx`
+- `src/components/dashboard/RecentDefectComments.tsx`
+
+**수정**
+- `src/pages/DashboardPage.tsx` — 하단에 카드 1개 추가
+- `src/pages/DefectDashboardPage.tsx` — 하단에 카드 1개 추가
+
+---
+
+## 7. 확인 부탁드리는 옵션
+
+승인 전 한 가지만 정해주시면 그대로 적용합니다. (미응답 시 **A**로 진행)
+
+- **A. 권장 기본값 그대로**: 최근 30일 / 최대 50건 / 탭(All · Instructions · Unread) / 내 권한 내 항목만
+- **B. 더 단순하게**: 최근 20건만, 탭/필터 없이 단순 리스트
+- **C. 더 풍부하게**: 위 A + 검색창 + 기간 7/30/90 셀렉트

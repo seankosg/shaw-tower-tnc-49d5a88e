@@ -32,6 +32,7 @@ import {
   aggregatePlanActualByGroup, buildSCurve, NONE_LABEL,
 } from '@/lib/dashboard-utils';
 import { isStageDone } from '@/lib/stage-metrics';
+import { RecentSubtestComments } from '@/components/dashboard/RecentSubtestComments';
 
 const STATUS_COLORS: Record<string, string> = {
   Done: 'hsl(142, 71%, 45%)',
@@ -535,6 +536,9 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ─── Recent Comments Feed ─── */}
+      <RecentSubtestComments />
     </div>
   );
 }

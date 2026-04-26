@@ -20,6 +20,7 @@ import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
 import { exportDefectPlanActualToExcel } from '@/lib/defect-dashboard-excel-export';
+import { RecentDefectComments } from '@/components/dashboard/RecentDefectComments';
 import {
   NONE_LABEL,
   aggregateDefectPlanActualByGroup,
@@ -528,6 +529,9 @@ function PlanActualTable({
           </Table>
         </div>
       </div>
+
+      {/* ─── Recent Comments Feed ─── */}
+      <RecentDefectComments />
     </div>
   );
 }
