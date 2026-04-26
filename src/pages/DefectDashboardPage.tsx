@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertTriangle, CalendarIcon, CheckCircle2, Clock, Download, Filter, ListChecks, ShieldCheck, TrendingUp } from 'lucide-react';
+import { AlertTriangle, CalendarIcon, CheckCircle2, ChevronDown, ChevronRight, Clock, Download, Filter, ListChecks, ShieldCheck, TrendingUp } from 'lucide-react';
 import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { supabase } from '@/integrations/supabase/client';
