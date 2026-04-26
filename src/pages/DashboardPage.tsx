@@ -986,6 +986,7 @@ function PlanActualTable({
                 actualOn: 'pred_actual_on',
                 delayAsOf: 'pred_delay_asof',
                 delayOn: 'pred_delay_on',
+                actualUnplannedOn: 'pred_actual_unplanned_on',
               },
               {
                 stage: 't1', label: 'T1', metrics: r.t1,
@@ -995,6 +996,7 @@ function PlanActualTable({
                 actualOn: 't1_actual_on',
                 delayAsOf: 't1_delay_asof',
                 delayOn: 't1_delay_on',
+                actualUnplannedOn: 't1_actual_unplanned_on',
               },
               {
                 stage: 't2', label: 'T2', metrics: r.t2,
@@ -1004,6 +1006,7 @@ function PlanActualTable({
                 actualOn: 't2_actual_on',
                 delayAsOf: 't2_delay_asof',
                 delayOn: 't2_delay_on',
+                actualUnplannedOn: 't2_actual_unplanned_on',
               },
             ];
 
