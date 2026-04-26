@@ -391,7 +391,29 @@ export default function DefectDetailPage() {
     });
   };
 
-  const rawEntries = useMemo(() => Object.entries(record?.raw_payload ?? {}).slice(0, 80), [record]);
+  // Raw payload entries to render: prefer Admin-managed `payload_*` field config rows
+  // (each carrying the original Excel header to look up), and fall back to the
+  // legacy "all keys, sliced to 80" mode when no payload_* rows are configured.
+  const rawPayloadConfig = getRawPayloadFieldsForDisplay();
+  const rawEntries = useMemo(() => {
+    const payload = (record?.raw_payload ?? {}) as Record<string, unknown>;
+    if (rawPayloadConfig.length > 0) {
+      return rawPayloadConfig
+        .map((cfg) => {
+          const header = cfg.original_header ?? '';
+          const value = header in payload ? payload[header] : undefined;
+          return { key: header, label: cfg.display_name, value, configured: true };
+        })
+        .filter((entry) => entry.value !== undefined && entry.value !== null && entry.value !== '');
+    }
+    return Object.entries(payload).slice(0, 80).map(([k, v]) => ({
+      key: k,
+      label: k.replace(/\s*\(H\)\s*$/i, ''),
+      value: v,
+      configured: false,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record, rawPayloadConfig.length]);
 
   // Master-driven dropdown options. Preserve legacy values that aren't in master.
   const subOptionsList = useMemo(() => {
