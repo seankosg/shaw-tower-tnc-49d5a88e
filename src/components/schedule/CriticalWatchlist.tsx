@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { AlertTriangle, Clock, TrendingDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import type { CriticalItem, LaggingGroup } from '@/lib/schedule-utils';
+import { STAGE_LABELS, type CriticalItem, type LaggingGroup } from '@/lib/schedule-utils';
 
 interface CriticalWatchlistProps {
   highRisk: CriticalItem[];
@@ -135,9 +135,10 @@ function RiskRow({ item, onClick, hint }: { item: CriticalItem; onClick?: (i: Cr
           item.stage === 't1' && 'bg-primary/15 text-primary',
           item.stage === 't2' && 'bg-primary/30 text-primary',
           item.stage === 'r1' && 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-          item.stage === 'r2' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+          item.stage === 'r2s' && 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-400',
+          item.stage === 'r2a' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
         )}>
-          {item.stage.toUpperCase()}
+          {STAGE_LABELS[item.stage]}
         </span>
         <span className="truncate font-medium" title={`${item.systemCode} · ${item.itemNo}`}>
           {item.systemCode}

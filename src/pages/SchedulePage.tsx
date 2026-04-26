@@ -206,7 +206,8 @@ export default function SchedulePage() {
         t1:   { ...r.stages.t1,   cells: r.stages.t1.cells.slice(startIdx) },
         t2:   { ...r.stages.t2,   cells: r.stages.t2.cells.slice(startIdx) },
         r1:   { ...r.stages.r1,   cells: r.stages.r1.cells.slice(startIdx) },
-        r2:   { ...r.stages.r2,   cells: r.stages.r2.cells.slice(startIdx) },
+        r2s:  { ...r.stages.r2s,  cells: r.stages.r2s.cells.slice(startIdx) },
+        r2a:  { ...r.stages.r2a,  cells: r.stages.r2a.cells.slice(startIdx) },
       },
     }));
     return { ...filteredAggregate, buckets, rows };
@@ -278,7 +279,7 @@ export default function SchedulePage() {
     params.date_field = field;
 
     // Stage scope (sub-row click) and matching status
-    if (stage === 't1' || stage === 't2' || stage === 'pred' || stage === 'r1' || stage === 'r2') {
+    if (stage === 't1' || stage === 't2' || stage === 'pred' || stage === 'r1' || stage === 'r2s' || stage === 'r2a') {
       params.stage = stage;
     }
     // Plan counts by planned_date regardless of status. Actual implies completed actual_date.
@@ -376,8 +377,9 @@ export default function SchedulePage() {
                 <TabsTrigger value="pred" className="h-6 px-2 text-xs">Pred</TabsTrigger>
                 <TabsTrigger value="t1" className="h-6 px-2 text-xs">T1</TabsTrigger>
                 <TabsTrigger value="t2" className="h-6 px-2 text-xs">T2</TabsTrigger>
-                <TabsTrigger value="r1" className="h-6 px-2 text-xs">R1</TabsTrigger>
-                <TabsTrigger value="r2" className="h-6 px-2 text-xs">R2</TabsTrigger>
+                <TabsTrigger value="r1" className="h-6 px-2 text-xs">R1S</TabsTrigger>
+                <TabsTrigger value="r2s" className="h-6 px-2 text-xs">R2S</TabsTrigger>
+                <TabsTrigger value="r2a" className="h-6 px-2 text-xs">R2A</TabsTrigger>
               </TabsList>
             </Tabs>
           </ToolbarGroup>

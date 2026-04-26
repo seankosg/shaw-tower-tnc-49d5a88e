@@ -925,7 +925,7 @@ export default function SubtestList() {
     //  - default: Pred/T1/T2 (matches Dashboard 1-tier KPI Overdue card)
     //  - scope=all: Pred/T1/T2/R1/R2 (matches Dashboard 3-tier alert banner)
     const OVERDUE_STAGES: StageKey[] = urlScope === 'all'
-      ? ['pred', 't1', 't2', 'r1', 'r2']
+      ? ['pred', 't1', 't2', 'r1', 'r2s', 'r2a']
       : ['pred', 't1', 't2'];
 
     return data.filter(r => {
@@ -989,20 +989,20 @@ export default function SubtestList() {
 
       // R2 cell-link filters (planned = r2_target_approval_date, actual = r2_actual_approval_date)
       if (urlR2PlannedTo) {
-        const p = getStagePlannedDate(r, 'r2');
+        const p = getStagePlannedDate(r, 'r2a');
         if (!(p && p <= urlR2PlannedTo)) return false;
       }
       if (urlR2ActualTo) {
-        const a = getStageActualDate(r, 'r2');
+        const a = getStageActualDate(r, 'r2a');
         if (!(a && a <= urlR2ActualTo)) return false;
       }
-      if (urlR2PlannedOn && getStagePlannedDate(r, 'r2') !== urlR2PlannedOn) return false;
-      if (urlR2ActualOn && getStageActualDate(r, 'r2') !== urlR2ActualOn) return false;
-      if (urlR2DelayAsOf && !isStageDelayedAsOf(r, 'r2', urlR2DelayAsOf)) return false;
-      if (urlR2DelayOn && !(getStagePlannedDate(r, 'r2') === urlR2DelayOn && !isStageDone(r, 'r2'))) return false;
+      if (urlR2PlannedOn && getStagePlannedDate(r, 'r2a') !== urlR2PlannedOn) return false;
+      if (urlR2ActualOn && getStageActualDate(r, 'r2a') !== urlR2ActualOn) return false;
+      if (urlR2DelayAsOf && !isStageDelayedAsOf(r, 'r2a', urlR2DelayAsOf)) return false;
+      if (urlR2DelayOn && !(getStagePlannedDate(r, 'r2a') === urlR2DelayOn && !isStageDone(r, 'r2a'))) return false;
       if (urlR2ActualUnplannedOn) {
-        const a = getStageActualDate(r, 'r2');
-        const p = getStagePlannedDate(r, 'r2');
+        const a = getStageActualDate(r, 'r2a');
+        const p = getStagePlannedDate(r, 'r2a');
         if (!(a === urlR2ActualUnplannedOn && p !== urlR2ActualUnplannedOn)) return false;
       }
 
@@ -1396,7 +1396,7 @@ function SubtestTableView({
   const renderRowBgClass = (r: SubtestRow) => {
     // Match active Overdue scope (Pred/T1/T2 default, or all 5 stages when scope=all).
     const stages: StageKey[] = overdueScope === 'all'
-      ? ['pred', 't1', 't2', 'r1', 'r2']
+      ? ['pred', 't1', 't2', 'r1', 'r2s', 'r2a']
       : ['pred', 't1', 't2'];
     const delayed = getAnyStageDelayedAsOf(r, stages, delayAsOfDate);
     const t2Done = isStageDone(r, 't2');

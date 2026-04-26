@@ -1,7 +1,16 @@
 import type { TcStatus, ReportStatus } from '@/types/enums';
-import { isR1Done as reportIsR1Done, isR2Done as reportIsR2Done } from '@/types/enums';
+import {
+  isR1Done as reportIsR1Done,
+  isR2Done as reportIsR2Done,
+  isR2Submitted as reportIsR2Submitted,
+} from '@/types/enums';
 
-export type StageKey = 'pred' | 't1' | 't2' | 'r1' | 'r2';
+// Stage keys used across schedule + dashboard utilities.
+// `r2` is split into:
+//   - `r2s` → R2 Submission milestone (target/actual submission date)
+//   - `r2a` → R2 Approval milestone   (target/actual approval date)
+// Both share the single `r2_status` column on subtests.
+export type StageKey = 'pred' | 't1' | 't2' | 'r1' | 'r2s' | 'r2a';
 
 export interface StageMetricRow {
   predecessor_status_raw?: string | null;
@@ -18,9 +27,7 @@ export interface StageMetricRow {
   r1_status?: ReportStatus | null;
   r1_target_submission_date?: string | null;
   r1_actual_submission_date?: string | null;
-  // R2 — HDEC → Client report (final completion = approval)
-  // For R2, "planned" date = target APPROVAL date (final closure milestone)
-  // and "actual" date = actual approval date.
+  // R2 — HDEC → Client report. Single status column drives both R2S and R2A.
   r2_status?: ReportStatus | null;
   r2_target_submission_date?: string | null;
   r2_actual_submission_date?: string | null;
@@ -49,6 +56,7 @@ export function getStageStatus(row: StageMetricRow, stage: StageKey): TcStatus |
   if (stage === 't1') return row.t1_status ?? null;
   if (stage === 't2') return row.t2_status ?? null;
   if (stage === 'r1') return row.r1_status ?? null;
+  // r2s and r2a share r2_status
   return row.r2_status ?? null;
 }
 
@@ -57,7 +65,8 @@ export function getStagePlannedDate(row: StageMetricRow, stage: StageKey): strin
   if (stage === 't1') return row.t1_planned_date ?? null;
   if (stage === 't2') return row.t2_planned_date ?? null;
   if (stage === 'r1') return row.r1_target_submission_date ?? null;
-  // R2 final milestone = approval target date
+  if (stage === 'r2s') return row.r2_target_submission_date ?? null;
+  // r2a → final approval target date
   return row.r2_target_approval_date ?? null;
 }
 
@@ -67,12 +76,26 @@ export function getStageActualDate(row: StageMetricRow, stage: StageKey): string
   if (stage === 't1') return row.t1_actual_date ?? null;
   if (stage === 't2') return row.t2_actual_date ?? null;
   if (stage === 'r1') return row.r1_actual_submission_date ?? null;
+  if (stage === 'r2s') return row.r2_actual_submission_date ?? null;
   return row.r2_actual_approval_date ?? null;
 }
 
 export function isStageDone(row: StageMetricRow, stage: StageKey): boolean {
-  if (stage === 'r1') return reportIsR1Done(row.r1_status ?? null);
-  if (stage === 'r2') return reportIsR2Done(row.r2_status ?? null);
+  // R1: defensive fallback if status missing but actual date present
+  if (stage === 'r1') {
+    if (row.r1_status == null && row.r1_actual_submission_date) return true;
+    return reportIsR1Done(row.r1_status ?? null);
+  }
+  // R2 Submission: done if status >= Submitted, or fallback when status missing but actual sub date present
+  if (stage === 'r2s') {
+    if (row.r2_status == null && row.r2_actual_submission_date) return true;
+    return reportIsR2Submitted(row.r2_status ?? null);
+  }
+  // R2 Approval: done only when status === Approved (or fallback when status missing but approval date present)
+  if (stage === 'r2a') {
+    if (row.r2_status == null && row.r2_actual_approval_date) return true;
+    return reportIsR2Done(row.r2_status ?? null);
+  }
 
   const status = getStageStatus(row, stage) as TcStatus | null;
   if (status === 'Done') return true;
@@ -119,6 +142,8 @@ export function getMaxDelayDaysAsOf(row: StageMetricRow, stages: StageKey[], asO
   return stages.reduce((worst, stage) => Math.max(worst, getStageDelayDaysAsOf(row, stage, asOfDate)), 0);
 }
 
+export const ALL_STAGE_KEYS: StageKey[] = ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'];
+
 export function getStageKeys(filter: 'all' | StageKey): StageKey[] {
-  return filter === 'all' ? ['pred', 't1', 't2', 'r1', 'r2'] : [filter];
+  return filter === 'all' ? ALL_STAGE_KEYS : [filter];
 }

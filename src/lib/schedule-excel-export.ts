@@ -130,9 +130,9 @@ export function exportScheduleToExcel(
   const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
   const fileTs = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
 
-  const stageLabel = stageFilter === 'all' ? 'All' : stageFilter.toUpperCase();
+  const stageLabel = stageFilter === 'all' ? 'All' : STAGE_LABELS[stageFilter as ScheduleStage];
   const showSubRows = stageFilter === 'all';
-  const stages: ScheduleStage[] = showSubRows ? ['pred', 't1', 't2', 'r1', 'r2'] : [];
+  const stages: ScheduleStage[] = showSubRows ? ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'] : [];
 
   // Fixed columns: Group(1) + Total Scope(4) + Up to Today(4) = 9
   const FIXED_COLS = 9;

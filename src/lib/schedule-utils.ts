@@ -171,11 +171,12 @@ export function aggregateSchedule(
       t1: emptyStageRow('t1', buckets, items.length),
       t2: emptyStageRow('t2', buckets, items.length),
       r1: emptyStageRow('r1', buckets, items.length),
-      r2: emptyStageRow('r2', buckets, items.length),
+      r2s: emptyStageRow('r2s', buckets, items.length),
+      r2a: emptyStageRow('r2a', buckets, items.length),
     };
 
     for (const s of items) {
-      for (const st of ['pred', 't1', 't2', 'r1', 'r2'] as ScheduleStage[]) {
+      for (const st of ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'] as ScheduleStage[]) {
         const { plan, actual } = getStageDates(s, st);
         if (plan) {
           const b = bucketize(plan, opts.bucket);
@@ -268,7 +269,8 @@ export function findCritical(
   const highRisk: CriticalItem[] = [];
   const t1Bottleneck: CriticalItem[] = [];
   // Stages monitored for High Risk (Pred is excluded — critical card surfaces actionable test/report milestones).
-  const RISK_STAGES: ScheduleStage[] = ['t1', 't2', 'r1', 'r2'];
+  // Includes both R2 milestones (Submission and Approval).
+  const RISK_STAGES: ScheduleStage[] = ['t1', 't2', 'r1', 'r2s', 'r2a'];
 
   for (const s of subs) {
     const groupLabel = getGroupKey(s, groupBy, sysCodeById);
@@ -341,8 +343,9 @@ export const STAGE_LABELS: Record<ScheduleStage, string> = {
   pred: 'Pred',
   t1: 'T1',
   t2: 'T2',
-  r1: 'R1',
-  r2: 'R2',
+  r1: 'R1S',
+  r2s: 'R2S',
+  r2a: 'R2A',
 };
 
 export function formatBucketLabel(iso: string, bucket: ScheduleBucket): { primary: string; secondary: string } {
