@@ -13,7 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { formatDateTimeDdMmmYyyy, formatDdMmm, formatSignedDays } from '@/lib/format';
+import { formatDateTimeDdMmmYyyy, formatDdMmm, formatSignedDays, formatDuration } from '@/lib/format';
 import { RollbackDialog } from '@/components/import/RollbackDialog';
 
 interface UploadBatch {
@@ -26,6 +26,8 @@ interface UploadBatch {
   success_rows: number | null;
   skipped_rows: number | null;
   rejected_rows: number | null;
+  uploaded_by: string | null;
+  data_date: string | null;
 }
 
 interface RowLog {
@@ -110,6 +112,8 @@ export default function ImportLogsPage() {
   const canDelete = isAdminOrSuperuser || import.meta.env.DEV;
 
   const [batches, setBatches] = useState<UploadBatch[]>([]);
+  const [uploaderNames, setUploaderNames] = useState<Record<string, string>>({});
+  const [durationsMs, setDurationsMs] = useState<Record<string, number>>({});
   const [selectedBatch, setSelectedBatch] = useState<string | null>(searchParams.get('batch'));
   const [detailTab, setDetailTab] = useState(searchParams.get('tab') || 'rows');
   const [rowLogs, setRowLogs] = useState<RowLog[]>([]);
@@ -135,10 +139,42 @@ export default function ImportLogsPage() {
   const fetchBatches = async () => {
     setLoading(true);
     const { data } = await supabase.from('upload_batches')
-      .select('id, uploaded_file_name, uploaded_at, import_type, status, total_rows, success_rows, skipped_rows, rejected_rows')
+      .select('id, uploaded_file_name, uploaded_at, import_type, status, total_rows, success_rows, skipped_rows, rejected_rows, uploaded_by, data_date')
       .order('uploaded_at', { ascending: false }).limit(100);
-    if (data) setBatches(data);
+    const list = (data ?? []) as UploadBatch[];
+    setBatches(list);
     setLoading(false);
+
+    // Fetch uploader names
+    const uploaderIds = Array.from(new Set(list.map(b => b.uploaded_by).filter(Boolean))) as string[];
+    if (uploaderIds.length) {
+      const { data: profs } = await supabase.from('profiles').select('user_id, name, login_id').in('user_id', uploaderIds);
+      const map: Record<string, string> = {};
+      (profs ?? []).forEach((p: any) => { map[p.user_id] = p.name || p.login_id || ''; });
+      setUploaderNames(map);
+    } else {
+      setUploaderNames({});
+    }
+
+    // Fetch durations from row logs (max processed_at per batch)
+    const batchIds = list.map(b => b.id);
+    if (batchIds.length) {
+      const { data: logs } = await supabase.from('upload_row_logs')
+        .select('upload_id, processed_at').in('upload_id', batchIds);
+      const maxByBatch: Record<string, number> = {};
+      (logs ?? []).forEach((l: any) => {
+        const t = new Date(l.processed_at).getTime();
+        if (!maxByBatch[l.upload_id] || t > maxByBatch[l.upload_id]) maxByBatch[l.upload_id] = t;
+      });
+      const durs: Record<string, number> = {};
+      list.forEach(b => {
+        const end = maxByBatch[b.id];
+        if (end) durs[b.id] = end - new Date(b.uploaded_at).getTime();
+      });
+      setDurationsMs(durs);
+    } else {
+      setDurationsMs({});
+    }
   };
 
   const selectBatch = async (id: string) => {
@@ -198,6 +234,9 @@ export default function ImportLogsPage() {
                     <TableHead className="text-xs">File</TableHead>
                     <TableHead className="text-xs">Type</TableHead>
                     <TableHead className="text-xs">Date</TableHead>
+                    <TableHead className="text-xs">Uploader</TableHead>
+                    <TableHead className="text-xs">Data Date</TableHead>
+                    <TableHead className="text-xs text-right">Duration</TableHead>
                     <TableHead className="text-xs">Status</TableHead>
                     <TableHead className="text-xs text-right">Total</TableHead>
                     <TableHead className="text-xs text-right">Success</TableHead>
@@ -208,14 +247,20 @@ export default function ImportLogsPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={canDelete ? 9 : 8} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={canDelete ? 12 : 11} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
                   ) : batches.length === 0 ? (
-                    <TableRow><TableCell colSpan={canDelete ? 9 : 8} className="text-center py-8 text-muted-foreground">No import history</TableCell></TableRow>
-                  ) : batches.map(b => (
+                    <TableRow><TableCell colSpan={canDelete ? 12 : 11} className="text-center py-8 text-muted-foreground">No import history</TableCell></TableRow>
+                  ) : batches.map(b => {
+                    const uploader = b.uploaded_by ? (uploaderNames[b.uploaded_by] || '—') : '—';
+                    const dur = durationsMs[b.id];
+                    return (
                     <TableRow key={b.id} className="hover:bg-muted/50">
                       <TableCell className="text-xs font-medium cursor-pointer" onClick={() => selectBatch(b.id)}>{b.uploaded_file_name}</TableCell>
                       <TableCell className="text-xs capitalize cursor-pointer" onClick={() => selectBatch(b.id)}>{b.import_type || '—'}</TableCell>
-                      <TableCell className="text-xs cursor-pointer" onClick={() => selectBatch(b.id)}>{formatDateTimeDdMmmYyyy(b.uploaded_at)}</TableCell>
+                      <TableCell className="text-xs cursor-pointer whitespace-nowrap" onClick={() => selectBatch(b.id)}>{formatDateTimeDdMmmYyyy(b.uploaded_at)}</TableCell>
+                      <TableCell className="text-xs cursor-pointer" onClick={() => selectBatch(b.id)}>{uploader}</TableCell>
+                      <TableCell className="text-xs cursor-pointer whitespace-nowrap" onClick={() => selectBatch(b.id)}>{formatDdMmm(b.data_date)}</TableCell>
+                      <TableCell className="text-xs text-right cursor-pointer whitespace-nowrap" onClick={() => selectBatch(b.id)} title={dur != null ? `${dur} ms` : ''}>{formatDuration(dur)}</TableCell>
                       <TableCell className="cursor-pointer" onClick={() => selectBatch(b.id)}>
                         <Badge variant="outline" className={`text-xs ${statusColor[b.status] || ''}`}>{b.status}</Badge>
                       </TableCell>
@@ -257,7 +302,7 @@ export default function ImportLogsPage() {
                         </TableCell>
                       )}
                     </TableRow>
-                  ))}
+                  ); })}
                 </TableBody>
               </Table>
             </div>

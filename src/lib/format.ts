@@ -45,3 +45,20 @@ export const formatSignedDays = (v: number | null | undefined): string => {
   if (v > 0) return `+${v}`;
   return String(v);
 };
+
+/**
+ * Format a millisecond duration as a short human-readable string.
+ * Examples: "<1s", "12s", "3m 24s", "1h 5m". Returns "—" for null/invalid.
+ */
+export const formatDuration = (ms: number | null | undefined): string => {
+  if (ms == null || !isFinite(ms) || ms < 0) return '—';
+  if (ms < 1000) return '<1s';
+  const totalSec = Math.round(ms / 1000);
+  if (totalSec < 60) return `${totalSec}s`;
+  const totalMin = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (totalMin < 60) return sec ? `${totalMin}m ${sec}s` : `${totalMin}m`;
+  const hr = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  return min ? `${hr}h ${min}m` : `${hr}h`;
+};
