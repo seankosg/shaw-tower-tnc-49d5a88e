@@ -825,6 +825,7 @@ export default function SubtestList() {
       if (urlStatusFilter) {
         const overdue = getAnyStageDelayedAsOf(r, getStageKeys('all'), delayAsOfDate);
         if (urlStatusFilter === 'overdue' && !overdue) return false;
+        if (urlStatusFilter === 'remaining' && r.t2_status === 'Done') return false;
         if (urlStatusFilter === 'at_risk') {
           if (overdue) return false;
           const within = (stage: StageKey) => {
