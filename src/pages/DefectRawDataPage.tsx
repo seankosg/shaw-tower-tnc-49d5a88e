@@ -1126,7 +1126,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
 
   const renderRowClass = (row: DefectRawRow, index: number) => {
     const closed = Boolean(row.actual_closure_date) || /closed|complete|done/i.test(`${row.closure_status ?? ''} ${row.status ?? ''}`);
-    const overdue = isOverdueDefect(row);
+    const overdue = isOverdueDefect(row, dataDate);
     return cn('cursor-pointer', closed && 'bg-muted/30 text-muted-foreground', overdue && !closed && 'bg-destructive/5', hoveredIndex === index && 'bg-muted/50');
   };
 
