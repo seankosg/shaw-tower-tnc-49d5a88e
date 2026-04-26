@@ -536,6 +536,9 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ─── Recent Comments Feed ─── */}
+      <RecentSubtestComments />
     </div>
   );
 }
