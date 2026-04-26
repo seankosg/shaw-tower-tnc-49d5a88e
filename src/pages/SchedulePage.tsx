@@ -177,10 +177,10 @@ export default function SchedulePage() {
 
   const aggregate = useMemo(
     () => aggregateSchedule(filteredSubtests, {
-      groupBy, bucket, stageFilter,
+      groupBy, bucket, stageFilter: stageFilterArg,
       rangeStart, rangeEnd, asOfDate, sysCodeById,
     }),
-    [filteredSubtests, groupBy, bucket, stageFilter, rangeStart, rangeEnd, asOfDate, sysCodeById],
+    [filteredSubtests, groupBy, bucket, stageFilterArg, rangeStart, rangeEnd, asOfDate, sysCodeById],
   );
 
   const systemFilterOptions = useMemo(
@@ -229,7 +229,7 @@ export default function SchedulePage() {
 
   const kpis = useMemo(() => {
     let cumPlan = 0, cumActual = 0;
-    const stages = getStageKeys(stageFilter);
+    const stages = getStageKeys(stageFilterArg);
     let totalStages = 0, doneStages = 0;
     for (const s of filteredSubtests) {
       totalStages += stages.length;
@@ -257,7 +257,7 @@ export default function SchedulePage() {
       }
     }
     return { cumPlan, cumActual, variance, progressPct, doneStages, totalStages, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
-  }, [stageFilter, filteredSubtests, critical.highRisk.length, dataDate, today]);
+  }, [stageFilterArg, filteredSubtests, critical.highRisk.length, dataDate, today]);
 
   // ───── Navigation handlers ─────
   const filterParamForGroup = (label: string): { key: string; value: string } => {
