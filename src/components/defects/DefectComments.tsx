@@ -392,12 +392,15 @@ export function DefectComments({
         ) : (
           <>
             <p className="text-sm whitespace-pre-wrap break-words text-foreground">{c.message}</p>
-            <button
-              onClick={() => handleReply(c)}
-              className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Reply className="h-3 w-3" /> Reply
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <RecipientBadges recipients={c.recipients} />
+              <button
+                onClick={() => handleReply(c)}
+                className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors ml-auto"
+              >
+                <Reply className="h-3 w-3" /> Reply
+              </button>
+            </div>
           </>
         )}
       </div>
@@ -441,13 +444,19 @@ export function DefectComments({
             {': '}
             {replyTo.message.substring(0, 60)}{replyTo.message.length > 60 ? '…' : ''}
           </span>
-          <button onClick={() => setReplyTo(null)} className="ml-auto shrink-0 hover:text-foreground text-muted-foreground" aria-label="Cancel reply">
+          <button onClick={() => { setReplyTo(null); setRecipients([]); }} className="ml-auto shrink-0 hover:text-foreground text-muted-foreground" aria-label="Cancel reply">
             <X className="h-3 w-3" />
           </button>
         </div>
       )}
 
       <div className="space-y-2">
+        <RecipientSelector
+          names={recipientNames}
+          value={recipients}
+          onChange={setRecipients}
+          disabled={!user || showNewTranslate}
+        />
         <div className="flex gap-2 items-end">
           {canPostInstruction && !replyTo && (
             <Select value={commentType} onValueChange={(v) => setCommentType(v as any)}>
@@ -486,8 +495,9 @@ export function DefectComments({
             <Button
               size="icon"
               onClick={handleSend}
-              disabled={sending || !message.trim() || !user || showNewTranslate}
+              disabled={sending || !message.trim() || !user || showNewTranslate || recipients.length === 0}
               className="shrink-0 h-9 w-9"
+              title={recipients.length === 0 ? 'Select at least one recipient' : undefined}
             >
               <Send className="h-3.5 w-3.5" />
             </Button>
