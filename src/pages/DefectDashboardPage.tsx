@@ -208,10 +208,6 @@ export default function DefectDashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <StageCard stage="Completion" total={kpis.total} done={kpis.actualDone} remaining={kpis.total - kpis.actualDone} pct={kpis.completionPct} overdue={kpis.completionOverdue} onClick={() => goRaw({ actualComplete: 'false' })} />
-        <StageCard stage="Closure" total={kpis.total} done={kpis.closureDone} remaining={kpis.total - kpis.closureDone} pct={kpis.overallProgressPct} overdue={kpis.closureOverdue} onClick={() => goRaw({ closureComplete: 'false' })} />
-      </div>
 
       <div className="grid gap-3 md:grid-cols-2">
         <AlertBanner tone="destructive" title={`${kpis.overdueCount} Overdue Defect${kpis.overdueCount === 1 ? '' : 's'}`} description={`Planned date is on/before Data Date (${dataDateLabel}) and not yet complete.`} onClick={() => goRaw({ overdue: 'true', asOf: dataDate })} />
