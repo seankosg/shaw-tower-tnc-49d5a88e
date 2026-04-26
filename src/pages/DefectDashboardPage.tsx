@@ -529,7 +529,7 @@ function PlanActualTable({
                         </TableCell>
                         <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={todayDelta} invert={isDiff} /></TableCell>
                         <TableCell className="px-2 py-1.5 text-right text-xs font-semibold text-destructive">
-                          <ClickNum value={metrics.todayDelay} hideZero onClick={() => go(row.key, { overdue: 'true', asOf: today })} />
+                          <ClickNum value={metrics.todayDelay} hideZero onClick={isDiff ? rowClick : () => go(row.key, { dueOn: today, stage: stage.stage })} />
                         </TableCell>
                         <TableCell className="border-l border-border px-2 py-1.5">
                           {isDiff ? (
