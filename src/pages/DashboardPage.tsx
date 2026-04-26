@@ -122,7 +122,7 @@ export default function DashboardPage() {
     const systemCount = new Set(filteredSubtests.map(s => s.system_id)).size;
 
     // Overall done = R2 Approved (final completion in 5-stage workflow)
-    const totalDone = filteredSubtests.filter(s => isStageDone(s, 'r2')).length;
+    const totalDone = filteredSubtests.filter(s => isStageDone(s, 't2')).length;
     const remaining = total - totalDone;
     const progressPct = total ? Math.round((totalDone / total) * 1000) / 10 : 0;
 
@@ -306,8 +306,8 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
         <KpiCard icon={<ListChecks className="h-6 w-6 text-primary" />} label="Systems" value={kpis.systemCount} onClick={() => navigate('/tc/raw-data')} />
         <KpiCard icon={<ListChecks className="h-6 w-6 text-muted-foreground" />} label="Total Subtests" value={kpis.total.toLocaleString()} onClick={() => navigate('/tc/raw-data')} />
-        <KpiCard icon={<CheckCircle2 className="h-6 w-6" style={{ color: STATUS_COLORS.Done }} />} label="Done" value={kpis.totalDone.toLocaleString()} sub="R2 Approved" onClick={() => goSubtests({ r2_status: 'Approved' })} />
-        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Remaining" value={kpis.remaining.toLocaleString()} sub="R2 not Approved" onClick={() => goSubtests({ status: 'remaining' })} />
+        <KpiCard icon={<CheckCircle2 className="h-6 w-6" style={{ color: STATUS_COLORS.Done }} />} label="Done" value={kpis.totalDone.toLocaleString()} sub="T2 Done" onClick={() => goSubtests({ t2_status: 'Done' })} />
+        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Remaining" value={kpis.remaining.toLocaleString()} sub="T2 not Done" onClick={() => goSubtests({ status: 'remaining' })} />
         <Card className="flex flex-col justify-center p-4">
           <p className="text-xs text-muted-foreground mb-1">Progress</p>
           <p className="text-xl font-bold text-foreground">{kpis.progressPct}%</p>
