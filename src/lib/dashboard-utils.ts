@@ -58,13 +58,13 @@ export function isOverdue(s: SubtestForDashboard, asOfDate: string): boolean {
 /** True if not overdue but a planned date is within `thresholdDays` (inclusive). */
 export function isAtRisk(s: SubtestForDashboard, today: string, thresholdDays: number): boolean {
   if (isOverdue(s, today)) return false;
-  const within = (stage: 'pred' | 't1' | 't2') => {
+  const within = (stage: StageKey) => {
     const planned = getStagePlannedDate(s, stage);
     if (!planned || isStageDone(s, stage)) return false;
     const d = daysBetween(today, planned);
     return d >= 0 && d <= thresholdDays;
   };
-  return within('pred') || within('t1') || within('t2');
+  return getStageKeys('all').some(within);
 }
 
 /** Worst delay days across Pred/T1/T2 (positive = days late). */
