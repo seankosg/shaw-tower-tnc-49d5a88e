@@ -1,6 +1,7 @@
-import type { TcStatus } from '@/types/enums';
+import type { TcStatus, ReportStatus } from '@/types/enums';
+import { isR1Done as reportIsR1Done, isR2Done as reportIsR2Done } from '@/types/enums';
 
-export type StageKey = 'pred' | 't1' | 't2';
+export type StageKey = 'pred' | 't1' | 't2' | 'r1' | 'r2';
 
 export interface StageMetricRow {
   predecessor_status_raw?: string | null;
@@ -13,6 +14,18 @@ export interface StageMetricRow {
   t2_status?: TcStatus | null;
   t2_planned_date?: string | null;
   t2_actual_date?: string | null;
+  // R1 — Subcontractor → HDEC report (planned = target submission)
+  r1_status?: ReportStatus | null;
+  r1_target_submission_date?: string | null;
+  r1_actual_submission_date?: string | null;
+  // R2 — HDEC → Client report (final completion = approval)
+  // For R2, "planned" date = target APPROVAL date (final closure milestone)
+  // and "actual" date = actual approval date.
+  r2_status?: ReportStatus | null;
+  r2_target_submission_date?: string | null;
+  r2_actual_submission_date?: string | null;
+  r2_target_approval_date?: string | null;
+  r2_actual_approval_date?: string | null;
 }
 
 const PRED_DONE_TOKENS = ['done', 'complete', 'completed', 'finished', '완료'];
@@ -31,27 +44,37 @@ export function daysBetween(fromIso: string, toIso: string): number {
   return Math.round((b - a) / 86400000);
 }
 
-export function getStageStatus(row: StageMetricRow, stage: StageKey): TcStatus | null {
+export function getStageStatus(row: StageMetricRow, stage: StageKey): TcStatus | ReportStatus | null {
   if (stage === 'pred') return row.pred_status ?? null;
   if (stage === 't1') return row.t1_status ?? null;
-  return row.t2_status ?? null;
+  if (stage === 't2') return row.t2_status ?? null;
+  if (stage === 'r1') return row.r1_status ?? null;
+  return row.r2_status ?? null;
 }
 
 export function getStagePlannedDate(row: StageMetricRow, stage: StageKey): string | null {
   if (stage === 'pred') return row.pred_planned_date ?? null;
   if (stage === 't1') return row.t1_planned_date ?? null;
-  return row.t2_planned_date ?? null;
+  if (stage === 't2') return row.t2_planned_date ?? null;
+  if (stage === 'r1') return row.r1_target_submission_date ?? null;
+  // R2 final milestone = approval target date
+  return row.r2_target_approval_date ?? null;
 }
 
 export function getStageActualDate(row: StageMetricRow, stage: StageKey): string | null {
   if (!isStageDone(row, stage)) return null;
   if (stage === 'pred') return row.pred_actual_date ?? null;
   if (stage === 't1') return row.t1_actual_date ?? null;
-  return row.t2_actual_date ?? null;
+  if (stage === 't2') return row.t2_actual_date ?? null;
+  if (stage === 'r1') return row.r1_actual_submission_date ?? null;
+  return row.r2_actual_approval_date ?? null;
 }
 
 export function isStageDone(row: StageMetricRow, stage: StageKey): boolean {
-  const status = getStageStatus(row, stage);
+  if (stage === 'r1') return reportIsR1Done(row.r1_status ?? null);
+  if (stage === 'r2') return reportIsR2Done(row.r2_status ?? null);
+
+  const status = getStageStatus(row, stage) as TcStatus | null;
   if (status === 'Done') return true;
   if (stage !== 'pred' || status != null) return false;
 
@@ -97,5 +120,5 @@ export function getMaxDelayDaysAsOf(row: StageMetricRow, stages: StageKey[], asO
 }
 
 export function getStageKeys(filter: 'all' | StageKey): StageKey[] {
-  return filter === 'all' ? ['pred', 't1', 't2'] : [filter];
+  return filter === 'all' ? ['pred', 't1', 't2', 'r1', 'r2'] : [filter];
 }

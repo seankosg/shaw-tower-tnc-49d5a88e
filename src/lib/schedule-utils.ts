@@ -170,10 +170,12 @@ export function aggregateSchedule(
       pred: emptyStageRow('pred', buckets, items.length),
       t1: emptyStageRow('t1', buckets, items.length),
       t2: emptyStageRow('t2', buckets, items.length),
+      r1: emptyStageRow('r1', buckets, items.length),
+      r2: emptyStageRow('r2', buckets, items.length),
     };
 
     for (const s of items) {
-      for (const st of ['pred', 't1', 't2'] as ScheduleStage[]) {
+      for (const st of ['pred', 't1', 't2', 'r1', 'r2'] as ScheduleStage[]) {
         const { plan, actual } = getStageDates(s, st);
         if (plan) {
           const b = bucketize(plan, opts.bucket);
@@ -334,6 +336,8 @@ export const STAGE_LABELS: Record<ScheduleStage, string> = {
   pred: 'Pred',
   t1: 'T1',
   t2: 'T2',
+  r1: 'R1',
+  r2: 'R2',
 };
 
 export function formatBucketLabel(iso: string, bucket: ScheduleBucket): { primary: string; secondary: string } {
