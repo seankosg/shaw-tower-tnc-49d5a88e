@@ -18,6 +18,7 @@ import {
   type CommentThread,
 } from '@/lib/comment-threads';
 import { ChevronDown, Lock, MessageSquare } from 'lucide-react';
+import { RecipientBadges } from '@/components/comments/RecipientSelector';
 
 export type DayWindow = 7 | 30 | 90 | 365 | 'all';
 export type TypeFilter = 'all' | 'comment' | 'instruction' | 'reply';
@@ -31,6 +32,7 @@ export interface AllCommentsRow {
   author_user_id: string;
   edited: boolean;
   parent_comment_id: string | null;
+  recipients?: string[] | null;
   // Either subtest_id+subtests or defect_id+defect_items will be present.
   subtest_id?: string;
   defect_id?: string;
@@ -84,8 +86,8 @@ export function AllCommentsView({ title, kind }: AllCommentsViewProps) {
   const readsTable = kind === 'subtest' ? 'subtest_comment_reads' : 'defect_comment_reads';
 
   const baseSelect = kind === 'subtest'
-    ? 'id, subtest_id, type, message, created_at, author_user_id, edited, parent_comment_id, subtests(id, item_no, mos_code, subcontractor_name)'
-    : 'id, defect_id, type, message, created_at, author_user_id, edited, parent_comment_id, defect_items(id, issue_no, description, subcontractor_name)';
+    ? 'id, subtest_id, type, message, created_at, author_user_id, edited, parent_comment_id, recipients, subtests(id, item_no, mos_code, subcontractor_name)'
+    : 'id, defect_id, type, message, created_at, author_user_id, edited, parent_comment_id, recipients, defect_items(id, issue_no, description, subcontractor_name)';
 
   const reload = async (resetOffset: boolean) => {
     if (!user) return;
