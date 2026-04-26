@@ -369,7 +369,11 @@ export function RecentSubtestComments() {
         {loading ? (
           <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>
         ) : filteredThreads.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">No comments in this view.</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            {threads.length === 0
+              ? `No comments in the last ${days} days.`
+              : `No comments match the "${tab}" filter.`}
+          </p>
         ) : (
           <ScrollArea className="h-[360px] pr-2">
             <ul className="space-y-2">{filteredThreads.map(renderThread)}</ul>
