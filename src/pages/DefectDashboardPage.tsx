@@ -562,7 +562,21 @@ function PlanActualTable({
                             ? <ClickNum value={metrics.todayActual} onClick={rowClick} />
                             : <ClickNum value={metrics.todayActual} onClick={() => go(row.key, { dateField: stage.actualField!, dateStart: today, dateEnd: today, [stage.doneParam!]: 'true' })} />}
                         </TableCell>
-                        <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={todayDelta} invert={isDiff} /></TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs">
+                          <ClickVariance
+                            value={todayDelta}
+                            invert={isDiff}
+                            onClick={
+                              isDiff
+                                ? rowClick
+                                : todayDelta < 0
+                                  ? () => go(row.key, { dueOn: today, stage: stage.stage })
+                                  : todayDelta > 0
+                                    ? () => go(row.key, { unplannedActualOn: today, stage: stage.stage })
+                                    : undefined
+                            }
+                          />
+                        </TableCell>
                         <TableCell className="px-2 py-1.5 text-right text-xs font-semibold text-destructive">
                           <ClickNum value={metrics.todayDelay} hideZero onClick={isDiff ? rowClick : () => go(row.key, { dueOn: today, stage: stage.stage })} />
                         </TableCell>
