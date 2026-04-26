@@ -204,12 +204,26 @@ export function ColumnSelectDialog({
                     </Badge>
                   )}
                 </div>
-                <div className="min-w-0 truncate text-xs">
+                <div className="min-w-0 flex items-center gap-1.5 text-xs">
                   {showAsUnmapped ? (
                     <span className="text-muted-foreground italic">(unmapped)</span>
                   ) : (
-                    <code className="text-foreground">{field}</code>
+                    <code className="text-foreground truncate">{field}</code>
                   )}
+                  {!showAsUnmapped && (() => {
+                    const origin = getSourceOrigin(field);
+                    const cls =
+                      origin === 'hdec'
+                        ? 'bg-blue-100 text-blue-900 dark:bg-blue-900 dark:text-blue-100'
+                        : origin === 'aconex'
+                          ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100'
+                          : 'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200';
+                    return (
+                      <Badge variant="outline" className={`${cls} text-[10px] px-1.5 py-0 shrink-0`}>
+                        {getSourceLabel(field)}
+                      </Badge>
+                    );
+                  })()}
                 </div>
                 <div className="min-w-0 truncate text-xs text-muted-foreground">{sample}</div>
               </div>
