@@ -556,6 +556,21 @@ export default function DefectRawDataPage() {
         return isOverdueDefect(item, asOf);
       });
     }
+    const dueOn = searchParams.get('dueOn');
+    if (dueOn) {
+      const stage = searchParams.get('stage');
+      next = next.filter((item) => {
+        if (Boolean(item.actual_closure_date)) return false;
+        if (stage === 'start') return item.planned_start_date === dueOn && !item.actual_start_date;
+        if (stage === 'completion') return item.planned_completion_date === dueOn && Number(item.actual_progress_pct ?? 0) < 100;
+        if (stage === 'closure') return item.planned_closure_date === dueOn && !item.actual_closure_date;
+        return (
+          (item.planned_start_date === dueOn && !item.actual_start_date) ||
+          (item.planned_completion_date === dueOn && Number(item.actual_progress_pct ?? 0) < 100) ||
+          (item.planned_closure_date === dueOn && !item.actual_closure_date)
+        );
+      });
+    }
     if (searchParams.get('atRisk') === 'true') {
       const asOf = new Date().toISOString().slice(0, 10);
       const days = Number(searchParams.get('atRiskDays') ?? 7);
@@ -825,6 +840,12 @@ export default function DefectRawDataPage() {
     if (from || to) {
       const dateField = searchParams.get('dateField');
       out.push({ label: `${dateField ? getLabel(dateField) : 'Date'} ${from || ''}${from && to ? ' → ' : ''}${to || ''}`, param: 'dateStart', clears: ['dateStart', 'dateEnd', 'dateField'] });
+    }
+    const dueOn = searchParams.get('dueOn');
+    if (dueOn) {
+      const stage = searchParams.get('stage');
+      const stageLabel = stage === 'completion' ? 'Completion' : stage === 'closure' ? 'Closure' : stage === 'start' ? 'Start' : 'Stage';
+      out.push({ label: `${stageLabel} due ${dueOn} (open)`, param: 'dueOn', clears: ['dueOn', 'stage'] });
     }
     return out;
   }, [searchParams, getLabel]);

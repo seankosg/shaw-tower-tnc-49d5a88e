@@ -143,7 +143,7 @@ function calcMetrics(items: DefectForDashboard[], stage: DefectDashboardStage, t
     if (actual && actual <= dataDate) cumActual++;
     if (plan === dataDate) dataDatePlan++;
     if (actual === dataDate) dataDateActual++;
-    if (isStageDelayedAsOf(item, stage, dataDate)) dataDateDelay++;
+    if (plan === dataDate && !isStageDone(item, stage)) dataDateDelay++;
     if (plan === today) todayPlan++;
     if (actual === today) todayActual++;
     if (plan === today && !isStageDone(item, stage)) todayDelay++;
