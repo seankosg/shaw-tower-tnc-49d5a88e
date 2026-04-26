@@ -45,14 +45,19 @@ describe('defect-classifier', () => {
     expect(r.work_type).toBe('Mechanical Rectification');
   });
 
-  it('returns unclassified when nothing matches', () => {
+  it('returns unclassified with blank trade fields when nothing matches', () => {
     const r = classifyDefect({ description: 'random thing', field_discipline: 'xyz' }, RULES, FALLBACKS);
     expect(r.source).toBe('unclassified');
-    expect(r.work_type).toBe('Review Required');
+    expect(r.main_trade).toBe('');
+    expect(r.sub_trade).toBe('');
+    expect(r.work_type).toBe('');
   });
 
-  it('returns unclassified when both inputs empty', () => {
+  it('returns unclassified with blank trade fields when both inputs empty', () => {
     const r = classifyDefect({ description: '', field_discipline: '' }, RULES, FALLBACKS);
     expect(r.source).toBe('unclassified');
+    expect(r.main_trade).toBe('');
+    expect(r.sub_trade).toBe('');
+    expect(r.work_type).toBe('');
   });
 });

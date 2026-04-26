@@ -494,8 +494,15 @@ export default function DefectDetailPage() {
               (rulesRes.data ?? []) as ClassificationRule[],
               (fbRes.data ?? []) as DisciplineFallback[],
             );
-            setForm((cur) => ({ ...cur, main_trade: cur.main_trade || c.main_trade, sub_trade: cur.sub_trade || c.sub_trade, work_type: c.work_type, classification_source: c.source }));
-            toast({ title: 'Auto-classified', description: `${c.source} → ${c.work_type}` });
+            // Empty-string classifier output (unclassified) → keep field blank (null).
+            setForm((cur) => ({
+              ...cur,
+              main_trade: cur.main_trade || c.main_trade || null,
+              sub_trade: cur.sub_trade || c.sub_trade || null,
+              work_type: c.work_type || null,
+              classification_source: c.source,
+            }));
+            toast({ title: 'Auto-classified', description: c.work_type ? `${c.source} → ${c.work_type}` : `${c.source} (no match — fields left blank)` });
           }}>Auto-classify from description</Button>
         </div>
         <SelectField label="Subcontractor" value={form.subcontractor_name} options={subOptionsList} disabled={!canEditResponsibility} onChange={(v) => updateField('subcontractor_name', v)} />

@@ -36,9 +36,12 @@ export interface ClassificationResult {
 }
 
 const UNCLASSIFIED: Omit<ClassificationResult, 'source' | 'matched_id'> = {
-  main_trade: 'Unclassified',
-  sub_trade: 'Unclassified',
-  work_type: 'Review Required',
+  // Unmatched defects keep blank trade fields. The 'unclassified' source value
+  // (returned alongside) is what drives stats, filters, and summary cards —
+  // never write a placeholder string into the trade columns themselves.
+  main_trade: '',
+  sub_trade: '',
+  work_type: '',
 };
 
 /**

@@ -731,9 +731,11 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
           )
         : null;
 
-      if (!excelHasMain) row.main_trade = existing?.main_trade ?? classification?.main_trade ?? null;
-      if (!excelHasSub) row.sub_trade = existing?.sub_trade ?? classification?.sub_trade ?? null;
-      if (!excelHasWork) row.work_type = existing?.work_type ?? classification?.work_type ?? null;
+      // Treat empty-string classifier output (the 'unclassified' case) as null
+      // so the DB stores blank trade columns instead of a placeholder label.
+      if (!excelHasMain) row.main_trade = existing?.main_trade ?? (classification?.main_trade || null);
+      if (!excelHasSub) row.sub_trade = existing?.sub_trade ?? (classification?.sub_trade || null);
+      if (!excelHasWork) row.work_type = existing?.work_type ?? (classification?.work_type || null);
 
       const classifierApplied = !!classification && (
         (!excelHasMain && !dbHasMain) ||
