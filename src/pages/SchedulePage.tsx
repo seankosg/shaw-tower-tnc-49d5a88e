@@ -205,6 +205,8 @@ export default function SchedulePage() {
         pred: { ...r.stages.pred, cells: r.stages.pred.cells.slice(startIdx) },
         t1:   { ...r.stages.t1,   cells: r.stages.t1.cells.slice(startIdx) },
         t2:   { ...r.stages.t2,   cells: r.stages.t2.cells.slice(startIdx) },
+        r1:   { ...r.stages.r1,   cells: r.stages.r1.cells.slice(startIdx) },
+        r2:   { ...r.stages.r2,   cells: r.stages.r2.cells.slice(startIdx) },
       },
     }));
     return { ...filteredAggregate, buckets, rows };
@@ -276,7 +278,7 @@ export default function SchedulePage() {
     params.date_field = field;
 
     // Stage scope (sub-row click) and matching status
-    if (stage === 't1' || stage === 't2' || stage === 'pred') {
+    if (stage === 't1' || stage === 't2' || stage === 'pred' || stage === 'r1' || stage === 'r2') {
       params.stage = stage;
     }
     // Plan counts by planned_date regardless of status. Actual implies completed actual_date.
