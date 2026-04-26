@@ -14,6 +14,7 @@ import { Progress } from '@/components/ui/progress';
 import { AlertTriangle, KeyRound, Loader2, LogOut, UserCircle } from 'lucide-react';
 import { APP_NAME } from '@/lib/constants';
 import { AppUpdateBanner } from './AppUpdateBanner';
+import { BuildInfoChip } from './BuildInfoChip';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouteMemory } from '@/hooks/useRouteMemory';
 
@@ -183,6 +184,7 @@ export function AppLayout() {
           <div className="ml-auto flex items-center gap-2">
             <GlobalImportIndicator />
             <GlobalDefectImportIndicator />
+            <BuildInfoChip />
             <AccountMenu />
           </div>
         </header>
