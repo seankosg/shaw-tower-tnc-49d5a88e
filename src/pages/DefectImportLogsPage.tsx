@@ -111,6 +111,8 @@ export default function DefectImportLogsPage() {
   const canDelete = isAdminOrSuperuser || import.meta.env.DEV;
 
   const [batches, setBatches] = useState<DefectBatch[]>([]);
+  const [uploaderNames, setUploaderNames] = useState<Record<string, string>>({});
+  const [durationsMs, setDurationsMs] = useState<Record<string, number>>({});
   const [selectedBatch, setSelectedBatch] = useState<string | null>(searchParams.get('batch'));
   const [detailTab, setDetailTab] = useState(searchParams.get('tab') || 'rows');
   const [rowLogs, setRowLogs] = useState<DefectRowLog[]>([]);
@@ -136,10 +138,40 @@ export default function DefectImportLogsPage() {
   const fetchBatches = async () => {
     setLoading(true);
     const { data } = await supabase.from('defect_upload_batches')
-      .select('id, uploaded_file_name, uploaded_at, status, total_rows, success_rows, skipped_rows, rejected_rows')
+      .select('id, uploaded_file_name, uploaded_at, status, total_rows, success_rows, skipped_rows, rejected_rows, uploaded_by, data_date')
       .order('uploaded_at', { ascending: false }).limit(100);
-    setBatches(data ?? []);
+    const list = (data ?? []) as DefectBatch[];
+    setBatches(list);
     setLoading(false);
+
+    const uploaderIds = Array.from(new Set(list.map(b => b.uploaded_by).filter(Boolean))) as string[];
+    if (uploaderIds.length) {
+      const { data: profs } = await supabase.from('profiles').select('user_id, name, login_id').in('user_id', uploaderIds);
+      const map: Record<string, string> = {};
+      (profs ?? []).forEach((p: any) => { map[p.user_id] = p.name || p.login_id || ''; });
+      setUploaderNames(map);
+    } else {
+      setUploaderNames({});
+    }
+
+    const batchIds = list.map(b => b.id);
+    if (batchIds.length) {
+      const { data: logs } = await supabase.from('defect_upload_row_logs')
+        .select('upload_id, processed_at').in('upload_id', batchIds);
+      const maxByBatch: Record<string, number> = {};
+      (logs ?? []).forEach((l: any) => {
+        const t = new Date(l.processed_at).getTime();
+        if (!maxByBatch[l.upload_id] || t > maxByBatch[l.upload_id]) maxByBatch[l.upload_id] = t;
+      });
+      const durs: Record<string, number> = {};
+      list.forEach(b => {
+        const end = maxByBatch[b.id];
+        if (end) durs[b.id] = end - new Date(b.uploaded_at).getTime();
+      });
+      setDurationsMs(durs);
+    } else {
+      setDurationsMs({});
+    }
   };
 
   const selectBatch = async (id: string) => {
