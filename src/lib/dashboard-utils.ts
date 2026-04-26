@@ -1,4 +1,4 @@
-import type { TcStatus } from '@/types/enums';
+import type { TcStatus, ReportStatus } from '@/types/enums';
 import {
   daysBetween,
   getMaxDelayDaysAsOf,
@@ -12,6 +12,7 @@ import {
   isStagePlannedOn,
   isStagePlannedUpTo,
   todayIso,
+  type StageKey,
 } from '@/lib/stage-metrics';
 
 export interface SubtestForDashboard {
@@ -33,6 +34,16 @@ export interface SubtestForDashboard {
   pred_actual_date?: string | null;
   predecessor_status_raw?: string | null;
   team?: string | null;
+  // R1 — Subcontractor → HDEC
+  r1_status?: ReportStatus | null;
+  r1_target_submission_date?: string | null;
+  r1_actual_submission_date?: string | null;
+  // R2 — HDEC → Client (final approval)
+  r2_status?: ReportStatus | null;
+  r2_target_submission_date?: string | null;
+  r2_actual_submission_date?: string | null;
+  r2_target_approval_date?: string | null;
+  r2_actual_approval_date?: string | null;
 }
 
 export const NONE_LABEL = '(None)';
@@ -47,13 +58,13 @@ export function isOverdue(s: SubtestForDashboard, asOfDate: string): boolean {
 /** True if not overdue but a planned date is within `thresholdDays` (inclusive). */
 export function isAtRisk(s: SubtestForDashboard, today: string, thresholdDays: number): boolean {
   if (isOverdue(s, today)) return false;
-  const within = (stage: 'pred' | 't1' | 't2') => {
+  const within = (stage: StageKey) => {
     const planned = getStagePlannedDate(s, stage);
     if (!planned || isStageDone(s, stage)) return false;
     const d = daysBetween(today, planned);
     return d >= 0 && d <= thresholdDays;
   };
-  return within('pred') || within('t1') || within('t2');
+  return getStageKeys('all').some(within);
 }
 
 /** Worst delay days across Pred/T1/T2 (positive = days late). */
@@ -177,6 +188,8 @@ export interface PlanActualRow {
   predecessor: PlanActualMetrics;
   t1: PlanActualMetrics;
   t2: PlanActualMetrics;
+  r1: PlanActualMetrics;
+  r2: PlanActualMetrics;
 }
 
 /** Aggregate Plan vs Actual metrics by group. */
@@ -197,7 +210,7 @@ export function aggregatePlanActualByGroup(
 
   const out: PlanActualRow[] = [];
   for (const [k, items] of buckets) {
-    const calc = (stage: 'pred' | 't1' | 't2'): PlanActualMetrics => {
+    const calc = (stage: StageKey): PlanActualMetrics => {
       let cumPlan = 0, cumActual = 0, dataDatePlan = 0, dataDateActual = 0, dataDateDelay = 0, tPlan = 0, tActual = 0, tDelay = 0;
       for (const i of items) {
         if (isStagePlannedUpTo(i, stage, dataDate)) cumPlan++;
@@ -230,6 +243,8 @@ export function aggregatePlanActualByGroup(
       predecessor: calc('pred'),
       t1: calc('t1'),
       t2: calc('t2'),
+      r1: calc('r1'),
+      r2: calc('r2'),
     });
   }
   // default sort: most-delayed (largest negative cumulative variance T2 then T1) first

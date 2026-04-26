@@ -73,7 +73,7 @@ export default function DashboardPage() {
       while (true) {
         const { data } = await supabase
           .from('subtests')
-          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, team' as any)
+          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, team, r1_status, r1_target_submission_date, r1_actual_submission_date, r2_status, r2_target_submission_date, r2_actual_submission_date, r2_target_approval_date, r2_actual_approval_date' as any)
           .eq('is_active', true)
           .range(from, from + PAGE - 1);
         if (!data || data.length === 0) break;
@@ -121,8 +121,8 @@ export default function DashboardPage() {
     const total = filteredSubtests.length;
     const systemCount = new Set(filteredSubtests.map(s => s.system_id)).size;
 
-    // Overall done = T2 Done (final completion)
-    const totalDone = filteredSubtests.filter(s => s.t2_status === 'Done').length;
+    // Overall done = R2 Approved (final completion in 5-stage workflow)
+    const totalDone = filteredSubtests.filter(s => isStageDone(s, 'r2')).length;
     const remaining = total - totalDone;
     const progressPct = total ? Math.round((totalDone / total) * 1000) / 10 : 0;
 
@@ -131,23 +131,29 @@ export default function DashboardPage() {
     const atRiskCount = filteredSubtests.filter(s => isAtRisk(s, today, atRiskDays)).length;
 
     // Stage-specific
-    const predDone = filteredSubtests.filter(s => isStageDone(s, 'pred')).length;
-    const predOverdue = filteredSubtests.filter(s => s.pred_planned_date && s.pred_planned_date <= dataDate && !isStageDone(s, 'pred')).length;
-    const predPct = total ? Math.round((predDone / total) * 1000) / 10 : 0;
+    const stageStat = (stage: 'pred' | 't1' | 't2' | 'r1' | 'r2', plannedField: keyof SubtestForDashboard) => {
+      const done = filteredSubtests.filter(s => isStageDone(s, stage)).length;
+      const overdue = filteredSubtests.filter(s => {
+        const planned = s[plannedField] as string | null | undefined;
+        return planned && planned <= dataDate && !isStageDone(s, stage);
+      }).length;
+      const pct = total ? Math.round((done / total) * 1000) / 10 : 0;
+      return { done, overdue, pct };
+    };
 
-    const t1Done = filteredSubtests.filter(s => isStageDone(s, 't1')).length;
-    const t1Overdue = filteredSubtests.filter(s => s.t1_planned_date && s.t1_planned_date <= dataDate && !isStageDone(s, 't1')).length;
-    const t1Pct = total ? Math.round((t1Done / total) * 1000) / 10 : 0;
-
-    const t2Done = totalDone;
-    const t2Overdue = filteredSubtests.filter(s => s.t2_planned_date && s.t2_planned_date <= dataDate && !isStageDone(s, 't2')).length;
-    const t2Pct = progressPct;
+    const pred = stageStat('pred', 'pred_planned_date');
+    const t1 = stageStat('t1', 't1_planned_date');
+    const t2 = stageStat('t2', 't2_planned_date');
+    const r1 = stageStat('r1', 'r1_target_submission_date');
+    const r2 = stageStat('r2', 'r2_target_approval_date');
 
     return {
       systemCount, total, totalDone, remaining, progressPct, overdueCount, atRiskCount,
-      predDone, predOverdue, predPct,
-      t1Done, t1Overdue, t1Pct,
-      t2Done, t2Overdue, t2Pct,
+      predDone: pred.done, predOverdue: pred.overdue, predPct: pred.pct,
+      t1Done: t1.done, t1Overdue: t1.overdue, t1Pct: t1.pct,
+      t2Done: t2.done, t2Overdue: t2.overdue, t2Pct: t2.pct,
+      r1Done: r1.done, r1Overdue: r1.overdue, r1Pct: r1.pct,
+      r2Done: r2.done, r2Overdue: r2.overdue, r2Pct: r2.pct,
     };
   }, [filteredSubtests, today, dataDate, atRiskDays]);
 
@@ -300,8 +306,8 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
         <KpiCard icon={<ListChecks className="h-6 w-6 text-primary" />} label="Systems" value={kpis.systemCount} onClick={() => navigate('/tc/raw-data')} />
         <KpiCard icon={<ListChecks className="h-6 w-6 text-muted-foreground" />} label="Total Subtests" value={kpis.total.toLocaleString()} onClick={() => navigate('/tc/raw-data')} />
-        <KpiCard icon={<CheckCircle2 className="h-6 w-6" style={{ color: STATUS_COLORS.Done }} />} label="Done" value={kpis.totalDone.toLocaleString()} sub="T2 completed" onClick={() => goSubtests({ t2_status: 'Done' })} />
-        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Remaining" value={kpis.remaining.toLocaleString()} sub="T2 not Done" onClick={() => goSubtests({ status: 'remaining' })} />
+        <KpiCard icon={<CheckCircle2 className="h-6 w-6" style={{ color: STATUS_COLORS.Done }} />} label="Done" value={kpis.totalDone.toLocaleString()} sub="R2 Approved" onClick={() => goSubtests({ r2_status: 'Approved' })} />
+        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Remaining" value={kpis.remaining.toLocaleString()} sub="R2 not Approved" onClick={() => goSubtests({ status: 'remaining' })} />
         <Card className="flex flex-col justify-center p-4">
           <p className="text-xs text-muted-foreground mb-1">Progress</p>
           <p className="text-xl font-bold text-foreground">{kpis.progressPct}%</p>
@@ -316,11 +322,13 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* ─── Tier 2: Stage Cards (Pred / T1 / T2) ─── */}
-      <div className="grid gap-3 md:grid-cols-3">
+      {/* ─── Tier 2: Stage Cards (Pred / T1 / T2 / R1 / R2) ─── */}
+      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
         <StageCard stage="Predecessor" total={kpis.total} done={kpis.predDone} remaining={kpis.total - kpis.predDone} pct={kpis.predPct} overdue={kpis.predOverdue} onClick={() => goSubtests({ pred_status: 'Done' })} />
         <StageCard stage="T1" total={kpis.total} done={kpis.t1Done} remaining={kpis.total - kpis.t1Done} pct={kpis.t1Pct} overdue={kpis.t1Overdue} onClick={() => goSubtests({ t1_status: 'Done' })} />
         <StageCard stage="T2" total={kpis.total} done={kpis.t2Done} remaining={kpis.total - kpis.t2Done} pct={kpis.t2Pct} overdue={kpis.t2Overdue} onClick={() => goSubtests({ t2_status: 'Done' })} />
+        <StageCard stage="R1 (Sub→HDEC)" total={kpis.total} done={kpis.r1Done} remaining={kpis.total - kpis.r1Done} pct={kpis.r1Pct} overdue={kpis.r1Overdue} onClick={() => goSubtests({ r1_status: 'Submitted' })} />
+        <StageCard stage="R2 (HDEC→Client)" total={kpis.total} done={kpis.r2Done} remaining={kpis.total - kpis.r2Done} pct={kpis.r2Pct} overdue={kpis.r2Overdue} onClick={() => goSubtests({ r2_status: 'Approved' })} />
       </div>
 
 
@@ -650,10 +658,12 @@ function HeaderTotalVariance({ value }: { value: number }) {
   return <span className="tabular-nums font-semibold text-destructive">{value.toLocaleString()}</span>;
 }
 
-const STAGE_BADGE: Record<'pred' | 't1' | 't2', string> = {
+const STAGE_BADGE: Record<'pred' | 't1' | 't2' | 'r1' | 'r2', string> = {
   pred: 'bg-muted text-muted-foreground border-border',
   t1: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30',
   t2: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30',
+  r1: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30',
+  r2: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
 };
 
 const summaryNumberClass = (value: number, tone?: 'done' | 'remain') => cn(
@@ -667,7 +677,7 @@ const summaryNumberClass = (value: number, tone?: 'done' | 'remain') => cn(
         : 'text-foreground',
 );
 
-function StageBadge({ stage, label }: { stage: 'pred' | 't1' | 't2'; label: string }) {
+function StageBadge({ stage, label }: { stage: 'pred' | 't1' | 't2' | 'r1' | 'r2'; label: string }) {
   return (
     <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold ${STAGE_BADGE[stage]}`}>
       {label}
@@ -887,7 +897,7 @@ function PlanActualTable({
   }, [rows]);
 
   type StageDef = {
-    stage: 'pred' | 't1' | 't2';
+    stage: 'pred' | 't1' | 't2' | 'r1' | 'r2';
     label: string;
     metrics: PlanActualMetrics;
     planTo?: string;
@@ -1012,6 +1022,12 @@ function PlanActualTable({
                 delayOn: 't2_delay_on',
                 actualUnplannedOn: 't2_actual_unplanned_on',
               },
+              {
+                stage: 'r1', label: 'R1', metrics: r.r1,
+              },
+              {
+                stage: 'r2', label: 'R2', metrics: r.r2,
+              },
             ];
 
             return stages.map((st, i) => {
@@ -1031,7 +1047,7 @@ function PlanActualTable({
                 >
                   {isFirst && (
                     <>
-                      <TableCell rowSpan={3} className="font-medium align-top px-2 py-1.5">{r.label}</TableCell>
+                      <TableCell rowSpan={5} className="font-medium align-top px-2 py-1.5">{r.label}</TableCell>
                     </>
                   )}
                   <TableCell className="px-2 py-1.5 bg-muted/10">

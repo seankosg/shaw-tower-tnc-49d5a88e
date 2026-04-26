@@ -173,10 +173,12 @@ export function exportPlanActualToExcel(
 
   // ── Data rows ──
   let dataRow = 5;
-  const stages: Array<{ key: keyof Pick<PlanActualRow, 'predecessor' | 't1' | 't2'>; label: string }> = [
+  const stages: Array<{ key: keyof Pick<PlanActualRow, 'predecessor' | 't1' | 't2' | 'r1' | 'r2'>; label: string }> = [
     { key: 'predecessor', label: 'Pred' },
     { key: 't1', label: 'T1' },
     { key: 't2', label: 'T2' },
+    { key: 'r1', label: 'R1' },
+    { key: 'r2', label: 'R2' },
   ];
 
   for (const r of rows) {
@@ -225,9 +227,9 @@ export function exportPlanActualToExcel(
       dataRow++;
     });
 
-    // Merge group name cells across 3 stage rows
+    // Merge group name cells across all stage rows
     merges.push(
-      { s: { r: startRow, c: 0 }, e: { r: startRow + 2, c: 0 } },
+      { s: { r: startRow, c: 0 }, e: { r: startRow + stages.length - 1, c: 0 } },
     );
   }
 
