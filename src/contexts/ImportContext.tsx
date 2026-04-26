@@ -572,7 +572,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   return (
     <ImportContext.Provider value={{
       files, isRunning, currentIndex,
-      addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam,
+      addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet,
     }}>
       {children}
     </ImportContext.Provider>
