@@ -128,8 +128,16 @@ export function ScheduleMatrix({
   }, [todayBucketIdx, data.buckets.length, cellWidth]);
 
 
+  const ALL_STAGES: ScheduleStage[] = ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'];
   const stagesToShow: ScheduleStage[] =
-    stageFilter === 'all' ? ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'] : [stageFilter as ScheduleStage];
+    stageFilter === 'all'
+      ? ALL_STAGES
+      : Array.isArray(stageFilter)
+        ? ALL_STAGES.filter(s => stageFilter.includes(s))
+        : [stageFilter as ScheduleStage];
+  const isMultiStage = stagesToShow.length > 1;
+  // Sentinel passed to onCellClick when cell aggregates multiple stages.
+  const aggregateStageArg: ScheduleStage | 'all' = isMultiStage ? 'all' : stagesToShow[0];
 
   const toggle = (key: string) => {
     setExpanded(prev => {
@@ -157,9 +165,11 @@ export function ScheduleMatrix({
       ? colVirtualizer.getTotalSize() - virtualCols[virtualCols.length - 1].end
       : 0;
 
-  const stageLabel = stageFilter === 'all' ? 'All' : STAGE_LABELS[stageFilter as ScheduleStage];
-  const totalBlockTitle = stageFilter === 'all'
-    ? 'Pred + T1 + T2 + R1S + R2S + R2A progress / (subtests × 6)'
+  const stageLabel = isMultiStage
+    ? stagesToShow.map(s => STAGE_LABELS[s]).join(' + ')
+    : STAGE_LABELS[stagesToShow[0]];
+  const totalBlockTitle = isMultiStage
+    ? `${stagesToShow.map(s => STAGE_LABELS[s]).join(' + ')} progress / (subtests × ${stagesToShow.length})`
     : `${stageLabel} progress / subtests`;
 
   return (
