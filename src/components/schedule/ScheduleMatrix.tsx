@@ -159,7 +159,7 @@ export function ScheduleMatrix({
 
   const stageLabel = stageFilter === 'all' ? 'All' : stageFilter.toUpperCase();
   const totalBlockTitle = stageFilter === 'all'
-    ? 'Pred + T1 + T2 progress / (subtests × 3)'
+    ? 'Pred + T1 + T2 + R1 + R2 progress / (subtests × 5)'
     : `${stageLabel} progress / subtests`;
 
   return (
