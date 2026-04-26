@@ -1,3 +1,5 @@
+import { isOverdue as isOverdueDashboard } from '@/lib/defect-dashboard-utils';
+
 export type DefectEditScope = 'none' | 'assigned' | 'team' | 'full';
 
 export type DefectStatusValue = 'Planned' | 'Delay' | 'Done' | 'WIP';
@@ -103,10 +105,7 @@ export function isOverdueDefect(
   >,
   asOf: string,
 ): boolean {
-  // Lazy require to avoid circular import at module load.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { isOverdue } = require('@/lib/defect-dashboard-utils') as typeof import('@/lib/defect-dashboard-utils');
-  return isOverdue(item as any, asOf);
+  return isOverdueDashboard(item as any, asOf);
 }
 
 export function toNullable(value: FormDataEntryValue | string | null | undefined): string | null {
