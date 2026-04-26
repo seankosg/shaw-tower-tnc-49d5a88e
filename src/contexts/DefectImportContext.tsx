@@ -891,6 +891,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         clearAll,
         setFileDataDate,
         setFileSheet,
+        setFileExcludedHeaders,
         startImport,
         setDecisionAction,
         confirmSimilarDecisions,
