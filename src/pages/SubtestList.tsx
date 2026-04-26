@@ -800,6 +800,9 @@ export default function SubtestList() {
   const urlPredDelayOn = searchParams.get('pred_delay_on');
   const urlT1DelayOn = searchParams.get('t1_delay_on');
   const urlT2DelayOn = searchParams.get('t2_delay_on');
+  const urlPredActualUnplannedOn = searchParams.get('pred_actual_unplanned_on');
+  const urlT1ActualUnplannedOn = searchParams.get('t1_actual_unplanned_on');
+  const urlT2ActualUnplannedOn = searchParams.get('t2_actual_unplanned_on');
 
   const urlDateFrom = searchParams.get('date_from');
   const urlDateTo = searchParams.get('date_to');
