@@ -1,3 +1,5 @@
+import { isOverdue as isOverdueDashboard } from '@/lib/defect-dashboard-utils';
+
 export type DefectEditScope = 'none' | 'assigned' | 'team' | 'full';
 
 export type DefectStatusValue = 'Planned' | 'Delay' | 'Done' | 'WIP';
