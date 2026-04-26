@@ -173,6 +173,19 @@ export default function DefectImportPage() {
                         disabled={isRunning || file.status === 'done' || file.status === 'failed'}
                         className="h-7 w-[150px] text-xs"
                       />
+                      {file.availableHeaders && file.availableHeaders.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1.5 text-xs"
+                          onClick={() => setColumnDialogFileId(file.id)}
+                          disabled={isRunning || file.status === 'done' || file.status === 'parsing'}
+                        >
+                          <Settings2 className="h-3.5 w-3.5" />
+                          Select Columns ({file.availableHeaders.length - (file.excludedHeaders?.length ?? 0)}/{file.availableHeaders.length})
+                        </Button>
+                      )}
                       <span className="text-xs text-muted-foreground">Team will be resolved from Field Discipline.</span>
                     </div>
                     {file.parsed?.some((row) => !row.issue_no) && (
