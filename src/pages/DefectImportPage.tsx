@@ -238,6 +238,19 @@ export default function DefectImportPage() {
         </Card>
       )}
 
+      {columnDialogFile && columnDialogFile.availableHeaders && (
+        <ColumnSelectDialog
+          open={!!columnDialogFileId}
+          onOpenChange={(open) => { if (!open) setColumnDialogFileId(null); }}
+          fileName={columnDialogFile.name}
+          headers={columnDialogFile.availableHeaders}
+          samples={columnDialogFile.headerSamples ?? {}}
+          defaultExcluded={columnDialogFile.excludedHeaders ?? []}
+          isReimport={!!columnDialogFile.isReimport}
+          onApply={(excluded) => setFileExcludedHeaders(columnDialogFile.id, excluded)}
+        />
+      )}
+
       <Dialog open={similarDecisions.length > 0} onOpenChange={(open) => {
         if (!open) cancelSimilarDecisions();
       }}>
