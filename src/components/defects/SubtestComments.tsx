@@ -403,32 +403,64 @@ export function SubtestComments({ subtestId, subtestTeam, onCountChange }: Subte
         </div>
       )}
 
-      <div className="flex gap-2 items-end">
-        {canPostInstruction && !replyTo && (
-          <Select value={commentType} onValueChange={(v) => setCommentType(v as any)}>
-            <SelectTrigger className="w-[120px] h-9 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="comment">Comment</SelectItem>
-              <SelectItem value="instruction">Instruction</SelectItem>
-            </SelectContent>
-          </Select>
+      <div className="space-y-2">
+        <div className="flex gap-2 items-end">
+          {canPostInstruction && !replyTo && (
+            <Select value={commentType} onValueChange={(v) => setCommentType(v as any)}>
+              <SelectTrigger className="w-[120px] h-9 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="comment">Comment</SelectItem>
+                <SelectItem value="instruction">Instruction</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          <Textarea
+            value={message}
+            onChange={(e) => { setMessage(e.target.value); if (showNewTranslate) setShowNewTranslate(false); }}
+            rows={2}
+            className="resize-none text-sm min-h-0"
+            placeholder={replyTo ? `Reply to ${replyTo.authorName}…` : 'Write a comment…  (Shift+Enter for newline)'}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+            }}
+            disabled={!user || showNewTranslate}
+          />
+          {isHdec && containsKorean(message) && !showNewTranslate ? (
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => setShowNewTranslate(true)}
+              disabled={!message.trim() || !user}
+              className="shrink-0 h-9 w-9"
+              title="Translate Korean to English before sending"
+            >
+              <Languages className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              size="icon"
+              onClick={handleSend}
+              disabled={sending || !message.trim() || !user || showNewTranslate}
+              className="shrink-0 h-9 w-9"
+            >
+              <Send className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+        {isHdec && containsKorean(message) && !showNewTranslate && (
+          <p className="text-[10px] text-amber-600 px-1">
+            Korean detected — click the translate button to convert to English before sending.
+          </p>
         )}
-        <Textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          rows={2}
-          className="resize-none text-sm min-h-0"
-          placeholder={replyTo ? `Reply to ${replyTo.authorName}…` : 'Write a comment…  (Shift+Enter for newline)'}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-          }}
-          disabled={!user}
-        />
-        <Button size="icon" onClick={handleSend} disabled={sending || !message.trim() || !user} className="shrink-0 h-9 w-9">
-          <Send className="h-3.5 w-3.5" />
-        </Button>
+        {showNewTranslate && (
+          <TranslatePanel
+            originalText={message}
+            onConfirm={(en) => persistNew(en)}
+            onCancel={() => setShowNewTranslate(false)}
+          />
+        )}
       </div>
     </div>
   );
