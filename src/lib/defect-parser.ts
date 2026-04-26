@@ -350,18 +350,30 @@ function detectReimportMarker(worksheet: XLSX.WorkSheet): boolean {
   return false;
 }
 
-export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
+/** Return the list of sheet names present in a Defect Excel file. */
+export async function getDefectExcelSheetNames(file: File): Promise<string[]> {
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: false, bookSheets: true });
+  return workbook.SheetNames ?? [];
+}
+
+export async function parseDefectExcel(file: File, sheetName?: string): Promise<ParseDefectResult> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: false });
 
-  let sheetName: string | null = null;
+  let resolvedSheetName: string | null = null;
   let worksheet: XLSX.WorkSheet | null = null;
   let headerRowIdx = 0;
   let rawRows: Record<string, unknown>[] = [];
   const scannedSheets: string[] = [];
   let headerOnlySheet: { name: string; headerRowIdx: number } | null = null;
 
-  for (const name of workbook.SheetNames) {
+  // If sheetName is specified, only consider that sheet.
+  const sheetsToScan = sheetName && workbook.SheetNames.includes(sheetName)
+    ? [sheetName]
+    : workbook.SheetNames;
+
+  for (const name of sheetsToScan) {
     scannedSheets.push(name);
     const ws = workbook.Sheets[name];
     if (!ws) continue;
@@ -373,7 +385,7 @@ export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
       blankrows: false,
     });
     if (candidateRows.length > 0) {
-      sheetName = name;
+      resolvedSheetName = name;
       worksheet = ws;
       headerRowIdx = detected.headerRowIdx;
       rawRows = candidateRows;
@@ -384,12 +396,16 @@ export async function parseDefectExcel(file: File): Promise<ParseDefectResult> {
     }
   }
 
-  if (!worksheet || !sheetName) {
+  if (!worksheet || !resolvedSheetName) {
     if (headerOnlySheet) {
       throw new Error(`No data rows found in sheet '${headerOnlySheet.name}' (header detected at row ${headerOnlySheet.headerRowIdx + 1})`);
     }
+    if (sheetName) {
+      throw new Error(`No 'Issue No' column found in sheet '${sheetName}'`);
+    }
     throw new Error(`No 'Issue No' column found. Scanned sheets: [${scannedSheets.join(', ')}]`);
   }
+  const sheetNameResolved = resolvedSheetName;
 
   const headers = Object.keys(rawRows[0] ?? {}).map((originalHeader, index) => ({
     originalHeader,
