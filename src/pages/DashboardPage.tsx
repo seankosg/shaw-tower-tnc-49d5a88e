@@ -121,8 +121,8 @@ export default function DashboardPage() {
     const total = filteredSubtests.length;
     const systemCount = new Set(filteredSubtests.map(s => s.system_id)).size;
 
-    // Overall done = T2 Done (final completion)
-    const totalDone = filteredSubtests.filter(s => s.t2_status === 'Done').length;
+    // Overall done = R2 Approved (final completion in 5-stage workflow)
+    const totalDone = filteredSubtests.filter(s => isStageDone(s, 'r2')).length;
     const remaining = total - totalDone;
     const progressPct = total ? Math.round((totalDone / total) * 1000) / 10 : 0;
 
@@ -131,23 +131,29 @@ export default function DashboardPage() {
     const atRiskCount = filteredSubtests.filter(s => isAtRisk(s, today, atRiskDays)).length;
 
     // Stage-specific
-    const predDone = filteredSubtests.filter(s => isStageDone(s, 'pred')).length;
-    const predOverdue = filteredSubtests.filter(s => s.pred_planned_date && s.pred_planned_date <= dataDate && !isStageDone(s, 'pred')).length;
-    const predPct = total ? Math.round((predDone / total) * 1000) / 10 : 0;
+    const stageStat = (stage: 'pred' | 't1' | 't2' | 'r1' | 'r2', plannedField: keyof SubtestForDashboard) => {
+      const done = filteredSubtests.filter(s => isStageDone(s, stage)).length;
+      const overdue = filteredSubtests.filter(s => {
+        const planned = s[plannedField] as string | null | undefined;
+        return planned && planned <= dataDate && !isStageDone(s, stage);
+      }).length;
+      const pct = total ? Math.round((done / total) * 1000) / 10 : 0;
+      return { done, overdue, pct };
+    };
 
-    const t1Done = filteredSubtests.filter(s => isStageDone(s, 't1')).length;
-    const t1Overdue = filteredSubtests.filter(s => s.t1_planned_date && s.t1_planned_date <= dataDate && !isStageDone(s, 't1')).length;
-    const t1Pct = total ? Math.round((t1Done / total) * 1000) / 10 : 0;
-
-    const t2Done = totalDone;
-    const t2Overdue = filteredSubtests.filter(s => s.t2_planned_date && s.t2_planned_date <= dataDate && !isStageDone(s, 't2')).length;
-    const t2Pct = progressPct;
+    const pred = stageStat('pred', 'pred_planned_date');
+    const t1 = stageStat('t1', 't1_planned_date');
+    const t2 = stageStat('t2', 't2_planned_date');
+    const r1 = stageStat('r1', 'r1_target_submission_date');
+    const r2 = stageStat('r2', 'r2_target_approval_date');
 
     return {
       systemCount, total, totalDone, remaining, progressPct, overdueCount, atRiskCount,
-      predDone, predOverdue, predPct,
-      t1Done, t1Overdue, t1Pct,
-      t2Done, t2Overdue, t2Pct,
+      predDone: pred.done, predOverdue: pred.overdue, predPct: pred.pct,
+      t1Done: t1.done, t1Overdue: t1.overdue, t1Pct: t1.pct,
+      t2Done: t2.done, t2Overdue: t2.overdue, t2Pct: t2.pct,
+      r1Done: r1.done, r1Overdue: r1.overdue, r1Pct: r1.pct,
+      r2Done: r2.done, r2Overdue: r2.overdue, r2Pct: r2.pct,
     };
   }, [filteredSubtests, today, dataDate, atRiskDays]);
 
