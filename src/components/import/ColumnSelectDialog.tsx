@@ -109,6 +109,15 @@ export function ColumnSelectDialog({
   };
 
   const selectAll = () => setExcluded(new Set());
+  const deselectAll = () => setExcluded(new Set(headers));
+  const selectByOrigin = (origin: 'hdec' | 'aconex') => {
+    const next = new Set<string>();
+    for (const h of headers) {
+      const field = toFieldName(h);
+      if (getSourceOrigin(field) !== origin) next.add(h);
+    }
+    setExcluded(next);
+  };
   const reset = () => setExcluded(new Set(defaultExcluded));
 
   const handleApply = () => {
