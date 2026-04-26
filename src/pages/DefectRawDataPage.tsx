@@ -861,6 +861,12 @@ export default function DefectRawDataPage() {
       const stageLabel = stage === 'completion' ? 'Completion' : stage === 'closure' ? 'Closure' : stage === 'start' ? 'Start' : 'Stage';
       out.push({ label: `${stageLabel} due ${dueOn} (open)`, param: 'dueOn', clears: ['dueOn', 'stage'] });
     }
+    const unplannedActualOn = searchParams.get('unplannedActualOn');
+    if (unplannedActualOn) {
+      const stage = searchParams.get('stage');
+      const stageLabel = stage === 'completion' ? 'Completion' : stage === 'closure' ? 'Closure' : stage === 'start' ? 'Start' : 'Stage';
+      out.push({ label: `${stageLabel} actual ${unplannedActualOn} (unplanned)`, param: 'unplannedActualOn', clears: ['unplannedActualOn', 'stage'] });
+    }
     return out;
   }, [searchParams, getLabel]);
 
