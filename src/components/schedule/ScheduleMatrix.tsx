@@ -129,7 +129,7 @@ export function ScheduleMatrix({
 
 
   const stagesToShow: ScheduleStage[] =
-    stageFilter === 'all' ? ['pred', 't1', 't2'] : [stageFilter as ScheduleStage];
+    stageFilter === 'all' ? ['pred', 't1', 't2', 'r1', 'r2'] : [stageFilter as ScheduleStage];
 
   const toggle = (key: string) => {
     setExpanded(prev => {
