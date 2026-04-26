@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { containsKorean } from '@/hooks/useTranslateToEnglish';
 import { TranslatePanel } from '@/components/comments/TranslatePanel';
+import { RecipientSelector, RecipientBadges, type RecipientKey } from '@/components/comments/RecipientSelector';
 
 type CommentType = 'comment' | 'instruction' | 'reply';
 
@@ -23,6 +24,7 @@ interface SubtestComment {
   type: CommentType;
   message: string;
   edited: boolean;
+  recipients: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -36,10 +38,22 @@ interface AuthorInfo {
 interface SubtestCommentsProps {
   subtestId: string;
   subtestTeam: string | null;
+  hdecPicName?: string | null;
+  hdecEngName?: string | null;
+  subcontractorName?: string | null;
+  subsubName?: string | null;
   onCountChange?: (count: number) => void;
 }
 
-export function SubtestComments({ subtestId, subtestTeam, onCountChange }: SubtestCommentsProps) {
+export function SubtestComments({
+  subtestId,
+  subtestTeam,
+  hdecPicName,
+  hdecEngName,
+  subcontractorName,
+  subsubName,
+  onCountChange,
+}: SubtestCommentsProps) {
   const { user, profile, isAdmin, isSuperuser, roles } = useAuth();
   const { toast } = useToast();
   const isSenior = roles.includes('senior_user');
