@@ -677,7 +677,7 @@ const summaryNumberClass = (value: number, tone?: 'done' | 'remain') => cn(
         : 'text-foreground',
 );
 
-function StageBadge({ stage, label }: { stage: 'pred' | 't1' | 't2'; label: string }) {
+function StageBadge({ stage, label }: { stage: 'pred' | 't1' | 't2' | 'r1' | 'r2'; label: string }) {
   return (
     <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold ${STAGE_BADGE[stage]}`}>
       {label}
