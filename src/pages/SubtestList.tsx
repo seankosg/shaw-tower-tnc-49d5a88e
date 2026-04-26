@@ -350,6 +350,7 @@ export default function SubtestList() {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [commentSummary, setCommentSummary] = useState<Record<string, { count: number; hasUnread: boolean }>>({});
   const urlStatusFilter = searchParams.get('status');
+  const urlScope = searchParams.get('scope');
   const urlAtRiskDays = Number(searchParams.get('at_risk_days') ?? '2');
   const tableRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -848,9 +849,12 @@ export default function SubtestList() {
     const inRange = (d: string | null) =>
       !!d && (!urlDateFrom || d >= urlDateFrom) && (!urlDateTo || d <= urlDateTo);
 
-    // Overdue / At-Risk consider only Pred/T1/T2 (matches Dashboard Overdue card scope).
-    // R1/R2 delays are surfaced via dedicated R1/R2 stage cards & cell-link filters.
-    const OVERDUE_STAGES: StageKey[] = ['pred', 't1', 't2'];
+    // Overdue / At-Risk stage scope:
+    //  - default: Pred/T1/T2 (matches Dashboard 1-tier KPI Overdue card)
+    //  - scope=all: Pred/T1/T2/R1/R2 (matches Dashboard 3-tier alert banner)
+    const OVERDUE_STAGES: StageKey[] = urlScope === 'all'
+      ? ['pred', 't1', 't2', 'r1', 'r2']
+      : ['pred', 't1', 't2'];
 
     return data.filter(r => {
       if (urlStatusFilter) {
@@ -948,7 +952,7 @@ export default function SubtestList() {
 
       return true;
     });
-  }, [data, urlStatusFilter, urlAtRiskDays,
+  }, [data, urlStatusFilter, urlAtRiskDays, urlScope,
       urlPredPlannedTo, urlT1PlannedTo, urlT2PlannedTo, urlPredActualTo, urlT1ActualTo, urlT2ActualTo,
       urlPredPlannedOn, urlT1PlannedOn, urlT2PlannedOn, urlPredActualOn, urlT1ActualOn, urlT2ActualOn,
       urlPredDelayAsOf, urlT1DelayAsOf, urlT2DelayAsOf, urlPredDelayOn, urlT1DelayOn, urlT2DelayOn,
@@ -1119,7 +1123,7 @@ export default function SubtestList() {
     const next = new URLSearchParams(searchParams);
     const toDelete = clears && clears.length ? clears : [param];
     for (const p of toDelete) next.delete(p);
-    if (toDelete.includes('status')) next.delete('at_risk_days');
+    if (toDelete.includes('status')) { next.delete('at_risk_days'); next.delete('scope'); }
     setSearchParams(next, { replace: true });
   };
   const clearAllUrlFilters = () => setSearchParams(new URLSearchParams(), { replace: true });
@@ -1241,6 +1245,7 @@ export default function SubtestList() {
         navigate={navigate}
         tableRef={tableRef}
         delayAsOfDate={delayAsOfDate}
+        overdueScope={urlScope === 'all' ? 'all' : 'execution'}
       />
     </div>
   );
@@ -1257,10 +1262,11 @@ interface SubtestTableViewProps {
   navigate: (path: string) => void;
   tableRef: React.RefObject<HTMLDivElement>;
   delayAsOfDate: string;
+  overdueScope: 'execution' | 'all';
 }
 
 function SubtestTableView({
-  table, loading, columns, sorting, autoSizeColumn, navigate, tableRef, delayAsOfDate,
+  table, loading, columns, sorting, autoSizeColumn, navigate, tableRef, delayAsOfDate, overdueScope,
 }: SubtestTableViewProps) {
   const isMobile = useIsMobile();
   const FROZEN_COUNT = (isMobile ? 1 : 4) + 1; // +1 for the always-on selection column
@@ -1316,8 +1322,11 @@ function SubtestTableView({
   const scrollHeaders = allHeaders.slice(FROZEN_COUNT);
 
   const renderRowBgClass = (r: SubtestRow) => {
-    // Match Dashboard Overdue scope: Pred/T1/T2 only.
-    const delayed = getAnyStageDelayedAsOf(r, ['pred', 't1', 't2'], delayAsOfDate);
+    // Match active Overdue scope (Pred/T1/T2 default, or all 5 stages when scope=all).
+    const stages: StageKey[] = overdueScope === 'all'
+      ? ['pred', 't1', 't2', 'r1', 'r2']
+      : ['pred', 't1', 't2'];
+    const delayed = getAnyStageDelayedAsOf(r, stages, delayAsOfDate);
     const t2Done = isStageDone(r, 't2');
     return { delayed, t2Done };
   };

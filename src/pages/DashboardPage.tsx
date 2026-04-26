@@ -28,7 +28,7 @@ import { formatDdMmm } from '@/lib/format';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import {
   type SubtestForDashboard, type PlanActualRow, type PlanActualMetrics,
-  todayIso, yesterdayIso, isOverdue, isAtRisk, maxDelayDays,
+  todayIso, yesterdayIso, isOverdue, isAtRisk, maxDelayDays, isOverdueAllStages, isAtRiskAllStages,
   aggregatePlanActualByGroup, buildSCurve, NONE_LABEL,
 } from '@/lib/dashboard-utils';
 import { isStageDone } from '@/lib/stage-metrics';
@@ -126,9 +126,12 @@ export default function DashboardPage() {
     const remaining = total - totalDone;
     const progressPct = total ? Math.round((totalDone / total) * 1000) / 10 : 0;
 
-    // Overdue (any stage) as of Data Date
+    // Overdue (any stage) as of Data Date — KPI uses Pred/T1/T2 only
     const overdueCount = filteredSubtests.filter(s => isOverdue(s, dataDate)).length;
     const atRiskCount = filteredSubtests.filter(s => isAtRisk(s, today, atRiskDays)).length;
+    // All-stage Overdue/At-Risk (Pred/T1/T2/R1/R2) — used by Tier 3 alert banner
+    const overdueCountAll = filteredSubtests.filter(s => isOverdueAllStages(s, dataDate)).length;
+    const atRiskCountAll = filteredSubtests.filter(s => isAtRiskAllStages(s, today, atRiskDays)).length;
 
     // Stage-specific
     const stageStat = (stage: 'pred' | 't1' | 't2' | 'r1' | 'r2', plannedField: keyof SubtestForDashboard) => {
@@ -149,6 +152,7 @@ export default function DashboardPage() {
 
     return {
       systemCount, total, totalDone, remaining, progressPct, overdueCount, atRiskCount,
+      overdueCountAll, atRiskCountAll,
       predDone: pred.done, predOverdue: pred.overdue, predPct: pred.pct,
       t1Done: t1.done, t1Overdue: t1.overdue, t1Pct: t1.pct,
       t2Done: t2.done, t2Overdue: t2.overdue, t2Pct: t2.pct,
@@ -336,16 +340,16 @@ export default function DashboardPage() {
         <AlertBanner
           tone="destructive"
           icon={<AlertTriangle className="h-5 w-5" />}
-          title={`${kpis.overdueCount} Overdue Subtest${kpis.overdueCount === 1 ? '' : 's'}`}
-          description={`Planned date is on/before Data Date (${dataDateLabel}) and not yet Done.`}
-          onClick={() => goSubtests({ status: 'overdue', as_of: dataDate })}
+          title={`${kpis.overdueCountAll} Overdue Subtest${kpis.overdueCountAll === 1 ? '' : 's'}`}
+          description={`Any stage (Pred/T1/T2/R1/R2) planned on/before Data Date (${dataDateLabel}) and not yet Done.`}
+          onClick={() => goSubtests({ status: 'overdue', as_of: dataDate, scope: 'all' })}
         />
         <AlertBanner
           tone="warning"
           icon={<Clock className="h-5 w-5" />}
-          title={`${kpis.atRiskCount} At-Risk Subtest${kpis.atRiskCount === 1 ? '' : 's'}`}
-          description={`Planned date is within ${atRiskDays} day(s) and not yet Done.`}
-          onClick={() => goSubtests({ status: 'at_risk', at_risk_days: String(atRiskDays) })}
+          title={`${kpis.atRiskCountAll} At-Risk Subtest${kpis.atRiskCountAll === 1 ? '' : 's'}`}
+          description={`Any stage (Pred/T1/T2/R1/R2) planned within ${atRiskDays} day(s) and not yet Done.`}
+          onClick={() => goSubtests({ status: 'at_risk', at_risk_days: String(atRiskDays), scope: 'all' })}
         />
       </div>
 
