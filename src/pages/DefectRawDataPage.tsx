@@ -571,6 +571,20 @@ export default function DefectRawDataPage() {
         );
       });
     }
+    const unplannedActualOn = searchParams.get('unplannedActualOn');
+    if (unplannedActualOn) {
+      const stage = searchParams.get('stage');
+      next = next.filter((item) => {
+        if (stage === 'start') return item.actual_start_date === unplannedActualOn && item.planned_start_date !== unplannedActualOn;
+        if (stage === 'completion') return item.actual_completion_date === unplannedActualOn && item.planned_completion_date !== unplannedActualOn;
+        if (stage === 'closure') return item.actual_closure_date === unplannedActualOn && item.planned_closure_date !== unplannedActualOn;
+        return (
+          (item.actual_start_date === unplannedActualOn && item.planned_start_date !== unplannedActualOn) ||
+          (item.actual_completion_date === unplannedActualOn && item.planned_completion_date !== unplannedActualOn) ||
+          (item.actual_closure_date === unplannedActualOn && item.planned_closure_date !== unplannedActualOn)
+        );
+      });
+    }
     if (searchParams.get('atRisk') === 'true') {
       const asOf = new Date().toISOString().slice(0, 10);
       const days = Number(searchParams.get('atRiskDays') ?? 7);
