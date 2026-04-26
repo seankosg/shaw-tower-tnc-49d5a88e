@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { detectImportType, getExcelSheetNames, parseExcelFile, parseLegacy, parseStandard, resolveValue, type DetectedImportType, type ParsedSubtest } from '@/lib/import-parser';
 import { useToast } from '@/hooks/use-toast';
 import { buildScheduleChangeImpact, hasScheduleChangeImpact } from '@/lib/schedule-change-utils';
+import { derivePlanFromT2 } from '@/lib/business-days';
 
 export type ImportType = 'legacy' | 'standard';
 export type FileStatus = 'pending' | 'parsing' | 'pending_sheet_selection' | 'ready' | 'processing' | 'done' | 'failed';
@@ -328,8 +329,15 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           ['subsub_name', row.subsub_name],
           ['hdec_pic_name', row.hdec_pic_name],
           ['r1_status', row.r1_status],
+          ['r1_report_ref', row.r1_report_ref],
+          ['r1_target_submission_date', row.r1_target_submission_date],
+          ['r1_actual_submission_date', row.r1_actual_submission_date],
           ['r2_status', row.r2_status],
           ['aconex_ref_no', row.aconex_ref_no],
+          ['r2_target_submission_date', row.r2_target_submission_date],
+          ['r2_actual_submission_date', row.r2_actual_submission_date],
+          ['r2_target_approval_date', row.r2_target_approval_date],
+          ['r2_actual_approval_date', row.r2_actual_approval_date],
           ['remarks', row.remarks],
           ['punchlist_comments', row.punchlist_comments],
         ];
