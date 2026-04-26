@@ -956,7 +956,7 @@ export default function DefectRawDataPage() {
         onClearSelection={() => setRowSelection({})}
       />
 
-      <DefectRawTableView table={table} loading={loading} sorting={sorting.length ? sorting : DEFAULT_SORTING} autoSizeColumn={autoSizeColumn} navigate={navigate} tableRef={tableRef} />
+      <DefectRawTableView table={table} loading={loading} sorting={sorting.length ? sorting : DEFAULT_SORTING} autoSizeColumn={autoSizeColumn} navigate={navigate} tableRef={tableRef} dataDate={dataDate} />
 
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
         <DialogContent>
@@ -1058,9 +1058,10 @@ interface DefectRawTableViewProps {
   autoSizeColumn: (id: string) => void;
   navigate: (path: string) => void;
   tableRef: React.RefObject<HTMLDivElement>;
+  dataDate: string;
 }
 
-function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate, tableRef }: DefectRawTableViewProps) {
+function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate, tableRef, dataDate }: DefectRawTableViewProps) {
   const isMobile = useIsMobile();
   const { value: frozenSetting } = useFrozenColumnCount();
   // Account for the always-on selection column at the start
