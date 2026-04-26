@@ -1047,7 +1047,7 @@ function PlanActualTable({
                 >
                   {isFirst && (
                     <>
-                      <TableCell rowSpan={3} className="font-medium align-top px-2 py-1.5">{r.label}</TableCell>
+                      <TableCell rowSpan={5} className="font-medium align-top px-2 py-1.5">{r.label}</TableCell>
                     </>
                   )}
                   <TableCell className="px-2 py-1.5 bg-muted/10">
