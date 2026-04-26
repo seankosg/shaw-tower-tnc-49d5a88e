@@ -144,6 +144,14 @@ export function getMaxDelayDaysAsOf(row: StageMetricRow, stages: StageKey[], asO
 
 export const ALL_STAGE_KEYS: StageKey[] = ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'];
 
-export function getStageKeys(filter: 'all' | StageKey): StageKey[] {
-  return filter === 'all' ? ALL_STAGE_KEYS : [filter];
+export type StageFilterInput = 'all' | StageKey | StageKey[];
+
+export function getStageKeys(filter: StageFilterInput): StageKey[] {
+  if (filter === 'all') return ALL_STAGE_KEYS;
+  if (Array.isArray(filter)) {
+    if (filter.length === 0) return ALL_STAGE_KEYS;
+    // preserve canonical order
+    return ALL_STAGE_KEYS.filter(k => filter.includes(k));
+  }
+  return [filter];
 }
