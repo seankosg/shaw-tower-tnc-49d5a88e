@@ -80,12 +80,24 @@ function generateBuckets(startDate: string, endDate: string, granularity: Defect
   return result;
 }
 
+/**
+ * Completion stage is "done" when:
+ *   - actual_completion_date exists, OR
+ *   - actual_progress_pct >= 100 (lenient policy — onsite often updates % only)
+ */
 export function isActualComplete(item: Pick<DefectForDashboard, 'actual_completion_date' | 'actual_progress_pct'>): boolean {
   return Boolean(item.actual_completion_date) || Number(item.actual_progress_pct ?? 0) >= 100;
 }
 
-export function isClosureComplete(item: Pick<DefectForDashboard, 'actual_closure_date'>): boolean {
-  return Boolean(item.actual_closure_date);
+/**
+ * Closure stage is "done" when:
+ *   - actual_closure_date exists, OR
+ *   - closure_status indicates closed (Done / Closed)
+ */
+export function isClosureComplete(item: Pick<DefectForDashboard, 'actual_closure_date' | 'closure_status'>): boolean {
+  if (item.actual_closure_date) return true;
+  const status = String((item as any).closure_status ?? '').trim().toLowerCase();
+  return status === 'done' || status === 'closed';
 }
 
 export function getStagePlanDate(item: DefectForDashboard, stage: DefectDashboardStage): string | null {
@@ -100,23 +112,39 @@ export function getStageActualDate(item: DefectForDashboard, stage: DefectDashbo
   return item.actual_closure_date;
 }
 
+/**
+ * Cascade Done logic: if a downstream stage is done, all upstream stages are
+ * implicitly done too. This prevents phantom "start overdue" on items where
+ * closure is already complete but actual_start_date was never recorded.
+ */
 export function isStageDone(item: DefectForDashboard, stage: DefectDashboardStage): boolean {
-  if (stage === 'start') return Boolean(item.actual_start_date) || isActualComplete(item);
-  if (stage === 'completion') return isActualComplete(item);
-  return isClosureComplete(item);
+  if (stage === 'closure') return isClosureComplete(item);
+  if (stage === 'completion') return isClosureComplete(item) || isActualComplete(item);
+  // start
+  return isClosureComplete(item) || isActualComplete(item) || Boolean(item.actual_start_date);
 }
 
+/**
+ * Strict less-than: a plan dated on `asOfDate` is NOT yet overdue
+ * (the work day is still open). Aligns with PM convention.
+ */
 export function isStageDelayedAsOf(item: DefectForDashboard, stage: DefectDashboardStage, asOfDate: string): boolean {
   const plan = getStagePlanDate(item, stage);
-  return Boolean(plan && plan <= asOfDate && !isStageDone(item, stage));
+  return Boolean(plan && plan < asOfDate && !isStageDone(item, stage));
 }
 
 const STAGES: DefectDashboardStage[] = ['start', 'completion', 'closure'];
 
+/** Overdue judgment — ALWAYS uses Data Date as `asOfDate`. */
 export function isOverdue(item: DefectForDashboard, asOfDate: string): boolean {
   return STAGES.some((stage) => isStageDelayedAsOf(item, stage, asOfDate));
 }
 
+/**
+ * At-Risk = not overdue (relative to `today`) and at least one stage plan
+ * falls within the next `thresholdDays`. Uses real today since "imminent"
+ * is naturally a forward-looking metric. Includes closure stage.
+ */
 export function isAtRisk(item: DefectForDashboard, today: string, thresholdDays: number): boolean {
   if (isOverdue(item, today)) return false;
   return STAGES.some((stage) => {
@@ -127,7 +155,12 @@ export function isAtRisk(item: DefectForDashboard, today: string, thresholdDays:
   });
 }
 
+/**
+ * Maximum delay in days across all stages. Returns 0 for closed items
+ * (closure complete cascades down — no stage can be "delayed" anymore).
+ */
 export function maxDelayDays(item: DefectForDashboard, asOfDate: string): number {
+  if (isClosureComplete(item)) return 0;
   return Math.max(0, ...STAGES.map((stage) => {
     const plan = getStagePlanDate(item, stage);
     return plan && !isStageDone(item, stage) ? Math.max(0, -daysBetween(asOfDate, plan)) : 0;
