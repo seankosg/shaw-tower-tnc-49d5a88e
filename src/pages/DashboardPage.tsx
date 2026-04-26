@@ -495,7 +495,11 @@ export default function DashboardPage() {
             </ChartContainer>
           )}
         </CardContent>
+        )}
       </Card>
+
+      {/* ─── Recent Comments Feed ─── */}
+      <RecentSubtestComments />
 
       {/* ─── Bottom split ─── */}
       <div className="grid gap-4 lg:grid-cols-2">
