@@ -188,6 +188,8 @@ export interface PlanActualRow {
   predecessor: PlanActualMetrics;
   t1: PlanActualMetrics;
   t2: PlanActualMetrics;
+  r1: PlanActualMetrics;
+  r2: PlanActualMetrics;
 }
 
 /** Aggregate Plan vs Actual metrics by group. */
