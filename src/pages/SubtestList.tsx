@@ -1320,8 +1320,11 @@ function SubtestTableView({
   const scrollHeaders = allHeaders.slice(FROZEN_COUNT);
 
   const renderRowBgClass = (r: SubtestRow) => {
-    // Match Dashboard Overdue scope: Pred/T1/T2 only.
-    const delayed = getAnyStageDelayedAsOf(r, ['pred', 't1', 't2'], delayAsOfDate);
+    // Match active Overdue scope (Pred/T1/T2 default, or all 5 stages when scope=all).
+    const stages: StageKey[] = urlScope === 'all'
+      ? ['pred', 't1', 't2', 'r1', 'r2']
+      : ['pred', 't1', 't2'];
+    const delayed = getAnyStageDelayedAsOf(r, stages, delayAsOfDate);
     const t2Done = isStageDone(r, 't2');
     return { delayed, t2Done };
   };
