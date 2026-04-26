@@ -848,9 +848,13 @@ export default function SubtestList() {
     const inRange = (d: string | null) =>
       !!d && (!urlDateFrom || d >= urlDateFrom) && (!urlDateTo || d <= urlDateTo);
 
+    // Overdue / At-Risk consider only Pred/T1/T2 (matches Dashboard Overdue card scope).
+    // R1/R2 delays are surfaced via dedicated R1/R2 stage cards & cell-link filters.
+    const OVERDUE_STAGES: StageKey[] = ['pred', 't1', 't2'];
+
     return data.filter(r => {
       if (urlStatusFilter) {
-        const overdue = getAnyStageDelayedAsOf(r, getStageKeys('all'), delayAsOfDate);
+        const overdue = getAnyStageDelayedAsOf(r, OVERDUE_STAGES, delayAsOfDate);
         if (urlStatusFilter === 'overdue' && !overdue) return false;
         // 5-stage workflow: final completion = R2 Approved
         if (urlStatusFilter === 'remaining' && isStageDone(r, 'r2')) return false;
@@ -862,7 +866,7 @@ export default function SubtestList() {
             const d = daysFromToday(planned);
             return d >= 0 && d <= urlAtRiskDays;
           };
-          if (!getStageKeys('all').some(within)) return false;
+          if (!OVERDUE_STAGES.some(within)) return false;
         }
       }
       // Pred/T1/T2 cell-link filters
@@ -1312,7 +1316,8 @@ function SubtestTableView({
   const scrollHeaders = allHeaders.slice(FROZEN_COUNT);
 
   const renderRowBgClass = (r: SubtestRow) => {
-    const delayed = getAnyStageDelayedAsOf(r, getStageKeys('all'), delayAsOfDate);
+    // Match Dashboard Overdue scope: Pred/T1/T2 only.
+    const delayed = getAnyStageDelayedAsOf(r, ['pred', 't1', 't2'], delayAsOfDate);
     const t2Done = isStageDone(r, 't2');
     return { delayed, t2Done };
   };
