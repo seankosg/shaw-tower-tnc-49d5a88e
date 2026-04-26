@@ -67,6 +67,9 @@ const HEADER_MAP: Record<string, string> = {
   'hdecpic': 'hdec_pic_name',
   'hdec_pic_name': 'hdec_pic_name',
   'hdec pic name': 'hdec_pic_name',
+  // Legacy R1/R2 columns historically held free-text (report ref no., remarks)
+  // — routed through smart splitter into r1_status/r1_report_ref (R1)
+  //   or r2_status/aconex_ref_no (R2).
   'r1 status': 'r1_status',
   'r1status': 'r1_status',
   'r1_status': 'r1_status',
@@ -79,6 +82,29 @@ const HEADER_MAP: Record<string, string> = {
   'r2': 'r2_status',
   'r2 (review by consultant)': 'r2_status',
   'r2 review by consultant': 'r2_status',
+  // R1 / R2 new fields (target / actual dates, refs)
+  'r1 report ref': 'r1_report_ref',
+  'r1 report reference': 'r1_report_ref',
+  'r1_report_ref': 'r1_report_ref',
+  'r1 ref': 'r1_report_ref',
+  'r1 target submission': 'r1_target_submission_date',
+  'r1 target submission date': 'r1_target_submission_date',
+  'r1_target_submission_date': 'r1_target_submission_date',
+  'r1 actual submission': 'r1_actual_submission_date',
+  'r1 actual submission date': 'r1_actual_submission_date',
+  'r1_actual_submission_date': 'r1_actual_submission_date',
+  'r2 target submission': 'r2_target_submission_date',
+  'r2 target submission date': 'r2_target_submission_date',
+  'r2_target_submission_date': 'r2_target_submission_date',
+  'r2 actual submission': 'r2_actual_submission_date',
+  'r2 actual submission date': 'r2_actual_submission_date',
+  'r2_actual_submission_date': 'r2_actual_submission_date',
+  'r2 target approval': 'r2_target_approval_date',
+  'r2 target approval date': 'r2_target_approval_date',
+  'r2_target_approval_date': 'r2_target_approval_date',
+  'r2 actual approval': 'r2_actual_approval_date',
+  'r2 actual approval date': 'r2_actual_approval_date',
+  'r2_actual_approval_date': 'r2_actual_approval_date',
   'aconex': 'aconex_ref_no',
   'aconex ref': 'aconex_ref_no',
   'aconex ref no': 'aconex_ref_no',
@@ -153,6 +179,42 @@ function normalizeStatus(val: any): string | null {
   const s = String(val).trim();
   const map: Record<string, string> = { planned: 'Planned', wip: 'WIP', done: 'Done', hold: 'Hold' };
   return map[s.toLowerCase()] || s;
+}
+
+// Recognised R1/R2 enum values (PostgreSQL public.report_status)
+const REPORT_STATUS_MAP: Record<string, string> = {
+  planned: 'Planned',
+  submitted: 'Submitted',
+  'under review': 'Under Review',
+  underreview: 'Under Review',
+  'in review': 'Under Review',
+  approved: 'Approved',
+  approval: 'Approved',
+  returned: 'Returned',
+  rejected: 'Returned',
+};
+
+/**
+ * Try to interpret a cell value as a report_status enum.
+ * Returns the canonical enum label or null if not recognised.
+ */
+export function normalizeReportStatus(val: any): string | null {
+  if (val == null || val === '') return null;
+  const key = String(val).trim().toLowerCase();
+  return REPORT_STATUS_MAP[key] || null;
+}
+
+/**
+ * Smart split for legacy R1/R2 free-text columns:
+ * - If value matches an enum (Submitted/Approved/...) → status only.
+ * - Otherwise treat as a free-text reference (report no., remarks).
+ */
+export function splitReportField(val: any): { status: string | null; ref: string | null } {
+  if (val == null || val === '') return { status: null, ref: null };
+  const enumVal = normalizeReportStatus(val);
+  if (enumVal) return { status: enumVal, ref: null };
+  const trimmed = String(val).trim();
+  return { status: null, ref: trimmed || null };
 }
 
 function normalizeTeam(val: any): string | null {
@@ -239,9 +301,18 @@ export interface ParsedSubtest {
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
-  r1_status: string | null;
-  r2_status: string | null;
-  aconex_ref_no: string | null;
+  // R1 — subcontractor → HDEC report
+  r1_status: string | null;            // enum-narrowed (or null when source value is free-text)
+  r1_report_ref: string | null;        // free-text report reference (legacy R1 column)
+  r1_target_submission_date: string | null;
+  r1_actual_submission_date: string | null;
+  // R2 — HDEC → client report
+  r2_status: string | null;            // enum-narrowed (or null when source value is free-text)
+  aconex_ref_no: string | null;        // R2 free-text fallback also lands here
+  r2_target_submission_date: string | null;
+  r2_actual_submission_date: string | null;
+  r2_target_approval_date: string | null;
+  r2_actual_approval_date: string | null;
   remarks: string | null;
   punchlist_comments: string | null;
 }
@@ -253,7 +324,11 @@ export const KNOWN_FIELDS = new Set<string>([
   't1_planned_date', 't1_status', 't2_planned_date', 't2_status',
   'predecessor_status_raw',
   'subcontractor_name', 'subsub_name', 'hdec_pic_name',
-  'r1_status', 'r2_status', 'aconex_ref_no', 'remarks', 'punchlist_comments',
+  'r1_status', 'r1_report_ref', 'r1_target_submission_date', 'r1_actual_submission_date',
+  'r2_status', 'aconex_ref_no',
+  'r2_target_submission_date', 'r2_actual_submission_date',
+  'r2_target_approval_date', 'r2_actual_approval_date',
+  'remarks', 'punchlist_comments',
   'source', 'updated_at',
 ]);
 
@@ -349,9 +424,24 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
       subcontractor_name: row.subcontractor_name?.trim() || null,
       subsub_name: row.subsub_name?.trim() || null,
       hdec_pic_name: row.hdec_pic_name?.trim() || null,
-      r1_status: row.r1_status?.trim() || null,
-      r2_status: row.r2_status?.trim() || null,
-      aconex_ref_no: row.aconex_ref_no?.trim() || null,
+      ...(() => {
+        const r1 = splitReportField(row.r1_status);
+        const r2 = splitReportField(row.r2_status);
+        const aconexExplicit = row.aconex_ref_no?.trim() || null;
+        return {
+          r1_status: r1.status,
+          r1_report_ref: row.r1_report_ref?.trim() || r1.ref,
+          r2_status: r2.status,
+          // Explicit aconex column wins; otherwise free-text from R2 column.
+          aconex_ref_no: aconexExplicit ?? r2.ref,
+        };
+      })(),
+      r1_target_submission_date: normalizeDate(row.r1_target_submission_date),
+      r1_actual_submission_date: normalizeDate(row.r1_actual_submission_date),
+      r2_target_submission_date: normalizeDate(row.r2_target_submission_date),
+      r2_actual_submission_date: normalizeDate(row.r2_actual_submission_date),
+      r2_target_approval_date: normalizeDate(row.r2_target_approval_date),
+      r2_actual_approval_date: normalizeDate(row.r2_actual_approval_date),
       remarks: row.remarks?.trim() || null,
       punchlist_comments: row.punchlist_comments?.trim() || null,
     };
@@ -412,9 +502,23 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
       subcontractor_name: row.subcontractor_name?.trim() || null,
       subsub_name: row.subsub_name?.trim() || null,
       hdec_pic_name: row.hdec_pic_name?.trim() || null,
-      r1_status: row.r1_status?.trim() || null,
-      r2_status: row.r2_status?.trim() || null,
-      aconex_ref_no: row.aconex_ref_no?.trim() || null,
+      ...(() => {
+        const r1 = splitReportField(row.r1_status);
+        const r2 = splitReportField(row.r2_status);
+        const aconexExplicit = row.aconex_ref_no?.trim() || null;
+        return {
+          r1_status: r1.status,
+          r1_report_ref: row.r1_report_ref?.trim() || r1.ref,
+          r2_status: r2.status,
+          aconex_ref_no: aconexExplicit ?? r2.ref,
+        };
+      })(),
+      r1_target_submission_date: normalizeDate(row.r1_target_submission_date),
+      r1_actual_submission_date: normalizeDate(row.r1_actual_submission_date),
+      r2_target_submission_date: normalizeDate(row.r2_target_submission_date),
+      r2_actual_submission_date: normalizeDate(row.r2_actual_submission_date),
+      r2_target_approval_date: normalizeDate(row.r2_target_approval_date),
+      r2_actual_approval_date: normalizeDate(row.r2_actual_approval_date),
       remarks: row.remarks?.trim() || null,
       punchlist_comments: row.punchlist_comments?.trim() || null,
     });
