@@ -1119,7 +1119,7 @@ export default function SubtestList() {
     const next = new URLSearchParams(searchParams);
     const toDelete = clears && clears.length ? clears : [param];
     for (const p of toDelete) next.delete(p);
-    if (toDelete.includes('status')) next.delete('at_risk_days');
+    if (toDelete.includes('status')) { next.delete('at_risk_days'); next.delete('scope'); }
     setSearchParams(next, { replace: true });
   };
   const clearAllUrlFilters = () => setSearchParams(new URLSearchParams(), { replace: true });
