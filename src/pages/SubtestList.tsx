@@ -812,6 +812,21 @@ export default function SubtestList() {
   const urlPredActualUnplannedOn = searchParams.get('pred_actual_unplanned_on');
   const urlT1ActualUnplannedOn = searchParams.get('t1_actual_unplanned_on');
   const urlT2ActualUnplannedOn = searchParams.get('t2_actual_unplanned_on');
+  // R1 / R2 cell-link filters (mirror Pred/T1/T2)
+  const urlR1PlannedTo = searchParams.get('r1_planned_to');
+  const urlR2PlannedTo = searchParams.get('r2_planned_to');
+  const urlR1ActualTo = searchParams.get('r1_actual_to');
+  const urlR2ActualTo = searchParams.get('r2_actual_to');
+  const urlR1PlannedOn = searchParams.get('r1_planned_on');
+  const urlR2PlannedOn = searchParams.get('r2_planned_on');
+  const urlR1ActualOn = searchParams.get('r1_actual_on');
+  const urlR2ActualOn = searchParams.get('r2_actual_on');
+  const urlR1DelayAsOf = searchParams.get('r1_delay_asof');
+  const urlR2DelayAsOf = searchParams.get('r2_delay_asof');
+  const urlR1DelayOn = searchParams.get('r1_delay_on');
+  const urlR2DelayOn = searchParams.get('r2_delay_on');
+  const urlR1ActualUnplannedOn = searchParams.get('r1_actual_unplanned_on');
+  const urlR2ActualUnplannedOn = searchParams.get('r2_actual_unplanned_on');
 
   const urlDateFrom = searchParams.get('date_from');
   const urlDateTo = searchParams.get('date_to');
