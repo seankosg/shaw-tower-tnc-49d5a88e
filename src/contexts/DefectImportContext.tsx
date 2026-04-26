@@ -77,6 +77,10 @@ export interface DefectImportFile {
   headerSamples?: Record<string, unknown>;
   /** User-excluded raw headers — re-parsed on change. Default: []. */
   excludedHeaders?: string[];
+  /** Canonical field names excluded from this import (derived from excludedHeaders).
+   *  Importer skips change-detection / audit / payload work for these fields, so
+   *  selecting fewer columns directly speeds up the import. */
+  excludedFields?: Set<string>;
   result?: { inserted: number; updated: number; skipped: number; rejected: number; teamUnresolved: number; classifiedRule: number; classifiedDiscipline: number; unclassified: number };
 }
 
