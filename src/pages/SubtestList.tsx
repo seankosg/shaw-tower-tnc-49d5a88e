@@ -594,6 +594,11 @@ export default function SubtestList() {
     []
   );
 
+  const reportStatusOptions = useMemo(() =>
+    REPORT_STATUS_OPTIONS.map(s => ({ value: s, label: s })),
+    []
+  );
+
   const sourceOptions = useMemo(() =>
     Object.entries(DATA_SOURCE_LABELS).map(([k, v]) => ({ value: k, label: v })),
     []
