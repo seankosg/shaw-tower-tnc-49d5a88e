@@ -306,8 +306,8 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
         <KpiCard icon={<ListChecks className="h-6 w-6 text-primary" />} label="Systems" value={kpis.systemCount} onClick={() => navigate('/tc/raw-data')} />
         <KpiCard icon={<ListChecks className="h-6 w-6 text-muted-foreground" />} label="Total Subtests" value={kpis.total.toLocaleString()} onClick={() => navigate('/tc/raw-data')} />
-        <KpiCard icon={<CheckCircle2 className="h-6 w-6" style={{ color: STATUS_COLORS.Done }} />} label="Done" value={kpis.totalDone.toLocaleString()} sub="T2 completed" onClick={() => goSubtests({ t2_status: 'Done' })} />
-        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Remaining" value={kpis.remaining.toLocaleString()} sub="T2 not Done" onClick={() => goSubtests({ status: 'remaining' })} />
+        <KpiCard icon={<CheckCircle2 className="h-6 w-6" style={{ color: STATUS_COLORS.Done }} />} label="Done" value={kpis.totalDone.toLocaleString()} sub="R2 Approved" onClick={() => goSubtests({ r2_status: 'Approved' })} />
+        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Remaining" value={kpis.remaining.toLocaleString()} sub="R2 not Approved" onClick={() => goSubtests({ status: 'remaining' })} />
         <Card className="flex flex-col justify-center p-4">
           <p className="text-xs text-muted-foreground mb-1">Progress</p>
           <p className="text-xl font-bold text-foreground">{kpis.progressPct}%</p>
@@ -322,11 +322,13 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* ─── Tier 2: Stage Cards (Pred / T1 / T2) ─── */}
-      <div className="grid gap-3 md:grid-cols-3">
+      {/* ─── Tier 2: Stage Cards (Pred / T1 / T2 / R1 / R2) ─── */}
+      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
         <StageCard stage="Predecessor" total={kpis.total} done={kpis.predDone} remaining={kpis.total - kpis.predDone} pct={kpis.predPct} overdue={kpis.predOverdue} onClick={() => goSubtests({ pred_status: 'Done' })} />
         <StageCard stage="T1" total={kpis.total} done={kpis.t1Done} remaining={kpis.total - kpis.t1Done} pct={kpis.t1Pct} overdue={kpis.t1Overdue} onClick={() => goSubtests({ t1_status: 'Done' })} />
         <StageCard stage="T2" total={kpis.total} done={kpis.t2Done} remaining={kpis.total - kpis.t2Done} pct={kpis.t2Pct} overdue={kpis.t2Overdue} onClick={() => goSubtests({ t2_status: 'Done' })} />
+        <StageCard stage="R1 (Sub→HDEC)" total={kpis.total} done={kpis.r1Done} remaining={kpis.total - kpis.r1Done} pct={kpis.r1Pct} overdue={kpis.r1Overdue} onClick={() => goSubtests({ r1_status: 'Submitted' })} />
+        <StageCard stage="R2 (HDEC→Client)" total={kpis.total} done={kpis.r2Done} remaining={kpis.total - kpis.r2Done} pct={kpis.r2Pct} overdue={kpis.r2Overdue} onClick={() => goSubtests({ r2_status: 'Approved' })} />
       </div>
 
 
