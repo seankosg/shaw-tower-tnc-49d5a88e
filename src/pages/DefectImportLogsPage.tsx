@@ -300,7 +300,7 @@ export default function DefectImportLogsPage() {
                         </TableCell>
                       )}
                     </TableRow>
-                  ))}
+                  ); })}
                 </TableBody>
               </Table>
             </div>
