@@ -128,8 +128,16 @@ export function ScheduleMatrix({
   }, [todayBucketIdx, data.buckets.length, cellWidth]);
 
 
+  const ALL_STAGES: ScheduleStage[] = ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'];
   const stagesToShow: ScheduleStage[] =
-    stageFilter === 'all' ? ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'] : [stageFilter as ScheduleStage];
+    stageFilter === 'all'
+      ? ALL_STAGES
+      : Array.isArray(stageFilter)
+        ? ALL_STAGES.filter(s => stageFilter.includes(s))
+        : [stageFilter as ScheduleStage];
+  const isMultiStage = stagesToShow.length > 1;
+  // Sentinel passed to onCellClick when cell aggregates multiple stages.
+  const aggregateStageArg: ScheduleStage | 'all' = isMultiStage ? 'all' : stagesToShow[0];
 
   const toggle = (key: string) => {
     setExpanded(prev => {
@@ -157,9 +165,11 @@ export function ScheduleMatrix({
       ? colVirtualizer.getTotalSize() - virtualCols[virtualCols.length - 1].end
       : 0;
 
-  const stageLabel = stageFilter === 'all' ? 'All' : STAGE_LABELS[stageFilter as ScheduleStage];
-  const totalBlockTitle = stageFilter === 'all'
-    ? 'Pred + T1 + T2 + R1S + R2S + R2A progress / (subtests × 6)'
+  const stageLabel = isMultiStage
+    ? stagesToShow.map(s => STAGE_LABELS[s]).join(' + ')
+    : STAGE_LABELS[stagesToShow[0]];
+  const totalBlockTitle = isMultiStage
+    ? `${stagesToShow.map(s => STAGE_LABELS[s]).join(' + ')} progress / (subtests × ${stagesToShow.length})`
     : `${stageLabel} progress / subtests`;
 
   return (
@@ -256,7 +266,7 @@ export function ScheduleMatrix({
           style={{ width: STICKY_LEFT_WIDTH }}
         >
           {data.rows.map(row => {
-            const showStageRows = stageFilter === 'all';
+            const showStageRows = isMultiStage;
             return (
               <Fragment key={`left-${row.key}`}>
                 <div className={cn("flex border-b border-border text-xs h-14", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
@@ -311,7 +321,7 @@ export function ScheduleMatrix({
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">No data in selected range.</div>
             )}
             {data.rows.map(row => {
-              const showStageRows = stageFilter === 'all';
+              const showStageRows = isMultiStage;
               return (
                 <Fragment key={row.key}>
                   <div className={cn("flex border-b border-border text-xs h-14", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
@@ -327,8 +337,8 @@ export function ScheduleMatrix({
                           isFuture={vc.index > todayBucketIdx}
                           isToday={vc.index === todayBucketIdx}
                           width={cellWidth}
-                          onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'planned') : undefined}
-                          onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'actual') : undefined}
+                          onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, aggregateStageArg, 'planned') : undefined}
+                          onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, aggregateStageArg, 'actual') : undefined}
                         />
                       );
                     })}

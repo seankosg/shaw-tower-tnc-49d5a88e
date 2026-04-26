@@ -17,7 +17,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { todayIso, yesterdayIso, type SubtestForDashboard } from '@/lib/dashboard-utils';
 import { formatDdMmm } from '@/lib/format';
-import { getStageKeys, isStageActualUpTo, isStageDelayedAsOf, isStagePlannedOn, isStagePlannedUpTo } from '@/lib/stage-metrics';
+import { ALL_STAGE_KEYS, getStageKeys, isStageActualUpTo, isStageDelayedAsOf, isStagePlannedOn, isStagePlannedUpTo } from '@/lib/stage-metrics';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   aggregateSchedule, findCritical, findLaggingGroups, addDays,
   type ScheduleBucket, type ScheduleGroupBy, type ScheduleStageFilter,
@@ -43,7 +44,20 @@ export default function SchedulePage() {
 
   const [groupBy, setGroupBy] = useState<ScheduleGroupBy>((searchParams.get('group') as ScheduleGroupBy) || 'system');
   const [bucket, setBucket] = useState<ScheduleBucket>((searchParams.get('bucket') as ScheduleBucket) || 'day');
-  const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>((searchParams.get('stage_view') as ScheduleStageFilter) || 'all');
+  const [stageFilter, setStageFilter] = useState<ScheduleStage[]>(() => {
+    const raw = searchParams.get('stage_view');
+    if (!raw || raw === 'all') return [...ALL_STAGE_KEYS];
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean) as ScheduleStage[];
+    const valid = parts.filter(p => (ALL_STAGE_KEYS as string[]).includes(p));
+    return valid.length > 0 ? valid : [...ALL_STAGE_KEYS];
+  });
+  const isAllStages = stageFilter.length === ALL_STAGE_KEYS.length;
+  // Pass to downstream consumers: 'all' sentinel when fully selected, single string when one, otherwise array.
+  const stageFilterArg: ScheduleStageFilter = isAllStages
+    ? 'all'
+    : stageFilter.length === 1
+      ? stageFilter[0]
+      : stageFilter;
   const [asOfMode, setAsOfMode] = useState<'dataDate' | 'today'>((searchParams.get('asof_mode') as 'dataDate' | 'today') || 'dataDate');
   const [dataDate, setDataDate] = useState(() => yesterdayIso(today));
   const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');
@@ -71,7 +85,7 @@ export default function SchedulePage() {
     };
     setOrDelete('group', groupBy, 'system');
     setOrDelete('bucket', bucket, 'day');
-    setOrDelete('stage_view', stageFilter, 'all');
+    setOrDelete('stage_view', isAllStages ? '' : stageFilter.join(','), '');
     setOrDelete('asof_mode', asOfMode, 'dataDate');
     setOrDelete('team', teamFilter, 'all');
     setOrDelete('system_text', systemTextFilter, '');
@@ -82,7 +96,7 @@ export default function SchedulePage() {
     setOrDelete('picked', pickedDate ? format(pickedDate, 'yyyy-MM-dd') : '', format(new Date(), 'yyyy-MM-dd'));
     setOrDelete('picked_field', pickedField, 'planned');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [groupBy, bucket, stageFilter, asOfMode, teamFilter, systemTextFilter, selectedSystemFilters, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, searchParams, setSearchParams]);
+  }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, systemTextFilter, selectedSystemFilters, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (groupBy === 'system') return;
@@ -163,10 +177,10 @@ export default function SchedulePage() {
 
   const aggregate = useMemo(
     () => aggregateSchedule(filteredSubtests, {
-      groupBy, bucket, stageFilter,
+      groupBy, bucket, stageFilter: stageFilterArg,
       rangeStart, rangeEnd, asOfDate, sysCodeById,
     }),
-    [filteredSubtests, groupBy, bucket, stageFilter, rangeStart, rangeEnd, asOfDate, sysCodeById],
+    [filteredSubtests, groupBy, bucket, stageFilterArg, rangeStart, rangeEnd, asOfDate, sysCodeById],
   );
 
   const systemFilterOptions = useMemo(
@@ -215,7 +229,7 @@ export default function SchedulePage() {
 
   const kpis = useMemo(() => {
     let cumPlan = 0, cumActual = 0;
-    const stages = getStageKeys(stageFilter);
+    const stages = getStageKeys(stageFilterArg);
     let totalStages = 0, doneStages = 0;
     for (const s of filteredSubtests) {
       totalStages += stages.length;
@@ -243,7 +257,7 @@ export default function SchedulePage() {
       }
     }
     return { cumPlan, cumActual, variance, progressPct, doneStages, totalStages, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
-  }, [stageFilter, filteredSubtests, critical.highRisk.length, dataDate, today]);
+  }, [stageFilterArg, filteredSubtests, critical.highRisk.length, dataDate, today]);
 
   // ───── Navigation handlers ─────
   const filterParamForGroup = (label: string): { key: string; value: string } => {
@@ -306,7 +320,7 @@ export default function SchedulePage() {
     }
     const { rowCount, fileName } = exportScheduleToExcel(visibleData, {
       groupHeader: GROUP_LABELS[groupBy],
-      stageFilter,
+      stageFilter: stageFilterArg,
       bucket,
       today,
       dataDate,
@@ -371,17 +385,40 @@ export default function SchedulePage() {
           </ToolbarGroup>
 
           <ToolbarGroup label="Stage">
-            <Tabs value={stageFilter} onValueChange={(v) => setStageFilter(v as ScheduleStageFilter)}>
-              <TabsList className="h-8">
-                <TabsTrigger value="all" className="h-6 px-2 text-xs">All</TabsTrigger>
-                <TabsTrigger value="pred" className="h-6 px-2 text-xs">Pred</TabsTrigger>
-                <TabsTrigger value="t1" className="h-6 px-2 text-xs">T1</TabsTrigger>
-                <TabsTrigger value="t2" className="h-6 px-2 text-xs">T2</TabsTrigger>
-                <TabsTrigger value="r1" className="h-6 px-2 text-xs">R1S</TabsTrigger>
-                <TabsTrigger value="r2s" className="h-6 px-2 text-xs">R2S</TabsTrigger>
-                <TabsTrigger value="r2a" className="h-6 px-2 text-xs">R2A</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant={isAllStages ? 'default' : 'outline'}
+                className="h-8 px-2 text-xs"
+                onClick={() => setStageFilter([...ALL_STAGE_KEYS])}
+                title="Show all stages"
+              >
+                All
+              </Button>
+              <ToggleGroup
+                type="multiple"
+                value={isAllStages ? [] : stageFilter}
+                onValueChange={(vals) => {
+                  const next = (vals as ScheduleStage[]).filter(v =>
+                    (ALL_STAGE_KEYS as string[]).includes(v),
+                  );
+                  // If user deselects everything, restore ALL.
+                  if (next.length === 0) {
+                    setStageFilter([...ALL_STAGE_KEYS]);
+                    return;
+                  }
+                  setStageFilter(ALL_STAGE_KEYS.filter(k => next.includes(k)));
+                }}
+                className="gap-1"
+              >
+                <ToggleGroupItem value="pred" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Pred</ToggleGroupItem>
+                <ToggleGroupItem value="t1" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">T1</ToggleGroupItem>
+                <ToggleGroupItem value="t2" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">T2</ToggleGroupItem>
+                <ToggleGroupItem value="r1" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">R1S</ToggleGroupItem>
+                <ToggleGroupItem value="r2s" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">R2S</ToggleGroupItem>
+                <ToggleGroupItem value="r2a" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">R2A</ToggleGroupItem>
+              </ToggleGroup>
+            </div>
           </ToolbarGroup>
 
           <ToolbarGroup label="As-of">
@@ -447,7 +484,7 @@ export default function SchedulePage() {
                   date_field: pickedField,
                 };
                 if (pickedField === 'actual') params.cell_status = 'Done';
-                if (stageFilter !== 'all') params.stage = stageFilter;
+                if (stageFilter.length === 1) params.stage = stageFilter[0];
                 navigate(`/tc/raw-data?${new URLSearchParams(params).toString()}`);
               }}
             >
@@ -538,7 +575,7 @@ export default function SchedulePage() {
             <ScheduleMatrix
               data={visibleData}
               bucket={bucket}
-              stageFilter={stageFilter}
+              stageFilter={stageFilterArg}
               today={today}
               asOfLabel={asOfLabel}
               groupHeader={GROUP_LABELS[groupBy]}

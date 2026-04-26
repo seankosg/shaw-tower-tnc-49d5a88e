@@ -130,9 +130,18 @@ export function exportScheduleToExcel(
   const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
   const fileTs = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
 
-  const stageLabel = stageFilter === 'all' ? 'All' : STAGE_LABELS[stageFilter as ScheduleStage];
-  const showSubRows = stageFilter === 'all';
-  const stages: ScheduleStage[] = showSubRows ? ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'] : [];
+  const ALL_STAGES: ScheduleStage[] = ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'];
+  const stagesSelected: ScheduleStage[] =
+    stageFilter === 'all'
+      ? ALL_STAGES
+      : Array.isArray(stageFilter)
+        ? ALL_STAGES.filter(s => stageFilter.includes(s))
+        : [stageFilter as ScheduleStage];
+  const stageLabel = stagesSelected.length === ALL_STAGES.length
+    ? 'All'
+    : stagesSelected.map(s => STAGE_LABELS[s]).join('+');
+  const showSubRows = stagesSelected.length > 1;
+  const stages: ScheduleStage[] = showSubRows ? stagesSelected : [];
 
   // Fixed columns: Group(1) + Total Scope(4) + Up to Today(4) = 9
   const FIXED_COLS = 9;
