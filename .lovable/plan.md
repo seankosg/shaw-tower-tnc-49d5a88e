@@ -1,89 +1,80 @@
-## 목표
+## 두 가지 작업
 
-HDEC 소속 사용자가 한글로 댓글을 작성하면, **저장 전**에 입력창 자체에서 영어로 번역 미리보기 → 사용자가 검토/수정 → 최종 영어 텍스트만 DB에 저장.
+### 작업 A — 댓글 작성 시 대상자(Recipients) 필수 선택
+T&C(Subtest)와 Defect Management 양쪽 댓글/Instruction 작성 시 **"To" 대상자**를 반드시 선택해야 저장되도록 구성. 다중 선택 가능.
 
-## 핵심 결정사항 (확정)
+**대상 카테고리** (해당 record의 책임자 정보를 기반으로 자동 후보 생성):
+- HDEC PIC (`hdec_pic_name`)
+- HDEC ENG (`hdec_eng_name`)
+- Subcontractor (`subcontractor_name`)
+- Sub-Sub (`subsub_name`)
 
-- **기본 저장 형식**: 영어만 (한글은 DB에 남기지 않음)
-- **적용 범위**: Subtest 댓글 + Defect 댓글 모두
-- **활성화 조건**: `profile.user_type === 'hdec'` 인 사용자만 번역 UI 노출
-- **DB 스키마 변경 없음**: 기존 `message` 컬럼만 사용 (영문 결과만 저장)
-- **AI 모델**: `google/gemini-2.5-flash-lite` (빠르고 저렴)
+존재하지 않는 카테고리(예: subsub가 비어있는 record)는 옵션에서 자동 제외.
 
-## UX 흐름
+### 작업 B — Dashboard "View All" 빈 페이지 원인 수정
+- **원인**: `/comments/subtest` 페이지 (`AllCommentsView`)가 PostgREST embed 문법 `subtests(id, item_no, ...)`을 사용하는데, **`subtest_comments.subtest_id → subtests.id` 외래키가 DB에 정의되어 있지 않음**. 따라서 PostgREST가 관계를 찾지 못해 쿼리가 실패하고 페이지에 아무것도 표시되지 않음. (defect_comments는 FK가 있어서 정상 동작하지만 데이터가 0건이라 마찬가지로 비어 보임.)
+- **수정**: `subtest_comments.subtest_id`에 FK 추가 (cascade delete). 같은 점검으로 `subtest_comments.parent_comment_id`, `defect_comment_reads`, `subtest_comment_reads`도 FK가 없는 경우 일관성 있게 추가.
 
-```text
-[입력창]
- ┌──────────────────────────────────────┐
- │ 안녕하세요, 이 부분 확인 부탁드립니다 │  ← 한글 입력
- └──────────────────────────────────────┘
-       [🌐 Translate to English]   [Send] (비활성)
-
-   ↓ 클릭
-
-[원문 표시 (읽기 전용, 작게)]
-   "안녕하세요, 이 부분 확인 부탁드립니다"
-
-[영문 입력창 (편집 가능)]
- ┌──────────────────────────────────────┐
- │ Hello, please review this part.      │  ← 수정 가능
- └──────────────────────────────────────┘
-       [↻ Re-translate]  [✕ Cancel]  [Send] (활성)
-```
-
-- **Send 버튼**: 번역 패널이 열려 있을 때는 "영문 입력창 내용"만 저장. 닫혀 있고 한글이 감지되면 Send 비활성 + 안내("Translate first")
-- 한글이 전혀 없는 입력(영문/숫자만)은 번역 단계 없이 바로 Send 가능
-- **Edit 모드**도 동일 적용 (수정 시에도 한글 → 영문 번역 후 저장)
+---
 
 ## 작업 항목
 
-### 1. Edge Function: `translate-text`
-- 입력: `{ text: string, targetLang?: 'en' }`
-- 출력: `{ translated: string }`
-- Lovable AI Gateway 호출 (`google/gemini-2.5-flash-lite`)
-- System prompt: "Translate to natural professional English used in construction/QA reports. Preserve technical terms, numbers, IDs. Output only the translation, no explanations."
-- CORS, JWT 검증, zod 입력 검증, 429/402 에러 처리
+### 1. DB 마이그레이션 — 누락된 FK 추가
+- `subtest_comments.subtest_id → subtests(id) ON DELETE CASCADE`
+- `subtest_comments.parent_comment_id → subtest_comments(id) ON DELETE CASCADE`
+- `subtest_comment_reads.subtest_id → subtests(id) ON DELETE CASCADE`
+- `subtest_comment_reads.user_id → auth.users(id) ON DELETE CASCADE`
+- `defect_comment_reads.defect_id → defect_items(id) ON DELETE CASCADE`
+- `defect_comment_reads.user_id → auth.users(id) ON DELETE CASCADE`
 
-### 2. 공용 훅: `useTranslateToEnglish`
-- 위치: `src/hooks/useTranslateToEnglish.ts`
-- `containsKorean(text)` 헬퍼: `/[\u3131-\uD79D\uAC00-\uD7AF]/`
-- `translate(text)` → edge function 호출, 로딩/에러 상태 관리
-- 마지막 결과 캐싱 (동일 입력 재호출 방지)
+(comments 테이블의 author_user_id도 FK 추가하면 좋지만, 기존 시스템 패턴상 auth.uid()만 비교하므로 FK 없이도 무방. 일단 보류.)
 
-### 3. 공용 컴포넌트: `<TranslatePanel>`
-- 위치: `src/components/comments/TranslatePanel.tsx`
-- props: `originalText`, `onConfirm(englishText)`, `onCancel`
-- 내부에서 자동으로 1회 번역 호출 → 결과를 편집 가능한 textarea로 표시
-- "Re-translate" 버튼 제공
-- HDEC 사용자에게만 부모에서 렌더링
+### 2. DB 마이그레이션 — 댓글에 recipients 컬럼 추가
+- `subtest_comments.recipients text[] NOT NULL DEFAULT '{}'`
+- `defect_comments.recipients text[] NOT NULL DEFAULT '{}'`
+- 값 형식: `['hdec_pic', 'hdec_eng', 'subcontractor', 'subsub']` 중 하나 이상
+- 기존 데이터는 빈 배열로 유지(과거 데이터에 강제 적용은 하지 않음 — 신규 작성에만 필수).
 
-### 4. `SubtestComments.tsx` 수정
-- `useAuth()`에서 현재 user의 `user_type` 가져오기 (이미 컨텍스트에 있음)
-- `isHdec = profile.user_type === 'hdec'`
-- 신규 작성 / 수정 모드 모두에 다음 로직:
-  - `isHdec && containsKorean(message)` → "Translate to English" 버튼 노출, Send 비활성
-  - 클릭 시 `<TranslatePanel>` 펼침 → 확정된 영문이 `message` 상태로 교체 → Send 가능
-- 비-HDEC 사용자는 기존 동작 그대로
+### 3. 신규 컴포넌트 — `RecipientSelector`
+- 위치: `src/components/comments/RecipientSelector.tsx`
+- Props: `availableRecipients: { key: string; label: string; name: string | null }[]`, `value: string[]`, `onChange(value)`, `disabled?`
+- 체크박스 형태의 인라인 그룹 (4개 옵션, 각 옆에 실제 담당자 이름 작게 표시)
+- 비어있는 카테고리(name이 null/empty)는 비활성 + 회색 처리
 
-### 5. `DefectComments.tsx` 수정
-- 위 4번과 동일 패턴 적용
+### 4. `SubtestComments.tsx` / `DefectComments.tsx` 수정
+- 부모로부터 책임자 4개 prop 추가 수신:
+  - `hdecPicName`, `hdecEngName`, `subcontractorName`, `subsubName`
+- 새 state: `recipients: string[]`
+- 신규 작성 영역에 `<RecipientSelector>` 추가
+- Send 버튼 활성 조건에 `recipients.length > 0` 추가
+- Reply는 부모 댓글의 recipients를 그대로 상속(또는 사용자가 변경 가능)
+- INSERT payload에 `recipients` 포함
+- 표시 영역: 각 댓글 헤더에 recipient badge들 노출 (예: `To: HDEC PIC, Subcontractor`)
+- Edit 모드는 메시지 수정만 — recipients는 잠금 (단순화)
 
-### 6. (선택) Plan 파일 업데이트
-- `.lovable/plan.md`에 이 기능 항목 추가
+### 5. 부모 페이지 prop 전달
+- `src/pages/SubtestDetail.tsx`: `<SubtestComments>`에 4개 책임자 이름 전달
+- `src/pages/DefectDetailPage.tsx`: `<DefectComments>`에 4개 책임자 이름 전달
+
+### 6. `AllCommentsView.tsx` 보강
+- recipients 컬럼을 select에 포함하고 각 행에 To 배지 표시
+- (1번 마이그레이션 후) 기존 쿼리는 자동으로 정상 동작 — 추가 변경 불필요
+
+---
 
 ## 기술 세부사항
 
-- **DB 스키마 변경 없음** → 마이그레이션 불필요
-- **저장 데이터**: 항상 영문만 (`message` 단일 컬럼)
-- **HDEC 판별**: AuthContext의 `user_type`이 이미 노출되어 있어 추가 쿼리 불필요
-- **에러 처리**: 번역 실패 시 toast + 한글 그대로 저장은 차단 (Send 계속 비활성). 사용자가 직접 영문으로 수정해서 진행 가능
-- **비용**: gemini-2.5-flash-lite는 매우 저렴 → 무료 $1 AI balance로 수천 건 처리 가능
+- Recipient 키는 enum으로 고정: `'hdec_pic' | 'hdec_eng' | 'subcontractor' | 'subsub'`
+- DB는 단순 `text[]` (CHECK 제약 대신 클라이언트 검증 + 향후 필요시 trigger)
+- Reply의 type은 항상 `'reply'`이며 recipients 강제 없음(부모 상속). 신규 comment/instruction에만 필수.
+- 기존 댓글(빈 recipients)은 표시 시 "To: —" 또는 표시 생략
 
-## 영향 범위 (변경 파일)
+## 변경 파일
 
-- `supabase/functions/translate-text/index.ts` (신규)
-- `src/hooks/useTranslateToEnglish.ts` (신규)
-- `src/components/comments/TranslatePanel.tsx` (신규)
+- `supabase/migrations/<new>` (FK 추가 + recipients 컬럼)
+- `src/components/comments/RecipientSelector.tsx` (신규)
 - `src/components/defects/SubtestComments.tsx` (수정)
 - `src/components/defects/DefectComments.tsx` (수정)
-- `.lovable/plan.md` (수정, 선택)
+- `src/components/comments/AllCommentsView.tsx` (수정 — recipient 배지 표시)
+- `src/pages/SubtestDetail.tsx` (수정 — prop 전달)
+- `src/pages/DefectDetailPage.tsx` (수정 — prop 전달)
