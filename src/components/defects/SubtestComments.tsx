@@ -441,13 +441,19 @@ export function SubtestComments({
             {': '}
             {replyTo.message.substring(0, 60)}{replyTo.message.length > 60 ? '…' : ''}
           </span>
-          <button onClick={() => setReplyTo(null)} className="ml-auto shrink-0 hover:text-foreground text-muted-foreground" aria-label="Cancel reply">
+          <button onClick={() => { setReplyTo(null); setRecipients([]); }} className="ml-auto shrink-0 hover:text-foreground text-muted-foreground" aria-label="Cancel reply">
             <X className="h-3 w-3" />
           </button>
         </div>
       )}
 
       <div className="space-y-2">
+        <RecipientSelector
+          names={recipientNames}
+          value={recipients}
+          onChange={setRecipients}
+          disabled={!user || showNewTranslate}
+        />
         <div className="flex gap-2 items-end">
           {canPostInstruction && !replyTo && (
             <Select value={commentType} onValueChange={(v) => setCommentType(v as any)}>
