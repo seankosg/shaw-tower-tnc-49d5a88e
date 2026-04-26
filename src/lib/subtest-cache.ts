@@ -35,6 +35,13 @@ export interface CachedSubtest {
   r2_actual_submission_date: string | null;
   r2_target_approval_date: string | null;
   r2_actual_approval_date: string | null;
+  r1_report_ref: string | null;
+  aconex_ref_no: string | null;
+  remarks: string | null;
+  punchlist_comments: string | null;
+  mos_sequence: number | null;
+  updated_by: string | null;
+  source_upload_id: string | null;
 }
 
 let cache: CachedSubtest[] | null = null;
