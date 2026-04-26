@@ -1058,7 +1058,8 @@ export default function SubtestList() {
     const formatValue = (v: string) => v === EMPTY_TOKEN ? '(Empty)' : v;
     const map: Record<string, string> = {
       system: 'System', subcon: 'Subcon', subsub: 'Sub-Sub',
-      hdec_pic: 'HDEC PIC', pred_status: 'Pred', t1_status: 'T1', t2_status: 'T2', status: 'Status',
+      hdec_pic: 'HDEC PIC', pred_status: 'Pred', t1_status: 'T1', t2_status: 'T2',
+      r1_status: 'R1', r2_status: 'R2', status: 'Status',
       pred_planned_to: 'Pred Plan ≤', pred_actual_to: 'Pred Actual ≤',
       t1_planned_to: 'T1 Plan ≤', t2_planned_to: 'T2 Plan ≤',
       t1_actual_to: 'T1 Actual ≤', t2_actual_to: 'T2 Actual ≤',
@@ -1067,6 +1068,15 @@ export default function SubtestList() {
       t1_actual_on: 'T1 Actual =', t2_actual_on: 'T2 Actual =',
       pred_delay_asof: 'Pred Delay ≤', t1_delay_asof: 'T1 Delay ≤', t2_delay_asof: 'T2 Delay ≤',
       pred_delay_on: 'Pred Delay =', t1_delay_on: 'T1 Delay =', t2_delay_on: 'T2 Delay =',
+      pred_actual_unplanned_on: 'Pred Unplanned =', t1_actual_unplanned_on: 'T1 Unplanned =', t2_actual_unplanned_on: 'T2 Unplanned =',
+      // R1 / R2 cell-link filters
+      r1_planned_to: 'R1 Plan ≤', r2_planned_to: 'R2 Plan ≤',
+      r1_actual_to: 'R1 Actual ≤', r2_actual_to: 'R2 Actual ≤',
+      r1_planned_on: 'R1 Plan =', r2_planned_on: 'R2 Plan =',
+      r1_actual_on: 'R1 Actual =', r2_actual_on: 'R2 Actual =',
+      r1_delay_asof: 'R1 Delay ≤', r2_delay_asof: 'R2 Delay ≤',
+      r1_delay_on: 'R1 Delay =', r2_delay_on: 'R2 Delay =',
+      r1_actual_unplanned_on: 'R1 Unplanned =', r2_actual_unplanned_on: 'R2 Unplanned =',
       stage: 'Stage', cell_status: 'Cell Status',
     };
     for (const [k, lbl] of Object.entries(map)) {
