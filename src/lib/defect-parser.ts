@@ -440,6 +440,20 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
   }
   const sheetNameResolved = resolvedSheetName;
 
+  // Apply user-selected column exclusion: drop excluded headers from each raw row.
+  // Safety: never drop headers that map to `issue_no` (PK / row-detection trigger),
+  // even if the caller mistakenly excluded them.
+  const excludedSet = new Set((excludedHeaders ?? []).filter((h) => toFieldName(h) !== 'issue_no'));
+  if (excludedSet.size > 0) {
+    rawRows = rawRows.map((raw) => {
+      const next: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(raw)) {
+        if (!excludedSet.has(k)) next[k] = v;
+      }
+      return next;
+    });
+  }
+
   const headers = Object.keys(rawRows[0] ?? {}).map((originalHeader, index) => ({
     originalHeader,
     displayName: cleanHeader(originalHeader),
