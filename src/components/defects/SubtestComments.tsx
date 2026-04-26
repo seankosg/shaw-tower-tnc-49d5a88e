@@ -250,6 +250,10 @@ export function SubtestComments({
 
   const persistNew = async (finalMessage: string) => {
     if (!finalMessage.trim() || !user) return;
+    if (recipients.length === 0) {
+      toast({ title: 'Recipient required', description: 'Select at least one recipient (To).', variant: 'destructive' });
+      return;
+    }
     setSending(true);
     try {
       const isReply = !!replyTo;
@@ -260,10 +264,12 @@ export function SubtestComments({
         parent_comment_id: replyTo?.id ?? null,
         type: finalType,
         message: finalMessage.trim(),
+        recipients,
       });
       if (error) throw error;
       setMessage('');
       setReplyTo(null);
+      setRecipients([]);
       setShowNewTranslate(false);
       fetchComments();
     } catch (err: any) {
@@ -275,6 +281,10 @@ export function SubtestComments({
 
   const handleSend = async () => {
     if (!message.trim() || !user) return;
+    if (recipients.length === 0) {
+      toast({ title: 'Recipient required', description: 'Select at least one recipient (To).', variant: 'destructive' });
+      return;
+    }
     if (isHdec && containsKorean(message)) {
       setShowNewTranslate(true);
       return;
