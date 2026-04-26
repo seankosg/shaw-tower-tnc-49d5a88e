@@ -190,9 +190,9 @@ export default function DefectDashboardPage() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         <KpiCard icon={<ListChecks className="h-6 w-6 text-muted-foreground" />} label="Total Defects" value={kpis.total.toLocaleString()} onClick={() => goRaw({})} />
-        <KpiCard icon={<CheckCircle2 className="h-6 w-6 text-primary" />} label="Completion Done" value={kpis.actualDone.toLocaleString()} sub={`${kpis.completionPct}% completed`} onClick={() => goRaw({ actualComplete: 'true' })} />
-        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Open Defect" value={(kpis.total - kpis.actualDone).toLocaleString()} sub="Total − Completion" onClick={() => goRaw({ actualComplete: 'false' })} />
-        <KpiCard icon={<ShieldCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />} label="Closure Done" value={kpis.closureDone.toLocaleString()} sub={`${kpis.overallProgressPct}% closed`} onClick={() => goRaw({ closureComplete: 'true' })} />
+        <KpiCard icon={<CheckCircle2 className="h-6 w-6 text-primary" />} label="Completion Done" value={kpis.actualDone.toLocaleString()} sub={`${kpis.completionPct}% completed`} progress={kpis.completionPct} onClick={() => goRaw({ actualComplete: 'true' })} />
+        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Open Defect" value={(kpis.total - kpis.actualDone).toLocaleString()} sub="Total − Completion" progress={100 - kpis.completionPct} progressTone="destructive" onClick={() => goRaw({ actualComplete: 'false' })} />
+        <KpiCard icon={<ShieldCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />} label="Closure Done" value={kpis.closureDone.toLocaleString()} sub={`${kpis.overallProgressPct}% closed`} progress={kpis.overallProgressPct} onClick={() => goRaw({ closureComplete: 'true' })} />
         <KpiCard icon={<Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />} label="Remain Inspection" value={kpis.difference.toLocaleString()} sub="검측 대기" onClick={() => goRaw({ actualComplete: 'true', closureComplete: 'false' })} />
       </div>
 
