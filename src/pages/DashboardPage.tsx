@@ -336,8 +336,8 @@ export default function DashboardPage() {
         <StageCard stage="Predecessor" total={kpis.total} done={kpis.predDone} remaining={kpis.total - kpis.predDone} pct={kpis.predPct} overdue={kpis.predOverdue} onClick={() => goSubtests({ pred_status: 'Done' })} />
         <StageCard stage="T1" total={kpis.total} done={kpis.t1Done} remaining={kpis.total - kpis.t1Done} pct={kpis.t1Pct} overdue={kpis.t1Overdue} onClick={() => goSubtests({ t1_status: 'Done' })} />
         <StageCard stage="T2" total={kpis.total} done={kpis.t2Done} remaining={kpis.total - kpis.t2Done} pct={kpis.t2Pct} overdue={kpis.t2Overdue} onClick={() => goSubtests({ t2_status: 'Done' })} />
-        <StageCard stage="R1 (Sub→HDEC)" total={kpis.total} done={kpis.r1Done} remaining={kpis.total - kpis.r1Done} pct={kpis.r1Pct} overdue={kpis.r1Overdue} onClick={() => goSubtests({ r1_status: 'Submitted' })} />
-        <StageCard stage="R2 (HDEC→Client)" total={kpis.total} done={kpis.r2Done} remaining={kpis.total - kpis.r2Done} pct={kpis.r2Pct} overdue={kpis.r2Overdue} onClick={() => goSubtests({ r2_status: 'Approved' })} />
+        <StageCard stage="R1S (Sub→HDEC)" total={kpis.total} done={kpis.r1Done} remaining={kpis.total - kpis.r1Done} pct={kpis.r1Pct} overdue={kpis.r1Overdue} onClick={() => goSubtests({ r1_status: 'Submitted' })} />
+        <StageCard stage="R2A (HDEC→Client)" total={kpis.total} done={kpis.r2Done} remaining={kpis.total - kpis.r2Done} pct={kpis.r2Pct} overdue={kpis.r2Overdue} onClick={() => goSubtests({ r2_status: 'Approved' })} />
       </div>
 
 
@@ -346,14 +346,14 @@ export default function DashboardPage() {
           tone="destructive"
           icon={<AlertTriangle className="h-5 w-5" />}
           title={`${kpis.overdueCountAll} Overdue Subtest${kpis.overdueCountAll === 1 ? '' : 's'}`}
-          description={`Any stage (Pred/T1/T2/R1/R2) planned on/before Data Date (${dataDateLabel}) and not yet Done.`}
+          description={`Any stage (Pred/T1/T2/R1S/R2S/R2A) planned on/before Data Date (${dataDateLabel}) and not yet Done.`}
           onClick={() => goSubtests({ status: 'overdue', as_of: dataDate, scope: 'all' })}
         />
         <AlertBanner
           tone="warning"
           icon={<Clock className="h-5 w-5" />}
           title={`${kpis.atRiskCountAll} At-Risk Subtest${kpis.atRiskCountAll === 1 ? '' : 's'}`}
-          description={`Any stage (Pred/T1/T2/R1/R2) planned within ${atRiskDays} day(s) and not yet Done.`}
+          description={`Any stage (Pred/T1/T2/R1S/R2S/R2A) planned within ${atRiskDays} day(s) and not yet Done.`}
           onClick={() => goSubtests({ status: 'at_risk', at_risk_days: String(atRiskDays), scope: 'all' })}
         />
       </div>
@@ -1032,7 +1032,7 @@ function PlanActualTable({
                 actualUnplannedOn: 't2_actual_unplanned_on',
               },
               {
-                stage: 'r1', label: 'R1', metrics: r.r1,
+                stage: 'r1', label: 'R1S', metrics: r.r1,
                 planTo: 'r1_planned_to',
                 actualTo: 'r1_actual_to',
                 planOn: 'r1_planned_on',
@@ -1042,7 +1042,7 @@ function PlanActualTable({
                 actualUnplannedOn: 'r1_actual_unplanned_on',
               },
               {
-                stage: 'r2', label: 'R2', metrics: r.r2,
+                stage: 'r2', label: 'R2A', metrics: r.r2,
                 planTo: 'r2_planned_to',
                 actualTo: 'r2_actual_to',
                 planOn: 'r2_planned_on',
