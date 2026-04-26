@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { daysDiff, getDefectExcelSheetNames, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
+import { daysDiff, getDefectExcelHeaders, getDefectExcelSheetNames, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
 import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, suggestOwnerCode } from '@/lib/defect-utils';
 import { isValidDefectStatus, reconcileClosureCompletion } from '@/lib/defect-status';
@@ -71,6 +71,12 @@ export interface DefectImportFile {
   sheetNames?: string[];
   /** Currently selected sheet (set after user picks, or auto-set when only 1 sheet). */
   selectedSheet?: string;
+  /** All raw header strings present in the chosen sheet (for column-select dialog). */
+  availableHeaders?: string[];
+  /** First data row (header → value) used as preview in column-select dialog. */
+  headerSamples?: Record<string, unknown>;
+  /** User-excluded raw headers — re-parsed on change. Default: []. */
+  excludedHeaders?: string[];
   result?: { inserted: number; updated: number; skipped: number; rejected: number; teamUnresolved: number; classifiedRule: number; classifiedDiscipline: number; unclassified: number };
 }
 
