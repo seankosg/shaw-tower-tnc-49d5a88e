@@ -176,13 +176,14 @@ export function SubtestComments({ subtestId, subtestTeam, onCountChange }: Subte
   const handleEdit = (c: SubtestComment) => {
     setEditingId(c.id);
     setEditingMessage(c.message);
+    setShowEditTranslate(false);
   };
 
-  const handleEditSave = async () => {
-    if (!editingId || !editingMessage.trim()) return;
+  const persistEdit = async (finalMessage: string) => {
+    if (!editingId || !finalMessage.trim()) return;
     const { error } = await (supabase as any)
       .from('subtest_comments')
-      .update({ message: editingMessage.trim() })
+      .update({ message: finalMessage.trim() })
       .eq('id', editingId);
     if (error) {
       toast({ title: 'Failed to update comment', description: error.message, variant: 'destructive' });
@@ -190,7 +191,17 @@ export function SubtestComments({ subtestId, subtestTeam, onCountChange }: Subte
     }
     setEditingId(null);
     setEditingMessage('');
+    setShowEditTranslate(false);
     fetchComments();
+  };
+
+  const handleEditSave = async () => {
+    if (!editingId || !editingMessage.trim()) return;
+    if (isHdec && containsKorean(editingMessage)) {
+      setShowEditTranslate(true);
+      return;
+    }
+    await persistEdit(editingMessage);
   };
 
   const handleDelete = async (id: string) => {
@@ -206,8 +217,8 @@ export function SubtestComments({ subtestId, subtestTeam, onCountChange }: Subte
     fetchComments();
   };
 
-  const handleSend = async () => {
-    if (!message.trim() || !user) return;
+  const persistNew = async (finalMessage: string) => {
+    if (!finalMessage.trim() || !user) return;
     setSending(true);
     try {
       const isReply = !!replyTo;
@@ -217,17 +228,27 @@ export function SubtestComments({ subtestId, subtestTeam, onCountChange }: Subte
         author_user_id: user.id,
         parent_comment_id: replyTo?.id ?? null,
         type: finalType,
-        message: message.trim(),
+        message: finalMessage.trim(),
       });
       if (error) throw error;
       setMessage('');
       setReplyTo(null);
+      setShowNewTranslate(false);
       fetchComments();
     } catch (err: any) {
       toast({ title: 'Failed to post comment', description: err.message ?? String(err), variant: 'destructive' });
     } finally {
       setSending(false);
     }
+  };
+
+  const handleSend = async () => {
+    if (!message.trim() || !user) return;
+    if (isHdec && containsKorean(message)) {
+      setShowNewTranslate(true);
+      return;
+    }
+    await persistNew(message);
   };
 
   const { topLevel, repliesByParent } = useMemo(() => {
