@@ -227,9 +227,9 @@ export function exportPlanActualToExcel(
       dataRow++;
     });
 
-    // Merge group name cells across 3 stage rows
+    // Merge group name cells across all stage rows
     merges.push(
-      { s: { r: startRow, c: 0 }, e: { r: startRow + 2, c: 0 } },
+      { s: { r: startRow, c: 0 }, e: { r: startRow + stages.length - 1, c: 0 } },
     );
   }
 
