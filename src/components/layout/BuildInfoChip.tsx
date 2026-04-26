@@ -22,6 +22,7 @@ import { useAppVersionCheck } from '@/hooks/useAppVersionCheck';
 export function BuildInfoChip() {
   const { checkVersion } = useAppVersionCheck();
   const [checking, setChecking] = useState(false);
+  const [remoteBuildId, setRemoteBuildId] = useState<string | null>(null);
 
   const buildId = typeof __APP_BUILD_ID__ === 'string' ? __APP_BUILD_ID__ : '';
 
@@ -31,6 +32,7 @@ export function BuildInfoChip() {
   }
 
   const shortId = buildId.slice(-6);
+  const remoteShort = remoteBuildId ? remoteBuildId.slice(-6) : null;
 
   function reloadWithBust(param: string) {
     window.location.replace(
@@ -43,14 +45,21 @@ export function BuildInfoChip() {
     setChecking(true);
     try {
       const result = await checkVersion();
-      if (result === 'latest') {
-        toast.success('최신 빌드입니다', { description: `v: ${shortId}` });
-      } else if (result === 'update') {
-        toast.message('새 빌드 발견 — 업데이트 적용 중…');
+      if (result.state === 'latest') {
+        setRemoteBuildId(result.remote);
+        toast.success('최신 빌드입니다', { description: `현재 v: ${shortId}` });
+      } else if (result.state === 'update') {
+        setRemoteBuildId(result.remote);
+        const nextShort = result.remote.slice(-6);
+        toast.message('새 빌드 발견 — 업데이트 적용 중…', {
+          description: `현재 ${shortId} → 최신 ${nextShort}`,
+        });
         // 토스트가 보이도록 짧게 지연 후 reload
-        setTimeout(() => reloadWithBust('__v'), 600);
+        setTimeout(() => reloadWithBust('__v'), 800);
       } else {
-        toast.error('확인 실패 — 네트워크를 확인해주세요');
+        toast.error('확인 실패 — 네트워크를 확인해주세요', {
+          description: result.reason ? `사유: ${result.reason}` : undefined,
+        });
       }
     } finally {
       setChecking(false);
@@ -69,9 +78,18 @@ export function BuildInfoChip() {
             v {shortId}
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64">
-          <DropdownMenuLabel className="font-mono text-xs break-all">
-            build {buildId}
+        <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuLabel className="font-mono text-[11px] break-all leading-tight">
+            <div>현재 build</div>
+            <div className="text-foreground">{buildId}</div>
+            {remoteBuildId && (
+              <>
+                <div className="mt-1.5">최신 build (서버)</div>
+                <div className={remoteBuildId === buildId ? 'text-foreground' : 'text-destructive'}>
+                  {remoteBuildId}
+                </div>
+              </>
+            )}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem
