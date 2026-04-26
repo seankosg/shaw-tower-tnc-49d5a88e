@@ -204,7 +204,7 @@ export function aggregatePlanActualByGroup(
         if (isStageActualUpTo(i, stage, dataDate)) cumActual++;
         if (isStagePlannedOn(i, stage, dataDate)) dataDatePlan++;
         if (isStageActualOn(i, stage, dataDate)) dataDateActual++;
-        if (isStageDelayedAsOf(i, stage, dataDate)) dataDateDelay++;
+        if (isStagePlannedOn(i, stage, dataDate) && !isStageDone(i, stage)) dataDateDelay++;
         if (isStagePlannedOn(i, stage, today)) tPlan++;
         if (isStageActualOn(i, stage, today)) tActual++;
         if (isStagePlannedOn(i, stage, today) && !isStageDone(i, stage)) tDelay++;

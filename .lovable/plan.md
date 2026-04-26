@@ -1,75 +1,75 @@
-## 원인 진단
+## 배경
 
-**왜 컬럼을 4개만 매핑해도 32개 매핑할 때와 속도가 비슷한가?**
+T&C 대시보드 "계획 및 실적" 표의 Data Date 섹션에는 **Plan / Actual / Δ / Delay** 4개 컬럼이 있습니다.
 
-`src/contexts/DefectImportContext.tsx`의 import 처리 루프(line 568~810)는 **각 행마다 1~6개의 `await supabase.from(...).insert/update()` 호출**을 직렬로 수행합니다. 컬럼 수가 줄어도 **행 수만큼의 네트워크 round-trip은 동일**하므로 시간 차이가 거의 나지 않습니다.
+현재 동작:
+- **Plan / Actual / Δ**: 당일 단위 (`planned_date == dataDate`, `actual_date == dataDate`, 둘의 차이)
+- **Delay**: **누적** 지연 (`planned_date <= dataDate AND not Done`)
 
-행 1건당 발생하는 DB 호출(최소 → 최대):
-- `defect_upload_row_logs.insert` × 1~5 (rejected/skipped/inserted/updated, planned_pct 경고, classifier 경고, status 경고, conflict 경고 등)
-- `defect_items.update` 또는 `defect_items.insert` × 1
-- `defect_schedule_change_audit.insert` × 변경된 trackedField 수 (최대 10)
-- `defect_daily_snapshots.insert` × 1 (신규 행만)
+문제: Δ가 음수일 때 그 절댓값과 Delay 값이 일치하지 않고, "당일" 컬럼인데도 과거 누적 지연이 합쳐져 표시됩니다.
 
-→ **2,000행이면 약 4,000~10,000회의 직렬 HTTP 요청**. 이게 진짜 병목입니다.
+예시 (사용자 제공):
+- BMS-039-MST-070: T2 예정일 = 2026-04-24 (미완료)
+- BMS-040-MST-070: T2 예정일 = 2026-04-25 (미완료)
+- Data Date = 2026-04-25
 
-또한 `parseDefectExcel`의 컬럼 제외 로직(line 446~454)은 단순히 `raw[k]` 객체에서 키를 제거할 뿐, 그 후 `mappedRows`를 만들 때는 **항상 32개 필드 전체에 대해 `getMapped` / `normalizeDate` / `toText` 등을 실행**합니다. 즉 파싱 단계에서도 컬럼 제외가 **연산량을 줄이지 않습니다**.
+→ 기대 동작: Data Date Delay에는 **04-25 plan인 BMS-040만** 카운트 (BMS-039 제외).
+→ 현재 동작: 둘 다 카운트 (누적이므로).
 
-게다가 update 분기에서 `hasAnyChange` 체크(line 764)는 **payload의 모든 키**를 비교하므로, 사용자가 "Subcontractor 4개 컬럼만 바꾸려고" 28개를 제외해도 32개 필드 모두 비교 → 변경 없음 시 skip되지만, **변경 비교 자체는 매번 전체 수행**됩니다.
+## 변경 내용
 
-## 해결 전략 (3단계, 효과 큰 순)
+### 1. 집계 로직 (`src/lib/dashboard-utils.ts`)
 
-### 1. 행-단위 DB 호출 → 일괄 처리(batch)로 전환 [가장 큰 효과: 5~20배 빨라짐 예상]
+`aggregatePlanActualByGroup`의 `dataDateDelay` 계산 변경:
 
-루프 안에서 즉시 `await insert`하지 말고, 메모리에 누적 후 청크 단위(예: 200~500행)로 일괄 전송합니다.
+```text
+변경 전: isStageDelayedAsOf(i, stage, dataDate)
+         → planned_date <= dataDate AND !done  (누적)
 
-- `defect_upload_row_logs`: 행 처리 중 `pendingLogs: any[]`에 push → 청크 끝에서 `.insert(pendingLogs)` 1회.
-- `defect_schedule_change_audit`: 동일하게 `pendingAudits` 배열로 누적 → 청크 끝에서 1회 insert.
-- `defect_daily_snapshots`: 신규 insert된 행 ID를 받아 `pendingSnapshots`에 모아서 청크 끝에서 1회 insert.
-- `defect_items.update` / `insert`:
-  - 신규 insert는 `.insert(payloads).select('id')`로 청크 단위 일괄 insert (반환 id 순서로 snapshot에 매핑).
-  - update는 PK 기준이라 일괄 처리하기 어려우므로, **변경 없음 행을 먼저 걸러낸 뒤** 변경된 것만 `Promise.all` 병렬로 (예: 동시 10개) 실행.
-- 진행률(progress)은 청크 단위로 업데이트.
+변경 후: isStagePlannedOn(i, stage, dataDate) && !isStageDone(i, stage)
+         → planned_date == dataDate AND !done  (당일)
+```
 
-### 2. 선택 컬럼 기반 부분 업데이트 (사용자가 매핑한 4개만 변경) [중간 효과 + UX 개선]
+`yesterdayDelay`(deprecated alias)도 같은 새 값을 가리키도록 유지.
 
-현재는 제외된 컬럼이 "raw에서 빠짐 → `toText(getMapped(raw,'x'))`가 null → `preserveExistingForBlank`가 DB값으로 복원"의 흐름인데, **실제로 32개 필드 모두 payload에 들어가서 update**됩니다(같은 값으로). 이로 인해 `hasAnyChange` 비교, audit 비교, row_version 증가가 불필요하게 모든 필드에 대해 일어납니다.
+### 2. 본문 셀 클릭 핸들러 (`src/pages/DashboardPage.tsx`)
 
-개선: parser가 `excludedFields: Set<string>`를 importer로 전달 → importer는
-- **변경 비교(`hasAnyChange`)와 audit 비교를 "사용자가 선택한 필드"로만 한정**.
-- update payload도 선택된 필드 + 항상 필요한 메타(team, classification_source, row_version 등)만 포함.
-- 그러면 4개 컬럼만 매핑한 경우 변경된 행 수가 극적으로 줄고, audit insert도 줄어듭니다.
+Data Date Delay 셀의 클릭 파라미터를 `delayAsOf`(누적 의미)에서 `delayOn`(당일 의미)으로 교체:
 
-### 3. 파싱 단계 미세 최적화 [효과 작지만 무료]
+```text
+변경 전: go(r.key, { [st.delayAsOf!]: dataDate })  // 예: t2_delay_asof=2026-04-25
+변경 후: go(r.key, { [st.delayOn!]:   dataDate })  // 예: t2_delay_on=2026-04-25
+```
 
-- 제외된 헤더에 매핑되는 필드는 `parseDefectExcel`의 매핑 루프(line 465~510)에서 `null`로 즉시 단축 → `normalizeDate` / `parseArea` 호출 자체를 스킵.
-- 단, `area_raw`처럼 derived field(area_type/level/location)를 만드는 입력은 제외되면 derived도 자동 null이 되어야 함(이미 dialog에서 경고 중).
+→ 클릭 시 SubtestList가 "해당 일자에 plan이고 아직 Done 아님" 필터를 적용해, 화면에 보이는 카운트와 이동 후 목록이 정확히 일치하게 됨.
 
-## 변경 파일
+Cumulative 섹션의 Δ(누적) 음수 클릭 핸들러는 기존 `delayAsOf` 그대로 유지(누적 지연 의미가 맞음).
 
-### `src/contexts/DefectImportContext.tsx` (메인)
-- `processFile` 내부 루프를 **청크 기반 2-pass**로 재작성:
-  - Pass A (CPU only): 모든 행에 대해 payload·log·audit·snapshot 객체를 **메모리에서만** 생성, 누적.
-  - Pass B (DB I/O): 청크 단위로 `defect_items.upsert` (insert 청크) + `update` 병렬화 + `row_logs.insert(array)` + `schedule_change_audit.insert(array)` + `daily_snapshots.insert(array)`.
-- `excludedFields: Set<string>` 매개변수를 받아 `hasAnyChange`와 `trackedFields` audit 루프에서 필터링.
-- `setFiles` progress 업데이트는 청크 단위로(루프마다 setState하지 않도록) — React 리렌더 비용도 절감.
+헤더 합계 셀(`headerTotals.dataDateDelay`)은 코드 변경 없음 — 집계 결과만 바뀌므로 자동 반영.
 
-### `src/lib/defect-parser.ts`
-- `ParseDefectResult`에 `excludedFields: Set<string>` 추가.
-- 매핑 루프(line 465~510)에서 `excludedFields.has('xxx')`인 필드는 정규화 스킵하고 `null` 할당.
+### 3. 테스트 업데이트 (`src/test/dashboard-utils.test.ts`)
 
-### `src/components/import/ColumnSelectDialog.tsx`
-- 변경 없음. 기존 `excludedHeaders` 흐름 그대로 사용.
+기존 두 케이스의 기대값을 새 정의에 맞춰 수정:
+- "counts Today Delay only for items planned today and not done": `t1.dataDateDelay` 기대값 `1` → `0`
+- "keeps Today Delay at zero when Today Plan is zero": `t1.dataDateDelay` 기대값 `2` → `0`
+
+사용자 시나리오를 그대로 반영하는 신규 케이스 추가:
+- T2 plan 2026-04-24 (open) + T2 plan 2026-04-25 (open), dataDate = 2026-04-25
+- 기대: `t2.dataDatePlan === 1`, `t2.dataDateActual === 0`, `t2.dataDateDelay === 1`
+- 즉, Delay 값이 `|Δ|` 와 일치하고, dataDate 이전 plan(04-24)은 카운트되지 않음.
+
+### 4. 적용 범위
+
+사용자가 명시한 **T&C(Schedule) 대시보드만** 변경합니다. `Defect Dashboard`(`src/pages/DefectDashboardPage.tsx`, `src/lib/defect-dashboard-utils.ts`)와 관련 엑셀 export는 기존 누적 정의를 유지합니다.
+
+## 영향 받는 파일
+
+- `src/lib/dashboard-utils.ts` — `dataDateDelay` 계산식 변경
+- `src/pages/DashboardPage.tsx` — Data Date Delay 셀 클릭 파라미터 `delayAsOf` → `delayOn`
+- `src/test/dashboard-utils.test.ts` — 기대값 수정 + 신규 케이스 추가
 
 ## 검증
 
-1. 2,000행 / 4컬럼 매핑 vs 32컬럼 매핑 처리 시간 비교 → 4컬럼 매핑이 명확히 빨라야 함(개선 후 50% 이상 단축 기대).
-2. 2,000행 전체 매핑도 절대 시간이 큰 폭(예상 5~10배) 단축.
-3. row_logs, schedule_change_audit, daily_snapshots 레코드 수가 기존과 동일(누락 없음).
-4. 부분 컬럼만 매핑 시: 매핑 안 된 필드의 audit이 생성되지 않아야 함(불필요한 audit 노이즈 제거).
-5. Re-import / 신규 import 양쪽 모두 정상 동작.
-6. 진행률 바가 청크 단위(2,000행이면 5~10번)로만 업데이트되어 UI 끊김 없음.
-
-## 리스크
-
-- 일괄 insert 도중 1행 실패 시 청크 전체 롤백 정책 필요 → Supabase는 기본적으로 청크 단위 트랜잭션 아님. 실패 행만 row_logs에 reason='batch_error'로 기록하고 나머지는 진행하는 graceful 처리 추가.
-- update 병렬화 동시성은 10 이하로 제한(Supabase rate limit 회피).
+- `bunx vitest run`으로 전체 테스트 통과 확인
+- 사용자 예시(BMS-039 / BMS-040)를 가진 데이터에서 Data Date(2026-04-25) Delay 값이 1로 표시되고, 클릭 시 BMS-040만 보이는지 확인
+- Data Date Δ가 음수인 모든 행에서 `Delay == |Δ|`가 성립하는지 확인
