@@ -841,6 +841,12 @@ export default function DefectRawDataPage() {
       const dateField = searchParams.get('dateField');
       out.push({ label: `${dateField ? getLabel(dateField) : 'Date'} ${from || ''}${from && to ? ' → ' : ''}${to || ''}`, param: 'dateStart', clears: ['dateStart', 'dateEnd', 'dateField'] });
     }
+    const dueOn = searchParams.get('dueOn');
+    if (dueOn) {
+      const stage = searchParams.get('stage');
+      const stageLabel = stage === 'completion' ? 'Completion' : stage === 'closure' ? 'Closure' : stage === 'start' ? 'Start' : 'Stage';
+      out.push({ label: `${stageLabel} due ${dueOn} (open)`, param: 'dueOn', clears: ['dueOn', 'stage'] });
+    }
     return out;
   }, [searchParams, getLabel]);
 
