@@ -16,6 +16,7 @@ export type { IssueAssignment } from '@/contexts/DefectImportContext';
 const statusBadge: Record<DefectFileStatus, { label: string; cls: string }> = {
   pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
   parsing: { label: 'Parsing', cls: 'bg-muted text-muted-foreground' },
+  pending_sheet_selection: { label: 'Select Sheet', cls: 'bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-200' },
   ready: { label: 'Ready', cls: 'bg-primary/10 text-primary' },
   processing: { label: 'Processing', cls: 'bg-muted text-muted-foreground' },
   done: { label: 'Done', cls: 'bg-primary/10 text-primary' },
@@ -39,6 +40,7 @@ export default function DefectImportPage() {
     removeFile,
     clearAll,
     setFileDataDate,
+    setFileSheet,
     startImport,
     setDecisionAction,
     confirmSimilarDecisions,
