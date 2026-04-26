@@ -1022,6 +1022,12 @@ function PlanActualTable({
                 delayOn: 't2_delay_on',
                 actualUnplannedOn: 't2_actual_unplanned_on',
               },
+              {
+                stage: 'r1', label: 'R1', metrics: r.r1,
+              },
+              {
+                stage: 'r2', label: 'R2', metrics: r.r2,
+              },
             ];
 
             return stages.map((st, i) => {
