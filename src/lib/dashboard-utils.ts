@@ -1,4 +1,4 @@
-import type { TcStatus } from '@/types/enums';
+import type { TcStatus, ReportStatus } from '@/types/enums';
 import {
   daysBetween,
   getMaxDelayDaysAsOf,
@@ -12,6 +12,7 @@ import {
   isStagePlannedOn,
   isStagePlannedUpTo,
   todayIso,
+  type StageKey,
 } from '@/lib/stage-metrics';
 
 export interface SubtestForDashboard {
@@ -33,6 +34,16 @@ export interface SubtestForDashboard {
   pred_actual_date?: string | null;
   predecessor_status_raw?: string | null;
   team?: string | null;
+  // R1 — Subcontractor → HDEC
+  r1_status?: ReportStatus | null;
+  r1_target_submission_date?: string | null;
+  r1_actual_submission_date?: string | null;
+  // R2 — HDEC → Client (final approval)
+  r2_status?: ReportStatus | null;
+  r2_target_submission_date?: string | null;
+  r2_actual_submission_date?: string | null;
+  r2_target_approval_date?: string | null;
+  r2_actual_approval_date?: string | null;
 }
 
 export const NONE_LABEL = '(None)';
