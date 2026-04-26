@@ -31,6 +31,8 @@ import DefectImportLogsPage from "./pages/DefectImportLogsPage";
 import DefectExportPage from "./pages/DefectExportPage";
 import DefectQuickUpdatePage from "./pages/DefectQuickUpdatePage";
 import DefectScheduleRevisionPage from "./pages/DefectScheduleRevisionPage";
+import AllSubtestCommentsPage from "./pages/AllSubtestCommentsPage";
+import AllDefectCommentsPage from "./pages/AllDefectCommentsPage";
 
 const queryClient = new QueryClient();
 
@@ -87,6 +89,8 @@ const App = () => (
                 <Route path="/defect/export" element={<RedirectPreserveSearch to="/defects/export" />} />
                 <Route path="/defect/quick-update" element={<RedirectPreserveSearch to="/defects/quick-update" />} />
                 <Route path="/defects/:id" element={<DefectDetailPage />} />
+                <Route path="/comments/subtest" element={<AllSubtestCommentsPage />} />
+                <Route path="/comments/defect" element={<AllDefectCommentsPage />} />
                 <Route path="/admin" element={<AdminPage />} />
                 <Route path="/admin/classification" element={<AdminClassificationPage />} />
               </Route>
