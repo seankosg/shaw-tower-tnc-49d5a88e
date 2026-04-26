@@ -1323,7 +1323,7 @@ function SubtestTableView({
 
   const renderRowBgClass = (r: SubtestRow) => {
     // Match active Overdue scope (Pred/T1/T2 default, or all 5 stages when scope=all).
-    const stages: StageKey[] = urlScope === 'all'
+    const stages: StageKey[] = overdueScope === 'all'
       ? ['pred', 't1', 't2', 'r1', 'r2']
       : ['pred', 't1', 't2'];
     const delayed = getAnyStageDelayedAsOf(r, stages, delayAsOfDate);
