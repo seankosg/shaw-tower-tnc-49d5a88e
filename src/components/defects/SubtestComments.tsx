@@ -84,9 +84,20 @@ export function SubtestComments({
   const [message, setMessage] = useState('');
   const [commentType, setCommentType] = useState<Exclude<CommentType, 'reply'>>('comment');
   const [sending, setSending] = useState(false);
-  const [replyTo, setReplyTo] = useState<{ id: string; authorId: string; authorName: string; message: string } | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: string; authorId: string; authorName: string; message: string; recipients: string[] } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState('');
+  const [recipients, setRecipients] = useState<RecipientKey[]>([]);
+
+  const recipientNames = useMemo(
+    () => ({
+      hdec_pic: hdecPicName ?? null,
+      hdec_eng: hdecEngName ?? null,
+      subcontractor: subcontractorName ?? null,
+      subsub: subsubName ?? null,
+    }),
+    [hdecPicName, hdecEngName, subcontractorName, subsubName],
+  );
 
   useEffect(() => {
     onCountChange?.(comments.length);
