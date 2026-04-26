@@ -17,7 +17,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { todayIso, yesterdayIso, type SubtestForDashboard } from '@/lib/dashboard-utils';
 import { formatDdMmm } from '@/lib/format';
-import { getStageKeys, isStageActualUpTo, isStageDelayedAsOf, isStagePlannedOn, isStagePlannedUpTo } from '@/lib/stage-metrics';
+import { ALL_STAGE_KEYS, getStageKeys, isStageActualUpTo, isStageDelayedAsOf, isStagePlannedOn, isStagePlannedUpTo } from '@/lib/stage-metrics';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   aggregateSchedule, findCritical, findLaggingGroups, addDays,
   type ScheduleBucket, type ScheduleGroupBy, type ScheduleStageFilter,
