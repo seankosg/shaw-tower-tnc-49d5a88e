@@ -448,6 +448,13 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
   // Safety: never drop headers that map to `issue_no` (PK / row-detection trigger),
   // even if the caller mistakenly excluded them.
   const excludedSet = new Set((excludedHeaders ?? []).filter((h) => toFieldName(h) !== 'issue_no'));
+  // Build the set of canonical field names that are excluded (for the importer
+  // to skip change-detection / audit work on those fields).
+  const excludedFields = new Set<string>();
+  for (const h of excludedSet) {
+    const f = toFieldName(h);
+    if (f) excludedFields.add(f);
+  }
   if (excludedSet.size > 0) {
     rawRows = rawRows.map((raw) => {
       const next: Record<string, unknown> = {};
