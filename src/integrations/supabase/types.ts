@@ -181,6 +181,7 @@ export type Database = {
           id: string
           message: string
           parent_comment_id: string | null
+          recipients: string[]
           type: string
           updated_at: string
         }
@@ -192,6 +193,7 @@ export type Database = {
           id?: string
           message: string
           parent_comment_id?: string | null
+          recipients?: string[]
           type?: string
           updated_at?: string
         }
@@ -203,6 +205,7 @@ export type Database = {
           id?: string
           message?: string
           parent_comment_id?: string | null
+          recipients?: string[]
           type?: string
           updated_at?: string
         }
@@ -1131,7 +1134,15 @@ export type Database = {
           subtest_id?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "subtest_comment_reads_subtest_id_fkey"
+            columns: ["subtest_id"]
+            isOneToOne: false
+            referencedRelation: "subtests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subtest_comments: {
         Row: {
@@ -1141,6 +1152,7 @@ export type Database = {
           id: string
           message: string
           parent_comment_id: string | null
+          recipients: string[]
           subtest_id: string
           type: string
           updated_at: string
@@ -1152,6 +1164,7 @@ export type Database = {
           id?: string
           message: string
           parent_comment_id?: string | null
+          recipients?: string[]
           subtest_id: string
           type?: string
           updated_at?: string
@@ -1163,11 +1176,27 @@ export type Database = {
           id?: string
           message?: string
           parent_comment_id?: string | null
+          recipients?: string[]
           subtest_id?: string
           type?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "subtest_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "subtest_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subtest_comments_subtest_id_fkey"
+            columns: ["subtest_id"]
+            isOneToOne: false
+            referencedRelation: "subtests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subtests: {
         Row: {
