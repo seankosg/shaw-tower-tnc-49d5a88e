@@ -852,7 +852,8 @@ export default function SubtestList() {
       if (urlStatusFilter) {
         const overdue = getAnyStageDelayedAsOf(r, getStageKeys('all'), delayAsOfDate);
         if (urlStatusFilter === 'overdue' && !overdue) return false;
-        if (urlStatusFilter === 'remaining' && r.t2_status === 'Done') return false;
+        // 5-stage workflow: final completion = R2 Approved
+        if (urlStatusFilter === 'remaining' && isStageDone(r, 'r2')) return false;
         if (urlStatusFilter === 'at_risk') {
           if (overdue) return false;
           const within = (stage: StageKey) => {
@@ -861,9 +862,10 @@ export default function SubtestList() {
             const d = daysFromToday(planned);
             return d >= 0 && d <= urlAtRiskDays;
           };
-          if (!within('pred') && !within('t1') && !within('t2')) return false;
+          if (!getStageKeys('all').some(within)) return false;
         }
       }
+      // Pred/T1/T2 cell-link filters
       if (urlPredPlannedTo && !(r.pred_planned_date && r.pred_planned_date <= urlPredPlannedTo)) return false;
       if (urlT1PlannedTo && !(r.t1_planned_date && r.t1_planned_date <= urlT1PlannedTo)) return false;
       if (urlT2PlannedTo && !(r.t2_planned_date && r.t2_planned_date <= urlT2PlannedTo)) return false;
@@ -885,6 +887,44 @@ export default function SubtestList() {
       if (urlPredActualUnplannedOn && !(r.pred_actual_date === urlPredActualUnplannedOn && r.pred_planned_date !== urlPredActualUnplannedOn)) return false;
       if (urlT1ActualUnplannedOn && !(r.t1_actual_date === urlT1ActualUnplannedOn && r.t1_planned_date !== urlT1ActualUnplannedOn)) return false;
       if (urlT2ActualUnplannedOn && !(r.t2_actual_date === urlT2ActualUnplannedOn && r.t2_planned_date !== urlT2ActualUnplannedOn)) return false;
+
+      // R1 cell-link filters (planned = r1_target_submission_date, actual = r1_actual_submission_date)
+      if (urlR1PlannedTo) {
+        const p = getStagePlannedDate(r, 'r1');
+        if (!(p && p <= urlR1PlannedTo)) return false;
+      }
+      if (urlR1ActualTo) {
+        const a = getStageActualDate(r, 'r1');
+        if (!(a && a <= urlR1ActualTo)) return false;
+      }
+      if (urlR1PlannedOn && getStagePlannedDate(r, 'r1') !== urlR1PlannedOn) return false;
+      if (urlR1ActualOn && getStageActualDate(r, 'r1') !== urlR1ActualOn) return false;
+      if (urlR1DelayAsOf && !isStageDelayedAsOf(r, 'r1', urlR1DelayAsOf)) return false;
+      if (urlR1DelayOn && !(getStagePlannedDate(r, 'r1') === urlR1DelayOn && !isStageDone(r, 'r1'))) return false;
+      if (urlR1ActualUnplannedOn) {
+        const a = getStageActualDate(r, 'r1');
+        const p = getStagePlannedDate(r, 'r1');
+        if (!(a === urlR1ActualUnplannedOn && p !== urlR1ActualUnplannedOn)) return false;
+      }
+
+      // R2 cell-link filters (planned = r2_target_approval_date, actual = r2_actual_approval_date)
+      if (urlR2PlannedTo) {
+        const p = getStagePlannedDate(r, 'r2');
+        if (!(p && p <= urlR2PlannedTo)) return false;
+      }
+      if (urlR2ActualTo) {
+        const a = getStageActualDate(r, 'r2');
+        if (!(a && a <= urlR2ActualTo)) return false;
+      }
+      if (urlR2PlannedOn && getStagePlannedDate(r, 'r2') !== urlR2PlannedOn) return false;
+      if (urlR2ActualOn && getStageActualDate(r, 'r2') !== urlR2ActualOn) return false;
+      if (urlR2DelayAsOf && !isStageDelayedAsOf(r, 'r2', urlR2DelayAsOf)) return false;
+      if (urlR2DelayOn && !(getStagePlannedDate(r, 'r2') === urlR2DelayOn && !isStageDone(r, 'r2'))) return false;
+      if (urlR2ActualUnplannedOn) {
+        const a = getStageActualDate(r, 'r2');
+        const p = getStagePlannedDate(r, 'r2');
+        if (!(a === urlR2ActualUnplannedOn && p !== urlR2ActualUnplannedOn)) return false;
+      }
 
       if (urlDateFrom || urlDateTo) {
         const stages: Array<'pred' | 't1' | 't2'> = urlStage ? [urlStage] : ['pred', 't1', 't2'];
@@ -909,6 +949,10 @@ export default function SubtestList() {
       urlPredPlannedOn, urlT1PlannedOn, urlT2PlannedOn, urlPredActualOn, urlT1ActualOn, urlT2ActualOn,
       urlPredDelayAsOf, urlT1DelayAsOf, urlT2DelayAsOf, urlPredDelayOn, urlT1DelayOn, urlT2DelayOn,
       urlPredActualUnplannedOn, urlT1ActualUnplannedOn, urlT2ActualUnplannedOn,
+      urlR1PlannedTo, urlR2PlannedTo, urlR1ActualTo, urlR2ActualTo,
+      urlR1PlannedOn, urlR2PlannedOn, urlR1ActualOn, urlR2ActualOn,
+      urlR1DelayAsOf, urlR2DelayAsOf, urlR1DelayOn, urlR2DelayOn,
+      urlR1ActualUnplannedOn, urlR2ActualUnplannedOn,
       urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, delayAsOfDate, localToday]);
 
   const columnIdToFieldName: Record<string, string> = {
