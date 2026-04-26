@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
+import { daysDiff, getDefectExcelSheetNames, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
 import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, suggestOwnerCode } from '@/lib/defect-utils';
 import { isValidDefectStatus, reconcileClosureCompletion } from '@/lib/defect-status';
@@ -50,7 +50,7 @@ function preserveExistingForBlank(row: ParsedDefectRow, existing: any | null): v
   }
 }
 
-export type DefectFileStatus = 'pending' | 'parsing' | 'ready' | 'processing' | 'done' | 'failed';
+export type DefectFileStatus = 'pending' | 'parsing' | 'pending_sheet_selection' | 'ready' | 'processing' | 'done' | 'failed';
 
 export interface DefectImportFile {
   id: string;
@@ -67,6 +67,10 @@ export interface DefectImportFile {
   /** True when the parsed file carries the SHAW_DEFECT_REIMPORT_V1 marker.
    *  In that case the importer runs in update-only mode and never inserts new rows. */
   isReimport?: boolean;
+  /** All sheet names in the workbook. Set when 2+ sheets exist. */
+  sheetNames?: string[];
+  /** Currently selected sheet (set after user picks, or auto-set when only 1 sheet). */
+  selectedSheet?: string;
   result?: { inserted: number; updated: number; skipped: number; rejected: number; teamUnresolved: number; classifiedRule: number; classifiedDiscipline: number; unclassified: number };
 }
 
@@ -294,6 +298,7 @@ interface DefectImportContextValue {
   removeFile: (id: string) => void;
   clearAll: () => void;
   setFileDataDate: (id: string, dataDate: string) => void;
+  setFileSheet: (id: string, sheetName: string) => Promise<void>;
   startImport: () => Promise<void>;
   setDecisionAction: (key: string, action: SimilarDecisionAction) => void;
   confirmSimilarDecisions: () => Promise<void>;
@@ -317,6 +322,25 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
   const [pendingImportFiles, setPendingImportFiles] = useState<DefectImportFile[] | null>(null);
   const [confirmedDecisions, setConfirmedDecisions] = useState<MasterNameDecisions>({});
 
+  /** Parse a defect file (optionally with explicit sheet) and update file state. */
+  const parseAndApply = useCallback(async (id: string, file: File, sheetName?: string) => {
+    try {
+      const parsed = await parseDefectExcel(file, sheetName);
+      setFiles((current) => current.map((f) => f.id === id ? {
+        ...f,
+        status: 'ready',
+        parsed: parsed.rows,
+        parsedCount: parsed.rows.length,
+        headerCount: parsed.headers.length,
+        isReimport: parsed.isReimport,
+        selectedSheet: parsed.sheetName ?? sheetName,
+        error: undefined,
+      } : f));
+    } catch (error) {
+      setFiles((current) => current.map((f) => f.id === id ? { ...f, status: 'failed', error: error instanceof Error ? error.message : 'Parse failed' } : f));
+    }
+  }, []);
+
   const addFiles = useCallback(async (selected: File[]) => {
     const excelFiles = selected.filter((file) => /\.(xlsx|xls)$/i.test(file.name));
     const nextFiles: DefectImportFile[] = excelFiles.map((file) => ({
@@ -333,25 +357,35 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
 
     for (const item of nextFiles) {
       try {
-        const parsed = await parseDefectExcel(item.file);
-        setFiles((current) => current.map((file) => file.id === item.id ? {
-          ...file,
-          status: 'ready',
-          parsed: parsed.rows,
-          parsedCount: parsed.rows.length,
-          headerCount: parsed.headers.length,
-          isReimport: parsed.isReimport,
-          error: undefined,
-        } : file));
+        const sheetNames = await getDefectExcelSheetNames(item.file);
+        setFiles((current) => current.map((f) => f.id === item.id ? { ...f, sheetNames } : f));
+
+        if (sheetNames.length > 1) {
+          // Multiple sheets — wait for user to pick one
+          setFiles((current) => current.map((f) => f.id === item.id ? { ...f, status: 'pending_sheet_selection' } : f));
+          continue;
+        }
+        // 0 or 1 sheet — auto-detect (legacy behavior)
+        await parseAndApply(item.id, item.file);
       } catch (error) {
-        setFiles((current) => current.map((file) => file.id === item.id ? { ...file, status: 'failed', error: error instanceof Error ? error.message : 'Parse failed' } : file));
+        setFiles((current) => current.map((f) => f.id === item.id ? { ...f, status: 'failed', error: error instanceof Error ? error.message : 'Parse failed' } : f));
       }
     }
-  }, []);
+  }, [parseAndApply]);
 
   const removeFile = useCallback((id: string) => setFiles((current) => current.filter((file) => file.id !== id)), []);
   const clearAll = useCallback(() => setFiles([]), []);
   const setFileDataDate = useCallback((id: string, dataDate: string) => setFiles((current) => current.map((file) => file.id === id ? { ...file, dataDate } : file)), []);
+
+  const setFileSheet = useCallback(async (id: string, sheetName: string) => {
+    let target: DefectImportFile | undefined;
+    setFiles((current) => {
+      target = current.find((f) => f.id === id);
+      return current.map((f) => f.id === id ? { ...f, status: 'parsing', selectedSheet: sheetName } : f);
+    });
+    if (!target) return;
+    await parseAndApply(id, target.file, sheetName);
+  }, [parseAndApply]);
 
   const applyMasterDecisions = (row: ParsedDefectRow, decisions: MasterNameDecisions): ParsedDefectRow => {
     const subKey = `sub:${masterNameKey(row.subcontractor_name)}`;
@@ -811,6 +845,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         removeFile,
         clearAll,
         setFileDataDate,
+        setFileSheet,
         startImport,
         setDecisionAction,
         confirmSimilarDecisions,
