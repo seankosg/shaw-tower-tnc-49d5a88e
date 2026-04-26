@@ -555,6 +555,10 @@ export default function SubtestDetailPage() {
             <SubtestComments
               subtestId={record.id}
               subtestTeam={(record as any).team ?? null}
+              hdecPicName={(record as any).hdec_pic_name ?? null}
+              hdecEngName={(record as any).hdec_eng_name ?? null}
+              subcontractorName={(record as any).subcontractor_name ?? null}
+              subsubName={(record as any).subsub_name ?? null}
               onCountChange={setCommentCount}
             />
           </CardContent>

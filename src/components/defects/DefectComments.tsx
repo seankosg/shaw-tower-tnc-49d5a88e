@@ -12,6 +12,9 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { containsKorean } from '@/hooks/useTranslateToEnglish';
 import { TranslatePanel } from '@/components/comments/TranslatePanel';
+import { RecipientSelector, RecipientBadges, RECIPIENT_ORDER, type RecipientKey } from '@/components/comments/RecipientSelector';
+
+const RECIPIENT_KEYS = new Set<string>(RECIPIENT_ORDER);
 
 type CommentType = 'comment' | 'instruction' | 'reply';
 
@@ -23,6 +26,7 @@ interface DefectComment {
   type: CommentType;
   message: string;
   edited: boolean;
+  recipients: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -36,10 +40,22 @@ interface AuthorInfo {
 interface DefectCommentsProps {
   defectId: string;
   defectTeam: string | null;
+  hdecPicName?: string | null;
+  hdecEngName?: string | null;
+  subcontractorName?: string | null;
+  subsubName?: string | null;
   onCountChange?: (count: number) => void;
 }
 
-export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCommentsProps) {
+export function DefectComments({
+  defectId,
+  defectTeam,
+  hdecPicName,
+  hdecEngName,
+  subcontractorName,
+  subsubName,
+  onCountChange,
+}: DefectCommentsProps) {
   const { user, profile, isAdmin, isSuperuser, roles } = useAuth();
   const { toast } = useToast();
   const isSenior = roles.includes('senior_user');
@@ -71,9 +87,20 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
   const [message, setMessage] = useState('');
   const [commentType, setCommentType] = useState<Exclude<CommentType, 'reply'>>('comment');
   const [sending, setSending] = useState(false);
-  const [replyTo, setReplyTo] = useState<{ id: string; authorId: string; authorName: string; message: string } | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: string; authorId: string; authorName: string; message: string; recipients: string[] } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState('');
+  const [recipients, setRecipients] = useState<RecipientKey[]>([]);
+
+  const recipientNames = useMemo(
+    () => ({
+      hdec_pic: hdecPicName ?? null,
+      hdec_eng: hdecEngName ?? null,
+      subcontractor: subcontractorName ?? null,
+      subsub: subsubName ?? null,
+    }),
+    [hdecPicName, hdecEngName, subcontractorName, subsubName],
+  );
 
   // Notify parent of count change
   useEffect(() => {
@@ -174,8 +201,11 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
       authorId: c.author_user_id,
       authorName: getAuthorName(c.author_user_id),
       message: c.message,
+      recipients: c.recipients ?? [],
     });
+    setRecipients(((c.recipients ?? []) as RecipientKey[]).filter((r) => RECIPIENT_KEYS.has(r)));
   };
+
 
   const handleEdit = (c: DefectComment) => {
     setEditingId(c.id);
@@ -223,6 +253,10 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
 
   const persistNew = async (finalMessage: string) => {
     if (!finalMessage.trim() || !user) return;
+    if (recipients.length === 0) {
+      toast({ title: 'Recipient required', description: 'Select at least one recipient (To).', variant: 'destructive' });
+      return;
+    }
     setSending(true);
     try {
       const isReply = !!replyTo;
@@ -233,10 +267,12 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
         parent_comment_id: replyTo?.id ?? null,
         type: finalType,
         message: finalMessage.trim(),
+        recipients,
       });
       if (error) throw error;
       setMessage('');
       setReplyTo(null);
+      setRecipients([]);
       setShowNewTranslate(false);
       fetchComments();
     } catch (err: any) {
@@ -248,6 +284,10 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
 
   const handleSend = async () => {
     if (!message.trim() || !user) return;
+    if (recipients.length === 0) {
+      toast({ title: 'Recipient required', description: 'Select at least one recipient (To).', variant: 'destructive' });
+      return;
+    }
     if (isHdec && containsKorean(message)) {
       setShowNewTranslate(true);
       return;
@@ -352,12 +392,15 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
         ) : (
           <>
             <p className="text-sm whitespace-pre-wrap break-words text-foreground">{c.message}</p>
-            <button
-              onClick={() => handleReply(c)}
-              className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Reply className="h-3 w-3" /> Reply
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <RecipientBadges recipients={c.recipients} />
+              <button
+                onClick={() => handleReply(c)}
+                className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors ml-auto"
+              >
+                <Reply className="h-3 w-3" /> Reply
+              </button>
+            </div>
           </>
         )}
       </div>
@@ -401,13 +444,19 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
             {': '}
             {replyTo.message.substring(0, 60)}{replyTo.message.length > 60 ? '…' : ''}
           </span>
-          <button onClick={() => setReplyTo(null)} className="ml-auto shrink-0 hover:text-foreground text-muted-foreground" aria-label="Cancel reply">
+          <button onClick={() => { setReplyTo(null); setRecipients([]); }} className="ml-auto shrink-0 hover:text-foreground text-muted-foreground" aria-label="Cancel reply">
             <X className="h-3 w-3" />
           </button>
         </div>
       )}
 
       <div className="space-y-2">
+        <RecipientSelector
+          names={recipientNames}
+          value={recipients}
+          onChange={setRecipients}
+          disabled={!user || showNewTranslate}
+        />
         <div className="flex gap-2 items-end">
           {canPostInstruction && !replyTo && (
             <Select value={commentType} onValueChange={(v) => setCommentType(v as any)}>
@@ -446,8 +495,9 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
             <Button
               size="icon"
               onClick={handleSend}
-              disabled={sending || !message.trim() || !user || showNewTranslate}
+              disabled={sending || !message.trim() || !user || showNewTranslate || recipients.length === 0}
               className="shrink-0 h-9 w-9"
+              title={recipients.length === 0 ? 'Select at least one recipient' : undefined}
             >
               <Send className="h-3.5 w-3.5" />
             </Button>
