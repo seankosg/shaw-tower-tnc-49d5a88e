@@ -1094,7 +1094,16 @@ function PlanActualTable({
                     <ClickNum value={m.todayActual} onClick={st.actualOn ? () => go(r.key, { [st.actualOn!]: today }) : undefined} />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5">
-                    <VarianceCell value={todayD} />
+                    <ClickVariance
+                      value={todayD}
+                      onClick={
+                        todayD < 0 && st.delayOn
+                          ? () => go(r.key, { [st.delayOn!]: today })
+                          : todayD > 0 && st.actualUnplannedOn
+                            ? () => go(r.key, { [st.actualUnplannedOn!]: today })
+                            : undefined
+                      }
+                    />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5 font-semibold text-destructive">
                     <ClickNum value={m.todayDelay} hideZero onClick={st.delayOn ? () => go(r.key, { [st.delayOn!]: today }) : undefined} />
