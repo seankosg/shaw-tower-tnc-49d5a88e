@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SuggestField } from '@/components/ui/suggest-field';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { MessageSquare } from 'lucide-react';
 import { DefectComments } from '@/components/defects/DefectComments';
 import { useAuth } from '@/contexts/AuthContext';
@@ -52,7 +53,7 @@ export default function DefectDetailPage() {
   const [hdecEngOptions, setHdecEngOptions] = useState<HdecMaster[]>([]);
   const [suggestPool, setSuggestPool] = useState<{ area_level: string[]; area_location: string[]; main_trade: string[]; sub_trade: string[]; work_type: string[] }>({ area_level: [], area_location: [], main_trade: [], sub_trade: [], work_type: [] });
   const [commentCount, setCommentCount] = useState(0);
-  const { isFieldVisible, isFieldRequired, getLabel } = useDefectFieldConfig();
+  const { isFieldVisible, isFieldRequired, getLabel, getRawPayloadFieldsForDisplay } = useDefectFieldConfig();
 
   const loadScHistory = async (defectId: string) => {
     const res = await (supabase as any)
@@ -390,7 +391,29 @@ export default function DefectDetailPage() {
     });
   };
 
-  const rawEntries = useMemo(() => Object.entries(record?.raw_payload ?? {}).slice(0, 80), [record]);
+  // Raw payload entries to render: prefer Admin-managed `payload_*` field config rows
+  // (each carrying the original Excel header to look up), and fall back to the
+  // legacy "all keys, sliced to 80" mode when no payload_* rows are configured.
+  const rawPayloadConfig = getRawPayloadFieldsForDisplay();
+  const rawEntries = useMemo(() => {
+    const payload = (record?.raw_payload ?? {}) as Record<string, unknown>;
+    if (rawPayloadConfig.length > 0) {
+      return rawPayloadConfig
+        .map((cfg) => {
+          const header = cfg.original_header ?? '';
+          const value = header in payload ? payload[header] : undefined;
+          return { key: header, label: cfg.display_name, value, configured: true };
+        })
+        .filter((entry) => entry.value !== undefined && entry.value !== null && entry.value !== '');
+    }
+    return Object.entries(payload).slice(0, 80).map(([k, v]) => ({
+      key: k,
+      label: k.replace(/\s*\(H\)\s*$/i, ''),
+      value: v,
+      configured: false,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record, rawPayloadConfig.length]);
 
   // Master-driven dropdown options. Preserve legacy values that aren't in master.
   const subOptionsList = useMemo(() => {
@@ -494,7 +517,40 @@ export default function DefectDetailPage() {
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Description</label><Textarea value={String(form.description ?? '')} disabled={!canEdit} onChange={(e) => updateField('description', e.target.value)} /></div>
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Remarks</label><Textarea value={String(form.remarks ?? '')} disabled={!canEdit} onChange={(e) => updateField('remarks', e.target.value)} /></div>
       </CardContent></Card>
-      <Card><CardHeader><CardTitle>Raw Payload</CardTitle></CardHeader><CardContent><div className="grid gap-2 md:grid-cols-2"><div className="rounded-md border p-2 text-xs"><div className="text-muted-foreground">Subcon Issue Source</div><div className="font-medium">{String(form.subcontractor_issue_source || '—')}</div></div>{rawEntries.filter(([k]) => !isRawAlias(k, ['Issue Description', 'IssueDescription', 'Item Description', 'Description'])).map(([k, v]) => <div key={k} className="rounded-md border p-2 text-xs"><div className="text-muted-foreground">{k.replace(/\s*\(H\)\s*$/i, '')}</div><div className="font-medium">{String(v || '—')}</div></div>)}</div></CardContent></Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            Raw Payload
+            <Badge variant="outline" className="bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100 text-[10px] px-1.5 py-0 font-normal">
+              Aconex
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2 md:grid-cols-2">
+            <div className="rounded-md border p-2 text-xs">
+              <div className="text-muted-foreground flex items-center gap-1">
+                Subcon Issue Source
+                <Badge variant="outline" className="bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200 text-[9px] px-1 py-0 font-normal">System</Badge>
+              </div>
+              <div className="font-medium">{String(form.subcontractor_issue_source || '—')}</div>
+            </div>
+            {rawEntries
+              .filter((entry) => entry.configured || !isRawAlias(entry.key, ['Issue Description', 'IssueDescription', 'Item Description', 'Description']))
+              .map((entry) => (
+                <div key={entry.key} className="rounded-md border p-2 text-xs">
+                  <div className="text-muted-foreground flex items-center gap-1">
+                    {entry.label}
+                    <Badge variant="outline" className="bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100 text-[9px] px-1 py-0 font-normal">
+                      Aconex
+                    </Badge>
+                  </div>
+                  <div className="font-medium">{String(entry.value || '—')}</div>
+                </div>
+              ))}
+          </div>
+        </CardContent>
+      </Card>
       <Card><CardHeader><CardTitle>Change History</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Field</TableHead><TableHead>Old</TableHead><TableHead>New</TableHead><TableHead>Changed At</TableHead></TableRow></TableHeader><TableBody>{logs.map((log) => <TableRow key={log.id}><TableCell>{log.changed_field}</TableCell><TableCell>{formatMaybeDate(log.old_value)}</TableCell><TableCell>{formatMaybeDate(log.new_value)}</TableCell><TableCell>{formatDateTimeDdMmmYyyy(log.changed_at)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
       <Card>
         <CardHeader><CardTitle>Subcontractor Issue No History</CardTitle></CardHeader>

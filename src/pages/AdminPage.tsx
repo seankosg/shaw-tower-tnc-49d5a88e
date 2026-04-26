@@ -1811,6 +1811,14 @@ function FieldConfigTab() {
   );
 }
 
+/** Map any legacy origin value to the canonical 3-value set. */
+function normalizeOriginValue(value: string | null | undefined): 'hdec' | 'aconex' | 'system' {
+  const v = String(value ?? '').toLowerCase();
+  if (v === 'hdec' || v === 'hdec_added') return 'hdec';
+  if (v === 'aconex' || v === 'll_original') return 'aconex';
+  return 'system'; // covers 'system', 'derived', and unknown
+}
+
 function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_config' | 'defect_field_config'; title: string; showOrigin?: boolean }) {
   const { toast } = useToast();
   const [fields, setFields] = useState<FieldCfg[]>([]);
@@ -1850,6 +1858,13 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
     if (!value || value === f.display_name) return;
     await (supabase as any).from(table).update({ display_name: value }).eq('id', f.id);
     toast({ title: 'Display name updated' });
+    load();
+  };
+
+  const updateOrigin = async (f: FieldCfg, origin: 'hdec' | 'aconex' | 'system') => {
+    if (origin === f.source_origin) return;
+    await (supabase as any).from(table).update({ source_origin: origin }).eq('id', f.id);
+    toast({ title: 'Origin updated' });
     load();
   };
 
@@ -1945,7 +1960,28 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
                   </TableCell>
                   <TableCell className="font-mono text-xs">{f.field_name}</TableCell>
                   <TableCell><Input className="h-8 min-w-[180px]" defaultValue={f.display_name} onBlur={(e) => updateName(f, e.target.value)} /></TableCell>
-                  {showOrigin && <TableCell className="text-xs text-muted-foreground">{f.source_origin ?? 'system'}{f.original_header ? ` · ${f.original_header}` : ''}</TableCell>}
+                  {showOrigin && (
+                    <TableCell className="text-xs">
+                      <Select
+                        value={normalizeOriginValue(f.source_origin)}
+                        onValueChange={(v) => updateOrigin(f, v as 'hdec' | 'aconex' | 'system')}
+                      >
+                        <SelectTrigger className="h-8 w-[110px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="hdec">HDEC</SelectItem>
+                          <SelectItem value="aconex">Aconex</SelectItem>
+                          <SelectItem value="system">System</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {f.original_header && (
+                        <div className="mt-1 text-[10px] text-muted-foreground truncate max-w-[140px]" title={f.original_header}>
+                          {f.original_header}
+                        </div>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="text-center">
                     <Switch checked={f.is_enabled} onCheckedChange={() => toggle(f, 'is_enabled')} />
                   </TableCell>

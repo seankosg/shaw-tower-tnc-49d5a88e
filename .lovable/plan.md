@@ -1,68 +1,94 @@
 ## 목표
 
-대시보드 "Recent Comments" 카드와 "모두 보기" 페이지에서:
-1. 기존에 기록된 모든 댓글이 누락 없이 표시되도록 보완
-2. **Reply는 부모 코멘트 아래에 묶어 스레드 형태로 표시**
-3. 권한이 없어 부모 항목(서브테스트/디팩트)을 못 보는 댓글은 표시하되 클릭 비활성화
+Defect 필드의 출처(Origin)를 **HDEC / Aconex / System** 3가지로 재분류하고, Admin 탭에서 드롭다운으로 수정 가능하게 합니다. 또한 raw_payload로만 들어오는 Aconex 원본 필드들도 `defect_field_config`에 등록하여 관리·표시합니다.
 
-현재 DB 상태:
-- `subtest_comments`: 39건 (전부 30일 이내)
-- `defect_comments`: 0건 (정상 — 아직 등록된 게 없음)
+---
 
-## 변경 사항
+## 1. Origin 분류 체계
 
-### 1. RecentSubtestComments / RecentDefectComments 컴포넌트 보완
+### 라벨 체계
+- `'hdec'` → **HDEC**
+- `'aconex'` → **Aconex**
+- `'system'` → **System**
 
-**조인 방식 변경**
-- `subtests!inner` → `subtests` (left join)
-- `defect_items!inner` → `defect_items` (left join)
-- 부모가 RLS로 가려진 행은 회색 처리 + "No access" 배지 + 클릭 비활성화
+내부 enum 값을 3개로 통일 (기존 4개 값 `ll_original`/`hdec_added`/`system`/`derived`은 데이터 마이그레이션으로 일괄 변환).
 
-**스레드 그룹핑 로직 (핵심)**
-- fetch는 윈도우(기본 30일) + limit 50 유지
-- 정렬: 부모 코멘트의 **마지막 활동 시각**(자기 자신 또는 자식 reply 중 가장 최근 `created_at`) 기준 내림차순
-- 화면 구성:
-  - 최상위 행 = `parent_comment_id IS NULL` 코멘트(comment / instruction)
-  - 같은 부모를 가진 reply들은 부모 카드 내부에 들여쓰기 + 좌측 보더로 묶여 표시
-  - reply가 3개를 넘으면 "더 보기 (N)" 토글로 접힘
-- **고아 reply 처리** (부모가 30일 윈도우 밖에 있어 안 잡힌 경우): 부모를 별도 fetch로 한 번 더 가져와 같은 스레드로 묶음. 그래도 없으면 단독 카드로 표시 + "Reply (parent unavailable)" 배지
-- 타입 배지: Instruction(빨강) / Reply(회색) / New(unread)
+### 필드별 최종 분류
 
-**카드 헤더**
-- "모두 보기" 링크 추가:
-  - Subtest → `/comments/subtest`
-  - Defect → `/comments/defect`
-- 탭(All / Instructions / Unread)은 부모 기준으로 필터링 (예: Unread = 스레드 내에 미열람 항목이 하나라도 있으면 노출)
+**HDEC** — 사용자(HDEC)가 직접 입력/관리
+- 담당자: `subcontractor_name`, `subsub_name`, `hdec_pic_name`, `hdec_eng_name`
+- 일자 6종: `planned_start_date`, `planned_completion_date`, `planned_closure_date`, `actual_start_date`, `actual_completion_date`, `actual_closure_date`
+- 진행률 입력: `actual_progress_pct`
+- 코멘트: `hdec_comments`
 
-### 2. 새 페이지: 모든 댓글 보기
+**Aconex** — LL/Aconex 원본
+- DB 매핑됨: `issue_no`, `area_raw`, `description`, `defect_type`, `priority`, `trade_detail`, `status`, `remarks`
+- raw_payload 전용 (15개 신규 등록): `Date Raised`, `Captured On`, `Captured by`, `Source`, `Listed In`, `Pinned To DocNumber`, `Doc Title`, `Date Closed`, `Due Date`, `Assigned to`, `Assigned On`, `Assigned By`, `Closed By User`, `Closed By Organization`, `Item Description`
 
-`src/pages/AllSubtestCommentsPage.tsx` (`/comments/subtest`)
-`src/pages/AllDefectCommentsPage.tsx` (`/comments/defect`)
+**System** — 시스템이 계산/판별/생성/파생
+- 계산: `planned_progress_pct`, `completion_status`, `closure_status`
+- 영역 파생: `area_type`, `area_level`, `area_location` (← `area_raw` 파싱)
+- 자동 분류 결과: `main_trade`, `sub_trade`, `work_type`, `classification_source`, `classified_at`
+- 자동 판별: `team` (subcontractor 마스터 조회)
+- 자동 생성/판별: `subcontractor_issue_no`, `subcontractor_issue_source` (`SC-{OWNER}-{SEQ}` 자동 생성)
 
-기능:
-- 기간: Last 7 / 30 / 90 / 365 / All time (기본 All time)
-- 타입 필터: All / Comment / Instruction / Reply
-- Unread 토글
-- 작성자/본문 검색
-- 페이지네이션 (50건 단위 Load more)
-- 표시 모드 토글: **"Threaded" / "Flat"** (기본 Threaded — 부모-자식 묶음)
-- 행 클릭 시 상세 페이지로 이동 (권한 없으면 비활성)
+---
 
-### 3. 라우팅 등록
+## 2. DB 변경
 
-`src/App.tsx`에 두 라우트 추가 (기존 ProtectedRoute 패턴 사용).
+### A. 기존 행 일괄 업데이트 (`defect_field_config.source_origin`)
+위 분류표대로 모든 행의 `source_origin`을 `'aconex' | 'hdec' | 'system'` 3개 값으로 일괄 변환.
 
-## 기술 노트
+### B. raw_payload 전용 Aconex 필드 신규 등록 (15개 INSERT)
+- `field_name`: `payload_` 접두사 + snake_case (예: `payload_date_raised`)
+- `display_name`: 원본 헤더 그대로 (예: "Date Raised")
+- `original_header`: 원본 엑셀 헤더 (raw_payload 키와 매칭용)
+- `source_origin`: `'aconex'`
+- `is_enabled`: true (기본 표시)
+- `is_required`: false
+- `sort_order`: 기존 최대값 이후 순차 배치 (1000~)
 
-- 그룹핑은 클라이언트에서 수행: 가져온 행들을 `parent_comment_id`로 분리 → 부모 맵 생성 → 자식 reply를 부모에 attach → 정렬 키는 `max(parent.created_at, ...child.created_at)`.
-- 고아 reply의 부모 보충 fetch: `IN ('parent_id', ...)` 단건 쿼리로 한 번에 처리.
-- 권한 가려짐 판정: left join 후 부모 객체가 `null`인지로만 확인 (별도 권한 호출 불필요).
-- 실시간: 기존 `postgres_changes` 구독 유지 — INSERT/UPDATE/DELETE 모두 다시 그룹핑.
+---
 
-## 영향 받는 파일
+## 3. Admin UI 변경 (`AdminPage.tsx`)
 
-- 수정: `src/components/dashboard/RecentSubtestComments.tsx`
-- 수정: `src/components/dashboard/RecentDefectComments.tsx`
-- 신규: `src/pages/AllSubtestCommentsPage.tsx`
-- 신규: `src/pages/AllDefectCommentsPage.tsx`
-- 수정: `src/App.tsx` (라우트 추가)
+`FieldConfigTable`의 "Origin" 컬럼:
+- **읽기 전용 텍스트 → Select 드롭다운**으로 변경 (HDEC / Aconex / System 3개 옵션)
+- 변경 시 `defect_field_config.source_origin` 즉시 업데이트 + toast
+- 기존 값(`ll_original`, `hdec_added`, `derived`)이 들어와도 표시 시 신규 라벨에 매핑 (방어적 처리)
+
+---
+
+## 4. UI 표기 일관화
+
+### `useDefectFieldConfig.ts`
+- `SOURCE_LABELS` 상수 추가: `{ hdec: 'HDEC', aconex: 'Aconex', system: 'System' }`
+- `getSourceLabel(fieldName)` 헬퍼 export
+- `getRawPayloadFieldsForDisplay()` 헬퍼 추가 (`payload_*` 필드를 원본 헤더와 매칭하여 반환)
+
+### `ColumnSelectDialog.tsx`
+- "Maps to Field" 옆에 작은 **Source 배지** (HDEC / Aconex / System) 표시
+
+### Defect Detail 페이지 — Raw Payload 섹션
+- `defect_field_config`의 `payload_*` 행 기반으로 렌더링:
+  - 사용자 친화적 라벨 표시 (`display_name`)
+  - **Source 배지** 표시 (Aconex)
+  - `is_enabled = false`인 필드는 숨김 (Admin이 가시성 제어 가능)
+
+---
+
+## 기술 세부사항
+
+**파일 변경:**
+- `src/pages/AdminPage.tsx` — Origin 셀을 Select 드롭다운으로 교체
+- `src/hooks/useDefectFieldConfig.ts` — `SOURCE_LABELS`, `getSourceLabel`, `getRawPayloadFieldsForDisplay` 추가
+- `src/lib/defect-parser.ts` — `DefectFieldOrigin` union을 `'aconex' | 'hdec' | 'system'`로 갱신 (하위 호환 위해 기존 값도 union에 임시 유지)
+- `src/components/import/ColumnSelectDialog.tsx` — Source 배지 추가
+- `src/pages/DefectDetailPage.tsx` — Raw Payload 섹션을 field_config 기반으로 리팩터링
+
+**DB 작업 (insert 도구로 수행):**
+1. 기존 34개 행 `source_origin` 일괄 업데이트 (4개 값 → 3개 값)
+2. raw_payload 전용 15개 행 INSERT
+
+**범위 제외:**
+- T&C(`field_config`) 테이블에는 `source_origin` 컬럼이 없으므로 이번 작업 범위 외
