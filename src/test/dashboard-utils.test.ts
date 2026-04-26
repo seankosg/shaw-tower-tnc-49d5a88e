@@ -67,10 +67,12 @@ describe('Plan vs Actual stage date aggregation', () => {
     const row = rows[0];
     expect(row.t1.todayPlan).toBe(2);
     expect(row.t1.todayDelay).toBe(1);
-    expect(row.t1.dataDateDelay).toBe(1);
+    // dataDateDelay is now day-specific (planned ON dataDate AND not done).
+    // None of the items above are planned exactly on 2026-04-21.
+    expect(row.t1.dataDateDelay).toBe(0);
   });
 
-  it('keeps Today Delay at zero when Today Plan is zero', () => {
+  it('keeps Data Date Delay at zero when nothing is planned on Data Date', () => {
     const rows = aggregatePlanActualByGroup([
       makeSubtest('t1-past-open-1', { t1_status: 'Planned', t1_planned_date: '2026-04-19' }),
       makeSubtest('t1-past-open-2', { t1_status: 'Planned', t1_planned_date: '2026-04-20' }),
@@ -79,7 +81,25 @@ describe('Plan vs Actual stage date aggregation', () => {
     const row = rows[0];
     expect(row.t1.todayPlan).toBe(0);
     expect(row.t1.todayDelay).toBe(0);
-    expect(row.t1.dataDateDelay).toBe(2);
+    // Past open items no longer accumulate into dataDateDelay (day-specific now).
+    expect(row.t1.dataDateDelay).toBe(0);
+  });
+
+  it('Data Date Delay matches |Δ| on Data Date and excludes earlier planned items', () => {
+    // Mirrors user-reported scenario: BMS-039 (T2 planned 2026-04-24, open) +
+    // BMS-040 (T2 planned 2026-04-25, open). Data Date = 2026-04-25.
+    // Only BMS-040 should contribute to Data Date Delay.
+    const rows = aggregatePlanActualByGroup([
+      makeSubtest('bms-039-mst-070', { t2_status: 'Planned', t2_planned_date: '2026-04-24' }),
+      makeSubtest('bms-040-mst-070', { t2_status: 'Planned', t2_planned_date: '2026-04-25' }),
+    ], '2026-04-26', '2026-04-25', s => s.system_id, k => k);
+
+    const row = rows[0];
+    expect(row.t2.dataDatePlan).toBe(1);
+    expect(row.t2.dataDateActual).toBe(0);
+    expect(row.t2.dataDateDelay).toBe(1);
+    // Δ = actual - plan = -1 → |Δ| === dataDateDelay
+    expect(Math.abs(row.t2.dataDateActual - row.t2.dataDatePlan)).toBe(row.t2.dataDateDelay);
   });
 
   it('keeps Progress day buckets aligned with Dashboard daily Plan/Actual metrics', () => {
