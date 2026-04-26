@@ -73,7 +73,7 @@ export default function DashboardPage() {
       while (true) {
         const { data } = await supabase
           .from('subtests')
-          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, team' as any)
+          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, team, r1_status, r1_target_submission_date, r1_actual_submission_date, r2_status, r2_target_submission_date, r2_actual_submission_date, r2_target_approval_date, r2_actual_approval_date' as any)
           .eq('is_active', true)
           .range(from, from + PAGE - 1);
         if (!data || data.length === 0) break;
