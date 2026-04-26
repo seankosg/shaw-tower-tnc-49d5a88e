@@ -849,9 +849,12 @@ export default function SubtestList() {
     const inRange = (d: string | null) =>
       !!d && (!urlDateFrom || d >= urlDateFrom) && (!urlDateTo || d <= urlDateTo);
 
-    // Overdue / At-Risk consider only Pred/T1/T2 (matches Dashboard Overdue card scope).
-    // R1/R2 delays are surfaced via dedicated R1/R2 stage cards & cell-link filters.
-    const OVERDUE_STAGES: StageKey[] = ['pred', 't1', 't2'];
+    // Overdue / At-Risk stage scope:
+    //  - default: Pred/T1/T2 (matches Dashboard 1-tier KPI Overdue card)
+    //  - scope=all: Pred/T1/T2/R1/R2 (matches Dashboard 3-tier alert banner)
+    const OVERDUE_STAGES: StageKey[] = urlScope === 'all'
+      ? ['pred', 't1', 't2', 'r1', 'r2']
+      : ['pred', 't1', 't2'];
 
     return data.filter(r => {
       if (urlStatusFilter) {
