@@ -51,6 +51,13 @@ export default function DashboardPage() {
   const [systems, setSystems] = useState<SystemRef[]>([]);
   const [loading, setLoading] = useState(true);
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>((searchParams.get('bucket') as 'day' | 'week') || 'day');
+  const [scurveOpen, setScurveOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('dashboard.scurve.open') === '1';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('dashboard.scurve.open', scurveOpen ? '1' : '0'); } catch {}
+  }, [scurveOpen]);
   const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');
   const [dataDate, setDataDate] = useState(() => yesterdayIso(todayIso()));
   const [systemTextFilter, setSystemTextFilter] = useState(searchParams.get('system_text') || '');
