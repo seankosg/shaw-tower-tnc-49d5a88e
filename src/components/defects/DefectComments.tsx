@@ -7,9 +7,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Send, Reply, X, Pencil, Trash2, Check, MessageSquare } from 'lucide-react';
+import { Send, Reply, X, Pencil, Trash2, Check, MessageSquare, Languages } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { containsKorean } from '@/hooks/useTranslateToEnglish';
+import { TranslatePanel } from '@/components/comments/TranslatePanel';
 
 type CommentType = 'comment' | 'instruction' | 'reply';
 
