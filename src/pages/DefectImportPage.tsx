@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,8 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle, Settings2 } from 'lucide-react';
 import { useDefectImport, type DefectFileStatus } from '@/contexts/DefectImportContext';
+import { ColumnSelectDialog } from '@/components/import/ColumnSelectDialog';
 
 // Re-export pure helpers so existing tests/imports keep working
 export { compareIssueNoAsc, detectIssueNoSortDirection, buildSubcontractorIssueAssignments } from '@/contexts/DefectImportContext';
@@ -42,11 +43,14 @@ export default function DefectImportPage() {
     clearAll,
     setFileDataDate,
     setFileSheet,
+    setFileExcludedHeaders,
     startImport,
     setDecisionAction,
     confirmSimilarDecisions,
     cancelSimilarDecisions,
   } = useDefectImport();
+  const [columnDialogFileId, setColumnDialogFileId] = useState<string | null>(null);
+  const columnDialogFile = files.find((f) => f.id === columnDialogFileId) ?? null;
 
   const onDrop = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -169,6 +173,19 @@ export default function DefectImportPage() {
                         disabled={isRunning || file.status === 'done' || file.status === 'failed'}
                         className="h-7 w-[150px] text-xs"
                       />
+                      {file.availableHeaders && file.availableHeaders.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1.5 text-xs"
+                          onClick={() => setColumnDialogFileId(file.id)}
+                          disabled={isRunning || file.status === 'done' || file.status === 'parsing'}
+                        >
+                          <Settings2 className="h-3.5 w-3.5" />
+                          Select Columns ({file.availableHeaders.length - (file.excludedHeaders?.length ?? 0)}/{file.availableHeaders.length})
+                        </Button>
+                      )}
                       <span className="text-xs text-muted-foreground">Team will be resolved from Field Discipline.</span>
                     </div>
                     {file.parsed?.some((row) => !row.issue_no) && (
@@ -219,6 +236,19 @@ export default function DefectImportPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {columnDialogFile && columnDialogFile.availableHeaders && (
+        <ColumnSelectDialog
+          open={!!columnDialogFileId}
+          onOpenChange={(open) => { if (!open) setColumnDialogFileId(null); }}
+          fileName={columnDialogFile.name}
+          headers={columnDialogFile.availableHeaders}
+          samples={columnDialogFile.headerSamples ?? {}}
+          defaultExcluded={columnDialogFile.excludedHeaders ?? []}
+          isReimport={!!columnDialogFile.isReimport}
+          onApply={(excluded) => setFileExcludedHeaders(columnDialogFile.id, excluded)}
+        />
       )}
 
       <Dialog open={similarDecisions.length > 0} onOpenChange={(open) => {

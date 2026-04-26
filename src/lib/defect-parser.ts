@@ -135,11 +135,11 @@ const FIELD_ALIASES: Record<string, string> = {
   'subcontractor issue no source': 'subcontractor_issue_source',
 };
 
-function cleanHeader(header: string): string {
+export function cleanHeader(header: string): string {
   return String(header ?? '').replace(/\s*\(H\)\s*$/i, '').trim();
 }
 
-function toFieldName(header: string): string {
+export function toFieldName(header: string): string {
   const normalized = cleanHeader(header).toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
   return FIELD_ALIASES[normalized] ?? normalized.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
@@ -357,7 +357,40 @@ export async function getDefectExcelSheetNames(file: File): Promise<string[]> {
   return workbook.SheetNames ?? [];
 }
 
-export async function parseDefectExcel(file: File, sheetName?: string): Promise<ParseDefectResult> {
+/**
+ * Quickly extract just the header row + first sample row from a Defect Excel file
+ * (without parsing all data rows). Used to populate the "Select Columns" dialog
+ * without paying the full parse cost.
+ */
+export async function getDefectExcelHeaders(
+  file: File,
+  sheetName?: string,
+): Promise<{ headers: string[]; sample: Record<string, unknown>; isReimport: boolean; sheetName: string } | null> {
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: false });
+  const sheetsToScan = sheetName && workbook.SheetNames.includes(sheetName)
+    ? [sheetName]
+    : workbook.SheetNames;
+
+  for (const name of sheetsToScan) {
+    const ws = workbook.Sheets[name];
+    if (!ws) continue;
+    const detected = detectHeaderRow(ws);
+    if (!detected) continue;
+    const candidateRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+      range: detected.headerRowIdx,
+      defval: '',
+      blankrows: false,
+    });
+    const headers = Object.keys(candidateRows[0] ?? {});
+    const sample = candidateRows[0] ?? {};
+    const isReimport = detectReimportMarker(ws);
+    return { headers, sample, isReimport, sheetName: name };
+  }
+  return null;
+}
+
+export async function parseDefectExcel(file: File, sheetName?: string, excludedHeaders?: string[]): Promise<ParseDefectResult> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: false });
 
@@ -406,6 +439,20 @@ export async function parseDefectExcel(file: File, sheetName?: string): Promise<
     throw new Error(`No 'Issue No' column found. Scanned sheets: [${scannedSheets.join(', ')}]`);
   }
   const sheetNameResolved = resolvedSheetName;
+
+  // Apply user-selected column exclusion: drop excluded headers from each raw row.
+  // Safety: never drop headers that map to `issue_no` (PK / row-detection trigger),
+  // even if the caller mistakenly excluded them.
+  const excludedSet = new Set((excludedHeaders ?? []).filter((h) => toFieldName(h) !== 'issue_no'));
+  if (excludedSet.size > 0) {
+    rawRows = rawRows.map((raw) => {
+      const next: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(raw)) {
+        if (!excludedSet.has(k)) next[k] = v;
+      }
+      return next;
+    });
+  }
 
   const headers = Object.keys(rawRows[0] ?? {}).map((originalHeader, index) => ({
     originalHeader,

@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { daysDiff, getDefectExcelSheetNames, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
+import { daysDiff, getDefectExcelHeaders, getDefectExcelSheetNames, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
 import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, suggestOwnerCode } from '@/lib/defect-utils';
 import { isValidDefectStatus, reconcileClosureCompletion } from '@/lib/defect-status';
@@ -71,6 +71,12 @@ export interface DefectImportFile {
   sheetNames?: string[];
   /** Currently selected sheet (set after user picks, or auto-set when only 1 sheet). */
   selectedSheet?: string;
+  /** All raw header strings present in the chosen sheet (for column-select dialog). */
+  availableHeaders?: string[];
+  /** First data row (header → value) used as preview in column-select dialog. */
+  headerSamples?: Record<string, unknown>;
+  /** User-excluded raw headers — re-parsed on change. Default: []. */
+  excludedHeaders?: string[];
   result?: { inserted: number; updated: number; skipped: number; rejected: number; teamUnresolved: number; classifiedRule: number; classifiedDiscipline: number; unclassified: number };
 }
 
@@ -299,6 +305,7 @@ interface DefectImportContextValue {
   clearAll: () => void;
   setFileDataDate: (id: string, dataDate: string) => void;
   setFileSheet: (id: string, sheetName: string) => Promise<void>;
+  setFileExcludedHeaders: (id: string, excluded: string[]) => Promise<void>;
   startImport: () => Promise<void>;
   setDecisionAction: (key: string, action: SimilarDecisionAction) => void;
   confirmSimilarDecisions: () => Promise<void>;
@@ -322,10 +329,10 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
   const [pendingImportFiles, setPendingImportFiles] = useState<DefectImportFile[] | null>(null);
   const [confirmedDecisions, setConfirmedDecisions] = useState<MasterNameDecisions>({});
 
-  /** Parse a defect file (optionally with explicit sheet) and update file state. */
-  const parseAndApply = useCallback(async (id: string, file: File, sheetName?: string) => {
+  /** Parse a defect file (optionally with explicit sheet + excluded headers) and update file state. */
+  const parseAndApply = useCallback(async (id: string, file: File, sheetName?: string, excludedHeaders?: string[]) => {
     try {
-      const parsed = await parseDefectExcel(file, sheetName);
+      const parsed = await parseDefectExcel(file, sheetName, excludedHeaders);
       setFiles((current) => current.map((f) => f.id === id ? {
         ...f,
         status: 'ready',
@@ -365,7 +372,17 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
           setFiles((current) => current.map((f) => f.id === item.id ? { ...f, status: 'pending_sheet_selection' } : f));
           continue;
         }
-        // 0 or 1 sheet — auto-detect (legacy behavior)
+        // 0 or 1 sheet — auto-detect (legacy behavior). Capture headers for column-select dialog.
+        const headerInfo = await getDefectExcelHeaders(item.file);
+        if (headerInfo) {
+          setFiles((current) => current.map((f) => f.id === item.id ? {
+            ...f,
+            availableHeaders: headerInfo.headers,
+            headerSamples: headerInfo.sample,
+            isReimport: headerInfo.isReimport,
+            excludedHeaders: [],
+          } : f));
+        }
         await parseAndApply(item.id, item.file);
       } catch (error) {
         setFiles((current) => current.map((f) => f.id === item.id ? { ...f, status: 'failed', error: error instanceof Error ? error.message : 'Parse failed' } : f));
@@ -381,10 +398,38 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
     let target: DefectImportFile | undefined;
     setFiles((current) => {
       target = current.find((f) => f.id === id);
-      return current.map((f) => f.id === id ? { ...f, status: 'parsing', selectedSheet: sheetName } : f);
+      // Sheet change → headers may differ → reset excludedHeaders.
+      return current.map((f) => f.id === id ? {
+        ...f,
+        status: 'parsing',
+        selectedSheet: sheetName,
+        excludedHeaders: [],
+        availableHeaders: undefined,
+        headerSamples: undefined,
+      } : f);
     });
     if (!target) return;
+    // Re-extract headers for the newly selected sheet.
+    const headerInfo = await getDefectExcelHeaders(target.file, sheetName);
+    if (headerInfo) {
+      setFiles((current) => current.map((f) => f.id === id ? {
+        ...f,
+        availableHeaders: headerInfo.headers,
+        headerSamples: headerInfo.sample,
+        isReimport: headerInfo.isReimport,
+      } : f));
+    }
     await parseAndApply(id, target.file, sheetName);
+  }, [parseAndApply]);
+
+  const setFileExcludedHeaders = useCallback(async (id: string, excluded: string[]) => {
+    let target: DefectImportFile | undefined;
+    setFiles((current) => {
+      target = current.find((f) => f.id === id);
+      return current.map((f) => f.id === id ? { ...f, status: 'parsing', excludedHeaders: excluded } : f);
+    });
+    if (!target) return;
+    await parseAndApply(id, target.file, target.selectedSheet, excluded);
   }, [parseAndApply]);
 
   const applyMasterDecisions = (row: ParsedDefectRow, decisions: MasterNameDecisions): ParsedDefectRow => {
@@ -846,6 +891,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         clearAll,
         setFileDataDate,
         setFileSheet,
+        setFileExcludedHeaders,
         startImport,
         setDecisionAction,
         confirmSimilarDecisions,
