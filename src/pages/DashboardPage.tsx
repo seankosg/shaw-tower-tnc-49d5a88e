@@ -464,7 +464,8 @@ export default function DashboardPage() {
           )}
         </CardHeader>
         {scurveOpen && (
-          {scurve.length === 0 ? (
+          <CardContent>
+            {scurve.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p>
           ) : (
             <ChartContainer config={chartConfig} className="h-[360px] w-full">
