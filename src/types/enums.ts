@@ -6,6 +6,20 @@ export type ChangeSource = 'app_direct_input' | 'mobile_input' | 'excel_import' 
 
 export const TC_STATUS_OPTIONS: TcStatus[] = ['Planned', 'WIP', 'Done', 'Hold'];
 
+// R1/R2 Report Status (mirrors PostgreSQL enum public.report_status)
+export type ReportStatus = 'Planned' | 'Submitted' | 'Under Review' | 'Approved' | 'Returned';
+export const REPORT_STATUS_OPTIONS: ReportStatus[] = ['Planned', 'Submitted', 'Under Review', 'Approved', 'Returned'];
+
+// R1 is considered "submitted/done" once it has left contractor's hand
+export const R1_DONE_STATUSES: ReportStatus[] = ['Submitted', 'Under Review', 'Approved'];
+// R2 final completion = HDEC report Approved by client
+export const R2_DONE_STATUSES: ReportStatus[] = ['Approved'];
+
+export const isR1Done = (s: ReportStatus | string | null | undefined): boolean =>
+  !!s && (R1_DONE_STATUSES as string[]).includes(s);
+export const isR2Done = (s: ReportStatus | string | null | undefined): boolean =>
+  !!s && (R2_DONE_STATUSES as string[]).includes(s);
+
 export const ALL_ROLES: AppRole[] = ['guest', 'super_guest', 'user', 'senior_user', 'superuser', 'admin'];
 export const ALL_USER_TYPES: UserType[] = ['subcontractor', 'subsub', 'hdec', 'pm_pd', 'admin'];
 
