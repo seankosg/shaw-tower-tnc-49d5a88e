@@ -57,6 +57,10 @@ export interface ParseDefectResult {
   /** True when the file was produced by "Re-import ready" export and contains the
    *  SHAW_DEFECT_REIMPORT_V1 marker — importer should run in update-only mode. */
   isReimport: boolean;
+  /** Set of canonical field names that the user excluded via the column-select
+   *  dialog. Importer uses this to skip change-detection / audit / payload work
+   *  for those fields, so picking few columns is dramatically faster. */
+  excludedFields: Set<string>;
 }
 
 export const REIMPORT_MARKER_TAG = 'SHAW_DEFECT_REIMPORT_V1';
@@ -444,6 +448,13 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
   // Safety: never drop headers that map to `issue_no` (PK / row-detection trigger),
   // even if the caller mistakenly excluded them.
   const excludedSet = new Set((excludedHeaders ?? []).filter((h) => toFieldName(h) !== 'issue_no'));
+  // Build the set of canonical field names that are excluded (for the importer
+  // to skip change-detection / audit work on those fields).
+  const excludedFields = new Set<string>();
+  for (const h of excludedSet) {
+    const f = toFieldName(h);
+    if (f) excludedFields.add(f);
+  }
   if (excludedSet.size > 0) {
     rawRows = rawRows.map((raw) => {
       const next: Record<string, unknown> = {};
@@ -510,7 +521,7 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
   });
 
   const isReimport = detectReimportMarker(worksheet);
-  return { rows, headers, sheetName: sheetNameResolved, isReimport };
+  return { rows, headers, sheetName: sheetNameResolved, isReimport, excludedFields };
 }
 
 export function daysDiff(oldDate?: string | null, newDate?: string | null): number | null {
