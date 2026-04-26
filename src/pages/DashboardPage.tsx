@@ -150,7 +150,7 @@ export default function DashboardPage() {
     const t1 = stageStat('t1', 't1_planned_date');
     const t2 = stageStat('t2', 't2_planned_date');
     const r1 = stageStat('r1', 'r1_target_submission_date');
-    const r2 = stageStat('r2', 'r2_target_approval_date');
+    const r2 = stageStat('r2a', 'r2_target_approval_date');
 
     return {
       systemCount, total, totalDone, remaining, progressPct, overdueCount, atRiskCount,
