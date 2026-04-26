@@ -417,38 +417,96 @@ export default function SubtestDetailPage() {
       </Card>
       )}
 
-      {(isFieldVisible('r1_status') || isFieldVisible('aconex_ref_no') || isFieldVisible('r2_status') || isFieldVisible('remarks') || isFieldVisible('punchlist_comments')) && (
+      {/* R1 — Subcontractor → HDEC report */}
       <Card>
         <CardHeader className="py-3">
-          <CardTitle className="text-sm font-medium">Additional Fields</CardTitle>
+          <CardTitle className="text-sm font-medium">R1 — Subcontractor → HDEC Report</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {isFieldVisible('r1_status') && (
           <div className="space-y-1.5">
             <Label className="text-xs">R1 Status</Label>
-            <Input className="h-9" value={form.r1_status || ''} onChange={e => updateField('r1_status', e.target.value)} />
+            <Select value={form.r1_status || '_blank'} onValueChange={v => updateField('r1_status', v === '_blank' ? null : v)}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_blank">— Blank —</SelectItem>
+                {REPORT_STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">R1 Target Submission Date</Label>
+            <Input type="date" className="h-9" value={form.r1_target_submission_date || ''} onChange={e => updateField('r1_target_submission_date', e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">R1 Actual Submission Date</Label>
+            <Input type="date" className="h-9" value={form.r1_actual_submission_date || ''} onChange={e => updateField('r1_actual_submission_date', e.target.value)} />
+          </div>
+          {isFieldVisible('r1_report_ref') && (
+          <div className="space-y-1.5 md:col-span-3">
+            <Label className="text-xs">R1 Report Reference</Label>
+            <Input className="h-9" value={form.r1_report_ref || ''} onChange={e => updateField('r1_report_ref', e.target.value)} placeholder="Legacy R1 reference / report no." />
           </div>
           )}
-          {isFieldVisible('aconex_ref_no') && (
+        </CardContent>
+      </Card>
+
+      {/* R2 — HDEC → Client report */}
+      <Card>
+        <CardHeader className="py-3">
+          <CardTitle className="text-sm font-medium">R2 — HDEC → Client Report (Final)</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1.5">
+            <Label className="text-xs">R2 Status</Label>
+            <Select value={form.r2_status || '_blank'} onValueChange={v => updateField('r2_status', v === '_blank' ? null : v)}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_blank">— Blank —</SelectItem>
+                {REPORT_STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {isFieldVisible('aconex_ref_no') && (
+          <div className="space-y-1.5 md:col-span-2">
             <Label className="text-xs">Aconex Ref No</Label>
             <Input className="h-9" value={form.aconex_ref_no || ''} onChange={e => updateField('aconex_ref_no', e.target.value)} />
           </div>
           )}
-          {isFieldVisible('r2_status') && (
           <div className="space-y-1.5">
-            <Label className="text-xs">R2 Status</Label>
-            <Input className="h-9" value={form.r2_status || ''} onChange={e => updateField('r2_status', e.target.value)} />
+            <Label className="text-xs">R2 Target Submission Date</Label>
+            <Input type="date" className="h-9" value={form.r2_target_submission_date || ''} onChange={e => updateField('r2_target_submission_date', e.target.value)} />
           </div>
-          )}
+          <div className="space-y-1.5">
+            <Label className="text-xs">R2 Actual Submission Date</Label>
+            <Input type="date" className="h-9" value={form.r2_actual_submission_date || ''} onChange={e => updateField('r2_actual_submission_date', e.target.value)} />
+          </div>
+          <div />
+          <div className="space-y-1.5">
+            <Label className="text-xs">R2 Target Approval Date</Label>
+            <Input type="date" className="h-9" value={form.r2_target_approval_date || ''} onChange={e => updateField('r2_target_approval_date', e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">R2 Actual Approval Date</Label>
+            <Input type="date" className="h-9" value={form.r2_actual_approval_date || ''} onChange={e => updateField('r2_actual_approval_date', e.target.value)} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Remarks & Punchlist */}
+      {(isFieldVisible('remarks') || isFieldVisible('punchlist_comments')) && (
+      <Card>
+        <CardHeader className="py-3">
+          <CardTitle className="text-sm font-medium">Remarks & Punchlist</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 gap-4">
           {isFieldVisible('remarks') && (
-          <div className="space-y-1.5 md:col-span-3">
+          <div className="space-y-1.5">
             <Label className="text-xs">Remarks</Label>
             <Textarea value={form.remarks || ''} onChange={e => updateField('remarks', e.target.value)} rows={2} />
           </div>
           )}
           {isFieldVisible('punchlist_comments') && (
-          <div className="space-y-1.5 md:col-span-3">
+          <div className="space-y-1.5">
             <Label className="text-xs">Punchlist Comments</Label>
             <Textarea value={form.punchlist_comments || ''} onChange={e => updateField('punchlist_comments', e.target.value)} rows={2} />
           </div>
