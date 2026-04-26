@@ -1,94 +1,98 @@
-## 목표
+## 문제 요약
 
-Defect 필드의 출처(Origin)를 **HDEC / Aconex / System** 3가지로 재분류하고, Admin 탭에서 드롭다운으로 수정 가능하게 합니다. 또한 raw_payload로만 들어오는 Aconex 원본 필드들도 `defect_field_config`에 등록하여 관리·표시합니다.
+대시보드(`/tc/dashboard`)의 **Recent Subtest Comments** 카드(그리고 결함 대시보드의 **Recent Defect Comments**)에 코멘트가 하나도 표시되지 않습니다. 사용자는 댓글이 달린 Subtest가 많다고 합니다.
 
----
+## 조사 결과
 
-## 1. Origin 분류 체계
+DB 직접 조회로 확인한 사실:
 
-### 라벨 체계
-- `'hdec'` → **HDEC**
-- `'aconex'` → **Aconex**
-- `'system'` → **System**
+- `subtest_comments`: **총 39건**, 모두 최근 24시간 내 작성, `created_at` 범위 정상 (오늘까지 포함)
+- 모든 코멘트가 가리키는 `subtests` row는 **존재하고 `is_active = true`**
+- `RecentSubtestComments` 컴포넌트는 `DashboardPage`에 정상 마운트되어 있음 (line 503)
+- 컴포넌트 기본 윈도우는 30일 → 최근 데이터는 모두 들어와야 함
 
-내부 enum 값을 3개로 통일 (기존 4개 값 `ll_original`/`hdec_added`/`system`/`derived`은 데이터 마이그레이션으로 일괄 변환).
+따라서 **데이터/시간범위/마운트 문제가 아닙니다.** 거의 확실한 원인은 다음 중 하나입니다.
 
-### 필드별 최종 분류
+### 원인 후보 A — `subtests(...)` 임베디드 join이 RLS로 비어 옴 (가장 유력)
 
-**HDEC** — 사용자(HDEC)가 직접 입력/관리
-- 담당자: `subcontractor_name`, `subsub_name`, `hdec_pic_name`, `hdec_eng_name`
-- 일자 6종: `planned_start_date`, `planned_completion_date`, `planned_closure_date`, `actual_start_date`, `actual_completion_date`, `actual_closure_date`
-- 진행률 입력: `actual_progress_pct`
-- 코멘트: `hdec_comments`
+쿼리:
+```ts
+.from('subtest_comments')
+.select('id, ..., subtests(id, item_no, mos_code, team, subcontractor_name, subsub_name)')
+```
 
-**Aconex** — LL/Aconex 원본
-- DB 매핑됨: `issue_no`, `area_raw`, `description`, `defect_type`, `priority`, `trade_detail`, `status`, `remarks`
-- raw_payload 전용 (15개 신규 등록): `Date Raised`, `Captured On`, `Captured by`, `Source`, `Listed In`, `Pinned To DocNumber`, `Doc Title`, `Date Closed`, `Due Date`, `Assigned to`, `Assigned On`, `Assigned By`, `Closed By User`, `Closed By Organization`, `Item Description`
+`subtest_comments` 자체의 SELECT RLS는 `true`(누구나 읽기)지만, 임베드된 `subtests`는 `can_view_subtest(...)` RLS를 통과해야만 함께 옵니다. 이 함수는:
 
-**System** — 시스템이 계산/판별/생성/파생
-- 계산: `planned_progress_pct`, `completion_status`, `closure_status`
-- 영역 파생: `area_type`, `area_level`, `area_location` (← `area_raw` 파싱)
-- 자동 분류 결과: `main_trade`, `sub_trade`, `work_type`, `classification_source`, `classified_at`
-- 자동 판별: `team` (subcontractor 마스터 조회)
-- 자동 생성/판별: `subcontractor_issue_no`, `subcontractor_issue_source` (`SC-{OWNER}-{SEQ}` 자동 생성)
+- admin/superuser/super_guest → 모두 보임
+- `user_type = hdec/pm_pd/admin` → 모두 보임
+- `user_type = subcontractor/subsub` → **자기 회사 row만 보임**
 
----
+지금 표시 안 되는 사용자가 hdec가 아닌 subcontractor/subsub이거나, 권한 매칭이 안 되면 **`subtests`가 null로 옵니다**. 코드에서는 그러면 `noAccess` 배지로라도 보여야 하는데, 사용자가 "하나도 안 보인다"고 한 것은 다른 문제와 결합되었을 가능성.
 
-## 2. DB 변경
+### 원인 후보 B — 컴포넌트 자체의 무음 실패 (보조)
 
-### A. 기존 행 일괄 업데이트 (`defect_field_config.source_origin`)
-위 분류표대로 모든 행의 `source_origin`을 `'aconex' | 'hdec' | 'system'` 3개 값으로 일괄 변환.
+- 데이터 로드 후 `error` 발생 시 콘솔에만 로그 없이 빈 상태로 떨어짐 (현재 콘솔 로그 없음)
+- 로딩 상태가 풀리지 않고 "Loading..."으로 멈췄을 가능성
 
-### B. raw_payload 전용 Aconex 필드 신규 등록 (15개 INSERT)
-- `field_name`: `payload_` 접두사 + snake_case (예: `payload_date_raised`)
-- `display_name`: 원본 헤더 그대로 (예: "Date Raised")
-- `original_header`: 원본 엑셀 헤더 (raw_payload 키와 매칭용)
-- `source_origin`: `'aconex'`
-- `is_enabled`: true (기본 표시)
-- `is_required`: false
-- `sort_order`: 기존 최대값 이후 순차 배치 (1000~)
+## 수정 계획
 
----
+### 1. `RecentSubtestComments` / `RecentDefectComments` 데이터 페칭 분리
 
-## 3. Admin UI 변경 (`AdminPage.tsx`)
+현재 단일 쿼리로 코멘트와 subtest를 join하는 방식을, **두 단계 페치**로 변경:
 
-`FieldConfigTable`의 "Origin" 컬럼:
-- **읽기 전용 텍스트 → Select 드롭다운**으로 변경 (HDEC / Aconex / System 3개 옵션)
-- 변경 시 `defect_field_config.source_origin` 즉시 업데이트 + toast
-- 기존 값(`ll_original`, `hdec_added`, `derived`)이 들어와도 표시 시 신규 라벨에 매핑 (방어적 처리)
+```ts
+// Step 1: 코멘트만 가져옴 (RLS true)
+const { data: rawComments } = await supabase
+  .from('subtest_comments')
+  .select('id, subtest_id, type, message, created_at, author_user_id, edited, parent_comment_id')
+  .gte('created_at', sinceIso)
+  .order('created_at', { ascending: false })
+  .limit(50);
 
----
+// Step 2: 별도로 subtests를 IN 쿼리 → 권한 없는 row는 단순히 누락됨
+const subtestIds = [...new Set(rawComments.map(c => c.subtest_id))];
+const { data: subtests } = await supabase
+  .from('subtests')
+  .select('id, item_no, mos_code, team, subcontractor_name, subsub_name')
+  .in('id', subtestIds);
 
-## 4. UI 표기 일관화
+// Map 머지
+const subMap = new Map(subtests?.map(s => [s.id, s]) ?? []);
+const merged = rawComments.map(c => ({ ...c, subtests: subMap.get(c.subtest_id) ?? null }));
+```
 
-### `useDefectFieldConfig.ts`
-- `SOURCE_LABELS` 상수 추가: `{ hdec: 'HDEC', aconex: 'Aconex', system: 'System' }`
-- `getSourceLabel(fieldName)` 헬퍼 export
-- `getRawPayloadFieldsForDisplay()` 헬퍼 추가 (`payload_*` 필드를 원본 헤더와 매칭하여 반환)
+이렇게 하면 임베드 join의 RLS 부작용에서 자유로워지고, 코멘트는 항상 화면에 뜨며 권한 없는 항목만 "No access" 배지로 표시됩니다.
 
-### `ColumnSelectDialog.tsx`
-- "Maps to Field" 옆에 작은 **Source 배지** (HDEC / Aconex / System) 표시
+### 2. 진단 로그 추가 + 빈 상태 메시지 개선
 
-### Defect Detail 페이지 — Raw Payload 섹션
-- `defect_field_config`의 `payload_*` 행 기반으로 렌더링:
-  - 사용자 친화적 라벨 표시 (`display_name`)
-  - **Source 배지** 표시 (Aconex)
-  - `is_enabled = false`인 필드는 숨김 (Admin이 가시성 제어 가능)
+```ts
+if (error) {
+  console.error('[RecentSubtestComments] load error', error);
+}
+console.debug('[RecentSubtestComments] loaded', { count: rows.length, days, sinceIso });
+```
 
----
+빈 상태 문구를 더 정확하게:
+- `loaded === 0` → "No comments in the last N days"
+- `loaded > 0 && filtered === 0` → "All comments are filtered out by tab '..'"
 
-## 기술 세부사항
+### 3. `RecentDefectComments`에도 동일 변경 적용
 
-**파일 변경:**
-- `src/pages/AdminPage.tsx` — Origin 셀을 Select 드롭다운으로 교체
-- `src/hooks/useDefectFieldConfig.ts` — `SOURCE_LABELS`, `getSourceLabel`, `getRawPayloadFieldsForDisplay` 추가
-- `src/lib/defect-parser.ts` — `DefectFieldOrigin` union을 `'aconex' | 'hdec' | 'system'`로 갱신 (하위 호환 위해 기존 값도 union에 임시 유지)
-- `src/components/import/ColumnSelectDialog.tsx` — Source 배지 추가
-- `src/pages/DefectDetailPage.tsx` — Raw Payload 섹션을 field_config 기반으로 리팩터링
+같은 패턴으로 `defect_items` 임베드 → 별도 페치로 분리.
 
-**DB 작업 (insert 도구로 수행):**
-1. 기존 34개 행 `source_origin` 일괄 업데이트 (4개 값 → 3개 값)
-2. raw_payload 전용 15개 행 INSERT
+### 4. (선택) 기본 윈도우를 30일 → 90일로 확장
 
-**범위 제외:**
-- T&C(`field_config`) 테이블에는 `source_origin` 컬럼이 없으므로 이번 작업 범위 외
+대시보드 기본값을 90일로 늘려, 첫 진입 시 더 많은 코멘트가 보이도록.
+
+## 영향 범위
+
+- `src/components/dashboard/RecentSubtestComments.tsx` — 페칭 로직 분리, 진단 로그
+- `src/components/dashboard/RecentDefectComments.tsx` — 동일 패턴 적용
+- DB / RLS 변경 없음
+- 기존 UI/UX 동일 (No access 배지 동작 그대로 유지)
+
+## 기대 결과
+
+- HDEC/admin 사용자: 모든 39개 subtest 코멘트가 대시보드에 즉시 표시
+- subcontractor/subsub 사용자: 권한 있는 코멘트는 풀 정보, 권한 없는 코멘트는 "No access" 배지로 표시 (이전엔 join 실패로 표시 자체가 누락되었을 수 있음)
+- 빈 상태 시 정확한 사유 안내
