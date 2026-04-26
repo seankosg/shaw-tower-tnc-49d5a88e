@@ -600,7 +600,7 @@ export default function DefectRawDataPage() {
       });
     }
     return next;
-  }, [items, searchParams]);
+  }, [items, searchParams, dataDate]);
 
   const optionFields = useMemo(() => ({
     team: uniqueOptions(items, 'team').map((option) => ({ value: option.value, label: formatTeamLabel(option.value) })),
