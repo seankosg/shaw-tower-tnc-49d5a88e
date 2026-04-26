@@ -284,7 +284,10 @@ export function AllCommentsView({ title, kind }: AllCommentsViewProps) {
           </span>
         </div>
         <p className="mt-1 text-sm whitespace-pre-wrap">{c.message}</p>
-        <div className="mt-1 text-[11px] text-muted-foreground">{renderContext(c)}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          <span>{renderContext(c)}</span>
+          <RecipientBadges recipients={c.recipients} />
+        </div>
       </button>
     );
   };
@@ -338,7 +341,10 @@ export function AllCommentsView({ title, kind }: AllCommentsViewProps) {
               </span>
             </div>
             <p className="mt-1 text-sm whitespace-pre-wrap">{t.parent.message}</p>
-            <div className="mt-1 text-[11px] text-muted-foreground">{renderContext(t.parent)}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+              <span>{renderContext(t.parent)}</span>
+              <RecipientBadges recipients={t.parent.recipients} />
+            </div>
           </button>
 
           {t.replies.length > 0 && (
