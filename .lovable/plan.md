@@ -1,74 +1,100 @@
-## 의도 확인
+# Defect 임포트 — 컬럼 선택(Include/Exclude) 기능 [최종 확정안 v3]
 
-> "CTO를 선택" → **"시트를 선택"** 의 오타로 해석했습니다. 즉, 엑셀 파일에 시트가 2개 이상이면 어느 시트를 임포트할지 사용자가 고를 수 있게 하는 기능입니다. (해석이 다르다면 알려주세요)
+> 매핑 로직 / `FIELD_ALIASES` / 자동 정규화 **그대로 유지**.
+> 추가: 엑셀 헤더 목록을 보여주고 **체크박스로 임포트할 컬럼만 선택**.
+> **필수 컬럼은 기본 체크 + 해제 시 경고 표시(차단 X)**.
+
+## 결정사항
+- (a) DB 기록 안 함 — UI 세션에만 유지
+- (b) Defect 임포트만 먼저
+- (c) 기본값 = 전체 선택
+- (d) 필수 컬럼은 기본 체크 + 해제 시 **경고만** (해제 자체는 허용)
 
 ---
 
-## 현재 동작
+## 1. "필수 컬럼" 정의
 
-| 임포트 종류 | 현재 시트 처리 방식 | 위치 |
+| 분류 | 조건 | 경고 메시지 (해제 시) |
 |---|---|---|
-| **T&C (Subtest)** | 무조건 **첫 번째 시트** (`wb.SheetNames[0]`) 사용 | `src/lib/import-parser.ts` L289 |
-| **Defect** | 모든 시트 순회하며 `Issue No` 컬럼 있는 **첫 번째 시트** 사용 | `src/lib/defect-parser.ts` L364 |
+| **시스템 필수** | `toFieldName(header) === 'issue_no'` | `"⚠ Issue No is required for header detection. Excluding it will likely cause the import to fail."` |
+| **Re-import 필수** | reimport 마커 있음 + `toFieldName(header) === 'id'` | `"⚠ Excluding 'id' on a Re-import file will create new rows instead of updating existing ones."` |
+| **Field Config 필수** | `defect_field_config.is_required = true` 인 필드로 매핑 | `"⚠ '{label}' is marked as required in Field Config. Excluding it may leave required fields empty."` |
 
-→ 두 경우 모두 사용자가 시트를 선택할 수 없음. 시트 1개만 있으면 문제 없지만, 여러 시트가 있을 때 의도와 다른 시트가 임포트될 수 있음.
+## 2. UI 동작
 
----
+```text
+┌─ Select Columns: defect_q1.xlsx ─────────────────┐
+│  [✓ Select all]                  [Reset]          │
+│  ─────────────────────────────────────────────── │
+│  ✓  Issue No              → issue_no    ★ Required│
+│  ✓  Main Trade            → main_trade  ★ Required│
+│  ✓  Area                  → area_raw              │
+│  ✓  Cost Code             → (unmapped)            │
+│  ☐  HDEC PIC              → hdec_pic_name         │
+│  ...                                              │
+│  ─────────────────────────────────────────────── │
+│  ⚠ 'Main Trade' is marked as required. Excluding  │
+│    it may leave required fields empty.            │
+│                                                   │
+│  Selected: 11/14  ·  Required excluded: 1         │
+│         [Cancel]              [Apply]             │
+└───────────────────────────────────────────────────┘
+```
 
-## 변경 사항
+- 필수 행: 항상 ★ Required 배지 표시 (체크박스 자체는 활성)
+- 사용자가 필수 컬럼 체크 해제 → **즉시 inline 경고 박스**(노란색, 다이얼로그 하단)에 누적 표시
+- toast 알림도 1회 발생 (`toast.warning` from sonner)
+- Apply 버튼은 활성 상태 유지 (차단하지 않음)
+- 헤더 카운터에 `Required excluded: N` 표시로 시각적 환기
 
-### 1. `src/lib/import-parser.ts`
-- `parseExcelFile(file, sheetName?)` — 두 번째 인자로 시트 이름 받도록 확장 (기본값: 첫 시트)
-- 새 함수 `getExcelSheetNames(file: ArrayBuffer): string[]` — 시트 목록만 빠르게 추출
+## 3. 코드 변경
 
-### 2. `src/lib/defect-parser.ts`
-- `parseDefectExcel(file, sheetName?)` — 두 번째 인자로 시트 이름 받도록 확장 (기본: 현재 로직 = `Issue No` 자동 감지)
-- 새 함수 `getDefectExcelSheetNames(file: File): Promise<string[]>` — 시트 목록 추출
+### A. `src/lib/defect-parser.ts`
+- 신규 export: `getDefectExcelHeaders(file, sheetName?)` → `{ headers, sample, isReimport }`
+- 신규 export: `toFieldName`
+- `parseDefectExcel(file, sheetName?, excludedHeaders?: string[])` — 세 번째 인자 추가. raw에서 제외 키 삭제 후 기존 흐름
 
-### 3. `src/contexts/ImportContext.tsx`
-- `ImportFileItem`에 `sheetNames?: string[]`, `selectedSheet?: string` 필드 추가
-- `addFiles` 흐름:
-  1. 파일을 ArrayBuffer로 읽음
-  2. 시트 목록 추출
-  3. **시트 1개**: 기존대로 즉시 파싱 → `status: 'ready'`
-  4. **시트 2개 이상**: 시트 목록만 채우고 `status: 'pending_sheet_selection'` (신규 상태) → 사용자 선택 대기
-- 새 액션 `setFileSheet(id: string, sheetName: string)`:
-  - 선택된 시트로 재파싱 → `status: 'ready'`로 전환
+### B. `src/contexts/DefectImportContext.tsx`
+- `ImportFileItem`에 추가: `availableHeaders?`, `headerSamples?`, `excludedHeaders?: string[]`, `isReimport?: boolean`
+- `addFiles` 흐름: 시트 확정 → `getDefectExcelHeaders` → 상태 저장 → `parseDefectExcel` 호출
+- 신규 액션: `setFileExcludedHeaders(id, excluded)` → 자동 재파싱
+- 시트 변경 시 `excludedHeaders` 초기화
 
-### 4. `src/contexts/DefectImportContext.tsx`
-- 동일하게 `sheetNames`, `selectedSheet` 추가
-- 동일하게 다중 시트 시 사용자 선택 대기 흐름
+### C. `src/components/import/ColumnSelectDialog.tsx` (**신규**)
+- props: `headers`, `samples`, `defaultExcluded`, `isReimport`, `onApply`, `onCancel`
+- `useDefectFieldConfig()`로 필수 필드 판정
+- `getRequirement(header)` 헬퍼:
+  ```ts
+  const field = toFieldName(header);
+  if (field === 'issue_no') return { required: true, reason: 'system', message: '...' };
+  if (isReimport && field === 'id') return { required: true, reason: 'reimport', message: '...' };
+  if (isFieldRequired(field)) return { required: true, reason: 'config', message: '...' };
+  return { required: false };
+  ```
+- 체크 해제 핸들러:
+  ```ts
+  const onToggle = (header, nextChecked) => {
+    const req = getRequirement(header);
+    if (req.required && !nextChecked) {
+      toast.warning(req.message);   // sonner
+    }
+    setExcluded(...);
+  };
+  ```
+- 다이얼로그 하단에 현재 제외된 필수 컬럼들의 경고 누적 박스 (Alert 컴포넌트, variant=warning 스타일)
+- area_raw 제외 시 안내: *"Excluding 'Area' will also clear Type/Level/Location"*
 
-### 5. `src/pages/ImportPage.tsx` & `src/pages/DefectImportPage.tsx`
-- 파일 행에 시트 선택 UI 추가:
-  - 시트가 1개면 표시 안 함 (현재 UI 유지)
-  - 시트가 2개 이상이면 **Select 드롭다운**으로 시트 선택 노출
-  - 선택 후 자동 재파싱
-- `pending_sheet_selection` 상태 배지/메시지 표시 ("시트를 선택하세요")
-- 시트 선택 전에는 Start Import 버튼이 해당 파일을 무시 (또는 비활성)
+### D. `src/pages/DefectImportPage.tsx`
+- 파일 행에 **"Select Columns (n/N)"** 버튼 (Settings2 아이콘)
+- 헤더 로딩 전엔 disabled
 
-### 6. 신규 상태값
-- `FileStatus`에 `'pending_sheet_selection'` 추가 (양쪽 컨텍스트 공통)
+## 4. 영향 파일
 
----
+| 파일 | 종류 |
+|---|---|
+| `src/lib/defect-parser.ts` | 수정 |
+| `src/contexts/DefectImportContext.tsx` | 수정 |
+| `src/components/import/ColumnSelectDialog.tsx` | **신규** |
+| `src/pages/DefectImportPage.tsx` | 수정 |
 
-## UI 동작 시나리오
-
-1. 사용자가 시트 3개짜리 엑셀 업로드
-2. 파일 행에 **"시트 선택 필요"** 배지 + **시트 선택 드롭다운** (Sheet1 / Sheet2 / Sheet3) 표시
-3. 시트 선택 → 자동 파싱 → `parsedCount` 표시 + 기존 import 흐름 진입
-4. 시트 1개 파일은 종전과 동일하게 즉시 파싱
-
----
-
-## 영향 범위
-
-- 신규 파일 0개, 수정 파일 4개 (parser 2개, context 2개, page 2개 = 총 6개)
-- 시트 1개인 파일은 동작 변화 없음 (회귀 위험 최저)
-- 시트 자동 감지 로직(Defect)은 **기본값**으로 유지하되, 사용자가 명시적으로 선택하면 그 값을 우선
-
----
-
-## 다음 단계
-
-이대로 진행할까요? 아니면 "CTO 선택"이 다른 의미였다면 알려주세요 (예: "팀 = CTO 부서 선택", "체크 옵션 추가" 등).
+DB 마이그레이션 없음. T&C 임포트 변경 없음. 매핑 로직/별칭 사전 변경 없음.
