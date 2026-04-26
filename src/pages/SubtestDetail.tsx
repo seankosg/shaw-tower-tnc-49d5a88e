@@ -15,8 +15,9 @@ import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFieldConfig } from '@/hooks/useFieldConfig';
-import { TC_STATUS_OPTIONS, TEAM_LABELS } from '@/types/enums';
-import type { TcStatus, DataSource, ChangeSource, TeamType } from '@/types/enums';
+import { TC_STATUS_OPTIONS, REPORT_STATUS_OPTIONS, TEAM_LABELS, R1_DONE_STATUSES, R2_DONE_STATUSES } from '@/types/enums';
+import type { TcStatus, ReportStatus, DataSource, ChangeSource, TeamType } from '@/types/enums';
+import { derivePlanFromT2 } from '@/lib/business-days';
 import { invalidateSubtestCache } from '@/lib/subtest-cache';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import { SubtestComments } from '@/components/defects/SubtestComments';
@@ -40,9 +41,16 @@ interface SubtestDetail {
   t2_planned_date: string | null;
   t2_actual_date: string | null;
   t2_status: TcStatus | null;
-  r1_status: string | null;
+  r1_report_ref: string | null;
+  r1_status: ReportStatus | null;
+  r1_target_submission_date: string | null;
+  r1_actual_submission_date: string | null;
   aconex_ref_no: string | null;
-  r2_status: string | null;
+  r2_status: ReportStatus | null;
+  r2_target_submission_date: string | null;
+  r2_actual_submission_date: string | null;
+  r2_target_approval_date: string | null;
+  r2_actual_approval_date: string | null;
   remarks: string | null;
   punchlist_comments: string | null;
   predecessor_status_raw: string | null;
@@ -125,9 +133,16 @@ export default function SubtestDetailPage() {
         t2_planned_date: d.t2_planned_date,
         t2_actual_date: d.t2_actual_date,
         t2_status: d.t2_status,
+        r1_report_ref: d.r1_report_ref,
         r1_status: d.r1_status,
+        r1_target_submission_date: d.r1_target_submission_date,
+        r1_actual_submission_date: d.r1_actual_submission_date,
         aconex_ref_no: d.aconex_ref_no,
         r2_status: d.r2_status,
+        r2_target_submission_date: d.r2_target_submission_date,
+        r2_actual_submission_date: d.r2_actual_submission_date,
+        r2_target_approval_date: d.r2_target_approval_date,
+        r2_actual_approval_date: d.r2_actual_approval_date,
         remarks: d.remarks,
         punchlist_comments: d.punchlist_comments,
         predecessor_status_raw: d.predecessor_status_raw,
@@ -162,7 +177,10 @@ export default function SubtestDetailPage() {
     const editableFields = [
       't1_planned_date', 't1_actual_date', 't1_status',
       't2_planned_date', 't2_actual_date', 't2_status',
-      'r1_status', 'aconex_ref_no', 'r2_status',
+      'r1_report_ref', 'r1_status', 'r1_target_submission_date', 'r1_actual_submission_date',
+      'aconex_ref_no',
+      'r2_status', 'r2_target_submission_date', 'r2_actual_submission_date',
+      'r2_target_approval_date', 'r2_actual_approval_date',
       'remarks', 'punchlist_comments',
       'predecessor_status_raw', 'pred_status', 'pred_planned_date', 'pred_actual_date',
       'subcontractor_name', 'subsub_name', 'hdec_pic_name',
@@ -184,9 +202,16 @@ export default function SubtestDetailPage() {
       t2_planned_date: form.t2_planned_date || null,
       t2_actual_date: form.t2_actual_date || null,
       t2_status: form.t2_status || null,
+      r1_report_ref: form.r1_report_ref || null,
       r1_status: form.r1_status || null,
+      r1_target_submission_date: form.r1_target_submission_date || null,
+      r1_actual_submission_date: form.r1_actual_submission_date || null,
       aconex_ref_no: form.aconex_ref_no || null,
       r2_status: form.r2_status || null,
+      r2_target_submission_date: form.r2_target_submission_date || null,
+      r2_actual_submission_date: form.r2_actual_submission_date || null,
+      r2_target_approval_date: form.r2_target_approval_date || null,
+      r2_actual_approval_date: form.r2_actual_approval_date || null,
       remarks: form.remarks || null,
       punchlist_comments: form.punchlist_comments || null,
       predecessor_status_raw: form.predecessor_status_raw || null,
