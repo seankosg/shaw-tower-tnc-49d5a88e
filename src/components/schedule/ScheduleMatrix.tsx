@@ -266,7 +266,7 @@ export function ScheduleMatrix({
           style={{ width: STICKY_LEFT_WIDTH }}
         >
           {data.rows.map(row => {
-            const showStageRows = stageFilter === 'all';
+            const showStageRows = isMultiStage;
             return (
               <Fragment key={`left-${row.key}`}>
                 <div className={cn("flex border-b border-border text-xs h-14", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
@@ -321,7 +321,7 @@ export function ScheduleMatrix({
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">No data in selected range.</div>
             )}
             {data.rows.map(row => {
-              const showStageRows = stageFilter === 'all';
+              const showStageRows = isMultiStage;
               return (
                 <Fragment key={row.key}>
                   <div className={cn("flex border-b border-border text-xs h-14", showStageRows ? 'bg-muted/30 font-semibold' : 'hover:bg-accent/30')}>
@@ -337,8 +337,8 @@ export function ScheduleMatrix({
                           isFuture={vc.index > todayBucketIdx}
                           isToday={vc.index === todayBucketIdx}
                           width={cellWidth}
-                          onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'planned') : undefined}
-                          onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, stageFilter, 'actual') : undefined}
+                          onPlanClick={onCellClick ? () => onCellClick(row.key, c.bucket, aggregateStageArg, 'planned') : undefined}
+                          onActualClick={onCellClick ? () => onCellClick(row.key, c.bucket, aggregateStageArg, 'actual') : undefined}
                         />
                       );
                     })}
