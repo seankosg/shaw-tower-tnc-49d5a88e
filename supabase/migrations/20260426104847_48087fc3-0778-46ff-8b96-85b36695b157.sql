@@ -1,0 +1,40 @@
+UPDATE public.field_config SET sort_order = CASE field_name
+  WHEN 'team' THEN 10
+  WHEN 'system' THEN 20
+  WHEN 'item_no' THEN 30
+  WHEN 'subtest_id' THEN 40
+  WHEN 'mos_code' THEN 50
+  WHEN 'mos_sequence' THEN 60
+  WHEN 'hdec_pic_name' THEN 70
+  WHEN 'subcontractor_name' THEN 80
+  WHEN 'subsub_name' THEN 90
+  WHEN 'equipment' THEN 100
+  WHEN 'description' THEN 110
+  WHEN 'level' THEN 120
+  WHEN 'predecessor_status_raw' THEN 130
+  WHEN 'pred_planned_date' THEN 140
+  WHEN 'pred_actual_date' THEN 150
+  WHEN 't1_planned_date' THEN 160
+  WHEN 't1_actual_date' THEN 170
+  WHEN 't1_status' THEN 180
+  WHEN 't2_planned_date' THEN 190
+  WHEN 't2_actual_date' THEN 200
+  WHEN 't2_status' THEN 210
+  WHEN 'r1_status' THEN 220
+  WHEN 'r1_target_submission_date' THEN 230
+  WHEN 'r1_actual_submission_date' THEN 240
+  WHEN 'r1_report_ref' THEN 250
+  WHEN 'r2_status' THEN 260
+  WHEN 'r2_target_submission_date' THEN 270
+  WHEN 'r2_actual_submission_date' THEN 280
+  WHEN 'r2_target_approval_date' THEN 290
+  WHEN 'r2_actual_approval_date' THEN 300
+  WHEN 'aconex_ref_no' THEN 310
+  WHEN 'remarks' THEN 320
+  WHEN 'punchlist_comments' THEN 330
+  WHEN 'data_source_type' THEN 340
+  WHEN 'source_upload_id' THEN 350
+  WHEN 'updated_at' THEN 360
+  WHEN 'updated_by' THEN 370
+  ELSE sort_order
+END;
