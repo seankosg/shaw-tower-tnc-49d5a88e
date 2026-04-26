@@ -1071,7 +1071,7 @@ function PlanActualTable({
                     <VarianceCell value={dataDateD} />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5 font-semibold text-destructive">
-                    <ClickNum value={m.dataDateDelay} hideZero onClick={st.delayAsOf ? () => go(r.key, { [st.delayAsOf!]: dataDate }) : undefined} />
+                    <ClickNum value={m.dataDateDelay} hideZero onClick={st.delayOn ? () => go(r.key, { [st.delayOn!]: dataDate }) : undefined} />
                   </TableCell>
                   {/* Today */}
                   <TableCell className="text-right border-l border-border text-xs px-2 py-1.5">
