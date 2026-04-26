@@ -376,6 +376,8 @@ export default function SchedulePage() {
                 <TabsTrigger value="pred" className="h-6 px-2 text-xs">Pred</TabsTrigger>
                 <TabsTrigger value="t1" className="h-6 px-2 text-xs">T1</TabsTrigger>
                 <TabsTrigger value="t2" className="h-6 px-2 text-xs">T2</TabsTrigger>
+                <TabsTrigger value="r1" className="h-6 px-2 text-xs">R1</TabsTrigger>
+                <TabsTrigger value="r2" className="h-6 px-2 text-xs">R2</TabsTrigger>
               </TabsList>
             </Tabs>
           </ToolbarGroup>
