@@ -340,16 +340,16 @@ export default function DashboardPage() {
         <AlertBanner
           tone="destructive"
           icon={<AlertTriangle className="h-5 w-5" />}
-          title={`${kpis.overdueCount} Overdue Subtest${kpis.overdueCount === 1 ? '' : 's'}`}
-          description={`Planned date is on/before Data Date (${dataDateLabel}) and not yet Done.`}
-          onClick={() => goSubtests({ status: 'overdue', as_of: dataDate })}
+          title={`${kpis.overdueCountAll} Overdue Subtest${kpis.overdueCountAll === 1 ? '' : 's'}`}
+          description={`Any stage (Pred/T1/T2/R1/R2) planned on/before Data Date (${dataDateLabel}) and not yet Done.`}
+          onClick={() => goSubtests({ status: 'overdue', as_of: dataDate, scope: 'all' })}
         />
         <AlertBanner
           tone="warning"
           icon={<Clock className="h-5 w-5" />}
-          title={`${kpis.atRiskCount} At-Risk Subtest${kpis.atRiskCount === 1 ? '' : 's'}`}
-          description={`Planned date is within ${atRiskDays} day(s) and not yet Done.`}
-          onClick={() => goSubtests({ status: 'at_risk', at_risk_days: String(atRiskDays) })}
+          title={`${kpis.atRiskCountAll} At-Risk Subtest${kpis.atRiskCountAll === 1 ? '' : 's'}`}
+          description={`Any stage (Pred/T1/T2/R1/R2) planned within ${atRiskDays} day(s) and not yet Done.`}
+          onClick={() => goSubtests({ status: 'at_risk', at_risk_days: String(atRiskDays), scope: 'all' })}
         />
       </div>
 
