@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { daysDiff, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
+import { daysDiff, getDefectExcelSheetNames, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
 import { createDefectMasterEnsurer } from '@/lib/defect-master-autocreate';
 import { generateSubcontractorIssueNo, normalizeSubcontractorIssueNo, suggestOwnerCode } from '@/lib/defect-utils';
 import { isValidDefectStatus, reconcileClosureCompletion } from '@/lib/defect-status';
@@ -50,7 +50,7 @@ function preserveExistingForBlank(row: ParsedDefectRow, existing: any | null): v
   }
 }
 
-export type DefectFileStatus = 'pending' | 'parsing' | 'ready' | 'processing' | 'done' | 'failed';
+export type DefectFileStatus = 'pending' | 'parsing' | 'pending_sheet_selection' | 'ready' | 'processing' | 'done' | 'failed';
 
 export interface DefectImportFile {
   id: string;
@@ -67,6 +67,10 @@ export interface DefectImportFile {
   /** True when the parsed file carries the SHAW_DEFECT_REIMPORT_V1 marker.
    *  In that case the importer runs in update-only mode and never inserts new rows. */
   isReimport?: boolean;
+  /** All sheet names in the workbook. Set when 2+ sheets exist. */
+  sheetNames?: string[];
+  /** Currently selected sheet (set after user picks, or auto-set when only 1 sheet). */
+  selectedSheet?: string;
   result?: { inserted: number; updated: number; skipped: number; rejected: number; teamUnresolved: number; classifiedRule: number; classifiedDiscipline: number; unclassified: number };
 }
 
