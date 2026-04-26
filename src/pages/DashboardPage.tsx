@@ -892,6 +892,7 @@ function PlanActualTable({
     actualOn?: string;
     delayAsOf?: string;
     delayOn?: string;
+    actualUnplannedOn?: string;
     actualOverride?: { param: string; value: string };
   };
 
