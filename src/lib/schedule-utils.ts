@@ -53,10 +53,10 @@ export interface CriticalItem {
   systemCode: string;
   itemNo: string;
   mosCode: string;
-  stage: 't1' | 't2';
+  stage: ScheduleStage;
   daysLeft: number;
   plannedDate: string;
-  status: TcStatus | null;
+  status: TcStatus | string | null;
   group: string;
 }
 
@@ -267,42 +267,47 @@ export function findCritical(
   const horizon = addDays(today, windowDays);
   const highRisk: CriticalItem[] = [];
   const t1Bottleneck: CriticalItem[] = [];
+  // Stages monitored for High Risk (Pred is excluded — critical card surfaces actionable test/report milestones).
+  const RISK_STAGES: ScheduleStage[] = ['t1', 't2', 'r1', 'r2'];
 
   for (const s of subs) {
     const groupLabel = getGroupKey(s, groupBy, sysCodeById);
     const sysCode = sysCodeById.get(s.system_id) ?? '—';
 
-    if (s.t2_planned_date && s.t2_planned_date <= horizon && s.t2_status !== 'Done') {
-      const days = daysBetween(today, s.t2_planned_date);
+    for (const stage of RISK_STAGES) {
+      const planned = getStagePlannedDate(s, stage);
+      if (!planned || planned > horizon) continue;
+      if (isStageDone(s, stage)) continue;
+
+      const status = (
+        stage === 't1' ? s.t1_status :
+        stage === 't2' ? s.t2_status :
+        stage === 'r1' ? s.r1_status :
+        s.r2_status
+      ) ?? null;
+
       const item: CriticalItem = {
         subtestId: s.id,
         systemCode: sysCode,
         itemNo: s.item_no,
         mosCode: s.mos_code,
-        stage: 't2',
-        daysLeft: days,
-        plannedDate: s.t2_planned_date,
-        status: s.t2_status,
+        stage,
+        daysLeft: daysBetween(today, planned),
+        plannedDate: planned,
+        status,
         group: groupLabel,
       };
       highRisk.push(item);
-      if (s.t1_status !== 'Done') {
-        t1Bottleneck.push({ ...item, stage: 't1', plannedDate: s.t1_planned_date ?? s.t2_planned_date });
+
+      // T1 bottleneck: when T2 is at risk and T1 is also not done
+      if (stage === 't2' && !isStageDone(s, 't1')) {
+        t1Bottleneck.push({
+          ...item,
+          stage: 't1',
+          plannedDate: getStagePlannedDate(s, 't1') ?? planned,
+          status: s.t1_status ?? null,
+        });
       }
-    }
-    if (s.t1_planned_date && s.t1_planned_date <= horizon && s.t1_status !== 'Done') {
-      const days = daysBetween(today, s.t1_planned_date);
-      highRisk.push({
-        subtestId: s.id,
-        systemCode: sysCode,
-        itemNo: s.item_no,
-        mosCode: s.mos_code,
-        stage: 't1',
-        daysLeft: days,
-        plannedDate: s.t1_planned_date,
-        status: s.t1_status,
-        group: groupLabel,
-      });
     }
   }
 

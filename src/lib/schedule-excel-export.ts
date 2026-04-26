@@ -132,7 +132,7 @@ export function exportScheduleToExcel(
 
   const stageLabel = stageFilter === 'all' ? 'All' : stageFilter.toUpperCase();
   const showSubRows = stageFilter === 'all';
-  const stages: ScheduleStage[] = showSubRows ? ['pred', 't1', 't2'] : [];
+  const stages: ScheduleStage[] = showSubRows ? ['pred', 't1', 't2', 'r1', 'r2'] : [];
 
   // Fixed columns: Group(1) + Total Scope(4) + Up to Today(4) = 9
   const FIXED_COLS = 9;
