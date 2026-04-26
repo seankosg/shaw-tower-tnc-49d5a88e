@@ -1245,6 +1245,7 @@ export default function SubtestList() {
         navigate={navigate}
         tableRef={tableRef}
         delayAsOfDate={delayAsOfDate}
+        overdueScope={urlScope === 'all' ? 'all' : 'execution'}
       />
     </div>
   );
@@ -1261,10 +1262,11 @@ interface SubtestTableViewProps {
   navigate: (path: string) => void;
   tableRef: React.RefObject<HTMLDivElement>;
   delayAsOfDate: string;
+  overdueScope: 'execution' | 'all';
 }
 
 function SubtestTableView({
-  table, loading, columns, sorting, autoSizeColumn, navigate, tableRef, delayAsOfDate,
+  table, loading, columns, sorting, autoSizeColumn, navigate, tableRef, delayAsOfDate, overdueScope,
 }: SubtestTableViewProps) {
   const isMobile = useIsMobile();
   const FROZEN_COUNT = (isMobile ? 1 : 4) + 1; // +1 for the always-on selection column
