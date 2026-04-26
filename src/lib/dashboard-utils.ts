@@ -80,6 +80,30 @@ export function maxDelayDays(s: SubtestForDashboard, today: string): number {
   return getMaxDelayDaysAsOf(s, OVERDUE_STAGES, today);
 }
 
+/**
+ * All 5 workflow stages — used by the dedicated all-stage Overdue / At-Risk
+ * alert banner (Tier 3) which intentionally surfaces R1/R2 report delays
+ * alongside Pred/T1/T2 execution delays.
+ */
+const ALL_STAGES: StageKey[] = ['pred', 't1', 't2', 'r1', 'r2'];
+
+/** True if any of the 5 stages has planned date on/before as-of date and not Done. */
+export function isOverdueAllStages(s: SubtestForDashboard, asOfDate: string): boolean {
+  return ALL_STAGES.some(stage => isStageDelayedAsOf(s, stage, asOfDate));
+}
+
+/** True if not all-stage overdue but any of the 5 stages is planned within thresholdDays. */
+export function isAtRiskAllStages(s: SubtestForDashboard, today: string, thresholdDays: number): boolean {
+  if (isOverdueAllStages(s, today)) return false;
+  const within = (stage: StageKey) => {
+    const planned = getStagePlannedDate(s, stage);
+    if (!planned || isStageDone(s, stage)) return false;
+    const d = daysBetween(today, planned);
+    return d >= 0 && d <= thresholdDays;
+  };
+  return ALL_STAGES.some(within);
+}
+
 export type TestStatus = 'done' | 'in_progress' | 'not_started';
 
 /** Aggregate Tests by (system_id, item_no). Test = Done iff all subtests' T2 are Done. */
