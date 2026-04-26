@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SuggestField } from '@/components/ui/suggest-field';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { MessageSquare } from 'lucide-react';
 import { DefectComments } from '@/components/defects/DefectComments';
 import { useAuth } from '@/contexts/AuthContext';
@@ -52,7 +53,7 @@ export default function DefectDetailPage() {
   const [hdecEngOptions, setHdecEngOptions] = useState<HdecMaster[]>([]);
   const [suggestPool, setSuggestPool] = useState<{ area_level: string[]; area_location: string[]; main_trade: string[]; sub_trade: string[]; work_type: string[] }>({ area_level: [], area_location: [], main_trade: [], sub_trade: [], work_type: [] });
   const [commentCount, setCommentCount] = useState(0);
-  const { isFieldVisible, isFieldRequired, getLabel } = useDefectFieldConfig();
+  const { isFieldVisible, isFieldRequired, getLabel, getRawPayloadFieldsForDisplay } = useDefectFieldConfig();
 
   const loadScHistory = async (defectId: string) => {
     const res = await (supabase as any)
