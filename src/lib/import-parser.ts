@@ -301,9 +301,18 @@ export interface ParsedSubtest {
   subcontractor_name: string | null;
   subsub_name: string | null;
   hdec_pic_name: string | null;
-  r1_status: string | null;
-  r2_status: string | null;
-  aconex_ref_no: string | null;
+  // R1 — subcontractor → HDEC report
+  r1_status: string | null;            // enum-narrowed (or null when source value is free-text)
+  r1_report_ref: string | null;        // free-text report reference (legacy R1 column)
+  r1_target_submission_date: string | null;
+  r1_actual_submission_date: string | null;
+  // R2 — HDEC → client report
+  r2_status: string | null;            // enum-narrowed (or null when source value is free-text)
+  aconex_ref_no: string | null;        // R2 free-text fallback also lands here
+  r2_target_submission_date: string | null;
+  r2_actual_submission_date: string | null;
+  r2_target_approval_date: string | null;
+  r2_actual_approval_date: string | null;
   remarks: string | null;
   punchlist_comments: string | null;
 }
@@ -315,7 +324,11 @@ export const KNOWN_FIELDS = new Set<string>([
   't1_planned_date', 't1_status', 't2_planned_date', 't2_status',
   'predecessor_status_raw',
   'subcontractor_name', 'subsub_name', 'hdec_pic_name',
-  'r1_status', 'r2_status', 'aconex_ref_no', 'remarks', 'punchlist_comments',
+  'r1_status', 'r1_report_ref', 'r1_target_submission_date', 'r1_actual_submission_date',
+  'r2_status', 'aconex_ref_no',
+  'r2_target_submission_date', 'r2_actual_submission_date',
+  'r2_target_approval_date', 'r2_actual_approval_date',
+  'remarks', 'punchlist_comments',
   'source', 'updated_at',
 ]);
 
