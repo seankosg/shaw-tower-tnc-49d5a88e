@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,9 +7,15 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MessageSquare, ChevronRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { MessageSquare, ChevronRight, ChevronDown, Lock, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import {
+  buildCommentThreads,
+  getMissingParentIds,
+  type CommentThread,
+} from '@/lib/comment-threads';
 
 interface DefectRef {
   id: string;
@@ -46,9 +52,11 @@ export function RecentDefectComments() {
   const [tab, setTab] = useState<FilterTab>('all');
   const [days, setDays] = useState<DayWindow>(30);
   const [comments, setComments] = useState<CommentRow[]>([]);
+  const [supplementalParents, setSupplementalParents] = useState<CommentRow[]>([]);
   const [authors, setAuthors] = useState<AuthorInfo[]>([]);
   const [reads, setReads] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const sinceIso = useMemo(() => {
     const d = new Date();
@@ -61,15 +69,19 @@ export function RecentDefectComments() {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
+      const baseSelect =
+        'id, defect_id, type, message, created_at, author_user_id, edited, parent_comment_id, defect_items(id, issue_no, description, team, subcontractor_name)';
+
       const { data, error } = await (supabase as any)
         .from('defect_comments')
-        .select('id, defect_id, type, message, created_at, author_user_id, edited, parent_comment_id, defect_items!inner(id, issue_no, description, team, subcontractor_name)')
+        .select(baseSelect)
         .gte('created_at', sinceIso)
         .order('created_at', { ascending: false })
         .limit(50);
       if (cancelled) return;
       if (error || !data) {
         setComments([]);
+        setSupplementalParents([]);
         setAuthors([]);
         setLoading(false);
         return;
@@ -77,12 +89,23 @@ export function RecentDefectComments() {
       const rows = data as CommentRow[];
       setComments(rows);
 
-      const authorIds = Array.from(new Set(rows.map((r) => r.author_user_id)));
-      if (authorIds.length > 0) {
+      const missingParentIds = getMissingParentIds(rows);
+      if (missingParentIds.length > 0) {
+        const { data: pData } = await (supabase as any)
+          .from('defect_comments')
+          .select(baseSelect)
+          .in('id', missingParentIds);
+        if (!cancelled) setSupplementalParents((pData as CommentRow[]) ?? []);
+      } else {
+        setSupplementalParents([]);
+      }
+
+      const allAuthorIds = Array.from(new Set(rows.map((r) => r.author_user_id)));
+      if (allAuthorIds.length > 0) {
         const { data: profs } = await supabase
           .from('profiles')
           .select('user_id, name, login_id')
-          .in('user_id', authorIds);
+          .in('user_id', allAuthorIds);
         if (!cancelled) setAuthors((profs as AuthorInfo[]) ?? []);
       } else {
         setAuthors([]);
@@ -116,6 +139,7 @@ export function RecentDefectComments() {
       cancelled = true;
       supabase.removeChannel(channel);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, sinceIso]);
 
   const authorName = (id: string) => {
@@ -128,12 +152,143 @@ export function RecentDefectComments() {
     return !last || new Date(c.created_at) > new Date(last);
   };
 
-  const filtered = useMemo(() => {
-    let list = comments;
-    if (tab === 'instruction') list = list.filter((c) => c.type === 'instruction');
-    else if (tab === 'unread') list = list.filter(isUnread);
-    return list;
-  }, [comments, tab, reads]);
+  const threads: CommentThread<CommentRow>[] = useMemo(
+    () => buildCommentThreads({ comments, supplementalParents }),
+    [comments, supplementalParents],
+  );
+
+  const filteredThreads = useMemo(() => {
+    if (tab === 'all') return threads;
+    if (tab === 'instruction') {
+      return threads.filter(
+        (t) => t.parent.type === 'instruction' || t.replies.some((r) => r.type === 'instruction'),
+      );
+    }
+    return threads.filter((t) => isUnread(t.parent) || t.replies.some(isUnread));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threads, tab, reads]);
+
+  const renderThread = (t: CommentThread<CommentRow>) => {
+    const defect = t.parent.defect_items;
+    const noAccess = !defect && !t.parentMissing;
+    const parentUnread = isUnread(t.parent);
+    const threadUnread = parentUnread || t.replies.some(isUnread);
+    const isExpanded = expanded[t.parent.id] ?? false;
+    const visibleReplies = isExpanded ? t.replies : t.replies.slice(0, 2);
+    const hiddenReplyCount = t.replies.length - visibleReplies.length;
+
+    const handleNavigate = () => {
+      if (noAccess || t.parentMissing) return;
+      const targetId = defect?.id ?? t.parent.defect_id;
+      if (targetId) navigate(`/defects/${targetId}`);
+    };
+
+    return (
+      <li key={t.parent.id}>
+        <div
+          className={cn(
+            'rounded-md border px-3 py-2 transition-colors',
+            threadUnread && 'border-primary/40 bg-primary/5',
+            (noAccess || t.parentMissing) && 'bg-muted/40',
+          )}
+        >
+          <button
+            type="button"
+            onClick={handleNavigate}
+            disabled={noAccess || t.parentMissing}
+            className={cn(
+              'group block w-full text-left',
+              !(noAccess || t.parentMissing) && 'hover:bg-muted/40 rounded',
+              (noAccess || t.parentMissing) && 'cursor-default',
+            )}
+          >
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-medium">{authorName(t.parent.author_user_id)}</span>
+              {t.parent.type === 'instruction' && (
+                <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
+                  Instruction
+                </Badge>
+              )}
+              {t.parentSupplemented && !t.parentMissing && (
+                <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
+                  Older
+                </Badge>
+              )}
+              {t.parentMissing && (
+                <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
+                  Reply (parent unavailable)
+                </Badge>
+              )}
+              {parentUnread && <Badge className="h-4 px-1.5 text-[10px]">New</Badge>}
+              {noAccess && (
+                <Badge variant="secondary" className="h-4 gap-1 px-1.5 text-[10px]">
+                  <Lock className="h-2.5 w-2.5" /> No access
+                </Badge>
+              )}
+              <span className="ml-auto text-muted-foreground">
+                {format(new Date(t.parent.created_at), 'yyyy-MM-dd HH:mm')}
+              </span>
+            </div>
+            <p className="mt-1 line-clamp-2 text-sm">{t.parent.message}</p>
+            <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+              <span className="truncate">
+                {defect?.issue_no ?? '—'}
+                {defect?.description ? ` · ${defect.description}` : ''}
+                {defect?.subcontractor_name ? ` · ${defect.subcontractor_name}` : ''}
+              </span>
+              {!noAccess && !t.parentMissing && (
+                <ChevronRight className="ml-auto h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
+              )}
+            </div>
+          </button>
+
+          {t.replies.length > 0 && (
+            <div className="mt-2 space-y-1.5 border-l-2 border-muted pl-3">
+              {visibleReplies.map((r) => {
+                const rUnread = isUnread(r);
+                return (
+                  <div
+                    key={r.id}
+                    className={cn(
+                      'rounded px-2 py-1.5 text-xs',
+                      rUnread && 'bg-primary/5',
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{authorName(r.author_user_id)}</span>
+                      <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
+                        Reply
+                      </Badge>
+                      {r.type === 'instruction' && (
+                        <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
+                          Instruction
+                        </Badge>
+                      )}
+                      {rUnread && <Badge className="h-4 px-1.5 text-[10px]">New</Badge>}
+                      <span className="ml-auto text-muted-foreground">
+                        {format(new Date(r.created_at), 'MM-dd HH:mm')}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 line-clamp-2 text-sm">{r.message}</p>
+                  </div>
+                );
+              })}
+              {hiddenReplyCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((s) => ({ ...s, [t.parent.id]: true }))}
+                  className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+                >
+                  <ChevronDown className="h-3 w-3" />
+                  Show {hiddenReplyCount} more {hiddenReplyCount === 1 ? 'reply' : 'replies'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </li>
+    );
+  };
 
   return (
     <Card>
@@ -161,58 +316,22 @@ export function RecentDefectComments() {
                 <SelectItem value="90">Last 90 days</SelectItem>
               </SelectContent>
             </Select>
+            <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+              <Link to="/comments/defect">
+                View all <ExternalLink className="ml-1 h-3 w-3" />
+              </Link>
+            </Button>
           </div>
         </div>
       </CardHeader>
       <CardContent>
         {loading ? (
           <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>
-        ) : filtered.length === 0 ? (
+        ) : filteredThreads.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No comments in this view.</p>
         ) : (
           <ScrollArea className="h-[360px] pr-2">
-            <ul className="space-y-2">
-              {filtered.map((c) => {
-                const unread = isUnread(c);
-                return (
-                  <li key={c.id}>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/defects/${c.defect_id}`)}
-                      className={cn(
-                        'group w-full rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/50',
-                        unread && 'border-primary/40 bg-primary/5'
-                      )}
-                    >
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="font-medium">{authorName(c.author_user_id)}</span>
-                        {c.type === 'instruction' && (
-                          <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">Instruction</Badge>
-                        )}
-                        {c.parent_comment_id && (
-                          <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">Reply</Badge>
-                        )}
-                        {unread && (
-                          <Badge className="h-4 px-1.5 text-[10px]">New</Badge>
-                        )}
-                        <span className="ml-auto text-muted-foreground">
-                          {format(new Date(c.created_at), 'yyyy-MM-dd HH:mm')}
-                        </span>
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-sm">{c.message}</p>
-                      <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <span className="truncate">
-                          {c.defect_items?.issue_no ?? '—'}
-                          {c.defect_items?.description ? ` · ${c.defect_items.description}` : ''}
-                          {c.defect_items?.subcontractor_name ? ` · ${c.defect_items.subcontractor_name}` : ''}
-                        </span>
-                        <ChevronRight className="ml-auto h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            <ul className="space-y-2">{filteredThreads.map(renderThread)}</ul>
           </ScrollArea>
         )}
       </CardContent>
