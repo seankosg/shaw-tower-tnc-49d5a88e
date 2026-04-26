@@ -44,7 +44,20 @@ export default function SchedulePage() {
 
   const [groupBy, setGroupBy] = useState<ScheduleGroupBy>((searchParams.get('group') as ScheduleGroupBy) || 'system');
   const [bucket, setBucket] = useState<ScheduleBucket>((searchParams.get('bucket') as ScheduleBucket) || 'day');
-  const [stageFilter, setStageFilter] = useState<ScheduleStageFilter>((searchParams.get('stage_view') as ScheduleStageFilter) || 'all');
+  const [stageFilter, setStageFilter] = useState<ScheduleStage[]>(() => {
+    const raw = searchParams.get('stage_view');
+    if (!raw || raw === 'all') return [...ALL_STAGE_KEYS];
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean) as ScheduleStage[];
+    const valid = parts.filter(p => (ALL_STAGE_KEYS as string[]).includes(p));
+    return valid.length > 0 ? valid : [...ALL_STAGE_KEYS];
+  });
+  const isAllStages = stageFilter.length === ALL_STAGE_KEYS.length;
+  // Pass to downstream consumers: 'all' sentinel when fully selected, single string when one, otherwise array.
+  const stageFilterArg: ScheduleStageFilter = isAllStages
+    ? 'all'
+    : stageFilter.length === 1
+      ? stageFilter[0]
+      : stageFilter;
   const [asOfMode, setAsOfMode] = useState<'dataDate' | 'today'>((searchParams.get('asof_mode') as 'dataDate' | 'today') || 'dataDate');
   const [dataDate, setDataDate] = useState(() => yesterdayIso(today));
   const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');
