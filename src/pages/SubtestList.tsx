@@ -857,7 +857,7 @@ export default function SubtestList() {
         const overdue = getAnyStageDelayedAsOf(r, OVERDUE_STAGES, delayAsOfDate);
         if (urlStatusFilter === 'overdue' && !overdue) return false;
         // 5-stage workflow: final completion = R2 Approved
-        if (urlStatusFilter === 'remaining' && isStageDone(r, 'r2')) return false;
+        if (urlStatusFilter === 'remaining' && isStageDone(r, 't2')) return false;
         if (urlStatusFilter === 'at_risk') {
           if (overdue) return false;
           const within = (stage: StageKey) => {
