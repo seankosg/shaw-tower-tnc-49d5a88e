@@ -210,7 +210,7 @@ export function aggregatePlanActualByGroup(
 
   const out: PlanActualRow[] = [];
   for (const [k, items] of buckets) {
-    const calc = (stage: 'pred' | 't1' | 't2'): PlanActualMetrics => {
+    const calc = (stage: StageKey): PlanActualMetrics => {
       let cumPlan = 0, cumActual = 0, dataDatePlan = 0, dataDateActual = 0, dataDateDelay = 0, tPlan = 0, tActual = 0, tDelay = 0;
       for (const i of items) {
         if (isStagePlannedUpTo(i, stage, dataDate)) cumPlan++;
@@ -243,6 +243,8 @@ export function aggregatePlanActualByGroup(
       predecessor: calc('pred'),
       t1: calc('t1'),
       t2: calc('t2'),
+      r1: calc('r1'),
+      r2: calc('r2'),
     });
   }
   // default sort: most-delayed (largest negative cumulative variance T2 then T1) first
