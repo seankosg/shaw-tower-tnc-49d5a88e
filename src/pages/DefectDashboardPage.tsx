@@ -190,9 +190,9 @@ export default function DefectDashboardPage() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         <KpiCard icon={<ListChecks className="h-6 w-6 text-muted-foreground" />} label="Total Defects" value={kpis.total.toLocaleString()} onClick={() => goRaw({})} />
-        <KpiCard icon={<CheckCircle2 className="h-6 w-6 text-primary" />} label="Completion Done" value={kpis.actualDone.toLocaleString()} sub={`${kpis.completionPct}% completed`} onClick={() => goRaw({ actualComplete: 'true' })} />
-        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Open Defect" value={(kpis.total - kpis.actualDone).toLocaleString()} sub="Total − Completion" onClick={() => goRaw({ actualComplete: 'false' })} />
-        <KpiCard icon={<ShieldCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />} label="Closure Done" value={kpis.closureDone.toLocaleString()} sub={`${kpis.overallProgressPct}% closed`} onClick={() => goRaw({ closureComplete: 'true' })} />
+        <KpiCard icon={<CheckCircle2 className="h-6 w-6 text-primary" />} label="Completion Done" value={kpis.actualDone.toLocaleString()} sub={`${kpis.completionPct}% completed`} progress={kpis.completionPct} onClick={() => goRaw({ actualComplete: 'true' })} />
+        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Open Defect" value={(kpis.total - kpis.actualDone).toLocaleString()} sub="Total − Completion" progress={100 - kpis.completionPct} progressTone="destructive" onClick={() => goRaw({ actualComplete: 'false' })} />
+        <KpiCard icon={<ShieldCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />} label="Closure Done" value={kpis.closureDone.toLocaleString()} sub={`${kpis.overallProgressPct}% closed`} progress={kpis.overallProgressPct} onClick={() => goRaw({ closureComplete: 'true' })} />
         <KpiCard icon={<Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />} label="Remain Inspection" value={kpis.difference.toLocaleString()} sub="검측 대기" onClick={() => goRaw({ actualComplete: 'true', closureComplete: 'false' })} />
       </div>
 
@@ -208,10 +208,6 @@ export default function DefectDashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <StageCard stage="Completion" total={kpis.total} done={kpis.actualDone} remaining={kpis.total - kpis.actualDone} pct={kpis.completionPct} overdue={kpis.completionOverdue} onClick={() => goRaw({ actualComplete: 'false' })} />
-        <StageCard stage="Closure" total={kpis.total} done={kpis.closureDone} remaining={kpis.total - kpis.closureDone} pct={kpis.overallProgressPct} overdue={kpis.closureOverdue} onClick={() => goRaw({ closureComplete: 'false' })} />
-      </div>
 
       <div className="grid gap-3 md:grid-cols-2">
         <AlertBanner tone="destructive" title={`${kpis.overdueCount} Overdue Defect${kpis.overdueCount === 1 ? '' : 's'}`} description={`Planned date is on/before Data Date (${dataDateLabel}) and not yet complete.`} onClick={() => goRaw({ overdue: 'true', asOf: dataDate })} />
@@ -264,15 +260,10 @@ export default function DefectDashboardPage() {
 type GroupParam = 'subTrade' | 'subcontractor' | 'subsub' | 'hdecPic' | 'hdecEng' | 'team' | 'workType';
 type StageKey = 'completion' | 'closure' | 'difference';
 
-function KpiCard({ icon, label, value, sub, accent, onClick }: { icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: 'destructive'; onClick?: () => void }) {
-  return <Card onClick={onClick} className={cn(onClick && 'cursor-pointer transition-colors hover:bg-muted/40', accent === 'destructive' && 'border-destructive/30')}><CardContent className="flex items-center gap-3 p-4">{icon}<div className="min-w-0"><p className="truncate text-xs text-muted-foreground">{label}</p><p className={cn('text-2xl font-bold', accent === 'destructive' ? 'text-destructive' : 'text-foreground')}>{value}</p>{sub && <p className="text-xs text-muted-foreground">{sub}</p>}</div></CardContent></Card>;
+function KpiCard({ icon, label, value, sub, accent, progress, progressTone, onClick }: { icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: 'destructive'; progress?: number; progressTone?: 'default' | 'destructive'; onClick?: () => void }) {
+  return <Card onClick={onClick} className={cn(onClick && 'cursor-pointer transition-colors hover:bg-muted/40', accent === 'destructive' && 'border-destructive/30')}><CardContent className="flex items-center gap-3 p-4">{icon}<div className="min-w-0 flex-1"><p className="truncate text-xs text-muted-foreground">{label}</p><p className={cn('text-2xl font-bold', accent === 'destructive' ? 'text-destructive' : 'text-foreground')}>{value}</p>{sub && <p className="text-xs text-muted-foreground">{sub}</p>}{typeof progress === 'number' && <Progress value={Math.max(0, Math.min(100, progress))} className={cn('mt-1.5 h-1.5', progressTone === 'destructive' && '[&>div]:bg-destructive')} />}</div></CardContent></Card>;
 }
 
-function StageCard({ stage, total, done, remaining, pct, overdue, onClick }: { stage: string; total: number; done: number; remaining: number; pct: number; overdue: number; onClick?: () => void }) {
-  return <Card onClick={onClick} className={cn(onClick && 'cursor-pointer transition-colors hover:bg-muted/40', overdue > 0 && 'border-destructive/30')}><CardContent className="space-y-2 p-4"><div className="flex items-center justify-between"><p className="text-sm font-semibold text-foreground">{stage}</p>{overdue > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive"><AlertTriangle className="h-3 w-3" />{overdue} OD</span>}</div><div className="grid grid-cols-3 gap-2 text-center"><MiniStat label="Total" value={total} /><MiniStat label="Done" value={done} /><MiniStat label="Remaining" value={remaining} /></div><div className="flex items-center gap-2"><Progress value={pct} className="h-2 flex-1" /><span className="w-12 text-right text-xs font-medium text-muted-foreground">{pct}%</span></div></CardContent></Card>;
-}
-
-function MiniStat({ label, value }: { label: string; value: number }) { return <div><p className="text-[11px] text-muted-foreground">{label}</p><p className="text-sm font-semibold text-foreground">{value.toLocaleString()}</p></div>; }
 function AlertBanner({ tone, title, description, onClick }: { tone: 'destructive' | 'warning'; title: string; description: string; onClick: () => void }) { const cls = tone === 'destructive' ? 'border-destructive/40 bg-destructive/5 text-destructive' : 'border-primary/40 bg-primary/5 text-primary'; return <button onClick={onClick} className={cn('flex items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/40', cls)}><div className="flex items-center gap-3"><AlertTriangle className="h-5 w-5" /><div><p className="font-semibold">{title}</p><p className="text-xs text-muted-foreground">{description}</p></div></div><span className="text-sm font-medium text-muted-foreground">View</span></button>; }
 function DateButton({ value, onChange }: { value: string; onChange: (value: string) => void }) { return <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-8 gap-1 text-xs"><CalendarIcon className="h-3.5 w-3.5" />{formatDdMmm(value)}</Button></PopoverTrigger><PopoverContent className="w-auto p-0" align="end"><Calendar mode="single" selected={new Date(value + 'T00:00:00')} onSelect={(d) => d && onChange(d.toISOString().slice(0, 10))} className={cn('p-3 pointer-events-auto')} /></PopoverContent></Popover>; }
 function HeaderTotalNumber({ value, tone }: { value: number; tone?: 'done' | 'remain' | 'delay' }) { return <span className={cn('tabular-nums font-semibold', value === 0 ? 'text-muted-foreground/40' : tone === 'done' ? 'text-emerald-700 dark:text-emerald-400' : tone === 'remain' ? 'text-amber-700 dark:text-amber-400' : tone === 'delay' ? 'text-destructive' : 'text-foreground')}>{value.toLocaleString()}</span>; }
