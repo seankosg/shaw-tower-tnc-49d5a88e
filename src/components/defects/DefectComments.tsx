@@ -317,16 +317,36 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
               className="resize-none text-sm min-h-0"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditSave(); }
-                if (e.key === 'Escape') { setEditingId(null); setEditingMessage(''); }
+                if (e.key === 'Escape') { setEditingId(null); setEditingMessage(''); setShowEditTranslate(false); }
               }}
             />
+            {isHdec && containsKorean(editingMessage) && !showEditTranslate && (
+              <p className="text-[10px] text-amber-600">
+                Korean detected — translation required before saving.
+              </p>
+            )}
+            {showEditTranslate && (
+              <TranslatePanel
+                originalText={editingMessage}
+                onConfirm={(en) => persistEdit(en)}
+                onCancel={() => setShowEditTranslate(false)}
+              />
+            )}
             <div className="flex gap-1 justify-end">
-              <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditingId(null); setEditingMessage(''); }}>
+              <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditingId(null); setEditingMessage(''); setShowEditTranslate(false); }}>
                 Cancel
               </Button>
-              <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleEditSave} disabled={!editingMessage.trim()}>
-                <Check className="h-3 w-3 mr-1" /> Save
-              </Button>
+              {isHdec && containsKorean(editingMessage) && !showEditTranslate ? (
+                <Button size="sm" className="h-6 text-[10px] px-2" onClick={() => setShowEditTranslate(true)} disabled={!editingMessage.trim()}>
+                  <Languages className="h-3 w-3 mr-1" /> Translate
+                </Button>
+              ) : (
+                !showEditTranslate && (
+                  <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleEditSave} disabled={!editingMessage.trim()}>
+                    <Check className="h-3 w-3 mr-1" /> Save
+                  </Button>
+                )
+              )}
             </div>
           </div>
         ) : (
