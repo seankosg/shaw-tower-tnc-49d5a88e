@@ -13,7 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { formatDateTimeDdMmmYyyy, formatDdMmm, formatSignedDays } from '@/lib/format';
+import { formatDateTimeDdMmmYyyy, formatDdMmm, formatSignedDays, formatDuration } from '@/lib/format';
 import { RollbackDialog } from '@/components/import/RollbackDialog';
 
 interface UploadBatch {
@@ -26,6 +26,8 @@ interface UploadBatch {
   success_rows: number | null;
   skipped_rows: number | null;
   rejected_rows: number | null;
+  uploaded_by: string | null;
+  data_date: string | null;
 }
 
 interface RowLog {
