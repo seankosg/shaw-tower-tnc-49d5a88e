@@ -12,6 +12,9 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { containsKorean } from '@/hooks/useTranslateToEnglish';
 import { TranslatePanel } from '@/components/comments/TranslatePanel';
+import { RecipientSelector, RecipientBadges, RECIPIENT_ORDER, type RecipientKey } from '@/components/comments/RecipientSelector';
+
+const RECIPIENT_KEYS = new Set<string>(RECIPIENT_ORDER);
 
 type CommentType = 'comment' | 'instruction' | 'reply';
 
@@ -23,6 +26,7 @@ interface DefectComment {
   type: CommentType;
   message: string;
   edited: boolean;
+  recipients: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -36,10 +40,22 @@ interface AuthorInfo {
 interface DefectCommentsProps {
   defectId: string;
   defectTeam: string | null;
+  hdecPicName?: string | null;
+  hdecEngName?: string | null;
+  subcontractorName?: string | null;
+  subsubName?: string | null;
   onCountChange?: (count: number) => void;
 }
 
-export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCommentsProps) {
+export function DefectComments({
+  defectId,
+  defectTeam,
+  hdecPicName,
+  hdecEngName,
+  subcontractorName,
+  subsubName,
+  onCountChange,
+}: DefectCommentsProps) {
   const { user, profile, isAdmin, isSuperuser, roles } = useAuth();
   const { toast } = useToast();
   const isSenior = roles.includes('senior_user');
@@ -71,9 +87,20 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
   const [message, setMessage] = useState('');
   const [commentType, setCommentType] = useState<Exclude<CommentType, 'reply'>>('comment');
   const [sending, setSending] = useState(false);
-  const [replyTo, setReplyTo] = useState<{ id: string; authorId: string; authorName: string; message: string } | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: string; authorId: string; authorName: string; message: string; recipients: string[] } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState('');
+  const [recipients, setRecipients] = useState<RecipientKey[]>([]);
+
+  const recipientNames = useMemo(
+    () => ({
+      hdec_pic: hdecPicName ?? null,
+      hdec_eng: hdecEngName ?? null,
+      subcontractor: subcontractorName ?? null,
+      subsub: subsubName ?? null,
+    }),
+    [hdecPicName, hdecEngName, subcontractorName, subsubName],
+  );
 
   // Notify parent of count change
   useEffect(() => {
