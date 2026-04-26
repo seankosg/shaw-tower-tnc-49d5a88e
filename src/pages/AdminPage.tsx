@@ -1853,6 +1853,13 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
     load();
   };
 
+  const updateOrigin = async (f: FieldCfg, origin: 'hdec' | 'aconex' | 'system') => {
+    if (origin === f.source_origin) return;
+    await (supabase as any).from(table).update({ source_origin: origin }).eq('id', f.id);
+    toast({ title: 'Origin updated' });
+    load();
+  };
+
   const toggleRole = async (f: FieldCfg, key: 'visible_to_roles' | 'editable_to_roles', role: AppRole) => {
     const current = new Set(f[key] ?? []);
     current.has(role) ? current.delete(role) : current.add(role);
