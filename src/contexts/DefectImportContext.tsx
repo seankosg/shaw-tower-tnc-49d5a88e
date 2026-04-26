@@ -372,7 +372,17 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
           setFiles((current) => current.map((f) => f.id === item.id ? { ...f, status: 'pending_sheet_selection' } : f));
           continue;
         }
-        // 0 or 1 sheet — auto-detect (legacy behavior)
+        // 0 or 1 sheet — auto-detect (legacy behavior). Capture headers for column-select dialog.
+        const headerInfo = await getDefectExcelHeaders(item.file);
+        if (headerInfo) {
+          setFiles((current) => current.map((f) => f.id === item.id ? {
+            ...f,
+            availableHeaders: headerInfo.headers,
+            headerSamples: headerInfo.sample,
+            isReimport: headerInfo.isReimport,
+            excludedHeaders: [],
+          } : f));
+        }
         await parseAndApply(item.id, item.file);
       } catch (error) {
         setFiles((current) => current.map((f) => f.id === item.id ? { ...f, status: 'failed', error: error instanceof Error ? error.message : 'Parse failed' } : f));
@@ -388,10 +398,38 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
     let target: DefectImportFile | undefined;
     setFiles((current) => {
       target = current.find((f) => f.id === id);
-      return current.map((f) => f.id === id ? { ...f, status: 'parsing', selectedSheet: sheetName } : f);
+      // Sheet change → headers may differ → reset excludedHeaders.
+      return current.map((f) => f.id === id ? {
+        ...f,
+        status: 'parsing',
+        selectedSheet: sheetName,
+        excludedHeaders: [],
+        availableHeaders: undefined,
+        headerSamples: undefined,
+      } : f);
     });
     if (!target) return;
+    // Re-extract headers for the newly selected sheet.
+    const headerInfo = await getDefectExcelHeaders(target.file, sheetName);
+    if (headerInfo) {
+      setFiles((current) => current.map((f) => f.id === id ? {
+        ...f,
+        availableHeaders: headerInfo.headers,
+        headerSamples: headerInfo.sample,
+        isReimport: headerInfo.isReimport,
+      } : f));
+    }
     await parseAndApply(id, target.file, sheetName);
+  }, [parseAndApply]);
+
+  const setFileExcludedHeaders = useCallback(async (id: string, excluded: string[]) => {
+    let target: DefectImportFile | undefined;
+    setFiles((current) => {
+      target = current.find((f) => f.id === id);
+      return current.map((f) => f.id === id ? { ...f, status: 'parsing', excludedHeaders: excluded } : f);
+    });
+    if (!target) return;
+    await parseAndApply(id, target.file, target.selectedSheet, excluded);
   }, [parseAndApply]);
 
   const applyMasterDecisions = (row: ParsedDefectRow, decisions: MasterNameDecisions): ParsedDefectRow => {
