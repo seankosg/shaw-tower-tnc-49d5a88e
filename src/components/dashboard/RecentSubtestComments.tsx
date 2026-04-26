@@ -51,7 +51,7 @@ export function RecentSubtestComments() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [tab, setTab] = useState<FilterTab>('all');
-  const [days, setDays] = useState<DayWindow>(30);
+  const [days, setDays] = useState<DayWindow>(90);
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [supplementalParents, setSupplementalParents] = useState<CommentRow[]>([]);
   const [authors, setAuthors] = useState<AuthorInfo[]>([]);
@@ -71,8 +71,9 @@ export function RecentSubtestComments() {
     const load = async () => {
       setLoading(true);
       const baseSelect =
-        'id, subtest_id, type, message, created_at, author_user_id, edited, parent_comment_id, subtests(id, item_no, mos_code, team, subcontractor_name, subsub_name)';
+        'id, subtest_id, type, message, created_at, author_user_id, edited, parent_comment_id';
 
+      // Step 1: fetch comments only (no embedded join — avoids RLS-driven dropouts on subtests)
       const { data, error } = await (supabase as any)
         .from('subtest_comments')
         .select(baseSelect)
@@ -80,6 +81,9 @@ export function RecentSubtestComments() {
         .order('created_at', { ascending: false })
         .limit(50);
       if (cancelled) return;
+      if (error) {
+        console.error('[RecentSubtestComments] load error', error);
+      }
       if (error || !data) {
         setComments([]);
         setSupplementalParents([]);
@@ -87,27 +91,52 @@ export function RecentSubtestComments() {
         setLoading(false);
         return;
       }
-      const rows = data as CommentRow[];
-      setComments(rows);
+      const baseRows = data as Omit<CommentRow, 'subtests'>[];
 
-      // Supplement orphan parents that fall outside the time window.
-      const missingParentIds = getMissingParentIds(rows);
+      // Step 2: supplement orphan parents outside the window
+      const missingParentIds = getMissingParentIds(baseRows as any);
+      let parentRows: Omit<CommentRow, 'subtests'>[] = [];
       if (missingParentIds.length > 0) {
         const { data: pData } = await (supabase as any)
           .from('subtest_comments')
           .select(baseSelect)
           .in('id', missingParentIds);
-        if (!cancelled) setSupplementalParents((pData as CommentRow[]) ?? []);
-      } else {
-        setSupplementalParents([]);
+        parentRows = (pData as Omit<CommentRow, 'subtests'>[]) ?? [];
       }
 
-      // Authors (include supplemented parents).
-      const authorIds = Array.from(
-        new Set([...rows, ...(supplementalParents ?? [])].map((r) => r.author_user_id)),
+      // Step 3: fetch related subtests in a single IN query (RLS-filtered; missing => no access)
+      const allSubIds = Array.from(
+        new Set([...baseRows, ...parentRows].map((r) => r.subtest_id).filter(Boolean)),
       );
+      const subMap = new Map<string, SubtestRef>();
+      if (allSubIds.length > 0) {
+        const { data: subs } = await supabase
+          .from('subtests')
+          .select('id, item_no, mos_code, team, subcontractor_name, subsub_name')
+          .in('id', allSubIds);
+        for (const s of (subs as SubtestRef[]) ?? []) subMap.set(s.id, s);
+      }
+
+      const attach = (r: Omit<CommentRow, 'subtests'>): CommentRow => ({
+        ...r,
+        subtests: subMap.get(r.subtest_id) ?? null,
+      });
+      const rows: CommentRow[] = baseRows.map(attach);
+      const suppl: CommentRow[] = parentRows.map(attach);
+
+      if (cancelled) return;
+      setComments(rows);
+      setSupplementalParents(suppl);
+      console.debug('[RecentSubtestComments] loaded', {
+        count: rows.length,
+        days,
+        sinceIso,
+        accessibleSubtests: subMap.size,
+      });
+
+      // Authors
       const allAuthorIds = Array.from(
-        new Set(rows.map((r) => r.author_user_id)),
+        new Set([...rows, ...suppl].map((r) => r.author_user_id)),
       );
       if (allAuthorIds.length > 0) {
         const { data: profs } = await supabase
@@ -118,9 +147,8 @@ export function RecentSubtestComments() {
       } else {
         setAuthors([]);
       }
-      void authorIds;
 
-      // Reads for unread highlight.
+      // Reads for unread highlight
       const subIds = Array.from(new Set(rows.map((r) => r.subtest_id)));
       if (subIds.length > 0) {
         const { data: r } = await (supabase as any)
