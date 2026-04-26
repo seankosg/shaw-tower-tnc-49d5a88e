@@ -501,6 +501,16 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         const insertPredActual = insertPredStatus === 'Done' ? autoFillDate : (row.pred_actual_date ?? null);
         const rowTeamValue = item.detectedImportType === 'standard' ? row.team : (item.team || null);
         const resolvedTeam = resolveValue(rowTeamValue, null);
+
+        // R1/R2: derive missing target dates from T2 planned date
+        const derivedR = row.t2_planned_date ? derivePlanFromT2(row.t2_planned_date) : { r1_target_submission_date: null, r2_target_submission_date: null, r2_target_approval_date: null };
+        const insertR1Target = row.r1_target_submission_date ?? derivedR.r1_target_submission_date;
+        const insertR2SubTarget = row.r2_target_submission_date ?? derivedR.r2_target_submission_date;
+        const insertR2ApprovalTarget = row.r2_target_approval_date ?? derivedR.r2_target_approval_date;
+        // Default R1/R2 status to 'Planned' when target exists but no explicit status
+        const insertR1Status = row.r1_status ?? (insertR1Target ? 'Planned' : null);
+        const insertR2Status = row.r2_status ?? (insertR2SubTarget ? 'Planned' : null);
+
         const { error } = await supabase.from('subtests').insert({
           project_id: projectId!, system_id: systemId,
           item_no: row.item_no, mos_code: row.mos_code, subtest_id: row.subtest_id,
@@ -516,9 +526,16 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           subcontractor_name: row.subcontractor_name,
           subsub_name: row.subsub_name,
           hdec_pic_name: row.hdec_pic_name,
-          r1_status: row.r1_status,
-          r2_status: row.r2_status,
+          r1_status: insertR1Status as any,
+          r1_report_ref: row.r1_report_ref,
+          r1_target_submission_date: insertR1Target,
+          r1_actual_submission_date: row.r1_actual_submission_date,
+          r2_status: insertR2Status as any,
           aconex_ref_no: row.aconex_ref_no,
+          r2_target_submission_date: insertR2SubTarget,
+          r2_actual_submission_date: row.r2_actual_submission_date,
+          r2_target_approval_date: insertR2ApprovalTarget,
+          r2_actual_approval_date: row.r2_actual_approval_date,
           remarks: row.remarks,
           punchlist_comments: row.punchlist_comments,
           data_source_type: dataSourceType as any, source_upload_id: uploadId,
