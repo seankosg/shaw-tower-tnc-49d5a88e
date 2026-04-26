@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,8 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle, Settings2 } from 'lucide-react';
 import { useDefectImport, type DefectFileStatus } from '@/contexts/DefectImportContext';
+import { ColumnSelectDialog } from '@/components/import/ColumnSelectDialog';
 
 // Re-export pure helpers so existing tests/imports keep working
 export { compareIssueNoAsc, detectIssueNoSortDirection, buildSubcontractorIssueAssignments } from '@/contexts/DefectImportContext';
@@ -42,11 +43,14 @@ export default function DefectImportPage() {
     clearAll,
     setFileDataDate,
     setFileSheet,
+    setFileExcludedHeaders,
     startImport,
     setDecisionAction,
     confirmSimilarDecisions,
     cancelSimilarDecisions,
   } = useDefectImport();
+  const [columnDialogFileId, setColumnDialogFileId] = useState<string | null>(null);
+  const columnDialogFile = files.find((f) => f.id === columnDialogFileId) ?? null;
 
   const onDrop = useCallback((event: React.DragEvent) => {
     event.preventDefault();
