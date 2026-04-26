@@ -86,26 +86,27 @@ export function todayIso(): string {
 }
 
 /**
- * A defect is overdue when any of its planned dates is on/before asOf and the
- * corresponding actual stage hasn't been completed yet.
+ * A defect is overdue when ANY of its planned dates is strictly BEFORE asOf
+ * and the corresponding stage is not yet done. Cascade Done semantics apply
+ * (closure done ⇒ all stages done; progress >= 100 ⇒ completion done).
+ *
+ * IMPORTANT: `asOf` is REQUIRED. Pass the project's Data Date — never `new Date()`.
+ * Use `useLatestDataDate()` hook to obtain the canonical Data Date.
+ *
+ * Implementation delegates to `defect-dashboard-utils.isOverdue` (single source of truth).
  */
 export function isOverdueDefect(
   item: Pick<DefectItem,
     'planned_start_date' | 'planned_completion_date' | 'planned_closure_date'
     | 'actual_start_date' | 'actual_completion_date' | 'actual_closure_date'
-    | 'closure_status' | 'status'
+    | 'actual_progress_pct' | 'closure_status' | 'status'
   >,
-  asOf = todayIso(),
+  asOf: string,
 ): boolean {
-  if (
-    Boolean(item.actual_closure_date)
-    || String(item.closure_status ?? '') === 'Done'
-    || String(item.status ?? '').trim().toLowerCase() === 'closed'
-  ) return false;
-  if (item.planned_start_date && item.planned_start_date < asOf && !item.actual_start_date) return true;
-  if (item.planned_completion_date && item.planned_completion_date < asOf && !item.actual_completion_date) return true;
-  if (item.planned_closure_date && item.planned_closure_date < asOf && !item.actual_closure_date) return true;
-  return false;
+  // Lazy require to avoid circular import at module load.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { isOverdue } = require('@/lib/defect-dashboard-utils') as typeof import('@/lib/defect-dashboard-utils');
+  return isOverdue(item as any, asOf);
 }
 
 export function toNullable(value: FormDataEntryValue | string | null | undefined): string | null {

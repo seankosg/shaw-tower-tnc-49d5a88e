@@ -3,10 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { DefectProgressMatrix } from '@/components/defects/DefectProgressMatrix';
 import { DefectDailyCumulativeChart } from '@/components/defects/DefectDailyCumulativeChart';
 import { aggregateDefectProgress, defaultDefectDateRange, type DefectProgressBucket, type DefectProgressDateField, type DefectProgressGroupBy } from '@/lib/defect-progress-utils';
 import { type DefectItem } from '@/lib/defect-utils';
+import { useLatestDataDate } from '@/hooks/useLatestDataDate';
+import { formatDdMmm } from '@/lib/format';
 
 const GROUP_LABELS: Record<DefectProgressGroupBy, string> = {
   team: 'Team',
@@ -45,15 +48,21 @@ export default function DefectProgressPage() {
     return () => { cancelled = true; };
   }, []);
 
-  const matrix = useMemo(() => start && end ? aggregateDefectProgress(items, { groupBy, bucket, start, end, dateField }) : { buckets: [], rows: [] }, [items, groupBy, bucket, start, end, dateField]);
+  const { dataDate, source: dataDateSource } = useLatestDataDate();
+  const matrix = useMemo(() => start && end ? aggregateDefectProgress(items, { groupBy, bucket, start, end, dateField, asOf: dataDate }) : { buckets: [], rows: [] }, [items, groupBy, bucket, start, end, dateField, dataDate]);
 
   if (loading) return <div className="text-sm text-muted-foreground">Loading defect progress...</div>;
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Defect Progress Matrix</h1>
-        <p className="text-sm text-muted-foreground">Plan / Actual progress by group and date bucket.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Defect Progress Matrix</h1>
+          <p className="text-sm text-muted-foreground">Plan / Actual progress by group and date bucket. Overdue uses Data Date as baseline.</p>
+        </div>
+        <Badge variant="outline" className="text-xs" title="Data Date — all overdue judgments use this date as baseline. Sourced from the latest completed upload batch.">
+          Data Date: {formatDdMmm(dataDate)}{dataDateSource === 'fallback' && ' (fallback)'}
+        </Badge>
       </div>
       <Card>
         <CardHeader><CardTitle className="text-base">Controls</CardTitle></CardHeader>
