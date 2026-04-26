@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { useDefectImport, type DefectFileStatus } from '@/contexts/DefectImportContext';
@@ -141,6 +142,25 @@ export default function DefectImportPage() {
                       </div>
                     )}
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      {file.sheetNames && file.sheetNames.length > 1 && (
+                        <>
+                          <span className="whitespace-nowrap text-xs text-muted-foreground">Sheet:</span>
+                          <Select
+                            value={file.selectedSheet || ''}
+                            onValueChange={(v) => setFileSheet(file.id, v)}
+                            disabled={isRunning || file.status === 'done' || file.status === 'processing'}
+                          >
+                            <SelectTrigger className="h-7 w-[180px] text-xs">
+                              <SelectValue placeholder="Select sheet" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {file.sheetNames.map((s) => (
+                                <SelectItem key={s} value={s}>{s}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </>
+                      )}
                       <span className="whitespace-nowrap text-xs text-muted-foreground">Data Date:</span>
                       <Input
                         type="date"
