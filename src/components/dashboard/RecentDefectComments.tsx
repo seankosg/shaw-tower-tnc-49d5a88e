@@ -50,7 +50,7 @@ export function RecentDefectComments() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [tab, setTab] = useState<FilterTab>('all');
-  const [days, setDays] = useState<DayWindow>(30);
+  const [days, setDays] = useState<DayWindow>(90);
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [supplementalParents, setSupplementalParents] = useState<CommentRow[]>([]);
   const [authors, setAuthors] = useState<AuthorInfo[]>([]);
@@ -70,8 +70,9 @@ export function RecentDefectComments() {
     const load = async () => {
       setLoading(true);
       const baseSelect =
-        'id, defect_id, type, message, created_at, author_user_id, edited, parent_comment_id, defect_items(id, issue_no, description, team, subcontractor_name)';
+        'id, defect_id, type, message, created_at, author_user_id, edited, parent_comment_id';
 
+      // Step 1: fetch comments only (no embedded join)
       const { data, error } = await (supabase as any)
         .from('defect_comments')
         .select(baseSelect)
@@ -79,6 +80,9 @@ export function RecentDefectComments() {
         .order('created_at', { ascending: false })
         .limit(50);
       if (cancelled) return;
+      if (error) {
+        console.error('[RecentDefectComments] load error', error);
+      }
       if (error || !data) {
         setComments([]);
         setSupplementalParents([]);
@@ -86,21 +90,50 @@ export function RecentDefectComments() {
         setLoading(false);
         return;
       }
-      const rows = data as CommentRow[];
-      setComments(rows);
+      const baseRows = data as Omit<CommentRow, 'defect_items'>[];
 
-      const missingParentIds = getMissingParentIds(rows);
+      // Step 2: supplement orphan parents
+      const missingParentIds = getMissingParentIds(baseRows as any);
+      let parentRows: Omit<CommentRow, 'defect_items'>[] = [];
       if (missingParentIds.length > 0) {
         const { data: pData } = await (supabase as any)
           .from('defect_comments')
           .select(baseSelect)
           .in('id', missingParentIds);
-        if (!cancelled) setSupplementalParents((pData as CommentRow[]) ?? []);
-      } else {
-        setSupplementalParents([]);
+        parentRows = (pData as Omit<CommentRow, 'defect_items'>[]) ?? [];
       }
 
-      const allAuthorIds = Array.from(new Set(rows.map((r) => r.author_user_id)));
+      // Step 3: fetch related defects in a single IN query
+      const allDefIds = Array.from(
+        new Set([...baseRows, ...parentRows].map((r) => r.defect_id).filter(Boolean)),
+      );
+      const defMap = new Map<string, DefectRef>();
+      if (allDefIds.length > 0) {
+        const { data: defs } = await supabase
+          .from('defect_items')
+          .select('id, issue_no, description, team, subcontractor_name')
+          .in('id', allDefIds);
+        for (const d of (defs as DefectRef[]) ?? []) defMap.set(d.id, d);
+      }
+
+      const attach = (r: Omit<CommentRow, 'defect_items'>): CommentRow => ({
+        ...r,
+        defect_items: defMap.get(r.defect_id) ?? null,
+      });
+      const rows: CommentRow[] = baseRows.map(attach);
+      const suppl: CommentRow[] = parentRows.map(attach);
+
+      if (cancelled) return;
+      setComments(rows);
+      setSupplementalParents(suppl);
+      console.debug('[RecentDefectComments] loaded', {
+        count: rows.length,
+        days,
+        sinceIso,
+        accessibleDefects: defMap.size,
+      });
+
+      const allAuthorIds = Array.from(new Set([...rows, ...suppl].map((r) => r.author_user_id)));
       if (allAuthorIds.length > 0) {
         const { data: profs } = await supabase
           .from('profiles')
