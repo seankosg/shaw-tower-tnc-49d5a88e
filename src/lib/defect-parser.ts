@@ -521,7 +521,7 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
   });
 
   const isReimport = detectReimportMarker(worksheet);
-  return { rows, headers, sheetName: sheetNameResolved, isReimport };
+  return { rows, headers, sheetName: sheetNameResolved, isReimport, excludedFields };
 }
 
 export function daysDiff(oldDate?: string | null, newDate?: string | null): number | null {
