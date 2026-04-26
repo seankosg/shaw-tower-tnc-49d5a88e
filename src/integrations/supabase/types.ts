@@ -1217,8 +1217,15 @@ export type Database = {
           predecessor_status_raw: string | null
           project_id: string
           punchlist_comments: string | null
-          r1_status: string | null
-          r2_status: string | null
+          r1_actual_submission_date: string | null
+          r1_report_ref: string | null
+          r1_status: Database["public"]["Enums"]["report_status"] | null
+          r1_target_submission_date: string | null
+          r2_actual_approval_date: string | null
+          r2_actual_submission_date: string | null
+          r2_status: Database["public"]["Enums"]["report_status"] | null
+          r2_target_approval_date: string | null
+          r2_target_submission_date: string | null
           remarks: string | null
           row_version: number
           source_upload_id: string | null
@@ -1255,8 +1262,15 @@ export type Database = {
           predecessor_status_raw?: string | null
           project_id: string
           punchlist_comments?: string | null
-          r1_status?: string | null
-          r2_status?: string | null
+          r1_actual_submission_date?: string | null
+          r1_report_ref?: string | null
+          r1_status?: Database["public"]["Enums"]["report_status"] | null
+          r1_target_submission_date?: string | null
+          r2_actual_approval_date?: string | null
+          r2_actual_submission_date?: string | null
+          r2_status?: Database["public"]["Enums"]["report_status"] | null
+          r2_target_approval_date?: string | null
+          r2_target_submission_date?: string | null
           remarks?: string | null
           row_version?: number
           source_upload_id?: string | null
@@ -1293,8 +1307,15 @@ export type Database = {
           predecessor_status_raw?: string | null
           project_id?: string
           punchlist_comments?: string | null
-          r1_status?: string | null
-          r2_status?: string | null
+          r1_actual_submission_date?: string | null
+          r1_report_ref?: string | null
+          r1_status?: Database["public"]["Enums"]["report_status"] | null
+          r1_target_submission_date?: string | null
+          r2_actual_approval_date?: string | null
+          r2_actual_submission_date?: string | null
+          r2_status?: Database["public"]["Enums"]["report_status"] | null
+          r2_target_approval_date?: string | null
+          r2_target_submission_date?: string | null
           remarks?: string | null
           row_version?: number
           source_upload_id?: string | null
@@ -1702,6 +1723,10 @@ export type Database = {
           area_type: string
         }[]
       }
+      add_business_days_no_sun: {
+        Args: { _days: number; _start: string }
+        Returns: string
+      }
       can_edit_subtest: {
         Args: {
           _project_id: string
@@ -1836,6 +1861,12 @@ export type Database = {
         | "standard_import"
         | "admin_edit"
       import_type: "legacy" | "standard"
+      report_status:
+        | "Planned"
+        | "Submitted"
+        | "Under Review"
+        | "Approved"
+        | "Returned"
       tc_status: "Planned" | "WIP" | "Done" | "Hold"
       team_type: "Mech" | "Elec" | "Arch" | "Supp"
       upload_status:
@@ -1996,6 +2027,13 @@ export const Constants = {
         "admin_edit",
       ],
       import_type: ["legacy", "standard"],
+      report_status: [
+        "Planned",
+        "Submitted",
+        "Under Review",
+        "Approved",
+        "Returned",
+      ],
       tc_status: ["Planned", "WIP", "Done", "Hold"],
       team_type: ["Mech", "Elec", "Arch", "Supp"],
       upload_status: [
