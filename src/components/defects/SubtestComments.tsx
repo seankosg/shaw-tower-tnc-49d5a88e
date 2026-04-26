@@ -492,8 +492,9 @@ export function SubtestComments({
             <Button
               size="icon"
               onClick={handleSend}
-              disabled={sending || !message.trim() || !user || showNewTranslate}
+              disabled={sending || !message.trim() || !user || showNewTranslate || recipients.length === 0}
               className="shrink-0 h-9 w-9"
+              title={recipients.length === 0 ? 'Select at least one recipient' : undefined}
             >
               <Send className="h-3.5 w-3.5" />
             </Button>
