@@ -682,7 +682,11 @@ function ClickNum({ value, onClick, hideZero = false }: { value: number; onClick
   return (
     <button
       type="button"
-      className={cn('tabular-nums hover:underline', zeroClass)}
+      className={cn(
+        'tabular-nums hover:underline',
+        zeroClass,
+        value !== 0 && 'underline decoration-dotted decoration-muted-foreground/30 underline-offset-2 hover:decoration-foreground'
+      )}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
     >
       {value}
@@ -892,6 +896,7 @@ function PlanActualTable({
     actualOn?: string;
     delayAsOf?: string;
     delayOn?: string;
+    actualUnplannedOn?: string;
     actualOverride?: { param: string; value: string };
   };
 
@@ -985,6 +990,7 @@ function PlanActualTable({
                 actualOn: 'pred_actual_on',
                 delayAsOf: 'pred_delay_asof',
                 delayOn: 'pred_delay_on',
+                actualUnplannedOn: 'pred_actual_unplanned_on',
               },
               {
                 stage: 't1', label: 'T1', metrics: r.t1,
@@ -994,6 +1000,7 @@ function PlanActualTable({
                 actualOn: 't1_actual_on',
                 delayAsOf: 't1_delay_asof',
                 delayOn: 't1_delay_on',
+                actualUnplannedOn: 't1_actual_unplanned_on',
               },
               {
                 stage: 't2', label: 'T2', metrics: r.t2,
@@ -1003,6 +1010,7 @@ function PlanActualTable({
                 actualOn: 't2_actual_on',
                 delayAsOf: 't2_delay_asof',
                 delayOn: 't2_delay_on',
+                actualUnplannedOn: 't2_actual_unplanned_on',
               },
             ];
 
@@ -1068,7 +1076,16 @@ function PlanActualTable({
                     <ClickNum value={m.dataDateActual} onClick={st.actualOn ? () => go(r.key, { [st.actualOn!]: dataDate }) : undefined} />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5">
-                    <VarianceCell value={dataDateD} />
+                    <ClickVariance
+                      value={dataDateD}
+                      onClick={
+                        dataDateD < 0 && st.delayOn
+                          ? () => go(r.key, { [st.delayOn!]: dataDate })
+                          : dataDateD > 0 && st.actualUnplannedOn
+                            ? () => go(r.key, { [st.actualUnplannedOn!]: dataDate })
+                            : undefined
+                      }
+                    />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5 font-semibold text-destructive">
                     <ClickNum value={m.dataDateDelay} hideZero onClick={st.delayOn ? () => go(r.key, { [st.delayOn!]: dataDate }) : undefined} />
@@ -1081,7 +1098,16 @@ function PlanActualTable({
                     <ClickNum value={m.todayActual} onClick={st.actualOn ? () => go(r.key, { [st.actualOn!]: today }) : undefined} />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5">
-                    <VarianceCell value={todayD} />
+                    <ClickVariance
+                      value={todayD}
+                      onClick={
+                        todayD < 0 && st.delayOn
+                          ? () => go(r.key, { [st.delayOn!]: today })
+                          : todayD > 0 && st.actualUnplannedOn
+                            ? () => go(r.key, { [st.actualUnplannedOn!]: today })
+                            : undefined
+                      }
+                    />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5 font-semibold text-destructive">
                     <ClickNum value={m.todayDelay} hideZero onClick={st.delayOn ? () => go(r.key, { [st.delayOn!]: today }) : undefined} />

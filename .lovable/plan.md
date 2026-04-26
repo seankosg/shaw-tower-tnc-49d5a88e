@@ -1,109 +1,89 @@
 ## 배경
 
-T&C 대시보드의 Data Date Delay를 "당일 plan AND not Done"으로 수정한 것과 동일한 버그가 **Defect Management** 대시보드에도 존재합니다.
+T&C 대시보드 "계획 및 실적" 표 — Data Date / Today 섹션의 8개 숫자 셀(stage별 Plan / Actual / Δ / Delay) 모두 클릭 시 SubtestList(`/tc/raw-data`)로 이동해 해당 항목들을 보여줘야 합니다.
 
-`src/lib/defect-dashboard-utils.ts` line 146:
-```ts
-if (isStageDelayedAsOf(item, stage, dataDate)) dataDateDelay++;
-// = planned_date <= dataDate AND !done  (누적)
-```
+코드 검토 결과:
+- **Plan / Actual / Delay** 셀은 이미 클릭 핸들러가 연결되어 있고, SubtestList에 대응하는 URL 필터(`*_planned_on`, `*_actual_on`, `*_delay_on`)도 구현되어 있어 라우팅이 정상 동작해야 합니다.
+- **Δ 셀** (Data Date Δ line 1071, Today Δ line 1084) 은 클릭 불가능한 `VarianceCell`로 렌더되어 클릭이 아예 안 됩니다.
 
-→ Data Date Delay가 누적이라 Δ 음수의 절댓값과 일치하지 않음. 같은 BMS-039/040 시나리오를 적용하면 동일 문제 발생.
-
-또한 클릭 핸들러는 `overdue=true & asOf=dataDate`로 이동하는데, 이 필터는 누적 overdue (planned ≤ asOf AND not done)를 적용해 "당일 plan만"이 아니라 과거 누적 지연 항목까지 모두 보여주므로 화면 카운트와 목록이 불일치합니다.
+사용자 진술 "현재는 Delay만 가능"은 (a) Δ 셀이 실제로 클릭 안 되는 점 (b) Plan/Actual 셀의 어포던스가 약하거나 일부 케이스에서 동작 안 하는 점 — 둘 다를 가리킬 수 있습니다. 본 plan은 둘 다 해결합니다.
 
 ## 변경 내용
 
-### 1. 집계 로직 (`src/lib/defect-dashboard-utils.ts`)
+### 1. Δ 셀 라우팅 (`src/pages/DashboardPage.tsx`)
 
-`calcMetrics` 함수의 `dataDateDelay` 계산 변경:
-```text
-변경 전: isStageDelayedAsOf(item, stage, dataDate)
-변경 후: plan === dataDate && !isStageDone(item, stage)
+사용자 결정대로 **Δ 부호에 따라 다른 목록**으로 이동:
+- `Δ < 0` (부족): "그 일자에 plan AND not done" → 기존 `<stage>_delay_on` 파라미터 (Delay 셀과 동일 결과).
+- `Δ > 0` (초과): "그 일자에 actual AND 그 일자 plan 아님" → 신규 `<stage>_actual_unplanned_on` 파라미터.
+- `Δ = 0`: 클릭 비활성 (텍스트 렌더).
+
+`StageDef`에 `actualUnplannedOn?: string` 필드 추가 → pred/t1/t2 정의에 각각 `pred_actual_unplanned_on`, `t1_actual_unplanned_on`, `t2_actual_unplanned_on` 매핑.
+
+Data Date Δ 셀:
+```tsx
+<ClickVariance
+  value={dataDateD}
+  onClick={
+    dataDateD < 0 && st.delayOn
+      ? () => go(r.key, { [st.delayOn!]: dataDate })
+      : dataDateD > 0 && st.actualUnplannedOn
+        ? () => go(r.key, { [st.actualUnplannedOn!]: dataDate })
+        : undefined
+  }
+/>
 ```
 
-`diffMetrics`의 `dataDateDelay` (= `max(0, c.dataDateDelay - z.dataDateDelay)`)는 그대로 유지 — 새 정의에서도 의미 보존됨 (당일 completion plan 미완료 - 당일 closure plan 미완료).
+Today Δ 셀: 동일 패턴, `dataDate` → `today`.
 
-### 2. URL 필터 추가 (`src/pages/DefectRawDataPage.tsx`)
+### 2. SubtestList 신규 필터 (`src/pages/SubtestList.tsx`)
 
-새 쿼리 파라미터 `dueOn`을 도입 (값: ISO 날짜). 동작: "해당 stage의 planned_date == dueOn AND 해당 stage 미완료" 필터. 기존 `stage` 파라미터를 함께 사용해 stage 결정 (completion / closure / start / 없으면 closure 미완료 + 어느 stage든 plan==date AND not done).
+세 개의 신규 URL 파라미터를 처리:
+- `pred_actual_unplanned_on`
+- `t1_actual_unplanned_on`
+- `t2_actual_unplanned_on`
 
-`overdue` 필터 처리 블록 다음에 추가:
+필터 로직 (기존 `urlT1ActualOn` 처리 라인 부근에 추가):
 ```ts
-const dueOn = searchParams.get('dueOn');
-if (dueOn) {
-  const stage = searchParams.get('stage');
-  next = next.filter((item) => {
-    if (Boolean(item.actual_closure_date)) return false;
-    if (stage === 'start') return item.planned_start_date === dueOn && !item.actual_start_date;
-    if (stage === 'completion') return item.planned_completion_date === dueOn && Number(item.actual_progress_pct ?? 0) < 100;
-    if (stage === 'closure') return item.planned_closure_date === dueOn && !item.actual_closure_date;
-    // fallback: any stage planned exactly on the date and not yet done
-    return (
-      (item.planned_start_date === dueOn && !item.actual_start_date) ||
-      (item.planned_completion_date === dueOn && Number(item.actual_progress_pct ?? 0) < 100) ||
-      (item.planned_closure_date === dueOn && !item.actual_closure_date)
-    );
-  });
-}
+if (urlPredActualUnplannedOn && !(r.pred_actual_date === urlPredActualUnplannedOn && r.pred_planned_date !== urlPredActualUnplannedOn)) return false;
+if (urlT1ActualUnplannedOn  && !(r.t1_actual_date  === urlT1ActualUnplannedOn  && r.t1_planned_date  !== urlT1ActualUnplannedOn))  return false;
+if (urlT2ActualUnplannedOn  && !(r.t2_actual_date  === urlT2ActualUnplannedOn  && r.t2_planned_date  !== urlT2ActualUnplannedOn))  return false;
 ```
 
-활성 필터 칩(active filter chips) 표시도 `dueOn`에 대해 추가:
-```ts
-const dueOn = searchParams.get('dueOn');
-if (dueOn) {
-  const stage = searchParams.get('stage');
-  const stageLabel = stage === 'completion' ? 'Completion' : stage === 'closure' ? 'Closure' : stage === 'start' ? 'Start' : 'Stage';
-  out.push({ label: `${stageLabel} due ${dueOn} (open)`, param: 'dueOn', clears: ['dueOn', 'stage'] });
-}
+### 3. Plan / Actual 셀 동작 보장
+
+기존 핸들러는 그대로 유지(`<stage>_planned_on=<date>` / `<stage>_actual_on=<date>`로 이동). 추가로:
+
+- `ClickNum`의 시각적 어포던스 강화: 0이 아닌 값에 옅은 underline 힌트 추가하여 클릭 가능함을 명확히 표시 (hover 시 underline은 그대로). 0 값은 muted 유지.
+
+```tsx
+className={cn(
+  'tabular-nums',
+  zeroClass,
+  onClick && value !== 0 && 'underline decoration-dotted decoration-muted-foreground/30 underline-offset-2 hover:decoration-foreground'
+)}
 ```
 
-### 3. Defect Dashboard 클릭 핸들러 (`src/pages/DefectDashboardPage.tsx`)
+- 그룹화가 `none` 등일 때 `keyToFilterValue` 처리가 빠지지 않는지 spot check (현재 코드는 `value && value !== NONE_LABEL`일 때만 `groupParam`을 추가하므로 안전).
 
-Data Date Delay 셀 (line 518) 변경:
-```text
-변경 전: go(row.key, { overdue: 'true', asOf: dataDate })
-변경 후: go(row.key, { dueOn: dataDate, stage: stage.stage })
-       (단, isDifference=true인 경우 rowClick fallback 유지)
-```
+### 4. 비변경 사항
 
-Today Delay 셀 (line 532)도 동일한 정의 일관성을 위해 변경:
-```text
-변경 전: go(row.key, { overdue: 'true', asOf: today })
-변경 후: go(row.key, { dueOn: today, stage: stage.stage })
-       (isDifference=true이면 rowClick)
-```
-
-→ 표에 보이는 카운트(당일 plan AND not done)와 클릭 후 목록이 정확히 일치.
-
-### 4. 테스트 추가 (`src/test/defect-dashboard-utils.test.ts`)
-
-기존 테스트 파일이 있는지 확인 후, 없으면 신규 생성. 다음 케이스 검증:
-- 사용자 시나리오 미러링: completion plan 04-24 (open) + completion plan 04-25 (open), dataDate=04-25
-  - `completion.dataDatePlan === 1`, `completion.dataDateActual === 0`, `completion.dataDateDelay === 1`
-  - `|Δ| === dataDateDelay` 보장
-- closure stage에 대해서도 동일 패턴 검증
-
-기존 defect 관련 테스트와 함께 `bunx vitest run`으로 회귀 확인.
-
-### 5. 영향 범위 / 비변경 사항
-
-- `aggregateDefectPlanActualByGroup`의 정렬 키, 헤더 합계 등은 자동 반영.
-- `KpiCard` "Overdue - Completion/Closure/Start" 카드(누적 overdue가 정확한 의미)는 변경하지 않음.
-- "Top 10 Overdue Defects", `AlertBanner`(누적 overdue) 등도 변경하지 않음.
-- `defect-dashboard-excel-export.ts`의 컬럼 매핑은 그대로 (값만 새 정의로 채워짐).
-- `isStageDelayedAsOf` export는 다른 코드에서 사용되므로 유지.
+- 헤더 합계, 정렬, 다른 KpiCard는 변경 없음.
+- Cumulative 섹션의 Plan/Actual/Δ 셀(이미 클릭 가능)은 변경 없음.
+- `defect-dashboard`는 사용자가 요청하지 않았으므로 변경 없음.
 
 ## 영향 받는 파일
 
-- `src/lib/defect-dashboard-utils.ts` — `dataDateDelay` 계산식 변경
-- `src/pages/DefectRawDataPage.tsx` — `dueOn` 필터 + active chip 처리 추가
-- `src/pages/DefectDashboardPage.tsx` — Data Date Delay & Today Delay 클릭 핸들러를 `dueOn` 필터로 교체
-- `src/test/defect-dashboard-utils.test.ts` — 신규/추가 테스트 케이스
+- `src/pages/DashboardPage.tsx` — Data Date Δ / Today Δ 셀을 `ClickVariance`로 교체, `StageDef.actualUnplannedOn` 필드 추가, `ClickNum` 어포던스 개선
+- `src/pages/SubtestList.tsx` — `*_actual_unplanned_on` 3개 URL 파라미터 처리
 
 ## 검증
 
-- `bunx vitest run` 전체 테스트 통과
-- Defect Dashboard에서 Data Date Δ < 0인 행에서 `Delay == |Δ|` 성립
-- Data Date Delay 셀 클릭 시, 보이는 카운트와 동일한 수의 항목이 DefectRawData 목록에 표시
-- Today Delay 셀도 동일하게 검증
+- `bunx vitest run` 통과
+- 표의 8개 셀(Plan/Actual/Δ/Delay × Data Date/Today) 모두 클릭 시 SubtestList로 이동하고 해당 행이 필터되어 표시
+- Δ 음수 클릭 = Delay 클릭과 동일 결과
+- Δ 양수 클릭 = 그 일자 actual인데 그 일자 plan은 아니었던 항목만 표시
+- Δ = 0 셀은 클릭 비활성
+
+## 후속 확인 (사용자에게)
+
+만약 위 변경 적용 후에도 특정 셀이 클릭되지 않는다면, 어떤 stage / 어떤 그룹화(System/Team/Subcontractor 등)에서 발생하는지 알려주시면 `go` 함수의 라우팅을 추가 점검하겠습니다.
