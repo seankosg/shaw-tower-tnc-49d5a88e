@@ -53,10 +53,10 @@ export interface CriticalItem {
   systemCode: string;
   itemNo: string;
   mosCode: string;
-  stage: 't1' | 't2';
+  stage: ScheduleStage;
   daysLeft: number;
   plannedDate: string;
-  status: TcStatus | null;
+  status: TcStatus | string | null;
   group: string;
 }
 
