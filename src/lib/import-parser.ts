@@ -181,6 +181,42 @@ function normalizeStatus(val: any): string | null {
   return map[s.toLowerCase()] || s;
 }
 
+// Recognised R1/R2 enum values (PostgreSQL public.report_status)
+const REPORT_STATUS_MAP: Record<string, string> = {
+  planned: 'Planned',
+  submitted: 'Submitted',
+  'under review': 'Under Review',
+  underreview: 'Under Review',
+  'in review': 'Under Review',
+  approved: 'Approved',
+  approval: 'Approved',
+  returned: 'Returned',
+  rejected: 'Returned',
+};
+
+/**
+ * Try to interpret a cell value as a report_status enum.
+ * Returns the canonical enum label or null if not recognised.
+ */
+export function normalizeReportStatus(val: any): string | null {
+  if (val == null || val === '') return null;
+  const key = String(val).trim().toLowerCase();
+  return REPORT_STATUS_MAP[key] || null;
+}
+
+/**
+ * Smart split for legacy R1/R2 free-text columns:
+ * - If value matches an enum (Submitted/Approved/...) → status only.
+ * - Otherwise treat as a free-text reference (report no., remarks).
+ */
+export function splitReportField(val: any): { status: string | null; ref: string | null } {
+  if (val == null || val === '') return { status: null, ref: null };
+  const enumVal = normalizeReportStatus(val);
+  if (enumVal) return { status: enumVal, ref: null };
+  const trimmed = String(val).trim();
+  return { status: null, ref: trimmed || null };
+}
+
 function normalizeTeam(val: any): string | null {
   if (val == null || val === '') return null;
   const s = String(val).trim();
