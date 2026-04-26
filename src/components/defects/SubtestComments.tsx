@@ -40,12 +40,15 @@ interface SubtestCommentsProps {
 }
 
 export function SubtestComments({ subtestId, subtestTeam, onCountChange }: SubtestCommentsProps) {
-  const { user, isAdmin, isSuperuser, roles } = useAuth();
+  const { user, profile, isAdmin, isSuperuser, roles } = useAuth();
   const { toast } = useToast();
   const isSenior = roles.includes('senior_user');
   const canPostInstruction = isAdmin || isSuperuser || isSenior;
+  const isHdec = profile?.user_type === 'hdec';
   const [myTeam, setMyTeam] = useState<string | null>(null);
   const sameTeamSenior = isSenior && !!subtestTeam && !!myTeam && subtestTeam === myTeam;
+  const [showNewTranslate, setShowNewTranslate] = useState(false);
+  const [showEditTranslate, setShowEditTranslate] = useState(false);
 
   useEffect(() => {
     if (!user || !isSenior) return;
