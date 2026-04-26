@@ -50,12 +50,20 @@ export const NONE_LABEL = '(None)';
 
 export { todayIso, daysBetween };
 
+/**
+ * Stages considered for the dashboard's Overdue / At-Risk / Top Overdue cards.
+ * R1/R2 (report stages) are intentionally excluded — those are tracked via the
+ * dedicated R1/R2 stage cards and Plan vs Actual rows. Overdue cards focus on
+ * physical test execution delays (Pred → T1 → T2) only.
+ */
+const OVERDUE_STAGES: StageKey[] = ['pred', 't1', 't2'];
+
 /** True if subtest has any Pred/T1/T2 planned date on/before as-of date and not Done. */
 export function isOverdue(s: SubtestForDashboard, asOfDate: string): boolean {
-  return getStageKeys('all').some(stage => isStageDelayedAsOf(s, stage, asOfDate));
+  return OVERDUE_STAGES.some(stage => isStageDelayedAsOf(s, stage, asOfDate));
 }
 
-/** True if not overdue but a planned date is within `thresholdDays` (inclusive). */
+/** True if not overdue but a Pred/T1/T2 planned date is within `thresholdDays` (inclusive). */
 export function isAtRisk(s: SubtestForDashboard, today: string, thresholdDays: number): boolean {
   if (isOverdue(s, today)) return false;
   const within = (stage: StageKey) => {
@@ -64,12 +72,12 @@ export function isAtRisk(s: SubtestForDashboard, today: string, thresholdDays: n
     const d = daysBetween(today, planned);
     return d >= 0 && d <= thresholdDays;
   };
-  return getStageKeys('all').some(within);
+  return OVERDUE_STAGES.some(within);
 }
 
 /** Worst delay days across Pred/T1/T2 (positive = days late). */
 export function maxDelayDays(s: SubtestForDashboard, today: string): number {
-  return getMaxDelayDaysAsOf(s, getStageKeys('all'), today);
+  return getMaxDelayDaysAsOf(s, OVERDUE_STAGES, today);
 }
 
 export type TestStatus = 'done' | 'in_progress' | 'not_started';
