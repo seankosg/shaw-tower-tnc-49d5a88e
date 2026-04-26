@@ -424,9 +424,24 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
       subcontractor_name: row.subcontractor_name?.trim() || null,
       subsub_name: row.subsub_name?.trim() || null,
       hdec_pic_name: row.hdec_pic_name?.trim() || null,
-      r1_status: row.r1_status?.trim() || null,
-      r2_status: row.r2_status?.trim() || null,
-      aconex_ref_no: row.aconex_ref_no?.trim() || null,
+      ...(() => {
+        const r1 = splitReportField(row.r1_status);
+        const r2 = splitReportField(row.r2_status);
+        const aconexExplicit = row.aconex_ref_no?.trim() || null;
+        return {
+          r1_status: r1.status,
+          r1_report_ref: row.r1_report_ref?.trim() || r1.ref,
+          r2_status: r2.status,
+          // Explicit aconex column wins; otherwise free-text from R2 column.
+          aconex_ref_no: aconexExplicit ?? r2.ref,
+        };
+      })(),
+      r1_target_submission_date: normalizeDate(row.r1_target_submission_date),
+      r1_actual_submission_date: normalizeDate(row.r1_actual_submission_date),
+      r2_target_submission_date: normalizeDate(row.r2_target_submission_date),
+      r2_actual_submission_date: normalizeDate(row.r2_actual_submission_date),
+      r2_target_approval_date: normalizeDate(row.r2_target_approval_date),
+      r2_actual_approval_date: normalizeDate(row.r2_actual_approval_date),
       remarks: row.remarks?.trim() || null,
       punchlist_comments: row.punchlist_comments?.trim() || null,
     };
@@ -487,9 +502,23 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
       subcontractor_name: row.subcontractor_name?.trim() || null,
       subsub_name: row.subsub_name?.trim() || null,
       hdec_pic_name: row.hdec_pic_name?.trim() || null,
-      r1_status: row.r1_status?.trim() || null,
-      r2_status: row.r2_status?.trim() || null,
-      aconex_ref_no: row.aconex_ref_no?.trim() || null,
+      ...(() => {
+        const r1 = splitReportField(row.r1_status);
+        const r2 = splitReportField(row.r2_status);
+        const aconexExplicit = row.aconex_ref_no?.trim() || null;
+        return {
+          r1_status: r1.status,
+          r1_report_ref: row.r1_report_ref?.trim() || r1.ref,
+          r2_status: r2.status,
+          aconex_ref_no: aconexExplicit ?? r2.ref,
+        };
+      })(),
+      r1_target_submission_date: normalizeDate(row.r1_target_submission_date),
+      r1_actual_submission_date: normalizeDate(row.r1_actual_submission_date),
+      r2_target_submission_date: normalizeDate(row.r2_target_submission_date),
+      r2_actual_submission_date: normalizeDate(row.r2_actual_submission_date),
+      r2_target_approval_date: normalizeDate(row.r2_target_approval_date),
+      r2_actual_approval_date: normalizeDate(row.r2_actual_approval_date),
       remarks: row.remarks?.trim() || null,
       punchlist_comments: row.punchlist_comments?.trim() || null,
     });
