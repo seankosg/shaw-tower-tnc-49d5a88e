@@ -1,54 +1,68 @@
-# S-Curve 카드 접기/펼치기 + 댓글 피드 위치 변경
+## 목표
+
+대시보드 "Recent Comments" 카드와 "모두 보기" 페이지에서:
+1. 기존에 기록된 모든 댓글이 누락 없이 표시되도록 보완
+2. **Reply는 부모 코멘트 아래에 묶어 스레드 형태로 표시**
+3. 권한이 없어 부모 항목(서브테스트/디팩트)을 못 보는 댓글은 표시하되 클릭 비활성화
+
+현재 DB 상태:
+- `subtest_comments`: 39건 (전부 30일 이내)
+- `defect_comments`: 0건 (정상 — 아직 등록된 게 없음)
 
 ## 변경 사항
 
-### 1. Plan vs Actual — S-Curve 차트 접기/펼치기
-- `src/pages/DashboardPage.tsx` 와 `src/pages/DefectDashboardPage.tsx` 의 S-Curve 카드를 **기본 접힌 상태**로 변경
-- 카드 헤더(제목 + 컨트롤 영역)는 항상 보임
-- 헤더 좌측 제목 옆에 **chevron 토글 버튼** 추가 (▶ / ▼)
-- 토글 클릭 시 차트 본문(`CardContent`) 만 표시/숨김
-- 헤더 안의 날짜 선택/Daily/Weekly 토글 버튼은 펼쳤을 때만 의미가 있으므로 **펼쳐진 상태에서만 보이게** 처리 (접혔을 땐 숨김)
-- 상태는 페이지별 `useState<boolean>(false)` 로 관리 (기본 false = 접힘)
-- 사용자 선호 기억을 위해 `localStorage` 에 저장:
-  - 키: `dashboard.scurve.open` / `defect-dashboard.scurve.open`
+### 1. RecentSubtestComments / RecentDefectComments 컴포넌트 보완
 
-### 2. Recent Comments 피드 위치 이동
-- 현재 위치: 페이지 **맨 아래** (Bottom split 카드들 뒤)
-- 변경 위치: **S-Curve 카드 바로 아래** (Plan vs Actual Summary 와 Bottom split 사이)
-- 두 페이지 동일 적용:
-  - `DashboardPage`: `<RecentSubtestComments />` 를 S-Curve `</Card>` 직후로 이동
-  - `DefectDashboardPage`: `<RecentDefectComments />` 를 S-Curve `</Card>` 직후로 이동
+**조인 방식 변경**
+- `subtests!inner` → `subtests` (left join)
+- `defect_items!inner` → `defect_items` (left join)
+- 부모가 RLS로 가려진 행은 회색 처리 + "No access" 배지 + 클릭 비활성화
 
-## 기술 세부
+**스레드 그룹핑 로직 (핵심)**
+- fetch는 윈도우(기본 30일) + limit 50 유지
+- 정렬: 부모 코멘트의 **마지막 활동 시각**(자기 자신 또는 자식 reply 중 가장 최근 `created_at`) 기준 내림차순
+- 화면 구성:
+  - 최상위 행 = `parent_comment_id IS NULL` 코멘트(comment / instruction)
+  - 같은 부모를 가진 reply들은 부모 카드 내부에 들여쓰기 + 좌측 보더로 묶여 표시
+  - reply가 3개를 넘으면 "더 보기 (N)" 토글로 접힘
+- **고아 reply 처리** (부모가 30일 윈도우 밖에 있어 안 잡힌 경우): 부모를 별도 fetch로 한 번 더 가져와 같은 스레드로 묶음. 그래도 없으면 단독 카드로 표시 + "Reply (parent unavailable)" 배지
+- 타입 배지: Instruction(빨강) / Reply(회색) / New(unread)
 
-```tsx
-const [scurveOpen, setScurveOpen] = useState<boolean>(() => {
-  return localStorage.getItem('dashboard.scurve.open') === '1';
-});
-useEffect(() => {
-  localStorage.setItem('dashboard.scurve.open', scurveOpen ? '1' : '0');
-}, [scurveOpen]);
+**카드 헤더**
+- "모두 보기" 링크 추가:
+  - Subtest → `/comments/subtest`
+  - Defect → `/comments/defect`
+- 탭(All / Instructions / Unread)은 부모 기준으로 필터링 (예: Unread = 스레드 내에 미열람 항목이 하나라도 있으면 노출)
 
-<Card>
-  <CardHeader className="...">
-    <div className="flex items-center gap-2">
-      <button onClick={() => setScurveOpen(v => !v)} aria-label="Toggle S-Curve">
-        {scurveOpen ? <ChevronDown /> : <ChevronRight />}
-      </button>
-      <CardTitle>Plan vs Actual — S-Curve</CardTitle>
-    </div>
-    {scurveOpen && (
-      <div className="...controls...">{/* date pickers, day/week toggle */}</div>
-    )}
-  </CardHeader>
-  {scurveOpen && (
-    <CardContent>{/* chart */}</CardContent>
-  )}
-</Card>
-```
+### 2. 새 페이지: 모든 댓글 보기
 
-## 변경 파일
-- `src/pages/DashboardPage.tsx`
-- `src/pages/DefectDashboardPage.tsx`
+`src/pages/AllSubtestCommentsPage.tsx` (`/comments/subtest`)
+`src/pages/AllDefectCommentsPage.tsx` (`/comments/defect`)
 
-신규 컴포넌트는 만들지 않습니다. 기존 `RecentSubtestComments` / `RecentDefectComments` 그대로 사용, 위치만 이동.
+기능:
+- 기간: Last 7 / 30 / 90 / 365 / All time (기본 All time)
+- 타입 필터: All / Comment / Instruction / Reply
+- Unread 토글
+- 작성자/본문 검색
+- 페이지네이션 (50건 단위 Load more)
+- 표시 모드 토글: **"Threaded" / "Flat"** (기본 Threaded — 부모-자식 묶음)
+- 행 클릭 시 상세 페이지로 이동 (권한 없으면 비활성)
+
+### 3. 라우팅 등록
+
+`src/App.tsx`에 두 라우트 추가 (기존 ProtectedRoute 패턴 사용).
+
+## 기술 노트
+
+- 그룹핑은 클라이언트에서 수행: 가져온 행들을 `parent_comment_id`로 분리 → 부모 맵 생성 → 자식 reply를 부모에 attach → 정렬 키는 `max(parent.created_at, ...child.created_at)`.
+- 고아 reply의 부모 보충 fetch: `IN ('parent_id', ...)` 단건 쿼리로 한 번에 처리.
+- 권한 가려짐 판정: left join 후 부모 객체가 `null`인지로만 확인 (별도 권한 호출 불필요).
+- 실시간: 기존 `postgres_changes` 구독 유지 — INSERT/UPDATE/DELETE 모두 다시 그룹핑.
+
+## 영향 받는 파일
+
+- 수정: `src/components/dashboard/RecentSubtestComments.tsx`
+- 수정: `src/components/dashboard/RecentDefectComments.tsx`
+- 신규: `src/pages/AllSubtestCommentsPage.tsx`
+- 신규: `src/pages/AllDefectCommentsPage.tsx`
+- 수정: `src/App.tsx` (라우트 추가)
