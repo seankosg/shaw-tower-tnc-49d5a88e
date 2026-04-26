@@ -284,9 +284,15 @@ export interface ParseExcelResult {
 }
 
 // ── Parse Excel file ──────────────────────────────────────────────────
-export function parseExcelFile(file: ArrayBuffer): ParseExcelResult {
+/**
+ * Parse a single sheet from an Excel buffer.
+ * @param file ArrayBuffer of the .xlsx/.xls file
+ * @param sheetName Optional sheet name. Defaults to the first sheet.
+ */
+export function parseExcelFile(file: ArrayBuffer, sheetName?: string): ParseExcelResult {
   const wb = XLSX.read(file, { type: 'array', cellDates: false });
-  const ws = wb.Sheets[wb.SheetNames[0]];
+  const targetSheet = sheetName && wb.SheetNames.includes(sheetName) ? sheetName : wb.SheetNames[0];
+  const ws = wb.Sheets[targetSheet];
   const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
   if (raw.length < 2) {
     return { rows: [], rawHeaders: [], mappedHeaders: [], unmappedHeaders: [] };
@@ -307,6 +313,12 @@ export function parseExcelFile(file: ArrayBuffer): ParseExcelResult {
     });
 
   return { rows, rawHeaders, mappedHeaders, unmappedHeaders };
+}
+
+/** Return the list of sheet names present in an Excel buffer. */
+export function getExcelSheetNames(file: ArrayBuffer): string[] {
+  const wb = XLSX.read(file, { type: 'array', cellDates: false, bookSheets: true });
+  return wb.SheetNames ?? [];
 }
 
 // ── Legacy parse: 1 row → multiple subtests (MOS-1~5) ────────────────
