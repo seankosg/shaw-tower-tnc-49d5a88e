@@ -277,24 +277,43 @@ export default function SubtestDetailPage() {
 
   const updateField = (field: string, value: any) => {
     setForm(prev => {
-      const updated = { ...prev, [field]: value || null };
-      // Auto-set actual date when status changes to "Done"
+      const updated: any = { ...prev, [field]: value || null };
       const today = new Date().toISOString().split('T')[0];
-      if (field === 't1_status') {
-        if (value === 'Done' && !prev.t1_actual_date) {
-          updated.t1_actual_date = today;
+
+      // Auto-set actual date when T1/T2/Pred status -> Done
+      if (field === 't1_status' && value === 'Done' && !prev.t1_actual_date) {
+        updated.t1_actual_date = today;
+      }
+      if (field === 't2_status' && value === 'Done' && !prev.t2_actual_date) {
+        updated.t2_actual_date = today;
+      }
+      if (field === 'pred_status' && value === 'Done' && !prev.pred_actual_date) {
+        updated.pred_actual_date = today;
+      }
+
+      // R1: when status leaves Planned (i.e. submitted/under review/approved/returned), stamp actual submission
+      if (field === 'r1_status' && value && value !== 'Planned' && !prev.r1_actual_submission_date) {
+        updated.r1_actual_submission_date = today;
+      }
+      // R2: stamp submission when status >= Submitted; stamp approval when status = Approved
+      if (field === 'r2_status') {
+        if (value && value !== 'Planned' && !prev.r2_actual_submission_date) {
+          updated.r2_actual_submission_date = today;
+        }
+        if (value === 'Approved' && !prev.r2_actual_approval_date) {
+          updated.r2_actual_approval_date = today;
         }
       }
-      if (field === 't2_status') {
-        if (value === 'Done' && !prev.t2_actual_date) {
-          updated.t2_actual_date = today;
-        }
+
+      // When T2 planned date changes, auto-recalc R1/R2 target dates
+      // (only fill blanks — never overwrite manually edited targets)
+      if (field === 't2_planned_date' && value) {
+        const derived = derivePlanFromT2(value);
+        if (!prev.r1_target_submission_date) updated.r1_target_submission_date = derived.r1_target_submission_date;
+        if (!prev.r2_target_submission_date) updated.r2_target_submission_date = derived.r2_target_submission_date;
+        if (!prev.r2_target_approval_date) updated.r2_target_approval_date = derived.r2_target_approval_date;
       }
-      if (field === 'pred_status') {
-        if (value === 'Done' && !prev.pred_actual_date) {
-          updated.pred_actual_date = today;
-        }
-      }
+
       return updated;
     });
   };
