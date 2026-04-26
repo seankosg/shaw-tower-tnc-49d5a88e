@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { detectImportType, parseExcelFile, parseLegacy, parseStandard, resolveValue, type DetectedImportType, type ParsedSubtest } from '@/lib/import-parser';
+import { detectImportType, getExcelSheetNames, parseExcelFile, parseLegacy, parseStandard, resolveValue, type DetectedImportType, type ParsedSubtest } from '@/lib/import-parser';
 import { useToast } from '@/hooks/use-toast';
 import { buildScheduleChangeImpact, hasScheduleChangeImpact } from '@/lib/schedule-change-utils';
 
 export type ImportType = 'legacy' | 'standard';
-export type FileStatus = 'pending' | 'parsing' | 'ready' | 'processing' | 'done' | 'failed';
+export type FileStatus = 'pending' | 'parsing' | 'pending_sheet_selection' | 'ready' | 'processing' | 'done' | 'failed';
 
 export interface ImportFileItem {
   id: string;
@@ -23,6 +23,12 @@ export interface ImportFileItem {
   detectionReasons?: string[];
   dataDate?: string;
   team?: string;
+  /** All sheet names in the workbook. Set when 2+ sheets exist; user must pick one. */
+  sheetNames?: string[];
+  /** Currently selected sheet (set after user picks, or auto-set when only 1 sheet). */
+  selectedSheet?: string;
+  /** Cached buffer for re-parsing on sheet change. */
+  buffer?: ArrayBuffer;
 }
 
 interface ImportContextValue {
@@ -35,6 +41,7 @@ interface ImportContextValue {
   startImport: () => Promise<void>;
   setFileDataDate: (id: string, date: string) => void;
   setFileTeam: (id: string, team: string) => void;
+  setFileSheet: (id: string, sheetName: string) => Promise<void>;
 }
 
 const ImportContext = createContext<ImportContextValue | null>(null);
@@ -55,6 +62,38 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     setFiles(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f));
   };
 
+  /** Parse a given sheet from a buffer and update file state accordingly. */
+  const parseAndApply = useCallback((id: string, buf: ArrayBuffer, sheetName?: string) => {
+    try {
+      const { rows, mappedHeaders, unmappedHeaders } = parseExcelFile(buf, sheetName);
+      const detection = detectImportType(mappedHeaders);
+      const subtests = detection.type === 'legacy' ? parseLegacy(rows) : detection.type === 'standard' ? parseStandard(rows) : [];
+      if (subtests.length === 0) {
+        updateFile(id, {
+          status: 'failed',
+          error: detection.type === 'unknown' ? 'Unknown import format' : 'No valid rows found',
+          unmappedHeaders,
+          detectedImportType: detection.type,
+          detectionReasons: detection.reasons,
+          selectedSheet: sheetName,
+        });
+      } else {
+        updateFile(id, {
+          status: 'ready',
+          parsedCount: subtests.length,
+          parsed: subtests,
+          unmappedHeaders,
+          detectedImportType: detection.type,
+          detectionReasons: detection.reasons,
+          selectedSheet: sheetName,
+          error: undefined,
+        });
+      }
+    } catch (e: any) {
+      updateFile(id, { status: 'failed', error: e.message });
+    }
+  }, []);
+
   const addFiles = useCallback(async (newFiles: File[]) => {
     const today = new Date().toISOString().slice(0, 10);
     const items: ImportFileItem[] = newFiles.map(file => ({
@@ -72,25 +111,22 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     for (const item of items) {
       try {
         const buf = await item.file.arrayBuffer();
-        const { rows, mappedHeaders, unmappedHeaders } = parseExcelFile(buf);
-        const detection = detectImportType(mappedHeaders);
-        const subtests = detection.type === 'legacy' ? parseLegacy(rows) : detection.type === 'standard' ? parseStandard(rows) : [];
-        if (subtests.length === 0) {
-          updateFile(item.id, {
-            status: 'failed',
-            error: detection.type === 'unknown' ? 'Unknown import format' : 'No valid rows found',
-            unmappedHeaders,
-            detectedImportType: detection.type,
-            detectionReasons: detection.reasons,
-          });
-        } else {
-          updateFile(item.id, { status: 'ready', parsedCount: subtests.length, parsed: subtests, unmappedHeaders, detectedImportType: detection.type, detectionReasons: detection.reasons });
+        const sheetNames = getExcelSheetNames(buf);
+        // Stash buffer for potential re-parse on sheet change
+        updateFile(item.id, { buffer: buf, sheetNames });
+
+        if (sheetNames.length > 1) {
+          // Multiple sheets — wait for user to pick one
+          updateFile(item.id, { status: 'pending_sheet_selection' });
+          continue;
         }
+        // 0 or 1 sheet — parse first sheet directly
+        parseAndApply(item.id, buf, sheetNames[0]);
       } catch (e: any) {
         updateFile(item.id, { status: 'failed', error: e.message });
       }
     }
-  }, []);
+  }, [parseAndApply]);
 
   const removeFile = (id: string) => {
     setFiles(prev => prev.filter(f => f.id !== id));
@@ -108,6 +144,23 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   const setFileTeam = (id: string, team: string) => {
     updateFile(id, { team });
   };
+
+  const setFileSheet = useCallback(async (id: string, sheetName: string) => {
+    const target = files.find(f => f.id === id);
+    if (!target) return;
+    let buf = target.buffer;
+    if (!buf) {
+      try {
+        buf = await target.file.arrayBuffer();
+        updateFile(id, { buffer: buf });
+      } catch (e: any) {
+        updateFile(id, { status: 'failed', error: e.message });
+        return;
+      }
+    }
+    updateFile(id, { status: 'parsing', selectedSheet: sheetName });
+    parseAndApply(id, buf, sheetName);
+  }, [files, parseAndApply]);
 
   const processFile = async (item: ImportFileItem): Promise<{ inserted: number; updated: number; skipped: number; rejected: number } | null> => {
     if (!item.parsed) return null;
