@@ -320,7 +320,7 @@ export default function SchedulePage() {
     }
     const { rowCount, fileName } = exportScheduleToExcel(visibleData, {
       groupHeader: GROUP_LABELS[groupBy],
-      stageFilter,
+      stageFilter: stageFilterArg,
       bucket,
       today,
       dataDate,
@@ -385,17 +385,40 @@ export default function SchedulePage() {
           </ToolbarGroup>
 
           <ToolbarGroup label="Stage">
-            <Tabs value={stageFilter} onValueChange={(v) => setStageFilter(v as ScheduleStageFilter)}>
-              <TabsList className="h-8">
-                <TabsTrigger value="all" className="h-6 px-2 text-xs">All</TabsTrigger>
-                <TabsTrigger value="pred" className="h-6 px-2 text-xs">Pred</TabsTrigger>
-                <TabsTrigger value="t1" className="h-6 px-2 text-xs">T1</TabsTrigger>
-                <TabsTrigger value="t2" className="h-6 px-2 text-xs">T2</TabsTrigger>
-                <TabsTrigger value="r1" className="h-6 px-2 text-xs">R1S</TabsTrigger>
-                <TabsTrigger value="r2s" className="h-6 px-2 text-xs">R2S</TabsTrigger>
-                <TabsTrigger value="r2a" className="h-6 px-2 text-xs">R2A</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant={isAllStages ? 'default' : 'outline'}
+                className="h-8 px-2 text-xs"
+                onClick={() => setStageFilter([...ALL_STAGE_KEYS])}
+                title="Show all stages"
+              >
+                All
+              </Button>
+              <ToggleGroup
+                type="multiple"
+                value={isAllStages ? [] : stageFilter}
+                onValueChange={(vals) => {
+                  const next = (vals as ScheduleStage[]).filter(v =>
+                    (ALL_STAGE_KEYS as string[]).includes(v),
+                  );
+                  // If user deselects everything, restore ALL.
+                  if (next.length === 0) {
+                    setStageFilter([...ALL_STAGE_KEYS]);
+                    return;
+                  }
+                  setStageFilter(ALL_STAGE_KEYS.filter(k => next.includes(k)));
+                }}
+                className="gap-1"
+              >
+                <ToggleGroupItem value="pred" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Pred</ToggleGroupItem>
+                <ToggleGroupItem value="t1" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">T1</ToggleGroupItem>
+                <ToggleGroupItem value="t2" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">T2</ToggleGroupItem>
+                <ToggleGroupItem value="r1" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">R1S</ToggleGroupItem>
+                <ToggleGroupItem value="r2s" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">R2S</ToggleGroupItem>
+                <ToggleGroupItem value="r2a" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">R2A</ToggleGroupItem>
+              </ToggleGroup>
+            </div>
           </ToolbarGroup>
 
           <ToolbarGroup label="As-of">
@@ -461,7 +484,7 @@ export default function SchedulePage() {
                   date_field: pickedField,
                 };
                 if (pickedField === 'actual') params.cell_status = 'Done';
-                if (stageFilter !== 'all') params.stage = stageFilter;
+                if (stageFilter.length === 1) params.stage = stageFilter[0];
                 navigate(`/tc/raw-data?${new URLSearchParams(params).toString()}`);
               }}
             >
@@ -552,7 +575,7 @@ export default function SchedulePage() {
             <ScheduleMatrix
               data={visibleData}
               bucket={bucket}
-              stageFilter={stageFilter}
+              stageFilter={stageFilterArg}
               today={today}
               asOfLabel={asOfLabel}
               groupHeader={GROUP_LABELS[groupBy]}
