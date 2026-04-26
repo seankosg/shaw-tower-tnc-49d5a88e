@@ -72,6 +72,13 @@ export default function DefectDashboardPage() {
   const [teamFilter, setTeamFilter] = useState(searchParams.get('team') || 'all');
   const [breakdownTab, setBreakdownTab] = useState(searchParams.get('tab') || 'subcon');
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>((searchParams.get('bucket') as 'day' | 'week') || 'day');
+  const [scurveOpen, setScurveOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('defect-dashboard.scurve.open') === '1';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('defect-dashboard.scurve.open', scurveOpen ? '1' : '0'); } catch {}
+  }, [scurveOpen]);
   const [scurveStart, setScurveStart] = useState(searchParams.get('scurve_start') || '2026-04-15');
   const [scurveEnd, setScurveEnd] = useState(searchParams.get('scurve_end') || '2026-06-07');
   const [subTradeTextFilter, setSubTradeTextFilter] = useState(searchParams.get('sub_trade_text') || '');
