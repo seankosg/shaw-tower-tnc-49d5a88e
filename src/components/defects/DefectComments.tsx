@@ -201,8 +201,11 @@ export function DefectComments({
       authorId: c.author_user_id,
       authorName: getAuthorName(c.author_user_id),
       message: c.message,
+      recipients: c.recipients ?? [],
     });
+    setRecipients(((c.recipients ?? []) as RecipientKey[]).filter((r) => RECIPIENT_KEYS.has(r)));
   };
+
 
   const handleEdit = (c: DefectComment) => {
     setEditingId(c.id);
@@ -250,6 +253,10 @@ export function DefectComments({
 
   const persistNew = async (finalMessage: string) => {
     if (!finalMessage.trim() || !user) return;
+    if (recipients.length === 0) {
+      toast({ title: 'Recipient required', description: 'Select at least one recipient (To).', variant: 'destructive' });
+      return;
+    }
     setSending(true);
     try {
       const isReply = !!replyTo;
@@ -260,10 +267,12 @@ export function DefectComments({
         parent_comment_id: replyTo?.id ?? null,
         type: finalType,
         message: finalMessage.trim(),
+        recipients,
       });
       if (error) throw error;
       setMessage('');
       setReplyTo(null);
+      setRecipients([]);
       setShowNewTranslate(false);
       fetchComments();
     } catch (err: any) {
@@ -275,6 +284,10 @@ export function DefectComments({
 
   const handleSend = async () => {
     if (!message.trim() || !user) return;
+    if (recipients.length === 0) {
+      toast({ title: 'Recipient required', description: 'Select at least one recipient (To).', variant: 'destructive' });
+      return;
+    }
     if (isHdec && containsKorean(message)) {
       setShowNewTranslate(true);
       return;
