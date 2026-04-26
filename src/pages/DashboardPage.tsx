@@ -1072,7 +1072,16 @@ function PlanActualTable({
                     <ClickNum value={m.dataDateActual} onClick={st.actualOn ? () => go(r.key, { [st.actualOn!]: dataDate }) : undefined} />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5">
-                    <VarianceCell value={dataDateD} />
+                    <ClickVariance
+                      value={dataDateD}
+                      onClick={
+                        dataDateD < 0 && st.delayOn
+                          ? () => go(r.key, { [st.delayOn!]: dataDate })
+                          : dataDateD > 0 && st.actualUnplannedOn
+                            ? () => go(r.key, { [st.actualUnplannedOn!]: dataDate })
+                            : undefined
+                      }
+                    />
                   </TableCell>
                   <TableCell className="text-right text-xs px-2 py-1.5 font-semibold text-destructive">
                     <ClickNum value={m.dataDateDelay} hideZero onClick={st.delayOn ? () => go(r.key, { [st.delayOn!]: dataDate }) : undefined} />
