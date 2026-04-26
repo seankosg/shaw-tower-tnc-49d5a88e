@@ -146,9 +146,30 @@ export function ColumnSelectDialog({
         </DialogHeader>
 
         <div className="flex items-center justify-between gap-2 border-b pb-2">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="outline" onClick={selectAll}>
               Select all
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={deselectAll}>
+              Deselect all
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => selectByOrigin('aconex')}
+              className="border-emerald-300 text-emerald-900 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-100 dark:hover:bg-emerald-950"
+            >
+              Aconex only
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => selectByOrigin('hdec')}
+              className="border-blue-300 text-blue-900 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-100 dark:hover:bg-blue-950"
+            >
+              HDEC only
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={reset}>
               Reset
