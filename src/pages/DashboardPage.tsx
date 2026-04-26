@@ -682,7 +682,11 @@ function ClickNum({ value, onClick, hideZero = false }: { value: number; onClick
   return (
     <button
       type="button"
-      className={cn('tabular-nums hover:underline', zeroClass)}
+      className={cn(
+        'tabular-nums hover:underline',
+        zeroClass,
+        value !== 0 && 'underline decoration-dotted decoration-muted-foreground/30 underline-offset-2 hover:decoration-foreground'
+      )}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
     >
       {value}
