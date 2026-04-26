@@ -29,7 +29,7 @@ function formatSize(bytes: number) {
 export default function ImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam } = useImport();
+  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet } = useImport();
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -134,7 +134,26 @@ export default function ImportPage() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 mt-1.5">
+                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                      {f.sheetNames && f.sheetNames.length > 1 && (
+                        <>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">Sheet:</span>
+                          <Select
+                            value={f.selectedSheet || ''}
+                            onValueChange={(v) => setFileSheet(f.id, v)}
+                            disabled={isRunning || f.status === 'done' || f.status === 'processing'}
+                          >
+                            <SelectTrigger className="h-7 w-[180px] text-xs">
+                              <SelectValue placeholder="Select sheet" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {f.sheetNames.map(s => (
+                                <SelectItem key={s} value={s}>{s}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </>
+                      )}
                       <span className="text-xs text-muted-foreground whitespace-nowrap">Data Date:</span>
                       <Input
                         type="date"
