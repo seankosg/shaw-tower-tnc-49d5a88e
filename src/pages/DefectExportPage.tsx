@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
+import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 import { exportDefectsWorkbook, filterDefectsForExport, resolveDefectExportColumns, type DefectColumnMode, type DefectExportFilters } from '@/lib/defect-export-utils';
 import { type DefectItem } from '@/lib/defect-utils';
+import { formatDdMmm } from '@/lib/format';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 
 const ALL = '__all__';
@@ -23,6 +26,7 @@ export default function DefectExportPage() {
   const [columnMode, setColumnMode] = useState<DefectColumnMode>('visible');
   const { toast } = useToast();
   const { fields } = useDefectFieldConfig();
+  const { dataDate, source: dataDateSource } = useLatestDataDate();
 
   useEffect(() => {
     let cancelled = false;
@@ -44,15 +48,20 @@ export default function DefectExportPage() {
 
   const exportData = () => {
     const columns = resolveDefectExportColumns(columnMode, fields);
-    const result = exportDefectsWorkbook(filtered, { columns, configs: fields, filters });
+    const result = exportDefectsWorkbook(filtered, { columns, configs: fields, filters, asOf: dataDate });
     toast({ title: 'Export complete', description: `${result.rowCount} defect items exported.` });
   };
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Defect Advanced Export</h1>
-        <p className="text-sm text-muted-foreground">Filter defects and export Defects, Summary, and Export Info sheets.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Defect Advanced Export</h1>
+          <p className="text-sm text-muted-foreground">Filter defects and export Defects, Summary, and Export Info sheets. Overdue counts use Data Date.</p>
+        </div>
+        <Badge variant="outline" className="text-xs" title="Data Date — overdue counts in the export use this date as baseline.">
+          Data Date: {formatDdMmm(dataDate)}{dataDateSource === 'fallback' && ' (fallback)'}
+        </Badge>
       </div>
       <Card>
         <CardHeader><CardTitle className="text-base">Filters</CardTitle></CardHeader>
