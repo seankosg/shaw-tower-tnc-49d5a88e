@@ -20,7 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Search, Upload, Download, ChevronDown } from 'lucide-react';
 import type { TcStatus, DataSource, TeamType, ReportStatus } from '@/types/enums';
-import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS, ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
+import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS, ALL_TEAMS, TEAM_LABELS, REPORT_STATUS_OPTIONS } from '@/types/enums';
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
 import { getSubtestCache, setSubtestCache } from '@/lib/subtest-cache';
@@ -75,6 +75,13 @@ interface SubtestRow {
   r2_actual_submission_date: string | null;
   r2_target_approval_date: string | null;
   r2_actual_approval_date: string | null;
+  r1_report_ref: string | null;
+  aconex_ref_no: string | null;
+  remarks: string | null;
+  punchlist_comments: string | null;
+  mos_sequence: number | null;
+  updated_by: string | null;
+  source_upload_id: string | null;
 }
 
 // ---- Filter functions ----
@@ -554,7 +561,7 @@ export default function SubtestList() {
     while (hasMore) {
       const { data } = await supabase
         .from('subtests')
-        .select('id, subtest_id, item_no, mos_code, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, team, updated_at, system_id, r1_status, r1_target_submission_date, r1_actual_submission_date, r2_status, r2_target_submission_date, r2_actual_submission_date, r2_target_approval_date, r2_actual_approval_date, system_master!inner(system_code)' as any)
+        .select('id, subtest_id, item_no, mos_code, mos_sequence, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, team, updated_at, updated_by, source_upload_id, system_id, r1_status, r1_target_submission_date, r1_actual_submission_date, r1_report_ref, r2_status, r2_target_submission_date, r2_actual_submission_date, r2_target_approval_date, r2_actual_approval_date, aconex_ref_no, remarks, punchlist_comments, system_master!inner(system_code)' as any)
         .eq('is_active', true)
         .order('updated_at', { ascending: false })
         .range(from, from + PAGE_SIZE - 1);
@@ -584,6 +591,11 @@ export default function SubtestList() {
 
   const statusOptions = useMemo(() =>
     TC_STATUS_OPTIONS.map(s => ({ value: s, label: s })),
+    []
+  );
+
+  const reportStatusOptions = useMemo(() =>
+    REPORT_STATUS_OPTIONS.map(s => ({ value: s, label: s })),
     []
   );
 
@@ -789,7 +801,67 @@ export default function SubtestList() {
     { accessorKey: 'updated_at', header: 'Updated', size: 140, filterFn: dateRangeFilterFn,
       meta: { filterType: 'date-range' },
       cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
-  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions, dataDate, commentSummary]);
+    // ---- R1 (Report stage 1) ----
+    { accessorKey: 'r1_status', header: 'R1 Status', size: 100, filterFn: multiSelectFilterFn,
+      meta: { filterType: 'multi-select', filterOptions: reportStatusOptions },
+      cell: ({ getValue }) => {
+        const v = getValue() as ReportStatus | null;
+        return v ? <span className="text-xs font-medium">{v}</span> : <span className="text-muted-foreground">—</span>;
+      } },
+    { accessorKey: 'r1_target_submission_date', header: 'R1 Target Sub.', size: 110, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
+      cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
+    { accessorKey: 'r1_actual_submission_date', header: 'R1 Actual Sub.', size: 110, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
+      cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
+    { accessorKey: 'r1_report_ref', header: 'R1 Aconex Ref', size: 130, filterFn: textFilterFn,
+      meta: { filterType: 'text' },
+      cell: ({ getValue }) => (<span className="truncate block max-w-[130px]">{(getValue() as string) || '—'}</span>) },
+    // ---- R2 (Report stage 2) ----
+    { accessorKey: 'r2_status', header: 'R2 Status', size: 100, filterFn: multiSelectFilterFn,
+      meta: { filterType: 'multi-select', filterOptions: reportStatusOptions },
+      cell: ({ getValue }) => {
+        const v = getValue() as ReportStatus | null;
+        return v ? <span className="text-xs font-medium">{v}</span> : <span className="text-muted-foreground">—</span>;
+      } },
+    { accessorKey: 'r2_target_submission_date', header: 'R2 Target Sub.', size: 110, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
+      cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
+    { accessorKey: 'r2_actual_submission_date', header: 'R2 Actual Sub.', size: 110, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
+      cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
+    { accessorKey: 'r2_target_approval_date', header: 'R2 Target Apv.', size: 110, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
+      cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
+    { accessorKey: 'r2_actual_approval_date', header: 'R2 Actual Apv.', size: 110, filterFn: dateRangeFilterFn,
+      meta: { filterType: 'date-range' },
+      cell: ({ getValue }) => formatDdMmm(getValue() as string | null) },
+    // ---- Other ----
+    { accessorKey: 'aconex_ref_no', header: 'Aconex Ref No', size: 130, filterFn: textFilterFn,
+      meta: { filterType: 'text' },
+      cell: ({ getValue }) => (<span className="truncate block max-w-[130px]">{(getValue() as string) || '—'}</span>) },
+    { accessorKey: 'remarks', header: 'Remarks', size: 180, filterFn: textFilterFn,
+      meta: { filterType: 'text' },
+      cell: ({ getValue }) => (<span className="truncate block max-w-[180px]">{(getValue() as string) || '—'}</span>) },
+    { accessorKey: 'punchlist_comments', header: 'Punchlist Comments', size: 180, filterFn: textFilterFn,
+      meta: { filterType: 'text' },
+      cell: ({ getValue }) => (<span className="truncate block max-w-[180px]">{(getValue() as string) || '—'}</span>) },
+    { accessorKey: 'mos_sequence', header: 'MOS Seq.', size: 80, filterFn: textFilterFn,
+      meta: { filterType: 'text' },
+      cell: ({ getValue }) => {
+        const v = getValue() as number | null;
+        return v == null ? <span className="text-muted-foreground">—</span> : String(v);
+      } },
+    { accessorKey: 'updated_by', header: 'Updated By', size: 120, filterFn: textFilterFn,
+      meta: { filterType: 'text' },
+      cell: ({ getValue }) => (<span className="truncate block max-w-[120px] text-muted-foreground">{(getValue() as string) || '—'}</span>) },
+    { accessorKey: 'source_upload_id', header: 'Upload ID', size: 110, filterFn: textFilterFn,
+      meta: { filterType: 'text' },
+      cell: ({ getValue }) => {
+        const v = getValue() as string | null;
+        return v ? <span className="font-mono text-[10px] text-muted-foreground">{v.slice(0, 8)}…</span> : <span className="text-muted-foreground">—</span>;
+      } },
+  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions, reportStatusOptions, dataDate, commentSummary]);
 
   // Apply status (overdue / at_risk) + date URL filters at data level
   const urlT1PlannedTo = searchParams.get('t1_planned_to');
@@ -984,7 +1056,7 @@ export default function SubtestList() {
     const allIds = columns
       .map(c => (c as any).id ?? (c as any).accessorKey)
       .filter(Boolean) as string[];
-    const PINNED_FRONT = ['__select', 'item_no', 'stage_progress', 'system_code', 'subtest_id', 'mos_code'];
+    const PINNED_FRONT = ['__select', 'item_no', 'stage_progress'];
     const pinned = PINNED_FRONT.filter(id => allIds.includes(id));
     const remaining = new Set(allIds.filter(id => !pinned.includes(id)));
     const ordered: string[] = [];
