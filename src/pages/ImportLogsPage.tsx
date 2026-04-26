@@ -302,7 +302,7 @@ export default function ImportLogsPage() {
                         </TableCell>
                       )}
                     </TableRow>
-                  ))}
+                  ); })}
                 </TableBody>
               </Table>
             </div>
