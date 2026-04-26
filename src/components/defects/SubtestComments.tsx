@@ -389,12 +389,15 @@ export function SubtestComments({
         ) : (
           <>
             <p className="text-sm whitespace-pre-wrap break-words text-foreground">{c.message}</p>
-            <button
-              onClick={() => handleReply(c)}
-              className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Reply className="h-3 w-3" /> Reply
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <RecipientBadges recipients={c.recipients} />
+              <button
+                onClick={() => handleReply(c)}
+                className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors ml-auto"
+              >
+                <Reply className="h-3 w-3" /> Reply
+              </button>
+            </div>
           </>
         )}
       </div>
