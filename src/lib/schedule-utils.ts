@@ -13,7 +13,8 @@ import {
 } from '@/lib/stage-metrics';
 
 export type ScheduleStage = StageKey;
-export type ScheduleStageFilter = 'all' | ScheduleStage;
+/** Stage filter — supports 'all' (sentinel), single stage, or multi-select via array. */
+export type ScheduleStageFilter = 'all' | ScheduleStage | ScheduleStage[];
 export type ScheduleBucket = 'day' | 'week';
 export type ScheduleGroupBy = 'system' | 'subcon' | 'subsub' | 'hdec' | 'team';
 
