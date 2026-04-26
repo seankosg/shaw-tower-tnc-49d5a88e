@@ -1,66 +1,85 @@
-## 목표
-대시보드 **3단(Overdue / At-Risk Alert 배너)** 의 집계 범위를 현재의 **Pred/T1/T2** 에서 **5단계 전체(Pred/T1/T2/R1/R2)** 로 변경합니다. **1단의 Overdue KPI 카드는 기존(Pred/T1/T2) 그대로 유지**하여 두 카드가 별개의 의미를 가지도록 분리합니다.
+## 문제 진단
 
-## 변경 사항
+`src/pages/SubtestList.tsx`(T&C Raw Data 테이블)의 컬럼 정의가 `field_config` 테이블 설정과 **불일치**합니다.
 
-### 1) `src/lib/dashboard-utils.ts` — 5단계 헬퍼 추가
-기존 `isOverdue`/`isAtRisk`(Pred/T1/T2 전용)는 그대로 두고, 별도로 추가:
+### 1) Field Config에 있으나 테이블 컬럼이 누락된 필드 (14개)
 
-```ts
-const ALL_STAGES: StageKey[] = ['pred','t1','t2','r1','r2'];
+데이터는 가져오지만 컬럼이 없어 화면에 표시 안 됨 / Field Config 토글이 무의미한 필드:
 
-export function isOverdueAllStages(s, asOfDate) {
-  return ALL_STAGES.some(stage => isStageDelayedAsOf(s, stage, asOfDate));
-}
+| field_name | display_name | DB SELECT 여부 |
+|---|---|---|
+| `r1_status` | R1 Status | ✅ 가져옴 |
+| `r1_target_submission_date` | R1 Target Submission Date | ✅ |
+| `r1_actual_submission_date` | R1 Actual Submission Date | ✅ |
+| `r1_report_ref` | R1 Aconex Ref | ❌ 누락 |
+| `r2_status` | R2 Status | ✅ |
+| `r2_target_submission_date` | R2 Target Submission Date | ✅ |
+| `r2_actual_submission_date` | R2 Actual Submission Date | ✅ |
+| `r2_target_approval_date` | R2 Target Approval Date | ✅ |
+| `r2_actual_approval_date` | R2 Actual Approval Date | ✅ |
+| `aconex_ref_no` | Aconex Ref No | ❌ |
+| `remarks` | Remarks | ❌ |
+| `punchlist_comments` | Punchlist Comments | ❌ |
+| `mos_sequence` | MOS Sequence | ❌ |
+| `updated_by` | Updated By | ❌ |
+| `source_upload_id` | Source Upload ID | ❌ |
 
-export function isAtRiskAllStages(s, today, thresholdDays) {
-  if (isOverdueAllStages(s, today)) return false;
-  const within = (stage) => {
-    const planned = getStagePlannedDate(s, stage);
-    if (!planned || isStageDone(s, stage)) return false;
-    const d = daysBetween(today, planned);
-    return d >= 0 && d <= thresholdDays;
-  };
-  return ALL_STAGES.some(within);
-}
+### 2) `sort_order` 중복 (Field Config 자체 데이터 문제)
+
+DB에 동일 sort_order가 여러 행에 존재 → 정렬 순서가 비결정적:
+- `250`: remarks, r1_status
+- `260`: r1_target_submission_date, punchlist_comments
+- `270`: updated_by, r1_actual_submission_date
+- `280`: updated_at, r1_report_ref
+- `290`: source_upload_id, r2_status
+- `300`: data_source_type, r2_target_submission_date
+
+### 3) 핀고정(PINNED_FRONT) vs sort_order 충돌
+
+`SubtestList.tsx` line 987에서 `item_no, system_code, subtest_id, mos_code`를 항상 앞으로 고정하고 있어, Field Config의 sort_order(team=10이 최우선)를 무시함. 사용자가 sort_order로 정렬을 바꿔도 반영되지 않음.
+
+---
+
+## 수정 계획
+
+### A. SubtestList.tsx — 누락 컬럼 추가
+1. **SubtestRow 인터페이스 확장**: `r1_report_ref`, `aconex_ref_no`, `remarks`, `punchlist_comments`, `mos_sequence`, `updated_by`, `source_upload_id` 추가.
+2. **DB SELECT 쿼리에 누락 필드 추가** (line 557).
+3. **컬럼 정의 추가** (line 616~792 `columns` 배열에):
+   - R1: Status (badge), Target Submission Date, Actual Submission Date, Aconex Ref
+   - R2: Status (badge), Target Submission Date, Actual Submission Date, Target Approval Date, Actual Approval Date
+   - 기타: Aconex Ref No, Remarks(truncate), Punchlist Comments(truncate), MOS Sequence, Updated By, Source Upload ID
+   - 날짜 컬럼은 기존 `t2_planned_date`처럼 `dateRangeFilterFn` + `formatDdMmm` 사용
+   - Status 컬럼은 기존 `StatusBadge`(또는 ReportStatus 호환) 사용
+
+### B. SubtestList.tsx — 핀고정 로직 완화
+- `PINNED_FRONT`에서 `system_code, subtest_id, mos_code` 제거 → Field Config sort_order만 따르도록 변경.
+- 유지: `__select`, `item_no`(comments 인디케이터 때문에 좌측 고정), `stage_progress`(파생 컬럼).
+- 결과: Team(sort 10)이 최좌측으로 와서 Field Config 의도대로 표시됨.
+
+### C. Field Config sort_order 재정렬 (DB 마이그레이션)
+`field_config` 테이블의 sort_order를 10단위로 재배치하여 중복 제거. 논리적 순서로 정리:
+```
+10 team, 20 system, 30 item_no, 40 subtest_id, 50 mos_code, 60 mos_sequence,
+70 hdec_pic_name, 80 subcontractor_name, 90 subsub_name,
+100 equipment, 110 description, 120 level,
+130 predecessor_status_raw, 140 pred_planned_date, 150 pred_actual_date,
+160 t1_planned_date, 170 t1_actual_date, 180 t1_status,
+190 t2_planned_date, 200 t2_actual_date, 210 t2_status,
+220 r1_status, 230 r1_target_submission_date, 240 r1_actual_submission_date, 250 r1_report_ref,
+260 r2_status, 270 r2_target_submission_date, 280 r2_actual_submission_date,
+290 r2_target_approval_date, 300 r2_actual_approval_date,
+310 aconex_ref_no, 320 remarks, 330 punchlist_comments,
+340 data_source_type, 350 source_upload_id, 360 updated_at, 370 updated_by
 ```
 
-### 2) `src/pages/DashboardPage.tsx` — KPI & 배너
-- `kpis` useMemo에 다음 두 값 추가:
-  ```ts
-  const overdueCountAll = filteredSubtests.filter(s => isOverdueAllStages(s, dataDate)).length;
-  const atRiskCountAll  = filteredSubtests.filter(s => isAtRiskAllStages(s, today, atRiskDays)).length;
-  ```
-- **1단 Overdue KPI 카드**: 그대로 `kpis.overdueCount` (Pred/T1/T2) 유지
-- **3단 AlertBanner**:
-  - Overdue 배너 → `kpis.overdueCountAll` 사용, `goSubtests({ status:'overdue', as_of: dataDate, scope:'all' })`
-  - At-Risk 배너 → `kpis.atRiskCountAll` 사용, `goSubtests({ status:'at_risk', at_risk_days:String(atRiskDays), scope:'all' })`
-  - description 문구에 "across all 5 stages (Pred/T1/T2/R1/R2)" 같은 보조 설명 추가
+### D. 검증
+- Admin → Field Config에서 toggle on/off 시 모든 R1/R2/기타 컬럼이 정상적으로 보이고/숨겨지는지 확인.
+- 컬럼 순서가 sort_order에 따라 좌→우로 바르게 정렬되는지 확인 (item_no/progress만 좌측 고정).
 
-### 3) `src/pages/SubtestList.tsx` — `scope=all` URL 파라미터 지원
-- `urlScope = searchParams.get('scope')` 추가
-- 기존 하드코딩 `OVERDUE_STAGES = ['pred','t1','t2']` 를 동적으로:
-  ```ts
-  const OVERDUE_STAGES: StageKey[] = urlScope === 'all'
-    ? ['pred','t1','t2','r1','r2']
-    : ['pred','t1','t2'];
-  ```
-- `at_risk` 필터 내부의 `within` 검사도 동일 배열 사용 (이미 같은 변수 참조 중)
-- `renderRowBgClass` 의 `getAnyStageDelayedAsOf(r, ['pred','t1','t2'], …)` 도 동일 동적 배열 사용
-- 칩 라벨: `scope=all` 인 경우 "Overdue (all stages)" / "At-Risk (all stages)" 표시 (선택적, UX 일관성)
-- `status` 칩 제거 시 `scope` 파라미터도 함께 제거 (cleanup)
+---
 
-## 동작 결과
-
-| 위치 | 범위 | 의미 |
-|---|---|---|
-| **1단 Overdue KPI** | Pred / T1 / T2 | 실제 테스트 수행 지연만 (기존 유지) |
-| **3단 Overdue 배너** | **Pred / T1 / T2 / R1 / R2** | 보고서 단계 포함 전체 워크플로 지연 |
-| **3단 At-Risk 배너** | **Pred / T1 / T2 / R1 / R2** | 전체 워크플로 임박 건 |
-
-두 Overdue 카드의 숫자가 서로 다를 수 있으며, 차이값은 곧 **R1/R2 단계의 지연/임박 건수**가 됩니다.
-
-## 영향 없음
-- 2단 Stage Cards (각 단계별 overdue) — 본인 기준 그대로
-- Plan vs Actual 표, S-Curve, Top 10 Overdue, Status Distribution
-- `status=remaining`, 기타 cell-link 필터들
+## 영향 범위
+- `src/pages/SubtestList.tsx` (인터페이스, SELECT, columns, PINNED_FRONT)
+- DB 마이그레이션 1건 (`field_config.sort_order` UPDATE)
+- 기존 데이터/RLS/스키마는 변경 없음, 비파괴적 변경
