@@ -19,7 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Search, Upload, Download, ChevronDown } from 'lucide-react';
-import type { TcStatus, DataSource, TeamType } from '@/types/enums';
+import type { TcStatus, DataSource, TeamType, ReportStatus } from '@/types/enums';
 import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS, ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
