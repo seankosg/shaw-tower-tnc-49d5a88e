@@ -24,6 +24,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DefectStatusBadge } from '@/components/defects/DefectStatusBadge';
 import { type DefectItem, formatPct, isOverdueDefect } from '@/lib/defect-utils';
+import { isStageDelayedAsOf } from '@/lib/defect-dashboard-utils';
+import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
@@ -314,6 +316,7 @@ export default function DefectRawDataPage() {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { dataDate } = useLatestDataDate();
   const storageKey = user?.id ? `defect-raw-data-state:${user.id}` : 'defect-raw-data-state:anon';
   const { isFieldVisible, getLabel, sortFieldNames, fields: fieldConfigRows } = useDefectFieldConfig();
   const [items, setItems] = useState<DefectRawRow[]>([]);
@@ -545,15 +548,15 @@ export default function DefectRawDataPage() {
     if (searchParams.get('actualComplete') === 'true') next = next.filter((item) => Number(item.actual_progress_pct ?? 0) >= 100);
     if (searchParams.get('closureComplete') === 'true') next = next.filter((item) => Boolean(item.actual_closure_date));
     if (searchParams.get('overdue') === 'true') {
-      const asOf = searchParams.get('asOf') ?? undefined;
-      const stage = searchParams.get('stage');
+      // URL `asOf` (Dashboard drill-down) takes precedence; otherwise use the project's Data Date.
+      // NEVER fall back to today — overdue is always a Data-Date judgment.
+      const asOfDate = searchParams.get('asOf') ?? dataDate;
+      const stage = searchParams.get('stage') as 'start' | 'completion' | 'closure' | null;
       next = next.filter((item) => {
-        if (Boolean(item.actual_closure_date)) return false;
-        const asOfDate = asOf ?? new Date().toISOString().slice(0, 10);
-        if (stage === 'start') return Boolean(item.planned_start_date && item.planned_start_date <= asOfDate && !item.actual_start_date);
-        if (stage === 'completion') return Boolean(item.planned_completion_date && item.planned_completion_date <= asOfDate && !item.actual_completion_date);
-        if (stage === 'closure') return Boolean(item.planned_closure_date && item.planned_closure_date <= asOfDate && !item.actual_closure_date);
-        return isOverdueDefect(item, asOf);
+        if (stage === 'start' || stage === 'completion' || stage === 'closure') {
+          return isStageDelayedAsOf(item as any, stage, asOfDate);
+        }
+        return isOverdueDefect(item, asOfDate);
       });
     }
     const dueOn = searchParams.get('dueOn');
