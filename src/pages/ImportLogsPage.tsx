@@ -234,6 +234,9 @@ export default function ImportLogsPage() {
                     <TableHead className="text-xs">File</TableHead>
                     <TableHead className="text-xs">Type</TableHead>
                     <TableHead className="text-xs">Date</TableHead>
+                    <TableHead className="text-xs">Uploader</TableHead>
+                    <TableHead className="text-xs">Data Date</TableHead>
+                    <TableHead className="text-xs text-right">Duration</TableHead>
                     <TableHead className="text-xs">Status</TableHead>
                     <TableHead className="text-xs text-right">Total</TableHead>
                     <TableHead className="text-xs text-right">Success</TableHead>
@@ -244,14 +247,20 @@ export default function ImportLogsPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={canDelete ? 9 : 8} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={canDelete ? 12 : 11} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
                   ) : batches.length === 0 ? (
-                    <TableRow><TableCell colSpan={canDelete ? 9 : 8} className="text-center py-8 text-muted-foreground">No import history</TableCell></TableRow>
-                  ) : batches.map(b => (
+                    <TableRow><TableCell colSpan={canDelete ? 12 : 11} className="text-center py-8 text-muted-foreground">No import history</TableCell></TableRow>
+                  ) : batches.map(b => {
+                    const uploader = b.uploaded_by ? (uploaderNames[b.uploaded_by] || '—') : '—';
+                    const dur = durationsMs[b.id];
+                    return (
                     <TableRow key={b.id} className="hover:bg-muted/50">
                       <TableCell className="text-xs font-medium cursor-pointer" onClick={() => selectBatch(b.id)}>{b.uploaded_file_name}</TableCell>
                       <TableCell className="text-xs capitalize cursor-pointer" onClick={() => selectBatch(b.id)}>{b.import_type || '—'}</TableCell>
-                      <TableCell className="text-xs cursor-pointer" onClick={() => selectBatch(b.id)}>{formatDateTimeDdMmmYyyy(b.uploaded_at)}</TableCell>
+                      <TableCell className="text-xs cursor-pointer whitespace-nowrap" onClick={() => selectBatch(b.id)}>{formatDateTimeDdMmmYyyy(b.uploaded_at)}</TableCell>
+                      <TableCell className="text-xs cursor-pointer" onClick={() => selectBatch(b.id)}>{uploader}</TableCell>
+                      <TableCell className="text-xs cursor-pointer whitespace-nowrap" onClick={() => selectBatch(b.id)}>{formatDdMmm(b.data_date)}</TableCell>
+                      <TableCell className="text-xs text-right cursor-pointer whitespace-nowrap" onClick={() => selectBatch(b.id)} title={dur != null ? `${dur} ms` : ''}>{formatDuration(dur)}</TableCell>
                       <TableCell className="cursor-pointer" onClick={() => selectBatch(b.id)}>
                         <Badge variant="outline" className={`text-xs ${statusColor[b.status] || ''}`}>{b.status}</Badge>
                       </TableCell>
