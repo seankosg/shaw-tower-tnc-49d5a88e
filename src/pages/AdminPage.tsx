@@ -1952,7 +1952,28 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
                   </TableCell>
                   <TableCell className="font-mono text-xs">{f.field_name}</TableCell>
                   <TableCell><Input className="h-8 min-w-[180px]" defaultValue={f.display_name} onBlur={(e) => updateName(f, e.target.value)} /></TableCell>
-                  {showOrigin && <TableCell className="text-xs text-muted-foreground">{f.source_origin ?? 'system'}{f.original_header ? ` · ${f.original_header}` : ''}</TableCell>}
+                  {showOrigin && (
+                    <TableCell className="text-xs">
+                      <Select
+                        value={normalizeOriginValue(f.source_origin)}
+                        onValueChange={(v) => updateOrigin(f, v as 'hdec' | 'aconex' | 'system')}
+                      >
+                        <SelectTrigger className="h-8 w-[110px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="hdec">HDEC</SelectItem>
+                          <SelectItem value="aconex">Aconex</SelectItem>
+                          <SelectItem value="system">System</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {f.original_header && (
+                        <div className="mt-1 text-[10px] text-muted-foreground truncate max-w-[140px]" title={f.original_header}>
+                          {f.original_header}
+                        </div>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="text-center">
                     <Switch checked={f.is_enabled} onCheckedChange={() => toggle(f, 'is_enabled')} />
                   </TableCell>
