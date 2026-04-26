@@ -400,6 +400,33 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           updates.pred_status = 'Planned';
         }
 
+        // R1/R2: when T2 planned date is present, auto-derive missing R1/R2 target dates
+        // (only fills targets that the import didn't supply AND are still empty in DB)
+        const { data: existingR } = await supabase.from('subtests')
+          .select('r1_target_submission_date, r2_target_submission_date, r2_target_approval_date, r1_status, r2_status' as any)
+          .eq('id', existing.id).maybeSingle();
+        const er: any = existingR;
+        const finalT2PlannedForRDerive = updates.t2_planned_date !== undefined ? updates.t2_planned_date : ed?.t2_planned_date;
+        if (finalT2PlannedForRDerive) {
+          const derived = derivePlanFromT2(finalT2PlannedForRDerive);
+          if (updates.r1_target_submission_date === undefined && !er?.r1_target_submission_date) {
+            updates.r1_target_submission_date = derived.r1_target_submission_date;
+          }
+          if (updates.r2_target_submission_date === undefined && !er?.r2_target_submission_date) {
+            updates.r2_target_submission_date = derived.r2_target_submission_date;
+          }
+          if (updates.r2_target_approval_date === undefined && !er?.r2_target_approval_date) {
+            updates.r2_target_approval_date = derived.r2_target_approval_date;
+          }
+        }
+        // Default R1/R2 status to 'Planned' when a target date exists but no status set
+        const finalR1Status = updates.r1_status !== undefined ? updates.r1_status : er?.r1_status;
+        const finalR1Target = updates.r1_target_submission_date !== undefined ? updates.r1_target_submission_date : er?.r1_target_submission_date;
+        if (finalR1Status == null && finalR1Target) updates.r1_status = 'Planned';
+        const finalR2Status = updates.r2_status !== undefined ? updates.r2_status : er?.r2_status;
+        const finalR2Target = updates.r2_target_submission_date !== undefined ? updates.r2_target_submission_date : er?.r2_target_submission_date;
+        if (finalR2Status == null && finalR2Target) updates.r2_status = 'Planned';
+
         const scheduleImpact = buildScheduleChangeImpact(existing as any, {
           pred_planned_date: updates.pred_planned_date,
           t1_planned_date: updates.t1_planned_date,
