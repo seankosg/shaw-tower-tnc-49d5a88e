@@ -1811,6 +1811,14 @@ function FieldConfigTab() {
   );
 }
 
+/** Map any legacy origin value to the canonical 3-value set. */
+function normalizeOriginValue(value: string | null | undefined): 'hdec' | 'aconex' | 'system' {
+  const v = String(value ?? '').toLowerCase();
+  if (v === 'hdec' || v === 'hdec_added') return 'hdec';
+  if (v === 'aconex' || v === 'll_original') return 'aconex';
+  return 'system'; // covers 'system', 'derived', and unknown
+}
+
 function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_config' | 'defect_field_config'; title: string; showOrigin?: boolean }) {
   const { toast } = useToast();
   const [fields, setFields] = useState<FieldCfg[]>([]);
