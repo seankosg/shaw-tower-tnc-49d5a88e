@@ -135,11 +135,11 @@ const FIELD_ALIASES: Record<string, string> = {
   'subcontractor issue no source': 'subcontractor_issue_source',
 };
 
-function cleanHeader(header: string): string {
+export function cleanHeader(header: string): string {
   return String(header ?? '').replace(/\s*\(H\)\s*$/i, '').trim();
 }
 
-function toFieldName(header: string): string {
+export function toFieldName(header: string): string {
   const normalized = cleanHeader(header).toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
   return FIELD_ALIASES[normalized] ?? normalized.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
