@@ -44,7 +44,7 @@ export function ColumnSelectDialog({
   isReimport,
   onApply,
 }: ColumnSelectDialogProps) {
-  const { isFieldRequired, getLabel } = useDefectFieldConfig();
+  const { isFieldRequired, getLabel, getSourceLabel, getSourceOrigin } = useDefectFieldConfig();
   const [excluded, setExcluded] = useState<Set<string>>(new Set(defaultExcluded));
 
   // Reset internal state when dialog re-opens with possibly different defaults.
