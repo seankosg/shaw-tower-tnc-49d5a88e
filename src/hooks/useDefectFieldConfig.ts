@@ -52,6 +52,21 @@ export const DEFECT_DEFAULT_FIELD_LABELS: Record<string, string> = {
   classified_at: 'Classified At',
 };
 
+/** Canonical 3-value origin labels used across the UI. */
+export const SOURCE_LABELS: Record<'hdec' | 'aconex' | 'system', string> = {
+  hdec: 'HDEC',
+  aconex: 'Aconex',
+  system: 'System',
+};
+
+/** Map any legacy `source_origin` value to the canonical 3-value set. */
+export function normalizeSourceOrigin(value: string | null | undefined): 'hdec' | 'aconex' | 'system' {
+  const v = String(value ?? '').toLowerCase();
+  if (v === 'hdec' || v === 'hdec_added') return 'hdec';
+  if (v === 'aconex' || v === 'll_original') return 'aconex';
+  return 'system';
+}
+
 export function useDefectFieldConfig() {
   const [fields, setFields] = useState<DefectFieldConfigRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,7 +98,35 @@ export function useDefectFieldConfig() {
   const getLabel = (fieldName: string) => fieldMap.get(fieldName)?.display_name || DEFECT_DEFAULT_FIELD_LABELS[fieldName] || fieldName;
   const getOrder = (fieldName: string) => fieldMap.get(fieldName)?.sort_order ?? 9999;
 
+  /** Return canonical source label ('HDEC' | 'Aconex' | 'System') for a field. */
+  const getSourceLabel = (fieldName: string): string => {
+    const row = fieldMap.get(fieldName);
+    return SOURCE_LABELS[normalizeSourceOrigin(row?.source_origin)];
+  };
+
+  /** Return raw origin token ('hdec' | 'aconex' | 'system') for a field. */
+  const getSourceOrigin = (fieldName: string): 'hdec' | 'aconex' | 'system' =>
+    normalizeSourceOrigin(fieldMap.get(fieldName)?.source_origin);
+
+  /**
+   * Return all `payload_*` field config rows, each annotated with its
+   * `original_header` (used to look up the value in `raw_payload`).
+   * Filters out rows with `is_enabled = false`.
+   */
+  const getRawPayloadFieldsForDisplay = (): DefectFieldConfigRow[] =>
+    fields.filter((f) => f.field_name.startsWith('payload_') && f.is_enabled && f.original_header);
+
   const sortFieldNames = (fieldNames: string[]) => [...fieldNames].sort((a, b) => getOrder(a) - getOrder(b));
 
-  return { fields, loading, isFieldVisible, isFieldRequired, getLabel, sortFieldNames };
+  return {
+    fields,
+    loading,
+    isFieldVisible,
+    isFieldRequired,
+    getLabel,
+    getSourceLabel,
+    getSourceOrigin,
+    getRawPayloadFieldsForDisplay,
+    sortFieldNames,
+  };
 }
