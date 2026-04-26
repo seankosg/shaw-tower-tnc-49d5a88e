@@ -7,9 +7,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Send, Reply, X, Pencil, Trash2, Check, MessageSquare } from 'lucide-react';
+import { Send, Reply, X, Pencil, Trash2, Check, MessageSquare, Languages } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { containsKorean } from '@/hooks/useTranslateToEnglish';
+import { TranslatePanel } from '@/components/comments/TranslatePanel';
 
 type CommentType = 'comment' | 'instruction' | 'reply';
 
@@ -38,12 +40,15 @@ interface DefectCommentsProps {
 }
 
 export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCommentsProps) {
-  const { user, isAdmin, isSuperuser, roles } = useAuth();
+  const { user, profile, isAdmin, isSuperuser, roles } = useAuth();
   const { toast } = useToast();
   const isSenior = roles.includes('senior_user');
   const canPostInstruction = isAdmin || isSuperuser || isSenior;
+  const isHdec = profile?.user_type === 'hdec';
   const [myTeam, setMyTeam] = useState<string | null>(null);
   const sameTeamSenior = isSenior && !!defectTeam && !!myTeam && defectTeam === myTeam;
+  const [showNewTranslate, setShowNewTranslate] = useState(false);
+  const [showEditTranslate, setShowEditTranslate] = useState(false);
 
   // Load own team from profiles for senior_user permission check
   useEffect(() => {
@@ -175,13 +180,14 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
   const handleEdit = (c: DefectComment) => {
     setEditingId(c.id);
     setEditingMessage(c.message);
+    setShowEditTranslate(false);
   };
 
-  const handleEditSave = async () => {
-    if (!editingId || !editingMessage.trim()) return;
+  const persistEdit = async (finalMessage: string) => {
+    if (!editingId || !finalMessage.trim()) return;
     const { error } = await (supabase as any)
       .from('defect_comments')
-      .update({ message: editingMessage.trim() })
+      .update({ message: finalMessage.trim() })
       .eq('id', editingId);
     if (error) {
       toast({ title: 'Failed to update comment', description: error.message, variant: 'destructive' });
@@ -189,7 +195,17 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
     }
     setEditingId(null);
     setEditingMessage('');
+    setShowEditTranslate(false);
     fetchComments();
+  };
+
+  const handleEditSave = async () => {
+    if (!editingId || !editingMessage.trim()) return;
+    if (isHdec && containsKorean(editingMessage)) {
+      setShowEditTranslate(true);
+      return;
+    }
+    await persistEdit(editingMessage);
   };
 
   const handleDelete = async (id: string) => {
@@ -205,8 +221,8 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
     fetchComments();
   };
 
-  const handleSend = async () => {
-    if (!message.trim() || !user) return;
+  const persistNew = async (finalMessage: string) => {
+    if (!finalMessage.trim() || !user) return;
     setSending(true);
     try {
       const isReply = !!replyTo;
@@ -216,17 +232,27 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
         author_user_id: user.id,
         parent_comment_id: replyTo?.id ?? null,
         type: finalType,
-        message: message.trim(),
+        message: finalMessage.trim(),
       });
       if (error) throw error;
       setMessage('');
       setReplyTo(null);
+      setShowNewTranslate(false);
       fetchComments();
     } catch (err: any) {
       toast({ title: 'Failed to post comment', description: err.message ?? String(err), variant: 'destructive' });
     } finally {
       setSending(false);
     }
+  };
+
+  const handleSend = async () => {
+    if (!message.trim() || !user) return;
+    if (isHdec && containsKorean(message)) {
+      setShowNewTranslate(true);
+      return;
+    }
+    await persistNew(message);
   };
 
   const { topLevel, repliesByParent } = useMemo(() => {
@@ -291,16 +317,36 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
               className="resize-none text-sm min-h-0"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditSave(); }
-                if (e.key === 'Escape') { setEditingId(null); setEditingMessage(''); }
+                if (e.key === 'Escape') { setEditingId(null); setEditingMessage(''); setShowEditTranslate(false); }
               }}
             />
+            {isHdec && containsKorean(editingMessage) && !showEditTranslate && (
+              <p className="text-[10px] text-amber-600">
+                Korean detected — translation required before saving.
+              </p>
+            )}
+            {showEditTranslate && (
+              <TranslatePanel
+                originalText={editingMessage}
+                onConfirm={(en) => persistEdit(en)}
+                onCancel={() => setShowEditTranslate(false)}
+              />
+            )}
             <div className="flex gap-1 justify-end">
-              <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditingId(null); setEditingMessage(''); }}>
+              <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => { setEditingId(null); setEditingMessage(''); setShowEditTranslate(false); }}>
                 Cancel
               </Button>
-              <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleEditSave} disabled={!editingMessage.trim()}>
-                <Check className="h-3 w-3 mr-1" /> Save
-              </Button>
+              {isHdec && containsKorean(editingMessage) && !showEditTranslate ? (
+                <Button size="sm" className="h-6 text-[10px] px-2" onClick={() => setShowEditTranslate(true)} disabled={!editingMessage.trim()}>
+                  <Languages className="h-3 w-3 mr-1" /> Translate
+                </Button>
+              ) : (
+                !showEditTranslate && (
+                  <Button size="sm" className="h-6 text-[10px] px-2" onClick={handleEditSave} disabled={!editingMessage.trim()}>
+                    <Check className="h-3 w-3 mr-1" /> Save
+                  </Button>
+                )
+              )}
             </div>
           </div>
         ) : (
@@ -361,32 +407,64 @@ export function DefectComments({ defectId, defectTeam, onCountChange }: DefectCo
         </div>
       )}
 
-      <div className="flex gap-2 items-end">
-        {canPostInstruction && !replyTo && (
-          <Select value={commentType} onValueChange={(v) => setCommentType(v as any)}>
-            <SelectTrigger className="w-[120px] h-9 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="comment">Comment</SelectItem>
-              <SelectItem value="instruction">Instruction</SelectItem>
-            </SelectContent>
-          </Select>
+      <div className="space-y-2">
+        <div className="flex gap-2 items-end">
+          {canPostInstruction && !replyTo && (
+            <Select value={commentType} onValueChange={(v) => setCommentType(v as any)}>
+              <SelectTrigger className="w-[120px] h-9 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="comment">Comment</SelectItem>
+                <SelectItem value="instruction">Instruction</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          <Textarea
+            value={message}
+            onChange={(e) => { setMessage(e.target.value); if (showNewTranslate) setShowNewTranslate(false); }}
+            rows={2}
+            className="resize-none text-sm min-h-0"
+            placeholder={replyTo ? `Reply to ${replyTo.authorName}…` : 'Write a comment…  (Shift+Enter for newline)'}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+            }}
+            disabled={!user || showNewTranslate}
+          />
+          {isHdec && containsKorean(message) && !showNewTranslate ? (
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => setShowNewTranslate(true)}
+              disabled={!message.trim() || !user}
+              className="shrink-0 h-9 w-9"
+              title="Translate Korean to English before sending"
+            >
+              <Languages className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              size="icon"
+              onClick={handleSend}
+              disabled={sending || !message.trim() || !user || showNewTranslate}
+              className="shrink-0 h-9 w-9"
+            >
+              <Send className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+        {isHdec && containsKorean(message) && !showNewTranslate && (
+          <p className="text-[10px] text-amber-600 px-1">
+            Korean detected — click the translate button to convert to English before sending.
+          </p>
         )}
-        <Textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          rows={2}
-          className="resize-none text-sm min-h-0"
-          placeholder={replyTo ? `Reply to ${replyTo.authorName}…` : 'Write a comment…  (Shift+Enter for newline)'}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-          }}
-          disabled={!user}
-        />
-        <Button size="icon" onClick={handleSend} disabled={sending || !message.trim() || !user} className="shrink-0 h-9 w-9">
-          <Send className="h-3.5 w-3.5" />
-        </Button>
+        {showNewTranslate && (
+          <TranslatePanel
+            originalText={message}
+            onConfirm={(en) => persistNew(en)}
+            onCancel={() => setShowNewTranslate(false)}
+          />
+        )}
       </div>
     </div>
   );
