@@ -281,6 +281,8 @@ export function ScheduleMatrix({
                           st === 'pred' && 'bg-secondary text-secondary-foreground',
                           st === 't1' && 'bg-primary/15 text-primary',
                           st === 't2' && 'bg-primary/30 text-primary',
+                          st === 'r1' && 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+                          st === 'r2' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
                         )}>
                           {STAGE_LABELS[st]}
                         </span>

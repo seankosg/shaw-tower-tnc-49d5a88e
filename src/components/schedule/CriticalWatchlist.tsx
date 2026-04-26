@@ -131,7 +131,11 @@ function RiskRow({ item, onClick, hint }: { item: CriticalItem; onClick?: (i: Cr
       <div className="flex items-center gap-1.5">
         <span className={cn(
           'inline-flex h-4 min-w-7 items-center justify-center rounded px-1 text-[9px] font-bold',
-          item.stage === 't1' ? 'bg-primary/15 text-primary' : 'bg-primary/30 text-primary',
+          item.stage === 'pred' && 'bg-secondary text-secondary-foreground',
+          item.stage === 't1' && 'bg-primary/15 text-primary',
+          item.stage === 't2' && 'bg-primary/30 text-primary',
+          item.stage === 'r1' && 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+          item.stage === 'r2' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
         )}>
           {item.stage.toUpperCase()}
         </span>
