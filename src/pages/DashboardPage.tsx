@@ -301,7 +301,7 @@ export default function DashboardPage() {
         <KpiCard icon={<ListChecks className="h-6 w-6 text-primary" />} label="Systems" value={kpis.systemCount} onClick={() => navigate('/tc/raw-data')} />
         <KpiCard icon={<ListChecks className="h-6 w-6 text-muted-foreground" />} label="Total Subtests" value={kpis.total.toLocaleString()} onClick={() => navigate('/tc/raw-data')} />
         <KpiCard icon={<CheckCircle2 className="h-6 w-6" style={{ color: STATUS_COLORS.Done }} />} label="Done" value={kpis.totalDone.toLocaleString()} sub="T2 completed" onClick={() => goSubtests({ t2_status: 'Done' })} />
-        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Remaining" value={kpis.remaining.toLocaleString()} />
+        <KpiCard icon={<Clock className="h-6 w-6 text-muted-foreground" />} label="Remaining" value={kpis.remaining.toLocaleString()} sub="T2 not Done" onClick={() => goSubtests({ status: 'remaining' })} />
         <Card className="flex flex-col justify-center p-4">
           <p className="text-xs text-muted-foreground mb-1">Progress</p>
           <p className="text-xl font-bold text-foreground">{kpis.progressPct}%</p>
