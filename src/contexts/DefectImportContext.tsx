@@ -345,6 +345,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         headerCount: parsed.headers.length,
         isReimport: parsed.isReimport,
         selectedSheet: parsed.sheetName ?? sheetName,
+        excludedFields: parsed.excludedFields,
         error: undefined,
       } : f));
     } catch (error) {
