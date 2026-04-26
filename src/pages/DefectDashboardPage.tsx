@@ -283,7 +283,28 @@ function VarianceCell({ value, invert = false }: { value: number; invert?: boole
   if (value > 0) return <span className={cn('tabular-nums', positiveBad ? 'font-semibold text-destructive' : 'text-green-700 dark:text-green-400')}>+{value}</span>;
   return <span className={cn('tabular-nums', positiveBad ? 'text-green-700 dark:text-green-400' : 'font-semibold text-destructive')}>{value}</span>;
 }
-function ClickNum({ value, onClick, hideZero = false }: { value: number; onClick?: () => void; hideZero?: boolean }) { if (hideZero && value === 0) return <span className="tabular-nums text-muted-foreground/40" />; return onClick ? <button type="button" className={cn('tabular-nums hover:underline', value === 0 && 'text-muted-foreground/40')} onClick={(e) => { e.stopPropagation(); onClick(); }}>{value}</button> : <span className={cn('tabular-nums', value === 0 && 'text-muted-foreground/40')}>{value}</span>; }
+function ClickNum({ value, onClick, hideZero = false }: { value: number; onClick?: () => void; hideZero?: boolean }) {
+  if (hideZero && value === 0) return <span className="tabular-nums text-muted-foreground/40" />;
+  return onClick
+    ? <button
+        type="button"
+        className={cn(
+          'tabular-nums hover:underline',
+          value === 0 && 'text-muted-foreground/40',
+          value !== 0 && 'underline decoration-dotted decoration-muted-foreground/30 underline-offset-2 hover:decoration-foreground'
+        )}
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
+      >{value}</button>
+    : <span className={cn('tabular-nums', value === 0 && 'text-muted-foreground/40')}>{value}</span>;
+}
+function ClickVariance({ value, invert = false, onClick }: { value: number; invert?: boolean; onClick?: () => void }) {
+  if (!onClick) return <VarianceCell value={value} invert={invert} />;
+  return (
+    <button type="button" className="hover:underline" onClick={(e) => { e.stopPropagation(); onClick(); }}>
+      <VarianceCell value={value} invert={invert} />
+    </button>
+  );
+}
 function StageBadge({ stage, label }: { stage: StageKey; label: string }) {
   const cls = stage === 'completion'
     ? 'bg-primary/10 text-primary border-primary/30'
@@ -513,7 +534,21 @@ function PlanActualTable({
                             ? <ClickNum value={metrics.dataDateActual} onClick={rowClick} />
                             : <ClickNum value={metrics.dataDateActual} onClick={() => go(row.key, { dateField: stage.actualField!, dateStart: dataDate, dateEnd: dataDate, [stage.doneParam!]: 'true' })} />}
                         </TableCell>
-                        <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={dataDateDelta} invert={isDiff} /></TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs">
+                          <ClickVariance
+                            value={dataDateDelta}
+                            invert={isDiff}
+                            onClick={
+                              isDiff
+                                ? rowClick
+                                : dataDateDelta < 0
+                                  ? () => go(row.key, { dueOn: dataDate, stage: stage.stage })
+                                  : dataDateDelta > 0
+                                    ? () => go(row.key, { unplannedActualOn: dataDate, stage: stage.stage })
+                                    : undefined
+                            }
+                          />
+                        </TableCell>
                         <TableCell className="px-2 py-1.5 text-right text-xs font-semibold text-destructive">
                           <ClickNum value={metrics.dataDateDelay} hideZero onClick={isDiff ? rowClick : () => go(row.key, { dueOn: dataDate, stage: stage.stage })} />
                         </TableCell>
@@ -527,7 +562,21 @@ function PlanActualTable({
                             ? <ClickNum value={metrics.todayActual} onClick={rowClick} />
                             : <ClickNum value={metrics.todayActual} onClick={() => go(row.key, { dateField: stage.actualField!, dateStart: today, dateEnd: today, [stage.doneParam!]: 'true' })} />}
                         </TableCell>
-                        <TableCell className="px-2 py-1.5 text-right text-xs"><VarianceCell value={todayDelta} invert={isDiff} /></TableCell>
+                        <TableCell className="px-2 py-1.5 text-right text-xs">
+                          <ClickVariance
+                            value={todayDelta}
+                            invert={isDiff}
+                            onClick={
+                              isDiff
+                                ? rowClick
+                                : todayDelta < 0
+                                  ? () => go(row.key, { dueOn: today, stage: stage.stage })
+                                  : todayDelta > 0
+                                    ? () => go(row.key, { unplannedActualOn: today, stage: stage.stage })
+                                    : undefined
+                            }
+                          />
+                        </TableCell>
                         <TableCell className="px-2 py-1.5 text-right text-xs font-semibold text-destructive">
                           <ClickNum value={metrics.todayDelay} hideZero onClick={isDiff ? rowClick : () => go(row.key, { dueOn: today, stage: stage.stage })} />
                         </TableCell>
