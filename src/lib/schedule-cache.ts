@@ -11,7 +11,7 @@ export interface CachedSchedule {
 // Bump when the shape of cached subtests changes (e.g. new columns added to
 // the Schedule page select). Stale caches with a different version are
 // discarded on first read so the UI doesn't render with missing fields.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 let cache: CachedSchedule | null = null;
 let cacheAt = 0;

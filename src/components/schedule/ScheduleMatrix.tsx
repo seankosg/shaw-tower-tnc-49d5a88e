@@ -129,7 +129,7 @@ export function ScheduleMatrix({
 
 
   const stagesToShow: ScheduleStage[] =
-    stageFilter === 'all' ? ['pred', 't1', 't2', 'r1', 'r2'] : [stageFilter as ScheduleStage];
+    stageFilter === 'all' ? ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'] : [stageFilter as ScheduleStage];
 
   const toggle = (key: string) => {
     setExpanded(prev => {
@@ -157,9 +157,9 @@ export function ScheduleMatrix({
       ? colVirtualizer.getTotalSize() - virtualCols[virtualCols.length - 1].end
       : 0;
 
-  const stageLabel = stageFilter === 'all' ? 'All' : stageFilter.toUpperCase();
+  const stageLabel = stageFilter === 'all' ? 'All' : STAGE_LABELS[stageFilter as ScheduleStage];
   const totalBlockTitle = stageFilter === 'all'
-    ? 'Pred + T1 + T2 + R1 + R2 progress / (subtests × 5)'
+    ? 'Pred + T1 + T2 + R1S + R2S + R2A progress / (subtests × 6)'
     : `${stageLabel} progress / subtests`;
 
   return (
@@ -282,7 +282,8 @@ export function ScheduleMatrix({
                           st === 't1' && 'bg-primary/15 text-primary',
                           st === 't2' && 'bg-primary/30 text-primary',
                           st === 'r1' && 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-                          st === 'r2' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+                          st === 'r2s' && 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-400',
+                          st === 'r2a' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
                         )}>
                           {STAGE_LABELS[st]}
                         </span>
