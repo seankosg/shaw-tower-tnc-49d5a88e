@@ -66,7 +66,18 @@ export function formatDefectBucketLabel(key: string, bucket: DefectProgressBucke
   return `${start.getFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
-export function aggregateDefectProgress(items: DefectItem[], opts: { groupBy: DefectProgressGroupBy; bucket: DefectProgressBucket; start: string; end: string; dateField?: DefectProgressDateField }) {
+export function aggregateDefectProgress(
+  items: DefectItem[],
+  opts: {
+    groupBy: DefectProgressGroupBy;
+    bucket: DefectProgressBucket;
+    start: string;
+    end: string;
+    dateField?: DefectProgressDateField;
+    /** Data Date — required for overdue judgment. Pass from useLatestDataDate(). */
+    asOf: string;
+  },
+) {
   const buckets = buildDefectBuckets(opts.start, opts.end, opts.bucket);
   const bucketSet = new Set(buckets);
   const rows = new Map<string, DefectProgressRow>();
@@ -79,7 +90,7 @@ export function aggregateDefectProgress(items: DefectItem[], opts: { groupBy: De
     row.total += 1;
     if (isClosedDefect(item)) row.closed += 1;
     else row.open += 1;
-    if (isOverdueDefect(item)) row.overdue += 1;
+    if (isOverdueDefect(item, opts.asOf)) row.overdue += 1;
 
     const planned = (item as any)[planField] as string | null;
     if (planned) {

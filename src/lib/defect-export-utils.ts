@@ -79,7 +79,17 @@ export function resolveDefectExportColumns(mode: DefectColumnMode, configs: Defe
   return [...base].sort((a, b) => (configMap.get(a)?.sort_order ?? 9999) - (configMap.get(b)?.sort_order ?? 9999));
 }
 
-export function exportDefectsWorkbook(items: DefectItem[], opts: { columns: string[]; configs: DefectFieldConfigRow[]; filters: DefectExportFilters; filePrefix?: string }) {
+export function exportDefectsWorkbook(
+  items: DefectItem[],
+  opts: {
+    columns: string[];
+    configs: DefectFieldConfigRow[];
+    filters: DefectExportFilters;
+    /** Data Date — required for overdue judgment. Pass from useLatestDataDate(). */
+    asOf: string;
+    filePrefix?: string;
+  },
+) {
   const configMap = new Map(opts.configs.map((field) => [field.field_name, field]));
   const label = (field: string) => configMap.get(field)?.display_name || DEFECT_DEFAULT_FIELD_LABELS[field] || field;
   const rows = items.map((item) => Object.fromEntries(opts.columns.map((field) => {
@@ -91,9 +101,13 @@ export function exportDefectsWorkbook(items: DefectItem[], opts: { columns: stri
     { Metric: 'Total', Value: items.length },
     { Metric: 'Closed', Value: items.filter(isClosedDefect).length },
     { Metric: 'Open', Value: items.filter((item) => !isClosedDefect(item)).length },
-    { Metric: 'Overdue', Value: items.filter((item) => isOverdueDefect(item)).length },
+    { Metric: 'Overdue (as of Data Date)', Value: items.filter((item) => isOverdueDefect(item, opts.asOf)).length },
+    { Metric: 'Data Date', Value: opts.asOf },
   ];
-  const info = Object.entries(opts.filters).map(([Field, Value]) => ({ Field, Value: Value || '—' }));
+  const info = [
+    { Field: 'Data Date', Value: opts.asOf },
+    ...Object.entries(opts.filters).map(([Field, Value]) => ({ Field, Value: Value || '—' })),
+  ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Defects');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
