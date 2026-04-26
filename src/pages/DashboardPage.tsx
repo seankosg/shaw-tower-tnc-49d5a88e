@@ -19,7 +19,7 @@ import {
   PieChart, Pie, Cell, ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine,
 } from 'recharts';
 import {
-  AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight, CalendarIcon, Download, Filter,
+  AlertTriangle, CheckCircle2, ListChecks, Clock, TrendingUp, ChevronRight, ChevronDown, CalendarIcon, Download, Filter,
 } from 'lucide-react';
 import { exportPlanActualToExcel } from '@/lib/dashboard-excel-export';
 import { useToast } from '@/hooks/use-toast';
@@ -51,6 +51,13 @@ export default function DashboardPage() {
   const [systems, setSystems] = useState<SystemRef[]>([]);
   const [loading, setLoading] = useState(true);
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>((searchParams.get('bucket') as 'day' | 'week') || 'day');
+  const [scurveOpen, setScurveOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('dashboard.scurve.open') === '1';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('dashboard.scurve.open', scurveOpen ? '1' : '0'); } catch {}
+  }, [scurveOpen]);
   const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');
   const [dataDate, setDataDate] = useState(() => yesterdayIso(todayIso()));
   const [systemTextFilter, setSystemTextFilter] = useState(searchParams.get('system_text') || '');
@@ -392,61 +399,73 @@ export default function DashboardPage() {
       {/* ─── S-Curve Combo Chart ─── */}
       <Card>
         <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0 pb-2">
-          <CardTitle className="text-base">Plan vs Actual — S-Curve</CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Date range pickers */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 text-xs gap-1">
-                  <CalendarIcon className="h-3.5 w-3.5" />
-                  {formatDdMmm(scurveStart)}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  mode="single"
-                  selected={new Date(scurveStart + 'T00:00:00')}
-                  onSelect={(d) => d && setScurveStart(d.toISOString().slice(0, 10))}
-                  className={cn("p-3 pointer-events-auto")}
-                />
-              </PopoverContent>
-            </Popover>
-            <span className="text-xs text-muted-foreground">~</span>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 text-xs gap-1">
-                  <CalendarIcon className="h-3.5 w-3.5" />
-                  {formatDdMmm(scurveEnd)}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  mode="single"
-                  selected={new Date(scurveEnd + 'T00:00:00')}
-                  onSelect={(d) => d && setScurveEnd(d.toISOString().slice(0, 10))}
-                  className={cn("p-3 pointer-events-auto")}
-                />
-              </PopoverContent>
-            </Popover>
-            {/* Day / Week toggle */}
-            <div className="flex gap-1 rounded-md border p-0.5">
-              <button
-                onClick={() => setScurveBucket('day')}
-                className={`px-3 py-1 text-xs rounded ${scurveBucket === 'day' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
-              >
-                Daily
-              </button>
-              <button
-                onClick={() => setScurveBucket('week')}
-                className={`px-3 py-1 text-xs rounded ${scurveBucket === 'week' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
-              >
-                Weekly
-              </button>
+          <button
+            type="button"
+            onClick={() => setScurveOpen((v) => !v)}
+            className="flex items-center gap-2 text-left hover:opacity-80"
+            aria-expanded={scurveOpen}
+            aria-label="Toggle S-Curve chart"
+          >
+            {scurveOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <CardTitle className="text-base">Plan vs Actual — S-Curve</CardTitle>
+          </button>
+          {scurveOpen && (
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Date range pickers */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1">
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    {formatDdMmm(scurveStart)}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="single"
+                    selected={new Date(scurveStart + 'T00:00:00')}
+                    onSelect={(d) => d && setScurveStart(d.toISOString().slice(0, 10))}
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+              <span className="text-xs text-muted-foreground">~</span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1">
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    {formatDdMmm(scurveEnd)}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="single"
+                    selected={new Date(scurveEnd + 'T00:00:00')}
+                    onSelect={(d) => d && setScurveEnd(d.toISOString().slice(0, 10))}
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+              {/* Day / Week toggle */}
+              <div className="flex gap-1 rounded-md border p-0.5">
+                <button
+                  onClick={() => setScurveBucket('day')}
+                  className={`px-3 py-1 text-xs rounded ${scurveBucket === 'day' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+                >
+                  Daily
+                </button>
+                <button
+                  onClick={() => setScurveBucket('week')}
+                  className={`px-3 py-1 text-xs rounded ${scurveBucket === 'week' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+                >
+                  Weekly
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </CardHeader>
-        <CardContent>
-          {scurve.length === 0 ? (
+        {scurveOpen && (
+          <CardContent>
+            {scurve.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p>
           ) : (
             <ChartContainer config={chartConfig} className="h-[360px] w-full">
@@ -477,7 +496,11 @@ export default function DashboardPage() {
             </ChartContainer>
           )}
         </CardContent>
+        )}
       </Card>
+
+      {/* ─── Recent Comments Feed ─── */}
+      <RecentSubtestComments />
 
       {/* ─── Bottom split ─── */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -537,8 +560,6 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* ─── Recent Comments Feed ─── */}
-      <RecentSubtestComments />
     </div>
   );
 }
