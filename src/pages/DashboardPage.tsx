@@ -658,10 +658,12 @@ function HeaderTotalVariance({ value }: { value: number }) {
   return <span className="tabular-nums font-semibold text-destructive">{value.toLocaleString()}</span>;
 }
 
-const STAGE_BADGE: Record<'pred' | 't1' | 't2', string> = {
+const STAGE_BADGE: Record<'pred' | 't1' | 't2' | 'r1' | 'r2', string> = {
   pred: 'bg-muted text-muted-foreground border-border',
   t1: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30',
   t2: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30',
+  r1: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30',
+  r2: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
 };
 
 const summaryNumberClass = (value: number, tone?: 'done' | 'remain') => cn(
