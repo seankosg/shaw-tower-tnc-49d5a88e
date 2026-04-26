@@ -858,6 +858,9 @@ export default function SubtestList() {
       if (urlPredDelayOn && !(r.pred_planned_date === urlPredDelayOn && !isStageDone(r, 'pred'))) return false;
       if (urlT1DelayOn && !(r.t1_planned_date === urlT1DelayOn && !isStageDone(r, 't1'))) return false;
       if (urlT2DelayOn && !(r.t2_planned_date === urlT2DelayOn && !isStageDone(r, 't2'))) return false;
+      if (urlPredActualUnplannedOn && !(r.pred_actual_date === urlPredActualUnplannedOn && r.pred_planned_date !== urlPredActualUnplannedOn)) return false;
+      if (urlT1ActualUnplannedOn && !(r.t1_actual_date === urlT1ActualUnplannedOn && r.t1_planned_date !== urlT1ActualUnplannedOn)) return false;
+      if (urlT2ActualUnplannedOn && !(r.t2_actual_date === urlT2ActualUnplannedOn && r.t2_planned_date !== urlT2ActualUnplannedOn)) return false;
 
       if (urlDateFrom || urlDateTo) {
         const stages: Array<'pred' | 't1' | 't2'> = urlStage ? [urlStage] : ['pred', 't1', 't2'];
