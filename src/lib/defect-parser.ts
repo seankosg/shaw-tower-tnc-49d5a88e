@@ -57,6 +57,10 @@ export interface ParseDefectResult {
   /** True when the file was produced by "Re-import ready" export and contains the
    *  SHAW_DEFECT_REIMPORT_V1 marker — importer should run in update-only mode. */
   isReimport: boolean;
+  /** Set of canonical field names that the user excluded via the column-select
+   *  dialog. Importer uses this to skip change-detection / audit / payload work
+   *  for those fields, so picking few columns is dramatically faster. */
+  excludedFields: Set<string>;
 }
 
 export const REIMPORT_MARKER_TAG = 'SHAW_DEFECT_REIMPORT_V1';
