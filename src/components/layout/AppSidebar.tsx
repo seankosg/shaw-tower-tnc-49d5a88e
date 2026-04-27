@@ -10,6 +10,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { APP_NAME } from '@/lib/constants';
 import { useAuth } from '@/contexts/AuthContext';
+import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { filterNavItems } from '@/lib/role-permissions';
 import { getRememberedRoute } from '@/hooks/useRouteMemory';
 
@@ -41,12 +42,17 @@ const adminNav = [
 export function AppSidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { profile, roles, signOut } = useAuth();
+  const { profile, roles, signOut, isAdmin } = useAuth();
+  const { tnc, defect } = useModuleStatus();
   const userName = profile?.name || profile?.login_id || 'User';
 
   const visibleMain = filterNavItems(mainNav, roles);
   const visibleDefects = filterNavItems(defectNav, roles);
   const visibleAdmin = filterNavItems(adminNav, roles);
+
+  // Non-admins lose the entire group when the module is paused
+  const showTncGroup = isAdmin || tnc.enabled;
+  const showDefectGroup = isAdmin || defect.enabled;
 
   return (
     <Sidebar>
@@ -83,45 +89,63 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>T&amp;C Management</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {visibleMain.map((item) => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton
-                    isActive={pathname === item.path || (item.path === '/tc/raw-data' && pathname.startsWith('/subtests/'))}
-                    onClick={() => navigate(getRememberedRoute(item.path))}
-                    tooltip={item.label}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {showTncGroup && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="flex items-center gap-2">
+              <span>T&amp;C Management</span>
+              {!tnc.enabled && (
+                <Badge variant="outline" className="border-amber-400 bg-amber-100/60 text-[10px] text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                  Paused
+                </Badge>
+              )}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleMain.map((item) => (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={pathname === item.path || (item.path === '/tc/raw-data' && pathname.startsWith('/subtests/'))}
+                      onClick={() => navigate(getRememberedRoute(item.path))}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Defect Management</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {visibleDefects.map((item) => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton
-                    isActive={pathname === item.path || (item.path === '/defects/raw-data' && /^\/defects\/[^/]+$/.test(pathname))}
-                    onClick={() => navigate(getRememberedRoute(item.path))}
-                    tooltip={item.label}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {showDefectGroup && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="flex items-center gap-2">
+              <span>Defect Management</span>
+              {!defect.enabled && (
+                <Badge variant="outline" className="border-amber-400 bg-amber-100/60 text-[10px] text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                  Paused
+                </Badge>
+              )}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleDefects.map((item) => (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={pathname === item.path || (item.path === '/defects/raw-data' && /^\/defects\/[^/]+$/.test(pathname))}
+                      onClick={() => navigate(getRememberedRoute(item.path))}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {visibleAdmin.length > 0 && (
           <SidebarGroup>

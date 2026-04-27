@@ -15,6 +15,7 @@ import { AlertTriangle, KeyRound, Loader2, LogOut, UserCircle } from 'lucide-rea
 import { APP_NAME } from '@/lib/constants';
 import { AppUpdateBanner } from './AppUpdateBanner';
 import { BuildInfoChip } from './BuildInfoChip';
+import { ModulePausedBanner } from './ModulePausedBanner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouteMemory } from '@/hooks/useRouteMemory';
 
@@ -189,6 +190,7 @@ export function AppLayout() {
           </div>
         </header>
         <AppUpdateBanner />
+        <ModulePausedBanner />
         <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4">
           <Outlet />
         </main>

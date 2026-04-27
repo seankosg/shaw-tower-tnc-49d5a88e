@@ -7,9 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle, Settings2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle, Settings2, Lock } from 'lucide-react';
 import { useDefectImport, type DefectFileStatus } from '@/contexts/DefectImportContext';
 import { ColumnSelectDialog } from '@/components/import/ColumnSelectDialog';
+import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 
 // Re-export pure helpers so existing tests/imports keep working
 export { compareIssueNoAsc, detectIssueNoSortDirection, buildSubcontractorIssueAssignments } from '@/contexts/DefectImportContext';
@@ -49,6 +50,8 @@ export default function DefectImportPage() {
     confirmSimilarDecisions,
     cancelSimilarDecisions,
   } = useDefectImport();
+  const { defect } = useModuleStatus();
+  const modulePaused = !defect.enabled;
   const [columnDialogFileId, setColumnDialogFileId] = useState<string | null>(null);
   const columnDialogFile = files.find((f) => f.id === columnDialogFileId) ?? null;
 
@@ -87,6 +90,17 @@ export default function DefectImportPage() {
         </Button>
       </div>
 
+      {modulePaused && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-medium">Defect 모듈이 일시 중단되어 업로드가 잠겼습니다.</p>
+            {defect.reason && <p className="mt-0.5 text-xs opacity-90">사유: {defect.reason}</p>}
+            <p className="mt-0.5 text-xs opacity-80">모듈을 재개한 후 업로드하세요. (관리자 전용)</p>
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardContent className="pt-6">
           <div
@@ -113,7 +127,7 @@ export default function DefectImportPage() {
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={clearAll} disabled={isRunning}>Clear All</Button>
-                <Button size="sm" onClick={startImport} disabled={isRunning || readyCount === 0}>
+                <Button size="sm" onClick={startImport} disabled={isRunning || readyCount === 0 || modulePaused}>
                   {isRunning ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Importing...</> : <><Upload className="mr-1.5 h-3.5 w-3.5" /> Execute Import ({readyCount} files)</>}
                 </Button>
               </div>

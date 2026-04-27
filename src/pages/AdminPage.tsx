@@ -29,6 +29,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import EventLogTab from './admin/EventLogTab';
+import { ModuleControlTab } from './admin/ModuleControlTab';
 
 /* ───── Types ───── */
 interface Profile {
@@ -107,6 +108,7 @@ export default function AdminPage() {
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="fields">Field Config</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsTrigger value="modules">Module Control</TabsTrigger>
           <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
           <TabsTrigger value="events">Event Log</TabsTrigger>
@@ -118,6 +120,7 @@ export default function AdminPage() {
         <TabsContent value="permissions"><PermissionsTab /></TabsContent>
         <TabsContent value="fields"><FieldConfigTab /></TabsContent>
         <TabsContent value="settings"><SettingsTab /></TabsContent>
+        <TabsContent value="modules"><ModuleControlTab /></TabsContent>
         <TabsContent value="backup"><BackupTab /></TabsContent>
         <TabsContent value="audit"><AuditTab /></TabsContent>
         <TabsContent value="events"><EventLogTab /></TabsContent>
