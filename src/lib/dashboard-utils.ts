@@ -105,6 +105,43 @@ export function isAtRiskAllStages(s: SubtestForDashboard, today: string, thresho
   return ALL_STAGES.some(within);
 }
 
+/**
+ * Sum of overdue counts across all 6 stages (Pred/T1/T2/R1/R2S/R2A).
+ * A single subtest can contribute multiple times if multiple stages are overdue.
+ * This equals the sum of OD badges shown on Tier 2 stage cards.
+ */
+export function countOverdueStageOccurrences(subs: SubtestForDashboard[], asOfDate: string): number {
+  let total = 0;
+  for (const s of subs) {
+    for (const stage of ALL_STAGES) {
+      if (isStageDelayedAsOf(s, stage, asOfDate)) total++;
+    }
+  }
+  return total;
+}
+
+/**
+ * Sum of at-risk counts across all 6 stages: planned within `thresholdDays`
+ * from `today` (inclusive), not yet Done, and not already overdue at that stage.
+ * A single subtest can contribute multiple times.
+ */
+export function countAtRiskStageOccurrences(
+  subs: SubtestForDashboard[],
+  today: string,
+  thresholdDays: number,
+): number {
+  let total = 0;
+  for (const s of subs) {
+    for (const stage of ALL_STAGES) {
+      const planned = getStagePlannedDate(s, stage);
+      if (!planned || isStageDone(s, stage)) continue;
+      const d = daysBetween(today, planned);
+      if (d >= 0 && d <= thresholdDays) total++;
+    }
+  }
+  return total;
+}
+
 export type TestStatus = 'done' | 'in_progress' | 'not_started';
 
 /** Aggregate Tests by (system_id, item_no). Test = Done iff all subtests' T2 are Done. */
