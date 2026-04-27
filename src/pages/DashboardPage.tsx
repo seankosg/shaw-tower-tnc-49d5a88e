@@ -31,6 +31,7 @@ import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import {
   type SubtestForDashboard, type PlanActualRow, type PlanActualMetrics,
   todayIso, yesterdayIso, isOverdue, isAtRisk, maxDelayDays, isOverdueAllStages, isAtRiskAllStages,
+  countOverdueStageOccurrences, countAtRiskStageOccurrences,
   aggregatePlanActualByGroup, buildSCurve, NONE_LABEL,
 } from '@/lib/dashboard-utils';
 import { isStageDone } from '@/lib/stage-metrics';
@@ -134,6 +135,9 @@ export default function DashboardPage() {
     // All-stage Overdue/At-Risk (Pred/T1/T2/R1/R2) — used by Tier 3 alert banner
     const overdueCountAll = filteredSubtests.filter(s => isOverdueAllStages(s, dataDate)).length;
     const atRiskCountAll = filteredSubtests.filter(s => isAtRiskAllStages(s, today, atRiskDays)).length;
+    // Stage-occurrence sums (a single subtest may contribute to multiple stages)
+    const overdueOccurrencesAll = countOverdueStageOccurrences(filteredSubtests, dataDate);
+    const atRiskOccurrencesAll = countAtRiskStageOccurrences(filteredSubtests, today, atRiskDays);
 
     // Stage-specific. R2 here = R2 Approval milestone (r2a).
     const stageStat = (stage: 'pred' | 't1' | 't2' | 'r1' | 'r2a', plannedField: keyof SubtestForDashboard) => {
@@ -154,7 +158,7 @@ export default function DashboardPage() {
 
     return {
       systemCount, total, totalDone, remaining, progressPct, overdueCount, atRiskCount,
-      overdueCountAll, atRiskCountAll,
+      overdueCountAll, atRiskCountAll, overdueOccurrencesAll, atRiskOccurrencesAll,
       predDone: pred.done, predOverdue: pred.overdue, predPct: pred.pct,
       t1Done: t1.done, t1Overdue: t1.overdue, t1Pct: t1.pct,
       t2Done: t2.done, t2Overdue: t2.overdue, t2Pct: t2.pct,
@@ -341,19 +345,33 @@ export default function DashboardPage() {
       </div>
 
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <AlertBanner
           tone="destructive"
           icon={<AlertTriangle className="h-5 w-5" />}
-          title={`${kpis.overdueCountAll} Overdue Subtest${kpis.overdueCountAll === 1 ? '' : 's'}`}
-          description={`Any stage (Pred/T1/T2/R1S/R2S/R2A) planned on/before Data Date (${dataDateLabel}) and not yet Done.`}
+          title={`${kpis.overdueCountAll} Overdue Subtests`}
+          description={`Unique subtests with any stage overdue as of Data Date (${dataDateLabel}).`}
+          onClick={() => goSubtests({ status: 'overdue', as_of: dataDate, scope: 'all' })}
+        />
+        <AlertBanner
+          tone="destructive"
+          icon={<AlertTriangle className="h-5 w-5" />}
+          title={`${kpis.overdueOccurrencesAll} Overdue Stage Occurrences`}
+          description={`Sum of overdue counts across Pred/T1/T2/R1S/R2S/R2A as of Data Date (${dataDateLabel}).`}
           onClick={() => goSubtests({ status: 'overdue', as_of: dataDate, scope: 'all' })}
         />
         <AlertBanner
           tone="warning"
           icon={<Clock className="h-5 w-5" />}
-          title={`${kpis.atRiskCountAll} At-Risk Subtest${kpis.atRiskCountAll === 1 ? '' : 's'}`}
-          description={`Any stage (Pred/T1/T2/R1S/R2S/R2A) planned within ${atRiskDays} day(s) and not yet Done.`}
+          title={`${kpis.atRiskCountAll} At-Risk Subtests`}
+          description={`Unique subtests with any stage planned within ${atRiskDays} day(s) and not yet Done.`}
+          onClick={() => goSubtests({ status: 'at_risk', at_risk_days: String(atRiskDays), scope: 'all' })}
+        />
+        <AlertBanner
+          tone="warning"
+          icon={<Clock className="h-5 w-5" />}
+          title={`${kpis.atRiskOccurrencesAll} At-Risk Stage Occurrences`}
+          description={`Sum of at-risk counts across Pred/T1/T2/R1S/R2S/R2A within ${atRiskDays} day(s).`}
           onClick={() => goSubtests({ status: 'at_risk', at_risk_days: String(atRiskDays), scope: 'all' })}
         />
       </div>
