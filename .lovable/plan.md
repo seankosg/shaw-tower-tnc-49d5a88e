@@ -1,88 +1,107 @@
-# SC번호 발번 근본개선 — P1~P4 통합 적용
+# 마스터 데이터 정합성 정리 (P5)
 
-기존 클라이언트(TS) 메모리 기반 시퀀스 발번을 **DB 단일 진실원(SSOT)** 으로 이전합니다. 동시 업로드/재시도/병행 임포트에서도 발번이 원자적이고 순서적으로 보장되며, 유니크 제약 충돌이 사라집니다.
+## 현재 상태 (DB 조회 결과)
 
-## 결과적으로 해결되는 문제
+| id (단축) | name | type | owner_code | is_active | parent |
+|---|---|---|---|---|---|
+| 313583a0… | **SCHINDLER** | sub | SCHINDLER | ✅ true | — |
+| 636df3e5… | Schindler | subsub | **SCHINDLER2** | ❌ false | 313583a0 (SCHINDLER) |
+| c1fd7c4c… | **Puretech** | sub | PURETECH | ✅ true | — |
+| cf08c328… | PUTRETECH | sub | **PUTRETECH** | ❌ false | — |
 
-- "duplicated key value violates unique constraint defect_items_subcontractor_issue_unique" 재현 차단
-- `project_id` NULL로 인한 키 불일치 (`COALESCE(project_id::text, '')`) 제거
-- 다중 업로드/멀티유저/재시도 시 SC 시퀀스 중복 또는 건너뛰기 방지
-- 엑셀에 수동 입력된 SC번호와 자동 발번 시퀀스 동기화
-
----
-
-## 변경 범위
-
-### 1) 신규 마이그레이션 (단일 파일)
-
-**A. 카운터 테이블**
-```text
-subcontractor_issue_counters
-  - project_id    uuid    NOT NULL
-  - owner_code    text    NOT NULL  (UPPER 정규화)
-  - next_seq      int     NOT NULL DEFAULT 1
-  - updated_at    timestamptz
-  - PK (project_id, owner_code)
-RLS: 모든 변경은 SECURITY DEFINER RPC로만 수행 → 일반 INSERT/UPDATE 정책 미부여(읽기는 authenticated 허용).
-```
-
-**B. 원자 발번 RPC**
-- `allot_subcontractor_issue_no(_project_id uuid, _owner_code text, _count int) → int[]`
-  - `INSERT ... ON CONFLICT DO UPDATE SET next_seq = next_seq + _count` 후 시작 시퀀스 반환.
-  - 동시성: row-level lock으로 직렬화. 한 번의 호출로 N개 시퀀스 예약.
-- `bump_subcontractor_issue_counter(_project_id uuid, _owner_code text, _used_seq int)`
-  - 엑셀에 수동 입력된 `SC-XXX-NNNNN`이 발견되면 카운터를 `MAX(current, used+1)`로 끌어올림.
-
-**C. 기본 project_id 트리거 (P2)**
-- `defect_items` BEFORE INSERT: `project_id IS NULL` 이면 활성 프로젝트가 1개일 때 그것을 채움(현재 SHAW 단일). 다중일 경우 RAISE EXCEPTION.
-
-**D. NOT NULL 강제 (P4)**
-- 잔여 NULL 점검 후 `ALTER TABLE defect_items ALTER COLUMN project_id SET NOT NULL`.
-- 유니크 인덱스 단순화: `defect_items_subcontractor_issue_unique`를 `(project_id, lower(trim(subcontractor_issue_no)))` WHERE 조건만 유지(현재의 `COALESCE(project_id::text,'')` 제거).
-
-**E. 마스터 정규화 보강 (보조)**
-- `subcontractor_master.owner_code`에 `UPPER` 정규화 트리거(기존 데이터 42건은 이미 정상).
-
-### 2) Import 코드 리팩토링 — `src/contexts/DefectImportContext.tsx`
-
-- `buildIssueRegistry` / `reserveSubcontractorIssueNo` / `buildSubcontractorIssueAssignments` 의 발번 부분을 RPC 호출로 교체.
-- 새 흐름:
-  1. 행 파싱 후 owner_code 분류 → 자동발번 대상 행을 owner별로 그룹핑(이슈번호 오름차순 정렬 유지).
-  2. owner별 1회 `allot_subcontractor_issue_no(project_id, owner, group.length)` 호출 → 시작 시퀀스 N개 일괄 수령.
-  3. 행에 순서대로 매핑하여 `SC-{owner}-{seq.padStart(5,'0')}` 생성.
-  4. 엑셀에 수동 입력된 SC번호는 `bump_subcontractor_issue_counter`로 카운터 동기화 후 그대로 사용.
-- `existingKeys` 중복 체크 루프 제거(DB 유니크 + RPC가 보장).
-- `project_id`는 항상 단일 활성 프로젝트 ID로 명시 전달(트리거가 백업).
-
-### 3) 적용 순서 (마이그레이션 1회)
-
-```text
-1. 카운터 테이블 + RPC 2종 생성
-2. 트리거 (project_id 기본값) 추가
-3. 기존 defect_items 잔여 NULL project_id 백필 (현재 0건이지만 안전 장치)
-4. 카운터 시드: 기존 SC번호로부터 owner별 MAX(seq) → next_seq = MAX+1 INSERT
-   (현재 defect_items가 비어있으므로 모든 owner의 next_seq=1로 시작)
-5. project_id NOT NULL 적용
-6. 유니크 인덱스 재생성 (단순화)
-```
-
-### 4) 코드 변경 영향 파일
-
-- `src/contexts/DefectImportContext.tsx` (발번 로직 교체)
-- `src/integrations/supabase/types.ts` 자동 갱신 (RPC 타입 포함)
+**확인 사항**
+- ✅ `defect_items` 테이블은 0건 (직전 truncate 완료) → 정리 시 운영 데이터 영향 **없음**
+- ✅ inactive 레코드는 더 이상 신규 import에 사용되지 않음
+- ⚠️ 그러나 owner_code(`SCHINDLER2`, `PUTRETECH`)가 살아있어 **P4 유니크 제약 적용 시 충돌 위험**
+- ⚠️ 신규 import에서 동일 회사가 다른 코드로 잡히면 SC번호 시리즈가 분기됨
 
 ---
 
-## 위험/영향 검토
+## 정리 방침
 
-- 데이터 손실 없음. 현재 `defect_items`는 0건 상태(직전 truncate)이므로 카운터 시드가 안전.
-- `subcontractor_master.owner_code`는 42건 모두 NOT NULL/대문자 정상.
-- 활성 프로젝트가 1개(SHAW)이므로 `project_id` 기본값 트리거가 단일 프로젝트로 동작. 다중 프로젝트 도입 시 임포트 UI에서 명시 선택 필요(현재도 동일).
-- 마스터 데이터 정리(P5)는 별도 단계로 보류.
+### 1. SCHINDLER (sub) ↔ Schindler (subsub, SCHINDLER2) 통합
+- `Schindler` (subsub)는 `SCHINDLER`의 하위로 등록되어 있으나 사실상 동일 회사
+- subsub 자체는 유지하되 (계층 정보), **owner_code = NULL** 로 변경
+  - 이유: SC번호는 **상위 sub(SCHINDLER)** 의 owner_code로만 발번해야 함
+  - subsub에 별도 owner_code가 있으면 SC번호가 두 갈래로 갈라짐
+- 이미 `is_active = false` 이므로 표시상 영향 없음
 
-## 검증 체크리스트 (적용 후)
+### 2. PUTRETECH (오타 sub) 정리
+- 명백한 오타, 이미 inactive
+- **owner_code → NULL** 로 변경 (재사용/충돌 방지)
+- 행 자체는 감사 추적을 위해 보존 (`is_active = false` 유지)
+- 향후 owner_code 유니크 제약 적용 시 NULL은 허용되어 충돌 없음
 
-1. 동일 파일을 연속 2회 업로드 → 두 번째는 "이미 처리된 행"으로 모두 skip, 신규 발번 0.
-2. SC번호 컬럼이 비어있는 신규 50행 업로드 → owner별 연속 시퀀스 발급, 유니크 충돌 0.
-3. 수동 SC번호(SC-AB-00099) 포함 행 임포트 → 동일 owner의 다음 자동 발번이 100부터 시작.
-4. 두 사용자가 동시 업로드 → 시퀀스 겹침 없이 모두 성공.
+### 3. subcontractor_issue_counters 정리
+- 현재 카운터 테이블에 `SCHINDLER2`, `PUTRETECH` 키가 있다면 삭제
+- (defect_items 0건이므로 발번 이력 자체가 의미 없음)
+
+### 4. owner_code 유니크 제약 강화 (P5 본편)
+- **부분 유니크 인덱스** 적용:
+  ```sql
+  CREATE UNIQUE INDEX subcontractor_master_owner_code_active_uq
+    ON subcontractor_master (owner_code)
+    WHERE owner_code IS NOT NULL AND is_active = true;
+  ```
+- 활성 마스터에 한해 owner_code 중복 차단
+- inactive/NULL은 자유롭게 허용 → 과거 데이터/감사 추적 보존
+
+### 5. 정규화 트리거 보강 (이미 P1~P4에서 일부 적용됨)
+- `fn_subcontractor_master_normalize_owner` 가 이미 owner_code를 `upper(trim())` 처리 중
+- **추가**: 빈 문자열(`''`)도 NULL로 변환 → 빈 코드로 인한 의도치 않은 충돌 방지
+
+---
+
+## 변경 사항 요약
+
+### 데이터 변경 (insert/update 도구)
+```sql
+-- (a) Schindler subsub의 owner_code 제거
+UPDATE subcontractor_master
+SET owner_code = NULL
+WHERE id = '636df3e5-35f7-46c3-bf8f-51825fa957c3';
+
+-- (b) PUTRETECH 오타 행의 owner_code 제거
+UPDATE subcontractor_master
+SET owner_code = NULL
+WHERE id = 'cf08c328-f1df-4a4d-bfdd-55fb385064a7';
+
+-- (c) 잘못된 카운터 키 삭제 (있으면)
+DELETE FROM subcontractor_issue_counters
+WHERE owner_code IN ('SCHINDLER2', 'PUTRETECH');
+```
+
+### 스키마 변경 (마이그레이션)
+```sql
+-- (1) 정규화 트리거 보강: 빈 문자열 → NULL
+CREATE OR REPLACE FUNCTION public.fn_subcontractor_master_normalize_owner()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.owner_code IS NOT NULL THEN
+    NEW.owner_code := nullif(upper(trim(NEW.owner_code)), '');
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- (2) 활성 마스터 owner_code 부분 유니크 인덱스
+CREATE UNIQUE INDEX IF NOT EXISTS subcontractor_master_owner_code_active_uq
+  ON public.subcontractor_master (owner_code)
+  WHERE owner_code IS NOT NULL AND is_active = true;
+```
+
+---
+
+## 검증 단계
+1. UPDATE/DELETE 실행 후 `SELECT … WHERE upper(name) LIKE '%SCHIND%' OR …` 재조회로 상태 확인
+2. 마이그레이션 적용 후 `\d subcontractor_master` 인덱스 목록에 부분 유니크 인덱스 존재 확인
+3. 임의 테스트: 활성 행의 owner_code를 기존 활성 owner_code와 동일하게 update 시도 → 차단되는지 확인
+
+## 영향 범위
+- `defect_items`: 0건이므로 영향 없음
+- `subcontractor_master`: 2건 update + 트리거/인덱스 추가
+- `subcontractor_issue_counters`: 잘못된 키 정리
+- 코드(`DefectImportContext.tsx` 등): **변경 없음** — RPC가 이미 정규화된 owner_code를 전달함
+
+## 후속 (이번 범위 외)
+- 정기적 마스터 데이터 점검 화면(중복/오타 후보 표시)은 별도 기능으로 추후 검토
