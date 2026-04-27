@@ -783,8 +783,11 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         continue;
       }
 
-      const issueAssignment = assignments.get(row.rawRowNo)
-        ?? reserveSubcontractorIssueNo(row, existing?.project_id ?? null, issueRegistry, existing);
+      const issueAssignment: IssueAssignment = assignments.get(row.rawRowNo) ?? {
+        subcontractor_issue_no: existing?.subcontractor_issue_no ?? null,
+        subcontractor_issue_source: existing?.subcontractor_issue_source ?? null,
+        duplicate: false,
+      };
       if (issueAssignment.duplicate) {
         rejected++;
         pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `${issueAssignment.subcontractor_issue_no} already exists in this project.` });
