@@ -67,6 +67,17 @@ export default function ImportPage() {
         </Button>
       </div>
 
+      {modulePaused && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-medium">T&amp;C 모듈이 일시 중단되어 업로드가 잠겼습니다.</p>
+            {tnc.reason && <p className="mt-0.5 text-xs opacity-90">사유: {tnc.reason}</p>}
+            <p className="mt-0.5 text-xs opacity-80">모듈을 재개한 후 업로드하세요. (관리자 전용)</p>
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardContent className="pt-6">
           <div
@@ -105,7 +116,7 @@ export default function ImportPage() {
                 <Button variant="outline" size="sm" onClick={clearAll} disabled={isRunning}>
                   Clear All
                 </Button>
-                <Button size="sm" onClick={startImport} disabled={isRunning || readyCount === 0}>
+                <Button size="sm" onClick={startImport} disabled={isRunning || readyCount === 0 || modulePaused}>
                   {isRunning ? (
                     <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Importing...</>
                   ) : (
