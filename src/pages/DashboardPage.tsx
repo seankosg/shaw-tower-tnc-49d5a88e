@@ -158,7 +158,7 @@ export default function DashboardPage() {
 
     return {
       systemCount, total, totalDone, remaining, progressPct, overdueCount, atRiskCount,
-      overdueCountAll, atRiskCountAll,
+      overdueCountAll, atRiskCountAll, overdueOccurrencesAll, atRiskOccurrencesAll,
       predDone: pred.done, predOverdue: pred.overdue, predPct: pred.pct,
       t1Done: t1.done, t1Overdue: t1.overdue, t1Pct: t1.pct,
       t2Done: t2.done, t2Overdue: t2.overdue, t2Pct: t2.pct,
