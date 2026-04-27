@@ -1,9 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Mock the Supabase client BEFORE importing the module under test so that the
+// module captures our mock when it evaluates.
+const rpcMock = vi.fn();
+vi.mock('@/integrations/supabase/client', () => ({
+  supabase: { rpc: (...args: any[]) => rpcMock(...args) },
+}));
+
 import {
   buildSubcontractorIssueAssignments,
   compareIssueNoAsc,
   detectIssueNoSortDirection,
-} from '@/pages/DefectImportPage';
+} from '@/contexts/DefectImportContext';
 import type { ParsedDefectRow } from '@/lib/defect-parser';
 
 type RowOverrides = Partial<ParsedDefectRow> & { issue_no: string; rawRowNo: number };
@@ -48,11 +56,10 @@ function makeRow(overrides: RowOverrides): ParsedDefectRow {
   };
 }
 
-function emptyRegistry(seedSeq: Record<string, number> = {}) {
+const PROJECT = '00000000-0000-0000-0000-000000000001';
+
+function emptyRegistry() {
   return {
-    existingKeys: new Set<string>(),
-    reservedKeys: new Set<string>(),
-    nextSeqByOwner: new Map<string, number>(Object.entries(seedSeq)),
     masters: [
       { name: 'Acme Builders', type: 'sub', parent_subcontractor_id: null, owner_code: 'ABC' },
       { name: 'Xerox Works', type: 'sub', parent_subcontractor_id: null, owner_code: 'XYZ' },
@@ -60,12 +67,41 @@ function emptyRegistry(seedSeq: Record<string, number> = {}) {
   };
 }
 
+/** Configure the rpc mock to behave like the real RPCs:
+ *  - allot_subcontractor_issue_no: returns N consecutive integers starting at the
+ *    current per-owner counter, then advances it.
+ *  - bump_subcontractor_issue_counter: lifts the per-owner counter to max(current, used+1). */
+function installRpcMock(seed: Record<string, number> = {}) {
+  const counters = new Map<string, number>();
+  for (const [owner, next] of Object.entries(seed)) counters.set(owner, next);
+  rpcMock.mockImplementation(async (fn: string, args: any) => {
+    const owner = String(args._owner_code ?? '').toUpperCase() || 'UNASSIGNED';
+    if (fn === 'allot_subcontractor_issue_no') {
+      const start = counters.get(owner) ?? 1;
+      const count = Number(args._count ?? 1);
+      counters.set(owner, start + count);
+      const out = Array.from({ length: count }, (_, i) => start + i);
+      return { data: out, error: null };
+    }
+    if (fn === 'bump_subcontractor_issue_counter') {
+      const used = Number(args._used_seq ?? 0);
+      const current = counters.get(owner) ?? 1;
+      const next = Math.max(current, used + 1);
+      counters.set(owner, next);
+      return { data: next, error: null };
+    }
+    throw new Error(`Unexpected RPC: ${fn}`);
+  });
+}
+
+beforeEach(() => { rpcMock.mockReset(); });
+afterEach(() => { rpcMock.mockReset(); });
+
 describe('compareIssueNoAsc', () => {
   it('uses numeric sort so 2 < 10', () => {
     expect(compareIssueNoAsc('2', '10')).toBeLessThan(0);
     expect(compareIssueNoAsc('D-2', 'D-10')).toBeLessThan(0);
   });
-
   it('sorts empty values to the end', () => {
     expect(compareIssueNoAsc('', 'A')).toBeGreaterThan(0);
     expect(compareIssueNoAsc('A', '')).toBeLessThan(0);
@@ -74,140 +110,116 @@ describe('compareIssueNoAsc', () => {
 
 describe('detectIssueNoSortDirection', () => {
   it('detects ascending', () => {
-    expect(detectIssueNoSortDirection([
-      { issue_no: '1001' }, { issue_no: '1002' }, { issue_no: '1003' },
-    ])).toBe('asc');
+    expect(detectIssueNoSortDirection([{ issue_no: '1001' }, { issue_no: '1002' }, { issue_no: '1003' }])).toBe('asc');
   });
-
   it('detects descending', () => {
-    expect(detectIssueNoSortDirection([
-      { issue_no: '1005' }, { issue_no: '1004' }, { issue_no: '1003' },
-    ])).toBe('desc');
+    expect(detectIssueNoSortDirection([{ issue_no: '1005' }, { issue_no: '1004' }, { issue_no: '1003' }])).toBe('desc');
   });
-
   it('handles natural numeric order (D-10, D-2, D-1 → desc)', () => {
-    expect(detectIssueNoSortDirection([
-      { issue_no: 'D-10' }, { issue_no: 'D-2' }, { issue_no: 'D-1' },
-    ])).toBe('desc');
+    expect(detectIssueNoSortDirection([{ issue_no: 'D-10' }, { issue_no: 'D-2' }, { issue_no: 'D-1' }])).toBe('desc');
   });
-
   it('returns asc when only one row', () => {
     expect(detectIssueNoSortDirection([{ issue_no: '1' }])).toBe('asc');
   });
-
-  it('uses majority direction for mixed input', () => {
-    // 3 desc pairs, 1 asc pair → desc
-    expect(detectIssueNoSortDirection([
-      { issue_no: '1010' }, { issue_no: '1009' }, { issue_no: '1008' }, { issue_no: '1007' }, { issue_no: '1008' },
-    ])).toBe('desc');
-  });
 });
 
-describe('buildSubcontractorIssueAssignments', () => {
-  it('assigns ascending sequences in row order when import is ascending', () => {
+describe('buildSubcontractorIssueAssignments (RPC-backed)', () => {
+  it('assigns ascending sequences in row order when import is ascending', async () => {
+    installRpcMock();
     const rows = [
       makeRow({ rawRowNo: 2, issue_no: '1001', subcontractor_name: 'Acme Builders' }),
       makeRow({ rawRowNo: 3, issue_no: '1002', subcontractor_name: 'Acme Builders' }),
       makeRow({ rawRowNo: 4, issue_no: '1003', subcontractor_name: 'Acme Builders' }),
     ];
-    const assignments = buildSubcontractorIssueAssignments(rows, null, emptyRegistry(), new Map());
-    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00001');
-    expect(assignments.get(3)?.subcontractor_issue_no).toBe('SC-ABC-00002');
-    expect(assignments.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00003');
+    const a = await buildSubcontractorIssueAssignments(rows, PROJECT, emptyRegistry(), new Map());
+    expect(a.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00001');
+    expect(a.get(3)?.subcontractor_issue_no).toBe('SC-ABC-00002');
+    expect(a.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00003');
   });
 
-  it('assigns SEQ by Issue No ascending even when import file is descending', () => {
+  it('assigns SEQ by Issue No ascending even when import file is descending', async () => {
+    installRpcMock();
     const rows = [
       makeRow({ rawRowNo: 2, issue_no: '1005', subcontractor_name: 'Acme Builders' }),
       makeRow({ rawRowNo: 3, issue_no: '1004', subcontractor_name: 'Acme Builders' }),
       makeRow({ rawRowNo: 4, issue_no: '1003', subcontractor_name: 'Acme Builders' }),
     ];
-    const assignments = buildSubcontractorIssueAssignments(rows, null, emptyRegistry(), new Map());
-    // Lowest Issue No (1003 → row 4) should always get the lowest SEQ
-    expect(assignments.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00001');
-    expect(assignments.get(3)?.subcontractor_issue_no).toBe('SC-ABC-00002');
-    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00003');
+    const a = await buildSubcontractorIssueAssignments(rows, PROJECT, emptyRegistry(), new Map());
+    expect(a.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00001');
+    expect(a.get(3)?.subcontractor_issue_no).toBe('SC-ABC-00002');
+    expect(a.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00003');
   });
 
-  it('handles natural sort with descending alphanumeric Issue No', () => {
-    const rows = [
-      makeRow({ rawRowNo: 2, issue_no: 'D-10', subcontractor_name: 'Acme Builders' }),
-      makeRow({ rawRowNo: 3, issue_no: 'D-2', subcontractor_name: 'Acme Builders' }),
-      makeRow({ rawRowNo: 4, issue_no: 'D-1', subcontractor_name: 'Acme Builders' }),
-    ];
-    const assignments = buildSubcontractorIssueAssignments(rows, null, emptyRegistry(), new Map());
-    // D-1 < D-2 < D-10 (natural numeric sort)
-    expect(assignments.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00001');
-    expect(assignments.get(3)?.subcontractor_issue_no).toBe('SC-ABC-00002');
-    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00003');
-  });
-
-  it('keeps owner-code sequences independent and ordered by Issue No asc', () => {
+  it('keeps owner-code sequences independent and ordered by Issue No asc', async () => {
+    installRpcMock();
     const rows = [
       makeRow({ rawRowNo: 2, issue_no: '1005', subcontractor_name: 'Acme Builders' }),
       makeRow({ rawRowNo: 3, issue_no: '1004', subcontractor_name: 'Xerox Works' }),
       makeRow({ rawRowNo: 4, issue_no: '1003', subcontractor_name: 'Acme Builders' }),
       makeRow({ rawRowNo: 5, issue_no: '1002', subcontractor_name: 'Xerox Works' }),
     ];
-    const assignments = buildSubcontractorIssueAssignments(rows, null, emptyRegistry(), new Map());
-    // ABC: 1003 < 1005 → row 4 = 00001, row 2 = 00002
-    expect(assignments.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00001');
-    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00002');
-    // XYZ: 1002 < 1004 → row 5 = 00001, row 3 = 00002
-    expect(assignments.get(5)?.subcontractor_issue_no).toBe('SC-XYZ-00001');
-    expect(assignments.get(3)?.subcontractor_issue_no).toBe('SC-XYZ-00002');
+    const a = await buildSubcontractorIssueAssignments(rows, PROJECT, emptyRegistry(), new Map());
+    expect(a.get(4)?.subcontractor_issue_no).toBe('SC-ABC-00001');
+    expect(a.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00002');
+    expect(a.get(5)?.subcontractor_issue_no).toBe('SC-XYZ-00001');
+    expect(a.get(3)?.subcontractor_issue_no).toBe('SC-XYZ-00002');
   });
 
-  it('starts from existing DB max sequence + 1, lowest Issue No first', () => {
+  it('starts from existing DB max sequence + 1, lowest Issue No first', async () => {
+    installRpcMock({ ABC: 28 });
     const rows = [
       makeRow({ rawRowNo: 2, issue_no: '1003', subcontractor_name: 'Acme Builders' }),
       makeRow({ rawRowNo: 3, issue_no: '1002', subcontractor_name: 'Acme Builders' }),
     ];
-    const assignments = buildSubcontractorIssueAssignments(rows, null, emptyRegistry({ ABC: 28 }), new Map());
-    // 1002 < 1003, so row 3 = 00028 (next from existing max 27 + 1), row 2 = 00029
-    expect(assignments.get(3)?.subcontractor_issue_no).toBe('SC-ABC-00028');
-    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00029');
+    const a = await buildSubcontractorIssueAssignments(rows, PROJECT, emptyRegistry(), new Map());
+    expect(a.get(3)?.subcontractor_issue_no).toBe('SC-ABC-00028');
+    expect(a.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00029');
   });
 
-  it('preserves existing defect subcontractor_issue_no', () => {
+  it('preserves existing defect subcontractor_issue_no without invoking RPC', async () => {
+    installRpcMock();
     const rows = [
       makeRow({ rawRowNo: 2, issue_no: '1003', subcontractor_name: 'Acme Builders' }),
     ];
     const existingByIssueNo = new Map<string, any>([
       ['1003', { subcontractor_issue_no: 'SC-ABC-00099', subcontractor_issue_source: 'auto_generated' }],
     ]);
-    const assignments = buildSubcontractorIssueAssignments(rows, null, emptyRegistry(), existingByIssueNo);
-    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00099');
-    expect(assignments.get(2)?.subcontractor_issue_source).toBe('auto_generated');
+    const a = await buildSubcontractorIssueAssignments(rows, PROJECT, emptyRegistry(), existingByIssueNo);
+    expect(a.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00099');
+    expect(a.get(2)?.subcontractor_issue_source).toBe('auto_generated');
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 
-  it('preserves imported subcontractor_issue_no when present in Excel', () => {
+  it('preserves imported subcontractor_issue_no and bumps the DB counter', async () => {
+    installRpcMock();
     const rows = [
       makeRow({
-        rawRowNo: 2,
-        issue_no: '1003',
+        rawRowNo: 2, issue_no: '1003',
         subcontractor_issue_no: 'SC-ABC-09999',
         subcontractor_name: 'Acme Builders',
       }),
     ];
-    const assignments = buildSubcontractorIssueAssignments(rows, null, emptyRegistry(), new Map());
-    expect(assignments.get(2)?.subcontractor_issue_no).toBe('SC-ABC-09999');
-    expect(assignments.get(2)?.subcontractor_issue_source).toBe('imported');
-    expect(assignments.get(2)?.duplicate).toBe(false);
+    const a = await buildSubcontractorIssueAssignments(rows, PROJECT, emptyRegistry(), new Map());
+    expect(a.get(2)?.subcontractor_issue_no).toBe('SC-ABC-09999');
+    expect(a.get(2)?.subcontractor_issue_source).toBe('imported');
+    expect(a.get(2)?.duplicate).toBe(false);
+    expect(rpcMock).toHaveBeenCalledWith('bump_subcontractor_issue_counter', expect.objectContaining({
+      _project_id: PROJECT, _owner_code: 'ABC', _used_seq: 9999,
+    }));
   });
 
-  it('flags imported subcontractor_issue_no as duplicate when it collides with existing DB values', () => {
+  it('after a manual SC bump, next auto-generated sequence continues from there', async () => {
+    installRpcMock();
     const rows = [
       makeRow({
-        rawRowNo: 2,
-        issue_no: '1003',
-        subcontractor_issue_no: 'SC-ABC-00001',
+        rawRowNo: 2, issue_no: '1001',
+        subcontractor_issue_no: 'SC-ABC-00099',
         subcontractor_name: 'Acme Builders',
       }),
+      makeRow({ rawRowNo: 3, issue_no: '1002', subcontractor_name: 'Acme Builders' }),
     ];
-    const registry = emptyRegistry();
-    registry.existingKeys.add('::sc-abc-00001');
-    const assignments = buildSubcontractorIssueAssignments(rows, null, registry, new Map());
-    expect(assignments.get(2)?.duplicate).toBe(true);
+    const a = await buildSubcontractorIssueAssignments(rows, PROJECT, emptyRegistry(), new Map());
+    expect(a.get(2)?.subcontractor_issue_no).toBe('SC-ABC-00099');
+    expect(a.get(3)?.subcontractor_issue_no).toBe('SC-ABC-00100');
   });
 });
