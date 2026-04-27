@@ -348,30 +348,26 @@ export default function DashboardPage() {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <AlertBanner
           tone="destructive"
-          icon={<AlertTriangle className="h-5 w-5" />}
-          title={`${kpis.overdueCountAll} Overdue Subtests`}
-          description={`Unique subtests with any stage overdue as of Data Date (${dataDateLabel}).`}
+          value={kpis.overdueCountAll}
+          label="Subtest Overdue"
           onClick={() => goSubtests({ status: 'overdue', as_of: dataDate, scope: 'all' })}
         />
         <AlertBanner
           tone="destructive"
-          icon={<AlertTriangle className="h-5 w-5" />}
-          title={`${kpis.overdueOccurrencesAll} Overdue Stage Occurrences`}
-          description={`Sum of overdue counts across Pred/T1/T2/R1S/R2S/R2A as of Data Date (${dataDateLabel}).`}
+          value={kpis.overdueOccurrencesAll}
+          label="Total Stage Overdue"
           onClick={() => goSubtests({ status: 'overdue', as_of: dataDate, scope: 'all' })}
         />
         <AlertBanner
           tone="warning"
-          icon={<Clock className="h-5 w-5" />}
-          title={`${kpis.atRiskCountAll} At-Risk Subtests`}
-          description={`Unique subtests with any stage planned within ${atRiskDays} day(s) and not yet Done.`}
+          value={kpis.atRiskCountAll}
+          label="Subtest At Risk"
           onClick={() => goSubtests({ status: 'at_risk', at_risk_days: String(atRiskDays), scope: 'all' })}
         />
         <AlertBanner
           tone="warning"
-          icon={<Clock className="h-5 w-5" />}
-          title={`${kpis.atRiskOccurrencesAll} At-Risk Stage Occurrences`}
-          description={`Sum of at-risk counts across Pred/T1/T2/R1S/R2S/R2A within ${atRiskDays} day(s).`}
+          value={kpis.atRiskOccurrencesAll}
+          label="Total Stage At Risk"
           onClick={() => goSubtests({ status: 'at_risk', at_risk_days: String(atRiskDays), scope: 'all' })}
         />
       </div>
