@@ -625,31 +625,29 @@ function KpiCard({
 }
 
 function AlertBanner({
-  tone, icon, title, description, onClick,
+  tone, value, label, onClick,
 }: {
   tone: 'destructive' | 'warning';
-  icon: React.ReactNode;
-  title: string;
-  description: string;
+  value: number;
+  label: string;
   onClick: () => void;
 }) {
   const cls = tone === 'destructive'
     ? 'border-destructive/40 bg-destructive/5'
     : 'border-amber-500/40 bg-amber-500/5';
-  const iconCls = tone === 'destructive' ? 'text-destructive' : 'text-amber-600 dark:text-amber-400';
+  const toneCls = tone === 'destructive' ? 'text-destructive' : 'text-amber-600 dark:text-amber-400';
   return (
     <button
       onClick={onClick}
-      className={`flex items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/40 ${cls}`}
+      className={`relative flex min-h-[140px] w-full flex-col rounded-lg border p-3 text-left transition-colors hover:bg-muted/40 ${cls}`}
     >
-      <div className="flex items-center gap-3">
-        <div className={iconCls}>{icon}</div>
-        <div>
-          <p className={`font-semibold ${iconCls}`}>{title}</p>
-          <p className="text-xs text-muted-foreground">{description}</p>
-        </div>
+      <p className={`text-xs font-semibold uppercase tracking-wide ${toneCls}`}>{label}</p>
+      <div className="flex flex-1 items-center justify-center">
+        <span className={`text-6xl font-bold leading-none tabular-nums ${toneCls}`}>
+          {value.toLocaleString()}
+        </span>
       </div>
-      <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
+      <div className="flex items-center justify-end gap-1 text-sm font-medium text-muted-foreground">
         View <ChevronRight className="h-4 w-4" />
       </div>
     </button>
