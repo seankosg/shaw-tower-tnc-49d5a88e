@@ -496,7 +496,15 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
     const dataDate = item.dataDate || todayIso();
     const profileTeamMap = await buildProfileTeamMap();
     const masterEnsurer = await createDefectMasterEnsurer(supabase as any);
-    const issueRegistry = await buildIssueRegistry(null);
+    const issueRegistry = await buildIssueRegistry();
+
+    // Resolve the active project once. SC counter + defect_items.project_id both require it.
+    const { data: projectsData } = await (supabase as any)
+      .from('projects').select('id').eq('is_active', true).order('created_at', { ascending: true });
+    const activeProjectId: string | null = projectsData?.[0]?.id ?? null;
+    if (!activeProjectId) {
+      throw new Error('No active project found. Please create or activate a project before importing.');
+    }
 
     const [rulesRes, fbRes] = await Promise.all([
       (supabase as any).from('defect_classification_rules').select('*').eq('is_active', true),
@@ -543,7 +551,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const assignments = buildSubcontractorIssueAssignments(mappedRows, null, issueRegistry, existingByIssueNo);
+    const assignments = await buildSubcontractorIssueAssignments(mappedRows, activeProjectId, issueRegistry, existingByIssueNo);
 
     const batchRes = await (supabase as any).from('defect_upload_batches').insert({ uploaded_file_name: item.name, uploaded_by: user.id, status: 'processing', total_rows: item.parsed.length, data_date: dataDate }).select('id').single();
     const uploadId = batchRes.data?.id;
