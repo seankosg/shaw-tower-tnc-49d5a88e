@@ -1,44 +1,45 @@
 ## 목표
 
-기존 Tier 3 영역의 **Overdue / At-Risk 배너 각각을 2개로 분리**하여 총 **4개의 배너**를 한 줄에 배치합니다. 현재 디자인(border, 배경색, 아이콘, View 화살표, 클릭 동작)은 그대로 유지하고, 폭만 절반이 됩니다.
+4개의 Tier 3 배너 레이아웃을 다음과 같이 변경합니다:
 
 ```text
-┌─────────────────────┬─────────────────────┬─────────────────────┬─────────────────────┐
-│ ⚠ 89                │ ⚠ 134               │ 🕐 N                │ 🕐 M                │
-│ Overdue Subtests    │ Overdue Stage       │ At-Risk Subtests    │ At-Risk Stage       │
-│ unique subtests     │ Occurrences         │ unique subtests     │ Occurrences         │
-│ Any stage planned…  │ total stage…        │ Any stage planned…  │ total stage…        │
-│              View > │              View > │              View > │              View > │
-└─────────────────────┴─────────────────────┴─────────────────────┴─────────────────────┘
+┌──────────────────────────────┐
+│ Subtest Overdue              │ ← 좌측 상단 라벨
+│                              │
+│            89                │ ← 가운데, 매우 크게
+│                              │
+│                      View >  │
+└──────────────────────────────┘
 ```
 
-- **배너 1 (Overdue – Unique)**: `overdueCountAll` 고유 Subtest 수. 기존 destructive 톤. 클릭 → 기존과 동일한 overdue 라우팅.
-- **배너 2 (Overdue – Stage Occurrences)**: 6개 스테이지(Pred/T1/T2/R1S/R2S/R2A) 각 지연 건수의 **합계**. destructive 톤. 클릭 → 동일 overdue 라우팅 (현재로선 동일 페이지 이동).
-- **배너 3 (At-Risk – Unique)**: `atRiskCountAll` 고유 Subtest 수. warning 톤. 기존과 동일.
-- **배너 4 (At-Risk – Stage Occurrences)**: 6개 스테이지 At-Risk 건수의 합계. warning 톤. 클릭 → 동일 at-risk 라우팅.
+- **라벨**: 좌측 상단, 작은 글씨, 톤 색상(destructive/amber)
+- **숫자**: 배너 가운데 정렬, 배너 높이/폭에 맞춰 최대한 크게 (`text-5xl` 정도, tabular-nums)
+- **View >**: 우측 하단에 그대로 유지
+- 설명 문구는 없음
 
-각 배너는 기존 `AlertBanner` 컴포넌트(제목 + 설명 + View) 구조를 그대로 사용하며, 제목/설명 문구만 종류별로 달라집니다.
+## 라벨 텍스트 (4개)
+
+1. `Subtest Overdue` — `overdueCountAll`
+2. `Total Stage Overdue` — `overdueOccurrencesAll`
+3. `Subtest At Risk` — `atRiskCountAll`
+4. `Total Stage At Risk` — `atRiskOccurrencesAll`
 
 ## 변경 파일
 
-### 1. `src/lib/dashboard-utils.ts`
-신규 헬퍼 2개 추가 (기존 함수 변경 없음):
-- `countOverdueStageOccurrences(subs, asOfDate)` → `['pred','t1','t2','r1','r2s','r2a']` 각각에 대해 `isStageDelayedAsOf` 매칭 건수의 총합
-- `countAtRiskStageOccurrences(subs, today, thresholdDays)` → 같은 6 스테이지에서 `0 ≤ daysBetween(today, planned) ≤ threshold` 이면서 not Done 인 건수의 총합
+### `src/pages/DashboardPage.tsx`
 
-### 2. `src/pages/DashboardPage.tsx`
-- `kpis` useMemo에 추가: `overdueOccurrencesAll`, `atRiskOccurrencesAll`
-- 기존 `<div className="grid gap-3 md:grid-cols-2">` 컨테이너를 **`md:grid-cols-4`** 로 변경
-- 그 안에 `AlertBanner` **4개** 배치:
-  1. title: `${overdueCountAll} Overdue Subtests`, description: `Unique subtests with any stage overdue as of Data Date (${dataDateLabel}).`
-  2. title: `${overdueOccurrencesAll} Overdue Stage Occurrences`, description: `Sum of overdue counts across Pred/T1/T2/R1S/R2S/R2A as of Data Date.`
-  3. title: `${atRiskCountAll} At-Risk Subtests`, description: `Unique subtests with any stage planned within ${atRiskDays} day(s) and not Done.`
-  4. title: `${atRiskOccurrencesAll} At-Risk Stage Occurrences`, description: `Sum of at-risk counts across Pred/T1/T2/R1S/R2S/R2A within ${atRiskDays} day(s).`
-- `AlertBanner` 컴포넌트 자체는 **수정하지 않음** — 시그니처/디자인 그대로
-- 화면 좁아질 때 깨지지 않도록 4열은 `md:` 이상에서만 적용, 그 이하에선 1열(현재 grid 기본 동작 유지)
+**1. `AlertBanner` 컴포넌트 재구성**:
+- 시그니처: `tone`, `value: number`, `label: string`, `onClick` (icon/title/description 제거)
+- 내부 구조 (button을 `relative` + `flex flex-col`로):
+  - 좌측 상단: `<p class="text-xs font-medium {iconCls}">label</p>`
+  - 가운데: `<div class="flex-1 flex items-center justify-center"><span class="text-5xl font-bold tabular-nums {iconCls}">value</span></div>`
+  - 우측 하단: `<div class="self-end flex items-center gap-1 text-sm text-muted-foreground">View <ChevronRight/></div>`
+- 최소 높이 추가(`min-h-[120px]` 정도)로 숫자가 잘 보이도록 함
+- 기존 border/배경 톤(destructive/amber) 유지
+
+**2. 4개 호출부 갱신**: 위 라벨 텍스트로 교체, 아이콘 prop 제거
 
 ## 비고
 
-- 클릭 라우팅: Stage Occurrences 배너 2개는 Unique 배너와 동일한 라우팅을 사용합니다(현 시점에선 동일 페이지). 추후 stage별 breakdown 페이지가 필요하면 별도 라우팅으로 분리 가능.
-- Overdue Stage Occurrences 합계는 Tier 2 스테이지 카드들의 OD 배지 숫자 합과 정확히 일치합니다(예: 2+11+2+74+45+R2S).
-- 폰트 크기/패딩 등은 현재 `AlertBanner` 그대로 사용 — 폭이 좁아져도 한 줄짜리 제목/설명이라 자연스럽게 wrap 됩니다.
+- `AlertTriangle`, `Clock` 아이콘은 더 이상 사용하지 않음 (라벨로 충분히 의미 전달). import는 다른 곳에서도 쓰이면 유지.
+- grid 레이아웃 `md:grid-cols-2 xl:grid-cols-4` 유지.

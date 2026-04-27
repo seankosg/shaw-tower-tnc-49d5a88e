@@ -348,30 +348,26 @@ export default function DashboardPage() {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <AlertBanner
           tone="destructive"
-          icon={<AlertTriangle className="h-5 w-5" />}
-          title={`${kpis.overdueCountAll} Overdue Subtests`}
-          description={`Unique subtests with any stage overdue as of Data Date (${dataDateLabel}).`}
+          value={kpis.overdueCountAll}
+          label="Subtest Overdue"
           onClick={() => goSubtests({ status: 'overdue', as_of: dataDate, scope: 'all' })}
         />
         <AlertBanner
           tone="destructive"
-          icon={<AlertTriangle className="h-5 w-5" />}
-          title={`${kpis.overdueOccurrencesAll} Overdue Stage Occurrences`}
-          description={`Sum of overdue counts across Pred/T1/T2/R1S/R2S/R2A as of Data Date (${dataDateLabel}).`}
+          value={kpis.overdueOccurrencesAll}
+          label="Total Stage Overdue"
           onClick={() => goSubtests({ status: 'overdue', as_of: dataDate, scope: 'all' })}
         />
         <AlertBanner
           tone="warning"
-          icon={<Clock className="h-5 w-5" />}
-          title={`${kpis.atRiskCountAll} At-Risk Subtests`}
-          description={`Unique subtests with any stage planned within ${atRiskDays} day(s) and not yet Done.`}
+          value={kpis.atRiskCountAll}
+          label="Subtest At Risk"
           onClick={() => goSubtests({ status: 'at_risk', at_risk_days: String(atRiskDays), scope: 'all' })}
         />
         <AlertBanner
           tone="warning"
-          icon={<Clock className="h-5 w-5" />}
-          title={`${kpis.atRiskOccurrencesAll} At-Risk Stage Occurrences`}
-          description={`Sum of at-risk counts across Pred/T1/T2/R1S/R2S/R2A within ${atRiskDays} day(s).`}
+          value={kpis.atRiskOccurrencesAll}
+          label="Total Stage At Risk"
           onClick={() => goSubtests({ status: 'at_risk', at_risk_days: String(atRiskDays), scope: 'all' })}
         />
       </div>
@@ -629,31 +625,29 @@ function KpiCard({
 }
 
 function AlertBanner({
-  tone, icon, title, description, onClick,
+  tone, value, label, onClick,
 }: {
   tone: 'destructive' | 'warning';
-  icon: React.ReactNode;
-  title: string;
-  description: string;
+  value: number;
+  label: string;
   onClick: () => void;
 }) {
   const cls = tone === 'destructive'
     ? 'border-destructive/40 bg-destructive/5'
     : 'border-amber-500/40 bg-amber-500/5';
-  const iconCls = tone === 'destructive' ? 'text-destructive' : 'text-amber-600 dark:text-amber-400';
+  const toneCls = tone === 'destructive' ? 'text-destructive' : 'text-amber-600 dark:text-amber-400';
   return (
     <button
       onClick={onClick}
-      className={`flex items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/40 ${cls}`}
+      className={`relative flex min-h-[140px] w-full flex-col rounded-lg border p-3 text-left transition-colors hover:bg-muted/40 ${cls}`}
     >
-      <div className="flex items-center gap-3">
-        <div className={iconCls}>{icon}</div>
-        <div>
-          <p className={`font-semibold ${iconCls}`}>{title}</p>
-          <p className="text-xs text-muted-foreground">{description}</p>
-        </div>
+      <p className={`text-xs font-semibold uppercase tracking-wide ${toneCls}`}>{label}</p>
+      <div className="flex flex-1 items-center justify-center">
+        <span className={`text-6xl font-bold leading-none tabular-nums ${toneCls}`}>
+          {value.toLocaleString()}
+        </span>
       </div>
-      <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
+      <div className="flex items-center justify-end gap-1 text-sm font-medium text-muted-foreground">
         View <ChevronRight className="h-4 w-4" />
       </div>
     </button>
