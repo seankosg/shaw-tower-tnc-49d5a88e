@@ -7,10 +7,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -18,6 +14,8 @@ import { Construction, Loader2, PauseCircle, PlayCircle, Shield } from 'lucide-r
 import { useAuth } from '@/contexts/AuthContext';
 import { useModuleStatus, type ModuleStatus } from '@/contexts/ModuleStatusContext';
 import { useToast } from '@/hooks/use-toast';
+import { PasswordReverifyDialog } from '@/components/admin/PasswordReverifyDialog';
+import { FinalConfirmDialog } from '@/components/admin/FinalConfirmDialog';
 
 const LABEL = { tnc: 'T&C', defect: 'Defect' } as const;
 
@@ -35,31 +33,27 @@ function formatDateTime(iso?: string) {
   }
 }
 
+type PauseFormData = { reason: string; message: string; expectedResumeAt: string };
+
 function PauseDialog({
   module, open, onOpenChange, onConfirm,
 }: {
   module: 'tnc' | 'defect';
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onConfirm: (data: { reason: string; message: string; expectedResumeAt: string }) => Promise<void>;
+  onConfirm: (data: PauseFormData) => void;
 }) {
   const [reason, setReason] = useState('');
   const [message, setMessage] = useState('');
   const [expectedResumeAt, setExpectedResumeAt] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   const reset = () => { setReason(''); setMessage(''); setExpectedResumeAt(''); };
 
-  const handleConfirm = async () => {
+  const handleConfirm = () => {
     if (!reason.trim()) return;
-    setSubmitting(true);
-    try {
-      await onConfirm({ reason: reason.trim(), message: message.trim(), expectedResumeAt });
-      reset();
-      onOpenChange(false);
-    } finally {
-      setSubmitting(false);
-    }
+    onConfirm({ reason: reason.trim(), message: message.trim(), expectedResumeAt });
+    reset();
+    onOpenChange(false);
   };
 
   return (
@@ -114,14 +108,13 @@ function PauseDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>취소</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
           <Button
             onClick={handleConfirm}
-            disabled={submitting || !reason.trim()}
+            disabled={!reason.trim()}
             className="bg-amber-600 text-white hover:bg-amber-700"
           >
-            {submitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-            일시 중단
+            다음 (보안 확인)
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -129,46 +122,83 @@ function PauseDialog({
   );
 }
 
+type PendingAction =
+  | { type: 'pause'; data: PauseFormData }
+  | { type: 'resume' }
+  | null;
+
 function ModuleRow({ module }: { module: 'tnc' | 'defect' }) {
   const { tnc, defect, setStatus } = useModuleStatus();
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const status: ModuleStatus = module === 'tnc' ? tnc : defect;
-  const [pauseOpen, setPauseOpen] = useState(false);
-  const [resumeOpen, setResumeOpen] = useState(false);
+
+  const [pauseFormOpen, setPauseFormOpen] = useState(false);
+  const [pending, setPending] = useState<PendingAction>(null);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [finalOpen, setFinalOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const onPauseConfirm = async (data: { reason: string; message: string; expectedResumeAt: string }) => {
-    const newStatus: ModuleStatus = {
-      enabled: false,
-      reason: data.reason,
-      message: data.message || undefined,
-      expectedResumeAt: data.expectedResumeAt
-        ? new Date(data.expectedResumeAt).toISOString()
-        : undefined,
-      pausedAt: new Date().toISOString(),
-      pausedByUserId: user?.id,
-      pausedByName: profile?.name || profile?.login_id || undefined,
-    };
-    const { error } = await setStatus(module, newStatus);
-    if (error) {
-      toast({ title: '중단 실패', description: error.message, variant: 'destructive' });
-    } else {
-      toast({ title: `${LABEL[module]} 모듈 일시 중단됨`, description: data.reason });
-    }
+  const moduleLabel = LABEL[module];
+
+  const resetFlow = () => {
+    setPending(null);
+    setPasswordOpen(false);
+    setFinalOpen(false);
   };
 
-  const onResume = async () => {
-    setBusy(true);
-    const { error } = await setStatus(module, { enabled: true });
-    setBusy(false);
-    setResumeOpen(false);
-    if (error) {
-      toast({ title: '재개 실패', description: error.message, variant: 'destructive' });
-    } else {
-      toast({ title: `${LABEL[module]} 모듈 재개됨` });
-    }
+  const requestPause = () => setPauseFormOpen(true);
+  const requestResume = () => {
+    setPending({ type: 'resume' });
+    setPasswordOpen(true);
   };
+
+  const onPauseFormConfirm = (data: PauseFormData) => {
+    setPending({ type: 'pause', data });
+    setPasswordOpen(true);
+  };
+
+  const onPasswordVerified = () => {
+    setPasswordOpen(false);
+    setFinalOpen(true);
+  };
+
+  const onFinalConfirm = async () => {
+    if (!pending) return;
+    setBusy(true);
+    let result: { error: Error | null };
+    if (pending.type === 'pause') {
+      const newStatus: ModuleStatus = {
+        enabled: false,
+        reason: pending.data.reason,
+        message: pending.data.message || undefined,
+        expectedResumeAt: pending.data.expectedResumeAt
+          ? new Date(pending.data.expectedResumeAt).toISOString()
+          : undefined,
+        pausedAt: new Date().toISOString(),
+        pausedByUserId: user?.id,
+        pausedByName: profile?.name || profile?.login_id || undefined,
+      };
+      result = await setStatus(module, newStatus);
+      setBusy(false);
+      if (result.error) {
+        toast({ title: '중단 실패', description: result.error.message, variant: 'destructive' });
+      } else {
+        toast({ title: `${moduleLabel} 모듈 일시 중단됨`, description: pending.data.reason });
+      }
+    } else {
+      result = await setStatus(module, { enabled: true });
+      setBusy(false);
+      if (result.error) {
+        toast({ title: '재개 실패', description: result.error.message, variant: 'destructive' });
+      } else {
+        toast({ title: `${moduleLabel} 모듈 재개됨` });
+      }
+    }
+    resetFlow();
+  };
+
+  const actionLabel = pending?.type === 'pause' ? '일시 중단' : '재개';
 
   return (
     <div className={`rounded-lg border p-4 transition-colors ${
@@ -179,7 +209,7 @@ function ModuleRow({ module }: { module: 'tnc' | 'defect' }) {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold">{LABEL[module]} Module</h3>
+            <h3 className="text-base font-semibold">{moduleLabel} Module</h3>
             {status.enabled ? (
               <Badge variant="outline" className="border-green-400 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300">
                 Active
@@ -225,8 +255,8 @@ function ModuleRow({ module }: { module: 'tnc' | 'defect' }) {
           <Switch
             checked={status.enabled}
             onCheckedChange={(checked) => {
-              if (checked) setResumeOpen(true);
-              else setPauseOpen(true);
+              if (checked) requestResume();
+              else requestPause();
             }}
             disabled={busy}
           />
@@ -234,7 +264,7 @@ function ModuleRow({ module }: { module: 'tnc' | 'defect' }) {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setResumeOpen(true)}
+              onClick={requestResume}
               disabled={busy}
             >
               <PlayCircle className="mr-1 h-3.5 w-3.5" />
@@ -246,31 +276,39 @@ function ModuleRow({ module }: { module: 'tnc' | 'defect' }) {
 
       <PauseDialog
         module={module}
-        open={pauseOpen}
-        onOpenChange={setPauseOpen}
-        onConfirm={onPauseConfirm}
+        open={pauseFormOpen}
+        onOpenChange={setPauseFormOpen}
+        onConfirm={onPauseFormConfirm}
       />
 
-      <AlertDialog open={resumeOpen} onOpenChange={setResumeOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <PlayCircle className="h-5 w-5 text-green-600" />
-              {LABEL[module]} 모듈 재개
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {LABEL[module]} 모듈을 즉시 재개합니다. 모든 사용자가 다시 접근할 수 있게 됩니다.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={onResume} disabled={busy}>
-              {busy && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              재개
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <PasswordReverifyDialog
+        open={passwordOpen}
+        onOpenChange={(v) => {
+          setPasswordOpen(v);
+          if (!v && !finalOpen) setPending(null);
+        }}
+        actionLabel={actionLabel}
+        moduleLabel={moduleLabel}
+        onVerified={onPasswordVerified}
+      />
+
+      <FinalConfirmDialog
+        open={finalOpen}
+        onOpenChange={(v) => {
+          setFinalOpen(v);
+          if (!v) setPending(null);
+        }}
+        title={`${moduleLabel} 모듈 ${actionLabel}`}
+        description={
+          pending?.type === 'pause'
+            ? `${moduleLabel} 모듈을 일시 중단합니다. 정말 진행하시겠습니까?`
+            : `${moduleLabel} 모듈을 재개합니다. 정말 진행하시겠습니까?`
+        }
+        confirmLabel={actionLabel}
+        confirmVariant={pending?.type === 'pause' ? 'warning' : 'default'}
+        busy={busy}
+        onConfirm={onFinalConfirm}
+      />
     </div>
   );
 }
@@ -300,7 +338,7 @@ export function ModuleControlTab() {
         <CardDescription>
           시스템 점검, 데이터 검증, 정무적 사유 등으로 T&amp;C 또는 Defect 모듈을 일시 중단할 수 있습니다.
           중단 중에도 데이터는 그대로 보존되며, 관리자만 페이지에 접근할 수 있어 검증·복구가 가능합니다.
-          재개는 토글 한 번이면 즉시 적용됩니다.
+          상태 변경 시에는 보안을 위해 비밀번호 재확인과 최종 확인이 필요합니다.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
