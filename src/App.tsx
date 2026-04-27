@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ImportProvider } from "@/contexts/ImportContext";
 import { DefectImportProvider } from "@/contexts/DefectImportContext";
+import { ModuleStatusProvider } from "@/contexts/ModuleStatusContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { RoleGuard } from "@/components/layout/RoleGuard";
@@ -44,6 +45,7 @@ function RedirectPreserveSearch({ to }: { to: string }) {
 const App = () => (
   <AuthProvider>
     <QueryClientProvider client={queryClient}>
+      <ModuleStatusProvider>
       <ImportProvider>
         <DefectImportProvider>
         <TooltipProvider>
@@ -99,6 +101,7 @@ const App = () => (
         </TooltipProvider>
         </DefectImportProvider>
       </ImportProvider>
+      </ModuleStatusProvider>
     </QueryClientProvider>
   </AuthProvider>
 );
