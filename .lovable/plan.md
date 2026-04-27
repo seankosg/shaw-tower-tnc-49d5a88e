@@ -1,103 +1,134 @@
 ## 목표
+`DefectProgressPage`를 T&C `SchedulePage`(/tc/progress) UI 구조로 전면 재디자인합니다. Defect 데이터 모델(3단계 lifecycle: Start/Completion/Closure)에 맞게 Stage를 매핑하고, T&C Progress의 toolbar / KPI strip / matrix / risk panel / date lookup / hide-past / excel export 패턴을 그대로 가져옵니다.
 
-`Admin → Module Control`에서 T&C / Defect 모듈의 상태(중단/재개)를 변경할 때, 단순 토글이나 버튼 클릭만으로 즉시 적용되지 않도록 **2단계 보안 확인**을 추가합니다.
+## 결정사항 (사용자 확정)
+- **Stage 구성**: Start / Completion / Closure (3 stages)
+- **Group By**: 기존 8개 + HDEC ENG = 9개 (Team, Subcontractor, Sub-Sub, HDEC PIC, **HDEC ENG**, Level, Main Trade, Sub Trade, Work Type)
+- **포함 기능**: 핵심 UI 세트 + Risk Panel + Hide past + Date Lookup + Excel export
+- **기존 차트(Daily/Cumulative)**: 제거 — matrix 중심 통일
 
-1. **1단계 — 비밀번호 재확인**: 현재 로그인한 관리자의 비밀번호를 다시 입력받아 검증
-2. **2단계 — 최종 확인**: 비밀번호가 맞으면 "정말 진행하시겠습니까?" 한 번 더 묻기
+---
 
-이렇게 하면 실수 클릭이나 자리 비움 상태에서의 우발적/악의적 모듈 중단을 방지할 수 있습니다.
+## UI 구조 (T&C Progress와 동일)
 
-## 적용 범위
-
-다음 진입점 모두에 동일한 2단계 흐름을 적용합니다:
-
-- `ModuleControlTab` 의 **Switch 토글** (켜기 → 재개, 끄기 → 중단)
-- `ModuleControlTab` 의 **재개 버튼**
-- `ModuleControlTab` 의 **중단 다이얼로그 "일시 중단" 확정 버튼**
-- `ModulePausedBanner` (상단 배너) 의 **재개 버튼**
-
-## UX 흐름
-
-### 중단(Pause) 시
 ```text
-[Switch OFF] / [중단 버튼]
-   ↓
-[기존 PauseDialog: 사유/공지/예상재개 입력] → "일시 중단" 클릭
-   ↓
-[NEW: 비밀번호 재확인 다이얼로그]
-   - 비밀번호 입력 (masked)
-   - 검증: supabase.auth.signInWithPassword (현재 사용자 email)
-   - 실패 시 에러 표시, 재시도 가능
-   ↓
-[NEW: 최종 확인 다이얼로그]
-   "T&C 모듈을 일시 중단합니다. 진행하시겠습니까?"
-   [취소] [확인]
-   ↓
-실제 setStatus 호출 → 토스트
+┌─ Header ─────────────────────────────────────────────────┐
+│ 📅 Defect Progress Status              [Excel] [Risk]   │
+│ Track planned vs actual by {group} · {bucket} · …       │
+├─ Toolbar (Card) ─────────────────────────────────────────┤
+│ Group | Team | Bucket | Stage | As-of | Range | Lookup  │
+│   tabs  select  tabs   toggle   tabs   select  pop+Go   │
+│                                              [Legend]    │
+├─ KPI Strip (4 cards) ────────────────────────────────────┤
+│ Cumulative │ Delay up to │ Critical │ Upcoming 7d Plan  │
+│  Progress  │  Data Date  │  (≤7d)   │                   │
+├─ Action row ─────────────────────────────────────────────┤
+│                              [Hide past] [Risk Panel]    │
+├─ Main ───────────────────────────────────────────────────┤
+│ ┌─ DefectScheduleMatrix ──────┐ ┌─ Critical Watchlist ─┐│
+│ │ Group │ Stage │ buckets...  │ │ High risk            ││
+│ │ ...                         │ │ Bottleneck           ││
+│ │                             │ │ Lagging groups       ││
+│ └─────────────────────────────┘ └──────────────────────┘│
+└──────────────────────────────────────────────────────────┘
 ```
 
-### 재개(Resume) 시
-```text
-[Switch ON] / [재개 버튼] (탭 또는 배너)
-   ↓
-[NEW: 비밀번호 재확인 다이얼로그]
-   ↓
-[NEW: 최종 확인 다이얼로그]
-   "T&C 모듈을 재개합니다. 진행하시겠습니까?"
-   ↓
-실제 setStatus(enabled: true) 호출 → 토스트
-```
+## Stage 매핑 (Defect lifecycle 기반)
 
-> 참고: 재개의 경우 기존에도 별도 AlertDialog가 있었지만, 이를 **비밀번호 재확인 → 최종 확인** 두 단계로 대체합니다.
+| Stage key | Planned date field            | Actual date field             | Done 판정                        |
+|-----------|--------------------------------|--------------------------------|----------------------------------|
+| `start`   | `planned_start_date`           | `actual_start_date`            | actual_start_date 존재 OR 후속 stage done |
+| `completion` | `planned_completion_date`   | `actual_completion_date`       | actual_completion_date 존재 OR closure done OR `actual_progress_pct >= 100` |
+| `closure` | `planned_closure_date`         | `actual_closure_date`          | `isClosedDefect()` (기존 함수)    |
 
-## 기술적 변경 사항
+Cascade Done semantics 유지: closure done ⇒ completion/start done; completion done ⇒ start done.
 
-### 1. 새 공통 컴포넌트: `src/components/admin/PasswordReverifyDialog.tsx`
-- Props: `open`, `onOpenChange`, `actionLabel`(예: "일시 중단" / "재개"), `moduleLabel`, `onVerified()`
-- 내부 state: `password`, `submitting`, `error`
-- 검증 로직:
-  ```ts
-  const { user } = useAuth();
-  const { error } = await supabase.auth.signInWithPassword({
-    email: user.email!,
-    password,
-  });
-  ```
-  - 성공 시 `onVerified()` 호출 후 닫힘
-  - 실패 시 한국어 에러("비밀번호가 일치하지 않습니다") 표시, 입력 필드 비우고 재시도 가능
-- 다이얼로그 헤더에 잠금 아이콘 + "보안 확인 필요" 안내 문구
-- Enter 키 제출 지원
+## Group By 옵션 (9개)
 
-### 2. 새 공통 컴포넌트: `src/components/admin/FinalConfirmDialog.tsx` (또는 기존 AlertDialog 재사용)
-- 단순한 "정말 진행하시겠습니까?" AlertDialog
-- Props: `open`, `onOpenChange`, `title`, `description`, `confirmLabel`, `confirmVariant`(중단=warning, 재개=default), `onConfirm()`
+| key                  | label             | accessor                |
+|----------------------|-------------------|-------------------------|
+| `team`               | Team              | `team` (TEAM_LABELS)    |
+| `subcontractor_name` | Subcontractor     | `subcontractor_name`    |
+| `subsub_name`        | Sub-Sub           | `subsub_name`           |
+| `hdec_pic_name`      | HDEC PIC          | `hdec_pic_name`         |
+| `hdec_eng_name`      | **HDEC ENG (신규)** | `hdec_eng_name`         |
+| `area_level`         | Level             | `area_level`            |
+| `main_trade`         | Main Trade        | `main_trade`            |
+| `sub_trade`          | Sub Trade         | `sub_trade`             |
+| `work_type`          | Work Type         | `work_type`             |
 
-### 3. `src/pages/admin/ModuleControlTab.tsx` 수정
-- `ModuleRow` 내부 state 추가:
-  - `pendingAction: { type: 'pause' | 'resume'; pauseData?: ... } | null`
-  - `passwordOpen`, `finalOpen`
-- 흐름 재배선:
-  - **Pause**: 기존 `PauseDialog` confirm 시 → setStatus 호출하지 말고 `pendingAction` 저장 → `passwordOpen=true`
-  - **Resume**: Switch ON 또는 재개 버튼 → 기존 AlertDialog 제거하고 바로 `pendingAction={type:'resume'}` 저장 → `passwordOpen=true`
-  - 비밀번호 검증 성공 → `passwordOpen=false`, `finalOpen=true`
-  - 최종 확인 → `setStatus(...)` 실제 실행 → 토스트
-  - 어느 단계든 취소 시 `pendingAction=null`로 초기화 (스위치도 원위치)
-- Switch의 낙관적 토글 방지: `checked`는 항상 `status.enabled` 기준으로만 표시, `onCheckedChange`에서 다이얼로그만 띄움 (검증 완료 전엔 실제 상태 변경 X)
+---
 
-### 4. `src/components/layout/ModulePausedBanner.tsx` 수정
-- `BannerRow` 의 `onResume`을 즉시 `setStatus` 호출이 아니라:
-  - `passwordOpen=true` → 검증 성공 시 → `finalOpen=true` → 확인 시 `setStatus({enabled:true})`
-- 동일한 `PasswordReverifyDialog` + `FinalConfirmDialog` 재사용
+## 구현 작업
 
-### 5. 보안 / UX 노트
-- `signInWithPassword`로 검증하면 현재 세션이 갱신될 수 있는데, 이는 정상 동작이며 사용자 경험에 영향 없음 (같은 계정 재인증)
-- 비밀번호 입력 필드는 `autoComplete="current-password"` 지정
-- 비밀번호는 state에만 잠시 보관, 검증 직후 클리어
-- 실패 횟수 제한은 이번 범위에서는 적용하지 않음 (필요 시 추후)
+### 1. 신규 라이브러리: `src/lib/defect-schedule-utils.ts`
+T&C `schedule-utils.ts`를 Defect 모델로 포팅. 포함 함수:
+- 타입: `DefectScheduleStage = 'start' | 'completion' | 'closure'`, `DefectScheduleStageFilter`, `DefectScheduleBucket`, `DefectScheduleGroupBy`, `BucketCell`, `StageRow`, `GroupRow`, `CriticalItem`, `LaggingGroup`
+- `DEFECT_STAGE_KEYS`, `getDefectStagePlannedDate`, `getDefectStageActualDate`, `isDefectStageDone(item, stage)`, `isDefectStagePlannedUpTo`, `isDefectStageActualUpTo`, `isDefectStagePlannedOn`, `isDefectStageDelayedAsOf`
+- `aggregateDefectSchedule({ items, groupBy, bucket, stageFilter, rangeStart, rangeEnd, asOfDate })`
+- `findDefectCritical(items, today, daysLeft, groupBy)` → high-risk + bottleneck (closure not started but completion overdue)
+- `findDefectLaggingGroups(rows, threshold)`
+- `addDays`, `toIso` (T&C와 동일하게 재export)
 
-## 변경 파일 요약
+### 2. 신규 컴포넌트: `src/components/defects/DefectScheduleMatrix.tsx`
+T&C `ScheduleMatrix.tsx` 패턴 그대로. Stage 토글 시 `start/completion/closure` 서브로우로 전개. Cell 클릭 → `/defects/raw-data?{group}={value}&date_from=…&date_to=…&date_field=planned|actual&stage=start|completion|closure&cell_status=Done(actual인 경우)` 형식으로 navigate.
 
-- 신규: `src/components/admin/PasswordReverifyDialog.tsx`
-- 신규: `src/components/admin/FinalConfirmDialog.tsx`
-- 수정: `src/pages/admin/ModuleControlTab.tsx` — pause/resume 흐름에 2단계 확인 끼워넣기, 기존 resume AlertDialog 대체
-- 수정: `src/components/layout/ModulePausedBanner.tsx` — 재개 버튼에 동일한 2단계 확인 적용
+### 3. 신규 컴포넌트: `src/components/defects/DefectCriticalWatchlist.tsx`
+T&C `CriticalWatchlist`와 동일 레이아웃. 3개 섹션:
+- **High Risk**: 7일 내 planned date인데 not done (모든 stage 대상)
+- **Completion Bottleneck**: completion overdue & not done인 defect (T&C의 T1 bottleneck 자리)
+- **Lagging Groups**: cumActual / cumPlan < 임계치
+
+### 4. 신규 라이브러리: `src/lib/defect-schedule-excel-export.ts`
+T&C `schedule-excel-export.ts` 포팅. `exportDefectScheduleToExcel(visibleData, { groupHeader, stageFilter, bucket, today, dataDate, asOfLabel })` — XLSX 형식, 그룹별 Plan/Actual 행 + bucket 컬럼.
+
+### 5. 페이지 재작성: `src/pages/DefectProgressPage.tsx`
+기존 코드 전면 교체. T&C `SchedulePage` 골격 그대로 가져와서 다음으로 치환:
+- `subtests` → `defect_items` 로딩 (기존 페이지의 paged fetch 패턴 사용)
+- `system_master` 조회 제거 (Defect엔 system 그룹이 없음)
+- `useLatestDataDate` 훅으로 Data Date 가져오기 (기존 페이지에서 이미 사용 중)
+- URL 파라미터 동기화: `group`, `bucket`, `stage_view`, `asof_mode`, `team`, `range`, `hide_past`, `risk_panel`, `picked`, `picked_field`
+- Hide past localStorage key: `defect_schedule_hide_past`
+- Cache: 별도 `defect-schedule-cache` (선택 — T&C와 동일하게 instant render 위해)
+- KPI Strip 4종:
+  - Cumulative Progress: 선택된 stage의 done/total
+  - Delay Up to Data Date: stage delayed 합산
+  - Critical (≤7d): 7일내 planned & not done
+  - Upcoming 7d Plan: 향후 7일 planned 합산
+- Toolbar: Group(9개) / Team / Bucket(day,week) / Stage(All + start/completion/closure 토글) / As-of(Data Date / Today) / Range(14/30/60/90) / Lookup(date picker + plan/actual + Go)
+- Excel 버튼은 헤더 우측
+
+### 6. Raw Data 라우팅 호환성 검증
+새로운 query 파라미터들(`stage=start|completion|closure`, `date_field`, `cell_status`)이 `DefectRawDataPage`에서 처리되는지 확인. 누락 시 필터 핸들러 추가.
+
+---
+
+## 영향 범위
+
+### 신규 파일
+- `src/lib/defect-schedule-utils.ts`
+- `src/lib/defect-schedule-excel-export.ts`
+- `src/components/defects/DefectScheduleMatrix.tsx`
+- `src/components/defects/DefectCriticalWatchlist.tsx`
+
+### 수정 파일
+- `src/pages/DefectProgressPage.tsx` — 전면 재작성
+- `src/pages/DefectRawDataPage.tsx` — 신규 query 파라미터 핸들링 (필요 시)
+
+### 제거 (사용처 정리 후)
+- `src/components/defects/DefectProgressMatrix.tsx` (DefectScheduleMatrix로 대체)
+- `src/components/defects/DefectDailyCumulativeChart.tsx` (차트 제거 결정)
+- `src/lib/defect-progress-utils.ts` (defect-schedule-utils로 대체) — 단, 다른 곳에서 import 중이면 deprecated로 두고 progress 페이지에서만 끊기
+
+### 보존
+- `defect-dashboard-utils.ts` (Dashboard에서 계속 사용)
+- `useLatestDataDate` 훅 (Data Date 출처)
+- 기존 stage Done 판정 로직(`isClosedDefect`, `isOverdueDefect`)은 새 utils에서 재사용
+
+---
+
+## 비고
+- T&C `stage-metrics.ts`는 subtest 전용이므로 Defect용 로직은 새 `defect-schedule-utils.ts`에 inline으로 작성합니다.
+- Critical Watchlist의 "T1 Bottleneck" 의미는 Defect에서 "Completion overdue but not closed" 로 재정의합니다 (closure 직전 단계 적체).
+- Defect엔 system 그룹이 없으므로 systemFilter UI는 matrix에서 제거합니다.
+- 색상 토큰(`schedule-plan`, `schedule-actual`, `schedule-over`, `schedule-short`)은 기존 design system 그대로 사용합니다.
