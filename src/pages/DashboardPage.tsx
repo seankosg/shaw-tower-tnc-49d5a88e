@@ -135,6 +135,9 @@ export default function DashboardPage() {
     // All-stage Overdue/At-Risk (Pred/T1/T2/R1/R2) — used by Tier 3 alert banner
     const overdueCountAll = filteredSubtests.filter(s => isOverdueAllStages(s, dataDate)).length;
     const atRiskCountAll = filteredSubtests.filter(s => isAtRiskAllStages(s, today, atRiskDays)).length;
+    // Stage-occurrence sums (a single subtest may contribute to multiple stages)
+    const overdueOccurrencesAll = countOverdueStageOccurrences(filteredSubtests, dataDate);
+    const atRiskOccurrencesAll = countAtRiskStageOccurrences(filteredSubtests, today, atRiskDays);
 
     // Stage-specific. R2 here = R2 Approval milestone (r2a).
     const stageStat = (stage: 'pred' | 't1' | 't2' | 'r1' | 'r2a', plannedField: keyof SubtestForDashboard) => {
