@@ -31,6 +31,7 @@ import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import {
   type SubtestForDashboard, type PlanActualRow, type PlanActualMetrics,
   todayIso, yesterdayIso, isOverdue, isAtRisk, maxDelayDays, isOverdueAllStages, isAtRiskAllStages,
+  countOverdueStageOccurrences, countAtRiskStageOccurrences,
   aggregatePlanActualByGroup, buildSCurve, NONE_LABEL,
 } from '@/lib/dashboard-utils';
 import { isStageDone } from '@/lib/stage-metrics';
