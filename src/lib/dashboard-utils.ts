@@ -106,14 +106,22 @@ export function isAtRiskAllStages(s: SubtestForDashboard, today: string, thresho
 }
 
 /**
- * Sum of overdue counts across all 6 stages (Pred/T1/T2/R1/R2S/R2A).
+ * Stages used for "stage occurrence" sum displayed in the Tier 3 banner.
+ * Matches the 5 Tier 2 stage cards: Pred / T1 / T2 / R1 (Submission) / R2 (Approval).
+ * R2 Submission (r2s) is intentionally excluded so the sum equals
+ * the sum of OD badges shown on the Tier 2 cards.
+ */
+const OCCURRENCE_STAGES: StageKey[] = ['pred', 't1', 't2', 'r1', 'r2a'];
+
+/**
+ * Sum of overdue counts across the 5 Tier-2 stages (Pred/T1/T2/R1S/R2A).
  * A single subtest can contribute multiple times if multiple stages are overdue.
  * This equals the sum of OD badges shown on Tier 2 stage cards.
  */
 export function countOverdueStageOccurrences(subs: SubtestForDashboard[], asOfDate: string): number {
   let total = 0;
   for (const s of subs) {
-    for (const stage of ALL_STAGES) {
+    for (const stage of OCCURRENCE_STAGES) {
       if (isStageDelayedAsOf(s, stage, asOfDate)) total++;
     }
   }
@@ -121,8 +129,8 @@ export function countOverdueStageOccurrences(subs: SubtestForDashboard[], asOfDa
 }
 
 /**
- * Sum of at-risk counts across all 6 stages: planned within `thresholdDays`
- * from `today` (inclusive), not yet Done, and not already overdue at that stage.
+ * Sum of at-risk counts across the 5 Tier-2 stages: planned within
+ * `thresholdDays` from `today` (inclusive), not yet Done.
  * A single subtest can contribute multiple times.
  */
 export function countAtRiskStageOccurrences(
@@ -132,7 +140,7 @@ export function countAtRiskStageOccurrences(
 ): number {
   let total = 0;
   for (const s of subs) {
-    for (const stage of ALL_STAGES) {
+    for (const stage of OCCURRENCE_STAGES) {
       const planned = getStagePlannedDate(s, stage);
       if (!planned || isStageDone(s, stage)) continue;
       const d = daysBetween(today, planned);
