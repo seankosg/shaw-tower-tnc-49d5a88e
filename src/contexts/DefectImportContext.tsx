@@ -614,11 +614,17 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       const batch = pendingUpdates.splice(0, pendingUpdates.length);
       // Run updates with bounded concurrency (Supabase has no true bulk update).
       for (let i = 0; i < batch.length; i += UPDATE_CONCURRENCY) {
-        await Promise.all(
+        const results = await Promise.all(
           batch.slice(i, i + UPDATE_CONCURRENCY).map((op) =>
             (supabase as any).from('defect_items').update(op.payload).eq('id', op.id)
           )
         );
+        for (const r of results) {
+          if (r?.error) {
+            // Surface DB errors so the import does not silently report success.
+            throw new Error(`defect_items UPDATE failed: ${r.error.message ?? JSON.stringify(r.error)}`);
+          }
+        }
       }
     };
     const flushInserts = async () => {
@@ -628,6 +634,10 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         const slice = batch.slice(i, i + INSERT_CHUNK);
         const payloads = slice.map((op) => op.payload);
         const res = await (supabase as any).from('defect_items').insert(payloads).select('id');
+        if (res?.error) {
+          // Surface DB errors so the import does not silently report success.
+          throw new Error(`defect_items INSERT failed: ${res.error.message ?? JSON.stringify(res.error)}`);
+        }
         const newIds: Array<{ id: string }> = res.data ?? [];
         // Map insert return order back to snapshot bases (Supabase preserves order).
         for (let j = 0; j < slice.length; j++) {
@@ -845,7 +855,28 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         row.actual_completion_date = actualCompletionDate;
       }
 
-      const payload = { ...row, id: undefined, subcontractor_issue_no: issueAssignment.subcontractor_issue_no, subcontractor_issue_source: issueAssignment.subcontractor_issue_source, actual_completion_date: actualCompletionDate, actual_progress_pct: actualProgressPct, completion_status: completionStatus, closure_status: closureStatus, team: resolvedTeam, classification_source: classificationSource, classified_at: classifiedAt, rawRowNo: undefined, source_upload_id: uploadId, data_source_type: 'defect_import', updated_by: user.id, row_version: (existing?.row_version ?? 0) + 1 };
+      // Build payload from row, then strip any keys that are NOT real defect_items columns.
+      // PostgREST sends every key as a column name (even when value is undefined), so leaving
+      // a non-column key like `rawRowNo` causes HTTP 400 PGRST204 and the entire batch fails silently.
+      const payload: Record<string, any> = {
+        ...row,
+        subcontractor_issue_no: issueAssignment.subcontractor_issue_no,
+        subcontractor_issue_source: issueAssignment.subcontractor_issue_source,
+        actual_completion_date: actualCompletionDate,
+        actual_progress_pct: actualProgressPct,
+        completion_status: completionStatus,
+        closure_status: closureStatus,
+        team: resolvedTeam,
+        classification_source: classificationSource,
+        classified_at: classifiedAt,
+        source_upload_id: uploadId,
+        data_source_type: 'defect_import',
+        updated_by: user.id,
+        row_version: (existing?.row_version ?? 0) + 1,
+      };
+      // Strip non-column keys carried over from the parser / spread.
+      delete payload.rawRowNo;
+      delete payload.id;
 
       if (existing) {
         // Change-detection skips fields the user did NOT map from Excel — without this,
