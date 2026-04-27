@@ -379,7 +379,7 @@ export type Database = {
           planned_progress_pct: number | null
           planned_start_date: string | null
           priority: string | null
-          project_id: string | null
+          project_id: string
           raw_payload: Json
           remarks: string | null
           row_version: number
@@ -425,7 +425,7 @@ export type Database = {
           planned_progress_pct?: number | null
           planned_start_date?: string | null
           priority?: string | null
-          project_id?: string | null
+          project_id: string
           raw_payload?: Json
           remarks?: string | null
           row_version?: number
@@ -471,7 +471,7 @@ export type Database = {
           planned_progress_pct?: number | null
           planned_start_date?: string | null
           priority?: string | null
-          project_id?: string | null
+          project_id?: string
           raw_payload?: Json
           remarks?: string | null
           row_version?: number
@@ -1030,6 +1030,27 @@ export type Database = {
           t2_old_date?: string | null
           t2_prev_gap_days?: number | null
           upload_id?: string
+        }
+        Relationships: []
+      }
+      subcontractor_issue_counters: {
+        Row: {
+          next_seq: number
+          owner_code: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          next_seq?: number
+          owner_code: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          next_seq?: number
+          owner_code?: string
+          project_id?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1726,6 +1747,14 @@ export type Database = {
       add_business_days_no_sun: {
         Args: { _days: number; _start: string }
         Returns: string
+      }
+      allot_subcontractor_issue_no: {
+        Args: { _count?: number; _owner_code: string; _project_id: string }
+        Returns: number[]
+      }
+      bump_subcontractor_issue_counter: {
+        Args: { _owner_code: string; _project_id: string; _used_seq: number }
+        Returns: number
       }
       can_edit_subtest: {
         Args: {
