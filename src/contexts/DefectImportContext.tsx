@@ -155,59 +155,18 @@ function resolveOwnerCode(row: Pick<ParsedDefectRow, 'subcontractor_name' | 'sub
   const subKey = masterNameKey(row.subcontractor_name);
   const subsub = masters.find((master) => master.type === 'subsub' && masterNameKey(master.name) === subsubKey);
   const sub = masters.find((master) => (master.type ?? 'sub') === 'sub' && masterNameKey(master.name) === subKey);
-  return subsub?.owner_code || sub?.owner_code || normalizeTeamValue(row.team) || 'UNASSIGNED';
+  return (subsub?.owner_code || sub?.owner_code || normalizeTeamValue(row.team) || 'UNASSIGNED').toUpperCase();
 }
 
-async function buildIssueRegistry(projectId: string | null): Promise<IssueRegistry> {
-  const [{ data: masters }, { data: defects }] = await Promise.all([
-    (supabase as any).from('subcontractor_master').select('name, type, parent_subcontractor_id, owner_code').eq('is_active', true),
-    (supabase as any).from('defect_items').select('project_id, subcontractor_issue_no').eq('is_active', true).not('subcontractor_issue_no', 'is', null),
-  ]);
-  const ownerMasters = (masters ?? []) as OwnerMaster[];
-  const existingKeys = new Set<string>();
-  const nextSeqByOwner = new Map<string, number>();
-
-  for (const defect of defects ?? []) {
-    const key = issueKey(defect.project_id, defect.subcontractor_issue_no);
-    if (key) existingKeys.add(key);
-    const match = /^SC-([A-Z0-9]+)-(\d+)$/i.exec(String(defect.subcontractor_issue_no ?? '').trim());
-    if (!match) continue;
-    const owner = match[1].toUpperCase();
-    nextSeqByOwner.set(owner, Math.max(nextSeqByOwner.get(owner) ?? 1, Number(match[2]) + 1));
-  }
-
-  return { existingKeys, reservedKeys: new Set<string>(), nextSeqByOwner, masters: ownerMasters };
-}
-
-function reserveSubcontractorIssueNo(row: ParsedDefectRow, projectId: string | null, registry: IssueRegistry, existing?: any) {
-  if (existing?.subcontractor_issue_no) {
-    return {
-      subcontractor_issue_no: normalizeSubcontractorIssueNo(existing.subcontractor_issue_no),
-      subcontractor_issue_source: existing.subcontractor_issue_source ?? null,
-      duplicate: false,
-    };
-  }
-
-  const ownerCode = resolveOwnerCode(row, registry.masters) || suggestOwnerCode(row.subsub_name ?? row.subcontractor_name ?? row.team);
-  const imported = normalizeSubcontractorIssueNo(row.subcontractor_issue_no);
-  if (imported) {
-    const key = issueKey(projectId, imported);
-    const duplicate = !!key && (registry.existingKeys.has(key) || registry.reservedKeys.has(key));
-    if (!duplicate && key) registry.reservedKeys.add(key);
-    return { subcontractor_issue_no: imported, subcontractor_issue_source: 'imported', duplicate };
-  }
-
-  let sequence = registry.nextSeqByOwner.get(ownerCode) ?? 1;
-  let generated = generateSubcontractorIssueNo(ownerCode, sequence);
-  let key = issueKey(projectId, generated)!;
-  while (registry.existingKeys.has(key) || registry.reservedKeys.has(key)) {
-    sequence += 1;
-    generated = generateSubcontractorIssueNo(ownerCode, sequence);
-    key = issueKey(projectId, generated)!;
-  }
-  registry.reservedKeys.add(key);
-  registry.nextSeqByOwner.set(ownerCode, sequence + 1);
-  return { subcontractor_issue_no: generated, subcontractor_issue_source: 'auto_generated', duplicate: false };
+/** Loads only the owner-master list. SC sequence allocation is handled atomically by
+ *  the database RPC `allot_subcontractor_issue_no`, removing all client-side race
+ *  conditions. */
+async function buildIssueRegistry(): Promise<IssueRegistry> {
+  const { data: masters } = await (supabase as any)
+    .from('subcontractor_master')
+    .select('name, type, parent_subcontractor_id, owner_code')
+    .eq('is_active', true);
+  return { masters: (masters ?? []) as OwnerMaster[] };
 }
 
 const issueNoCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -240,14 +199,22 @@ export interface IssueAssignment {
   duplicate: boolean;
 }
 
-export function buildSubcontractorIssueAssignments(
+/** Assign SC numbers for every parsed row using the DB-backed counter:
+ *  1. Existing rows keep their current SC number.
+ *  2. Manually-typed SC numbers are validated and the counter is bumped via RPC.
+ *  3. Auto-generated rows are grouped by owner_code, sorted by issue_no,
+ *     and a single `allot_subcontractor_issue_no(project, owner, N)` RPC
+ *     reserves N atomic sequences per owner. */
+export async function buildSubcontractorIssueAssignments(
   rows: ParsedDefectRow[],
-  projectId: string | null,
+  projectId: string,
   registry: IssueRegistry,
   existingByIssueNo: Map<string, { subcontractor_issue_no?: string | null; subcontractor_issue_source?: string | null }>,
-): Map<number, IssueAssignment> {
+): Promise<Map<number, IssueAssignment>> {
   const assignments = new Map<number, IssueAssignment>();
-  const autoGenRows: ParsedDefectRow[] = [];
+  const autoGenByOwner = new Map<string, ParsedDefectRow[]>();
+  const manualBumps = new Map<string, number>(); // owner_code -> max manual seq seen this batch
+
   for (const row of rows) {
     if (!row.issue_no) continue;
     const existing = existingByIssueNo.get(row.issue_no);
@@ -261,40 +228,58 @@ export function buildSubcontractorIssueAssignments(
     }
     const imported = normalizeSubcontractorIssueNo(row.subcontractor_issue_no);
     if (imported) {
-      const key = issueKey(projectId, imported);
-      const duplicate = !!key && (registry.existingKeys.has(key) || registry.reservedKeys.has(key));
-      if (!duplicate && key) registry.reservedKeys.add(key);
       assignments.set(row.rawRowNo, {
         subcontractor_issue_no: imported,
         subcontractor_issue_source: 'imported',
-        duplicate,
+        duplicate: false,
       });
+      // Track manual SC numbers so we can lift the DB counter once per owner.
+      const m = /^SC-([A-Z0-9]+)-(\d+)$/i.exec(imported);
+      if (m) {
+        const owner = m[1].toUpperCase();
+        const seq = Number(m[2]);
+        if (Number.isFinite(seq) && seq > 0) {
+          manualBumps.set(owner, Math.max(manualBumps.get(owner) ?? 0, seq));
+        }
+      }
       continue;
     }
-    autoGenRows.push(row);
+    const ownerCode = resolveOwnerCode(row, registry.masters)
+      || suggestOwnerCode(row.subsub_name ?? row.subcontractor_name ?? row.team);
+    const list = autoGenByOwner.get(ownerCode) ?? [];
+    list.push(row);
+    autoGenByOwner.set(ownerCode, list);
   }
 
-  // Always assign SC sequence numbers in Issue No ascending order so that the
-  // smallest Issue No within an owner gets the smallest SC-XXX-00001, regardless
-  // of whether the import file itself was sorted ascending or descending.
-  const sortedAutoGen = [...autoGenRows].sort((a, b) => compareIssueNoAsc(a.issue_no, b.issue_no));
+  // 1) Bump counters for manually typed SC numbers (one RPC per owner).
+  await Promise.all(
+    [...manualBumps.entries()].map(([owner, used]) =>
+      (supabase as any).rpc('bump_subcontractor_issue_counter', {
+        _project_id: projectId,
+        _owner_code: owner,
+        _used_seq: used,
+      })
+    )
+  );
 
-  for (const row of sortedAutoGen) {
-    const ownerCode = resolveOwnerCode(row, registry.masters) || suggestOwnerCode(row.subsub_name ?? row.subcontractor_name ?? row.team);
-    let sequence = registry.nextSeqByOwner.get(ownerCode) ?? 1;
-    let generated = generateSubcontractorIssueNo(ownerCode, sequence);
-    let key = issueKey(projectId, generated)!;
-    while (registry.existingKeys.has(key) || registry.reservedKeys.has(key)) {
-      sequence += 1;
-      generated = generateSubcontractorIssueNo(ownerCode, sequence);
-      key = issueKey(projectId, generated)!;
+  // 2) Allocate sequences atomically per owner via RPC, in issue_no asc order.
+  for (const [ownerCode, group] of autoGenByOwner) {
+    const sortedGroup = [...group].sort((a, b) => compareIssueNoAsc(a.issue_no, b.issue_no));
+    const { data, error } = await (supabase as any).rpc('allot_subcontractor_issue_no', {
+      _project_id: projectId,
+      _owner_code: ownerCode,
+      _count: sortedGroup.length,
+    });
+    if (error || !Array.isArray(data) || data.length !== sortedGroup.length) {
+      throw new Error(`Failed to allocate SC numbers for owner ${ownerCode}: ${error?.message ?? 'unexpected RPC response'}`);
     }
-    registry.reservedKeys.add(key);
-    registry.nextSeqByOwner.set(ownerCode, sequence + 1);
-    assignments.set(row.rawRowNo, {
-      subcontractor_issue_no: generated,
-      subcontractor_issue_source: 'auto_generated',
-      duplicate: false,
+    sortedGroup.forEach((row, idx) => {
+      const seq = Number(data[idx]);
+      assignments.set(row.rawRowNo, {
+        subcontractor_issue_no: generateSubcontractorIssueNo(ownerCode, seq),
+        subcontractor_issue_source: 'auto_generated',
+        duplicate: false,
+      });
     });
   }
 
