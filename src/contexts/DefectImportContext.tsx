@@ -857,6 +857,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       // a non-column key like `rawRowNo` causes HTTP 400 PGRST204 and the entire batch fails silently.
       const payload: Record<string, any> = {
         ...row,
+        project_id: existing?.project_id ?? activeProjectId,
         subcontractor_issue_no: issueAssignment.subcontractor_issue_no,
         subcontractor_issue_source: issueAssignment.subcontractor_issue_source,
         actual_completion_date: actualCompletionDate,
