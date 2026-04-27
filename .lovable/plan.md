@@ -1,45 +1,31 @@
 ## 목표
 
-4개의 Tier 3 배너 레이아웃을 다음과 같이 변경합니다:
+**Total Stage Overdue / Total Stage At Risk** 배너의 합계가 Tier 2 카드 5개(Pred / T1 / T2 / R1S / R2A)의 OD 배지 합과 정확히 일치하도록 수정합니다.
 
-```text
-┌──────────────────────────────┐
-│ Subtest Overdue              │ ← 좌측 상단 라벨
-│                              │
-│            89                │ ← 가운데, 매우 크게
-│                              │
-│                      View >  │
-└──────────────────────────────┘
-```
+현재 6개 스테이지(Pred/T1/T2/R1/**R2S**/R2A)를 합산해 Tier 2 합보다 R2 Submission 지연 건수만큼 많이 표시되고 있어, **R2S(R2 Submission)를 occurrence 합계에서 제외**합니다.
 
-- **라벨**: 좌측 상단, 작은 글씨, 톤 색상(destructive/amber)
-- **숫자**: 배너 가운데 정렬, 배너 높이/폭에 맞춰 최대한 크게 (`text-5xl` 정도, tabular-nums)
-- **View >**: 우측 하단에 그대로 유지
-- 설명 문구는 없음
+| 스테이지 | Tier 2 카드 | 현재 occurrence 합계 | 수정 후 |
+|---|---|---|---|
+| Pred | ✅ | 포함 | 포함 |
+| T1 | ✅ | 포함 | 포함 |
+| T2 | ✅ | 포함 | 포함 |
+| R1 (Submission) | ✅ | 포함 | 포함 |
+| R2 (Submission) | ❌ | 포함 | **제외** |
+| R2 (Approval) | ✅ | 포함 | 포함 |
 
-## 라벨 텍스트 (4개)
-
-1. `Subtest Overdue` — `overdueCountAll`
-2. `Total Stage Overdue` — `overdueOccurrencesAll`
-3. `Subtest At Risk` — `atRiskCountAll`
-4. `Total Stage At Risk` — `atRiskOccurrencesAll`
+예시(사용자 케이스): 2 + 11 + 2 + 74 + 45 = **134** ← 이 값과 일치하게 됨.
 
 ## 변경 파일
 
-### `src/pages/DashboardPage.tsx`
-
-**1. `AlertBanner` 컴포넌트 재구성**:
-- 시그니처: `tone`, `value: number`, `label: string`, `onClick` (icon/title/description 제거)
-- 내부 구조 (button을 `relative` + `flex flex-col`로):
-  - 좌측 상단: `<p class="text-xs font-medium {iconCls}">label</p>`
-  - 가운데: `<div class="flex-1 flex items-center justify-center"><span class="text-5xl font-bold tabular-nums {iconCls}">value</span></div>`
-  - 우측 하단: `<div class="self-end flex items-center gap-1 text-sm text-muted-foreground">View <ChevronRight/></div>`
-- 최소 높이 추가(`min-h-[120px]` 정도)로 숫자가 잘 보이도록 함
-- 기존 border/배경 톤(destructive/amber) 유지
-
-**2. 4개 호출부 갱신**: 위 라벨 텍스트로 교체, 아이콘 prop 제거
+### `src/lib/dashboard-utils.ts`
+- 신규 상수 추가:
+  ```ts
+  const OCCURRENCE_STAGES: StageKey[] = ['pred', 't1', 't2', 'r1', 'r2a'];
+  ```
+- `countOverdueStageOccurrences`와 `countAtRiskStageOccurrences` 내부 루프에서 기존 `ALL_STAGES` 대신 `OCCURRENCE_STAGES` 사용.
+- 다른 함수(`isOverdueAllStages`, `isAtRiskAllStages` 등)가 사용하는 `ALL_STAGES`는 **변경하지 않음** — 고유 Subtest 판정은 R2S 지연도 "지연 상태"로 인정해야 하므로 6 스테이지 유지.
 
 ## 비고
 
-- `AlertTriangle`, `Clock` 아이콘은 더 이상 사용하지 않음 (라벨로 충분히 의미 전달). import는 다른 곳에서도 쓰이면 유지.
-- grid 레이아웃 `md:grid-cols-2 xl:grid-cols-4` 유지.
+- `Subtest Overdue` / `Subtest At Risk` 카운트는 변경되지 않습니다(고유 Subtest 단위 판정 유지).
+- 영향 범위: Tier 3 배너 2개(Total Stage Overdue, Total Stage At Risk)의 표시 숫자만 변경.
