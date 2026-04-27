@@ -97,7 +97,8 @@ export type SimilarMasterDecision = {
 
 export type MasterNameDecisions = Record<string, SimilarMasterDecision>;
 type OwnerMaster = { name: string; type: string | null; parent_subcontractor_id: string | null; owner_code: string | null };
-type IssueRegistry = { existingKeys: Set<string>; reservedKeys: Set<string>; nextSeqByOwner: Map<string, number>; masters: OwnerMaster[] };
+/** Lightweight registry — counters now live in the database (subcontractor_issue_counters). */
+type IssueRegistry = { masters: OwnerMaster[] };
 
 function changed(a: unknown, b: unknown) {
   return String(a ?? '') !== String(b ?? '');
