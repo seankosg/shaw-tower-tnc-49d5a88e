@@ -959,6 +959,15 @@ export type Database = {
           pred_old_date: string | null
           pred_prev_gap_days: number | null
           project_id: string
+          r1_cur_gap_days: number | null
+          r1_diff_days: number | null
+          r1_new_date: string | null
+          r1_old_date: string | null
+          r1_prev_gap_days: number | null
+          r2s_diff_days: number | null
+          r2s_new_date: string | null
+          r2s_old_date: string | null
+          r2s_prev_gap_days: number | null
           raw_row_no: number | null
           subtest_code: string | null
           subtest_id: string
@@ -987,6 +996,15 @@ export type Database = {
           pred_old_date?: string | null
           pred_prev_gap_days?: number | null
           project_id: string
+          r1_cur_gap_days?: number | null
+          r1_diff_days?: number | null
+          r1_new_date?: string | null
+          r1_old_date?: string | null
+          r1_prev_gap_days?: number | null
+          r2s_diff_days?: number | null
+          r2s_new_date?: string | null
+          r2s_old_date?: string | null
+          r2s_prev_gap_days?: number | null
           raw_row_no?: number | null
           subtest_code?: string | null
           subtest_id: string
@@ -1015,6 +1033,15 @@ export type Database = {
           pred_old_date?: string | null
           pred_prev_gap_days?: number | null
           project_id?: string
+          r1_cur_gap_days?: number | null
+          r1_diff_days?: number | null
+          r1_new_date?: string | null
+          r1_old_date?: string | null
+          r1_prev_gap_days?: number | null
+          r2s_diff_days?: number | null
+          r2s_new_date?: string | null
+          r2s_old_date?: string | null
+          r2s_prev_gap_days?: number | null
           raw_row_no?: number | null
           subtest_code?: string | null
           subtest_id?: string

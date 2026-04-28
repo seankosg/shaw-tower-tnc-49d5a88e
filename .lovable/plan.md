@@ -1,67 +1,45 @@
-# T&C(Subtest) Import에 자동 재활성화 로직 적용
+## 목적
 
-## 배경
+현재 스케줄 변동 검토 로직에서 T2는 후속(successor) 단계가 없어 `prev_gap_days` / `cur_gap_days`가 항상 `null`이고, R1/R2 단계는 아예 변동 검토 대상이 아닙니다.
 
-Defect Import에는 이미 update 경로에서 `is_active: true`를 자동 설정하는 로직이 적용되어 있습니다. 동일한 패턴을 T&C(Subtest) Import에도 적용합니다.
+요청에 따라 다음과 같이 후속 단계 매핑을 확장합니다:
+- **T2** → 후속은 **R1 Target Submission** (`r1_target_submission_date`)
+- **R1** → 후속은 **R2 Target Submission** (`r2_target_submission_date`)
+- **Pred** → T1 (기존 유지)
+- **T1** → T2 (기존 유지)
 
-## T&C Import의 차이점 (중요)
+## 변경 사항
 
-T&C Import는 Defect Import와 lookup 방식이 다릅니다.
+### 1. `src/lib/schedule-change-utils.ts`
+- `Stage` 타입을 `'pred' | 't1' | 't2'`에서 `'pred' | 't1' | 't2' | 'r1' | 'r2s'`로 확장
+- `PlannedDates` 타입에 `r1_target_submission_date`, `r2_target_submission_date` 추가
+- `buildScheduleChangeImpact()`에서 successor 매핑 변경:
+  - `t2` 후속을 `null` → `r1_target_submission_date`로 변경
+  - `r1` 항목 추가 (후속: `r2_target_submission_date`)
+  - `r2s` 항목 추가 (후속: 없음, 최종 단계)
+- `finalDates` 객체에도 R1/R2 필드 포함시켜 cur_gap 계산이 동일 임포트 내 동시 변경을 반영하도록 함
 
-`src/contexts/ImportContext.tsx` 334번 줄:
-```ts
-.eq('item_no', row.item_no).eq('mos_code', row.mos_code).eq('is_active', true)
+### 2. `src/contexts/ImportContext.tsx`
+- `buildScheduleChangeImpact()` 호출 시 `r1_target_submission_date`, `r2_target_submission_date`도 existing/updates 양쪽에 전달
+- Existing 조회 시 select 컬럼에 두 필드 포함 (이미 `r1/r2_target_submission_date`는 다른 곳에서 조회 중이므로 동일 select 절에서 함께 가져오도록 정리)
+- `schedule_change_audit` INSERT payload는 **현행 스키마에 R1/R2 컬럼이 없으므로**, 우선 T2의 `t2_prev_gap_days` / `t2_cur_gap_days`가 R1 제출일과의 간격으로 정상 계산되어 들어가는 효과만 즉시 반영됨
+
+### 3. DB 마이그레이션 (선택, 권장)
+R1 제출일 변경 자체를 감사 로그에 남기려면 `schedule_change_audit` 테이블에 컬럼 추가가 필요합니다:
 ```
-
-기존 행 조회 시 **`is_active=true` 필터를 사용**하기 때문에, 이미 비활성화된 subtest는 "찾을 수 없음"으로 판정되어 update 경로가 아닌 **insert 경로**로 흘러갑니다. 이 상태에서 단순히 update payload에 `is_active: true`만 추가하면 비활성 행은 영원히 복구되지 않습니다.
-
-## 변경 내용 (한 파일, 2곳 수정)
-
-**파일:** `src/contexts/ImportContext.tsx`
-
-### 1. Lookup에서 `is_active` 필터 제거 (~331~335줄)
-
-활성/비활성 구분 없이 자연 키(`project_id` + `system_id` + `item_no` + `mos_code`)로만 조회하여 비활성 행도 매칭되도록 합니다. 동시에 select 컬럼에 `is_active`를 추가해 변경 감지에 사용합니다.
-
-```ts
-const { data: existing } = await supabase.from('subtests')
-  .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date, is_active')
-  .eq('project_id', projectId!).eq('system_id', systemId)
-  .eq('item_no', row.item_no).eq('mos_code', row.mos_code)
-  .maybeSingle();
+r1_old_date, r1_new_date, r1_diff_days, r1_prev_gap_days, r1_cur_gap_days
+r2s_old_date, r2s_new_date, r2s_diff_days, r2s_prev_gap_days
 ```
+- 추가 시 `ImportContext.tsx`의 audit payload에도 매핑 추가
+- 추가 시 `ScheduleRevisionPage`에 R1/R2 컬럼 표시
 
-### 2. Update payload에 `is_active: true` 강제 설정 (~386~389줄 근처)
+> R1/R2 자체의 변동 이력까지 기록할지, 아니면 **T2 변경 시 R1과의 gap만 보면 충분**한지에 따라 마이그레이션 포함 여부가 갈립니다.
 
-`updates.data_source_type = ...` 블록 옆에 한 줄을 추가합니다.
+## 의사결정 필요
 
-```ts
-updates.data_source_type = dataSourceType;
-updates.source_upload_id = uploadId;
-updates.row_version = (existing.row_version || 1) + 1;
-updates.subtest_id = row.subtest_id;
-// Re-activate previously hidden subtests so they reappear on the data screens.
-updates.is_active = true;
-```
+다음 중 어느 범위로 진행할지 알려주세요:
 
-### 3. "no_changes" skip 분기 보정
+- **A. 최소 범위**: T2의 후속을 R1로, R1의 후속을 R2로 매핑만 변경. R1/R2 단독 변동은 audit에 기록하지 않고, 기존 T2 audit의 gap 값만 의미 있게 채워짐. (마이그레이션 불필요)
+- **B. 전체 범위**: A + `schedule_change_audit` 테이블에 R1/R2 컬럼 추가 + Schedule Revision 페이지 표시까지 확장. (마이그레이션 필요)
 
-374번 줄의 `if (Object.keys(updates).length === 0)` 분기는 활성 상태 행에는 그대로 유효하지만, **기존 행이 inactive였던 경우**에는 다른 컬럼 값이 모두 같더라도 재활성화 자체가 의미 있는 변경이므로 skip하지 않도록 조건을 보강합니다.
-
-```ts
-const needsReactivation = existing.is_active === false;
-if (Object.keys(updates).length === 0 && !needsReactivation) {
-  // 기존 skip 처리
-}
-```
-
-`needsReactivation`이 true이면 skip하지 않고, 이후 update 블록에서 `updates.is_active = true`만 들어간 update가 실행되어 행이 복구됩니다.
-
-## 영향 범위
-
-- 영향 파일: `src/contexts/ImportContext.tsx` 한 파일 (Standard / Legacy import 양쪽 모두 같은 코드 경로 사용)
-- DB 스키마 변경 없음 (`subtests.is_active` 컬럼은 이미 존재)
-- 기존 행이 활성 상태인 일반적인 import 흐름의 동작은 그대로 유지
-- 비활성 행이 있는 경우에만 재활성화가 발생
-
-승인해 주시면 적용하겠습니다.
+기본 추천은 **B** (이력 추적이 본 기능의 목적이므로). 단, A로 진행해도 T2 변경 시 R1 제출일과의 간격 변화는 즉시 보이게 됩니다.
