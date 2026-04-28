@@ -14,6 +14,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   applyBulkUpdate, BULK_EDIT_MAX_ROWS, type BulkEditableField, type BulkUpdateRequest,
 } from '@/lib/bulk-edit';
+import { validateActualDateNotAfterDataDate, type ActualDateField } from '@/lib/defect-date-validation';
+import { useLatestDataDate } from '@/hooks/useLatestDataDate';
+
+const DEFECT_ACTUAL_DATE_FIELDS: ReadonlySet<string> = new Set([
+  'actual_start_date', 'actual_completion_date', 'actual_closure_date',
+]);
 
 const BLANK = '__BLANK__';
 
@@ -35,6 +41,7 @@ export function BulkEditBar<TRow extends { id: string }>({
 }: BulkEditBarProps<TRow>) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { dataDate } = useLatestDataDate();
 
   const [fieldName, setFieldName] = useState<string>('');
   const [rawValue, setRawValue] = useState<string>('');
@@ -76,6 +83,21 @@ export function BulkEditBar<TRow extends { id: string }>({
 
   async function handleApply() {
     if (!user || !field) return;
+
+    // Business rule: actual dates on defect_items cannot be later than Data Date.
+    if (
+      table === 'defect_items'
+      && DEFECT_ACTUAL_DATE_FIELDS.has(field.field)
+      && !setBlank
+      && typeof computedValue === 'string'
+    ) {
+      const result = validateActualDateNotAfterDataDate(field.field as ActualDateField, computedValue, dataDate);
+      if (!result.ok) {
+        toast({ title: 'Save blocked', description: result.message, variant: 'destructive' });
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const result = await applyBulkUpdate({
