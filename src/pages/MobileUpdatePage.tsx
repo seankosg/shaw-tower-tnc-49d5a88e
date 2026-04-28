@@ -10,6 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import type { TcStatus } from '@/types/enums';
 import { TC_STATUS_OPTIONS } from '@/types/enums';
+import { validateSubtestActualDatesAgainstDataDate } from '@/lib/defect-date-validation';
+import { useLatestSubtestDataDate } from '@/hooks/useLatestSubtestDataDate';
 
 interface SubtestCard {
   id: string;
@@ -41,6 +43,7 @@ const RESPONSIBILITY_FIELDS = ['subcontractor_name', 'subsub_name', 'hdec_pic_na
 export default function MobileUpdatePage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { dataDate } = useLatestSubtestDataDate();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SubtestCard[]>([]);
   const [loading, setLoading] = useState(false);
@@ -109,6 +112,18 @@ export default function MobileUpdatePage() {
     }
     if (changes.pred_status === 'Done' && !card.pred_actual_date && changes.pred_actual_date === undefined) {
       updates.pred_actual_date = today;
+    }
+
+    // Business rule: actual dates cannot be later than the latest Data Date.
+    const dateCheck = validateSubtestActualDatesAgainstDataDate({
+      t1_actual_date: updates.t1_actual_date !== undefined ? updates.t1_actual_date : card.t1_actual_date,
+      t2_actual_date: updates.t2_actual_date !== undefined ? updates.t2_actual_date : card.t2_actual_date,
+      pred_actual_date: updates.pred_actual_date !== undefined ? updates.pred_actual_date : card.pred_actual_date,
+    }, dataDate);
+    if (!dateCheck.ok) {
+      toast({ title: 'Save blocked', description: dateCheck.message, variant: 'destructive' });
+      setSaving(null);
+      return;
     }
 
     const { error } = await supabase.from('subtests').update(updates as any).eq('id', card.id);
