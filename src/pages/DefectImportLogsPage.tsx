@@ -22,6 +22,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { formatDateTimeDdMmmYyyy, formatDdMmm, formatSignedDays, formatDuration } from '@/lib/format';
 import { RollbackDialog } from '@/components/import/RollbackDialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { fetchAllByUploadId } from '@/lib/fetch-all-rows';
 
 interface DefectBatch {
   id: string;
