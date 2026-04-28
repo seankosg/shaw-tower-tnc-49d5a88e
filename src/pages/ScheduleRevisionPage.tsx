@@ -132,7 +132,9 @@ function StageCells({ row, stage }: { row: ScheduleRevisionRow; stage: Stage }) 
   const newDate = row[`${stage}_new_date` as keyof ScheduleRevisionRow] as string | null;
   const diff = row[`${stage}_diff_days` as keyof ScheduleRevisionRow] as number | null;
   const prevGap = row[`${stage}_prev_gap_days` as keyof ScheduleRevisionRow] as number | null;
-  const curGap = row[`${stage}_cur_gap_days` as keyof ScheduleRevisionRow] as number | null;
+  const curGap = stageHasSuccessor[stage]
+    ? (row[`${stage}_cur_gap_days` as keyof ScheduleRevisionRow] as number | null)
+    : null;
 
   return (
     <>
@@ -140,7 +142,9 @@ function StageCells({ row, stage }: { row: ScheduleRevisionRow; stage: Stage }) 
       <TableCell className="text-xs whitespace-nowrap">{formatDdMmm(newDate)}</TableCell>
       <TableCell className={`text-xs text-right ${diffClass(diff)}`}>{formatSignedDays(diff)}</TableCell>
       <TableCell className="text-xs text-right">{formatGap(prevGap)}</TableCell>
-      <TableCell className="text-xs text-right">{formatGap(curGap)}</TableCell>
+      {stageHasSuccessor[stage] && (
+        <TableCell className="text-xs text-right">{formatGap(curGap)}</TableCell>
+      )}
     </>
   );
 }
