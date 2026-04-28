@@ -1401,6 +1401,7 @@ function SubtestTableView({
 
   const frozenPaneRef = useRef<HTMLDivElement>(null);
   const scrollPaneRef = tableRef;
+  const headerScrollRef = useRef<HTMLDivElement>(null);
 
   const rows = table.getRowModel().rows;
   const ROW_HEIGHT = 36;
@@ -1422,6 +1423,9 @@ function SubtestTableView({
   const handleScroll = useCallback(() => {
     if (frozenPaneRef.current && scrollPaneRef.current) {
       frozenPaneRef.current.scrollTop = scrollPaneRef.current.scrollTop;
+    }
+    if (headerScrollRef.current && scrollPaneRef.current) {
+      headerScrollRef.current.scrollLeft = scrollPaneRef.current.scrollLeft;
     }
   }, [scrollPaneRef]);
 
@@ -1454,7 +1458,7 @@ function SubtestTableView({
         key={header.id}
         data-column-id={header.column.id}
         style={{ width: header.getSize() }}
-        className="relative text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b"
+        className="relative h-9 py-0 text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b"
         onClick={header.column.getToggleSortingHandler()}
       >
         <span className="inline-flex items-center gap-1">
@@ -1508,6 +1512,8 @@ function SubtestTableView({
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* Spacer to align frozen rows with scroll-pane rows (matches mirror scrollbar height) */}
+            <tr aria-hidden><td colSpan={frozenCols.length} style={{ height: 12, padding: 0, border: 0 }} /></tr>
             {loading || rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={frozenCols.length} className="text-center py-8 text-muted-foreground">
@@ -1567,18 +1573,25 @@ function SubtestTableView({
 
       {/* Scroll pane */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Header: hidden horizontal scroll, synced with body */}
+        <div ref={headerScrollRef} className="overflow-hidden bg-background">
+          <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
+            <TableHeader className="bg-background">
+              <TableRow className="border-b bg-background">
+                {scrollHeaders.map(renderHeader)}
+              </TableRow>
+            </TableHeader>
+          </Table>
+        </div>
+        {/* Mirror horizontal scrollbar - sits BELOW the header */}
         <TopHorizontalScrollbar targetRef={scrollPaneRef} width={scrollWidth} />
+        {/* Body: vertical scroll only */}
         <div
           ref={scrollPaneRef}
           onScroll={handleScroll}
-          className="min-w-0 flex-1 overflow-auto"
+          className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide"
         >
         <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
-          <TableHeader className="sticky top-0 z-20 bg-background">
-            <TableRow className="border-b bg-background">
-              {scrollHeaders.map(renderHeader)}
-            </TableRow>
-          </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
@@ -1609,6 +1622,7 @@ function SubtestTableView({
                       key={row.id}
                       data-index={virtualRow.index}
                       ref={(el) => el && rowVirtualizer.measureElement(el)}
+                      style={{ height: virtualRow.size }}
                       className={cn(
                         'cursor-pointer',
                         t2Done && 'bg-muted/30 text-muted-foreground',
@@ -1624,7 +1638,7 @@ function SubtestTableView({
                           key={cell.id}
                           data-column-id={cell.column.id}
                           style={{ width: cell.column.getSize() }}
-                          className="text-xs py-2 truncate"
+                          className="text-xs py-2 truncate whitespace-nowrap"
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>

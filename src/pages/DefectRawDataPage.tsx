@@ -1117,6 +1117,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
   const frozenWidth = useMemo(() => frozenColumns.reduce((sum, column) => sum + column.getSize(), 0), [frozenColumns, table.getState().columnSizing]);
   const scrollWidth = useMemo(() => scrollColumns.reduce((sum, column) => sum + column.getSize(), 0), [scrollColumns, table.getState().columnSizing]);
   const frozenPaneRef = useRef<HTMLDivElement>(null);
+  const headerScrollRef = useRef<HTMLDivElement>(null);
   const rows = table.getRowModel().rows;
   const rowVirtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => tableRef.current, estimateSize: () => 36, overscan: 12 });
   const virtualRows = rowVirtualizer.getVirtualItems();
@@ -1127,6 +1128,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
 
   const handleScroll = useCallback(() => {
     if (frozenPaneRef.current && tableRef.current) frozenPaneRef.current.scrollTop = tableRef.current.scrollTop;
+    if (headerScrollRef.current && tableRef.current) headerScrollRef.current.scrollLeft = tableRef.current.scrollLeft;
   }, [tableRef]);
 
   const handleFrozenWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
@@ -1143,7 +1145,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
       key={header.id}
       data-column-id={header.column.id}
       style={{ width: header.getSize() }}
-      className="relative cursor-pointer select-none whitespace-nowrap border-b bg-background text-xs font-medium"
+      className="relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background py-0 text-xs font-medium"
       onClick={header.column.getToggleSortingHandler()}
     >
       <span className="inline-flex items-center gap-1">
@@ -1181,6 +1183,8 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
         <Table style={{ width: frozenWidth, tableLayout: 'fixed' }}>
           <TableHeader className="sticky top-0 z-20 bg-background"><TableRow className="border-b bg-background">{frozenHeaders.map(renderHeader)}</TableRow></TableHeader>
           <TableBody>
+            {/* Spacer to align frozen rows with scroll-pane rows (matches mirror scrollbar height) */}
+            <tr aria-hidden><td colSpan={frozenColumns.length} style={{ height: 12, padding: 0, border: 0 }} /></tr>
             {loading || rows.length === 0 ? <TableRow><TableCell colSpan={frozenColumns.length} className="py-8 text-center text-muted-foreground">&nbsp;</TableCell></TableRow> : (
               <>
                 {paddingTop > 0 && <tr style={{ height: paddingTop }} aria-hidden><td colSpan={frozenColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
@@ -1188,7 +1192,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
                   const row = rows[virtualRow.index];
                   return (
                     <TableRow key={row.id} data-index={virtualRow.index} style={{ height: virtualRow.size }} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}${location.search}`)}>
-                      {row.getVisibleCells().slice(0, frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize() }} className="truncate py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
+                      {row.getVisibleCells().slice(0, frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize() }} className="truncate whitespace-nowrap py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
                     </TableRow>
                   );
                 })}
@@ -1200,27 +1204,34 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Header: hidden horizontal scroll, synced with body */}
+        <div ref={headerScrollRef} className="overflow-hidden bg-background">
+          <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
+            <TableHeader className="bg-background"><TableRow className="border-b bg-background">{scrollHeaders.map(renderHeader)}</TableRow></TableHeader>
+          </Table>
+        </div>
+        {/* Mirror horizontal scrollbar - now sits BELOW the header */}
         <TopHorizontalScrollbar targetRef={tableRef} width={scrollWidth} />
-        <div ref={tableRef} onScroll={handleScroll} className="min-w-0 flex-1 overflow-auto">
-        <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
-          <TableHeader className="sticky top-0 z-20 bg-background"><TableRow className="border-b bg-background">{scrollHeaders.map(renderHeader)}</TableRow></TableHeader>
-          <TableBody>
-            {loading ? <TableRow><TableCell colSpan={scrollColumns.length} className="py-8 text-center text-muted-foreground">Loading...</TableCell></TableRow> : rows.length === 0 ? <TableRow><TableCell colSpan={scrollColumns.length} className="py-8 text-center text-muted-foreground">No defects found. Import data to get started.</TableCell></TableRow> : (
-              <>
-                {paddingTop > 0 && <tr style={{ height: paddingTop }} aria-hidden><td colSpan={scrollColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
-                {virtualRows.map((virtualRow) => {
-                  const row = rows[virtualRow.index];
-                  return (
-                    <TableRow key={row.id} data-index={virtualRow.index} ref={(element) => element && rowVirtualizer.measureElement(element)} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}${location.search}`)}>
-                      {row.getVisibleCells().slice(frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize() }} className="truncate py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
-                    </TableRow>
-                  );
-                })}
-                {paddingBottom > 0 && <tr style={{ height: paddingBottom }} aria-hidden><td colSpan={scrollColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
-              </>
-            )}
-          </TableBody>
-        </Table>
+        {/* Body: vertical scroll only; horizontal handled by the mirror above */}
+        <div ref={tableRef} onScroll={handleScroll} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide">
+          <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
+            <TableBody>
+              {loading ? <TableRow><TableCell colSpan={scrollColumns.length} className="py-8 text-center text-muted-foreground">Loading...</TableCell></TableRow> : rows.length === 0 ? <TableRow><TableCell colSpan={scrollColumns.length} className="py-8 text-center text-muted-foreground">No defects found. Import data to get started.</TableCell></TableRow> : (
+                <>
+                  {paddingTop > 0 && <tr style={{ height: paddingTop }} aria-hidden><td colSpan={scrollColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
+                  {virtualRows.map((virtualRow) => {
+                    const row = rows[virtualRow.index];
+                    return (
+                      <TableRow key={row.id} data-index={virtualRow.index} ref={(element) => element && rowVirtualizer.measureElement(element)} style={{ height: virtualRow.size }} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}${location.search}`)}>
+                        {row.getVisibleCells().slice(frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize() }} className="truncate whitespace-nowrap py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
+                      </TableRow>
+                    );
+                  })}
+                  {paddingBottom > 0 && <tr style={{ height: paddingBottom }} aria-hidden><td colSpan={scrollColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
+                </>
+              )}
+            </TableBody>
+          </Table>
         </div>
       </div>
     </div>
