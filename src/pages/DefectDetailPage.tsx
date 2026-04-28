@@ -21,6 +21,8 @@ import { DEFECT_RESPONSIBILITY_FIELDS, DEFECT_REVISION_FIELDS, DEFECT_STATUS_VAL
 import { classifyDefect, type ClassificationRule, type DisciplineFallback } from '@/lib/defect-classifier';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
+import { validateActualDatesAgainstDataDate } from '@/lib/defect-date-validation';
+import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 
 type SubMaster = { id: string; name: string; parent_subcontractor_id: string | null };
 type HdecMaster = { name: string };
