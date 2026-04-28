@@ -24,7 +24,7 @@ import { SubtestComments } from '@/components/defects/SubtestComments';
 import { Badge } from '@/components/ui/badge';
 import { MessageSquare } from 'lucide-react';
 import { validateSubtestActualDatesAgainstDataDate } from '@/lib/defect-date-validation';
-import { useLatestDataDate } from '@/hooks/useLatestDataDate';
+import { useLatestSubtestDataDate } from '@/hooks/useLatestSubtestDataDate';
 
 interface SubtestDetail {
   id: string;
