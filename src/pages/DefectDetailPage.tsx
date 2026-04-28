@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,9 +39,18 @@ const RAW_FIELD_LABELS = {
 export default function DefectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const [record, setRecord] = useState<DefectItem | null>(null);
+  // Scroll to #comments when arriving from a Raw Data meta column click.
+  useEffect(() => {
+    if (!record || location.hash !== '#comments') return;
+    const t = window.setTimeout(() => {
+      document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [record, location.hash]);
   const [form, setForm] = useState<Partial<DefectItem>>({});
   const [scope, setScope] = useState<DefectEditScope>('none');
   const [logs, setLogs] = useState<any[]>([]);
@@ -592,7 +601,7 @@ export default function DefectDetailPage() {
           )}
         </CardContent>
       </Card>
-      <Card>
+      <Card id="comments">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />

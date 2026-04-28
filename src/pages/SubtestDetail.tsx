@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
 import { Button } from '@/components/ui/button';
@@ -83,11 +83,20 @@ const RESPONSIBILITY_FIELDS = ['subcontractor_name', 'subsub_name', 'hdec_pic_na
 export default function SubtestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const { toast } = useToast();
   const { isAdminOrSuperuser, user } = useAuth();
   const { isFieldVisible } = useFieldConfig();
   const [record, setRecord] = useState<SubtestDetail | null>(null);
+  // Scroll to #comments when arriving from a Raw Data meta column click.
+  useEffect(() => {
+    if (!record || location.hash !== '#comments') return;
+    const t = window.setTimeout(() => {
+      document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [record, location.hash]);
   const [form, setForm] = useState<Partial<SubtestDetail>>({});
   const [changeLogs, setChangeLogs] = useState<ChangeLog[]>([]);
   const [canEditRecord, setCanEditRecord] = useState(false);
@@ -641,7 +650,7 @@ export default function SubtestDetailPage() {
 
       {/* Comments */}
       {record && (
-        <Card>
+        <Card id="comments">
           <CardHeader className="py-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <MessageSquare className="h-4 w-4" />

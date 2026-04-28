@@ -4,6 +4,7 @@ import { formatDdMmm, formatDdMmmYyyy } from './format';
 import { formatTeamLabel } from '@/types/enums';
 import { formatPct } from '@/lib/defect-utils';
 import { type DefectFieldConfigRow, DEFECT_DEFAULT_FIELD_LABELS } from '@/hooks/useDefectFieldConfig';
+import { isMetaField } from '@/lib/meta-fields';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -395,7 +396,7 @@ export function exportDefectRawToExcel<TRow>(opts: ExportDefectRawOptions<TRow>)
 } {
   const { table, fieldConfig, globalFilter, searchParams, meta, format = 'view' } = opts;
 
-  const visibleCols = table.getVisibleLeafColumns();
+  const visibleCols = table.getVisibleLeafColumns().filter((c) => !isMetaField(c.id));
   const sortedRows = table.getSortedRowModel().rows;
 
   const wb = buildDefectWorkbook({
@@ -426,7 +427,7 @@ export function exportDefectRawToExcelBySubcontractor<TRow>(opts: ExportDefectRa
   fileNames: string[];
 } {
   const { table, fieldConfig, globalFilter, searchParams, meta, format = 'view' } = opts;
-  const visibleCols = table.getVisibleLeafColumns();
+  const visibleCols = table.getVisibleLeafColumns().filter((c) => !isMetaField(c.id));
   const sortedRows = table.getSortedRowModel().rows;
 
   // Group by subcontractor_name
