@@ -1,107 +1,65 @@
-# 마스터 데이터 정합성 정리 (P5)
+# Defect Progress — Group 선택 UI를 ToggleGroup 다중선택 방식으로 변경
 
-## 현재 상태 (DB 조회 결과)
+## 목적
+현재 Defect Progress(`/tc/progress` 옆 Defect Progress 탭)의 Group 선택은 단일 선택 Select 드롭다운입니다. 이를 T&C Progress의 Stage 토글과 동일한 형태인 **ToggleGroup `type="multiple"`** 으로 변경하여, 여러 그룹 차원(예: Team + Subcon, Sub-Sub + Level 등)을 동시에 적용한 집계를 볼 수 있게 합니다.
 
-| id (단축) | name | type | owner_code | is_active | parent |
-|---|---|---|---|---|---|
-| 313583a0… | **SCHINDLER** | sub | SCHINDLER | ✅ true | — |
-| 636df3e5… | Schindler | subsub | **SCHINDLER2** | ❌ false | 313583a0 (SCHINDLER) |
-| c1fd7c4c… | **Puretech** | sub | PURETECH | ✅ true | — |
-| cf08c328… | PUTRETECH | sub | **PUTRETECH** | ❌ false | — |
-
-**확인 사항**
-- ✅ `defect_items` 테이블은 0건 (직전 truncate 완료) → 정리 시 운영 데이터 영향 **없음**
-- ✅ inactive 레코드는 더 이상 신규 import에 사용되지 않음
-- ⚠️ 그러나 owner_code(`SCHINDLER2`, `PUTRETECH`)가 살아있어 **P4 유니크 제약 적용 시 충돌 위험**
-- ⚠️ 신규 import에서 동일 회사가 다른 코드로 잡히면 SC번호 시리즈가 분기됨
-
----
-
-## 정리 방침
-
-### 1. SCHINDLER (sub) ↔ Schindler (subsub, SCHINDLER2) 통합
-- `Schindler` (subsub)는 `SCHINDLER`의 하위로 등록되어 있으나 사실상 동일 회사
-- subsub 자체는 유지하되 (계층 정보), **owner_code = NULL** 로 변경
-  - 이유: SC번호는 **상위 sub(SCHINDLER)** 의 owner_code로만 발번해야 함
-  - subsub에 별도 owner_code가 있으면 SC번호가 두 갈래로 갈라짐
-- 이미 `is_active = false` 이므로 표시상 영향 없음
-
-### 2. PUTRETECH (오타 sub) 정리
-- 명백한 오타, 이미 inactive
-- **owner_code → NULL** 로 변경 (재사용/충돌 방지)
-- 행 자체는 감사 추적을 위해 보존 (`is_active = false` 유지)
-- 향후 owner_code 유니크 제약 적용 시 NULL은 허용되어 충돌 없음
-
-### 3. subcontractor_issue_counters 정리
-- 현재 카운터 테이블에 `SCHINDLER2`, `PUTRETECH` 키가 있다면 삭제
-- (defect_items 0건이므로 발번 이력 자체가 의미 없음)
-
-### 4. owner_code 유니크 제약 강화 (P5 본편)
-- **부분 유니크 인덱스** 적용:
-  ```sql
-  CREATE UNIQUE INDEX subcontractor_master_owner_code_active_uq
-    ON subcontractor_master (owner_code)
-    WHERE owner_code IS NOT NULL AND is_active = true;
-  ```
-- 활성 마스터에 한해 owner_code 중복 차단
-- inactive/NULL은 자유롭게 허용 → 과거 데이터/감사 추적 보존
-
-### 5. 정규화 트리거 보강 (이미 P1~P4에서 일부 적용됨)
-- `fn_subcontractor_master_normalize_owner` 가 이미 owner_code를 `upper(trim())` 처리 중
-- **추가**: 빈 문자열(`''`)도 NULL로 변환 → 빈 코드로 인한 의도치 않은 충돌 방지
-
----
-
-## 변경 사항 요약
-
-### 데이터 변경 (insert/update 도구)
-```sql
--- (a) Schindler subsub의 owner_code 제거
-UPDATE subcontractor_master
-SET owner_code = NULL
-WHERE id = '636df3e5-35f7-46c3-bf8f-51825fa957c3';
-
--- (b) PUTRETECH 오타 행의 owner_code 제거
-UPDATE subcontractor_master
-SET owner_code = NULL
-WHERE id = 'cf08c328-f1df-4a4d-bfdd-55fb385064a7';
-
--- (c) 잘못된 카운터 키 삭제 (있으면)
-DELETE FROM subcontractor_issue_counters
-WHERE owner_code IN ('SCHINDLER2', 'PUTRETECH');
-```
-
-### 스키마 변경 (마이그레이션)
-```sql
--- (1) 정규화 트리거 보강: 빈 문자열 → NULL
-CREATE OR REPLACE FUNCTION public.fn_subcontractor_master_normalize_owner()
-RETURNS trigger AS $$
-BEGIN
-  IF NEW.owner_code IS NOT NULL THEN
-    NEW.owner_code := nullif(upper(trim(NEW.owner_code)), '');
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- (2) 활성 마스터 owner_code 부분 유니크 인덱스
-CREATE UNIQUE INDEX IF NOT EXISTS subcontractor_master_owner_code_active_uq
-  ON public.subcontractor_master (owner_code)
-  WHERE owner_code IS NOT NULL AND is_active = true;
-```
-
----
-
-## 검증 단계
-1. UPDATE/DELETE 실행 후 `SELECT … WHERE upper(name) LIKE '%SCHIND%' OR …` 재조회로 상태 확인
-2. 마이그레이션 적용 후 `\d subcontractor_master` 인덱스 목록에 부분 유니크 인덱스 존재 확인
-3. 임의 테스트: 활성 행의 owner_code를 기존 활성 owner_code와 동일하게 update 시도 → 차단되는지 확인
+## 사용자가 보게 될 변화
+- Group 영역에 9개 토글 버튼이 가로로 노출 (Team / Subcontractor / Sub-Sub / HDEC PIC / HDEC ENG / Level / Main Trade / Sub Trade / Work Type) + 좌측에 `All` 단축 버튼
+- 여러 개를 켜면 각 그룹 키가 `값1 · 값2` 형식으로 합쳐진 복합 라벨로 행이 생성됨
+- 하나도 선택하지 않으면 자동으로 기본값(`team` 단독)으로 복귀
+- URL 파라미터 `?group=` 가 `team,subcontractor_name` 처럼 콤마 구분으로 직렬화 (단일이면 기존과 동일)
+- Critical Watchlist, Excel Export, 행 클릭 시 Raw Data 필터 이동 등 다운스트림은 모두 첫 번째 선택 그룹을 "primary" 로 사용하여 호환 유지
 
 ## 영향 범위
-- `defect_items`: 0건이므로 영향 없음
-- `subcontractor_master`: 2건 update + 트리거/인덱스 추가
-- `subcontractor_issue_counters`: 잘못된 키 정리
-- 코드(`DefectImportContext.tsx` 등): **변경 없음** — RPC가 이미 정규화된 owner_code를 전달함
+- `src/pages/DefectProgressPage.tsx` — UI 교체, 상태/URL 직렬화 변경
+- `src/lib/defect-schedule-utils.ts` — `DefectAggregateOptions.groupBy` 를 `DefectScheduleGroupBy | DefectScheduleGroupBy[]` 로 확장; 그룹 키 생성/라벨 함수에서 다중 차원 합성 처리
+- 다운스트림(`findDefectCritical`, `DEFECT_GROUP_QUERY_PARAM` 사용처, Excel export 헤더, Raw Data 이동) 은 **primary group(첫 번째 선택)** 만 사용하도록 보수적으로 처리하여 폭발적 변경 회피
 
-## 후속 (이번 범위 외)
-- 정기적 마스터 데이터 점검 화면(중복/오타 후보 표시)은 별도 기능으로 추후 검토
+## 기술 상세
+
+### 1. `defect-schedule-utils.ts`
+- 새 헬퍼 추가:
+  ```ts
+  export type DefectGroupBySpec = DefectScheduleGroupBy | DefectScheduleGroupBy[];
+  const SEP = ' · ';
+  export function getDefectCompositeGroupKey(item, by: DefectGroupBySpec): string;
+  export function getDefectCompositeGroupLabel(by: DefectGroupBySpec, key: string): string;
+  export function getPrimaryGroupBy(by: DefectGroupBySpec): DefectScheduleGroupBy;
+  ```
+- `aggregateDefectSchedule` 의 `opts.groupBy` 타입을 `DefectGroupBySpec` 으로 확장. 내부 `groupMap` 키 생성을 `getDefectCompositeGroupKey` 로 교체. `row.label` 은 `getDefectCompositeGroupLabel` 사용.
+- `DEFECT_GROUP_LABELS` 헤더는 다중 선택 시 `Team · Subcon` 처럼 합성 표시.
+
+### 2. `DefectProgressPage.tsx`
+- 상태 변경:
+  ```ts
+  const [groupBy, setGroupBy] = useState<DefectScheduleGroupBy[]>(() => parseGroupParam(searchParams.get('group')));
+  const groupBySpec = groupBy.length === 1 ? groupBy[0] : groupBy;
+  const primaryGroup = groupBy[0] ?? 'team';
+  ```
+- `parseGroupParam`: 콤마 split → 유효 키 필터, 없으면 `['team']`.
+- URL 직렬화: `setOrDelete('group', groupBy.join(','), 'team')`.
+- UI 교체 (Stage 토글 패턴 재사용):
+  ```tsx
+  <ToolbarGroup label="Group">
+    <Button variant={isAllGroups ? 'default' : 'outline'} onClick={() => setGroupBy([...ALL_DEFECT_GROUP_KEYS])}>All</Button>
+    <ToggleGroup type="multiple" value={isAllGroups ? [] : groupBy} onValueChange={...}>
+      <ToggleGroupItem value="team">Team</ToggleGroupItem>
+      ...9 items
+    </ToggleGroup>
+  </ToolbarGroup>
+  ```
+- `isAllGroups` = 9개 모두 선택된 상태. 빈 배열이면 `['team']` 으로 자동 복귀.
+- `findDefectCritical`, `DEFECT_GROUP_QUERY_PARAM[...]`, `exportDefectScheduleToExcel({ groupHeader })` 호출부는 모두 `primaryGroup` 으로 대체.
+- Header 부 라벨은 `groupBy.map(g => DEFECT_GROUP_LABELS[g]).join(' · ')` 로 표시.
+
+### 3. 새 export
+- `defect-schedule-utils.ts` 에 `ALL_DEFECT_GROUP_KEYS: DefectScheduleGroupBy[]` 추가.
+
+## 비포함 (Out of Scope)
+- 9개 차원 전체 동시선택 시 행 폭발 가드(서버 페이지네이션 등) — 현재 데이터 규모에서 불필요
+- Raw Data 이동 시 다중 필터 동시 적용 — primary group만 적용 (단순화)
+- Excel Export 헤더가 합성 라벨 1열만 표시되는 구조 유지 (열 분리 안 함)
+
+## 검증
+- `bun test src/test/defect-*` 회귀 통과
+- 수동: Group=Team 단독 → 기존과 동일 결과; Team + Subcon 동시 선택 → 행 라벨 `Mech · ABC Co` 등 합성; 모두 해제 → Team 단독으로 복귀; URL 새로고침 시 선택 복원
