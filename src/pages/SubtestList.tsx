@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel,
+  getFacetedRowModel, getFacetedUniqueValues,
   flexRender, type ColumnDef, type SortingState, type ColumnFiltersState,
   type ColumnSizingState, type RowSelectionState, type VisibilityState,
 } from '@tanstack/react-table';
