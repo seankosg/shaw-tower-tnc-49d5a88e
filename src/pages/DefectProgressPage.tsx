@@ -244,7 +244,7 @@ export default function DefectProgressPage() {
   };
 
   const handleGroupClick = (label: string) => {
-    goRaw({ [DEFECT_GROUP_QUERY_PARAM[groupBy]]: filterValueFor(label) });
+    goRaw({ [DEFECT_GROUP_QUERY_PARAM[primaryGroup]]: filterValueFor(label.split(' · ')[0] ?? label) });
   };
 
   const handleExport = () => {
