@@ -373,7 +373,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         const resolvedTeam = resolveValue(rowTeamValue, null);
         if (resolvedTeam !== undefined) updates.team = resolvedTeam;
 
-        if (Object.keys(updates).length === 0) {
+        const needsReactivation = (existing as any).is_active === false;
+        if (Object.keys(updates).length === 0 && !needsReactivation) {
           res.skipped++;
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
@@ -389,6 +390,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         updates.source_upload_id = uploadId;
         updates.row_version = (existing.row_version || 1) + 1;
         updates.subtest_id = row.subtest_id;
+        // Re-activate previously hidden subtests so they reappear on the data screens.
+        updates.is_active = true;
 
         // Auto-fill t1/t2 status to 'Planned' when planned_date exists but status is null
         const finalT1PlannedForAutoFill = updates.t1_planned_date !== undefined ? updates.t1_planned_date : null;
