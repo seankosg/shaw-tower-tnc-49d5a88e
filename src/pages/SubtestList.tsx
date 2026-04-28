@@ -1458,7 +1458,7 @@ function SubtestTableView({
         key={header.id}
         data-column-id={header.column.id}
         style={{ width: header.getSize() }}
-        className="relative text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b"
+        className="relative h-9 py-0 text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b"
         onClick={header.column.getToggleSortingHandler()}
       >
         <span className="inline-flex items-center gap-1">
