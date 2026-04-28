@@ -452,7 +452,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
             item_no: row.item_no, mos_code: row.mos_code, action_taken: 'rejected' as any,
-            reason_code: 'update_failed', reason_detail: error.message, mapped_system_id: systemId,
+            reason_code: 'update_failed', reason_detail: formatPgError(error), mapped_system_id: systemId,
           });
         } else {
           res.updated++;
@@ -559,7 +559,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
             item_no: row.item_no, mos_code: row.mos_code, action_taken: 'rejected' as any,
-            reason_code: 'insert_failed', reason_detail: error.message, mapped_system_id: systemId,
+            reason_code: 'insert_failed', reason_detail: formatPgError(error), mapped_system_id: systemId,
           });
         } else {
           res.inserted++;
