@@ -1,73 +1,84 @@
-## 목표
-T&C Raw Data(`SubtestList`)와 Defect Raw Data(`DefectRawDataPage`)에서 가로 스크롤바를 리스트 **하단** 대신 **헤더 바로 아래(테이블 영역 상단)** 에 항상 노출되게 하여, 화면을 아래로 스크롤하지 않아도 가로 스크롤이 가능하도록 합니다.
+# Import Log 사유 누락 보강 (Defect + T&C)
 
-## 배경
-- 현재 두 페이지 모두 `<div className="... overflow-auto">` 한 곳에서 가로/세로 스크롤을 모두 처리합니다. 브라우저는 horizontal scrollbar를 그 컨테이너의 **하단**에만 그릴 수 있습니다.
-- viewport 높이가 작거나 행 수가 많으면 horizontal scrollbar가 화면 아래로 밀려, 사용자가 가로 스크롤을 인지하지 못합니다.
-- 표준 해결책: **"미러 스크롤바"** — 실제 테이블과 동일한 가로폭만 가진 더미 div를 헤더 바로 아래에 sticky로 두고, 두 컨테이너의 `scrollLeft`를 양방향 동기화합니다.
+## 문제 요약
 
-## 동작 변경
-- 테이블 우측 스크롤 영역 **상단(헤더 바로 아래)** 에 항상 보이는 얇은 horizontal scrollbar가 sticky로 표시됩니다.
-- 사용자가 이 상단 스크롤바를 드래그하면 실제 테이블 영역도 같이 가로 이동합니다.
-- 사용자가 아래로 스크롤해서 테이블 하단의 기본 horizontal scrollbar를 사용해도, 상단 미러 스크롤바도 동기화되어 움직입니다.
-- frozen pane(좌측 고정 컬럼)과 scroll pane(우측 가변 컬럼)의 분리 구조는 그대로 유지됩니다.
-- 세로 스크롤 동작은 변경 없음.
+현재 `defect_upload_row_logs` / `upload_row_logs` 테이블의 `reason_code`, `reason_detail`이 일부 경로에서 비어 있거나 부정확합니다. Import Logs 화면에서 Skip/Reject된 행의 이유를 사용자가 정확히 알 수 없습니다.
 
-## 기술 구현
+식별된 누락/부정확 케이스는 아래와 같습니다.
 
-### 1) 새 공용 컴포넌트
-- `src/components/raw-data/TopHorizontalScrollbar.tsx` 신규 생성.
-  - props: `targetRef: React.RefObject<HTMLDivElement>`, `width: number`, `className?: string`.
-  - 내부:
-    - 자체 `ref`로 `<div className="overflow-x-auto overflow-y-hidden h-3 sticky top-0 z-30 bg-background border-b">` 를 렌더하고, 안에 `<div style={{ width }}>` 로 가로폭 제공.
-    - `onScroll` 핸들러로 `targetRef.current.scrollLeft` 동기화.
-    - `useEffect`에서 `targetRef`에 `scroll` 리스너를 달아 반대 방향 동기화. 무한루프 방지를 위해 `isSyncingRef` 플래그 사용.
-    - `ResizeObserver`로 `width` 변경 시 자동 반영.
-  - 시각: `h-3` (12px) 정도 얇게, `bg-muted/40` 트랙, native scrollbar 그대로 사용.
+---
 
-### 2) `DefectRawDataPage.tsx` (`DefectRawTableView` 내부, 약 1158번 줄 근처)
-- scroll pane 컨테이너 직전 위치에 `<TopHorizontalScrollbar targetRef={tableRef} width={scrollWidth} />` 삽입.
-- scroll pane 컨테이너의 sticky header(`<TableHeader className="sticky top-0 z-20 ...">`)의 `top` 값을 미러 스크롤바 높이(12px)만큼 내리거나, 미러 스크롤바를 scroll pane **외부 상단**(즉, 테이블 외곽 컨테이너 안쪽 / scroll pane 위)에 두는 방식 중 후자를 사용 — sticky header와 z-index 충돌을 피합니다.
-- 구체적으로 외곽 컨테이너를 `flex flex-col`로 한 단 더 감싸지 않고, 기존 `flex` 가로 분할은 유지한 채 scroll pane 영역만 `flex-col` 로 감싸 `[TopScrollbar][Table]` 두 행으로 구성:
-  ```
-  <div className="flex flex-col min-w-0 flex-1">
-    <TopHorizontalScrollbar targetRef={tableRef} width={scrollWidth} />
-    <div ref={tableRef} className="min-w-0 flex-1 overflow-auto">
-      <Table .../>
-    </div>
-  </div>
-  ```
-- frozen pane은 기존대로 좌측 별도.
+## 누락 케이스 — Defect Import (`src/contexts/DefectImportContext.tsx`)
 
-### 3) `SubtestList.tsx` (`SubtestTableView` 내부, 약 1452/1528번 줄 근처)
-- 동일한 방식으로 scroll pane을 `flex-col`로 감싸고 위에 `<TopHorizontalScrollbar targetRef={tableRef} width={scrollWidth} />` 추가.
+### 1. Skipped (no changes) 시 사유 비어 있음 — line 890
+```ts
+pendingLogs.push({ ..., action_taken: 'skipped', ...logReason });
+```
+`logReason`은 team이 unresolved일 때만 채워짐. 일반적인 "변경사항 없음" Skip은 `reason_code`/`reason_detail`이 둘 다 비어 있어 로그에 `—`로 표시됨.
 
-### 4) 동기화 세부사항
-- `scrollLeft` 양방향 동기화는 다음 패턴:
-  ```ts
-  const isSyncing = useRef(false);
-  const onTopScroll = (e) => {
-    if (isSyncing.current) return;
-    isSyncing.current = true;
-    targetRef.current!.scrollLeft = e.currentTarget.scrollLeft;
-    requestAnimationFrame(() => { isSyncing.current = false; });
-  };
-  // target → top 동기화도 effect에서 동일 패턴으로.
-  ```
-- frozen pane의 세로 동기화 로직(`handleScroll`, `handleFrozenWheel`)은 변경 없음.
+→ 항상 `reason_code: 'no_changes'`, `reason_detail: 'All importable fields match existing values; no update needed.'`을 기본으로 넣고, team unresolved 시 detail에 추가 정보를 append.
 
-### 5) 부수 효과 / 주의
-- 새 미러 스크롤바가 약 12px의 세로 공간을 차지하므로, 테이블 외곽 `max-h-[calc(100vh-220px)]` 안에서 그만큼 scroll pane 가용 높이가 감소. 필요 시 외곽 max-h를 `calc(100vh-232px)` 로 12px 보정.
-- 좌측 frozen pane 상단에는 미러 스크롤바가 필요 없으므로(가로 이동 없음), 동일 높이의 빈 placeholder div를 추가해 frozen header와 scroll header의 수직 정렬을 맞춥니다.
-- 모바일 환경에서도 native scrollbar가 기본 노출되도록 별도 CSS 강제는 하지 않으나, 트랙 색상으로 시각적 가시성을 확보합니다.
+### 2. DB INSERT/UPDATE 실패 — lines 619, 633 (flushUpdates / flushInserts)
+현재 DB 오류 발생 시 `throw new Error(...)`로 전체 batch를 중단할 뿐, 해당 행에 대한 row-log를 남기지 않음. T&C 쪽의 `reason_code: 'update_failed' / 'insert_failed'` 패턴이 Defect에는 없음.
 
-## 영향 범위
-- 신규 파일 1개: `src/components/raw-data/TopHorizontalScrollbar.tsx`
-- 수정 파일 2개: `src/pages/SubtestList.tsx`, `src/pages/DefectRawDataPage.tsx`
-- 데이터/스키마/RLS 변경 없음.
+→ flush 시점에 실패 시 chunk 내 각 행에 대해 `defect_upload_row_logs`에 `action_taken: 'rejected'`, `reason_code: 'db_update_failed'`/`'db_insert_failed'`, `reason_detail: <Postgres error message>`를 즉시 기록한 뒤 throw.
 
-## 검증
-- `/tc/raw-data` 직접 진입 및 `/tc/dashboard`에서 카드 클릭 후 진입 시, 헤더 아래에 미러 스크롤바가 sticky로 보이고 양방향 동기화 정상.
-- `/defects/raw-data` 동일 검증.
-- 컬럼 리사이즈/필터 변경 → `scrollWidth` 변경 시 미러 트랙 폭이 즉시 반영.
-- 좌측 frozen 컬럼은 영향 없음, 세로 스크롤 동작 유지.
+### 3. Duplicate subcontractor_issue_no — line 793
+detail이 "X already exists in this project."뿐. 어떤 기존 defect와 충돌인지 알 수 없음.
+
+→ `existingByIssueNo` / issueRegistry를 활용해 충돌 상대 issue_no를 detail에 포함: `"<value> already assigned to issue_no=<other>".`
+
+### 4. Re-import not found — line 780
+`id=n/a`라는 표기가 사용자에게 모호함.
+
+→ "id 없음" / "id provided but no row matches" / "issue_no not found in DB" 케이스를 분리해 detail에 명확히 기재.
+
+### 5. 자동 보정(reconcile) 시 사유 — lines 826, 836, 840, 845
+이미 일부 기록되지만 `action_taken`이 항상 `'updated'`/`'inserted'`로 들어가, 같은 행에 대해 여러 reason 로그가 쌓일 수 있음. (현재 동작 유지하되) detail prefix로 어떤 자동 보정인지 명확히 함.
+
+→ 코드 변경 없음. (의도된 다중 로그 동작 유지)
+
+### 6. 파서 단계에서 누락된 행
+`defect-parser`에서 row가 drop되는 경로(헤더 부재 등)는 row-log로 남지 않음. 사용자가 "엑셀 N행이 왜 import 안 됐는지" 알 수 없음.
+
+→ 파서가 drop한 행도 caller에 `{ rawRowNo, reason }` 형태로 반환하도록 하고, importOneFile 시작부에 `action_taken: 'rejected'`, `reason_code: 'parser_dropped'`, `reason_detail`로 일괄 기록.
+(파서 동작이 복잡하므로 1차로는 "파싱된 행 수 < 원본 행 수"인 경우 batch 단위 메모로 남기고, 세부 행 추적은 후속 작업으로 분리.)
+
+---
+
+## 누락 케이스 — T&C Import (`src/contexts/ImportContext.tsx`)
+
+### 1. Skipped (no changes) 시 detail 비어 있음 — line 356
+```ts
+{ ..., action_taken: 'skipped', reason_code: 'no_changes', mapped_system_id: systemId }
+```
+`reason_detail`이 없음.
+
+→ `reason_detail: 'All mapped columns match existing values; no update needed.'` 추가.
+
+### 2. update_failed / insert_failed — lines 442, 549
+이미 `error.message`를 detail에 넣지만, Postgres 에러 코드(P0001 등)와 컬럼명이 메시지에 포함되지 않는 경우가 있음.
+
+→ detail을 `${error.code ?? ''}: ${error.message} (details: ${error.details ?? '—'}, hint: ${error.hint ?? '—'})` 형태로 풍부하게.
+
+### 3. resolveSystem 자동 등록 실패 — line 281
+현재 system 자동 INSERT가 실패하면 `null` 반환 → line 297에서 `system_resolve_failed`로 기록되지만 detail에 "auto-register failed: <error>"가 포함되지 않음.
+
+→ resolveSystem이 실패 사유 문자열도 함께 반환하도록 하여 reason_detail에 합침.
+
+---
+
+## 변경 파일
+
+- `src/contexts/DefectImportContext.tsx` — 항목 1~5 (no-changes 사유, db 실패 per-row 로그, duplicate detail 강화, reimport detail 분기)
+- `src/contexts/ImportContext.tsx` — T&C 1~3 (no-changes detail, db 실패 detail 강화, system resolve 사유)
+
+## 비변경 항목
+
+- `defect_upload_row_logs` / `upload_row_logs` 테이블 스키마는 이미 `reason_code` + `reason_detail` 두 컬럼을 보유 → 마이그레이션 불필요.
+- Import Logs UI(`DefectImportLogsPage.tsx`, `ImportLogsPage.tsx`)는 이미 두 컬럼을 표시 → UI 변경 불필요.
+- 파서 단계 행 누락 추적(Defect 항목 6)은 범위가 커서 본 작업에서는 batch 단위 차이만 토스트로 안내하고, 행 단위 추적은 별도 작업으로 분리.
+
+## 기대 결과
+
+Import Logs에서 모든 Skip / Reject 행이 `reason_code`와 `reason_detail` 두 컬럼에 사유를 명확히 표시. DB 실패 시에도 어떤 행에서 어떤 Postgres 에러가 났는지 행 단위로 확인 가능.

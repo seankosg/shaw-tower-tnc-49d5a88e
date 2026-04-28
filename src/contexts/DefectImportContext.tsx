@@ -576,8 +576,17 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
     type LogRow = Record<string, any>;
     type AuditRow = Record<string, any>;
     type SnapshotRow = Record<string, any>;
-    type UpdateOp = { id: string; payload: Record<string, any> };
+    type UpdateOp = { id: string; payload: Record<string, any>; rawRowNo: number; issueNo: string };
     type InsertOp = { payload: Record<string, any>; rawRowNo: number; issueNo: string; snapshotBase: SnapshotRow };
+
+    const formatPgError = (err: any): string => {
+      if (!err) return 'unknown error';
+      const code = err.code ? `[${err.code}] ` : '';
+      const msg = err.message ?? JSON.stringify(err);
+      const details = err.details ? ` | details: ${err.details}` : '';
+      const hint = err.hint ? ` | hint: ${err.hint}` : '';
+      return `${code}${msg}${details}${hint}`;
+    };
 
     const pendingLogs: LogRow[] = [];
     const pendingAudits: AuditRow[] = [];
@@ -608,15 +617,25 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       const batch = pendingUpdates.splice(0, pendingUpdates.length);
       // Run updates with bounded concurrency (Supabase has no true bulk update).
       for (let i = 0; i < batch.length; i += UPDATE_CONCURRENCY) {
+        const chunk = batch.slice(i, i + UPDATE_CONCURRENCY);
         const results = await Promise.all(
-          batch.slice(i, i + UPDATE_CONCURRENCY).map((op) =>
+          chunk.map((op) =>
             (supabase as any).from('defect_items').update(op.payload).eq('id', op.id)
           )
         );
-        for (const r of results) {
+        for (let k = 0; k < results.length; k++) {
+          const r = results[k];
+          const op = chunk[k];
           if (r?.error) {
-            // Surface DB errors so the import does not silently report success.
-            throw new Error(`defect_items UPDATE failed: ${r.error.message ?? JSON.stringify(r.error)}`);
+            const detail = formatPgError(r.error);
+            // Log the per-row failure so the user can see which row failed and why.
+            try {
+              await (supabase as any).from('defect_upload_row_logs').insert({
+                upload_id: uploadId, raw_row_no: op.rawRowNo, issue_no: op.issueNo,
+                action_taken: 'rejected', reason_code: 'db_update_failed', reason_detail: detail,
+              });
+            } catch { /* swallow logging error to surface the original */ }
+            throw new Error(`defect_items UPDATE failed (issue_no=${op.issueNo}, row=${op.rawRowNo}): ${detail}`);
           }
         }
       }
@@ -629,8 +648,17 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         const payloads = slice.map((op) => op.payload);
         const res = await (supabase as any).from('defect_items').insert(payloads).select('id');
         if (res?.error) {
-          // Surface DB errors so the import does not silently report success.
-          throw new Error(`defect_items INSERT failed: ${res.error.message ?? JSON.stringify(res.error)}`);
+          const detail = formatPgError(res.error);
+          // Log per-row failure for every row in the failed chunk.
+          try {
+            await (supabase as any).from('defect_upload_row_logs').insert(
+              slice.map((op) => ({
+                upload_id: uploadId, raw_row_no: op.rawRowNo, issue_no: op.issueNo,
+                action_taken: 'rejected', reason_code: 'db_insert_failed', reason_detail: detail,
+              }))
+            );
+          } catch { /* swallow logging error */ }
+          throw new Error(`defect_items INSERT failed (${slice.length} rows in chunk): ${detail}`);
         }
         const newIds: Array<{ id: string }> = res.data ?? [];
         // Map insert return order back to snapshot bases (Supabase preserves order).
@@ -771,13 +799,21 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
 
       if (isReimport && !existing) {
         rejected++;
+        let reimportDetail: string;
+        if (!row.id) {
+          reimportDetail = `Re-import row has no defect id and issue_no="${row.issue_no}" was not found in the database. New rows are not created in re-import mode.`;
+        } else if (!existingById.has(String(row.id))) {
+          reimportDetail = `Re-import row id=${row.id} does not match any existing defect (issue_no="${row.issue_no}" also not found). The defect may have been deleted or the export is stale. New rows are not created in re-import mode.`;
+        } else {
+          reimportDetail = `Re-import row could not be matched (id=${row.id}, issue_no="${row.issue_no}"). New rows are not created in re-import mode.`;
+        }
         pendingLogs.push({
           upload_id: uploadId,
           raw_row_no: row.rawRowNo,
           issue_no: row.issue_no,
           action_taken: 'rejected',
           reason_code: 'reimport_not_found',
-          reason_detail: `Re-import row could not be matched to any existing defect (id=${row.id ?? 'n/a'}, issue_no=${row.issue_no}). New rows are not created in re-import mode.`,
+          reason_detail: reimportDetail,
         });
         await maybeFlush();
         continue;
@@ -790,7 +826,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       };
       if (issueAssignment.duplicate) {
         rejected++;
-        pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `${issueAssignment.subcontractor_issue_no} already exists in this project.` });
+        pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `Subcontractor Issue No "${issueAssignment.subcontractor_issue_no}" is already used (either by another row in this import or by an existing defect in the project).` });
         await maybeFlush();
         continue;
       }
@@ -887,11 +923,16 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         });
         if (!hasAnyChange) {
           skipped++;
-          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'skipped', ...logReason });
+          // Always record a reason for Skipped rows. The default is "no_changes";
+          // if team is also unresolved, append that detail so both signals appear.
+          const skipDetail = resolvedTeam
+            ? 'All importable fields match existing values; no update needed.'
+            : 'All importable fields match existing values; no update needed. (Team also could not be resolved from Field Discipline or User Management profile.)';
+          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'skipped', reason_code: 'no_changes', reason_detail: skipDetail });
           await maybeFlush();
           continue;
         }
-        pendingUpdates.push({ id: existing.id, payload });
+        pendingUpdates.push({ id: existing.id, payload, rawRowNo: row.rawRowNo, issueNo: row.issue_no });
         for (const field of activeTrackedFields) {
           if (changed(existing[field], (row as any)[field])) {
             const isDate = field.endsWith('_date');

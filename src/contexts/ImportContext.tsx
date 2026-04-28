@@ -188,6 +188,17 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     if (batchErr || !batch) throw new Error(batchErr?.message || 'Failed to create batch');
     const uploadId = batch.id;
 
+    // Build a rich, human-readable reason_detail from a Postgres / PostgREST error
+    // so Import Logs show error code + message + details + hint instead of just `error.message`.
+    const formatPgError = (err: any): string => {
+      if (!err) return 'unknown error';
+      const code = err.code ? `[${err.code}] ` : '';
+      const msg = err.message ?? JSON.stringify(err);
+      const details = err.details ? ` | details: ${err.details}` : '';
+      const hint = err.hint ? ` | hint: ${err.hint}` : '';
+      return `${code}${msg}${details}${hint}`;
+    };
+
     const { data: systemsData } = await supabase.from('system_master').select('id, system_code').eq('project_id', projectId);
     const { data: aliasData } = await supabase.from('system_alias_map').select('alias_name, system_id').eq('project_id', projectId).eq('is_active', true);
     const systemByCode = new Map<string, string>();
@@ -263,12 +274,16 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       if (fnErr) userCreateFails.push(`${name.trim()} (hdec_pic): ${fnErr.message}`);
     }
 
+    // Tracks the most recent auto-create failure per raw system name so we can surface
+    // it in the row log instead of just "Cannot resolve system".
+    const systemAutoCreateError = new Map<string, string>();
+
     async function resolveSystem(rawName: string): Promise<string | null> {
       if (!rawName) return null;
       const key = rawName.toLowerCase().trim();
       if (systemByCode.has(key)) return systemByCode.get(key)!;
       if (aliasByName.has(key)) return aliasByName.get(key)!;
-      const { data: newSys } = await supabase.from('system_master').insert({
+      const { data: newSys, error: newSysErr } = await supabase.from('system_master').insert({
         project_id: projectId!,
         system_code: rawName.trim(),
         is_auto_created: true,
@@ -278,6 +293,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         systemByCode.set(key, newSys.id);
         return newSys.id;
       }
+      if (newSysErr) systemAutoCreateError.set(key, formatPgError(newSysErr));
       return null;
     }
 
@@ -291,10 +307,17 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       const systemId = await resolveSystem(row.raw_system_name);
       if (!systemId) {
         res.rejected++;
+        const rawKey = (row.raw_system_name ?? '').toLowerCase().trim();
+        const autoErr = systemAutoCreateError.get(rawKey);
+        const detail = !row.raw_system_name
+          ? 'Row has no System / Raw System Name value.'
+          : autoErr
+            ? `Cannot resolve system "${row.raw_system_name}" and auto-register failed: ${autoErr}`
+            : `Cannot resolve system "${row.raw_system_name}" — not found in system_master, no alias, and auto-register did not produce a new row.`;
         rowLogs.push({
           upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
           item_no: row.item_no, mos_code: row.mos_code, action_taken: 'rejected' as any,
-          reason_code: 'system_resolve_failed', reason_detail: `Cannot resolve system: ${row.raw_system_name}`,
+          reason_code: 'system_resolve_failed', reason_detail: detail,
           mapped_system_id: null,
         });
         continue;
@@ -353,7 +376,9 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
             item_no: row.item_no, mos_code: row.mos_code, action_taken: 'skipped' as any,
-            reason_code: 'no_changes', mapped_system_id: systemId,
+            reason_code: 'no_changes',
+            reason_detail: 'All mapped columns match existing values; no update needed.',
+            mapped_system_id: systemId,
           });
           continue;
         }
@@ -439,7 +464,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
             item_no: row.item_no, mos_code: row.mos_code, action_taken: 'rejected' as any,
-            reason_code: 'update_failed', reason_detail: error.message, mapped_system_id: systemId,
+            reason_code: 'update_failed', reason_detail: formatPgError(error), mapped_system_id: systemId,
           });
         } else {
           res.updated++;
@@ -546,7 +571,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
             item_no: row.item_no, mos_code: row.mos_code, action_taken: 'rejected' as any,
-            reason_code: 'insert_failed', reason_detail: error.message, mapped_system_id: systemId,
+            reason_code: 'insert_failed', reason_detail: formatPgError(error), mapped_system_id: systemId,
           });
         } else {
           res.inserted++;
