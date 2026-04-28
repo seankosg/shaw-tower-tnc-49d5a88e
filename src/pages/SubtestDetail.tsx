@@ -90,6 +90,7 @@ export default function SubtestDetailPage() {
   const { toast } = useToast();
   const { isAdminOrSuperuser, user } = useAuth();
   const { isFieldVisible } = useFieldConfig();
+  const { dataDate } = useLatestSubtestDataDate();
   const [record, setRecord] = useState<SubtestDetail | null>(null);
   // Scroll to #comments when arriving from a Raw Data meta column click.
   useEffect(() => {
