@@ -92,7 +92,7 @@ export default function DefectProgressPage() {
       if (!value || value === defaultValue) next.delete(key);
       else next.set(key, value);
     };
-    setOrDelete('group', groupBy, 'team');
+    setOrDelete('group', groupBy.join(','), 'team');
     setOrDelete('bucket', bucket, 'day');
     setOrDelete('stage_view', isAllStages ? '' : stageFilter.join(','), '');
     setOrDelete('asof_mode', asOfMode, 'dataDate');
