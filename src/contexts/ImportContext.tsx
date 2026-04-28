@@ -274,12 +274,16 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       if (fnErr) userCreateFails.push(`${name.trim()} (hdec_pic): ${fnErr.message}`);
     }
 
+    // Tracks the most recent auto-create failure per raw system name so we can surface
+    // it in the row log instead of just "Cannot resolve system".
+    const systemAutoCreateError = new Map<string, string>();
+
     async function resolveSystem(rawName: string): Promise<string | null> {
       if (!rawName) return null;
       const key = rawName.toLowerCase().trim();
       if (systemByCode.has(key)) return systemByCode.get(key)!;
       if (aliasByName.has(key)) return aliasByName.get(key)!;
-      const { data: newSys } = await supabase.from('system_master').insert({
+      const { data: newSys, error: newSysErr } = await supabase.from('system_master').insert({
         project_id: projectId!,
         system_code: rawName.trim(),
         is_auto_created: true,
@@ -289,6 +293,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         systemByCode.set(key, newSys.id);
         return newSys.id;
       }
+      if (newSysErr) systemAutoCreateError.set(key, formatPgError(newSysErr));
       return null;
     }
 
@@ -302,10 +307,17 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       const systemId = await resolveSystem(row.raw_system_name);
       if (!systemId) {
         res.rejected++;
+        const rawKey = (row.raw_system_name ?? '').toLowerCase().trim();
+        const autoErr = systemAutoCreateError.get(rawKey);
+        const detail = !row.raw_system_name
+          ? 'Row has no System / Raw System Name value.'
+          : autoErr
+            ? `Cannot resolve system "${row.raw_system_name}" and auto-register failed: ${autoErr}`
+            : `Cannot resolve system "${row.raw_system_name}" — not found in system_master, no alias, and auto-register did not produce a new row.`;
         rowLogs.push({
           upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
           item_no: row.item_no, mos_code: row.mos_code, action_taken: 'rejected' as any,
-          reason_code: 'system_resolve_failed', reason_detail: `Cannot resolve system: ${row.raw_system_name}`,
+          reason_code: 'system_resolve_failed', reason_detail: detail,
           mapped_system_id: null,
         });
         continue;
