@@ -1512,6 +1512,8 @@ function SubtestTableView({
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* Spacer to align frozen rows with scroll-pane rows (matches mirror scrollbar height) */}
+            <tr aria-hidden><td colSpan={frozenCols.length} style={{ height: 12, padding: 0, border: 0 }} /></tr>
             {loading || rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={frozenCols.length} className="text-center py-8 text-muted-foreground">
