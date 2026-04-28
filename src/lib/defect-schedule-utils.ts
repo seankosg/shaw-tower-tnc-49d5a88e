@@ -380,7 +380,7 @@ export function aggregateDefectSchedule(
 
     rows.push({
       key,
-      label: getDefectGroupLabel(opts.groupBy, key),
+      label: getDefectCompositeGroupLabel(opts.groupBy, key),
       total,
       doneCount,
       cumPlan,
