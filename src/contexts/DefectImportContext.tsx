@@ -826,7 +826,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       };
       if (issueAssignment.duplicate) {
         rejected++;
-        pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `${issueAssignment.subcontractor_issue_no} already exists in this project.` });
+        pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `Subcontractor Issue No "${issueAssignment.subcontractor_issue_no}" is already used (either by another row in this import or by an existing defect in the project).` });
         await maybeFlush();
         continue;
       }
