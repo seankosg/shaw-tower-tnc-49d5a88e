@@ -847,6 +847,8 @@ export default function DefectRawDataPage() {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
     globalFilterFn: globalDefectFilterFn,
     enableMultiSort: true,
     enableSortingRemoval: true,
