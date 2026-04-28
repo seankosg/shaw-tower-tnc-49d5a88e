@@ -152,6 +152,17 @@ const multiSelectFilterFn = (row: any, columnId: string, filterValue: string[]) 
   return filterValue.includes(String(val));
 };
 
+// Comma-separated tokens are AND-combined (case-insensitive substring match).
+const tokenizeAnd = (text: string): string[] =>
+  String(text ?? '').split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+
+const matchesAllTokens = (haystack: string, query: string): boolean => {
+  const tokens = tokenizeAnd(query);
+  if (tokens.length === 0) return true;
+  const lower = String(haystack ?? '').toLowerCase();
+  return tokens.every((tok) => lower.includes(tok));
+};
+
 const textFilterFn = (row: any, columnId: string, filterValue: any) => {
   if (!filterValue) return true;
   const text = typeof filterValue === 'string' ? filterValue : filterValue?.text;
@@ -160,7 +171,7 @@ const textFilterFn = (row: any, columnId: string, filterValue: any) => {
   if (emptyOnly) return val == null || String(val).trim() === '';
   if (!text) return true;
   if (val == null) return false;
-  return String(val).toLowerCase().includes(String(text).toLowerCase());
+  return matchesAllTokens(String(val), String(text));
 };
 
 const dateRangeFilterFn = (row: any, columnId: string, filterValue: any) => {
