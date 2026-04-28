@@ -152,6 +152,17 @@ const multiSelectFilterFn = (row: any, columnId: string, filterValue: string[]) 
   return filterValue.includes(String(val));
 };
 
+// Comma-separated tokens are AND-combined (case-insensitive substring match).
+const tokenizeAnd = (text: string): string[] =>
+  String(text ?? '').split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+
+const matchesAllTokens = (haystack: string, query: string): boolean => {
+  const tokens = tokenizeAnd(query);
+  if (tokens.length === 0) return true;
+  const lower = String(haystack ?? '').toLowerCase();
+  return tokens.every((tok) => lower.includes(tok));
+};
+
 const textFilterFn = (row: any, columnId: string, filterValue: any) => {
   if (!filterValue) return true;
   const text = typeof filterValue === 'string' ? filterValue : filterValue?.text;
@@ -160,7 +171,7 @@ const textFilterFn = (row: any, columnId: string, filterValue: any) => {
   if (emptyOnly) return val == null || String(val).trim() === '';
   if (!text) return true;
   if (val == null) return false;
-  return String(val).toLowerCase().includes(String(text).toLowerCase());
+  return matchesAllTokens(String(val), String(text));
 };
 
 const dateRangeFilterFn = (row: any, columnId: string, filterValue: any) => {
@@ -182,14 +193,13 @@ const progressFilterFn = (row: any, columnId: string, filterValue: any) => {
   const val = row.getValue(columnId);
   if (emptyOnly) return val == null || val === '';
   if (!text) return true;
-  return formatPct(val).toLowerCase().includes(String(text).toLowerCase());
+  return matchesAllTokens(formatPct(val), String(text));
 };
 
 const globalDefectFilterFn = (row: any, _columnId: string, filterValue: string) => {
-  const text = String(filterValue ?? '').trim().toLowerCase();
-  if (!text) return true;
+  if (tokenizeAnd(filterValue).length === 0) return true;
   const original = row.original as DefectRawRow;
-  return RAW_SEARCH_FIELDS.some((field) => String((original as any)[field] ?? '').toLowerCase().includes(text));
+  return RAW_SEARCH_FIELDS.some((field) => matchesAllTokens(String((original as any)[field] ?? ''), filterValue));
 };
 
 function uniqueOptions(data: DefectRawRow[], field: keyof DefectRawRow) {
@@ -290,7 +300,8 @@ function TextFilterDropdown({ column }: { column: any }) {
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-52 space-y-2 p-3" align="start" onClick={(event) => event.stopPropagation()}>
-        <Input placeholder="Search..." value={text} onChange={(event) => update({ text: event.target.value || undefined })} className="h-7 text-xs" disabled={emptyOnly} />
+        <Input placeholder="Search... (use , for AND)" value={text} onChange={(event) => update({ text: event.target.value || undefined })} className="h-7 text-xs" disabled={emptyOnly} />
+        <p className="text-[10px] text-muted-foreground">Tip: comma separates AND terms (e.g. <code>slab, rebar</code>)</p>
         <label className="flex cursor-pointer items-center gap-2 text-xs">
           <Checkbox checked={emptyOnly} onCheckedChange={(checked) => update({ emptyOnly: !!checked, text: undefined })} className="h-3.5 w-3.5" />
           Empty only
@@ -1012,7 +1023,7 @@ export default function DefectRawDataPage() {
       <div className="flex flex-wrap gap-3">
         <div className="relative min-w-[220px] max-w-sm flex-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search defects..." value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="h-9 pl-8" />
+          <Input placeholder="Search defects... (comma = AND)" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="h-9 pl-8" />
         </div>
         <span className="self-center text-sm text-muted-foreground">{table.getFilteredRowModel().rows.length} records</span>
         {activeColumnFilterCount > 0 && (
