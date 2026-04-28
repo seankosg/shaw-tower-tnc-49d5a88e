@@ -89,6 +89,14 @@ export default function SubtestDetailPage() {
   const { isAdminOrSuperuser, user } = useAuth();
   const { isFieldVisible } = useFieldConfig();
   const [record, setRecord] = useState<SubtestDetail | null>(null);
+  // Scroll to #comments when arriving from a Raw Data meta column click.
+  useEffect(() => {
+    if (!record || location.hash !== '#comments') return;
+    const t = window.setTimeout(() => {
+      document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [record, location.hash]);
   const [form, setForm] = useState<Partial<SubtestDetail>>({});
   const [changeLogs, setChangeLogs] = useState<ChangeLog[]>([]);
   const [canEditRecord, setCanEditRecord] = useState(false);

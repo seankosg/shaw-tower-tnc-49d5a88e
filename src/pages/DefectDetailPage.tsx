@@ -43,6 +43,14 @@ export default function DefectDetailPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [record, setRecord] = useState<DefectItem | null>(null);
+  // Scroll to #comments when arriving from a Raw Data meta column click.
+  useEffect(() => {
+    if (!record || location.hash !== '#comments') return;
+    const t = window.setTimeout(() => {
+      document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [record, location.hash]);
   const [form, setForm] = useState<Partial<DefectItem>>({});
   const [scope, setScope] = useState<DefectEditScope>('none');
   const [logs, setLogs] = useState<any[]>([]);
