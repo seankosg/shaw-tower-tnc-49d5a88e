@@ -1176,6 +1176,8 @@ export default function SubtestList() {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
     enableMultiSort: true,
     enableSortingRemoval: true,
     isMultiSortEvent: (e) => (e as unknown as MouseEvent).shiftKey,
