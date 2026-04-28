@@ -22,6 +22,34 @@ export type DefectScheduleGroupBy =
 
 export const ALL_DEFECT_STAGE_KEYS: DefectScheduleStage[] = ['start', 'completion', 'closure'];
 
+/** Canonical ordered list of all Group dimensions. Order drives toolbar layout & URL serialization. */
+export const ALL_DEFECT_GROUP_KEYS: DefectScheduleGroupBy[] = [
+  'team',
+  'subcontractor_name',
+  'subsub_name',
+  'hdec_pic_name',
+  'hdec_eng_name',
+  'area_level',
+  'main_trade',
+  'sub_trade',
+  'work_type',
+];
+
+/** Group spec: a single dimension or an ordered list of dimensions to combine. */
+export type DefectGroupBySpec = DefectScheduleGroupBy | DefectScheduleGroupBy[];
+
+const DEFECT_GROUP_KEY_SEP = ' · ';
+
+function toGroupArray(by: DefectGroupBySpec): DefectScheduleGroupBy[] {
+  return Array.isArray(by) ? by : [by];
+}
+
+/** First dimension — used for downstream features (URL filter mapping, critical, export header). */
+export function getPrimaryDefectGroup(by: DefectGroupBySpec): DefectScheduleGroupBy {
+  const arr = toGroupArray(by);
+  return arr[0] ?? 'team';
+}
+
 export const DEFECT_STAGE_LABELS: Record<DefectScheduleStage, string> = {
   start: 'Start',
   completion: 'Comp',
