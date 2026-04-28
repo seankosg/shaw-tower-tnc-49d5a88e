@@ -22,6 +22,34 @@ export type DefectScheduleGroupBy =
 
 export const ALL_DEFECT_STAGE_KEYS: DefectScheduleStage[] = ['start', 'completion', 'closure'];
 
+/** Canonical ordered list of all Group dimensions. Order drives toolbar layout & URL serialization. */
+export const ALL_DEFECT_GROUP_KEYS: DefectScheduleGroupBy[] = [
+  'team',
+  'subcontractor_name',
+  'subsub_name',
+  'hdec_pic_name',
+  'hdec_eng_name',
+  'area_level',
+  'main_trade',
+  'sub_trade',
+  'work_type',
+];
+
+/** Group spec: a single dimension or an ordered list of dimensions to combine. */
+export type DefectGroupBySpec = DefectScheduleGroupBy | DefectScheduleGroupBy[];
+
+const DEFECT_GROUP_KEY_SEP = ' · ';
+
+function toGroupArray(by: DefectGroupBySpec): DefectScheduleGroupBy[] {
+  return Array.isArray(by) ? by : [by];
+}
+
+/** First dimension — used for downstream features (URL filter mapping, critical, export header). */
+export function getPrimaryDefectGroup(by: DefectGroupBySpec): DefectScheduleGroupBy {
+  const arr = toGroupArray(by);
+  return arr[0] ?? 'team';
+}
+
 export const DEFECT_STAGE_LABELS: Record<DefectScheduleStage, string> = {
   start: 'Start',
   completion: 'Comp',
@@ -248,9 +276,30 @@ export function getDefectGroupLabel(by: DefectScheduleGroupBy, key: string): str
   return key;
 }
 
+/** Composite group key: joins per-dimension keys with separator. Single-dim spec is identical to getDefectGroupKey. */
+export function getDefectCompositeGroupKey(item: DefectItem, by: DefectGroupBySpec): string {
+  const dims = toGroupArray(by);
+  return dims.map(d => getDefectGroupKey(item, d)).join(DEFECT_GROUP_KEY_SEP);
+}
+
+/** Composite display label — resolves Team enum to full name, joins with separator. */
+export function getDefectCompositeGroupLabel(by: DefectGroupBySpec, key: string): string {
+  const dims = toGroupArray(by);
+  if (dims.length === 1) return getDefectGroupLabel(dims[0], key);
+  const parts = key.split(DEFECT_GROUP_KEY_SEP);
+  return dims.map((d, i) => getDefectGroupLabel(d, parts[i] ?? NONE_LABEL)).join(DEFECT_GROUP_KEY_SEP);
+}
+
+/** Composite header label for toolbar / page subheading (e.g. "Team · Subcontractor"). */
+export function getDefectGroupHeaderLabel(by: DefectGroupBySpec): string {
+  const dims = toGroupArray(by);
+  return dims.map(d => DEFECT_GROUP_LABELS[d]).join(DEFECT_GROUP_KEY_SEP);
+}
+
 // ───── main aggregation ─────
 export interface DefectAggregateOptions {
-  groupBy: DefectScheduleGroupBy;
+  /** Single dimension or ordered list of dimensions to combine into composite group keys. */
+  groupBy: DefectGroupBySpec;
   bucket: DefectScheduleBucket;
   stageFilter: DefectScheduleStageFilter;
   rangeStart: string;
@@ -268,7 +317,7 @@ export function aggregateDefectSchedule(
 
   const groupMap = new Map<string, DefectItem[]>();
   for (const it of items) {
-    const k = getDefectGroupKey(it, opts.groupBy);
+    const k = getDefectCompositeGroupKey(it, opts.groupBy);
     const arr = groupMap.get(k) ?? [];
     arr.push(it);
     groupMap.set(k, arr);
@@ -331,7 +380,7 @@ export function aggregateDefectSchedule(
 
     rows.push({
       key,
-      label: getDefectGroupLabel(opts.groupBy, key),
+      label: getDefectCompositeGroupLabel(opts.groupBy, key),
       total,
       doneCount,
       cumPlan,

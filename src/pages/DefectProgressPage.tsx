@@ -20,6 +20,7 @@ import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 import { type DefectItem, todayIso } from '@/lib/defect-utils';
 import {
   ALL_DEFECT_STAGE_KEYS,
+  ALL_DEFECT_GROUP_KEYS,
   DEFECT_GROUP_LABELS,
   DEFECT_GROUP_QUERY_PARAM,
   addDays,
@@ -47,7 +48,17 @@ export default function DefectProgressPage() {
   const today = useMemo(() => todayIso(), []);
   const { toast } = useToast();
 
-  const [groupBy, setGroupBy] = useState<DefectScheduleGroupBy>((searchParams.get('group') as DefectScheduleGroupBy) || 'team');
+  const [groupBy, setGroupBy] = useState<DefectScheduleGroupBy[]>(() => {
+    const raw = searchParams.get('group');
+    if (!raw) return ['team'];
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean) as DefectScheduleGroupBy[];
+    const valid = parts.filter(p => (ALL_DEFECT_GROUP_KEYS as string[]).includes(p));
+    return valid.length > 0 ? valid : ['team'];
+  });
+  const isAllGroups = groupBy.length === ALL_DEFECT_GROUP_KEYS.length;
+  const groupBySpec = groupBy.length === 1 ? groupBy[0] : groupBy;
+  const primaryGroup: DefectScheduleGroupBy = groupBy[0] ?? 'team';
+  const groupHeaderLabel = groupBy.map(g => DEFECT_GROUP_LABELS[g]).join(' · ');
   const [bucket, setBucket] = useState<DefectScheduleBucket>((searchParams.get('bucket') as DefectScheduleBucket) || 'day');
   const [stageFilter, setStageFilter] = useState<DefectScheduleStage[]>(() => {
     const raw = searchParams.get('stage_view');
@@ -81,7 +92,7 @@ export default function DefectProgressPage() {
       if (!value || value === defaultValue) next.delete(key);
       else next.set(key, value);
     };
-    setOrDelete('group', groupBy, 'team');
+    setOrDelete('group', groupBy.join(','), 'team');
     setOrDelete('bucket', bucket, 'day');
     setOrDelete('stage_view', isAllStages ? '' : stageFilter.join(','), '');
     setOrDelete('asof_mode', asOfMode, 'dataDate');
@@ -130,14 +141,14 @@ export default function DefectProgressPage() {
 
   const aggregate = useMemo(
     () => aggregateDefectSchedule(filteredItems, {
-      groupBy, bucket, stageFilter: stageFilterArg, rangeStart, rangeEnd, asOfDate,
+      groupBy: groupBySpec, bucket, stageFilter: stageFilterArg, rangeStart, rangeEnd, asOfDate,
     }),
-    [filteredItems, groupBy, bucket, stageFilterArg, rangeStart, rangeEnd, asOfDate],
+    [filteredItems, groupBySpec, bucket, stageFilterArg, rangeStart, rangeEnd, asOfDate],
   );
 
   const critical = useMemo(
-    () => findDefectCritical(filteredItems, today, 7, groupBy),
-    [filteredItems, today, groupBy],
+    () => findDefectCritical(filteredItems, today, 7, primaryGroup),
+    [filteredItems, today, primaryGroup],
   );
 
   const lagging = useMemo(() => findDefectLaggingGroups(aggregate.rows, 5), [aggregate.rows]);
@@ -206,7 +217,7 @@ export default function DefectProgressPage() {
     field: 'planned' | 'actual',
   ) => {
     const params: Record<string, string> = {
-      [DEFECT_GROUP_QUERY_PARAM[groupBy]]: filterValueFor(groupKey),
+      [DEFECT_GROUP_QUERY_PARAM[primaryGroup]]: filterValueFor(groupKey.split(' · ')[0] ?? groupKey),
     };
     const dateFrom = bucketIso;
     const dateTo = bucket === 'week' ? addDays(bucketIso, 6) : bucketIso;
@@ -233,7 +244,7 @@ export default function DefectProgressPage() {
   };
 
   const handleGroupClick = (label: string) => {
-    goRaw({ [DEFECT_GROUP_QUERY_PARAM[groupBy]]: filterValueFor(label) });
+    goRaw({ [DEFECT_GROUP_QUERY_PARAM[primaryGroup]]: filterValueFor(label.split(' · ')[0] ?? label) });
   };
 
   const handleExport = () => {
@@ -242,7 +253,7 @@ export default function DefectProgressPage() {
       return;
     }
     const { rowCount, fileName } = exportDefectScheduleToExcel(visibleData, {
-      groupHeader: DEFECT_GROUP_LABELS[groupBy],
+      groupHeader: groupHeaderLabel,
       stageFilter: stageFilterArg,
       bucket,
       today,
@@ -262,7 +273,7 @@ export default function DefectProgressPage() {
             Defect Progress Status
           </h1>
           <p className="text-xs text-muted-foreground">
-            Track planned vs actual progress by {DEFECT_GROUP_LABELS[groupBy]} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Data Date {formatDdMmm(dataDate)}{dataDateSource === 'fallback' && ' (fallback)'} · Today {formatDdMmm(today)} · Cumulative: {asOfLabel}
+            Track planned vs actual progress by {groupHeaderLabel} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Data Date {formatDdMmm(dataDate)}{dataDateSource === 'fallback' && ' (fallback)'} · Today {formatDdMmm(today)} · Cumulative: {asOfLabel}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={handleExport}>
@@ -275,14 +286,41 @@ export default function DefectProgressPage() {
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3 p-3">
           <ToolbarGroup label="Group">
-            <Select value={groupBy} onValueChange={(v) => setGroupBy(v as DefectScheduleGroupBy)}>
-              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(DEFECT_GROUP_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>{label}</SelectItem>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant={isAllGroups ? 'default' : 'outline'}
+                className="h-8 px-2 text-xs"
+                onClick={() => setGroupBy([...ALL_DEFECT_GROUP_KEYS])}
+                title="Select all groups"
+              >
+                All
+              </Button>
+              <ToggleGroup
+                type="multiple"
+                value={isAllGroups ? [] : groupBy}
+                onValueChange={(vals) => {
+                  const next = (vals as DefectScheduleGroupBy[]).filter(v => (ALL_DEFECT_GROUP_KEYS as string[]).includes(v));
+                  if (next.length === 0) {
+                    setGroupBy(['team']);
+                    return;
+                  }
+                  // Preserve canonical order so URL/labels stay stable.
+                  setGroupBy(ALL_DEFECT_GROUP_KEYS.filter(k => next.includes(k)));
+                }}
+                className="gap-1 flex-wrap"
+              >
+                {ALL_DEFECT_GROUP_KEYS.map(k => (
+                  <ToggleGroupItem
+                    key={k}
+                    value={k}
+                    className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                  >
+                    {DEFECT_GROUP_LABELS[k]}
+                  </ToggleGroupItem>
                 ))}
-              </SelectContent>
-            </Select>
+              </ToggleGroup>
+            </div>
           </ToolbarGroup>
 
           <ToolbarGroup label="Team">
@@ -497,7 +535,7 @@ export default function DefectProgressPage() {
               stageFilter={stageFilterArg}
               today={today}
               asOfLabel={asOfLabel}
-              groupHeader={DEFECT_GROUP_LABELS[groupBy]}
+              groupHeader={groupHeaderLabel}
               onCellClick={handleCellClick}
             />
           )}
