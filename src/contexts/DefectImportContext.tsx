@@ -923,7 +923,12 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         });
         if (!hasAnyChange) {
           skipped++;
-          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'skipped', ...logReason });
+          // Always record a reason for Skipped rows. The default is "no_changes";
+          // if team is also unresolved, append that detail so both signals appear.
+          const skipDetail = resolvedTeam
+            ? 'All importable fields match existing values; no update needed.'
+            : 'All importable fields match existing values; no update needed. (Team also could not be resolved from Field Discipline or User Management profile.)';
+          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'skipped', reason_code: 'no_changes', reason_detail: skipDetail });
           await maybeFlush();
           continue;
         }
