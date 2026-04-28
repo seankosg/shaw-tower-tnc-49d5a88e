@@ -1062,6 +1062,7 @@ export default function DefectRawDataPage() {
         <span className="hidden self-center text-xs text-muted-foreground md:inline">
           Tip: Shift+Click headers for multi-sort · Click <Filter className="inline h-3 w-3" /> to filter columns
         </span>
+        <div className="ml-auto"><DefectStageProgressLegend /></div>
       </div>
 
       <BulkEditBar
