@@ -41,6 +41,8 @@ import {
 import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import type { BulkEditableField } from '@/lib/bulk-edit';
+import { META_FIELD_NAMES, type CommentSummary, EMPTY_SUMMARY, isMetaField } from '@/lib/meta-fields';
+import { MetaCell } from '@/components/raw-data/MetaCell';
 
 interface SubtestRow {
   id: string;
@@ -356,7 +358,7 @@ export default function SubtestList() {
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
   const [dataDate, setDataDate] = useState<string | null>(null);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [commentSummary, setCommentSummary] = useState<Record<string, { count: number; hasUnread: boolean }>>({});
+  const [commentSummary, setCommentSummary] = useState<Record<string, CommentSummary>>({});
   const urlStatusFilter = searchParams.get('status');
   const urlScope = searchParams.get('scope');
   const urlAtRiskDays = Number(searchParams.get('at_risk_days') ?? '2');
@@ -496,13 +498,28 @@ export default function SubtestList() {
     const refresh = async () => {
       const ids = data.map((r) => r.id);
       const chunkSize = 500;
-      const next: Record<string, { count: number; hasUnread: boolean }> = {};
+      const next: Record<string, CommentSummary> = {};
       for (let i = 0; i < ids.length; i += chunkSize) {
         const chunk = ids.slice(i, i + chunkSize);
         const { data: rows, error } = await (supabase as any).rpc('get_subtest_comment_summary', { _subtest_ids: chunk });
         if (error || !rows) continue;
-        for (const row of rows as Array<{ subtest_id: string; comment_count: number; has_unread: boolean }>) {
-          next[row.subtest_id] = { count: row.comment_count, hasUnread: row.has_unread };
+        for (const row of rows as Array<{
+          subtest_id: string;
+          comment_count: number;
+          has_unread: boolean;
+          instruction_count: number;
+          comment_count_only: number;
+          reply_count: number;
+          last_activity_at: string | null;
+        }>) {
+          next[row.subtest_id] = {
+            count: row.comment_count,
+            hasUnread: row.has_unread,
+            instructionCount: row.instruction_count ?? 0,
+            commentCount: row.comment_count_only ?? 0,
+            replyCount: row.reply_count ?? 0,
+            lastActivityAt: row.last_activity_at ?? null,
+          };
         }
       }
       if (!cancelled) setCommentSummary(next);
