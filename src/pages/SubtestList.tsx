@@ -879,7 +879,33 @@ export default function SubtestList() {
         const v = getValue() as string | null;
         return v ? <span className="font-mono text-[10px] text-muted-foreground">{v.slice(0, 8)}…</span> : <span className="text-muted-foreground">—</span>;
       } },
-  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions, reportStatusOptions, dataDate, commentSummary]);
+    // ---- Virtual meta columns (Instructions / Comments / Replies / Last Activity) ----
+    ...META_FIELD_NAMES.map<ColumnDef<SubtestRow>>((field) => ({
+      id: field,
+      header:
+        field === '_meta_instruction_count' ? 'Instructions'
+          : field === '_meta_comment_count' ? 'Comments'
+          : field === '_meta_reply_count' ? 'Replies'
+          : 'Last Activity',
+      size: 110,
+      enableColumnFilter: false,
+      enableSorting: true,
+      accessorFn: (row: SubtestRow) => {
+        const s = commentSummary[row.id] ?? EMPTY_SUMMARY;
+        if (field === '_meta_instruction_count') return s.instructionCount;
+        if (field === '_meta_comment_count') return s.commentCount;
+        if (field === '_meta_reply_count') return s.replyCount;
+        return s.lastActivityAt ? new Date(s.lastActivityAt).getTime() : 0;
+      },
+      cell: ({ row }) => (
+        <MetaCell
+          field={field as any}
+          summary={commentSummary[row.original.id]}
+          onClick={() => navigate(`/subtests/${row.original.id}#comments`)}
+        />
+      ),
+    })),
+  ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions, reportStatusOptions, dataDate, commentSummary, navigate]);
 
   // Apply status (overdue / at_risk) + date URL filters at data level
   const urlT1PlannedTo = searchParams.get('t1_planned_to');
