@@ -576,8 +576,17 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
     type LogRow = Record<string, any>;
     type AuditRow = Record<string, any>;
     type SnapshotRow = Record<string, any>;
-    type UpdateOp = { id: string; payload: Record<string, any> };
+    type UpdateOp = { id: string; payload: Record<string, any>; rawRowNo: number; issueNo: string };
     type InsertOp = { payload: Record<string, any>; rawRowNo: number; issueNo: string; snapshotBase: SnapshotRow };
+
+    const formatPgError = (err: any): string => {
+      if (!err) return 'unknown error';
+      const code = err.code ? `[${err.code}] ` : '';
+      const msg = err.message ?? JSON.stringify(err);
+      const details = err.details ? ` | details: ${err.details}` : '';
+      const hint = err.hint ? ` | hint: ${err.hint}` : '';
+      return `${code}${msg}${details}${hint}`;
+    };
 
     const pendingLogs: LogRow[] = [];
     const pendingAudits: AuditRow[] = [];
