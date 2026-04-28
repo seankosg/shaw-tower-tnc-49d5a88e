@@ -273,7 +273,7 @@ export default function DefectProgressPage() {
             Defect Progress Status
           </h1>
           <p className="text-xs text-muted-foreground">
-            Track planned vs actual progress by {DEFECT_GROUP_LABELS[groupBy]} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Data Date {formatDdMmm(dataDate)}{dataDateSource === 'fallback' && ' (fallback)'} · Today {formatDdMmm(today)} · Cumulative: {asOfLabel}
+            Track planned vs actual progress by {groupHeaderLabel} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Data Date {formatDdMmm(dataDate)}{dataDateSource === 'fallback' && ' (fallback)'} · Today {formatDdMmm(today)} · Cumulative: {asOfLabel}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={handleExport}>
