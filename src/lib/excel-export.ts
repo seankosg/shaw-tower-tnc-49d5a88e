@@ -3,6 +3,7 @@ import type { Table, Column, Row } from '@tanstack/react-table';
 import { formatDdMmm, formatDdMmmYyyy } from './format';
 import { DATA_SOURCE_LABELS, type DataSource, type TcStatus } from '@/types/enums';
 import type { FieldConfigRow } from '@/hooks/useFieldConfig';
+import { isMetaField } from '@/lib/meta-fields';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -205,7 +206,7 @@ export function exportSubtestsToExcel<TRow>(opts: ExportSubtestsOptions<TRow>): 
 } {
   const { table, fieldConfig, globalFilter, searchParams, meta } = opts;
 
-  const visibleCols = table.getVisibleLeafColumns();
+  const visibleCols = table.getVisibleLeafColumns().filter((c) => !isMetaField(c.id));
   const sortedRows = table.getSortedRowModel().rows;
 
   const now = new Date();
