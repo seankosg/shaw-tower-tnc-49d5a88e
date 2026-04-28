@@ -1573,18 +1573,25 @@ function SubtestTableView({
 
       {/* Scroll pane */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Header: hidden horizontal scroll, synced with body */}
+        <div ref={headerScrollRef} className="overflow-hidden bg-background">
+          <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
+            <TableHeader className="bg-background">
+              <TableRow className="border-b bg-background">
+                {scrollHeaders.map(renderHeader)}
+              </TableRow>
+            </TableHeader>
+          </Table>
+        </div>
+        {/* Mirror horizontal scrollbar - sits BELOW the header */}
         <TopHorizontalScrollbar targetRef={scrollPaneRef} width={scrollWidth} />
+        {/* Body: vertical scroll only */}
         <div
           ref={scrollPaneRef}
           onScroll={handleScroll}
-          className="min-w-0 flex-1 overflow-auto"
+          className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide"
         >
         <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
-          <TableHeader className="sticky top-0 z-20 bg-background">
-            <TableRow className="border-b bg-background">
-              {scrollHeaders.map(renderHeader)}
-            </TableRow>
-          </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
@@ -1615,6 +1622,7 @@ function SubtestTableView({
                       key={row.id}
                       data-index={virtualRow.index}
                       ref={(el) => el && rowVirtualizer.measureElement(el)}
+                      style={{ height: virtualRow.size }}
                       className={cn(
                         'cursor-pointer',
                         t2Done && 'bg-muted/30 text-muted-foreground',
@@ -1630,7 +1638,7 @@ function SubtestTableView({
                           key={cell.id}
                           data-column-id={cell.column.id}
                           style={{ width: cell.column.getSize() }}
-                          className="text-xs py-2 truncate"
+                          className="text-xs py-2 truncate whitespace-nowrap"
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>
