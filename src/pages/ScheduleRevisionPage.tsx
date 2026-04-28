@@ -24,7 +24,7 @@ import { TEAM_LABELS, type TeamType } from '@/types/enums';
 import { formatDateTimeDdMmmYyyy, formatDdMmm, formatSignedDays } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-type Stage = 'pred' | 't1' | 't2';
+type Stage = 'pred' | 't1' | 't2' | 'r1' | 'r2s';
 type FilterKind = 'text' | 'date-range' | 'multi-select';
 
 type FilterMeta = {
@@ -57,6 +57,15 @@ interface ScheduleChangeAudit {
   t2_diff_days: number | null;
   t2_prev_gap_days: number | null;
   t2_cur_gap_days: number | null;
+  r1_old_date: string | null;
+  r1_new_date: string | null;
+  r1_diff_days: number | null;
+  r1_prev_gap_days: number | null;
+  r1_cur_gap_days: number | null;
+  r2s_old_date: string | null;
+  r2s_new_date: string | null;
+  r2s_diff_days: number | null;
+  r2s_prev_gap_days: number | null;
 }
 
 interface SubtestRevisionMeta {
@@ -75,8 +84,10 @@ type ScheduleRevisionRow = ScheduleChangeAudit & {
   subsub_name: string | null;
 };
 
-const stageGroups = ['pred', 't1', 't2'] as const;
-const stageLabels: Record<Stage, string> = { pred: 'Pred', t1: 'T1', t2: 'T2' };
+const stageGroups = ['pred', 't1', 't2', 'r1', 'r2s'] as const;
+const stageLabels: Record<Stage, string> = { pred: 'Pred', t1: 'T1', t2: 'T2', r1: 'R1 Sub', r2s: 'R2 Sub' };
+// R2 Submission is the last tracked stage and has no successor → no Cur.Gap column.
+const stageHasSuccessor: Record<Stage, boolean> = { pred: true, t1: true, t2: true, r1: true, r2s: false };
 const EMPTY_TOKEN = '__EMPTY__';
 
 const formatGap = (value: number | null | undefined) => value == null ? '—' : String(value);
