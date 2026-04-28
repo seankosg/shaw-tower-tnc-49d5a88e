@@ -1,9 +1,11 @@
-type Stage = 'pred' | 't1' | 't2';
+type Stage = 'pred' | 't1' | 't2' | 'r1' | 'r2s';
 
 type PlannedDates = {
   pred_planned_date: string | null;
   t1_planned_date: string | null;
   t2_planned_date: string | null;
+  r1_target_submission_date: string | null;
+  r2_target_submission_date: string | null;
 };
 
 type StageImpact = {
@@ -41,6 +43,8 @@ export const buildScheduleChangeImpact = (
     pred_planned_date: updates.pred_planned_date !== undefined ? updates.pred_planned_date ?? null : existing.pred_planned_date,
     t1_planned_date: updates.t1_planned_date !== undefined ? updates.t1_planned_date ?? null : existing.t1_planned_date,
     t2_planned_date: updates.t2_planned_date !== undefined ? updates.t2_planned_date ?? null : existing.t2_planned_date,
+    r1_target_submission_date: updates.r1_target_submission_date !== undefined ? updates.r1_target_submission_date ?? null : existing.r1_target_submission_date,
+    r2_target_submission_date: updates.r2_target_submission_date !== undefined ? updates.r2_target_submission_date ?? null : existing.r2_target_submission_date,
   };
 
   const addImpact = (stage: Stage, field: keyof PlannedDates, successorField: keyof PlannedDates | null) => {
@@ -59,10 +63,12 @@ export const buildScheduleChangeImpact = (
 
   addImpact('pred', 'pred_planned_date', 't1_planned_date');
   addImpact('t1', 't1_planned_date', 't2_planned_date');
-  addImpact('t2', 't2_planned_date', null);
+  addImpact('t2', 't2_planned_date', 'r1_target_submission_date');
+  addImpact('r1', 'r1_target_submission_date', 'r2_target_submission_date');
+  addImpact('r2s', 'r2_target_submission_date', null);
 
   return impact;
 };
 
 export const hasScheduleChangeImpact = (impact: ScheduleChangeImpact): boolean =>
-  Boolean(impact.pred || impact.t1 || impact.t2);
+  Boolean(impact.pred || impact.t1 || impact.t2 || impact.r1 || impact.r2s);
