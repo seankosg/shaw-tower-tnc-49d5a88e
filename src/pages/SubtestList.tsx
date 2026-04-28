@@ -1401,6 +1401,7 @@ function SubtestTableView({
 
   const frozenPaneRef = useRef<HTMLDivElement>(null);
   const scrollPaneRef = tableRef;
+  const headerScrollRef = useRef<HTMLDivElement>(null);
 
   const rows = table.getRowModel().rows;
   const ROW_HEIGHT = 36;
@@ -1422,6 +1423,9 @@ function SubtestTableView({
   const handleScroll = useCallback(() => {
     if (frozenPaneRef.current && scrollPaneRef.current) {
       frozenPaneRef.current.scrollTop = scrollPaneRef.current.scrollTop;
+    }
+    if (headerScrollRef.current && scrollPaneRef.current) {
+      headerScrollRef.current.scrollLeft = scrollPaneRef.current.scrollLeft;
     }
   }, [scrollPaneRef]);
 
