@@ -38,6 +38,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
+import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import type { BulkEditableField } from '@/lib/bulk-edit';
 
 const EMPTY_TOKEN = '__EMPTY__';
