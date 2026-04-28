@@ -193,14 +193,13 @@ const progressFilterFn = (row: any, columnId: string, filterValue: any) => {
   const val = row.getValue(columnId);
   if (emptyOnly) return val == null || val === '';
   if (!text) return true;
-  return formatPct(val).toLowerCase().includes(String(text).toLowerCase());
+  return matchesAllTokens(formatPct(val), String(text));
 };
 
 const globalDefectFilterFn = (row: any, _columnId: string, filterValue: string) => {
-  const text = String(filterValue ?? '').trim().toLowerCase();
-  if (!text) return true;
+  if (tokenizeAnd(filterValue).length === 0) return true;
   const original = row.original as DefectRawRow;
-  return RAW_SEARCH_FIELDS.some((field) => String((original as any)[field] ?? '').toLowerCase().includes(text));
+  return RAW_SEARCH_FIELDS.some((field) => matchesAllTokens(String((original as any)[field] ?? ''), filterValue));
 };
 
 function uniqueOptions(data: DefectRawRow[], field: keyof DefectRawRow) {
