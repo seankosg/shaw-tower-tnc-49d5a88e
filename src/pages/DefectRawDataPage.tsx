@@ -850,11 +850,14 @@ export default function DefectRawDataPage() {
     });
 
     return [selectColumn, ...dataColumns];
-  }, [getLabel, optionFields, commentSummary, navigate]);
+  }, [getLabel, optionFields, commentSummary, navigate, dataDate]);
 
   const columnVisibility = useMemo<VisibilityState>(() => {
     const visibility: VisibilityState = { __select: true };
-    for (const field of DEFECT_RAW_FIELDS) visibility[field] = field === 'issue_no' ? true : isFieldVisible(field);
+    for (const field of DEFECT_RAW_FIELDS) {
+      if (field === 'issue_no' || field === 'stage_progress') visibility[field] = true;
+      else visibility[field] = isFieldVisible(field);
+    }
     return visibility;
   }, [isFieldVisible]);
 
