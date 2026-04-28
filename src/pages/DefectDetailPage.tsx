@@ -39,6 +39,7 @@ const RAW_FIELD_LABELS = {
 export default function DefectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const [record, setRecord] = useState<DefectItem | null>(null);

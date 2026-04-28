@@ -83,6 +83,7 @@ const RESPONSIBILITY_FIELDS = ['subcontractor_name', 'subsub_name', 'hdec_pic_na
 export default function SubtestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const { toast } = useToast();
   const { isAdminOrSuperuser, user } = useAuth();
