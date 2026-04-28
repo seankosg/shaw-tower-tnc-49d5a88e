@@ -141,7 +141,40 @@ function MultiSelectDropdown({ column, options }: {
     column.setFilterValue(next.length ? next : undefined);
   };
 
-  const allOptions = [{ value: EMPTY_TOKEN, label: '(Empty)' }, ...options];
+  // Label dictionary derived from the static `options` prop (used for enum→label mapping).
+  const labelMap = useMemo(() => new Map(options.map(o => [o.value, o.label])), [options]);
+
+  // Faceted unique values reflect rows that pass ALL OTHER active column filters
+  // (TanStack Table excludes the current column's own filter automatically).
+  const facets = column.getFacetedUniqueValues?.() as Map<any, number> | undefined;
+
+  // Build candidate items: union of facet keys + currently-selected values + static options
+  // (so enums with no current data and already-selected-but-now-filtered-out values are kept).
+  const items = useMemo(() => {
+    const counts = new Map<string, number>();
+    let emptyCount = 0;
+    if (facets) {
+      facets.forEach((count, rawVal) => {
+        if (rawVal == null || rawVal === '') {
+          emptyCount += count;
+        } else {
+          const key = String(rawVal);
+          counts.set(key, (counts.get(key) ?? 0) + count);
+        }
+      });
+    }
+    // Ensure currently-selected and static options remain visible even with count=0.
+    selected.forEach((v) => { if (v !== EMPTY_TOKEN && !counts.has(v)) counts.set(v, 0); });
+    options.forEach((o) => { if (!counts.has(o.value)) counts.set(o.value, 0); });
+
+    const list = [...counts.entries()].map(([value, count]) => ({
+      value,
+      label: labelMap.get(value) ?? value,
+      count,
+    }));
+    list.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+    return [{ value: EMPTY_TOKEN, label: '(Empty)', count: emptyCount }, ...list];
+  }, [facets, options, labelMap, selected]);
 
   return (
     <Popover>
@@ -158,7 +191,7 @@ function MultiSelectDropdown({ column, options }: {
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-48 p-2 max-h-60 overflow-auto"
+        className="w-56 p-2 max-h-72 overflow-auto"
         align="start"
         onClick={(e) => e.stopPropagation()}
         onPointerDownOutside={(e) => e.stopPropagation()}
@@ -169,14 +202,21 @@ function MultiSelectDropdown({ column, options }: {
         >
           Clear all
         </button>
-        {allOptions.map(o => (
-          <label key={o.value} className="flex items-center gap-2 px-1 py-1 text-xs cursor-pointer hover:bg-muted/50 rounded">
+        {items.map(o => (
+          <label
+            key={o.value}
+            className={cn(
+              'flex items-center gap-2 px-1 py-1 text-xs cursor-pointer hover:bg-muted/50 rounded',
+              o.count === 0 && !selected.includes(o.value) && 'text-muted-foreground/60'
+            )}
+          >
             <Checkbox
               checked={selected.includes(o.value)}
               onCheckedChange={() => toggle(o.value)}
               className="h-3.5 w-3.5"
             />
-            {o.label}
+            <span className="flex-1 truncate">{o.label}</span>
+            <span className="text-[10px] text-muted-foreground tabular-nums">{o.count}</span>
           </label>
         ))}
       </PopoverContent>
