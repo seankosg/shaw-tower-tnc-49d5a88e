@@ -900,7 +900,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
           await maybeFlush();
           continue;
         }
-        pendingUpdates.push({ id: existing.id, payload });
+        pendingUpdates.push({ id: existing.id, payload, rawRowNo: row.rawRowNo, issueNo: row.issue_no });
         for (const field of activeTrackedFields) {
           if (changed(existing[field], (row as any)[field])) {
             const isDate = field.endsWith('_date');
