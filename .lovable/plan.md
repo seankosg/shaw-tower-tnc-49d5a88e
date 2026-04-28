@@ -1,110 +1,89 @@
-## 문제 분석
+# Raw Data 필터 옵션 동적 연동 (Cross-Filtered Options)
 
-T&C(`SubtestList.tsx`)와 Defect(`DefectRawDataPage.tsx`) Raw Data 그리드에서 발생하는 3가지 레이아웃 문제:
+## 문제
 
-### 1. 가로 스크롤바 위치
-현재 `TopHorizontalScrollbar`가 **컬럼 헤더 위**에 렌더링됩니다. 사용자는 헤더 아래에 위치하기를 원함.
+T&C(`SubtestList.tsx`)와 Defect(`DefectRawDataPage.tsx`)의 Raw Data 그리드에서 컬럼별 필터 Pulldown 옵션이 **항상 전체 데이터(`items` / `data`)** 를 기준으로 만들어집니다. 따라서 다른 컬럼에 필터를 걸어도 Pulldown에는 현재 행과 무관한 값까지 모두 보입니다.
 
-```text
-[현재]                          [원하는 모습]
-┌─ Frozen ┬─ scrollbar ────┐    ┌─ Frozen ┬─ Header ───────┐
-│ Header  │ Header         │    │ Header  │ Header         │
-│         ├────────────────┤    │         ├─ scrollbar ────┤
-│ rows    │ rows           │    │ rows    │ rows           │
-└─────────┴────────────────┘    └─────────┴────────────────┘
+예: Subcontractor를 "A"로 거른 상태에서 HDEC PIC Pulldown을 열면, A와 무관한 PIC도 모두 표시됨.
+
+## 목표 동작 (Excel/AG-Grid 스타일)
+
+각 필터 Pulldown은 **자기 자신을 제외한 다른 모든 활성 필터를 적용한 행** 을 기준으로 unique 값 목록을 생성합니다.
+
+- 자기 컬럼 필터를 제외하는 이유: 그렇지 않으면 한 번 좁히고 나면 다시 다른 값을 추가 선택할 수 없게 됨.
+- 이미 선택했지만 현재 다른 필터로 인해 행이 0개인 값은 옵션 목록에 **유지** 하고 옅은 회색으로 표시 (선택 해제 가능하도록).
+
+## 구현 방식
+
+TanStack Table의 `getFacetedUniqueValues()` 와 `column.getFacetedUniqueValues()` 를 사용하면 위 동작이 표준으로 지원됩니다. 현재 두 페이지는 자체 `optionFields` / `*Options` 배열을 컬럼 `meta.filterOptions` 로 주입하고 있어 정적입니다. 이를 다음과 같이 교체합니다.
+
+### 1) Table 인스턴스에 faceted unique values 활성화
+
+`useReactTable({...})` 호출에 추가:
+```ts
+import { getFacetedUniqueValues, getFacetedRowModel } from '@tanstack/react-table';
+
+useReactTable({
+  ...,
+  getFacetedRowModel: getFacetedRowModel(),
+  getFacetedUniqueValues: getFacetedUniqueValues(),
+});
 ```
 
-### 2. 좌측 Sticky 컬럼 헤더와 우측 헤더 높이 불일치
-스크롤바가 우측 영역 위에 12px를 추가하면서 우측 헤더가 좌측 헤더보다 12px 아래로 밀려, 두 헤더의 baseline이 어긋남.
+기본 `getFacetedRowModel` 은 "현재 컬럼을 제외한 다른 필터가 적용된 행" 을 자동으로 반환합니다 — 정확히 우리가 원하는 동작.
 
-### 3. Sticky 컬럼 행과 우측 스크롤 영역 행의 높이 불일치
-- 좌측(Frozen): `style={{ height: virtualRow.size }}` 명시 적용
-- 우측(Scroll): `ref={(el) => rowVirtualizer.measureElement(el)}` 만 적용, 명시적 height 없음
-→ 우측이 자체 콘텐츠에 따라 높이가 달라져 좌/우 행 높이가 어긋남.
+### 2) `MultiSelectDropdown` 이 옵션을 column 으로부터 직접 계산
 
----
-
-## 해결 방안
-
-### A. 스크롤바를 헤더 **아래**로 이동
-`TopHorizontalScrollbar`를 헤더와 분리하기 위해 우측 pane 구조를 변경:
-- 우측 pane을 **(1) Header 영역 + (2) 스크롤바 + (3) Body 영역** 3단으로 분리
-- Header는 자체 가로 스크롤되는 컨테이너에 두고, 스크롤바·body와 `scrollLeft`를 동기화
-- Body의 native 가로 스크롤바는 숨김(`scrollbar-hide`) 처리해 위쪽 mirror 스크롤바만 사용
-
-```text
-┌──────────────────────────────────┐
-│ FROZEN HEADER │ SCROLL HEADER    │  ← 같은 높이 (둘 다 단일 행)
-├───────────────┼──────────────────┤
-│               │ ▭ 가로 스크롤바  │  ← 우측에만 표시
-│ FROZEN ROWS   ├──────────────────┤
-│               │ SCROLL ROWS      │
-└───────────────┴──────────────────┘
+현재 시그니처:
+```ts
+function MultiSelectDropdown({ column, options }: { column; options: {value,label}[] })
 ```
 
-좌측 Frozen pane에는 스크롤바 자리만큼의 spacer(`<div style={{ height: 12 }} />`)를 헤더와 body 사이에 삽입해 행이 동일한 Y 위치에서 시작하도록 함.
+변경:
+- `options` prop은 **labels 매핑(team→TEAM_LABELS 등)** 용 또는 정적 옵션(예: classification_source) 의 fallback 으로만 사용.
+- 실제 후보 값 집합은 `column.getFacetedUniqueValues()` (Map<value, count>) 에서 도출.
+- 표시 로직:
+  1. faceted Map의 key 들 + 현재 선택된 값들의 합집합으로 candidate set 구성.
+  2. 각 항목에 count 표시 (옵션 라벨 우측에 `(12)`).
+  3. count === 0 (선택은 됐지만 다른 필터로 가려진 값) 인 항목은 muted 스타일로 표시.
+  4. 정렬: count 내림차순 → 라벨 오름차순. (또는 라벨 오름차순 단일.)
+- `(EMPTY)` 토큰 처리: faceted map에서 빈 값(`null`/`''`)을 EMPTY_TOKEN 으로 정규화하여 카운트.
 
-### B. 좌/우 헤더 높이 동기화
-- 양쪽 `TableHead`의 padding을 동일한 클래스(`h-9` 등)로 명시
-- 우측 헤더 위에 스크롤바를 두지 않으므로 자연히 같은 높이가 됨 (A 해결로 함께 해결)
+### 3) 라벨 매핑 헬퍼
 
-### C. 좌/우 행 높이 동기화
-TanStack Virtual의 동적 measure는 한쪽 pane만 측정하면 다른 쪽이 어긋남. 두 가지 옵션 중 **옵션 1**을 적용:
+team 같은 enum 컬럼은 value→label 매핑이 필요하므로, `meta.filterOptions` 를 Map으로 변환해 라벨 lookup 으로 사용합니다 (옵션 source 가 아닌 label dictionary 역할).
 
-**옵션 1 (권장)**: 우측 행에도 `style={{ height: virtualRow.size }}` 적용 + 측정은 우측에서 수행하고, 좌측은 그 측정 결과를 따라감.
-- 측정 대상 셀은 콘텐츠가 가장 큰 우측으로 통일 (`measureElement` 우측 유지)
-- 좌·우 모두 `style={{ height: virtualRow.size }}` 명시
-- 셀에 `truncate` + `overflow-hidden`을 강화해 콘텐츠가 행 높이를 더 늘리지 못하도록 함
-- `MetaCell` 등 멀티라인 콘텐츠는 `whitespace-nowrap` 적용
+```ts
+const labelMap = useMemo(
+  () => new Map(options.map(o => [o.value, o.label])),
+  [options],
+);
+const display = (v: string) => labelMap.get(v) ?? v;
+```
 
----
+### 4) 정적 옵션 컬럼은 그대로 동작
 
-## 수정 대상 파일
+`classification_source` 처럼 데이터에 없어도 보여야 하는 enum 컬럼은 `options` prop의 값을 candidate 합집합에 추가하면 됩니다 (이미 위 step 2.1 의 union 처리로 커버됨).
 
-1. **`src/components/raw-data/TopHorizontalScrollbar.tsx`**
-   - `scrollbar-hide` 유틸 클래스 또는 인라인 CSS로 본 body 스크롤바를 숨길 수 있도록 보조 prop 추가 (선택)
-   - 동작은 동일, 위치만 부모에서 변경
+### 5) Sticky 좌측 컬럼 필터에도 적용
 
-2. **`src/pages/DefectRawDataPage.tsx`** (1178-1226 라인 근처)
-   - 우측 pane 레이아웃을 `Header → Scrollbar → Body` 순으로 재배치
-   - Header를 별도 가로 스크롤 컨테이너로 감싸고 `scrollLeft` 동기화 (기존 `handleScroll` 로직에 헤더 ref 동기화 추가)
-   - Body 컨테이너에 `overflow-x-hidden overflow-y-auto`로 변경 (가로는 mirror가 담당)
-   - 좌측 Frozen pane에 12px spacer 추가
-   - 우측 `TableRow`에 `style={{ height: virtualRow.size }}` 추가
-   - 셀에 `whitespace-nowrap` 추가 보강
+좌측 frozen 영역의 컬럼 헤더 필터도 동일 `MultiSelectDropdown` 컴포넌트를 쓰므로 자동 적용됨. 추가 작업 없음.
 
-3. **`src/pages/SubtestList.tsx`** (1495-1648 라인 근처)
-   - 위와 동일한 패턴으로 우측 pane 3단 분리
-   - 좌측에 spacer, 우측 행에 명시적 height 적용
+## 변경 파일
 
-4. **`src/index.css`** (필요 시)
-   - `.scrollbar-hide { scrollbar-width: none; } .scrollbar-hide::-webkit-scrollbar { display: none; }` 유틸 추가
+- `src/pages/SubtestList.tsx`
+  - `useReactTable` 에 `getFacetedRowModel`, `getFacetedUniqueValues` 추가
+  - `MultiSelectDropdown` 내부에서 `column.getFacetedUniqueValues()` 기반 옵션 생성으로 교체
+- `src/pages/DefectRawDataPage.tsx`
+  - 동일한 두 변경 적용 (해당 파일에도 유사한 `MultiSelectDropdown` 이 있음, line 199)
+- (선택) Defect/T&C에서 공통 `MultiSelectDropdown` 을 `src/components/raw-data/MultiSelectDropdown.tsx` 로 추출하여 중복 제거. 이번 변경 범위가 동일하므로 함께 추출 권장.
 
----
+## 영향 범위 / 비영향
 
-## 기술 세부 (개발자용)
+- 정렬·가상 스크롤·sticky 컬럼 레이아웃: 영향 없음.
+- BulkEdit 의 select option(`optionFields` / `subcontractorOptions`): **변경 없음** — 일괄 수정 시에는 모든 가능한 값을 보여줘야 하므로 기존 정적 옵션 유지.
+- Export 페이지 (`DefectExportPage` 등) 의 필터 Pulldown: 본 작업 범위 외 (별도 페이지). 필요 시 후속 작업.
 
-- 우측 pane 새 구조 (Defect/Subtest 동일):
-  ```tsx
-  <div className="flex min-w-0 flex-1 flex-col">
-    {/* (1) Header - 가로 스크롤되지만 사용자에겐 숨김 */}
-    <div ref={headerScrollRef} className="overflow-hidden border-b">
-      <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
-        <TableHeader>...</TableHeader>
-      </Table>
-    </div>
-    {/* (2) Mirror 스크롤바 */}
-    <TopHorizontalScrollbar targetRef={tableRef} width={scrollWidth} />
-    {/* (3) Body */}
-    <div ref={tableRef} onScroll={handleScroll}
-         className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-      <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
-        <TableBody>...</TableBody>
-      </Table>
-    </div>
-  </div>
-  ```
-- `handleScroll`에 `headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft` 추가
-- `TopHorizontalScrollbar`의 기존 양방향 sync 로직은 그대로 유지(헤더는 body 스크롤을 단방향으로 따라감)
-- 좌측 Frozen pane은 헤더 직후 `<div style={{ height: 12 }} aria-hidden />` 삽입으로 우측 mirror 스크롤바 높이를 보정
-- 가상화 행 높이 동기화: 양쪽 모두 `style={{ height: virtualRow.size }}` + 측정은 우측 한 곳에서만(`measureElement`)
+## 결과
+
+다중 필터를 걸수록 각 컬럼의 Pulldown 후보가 자동으로 좁혀지고, 옵션 옆에 매칭 행 수가 표시되어 사용자가 의미 있는 선택만 수행할 수 있게 됩니다.
