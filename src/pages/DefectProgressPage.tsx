@@ -286,14 +286,41 @@ export default function DefectProgressPage() {
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3 p-3">
           <ToolbarGroup label="Group">
-            <Select value={groupBy} onValueChange={(v) => setGroupBy(v as DefectScheduleGroupBy)}>
-              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(DEFECT_GROUP_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>{label}</SelectItem>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant={isAllGroups ? 'default' : 'outline'}
+                className="h-8 px-2 text-xs"
+                onClick={() => setGroupBy([...ALL_DEFECT_GROUP_KEYS])}
+                title="Select all groups"
+              >
+                All
+              </Button>
+              <ToggleGroup
+                type="multiple"
+                value={isAllGroups ? [] : groupBy}
+                onValueChange={(vals) => {
+                  const next = (vals as DefectScheduleGroupBy[]).filter(v => (ALL_DEFECT_GROUP_KEYS as string[]).includes(v));
+                  if (next.length === 0) {
+                    setGroupBy(['team']);
+                    return;
+                  }
+                  // Preserve canonical order so URL/labels stay stable.
+                  setGroupBy(ALL_DEFECT_GROUP_KEYS.filter(k => next.includes(k)));
+                }}
+                className="gap-1 flex-wrap"
+              >
+                {ALL_DEFECT_GROUP_KEYS.map(k => (
+                  <ToggleGroupItem
+                    key={k}
+                    value={k}
+                    className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                  >
+                    {DEFECT_GROUP_LABELS[k]}
+                  </ToggleGroupItem>
                 ))}
-              </SelectContent>
-            </Select>
+              </ToggleGroup>
+            </div>
           </ToolbarGroup>
 
           <ToolbarGroup label="Team">
