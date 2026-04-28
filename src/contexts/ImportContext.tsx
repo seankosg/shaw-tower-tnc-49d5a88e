@@ -328,10 +328,12 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       await ensureSubsub(row.subsub_name, row.subcontractor_name);
       await ensureHdecPic(row.hdec_pic_name);
 
+      // Look up by natural key WITHOUT is_active filter, so previously deactivated
+      // subtests are matched and re-activated below (instead of triggering a duplicate insert).
       const { data: existing } = await supabase.from('subtests')
-        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date')
+        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date, is_active')
         .eq('project_id', projectId!).eq('system_id', systemId)
-        .eq('item_no', row.item_no).eq('mos_code', row.mos_code).eq('is_active', true)
+        .eq('item_no', row.item_no).eq('mos_code', row.mos_code)
         .maybeSingle();
 
       const dataSourceType = item.detectedImportType === 'legacy' ? 'legacy_import_inherited' : 'standard_import';
@@ -371,7 +373,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         const resolvedTeam = resolveValue(rowTeamValue, null);
         if (resolvedTeam !== undefined) updates.team = resolvedTeam;
 
-        if (Object.keys(updates).length === 0) {
+        const needsReactivation = (existing as any).is_active === false;
+        if (Object.keys(updates).length === 0 && !needsReactivation) {
           res.skipped++;
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
@@ -387,6 +390,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         updates.source_upload_id = uploadId;
         updates.row_version = (existing.row_version || 1) + 1;
         updates.subtest_id = row.subtest_id;
+        // Re-activate previously hidden subtests so they reappear on the data screens.
+        updates.is_active = true;
 
         // Auto-fill t1/t2 status to 'Planned' when planned_date exists but status is null
         const finalT1PlannedForAutoFill = updates.t1_planned_date !== undefined ? updates.t1_planned_date : null;
