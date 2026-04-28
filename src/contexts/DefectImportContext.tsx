@@ -705,6 +705,26 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         continue;
       }
 
+      // Business rule: actual dates (start/completion/closure) cannot be after Data Date.
+      // Reject the row entirely so the user can correct the Excel and re-upload.
+      const futureActuals: string[] = [];
+      if (row.actual_start_date && row.actual_start_date > dataDate) futureActuals.push(`actual_start_date=${row.actual_start_date}`);
+      if (row.actual_completion_date && row.actual_completion_date > dataDate) futureActuals.push(`actual_completion_date=${row.actual_completion_date}`);
+      if (row.actual_closure_date && row.actual_closure_date > dataDate) futureActuals.push(`actual_closure_date=${row.actual_closure_date}`);
+      if (futureActuals.length > 0) {
+        rejected++;
+        pendingLogs.push({
+          upload_id: uploadId,
+          raw_row_no: row.rawRowNo,
+          issue_no: row.issue_no,
+          action_taken: 'rejected',
+          reason_code: 'actual_date_after_data_date',
+          reason_detail: `Actual date(s) cannot be later than Data Date (${dataDate}): ${futureActuals.join(', ')}.`,
+        });
+        await maybeFlush();
+        continue;
+      }
+
       await masterEnsurer.ensureForRow(row);
 
       // Look up existing row FIRST so we can apply "blank in Excel = keep DB value" policy
