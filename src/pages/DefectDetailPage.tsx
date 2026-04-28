@@ -44,6 +44,7 @@ export default function DefectDetailPage() {
   const location = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { dataDate } = useLatestDataDate();
   const [record, setRecord] = useState<DefectItem | null>(null);
   // Scroll to #comments when arriving from a Raw Data meta column click.
   useEffect(() => {
@@ -175,6 +176,18 @@ export default function DefectDetailPage() {
 
   const handleSave = async () => {
     if (!record || !user || !canEdit) return;
+
+    // Business rule: actual dates cannot be later than Data Date.
+    const actualValidation = validateActualDatesAgainstDataDate({
+      actual_start_date: form.actual_start_date as any,
+      actual_completion_date: form.actual_completion_date as any,
+      actual_closure_date: form.actual_closure_date as any,
+    }, dataDate);
+    if (!actualValidation.ok) {
+      toast({ title: 'Save blocked', description: actualValidation.message, variant: 'destructive' });
+      return;
+    }
+
     setSaving(true);
 
     const rawFieldKeys = ['item_description', 'work_type', 'captured_on', 'start_date', 'finish_date', 'actual_start_date', 'actual_finish_date', 'planned_progress'] as const;
