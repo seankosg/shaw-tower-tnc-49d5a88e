@@ -190,14 +190,32 @@ export default function ImportLogsPage() {
   };
 
   const loadBatchDetails = async (id: string) => {
-    const { data } = await supabase.from('upload_row_logs')
-      .select('id, raw_row_no, raw_system_name, item_no, mos_code, action_taken, reason_code, reason_detail')
-      .eq('upload_id', id).order('raw_row_no', { ascending: true }).limit(500);
-    if (data) setRowLogs(data);
-    const { data: changes } = await supabase.from('schedule_change_audit')
-      .select('*, system_master(system_code)' as any)
-      .eq('upload_id', id).order('raw_row_no', { ascending: true }).limit(500);
-    setScheduleChanges((changes as any) || []);
+    setActionFilter('all');
+    setReasonFilter('all');
+    setRowSearch('');
+    setRenderLimit(500);
+    try {
+      const rows = await fetchAllByUploadId<RowLog>(
+        'upload_row_logs',
+        'id, raw_row_no, raw_system_name, item_no, mos_code, action_taken, reason_code, reason_detail',
+        id,
+      );
+      setRowLogs(rows);
+    } catch (e) {
+      console.error('Failed to load row logs', e);
+      setRowLogs([]);
+    }
+    try {
+      const changes = await fetchAllByUploadId<ScheduleChangeAudit>(
+        'schedule_change_audit',
+        '*, system_master(system_code)',
+        id,
+      );
+      setScheduleChanges(changes);
+    } catch (e) {
+      console.error('Failed to load schedule audit', e);
+      setScheduleChanges([]);
+    }
   };
 
   const deleteBatch = async (batch: UploadBatch) => {
