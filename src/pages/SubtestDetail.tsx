@@ -181,6 +181,21 @@ export default function SubtestDetailPage() {
 
   const handleSave = async () => {
     if (!record || !user?.id || !canEditRecord) return;
+
+    // Business rule: actual dates cannot be later than the latest Data Date.
+    const dateCheck = validateSubtestActualDatesAgainstDataDate({
+      t1_actual_date: form.t1_actual_date,
+      t2_actual_date: form.t2_actual_date,
+      pred_actual_date: form.pred_actual_date,
+      r1_actual_submission_date: form.r1_actual_submission_date,
+      r2_actual_submission_date: form.r2_actual_submission_date,
+      r2_actual_approval_date: form.r2_actual_approval_date,
+    }, dataDate);
+    if (!dateCheck.ok) {
+      toast({ title: 'Save blocked', description: dateCheck.message, variant: 'destructive' });
+      return;
+    }
+
     setSaving(true);
     const canEditResponsibility = editScope === 'team' || editScope === 'full';
 
