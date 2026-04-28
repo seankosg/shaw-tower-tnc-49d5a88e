@@ -353,7 +353,9 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
             item_no: row.item_no, mos_code: row.mos_code, action_taken: 'skipped' as any,
-            reason_code: 'no_changes', mapped_system_id: systemId,
+            reason_code: 'no_changes',
+            reason_detail: 'All mapped columns match existing values; no update needed.',
+            mapped_system_id: systemId,
           });
           continue;
         }
