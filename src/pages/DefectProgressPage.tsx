@@ -141,9 +141,9 @@ export default function DefectProgressPage() {
 
   const aggregate = useMemo(
     () => aggregateDefectSchedule(filteredItems, {
-      groupBy, bucket, stageFilter: stageFilterArg, rangeStart, rangeEnd, asOfDate,
+      groupBy: groupBySpec, bucket, stageFilter: stageFilterArg, rangeStart, rangeEnd, asOfDate,
     }),
-    [filteredItems, groupBy, bucket, stageFilterArg, rangeStart, rangeEnd, asOfDate],
+    [filteredItems, groupBySpec, bucket, stageFilterArg, rangeStart, rangeEnd, asOfDate],
   );
 
   const critical = useMemo(
