@@ -15,6 +15,8 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Download, Filter, MessageSquare, Search, Upload, X } from 'lucide-react';
+import { META_FIELD_NAMES, type CommentSummary, EMPTY_SUMMARY, isMetaField } from '@/lib/meta-fields';
+import { MetaCell } from '@/components/raw-data/MetaCell';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -81,6 +83,7 @@ const DEFECT_RAW_FIELDS = [
   'hdec_comments',
   'updated_at',
   'created_at',
+  ...META_FIELD_NAMES,
 ] as const;
 
 const TEXT_FILTER_FIELDS = new Set([
@@ -332,7 +335,7 @@ export default function DefectRawDataPage() {
   const [exportFormat, setExportFormat] = useState<'view' | 'reimport'>('view');
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [commentSummary, setCommentSummary] = useState<Record<string, { count: number; hasUnread: boolean }>>({});
+  const [commentSummary, setCommentSummary] = useState<Record<string, CommentSummary>>({});
   const tableRef = useRef<HTMLDivElement>(null);
 
   const autoSizeColumn = (columnId: string) => {
@@ -394,13 +397,28 @@ export default function DefectRawDataPage() {
     const refresh = async () => {
       const ids = items.map((i) => i.id);
       const chunkSize = 500;
-      const next: Record<string, { count: number; hasUnread: boolean }> = {};
+      const next: Record<string, CommentSummary> = {};
       for (let i = 0; i < ids.length; i += chunkSize) {
         const chunk = ids.slice(i, i + chunkSize);
         const { data, error } = await (supabase as any).rpc('get_defect_comment_summary', { _defect_ids: chunk });
         if (error || !data) continue;
-        for (const row of data as Array<{ defect_id: string; comment_count: number; has_unread: boolean }>) {
-          next[row.defect_id] = { count: row.comment_count, hasUnread: row.has_unread };
+        for (const row of data as Array<{
+          defect_id: string;
+          comment_count: number;
+          has_unread: boolean;
+          instruction_count: number;
+          comment_count_only: number;
+          reply_count: number;
+          last_activity_at: string | null;
+        }>) {
+          next[row.defect_id] = {
+            count: row.comment_count,
+            hasUnread: row.has_unread,
+            instructionCount: row.instruction_count ?? 0,
+            commentCount: row.comment_count_only ?? 0,
+            replyCount: row.reply_count ?? 0,
+            lastActivityAt: row.last_activity_at ?? null,
+          };
         }
       }
       if (!cancelled) setCommentSummary(next);
