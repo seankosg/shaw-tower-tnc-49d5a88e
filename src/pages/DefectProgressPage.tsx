@@ -47,7 +47,17 @@ export default function DefectProgressPage() {
   const today = useMemo(() => todayIso(), []);
   const { toast } = useToast();
 
-  const [groupBy, setGroupBy] = useState<DefectScheduleGroupBy>((searchParams.get('group') as DefectScheduleGroupBy) || 'team');
+  const [groupBy, setGroupBy] = useState<DefectScheduleGroupBy[]>(() => {
+    const raw = searchParams.get('group');
+    if (!raw) return ['team'];
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean) as DefectScheduleGroupBy[];
+    const valid = parts.filter(p => (ALL_DEFECT_GROUP_KEYS as string[]).includes(p));
+    return valid.length > 0 ? valid : ['team'];
+  });
+  const isAllGroups = groupBy.length === ALL_DEFECT_GROUP_KEYS.length;
+  const groupBySpec = groupBy.length === 1 ? groupBy[0] : groupBy;
+  const primaryGroup: DefectScheduleGroupBy = groupBy[0] ?? 'team';
+  const groupHeaderLabel = groupBy.map(g => DEFECT_GROUP_LABELS[g]).join(' · ');
   const [bucket, setBucket] = useState<DefectScheduleBucket>((searchParams.get('bucket') as DefectScheduleBucket) || 'day');
   const [stageFilter, setStageFilter] = useState<DefectScheduleStage[]>(() => {
     const raw = searchParams.get('stage_view');
