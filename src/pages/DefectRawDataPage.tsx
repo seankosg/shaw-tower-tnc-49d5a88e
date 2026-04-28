@@ -726,6 +726,23 @@ export default function DefectRawDataPage() {
     };
 
     const dataColumns: ColumnDef<DefectRawRow>[] = DEFECT_RAW_FIELDS.map((field) => {
+      // ─── Virtual Stage Progress column (Start → Completion → Closure pip pipeline) ───
+      if (field === 'stage_progress') {
+        return {
+          id: 'stage_progress',
+          header: 'Progress',
+          size: 110,
+          enableColumnFilter: false,
+          enableSorting: true,
+          accessorFn: (r: DefectRawRow) => {
+            const startDone = isDefectStageDone(r as any, 'start');
+            const compDone = isDefectStageDone(r as any, 'completion');
+            const closureDone = isDefectStageDone(r as any, 'closure');
+            return (startDone ? 1 : 0) + (compDone ? 2 : 0) + (closureDone ? 4 : 0);
+          },
+          cell: ({ row }) => <DefectStageProgress item={row.original as any} asOfDate={dataDate} />,
+        } as ColumnDef<DefectRawRow>;
+      }
       // ─── Virtual meta columns (Instructions / Comments / Replies / Last Activity) ───
       if (isMetaField(field)) {
         return {
