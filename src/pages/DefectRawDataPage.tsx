@@ -1194,10 +1194,10 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
       key={header.id}
       data-column-id={header.column.id}
       style={{ width: header.getSize() }}
-      className="relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background py-0 text-xs font-medium"
+      className="relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background py-0 text-center text-xs font-medium"
       onClick={header.column.getToggleSortingHandler()}
     >
-      <span className="inline-flex items-center gap-1">
+      <span className="inline-flex items-center justify-center gap-1 w-full">
         {flexRender(header.column.columnDef.header, header.getContext())}
         {header.column.getIsSorted() && (
           <span className="ml-0.5">
