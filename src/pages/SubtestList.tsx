@@ -1664,7 +1664,6 @@ function SubtestTableView({
                     <TableRow
                       key={row.id}
                       data-index={virtualRow.index}
-                      ref={(el) => el && rowVirtualizer.measureElement(el)}
                       style={{ height: virtualRow.size }}
                       className={cn(
                         'cursor-pointer',
