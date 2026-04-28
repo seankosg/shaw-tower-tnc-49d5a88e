@@ -1798,9 +1798,12 @@ export type Database = {
         Args: { _defect_ids: string[] }
         Returns: {
           comment_count: number
+          comment_count_only: number
           defect_id: string
           has_unread: boolean
-          last_comment_at: string
+          instruction_count: number
+          last_activity_at: string
+          reply_count: number
         }[]
       }
       get_defect_edit_scope: {
@@ -1811,8 +1814,11 @@ export type Database = {
         Args: { _subtest_ids: string[] }
         Returns: {
           comment_count: number
+          comment_count_only: number
           has_unread: boolean
-          last_comment_at: string
+          instruction_count: number
+          last_activity_at: string
+          reply_count: number
           subtest_id: string
         }[]
       }
