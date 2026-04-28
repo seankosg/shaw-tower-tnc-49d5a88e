@@ -1961,7 +1961,14 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
                       <span className="text-xs text-muted-foreground tabular-nums w-6 text-right">{f.sort_order}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="font-mono text-xs">{f.field_name}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    <span className="inline-flex items-center gap-1.5">
+                      {f.field_name}
+                      {f.field_name.startsWith('_meta_') && (
+                        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">Virtual</span>
+                      )}
+                    </span>
+                  </TableCell>
                   <TableCell><Input className="h-8 min-w-[180px]" defaultValue={f.display_name} onBlur={(e) => updateName(f, e.target.value)} /></TableCell>
                   {showOrigin && (
                     <TableCell className="text-xs">
