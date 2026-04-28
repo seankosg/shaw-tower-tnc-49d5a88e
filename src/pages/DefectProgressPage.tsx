@@ -217,7 +217,7 @@ export default function DefectProgressPage() {
     field: 'planned' | 'actual',
   ) => {
     const params: Record<string, string> = {
-      [DEFECT_GROUP_QUERY_PARAM[groupBy]]: filterValueFor(groupKey),
+      [DEFECT_GROUP_QUERY_PARAM[primaryGroup]]: filterValueFor(groupKey.split(' · ')[0] ?? groupKey),
     };
     const dateFrom = bucketIso;
     const dateTo = bucket === 'week' ? addDays(bucketIso, 6) : bucketIso;
