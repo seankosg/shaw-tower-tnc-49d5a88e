@@ -421,7 +421,7 @@ export default function ScheduleRevisionPage() {
             </div>
           ) : (
             <div className="max-h-[680px] overflow-auto rounded-md border-0">
-              <Table className="min-w-[2080px]">
+              <Table className="min-w-[2880px]">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <SortableHeader column={table.getColumn('created_at')} label="Changed At" rowSpan={2} />
@@ -434,18 +434,25 @@ export default function ScheduleRevisionPage() {
                     <SortableHeader column={table.getColumn('item_no')} label="Item No" rowSpan={2} />
                     <SortableHeader column={table.getColumn('mos_code')} label="MOS Code" rowSpan={2} />
                     <SortableHeader column={table.getColumn('subtest_code')} label="Subtest ID" rowSpan={2} />
-                    {stageGroups.map(stage => <TableHead key={stage} colSpan={5} className="border-l text-center text-xs">{stageLabels[stage]}</TableHead>)}
+                    {stageGroups.map(stage => (
+                      <TableHead key={stage} colSpan={stageHasSuccessor[stage] ? 5 : 4} className="border-l text-center text-xs">{stageLabels[stage]}</TableHead>
+                    ))}
                   </TableRow>
                   <TableRow>
-                    {stageGroups.flatMap(stage => ['old_date', 'new_date', 'diff_days', 'prev_gap_days', 'cur_gap_days'].map((suffix, index) => {
-                      const label = ['Old date', 'New date', 'Diff', 'Prev.Gap', 'Cur.Gap'][index];
-                      return <SortableHeader key={`${stage}-${suffix}`} column={table.getColumn(`${stage}_${suffix}`)} label={label} className="border-l first:border-l-0" />;
-                    }))}
+                    {stageGroups.flatMap(stage => {
+                      const suffixes = stageHasSuccessor[stage]
+                        ? ['old_date', 'new_date', 'diff_days', 'prev_gap_days', 'cur_gap_days']
+                        : ['old_date', 'new_date', 'diff_days', 'prev_gap_days'];
+                      const labels = ['Old date', 'New date', 'Diff', 'Prev.Gap', 'Cur.Gap'];
+                      return suffixes.map((suffix, index) => (
+                        <SortableHeader key={`${stage}-${suffix}`} column={table.getColumn(`${stage}_${suffix}`)} label={labels[index]} className="border-l first:border-l-0" />
+                      ));
+                    })}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={25} className="py-8 text-center text-muted-foreground">No schedule revisions</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={34} className="py-8 text-center text-muted-foreground">No schedule revisions</TableCell></TableRow>
                   ) : rows.map(row => {
                     const original = row.original;
                     return (
