@@ -298,7 +298,8 @@ export function getDefectGroupHeaderLabel(by: DefectGroupBySpec): string {
 
 // ───── main aggregation ─────
 export interface DefectAggregateOptions {
-  groupBy: DefectScheduleGroupBy;
+  /** Single dimension or ordered list of dimensions to combine into composite group keys. */
+  groupBy: DefectGroupBySpec;
   bucket: DefectScheduleBucket;
   stageFilter: DefectScheduleStageFilter;
   rangeStart: string;
@@ -316,7 +317,7 @@ export function aggregateDefectSchedule(
 
   const groupMap = new Map<string, DefectItem[]>();
   for (const it of items) {
-    const k = getDefectGroupKey(it, opts.groupBy);
+    const k = getDefectCompositeGroupKey(it, opts.groupBy);
     const arr = groupMap.get(k) ?? [];
     arr.push(it);
     groupMap.set(k, arr);
