@@ -188,6 +188,17 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     if (batchErr || !batch) throw new Error(batchErr?.message || 'Failed to create batch');
     const uploadId = batch.id;
 
+    // Build a rich, human-readable reason_detail from a Postgres / PostgREST error
+    // so Import Logs show error code + message + details + hint instead of just `error.message`.
+    const formatPgError = (err: any): string => {
+      if (!err) return 'unknown error';
+      const code = err.code ? `[${err.code}] ` : '';
+      const msg = err.message ?? JSON.stringify(err);
+      const details = err.details ? ` | details: ${err.details}` : '';
+      const hint = err.hint ? ` | hint: ${err.hint}` : '';
+      return `${code}${msg}${details}${hint}`;
+    };
+
     const { data: systemsData } = await supabase.from('system_master').select('id, system_code').eq('project_id', projectId);
     const { data: aliasData } = await supabase.from('system_alias_map').select('alias_name, system_id').eq('project_id', projectId).eq('is_active', true);
     const systemByCode = new Map<string, string>();
