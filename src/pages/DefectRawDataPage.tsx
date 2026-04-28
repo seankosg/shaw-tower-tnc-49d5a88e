@@ -1194,19 +1194,25 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
       key={header.id}
       data-column-id={header.column.id}
       style={{ width: header.getSize() }}
-      className="relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background py-0 text-center text-xs font-medium"
+      className="relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background px-4 py-0 text-left text-xs font-medium"
       onClick={header.column.getToggleSortingHandler()}
     >
-      <span className="inline-flex items-center justify-center gap-1 w-full">
-        {flexRender(header.column.columnDef.header, header.getContext())}
-        {header.column.getIsSorted() && (
-          <span className="ml-0.5">
-            {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
-            {sorting.length > 1 && <sup className="ml-0.5 text-[9px] text-muted-foreground">{header.column.getSortIndex() + 1}</sup>}
+      <div className="flex w-full items-center justify-between gap-1">
+        <span className="inline-flex min-w-0 items-center gap-1 truncate">
+          <span className="truncate">{flexRender(header.column.columnDef.header, header.getContext())}</span>
+          {header.column.getIsSorted() && (
+            <span className="flex-shrink-0">
+              {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
+              {sorting.length > 1 && <sup className="ml-0.5 text-[9px] text-muted-foreground">{header.column.getSortIndex() + 1}</sup>}
+            </span>
+          )}
+        </span>
+        {header.column.getCanFilter() && (
+          <span className="flex-shrink-0" onClick={(event) => event.stopPropagation()}>
+            <ColumnFilterDropdown column={header.column} />
           </span>
         )}
-        {header.column.getCanFilter() && <span onClick={(event) => event.stopPropagation()}><ColumnFilterDropdown column={header.column} /></span>}
-      </span>
+      </div>
       {header.column.getCanResize() && (
         <div
           onMouseDown={header.getResizeHandler()}
