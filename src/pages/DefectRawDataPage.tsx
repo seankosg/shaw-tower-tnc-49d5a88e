@@ -5,6 +5,8 @@ import {
   getCoreRowModel,
   getFilteredRowModel,
   getSortedRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
   type ColumnDef,
   type ColumnFiltersState,
   type ColumnSizingState,
