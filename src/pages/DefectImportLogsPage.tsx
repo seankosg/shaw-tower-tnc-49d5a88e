@@ -187,15 +187,33 @@ export default function DefectImportLogsPage() {
   };
 
   const loadBatchDetails = async (id: string) => {
-    const { data } = await supabase.from('defect_upload_row_logs')
-      .select('id, raw_row_no, issue_no, action_taken, reason_code, reason_detail')
-      .eq('upload_id', id).order('raw_row_no', { ascending: true }).limit(500);
-    setRowLogs(data ?? []);
+    setActionFilter('all');
+    setReasonFilter('all');
+    setRowSearch('');
+    setRenderLimit(500);
+    try {
+      const rows = await fetchAllByUploadId<DefectRowLog>(
+        'defect_upload_row_logs',
+        'id, raw_row_no, issue_no, action_taken, reason_code, reason_detail',
+        id,
+      );
+      setRowLogs(rows);
+    } catch (e) {
+      console.error('Failed to load defect row logs', e);
+      setRowLogs([]);
+    }
 
-    const { data: changes } = await supabase.from('defect_schedule_change_audit')
-      .select('id, raw_row_no, defect_id, issue_no, subcontractor_issue_no, planned_completion_old_date, planned_completion_new_date, planned_completion_diff_days, planned_closure_old_date, planned_closure_new_date, planned_closure_diff_days, actual_closure_old_date, actual_closure_new_date, actual_closure_diff_days, progress_old_pct, progress_new_pct, progress_diff_pct, completion_status_old, completion_status_new, closure_status_old, closure_status_new, change_source')
-      .eq('upload_id', id).order('raw_row_no', { ascending: true }).limit(500);
-    setScheduleChanges(((changes as unknown) as DefectScheduleChangeAudit[]) ?? []);
+    try {
+      const changes = await fetchAllByUploadId<DefectScheduleChangeAudit>(
+        'defect_schedule_change_audit',
+        'id, raw_row_no, defect_id, issue_no, subcontractor_issue_no, planned_completion_old_date, planned_completion_new_date, planned_completion_diff_days, planned_closure_old_date, planned_closure_new_date, planned_closure_diff_days, actual_closure_old_date, actual_closure_new_date, actual_closure_diff_days, progress_old_pct, progress_new_pct, progress_diff_pct, completion_status_old, completion_status_new, closure_status_old, closure_status_new, change_source',
+        id,
+      );
+      setScheduleChanges(changes);
+    } catch (e) {
+      console.error('Failed to load defect schedule audit', e);
+      setScheduleChanges([]);
+    }
   };
 
   const deleteBatch = async (batch: DefectBatch) => {
