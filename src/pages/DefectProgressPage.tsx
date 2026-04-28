@@ -147,8 +147,8 @@ export default function DefectProgressPage() {
   );
 
   const critical = useMemo(
-    () => findDefectCritical(filteredItems, today, 7, groupBy),
-    [filteredItems, today, groupBy],
+    () => findDefectCritical(filteredItems, today, 7, primaryGroup),
+    [filteredItems, today, primaryGroup],
   );
 
   const lagging = useMemo(() => findDefectLaggingGroups(aggregate.rows, 5), [aggregate.rows]);
