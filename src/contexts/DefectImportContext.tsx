@@ -617,15 +617,25 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       const batch = pendingUpdates.splice(0, pendingUpdates.length);
       // Run updates with bounded concurrency (Supabase has no true bulk update).
       for (let i = 0; i < batch.length; i += UPDATE_CONCURRENCY) {
+        const chunk = batch.slice(i, i + UPDATE_CONCURRENCY);
         const results = await Promise.all(
-          batch.slice(i, i + UPDATE_CONCURRENCY).map((op) =>
+          chunk.map((op) =>
             (supabase as any).from('defect_items').update(op.payload).eq('id', op.id)
           )
         );
-        for (const r of results) {
+        for (let k = 0; k < results.length; k++) {
+          const r = results[k];
+          const op = chunk[k];
           if (r?.error) {
-            // Surface DB errors so the import does not silently report success.
-            throw new Error(`defect_items UPDATE failed: ${r.error.message ?? JSON.stringify(r.error)}`);
+            const detail = formatPgError(r.error);
+            // Log the per-row failure so the user can see which row failed and why.
+            try {
+              await (supabase as any).from('defect_upload_row_logs').insert({
+                upload_id: uploadId, raw_row_no: op.rawRowNo, issue_no: op.issueNo,
+                action_taken: 'rejected', reason_code: 'db_update_failed', reason_detail: detail,
+              });
+            } catch { /* swallow logging error to surface the original */ }
+            throw new Error(`defect_items UPDATE failed (issue_no=${op.issueNo}, row=${op.rawRowNo}): ${detail}`);
           }
         }
       }
@@ -638,8 +648,17 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         const payloads = slice.map((op) => op.payload);
         const res = await (supabase as any).from('defect_items').insert(payloads).select('id');
         if (res?.error) {
-          // Surface DB errors so the import does not silently report success.
-          throw new Error(`defect_items INSERT failed: ${res.error.message ?? JSON.stringify(res.error)}`);
+          const detail = formatPgError(res.error);
+          // Log per-row failure for every row in the failed chunk.
+          try {
+            await (supabase as any).from('defect_upload_row_logs').insert(
+              slice.map((op) => ({
+                upload_id: uploadId, raw_row_no: op.rawRowNo, issue_no: op.issueNo,
+                action_taken: 'rejected', reason_code: 'db_insert_failed', reason_detail: detail,
+              }))
+            );
+          } catch { /* swallow logging error */ }
+          throw new Error(`defect_items INSERT failed (${slice.length} rows in chunk): ${detail}`);
         }
         const newIds: Array<{ id: string }> = res.data ?? [];
         // Map insert return order back to snapshot bases (Supabase preserves order).
