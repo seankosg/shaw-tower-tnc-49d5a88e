@@ -328,10 +328,12 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       await ensureSubsub(row.subsub_name, row.subcontractor_name);
       await ensureHdecPic(row.hdec_pic_name);
 
+      // Look up by natural key WITHOUT is_active filter, so previously deactivated
+      // subtests are matched and re-activated below (instead of triggering a duplicate insert).
       const { data: existing } = await supabase.from('subtests')
-        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date')
+        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date, is_active')
         .eq('project_id', projectId!).eq('system_id', systemId)
-        .eq('item_no', row.item_no).eq('mos_code', row.mos_code).eq('is_active', true)
+        .eq('item_no', row.item_no).eq('mos_code', row.mos_code)
         .maybeSingle();
 
       const dataSourceType = item.detectedImportType === 'legacy' ? 'legacy_import_inherited' : 'standard_import';
