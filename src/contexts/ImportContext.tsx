@@ -324,6 +324,27 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         continue;
       }
 
+      // Business rule: actual dates cannot be later than the file's Data Date.
+      if (item.dataDate) {
+        const dd = item.dataDate;
+        const violations: string[] = [];
+        for (const f of SUBTEST_ACTUAL_DATE_FIELDS) {
+          const v = (row as any)[f] as string | null | undefined;
+          if (v && v > dd) violations.push(`${f}=${v}`);
+        }
+        if (violations.length > 0) {
+          res.rejected++;
+          rowLogs.push({
+            upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
+            item_no: row.item_no, mos_code: row.mos_code, action_taken: 'rejected' as any,
+            reason_code: 'actual_date_after_data_date',
+            reason_detail: `Actual date(s) cannot be later than Data Date (${dd}): ${violations.join(', ')}.`,
+            mapped_system_id: systemId,
+          });
+          continue;
+        }
+      }
+
       // Auto-register masters mentioned in this row
       await ensureSubcontractor(row.subcontractor_name);
       await ensureSubsub(row.subsub_name, row.subcontractor_name);
