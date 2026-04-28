@@ -24,7 +24,7 @@ import { TEAM_LABELS, type TeamType } from '@/types/enums';
 import { formatDateTimeDdMmmYyyy, formatDdMmm, formatSignedDays } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-type Stage = 'pred' | 't1' | 't2';
+type Stage = 'pred' | 't1' | 't2' | 'r1' | 'r2s';
 type FilterKind = 'text' | 'date-range' | 'multi-select';
 
 type FilterMeta = {
@@ -57,6 +57,15 @@ interface ScheduleChangeAudit {
   t2_diff_days: number | null;
   t2_prev_gap_days: number | null;
   t2_cur_gap_days: number | null;
+  r1_old_date: string | null;
+  r1_new_date: string | null;
+  r1_diff_days: number | null;
+  r1_prev_gap_days: number | null;
+  r1_cur_gap_days: number | null;
+  r2s_old_date: string | null;
+  r2s_new_date: string | null;
+  r2s_diff_days: number | null;
+  r2s_prev_gap_days: number | null;
 }
 
 interface SubtestRevisionMeta {
@@ -75,8 +84,10 @@ type ScheduleRevisionRow = ScheduleChangeAudit & {
   subsub_name: string | null;
 };
 
-const stageGroups = ['pred', 't1', 't2'] as const;
-const stageLabels: Record<Stage, string> = { pred: 'Pred', t1: 'T1', t2: 'T2' };
+const stageGroups = ['pred', 't1', 't2', 'r1', 'r2s'] as const;
+const stageLabels: Record<Stage, string> = { pred: 'Pred', t1: 'T1', t2: 'T2', r1: 'R1 Sub', r2s: 'R2 Sub' };
+// R2 Submission is the last tracked stage and has no successor → no Cur.Gap column.
+const stageHasSuccessor: Record<Stage, boolean> = { pred: true, t1: true, t2: true, r1: true, r2s: false };
 const EMPTY_TOKEN = '__EMPTY__';
 
 const formatGap = (value: number | null | undefined) => value == null ? '—' : String(value);
@@ -121,7 +132,9 @@ function StageCells({ row, stage }: { row: ScheduleRevisionRow; stage: Stage }) 
   const newDate = row[`${stage}_new_date` as keyof ScheduleRevisionRow] as string | null;
   const diff = row[`${stage}_diff_days` as keyof ScheduleRevisionRow] as number | null;
   const prevGap = row[`${stage}_prev_gap_days` as keyof ScheduleRevisionRow] as number | null;
-  const curGap = row[`${stage}_cur_gap_days` as keyof ScheduleRevisionRow] as number | null;
+  const curGap = stageHasSuccessor[stage]
+    ? (row[`${stage}_cur_gap_days` as keyof ScheduleRevisionRow] as number | null)
+    : null;
 
   return (
     <>
@@ -129,7 +142,9 @@ function StageCells({ row, stage }: { row: ScheduleRevisionRow; stage: Stage }) 
       <TableCell className="text-xs whitespace-nowrap">{formatDdMmm(newDate)}</TableCell>
       <TableCell className={`text-xs text-right ${diffClass(diff)}`}>{formatSignedDays(diff)}</TableCell>
       <TableCell className="text-xs text-right">{formatGap(prevGap)}</TableCell>
-      <TableCell className="text-xs text-right">{formatGap(curGap)}</TableCell>
+      {stageHasSuccessor[stage] && (
+        <TableCell className="text-xs text-right">{formatGap(curGap)}</TableCell>
+      )}
     </>
   );
 }
@@ -343,13 +358,18 @@ export default function ScheduleRevisionPage() {
     { accessorKey: 'item_no', header: 'Item No', filterFn: textFilterFn },
     { accessorKey: 'mos_code', header: 'MOS Code', filterFn: textFilterFn },
     { accessorKey: 'subtest_code', header: 'Subtest ID', filterFn: textFilterFn },
-    ...stageGroups.flatMap(stage => [
-      { accessorKey: `${stage}_old_date`, header: `${stageLabels[stage]} Old date`, filterFn: dateRangeFilterFn, meta: { filterType: 'date-range' } },
-      { accessorKey: `${stage}_new_date`, header: `${stageLabels[stage]} New date`, filterFn: dateRangeFilterFn, meta: { filterType: 'date-range' } },
-      { accessorKey: `${stage}_diff_days`, header: `${stageLabels[stage]} Diff`, filterFn: textFilterFn },
-      { accessorKey: `${stage}_prev_gap_days`, header: `${stageLabels[stage]} Prev.Gap`, filterFn: textFilterFn },
-      { accessorKey: `${stage}_cur_gap_days`, header: `${stageLabels[stage]} Cur.Gap`, filterFn: textFilterFn },
-    ] as ColumnDef<ScheduleRevisionRow>[]),
+    ...stageGroups.flatMap(stage => {
+      const baseCols: ColumnDef<ScheduleRevisionRow>[] = [
+        { accessorKey: `${stage}_old_date`, header: `${stageLabels[stage]} Old date`, filterFn: dateRangeFilterFn, meta: { filterType: 'date-range' } },
+        { accessorKey: `${stage}_new_date`, header: `${stageLabels[stage]} New date`, filterFn: dateRangeFilterFn, meta: { filterType: 'date-range' } },
+        { accessorKey: `${stage}_diff_days`, header: `${stageLabels[stage]} Diff`, filterFn: textFilterFn },
+        { accessorKey: `${stage}_prev_gap_days`, header: `${stageLabels[stage]} Prev.Gap`, filterFn: textFilterFn },
+      ];
+      if (stageHasSuccessor[stage]) {
+        baseCols.push({ accessorKey: `${stage}_cur_gap_days`, header: `${stageLabels[stage]} Cur.Gap`, filterFn: textFilterFn });
+      }
+      return baseCols;
+    }),
   ], []);
 
   const table = useReactTable({
@@ -375,7 +395,7 @@ export default function ScheduleRevisionPage() {
             Schedule Revision
           </h1>
           <p className="text-xs text-muted-foreground">
-            Pred / T1 / T2 planned date revision history · Recent 500 records · {changeCountLabel}
+            Pred / T1 / T2 / R1 Sub / R2 Sub planned date revision history · Recent 500 records · {changeCountLabel}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -401,7 +421,7 @@ export default function ScheduleRevisionPage() {
             </div>
           ) : (
             <div className="max-h-[680px] overflow-auto rounded-md border-0">
-              <Table className="min-w-[2080px]">
+              <Table className="min-w-[2880px]">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <SortableHeader column={table.getColumn('created_at')} label="Changed At" rowSpan={2} />
@@ -414,18 +434,25 @@ export default function ScheduleRevisionPage() {
                     <SortableHeader column={table.getColumn('item_no')} label="Item No" rowSpan={2} />
                     <SortableHeader column={table.getColumn('mos_code')} label="MOS Code" rowSpan={2} />
                     <SortableHeader column={table.getColumn('subtest_code')} label="Subtest ID" rowSpan={2} />
-                    {stageGroups.map(stage => <TableHead key={stage} colSpan={5} className="border-l text-center text-xs">{stageLabels[stage]}</TableHead>)}
+                    {stageGroups.map(stage => (
+                      <TableHead key={stage} colSpan={stageHasSuccessor[stage] ? 5 : 4} className="border-l text-center text-xs">{stageLabels[stage]}</TableHead>
+                    ))}
                   </TableRow>
                   <TableRow>
-                    {stageGroups.flatMap(stage => ['old_date', 'new_date', 'diff_days', 'prev_gap_days', 'cur_gap_days'].map((suffix, index) => {
-                      const label = ['Old date', 'New date', 'Diff', 'Prev.Gap', 'Cur.Gap'][index];
-                      return <SortableHeader key={`${stage}-${suffix}`} column={table.getColumn(`${stage}_${suffix}`)} label={label} className="border-l first:border-l-0" />;
-                    }))}
+                    {stageGroups.flatMap(stage => {
+                      const suffixes = stageHasSuccessor[stage]
+                        ? ['old_date', 'new_date', 'diff_days', 'prev_gap_days', 'cur_gap_days']
+                        : ['old_date', 'new_date', 'diff_days', 'prev_gap_days'];
+                      const labels = ['Old date', 'New date', 'Diff', 'Prev.Gap', 'Cur.Gap'];
+                      return suffixes.map((suffix, index) => (
+                        <SortableHeader key={`${stage}-${suffix}`} column={table.getColumn(`${stage}_${suffix}`)} label={labels[index]} className="border-l first:border-l-0" />
+                      ));
+                    })}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={25} className="py-8 text-center text-muted-foreground">No schedule revisions</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={34} className="py-8 text-center text-muted-foreground">No schedule revisions</TableCell></TableRow>
                   ) : rows.map(row => {
                     const original = row.original;
                     return (

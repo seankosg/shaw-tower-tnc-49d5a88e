@@ -331,7 +331,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       // Look up by natural key WITHOUT is_active filter, so previously deactivated
       // subtests are matched and re-activated below (instead of triggering a duplicate insert).
       const { data: existing } = await supabase.from('subtests')
-        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date, is_active')
+        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date, r1_target_submission_date, r2_target_submission_date, is_active')
         .eq('project_id', projectId!).eq('system_id', systemId)
         .eq('item_no', row.item_no).eq('mos_code', row.mos_code)
         .maybeSingle();
@@ -461,6 +461,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           pred_planned_date: updates.pred_planned_date,
           t1_planned_date: updates.t1_planned_date,
           t2_planned_date: updates.t2_planned_date,
+          r1_target_submission_date: updates.r1_target_submission_date,
+          r2_target_submission_date: updates.r2_target_submission_date,
         });
 
         const { error } = await supabase.from('subtests').update(updates as any).eq('id', existing.id);
@@ -498,6 +500,15 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
               t2_diff_days: scheduleImpact.t2?.diff_days ?? null,
               t2_prev_gap_days: scheduleImpact.t2?.prev_gap_days ?? null,
               t2_cur_gap_days: scheduleImpact.t2?.cur_gap_days ?? null,
+              r1_old_date: scheduleImpact.r1?.old_date ?? null,
+              r1_new_date: scheduleImpact.r1?.new_date ?? null,
+              r1_diff_days: scheduleImpact.r1?.diff_days ?? null,
+              r1_prev_gap_days: scheduleImpact.r1?.prev_gap_days ?? null,
+              r1_cur_gap_days: scheduleImpact.r1?.cur_gap_days ?? null,
+              r2s_old_date: scheduleImpact.r2s?.old_date ?? null,
+              r2s_new_date: scheduleImpact.r2s?.new_date ?? null,
+              r2s_diff_days: scheduleImpact.r2s?.diff_days ?? null,
+              r2s_prev_gap_days: scheduleImpact.r2s?.prev_gap_days ?? null,
               created_by: user.id,
             });
             (['pred', 't1', 't2'] as const).forEach(stage => {
@@ -506,6 +517,20 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
               changeLogs.push({
                 subtest_id: existing.id,
                 changed_field: `${stage}_planned_date`,
+                old_value: change.old_date,
+                new_value: change.new_date,
+                changed_by: user.id,
+                change_source: 'excel_import' as any,
+                upload_id: uploadId,
+              });
+            });
+            (['r1', 'r2s'] as const).forEach(stage => {
+              const change = scheduleImpact[stage];
+              if (!change) return;
+              const fieldName = stage === 'r1' ? 'r1_target_submission_date' : 'r2_target_submission_date';
+              changeLogs.push({
+                subtest_id: existing.id,
+                changed_field: fieldName,
                 old_value: change.old_date,
                 new_value: change.new_date,
                 changed_by: user.id,
