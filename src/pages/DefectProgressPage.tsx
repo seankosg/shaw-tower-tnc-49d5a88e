@@ -535,7 +535,7 @@ export default function DefectProgressPage() {
               stageFilter={stageFilterArg}
               today={today}
               asOfLabel={asOfLabel}
-              groupHeader={DEFECT_GROUP_LABELS[groupBy]}
+              groupHeader={groupHeaderLabel}
               onCellClick={handleCellClick}
             />
           )}
