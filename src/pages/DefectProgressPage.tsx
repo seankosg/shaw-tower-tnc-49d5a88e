@@ -20,6 +20,7 @@ import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 import { type DefectItem, todayIso } from '@/lib/defect-utils';
 import {
   ALL_DEFECT_STAGE_KEYS,
+  ALL_DEFECT_GROUP_KEYS,
   DEFECT_GROUP_LABELS,
   DEFECT_GROUP_QUERY_PARAM,
   addDays,
