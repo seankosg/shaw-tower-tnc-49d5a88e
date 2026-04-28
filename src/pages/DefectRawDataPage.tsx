@@ -28,7 +28,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DefectStatusBadge } from '@/components/defects/DefectStatusBadge';
 import { type DefectItem, formatPct, isOverdueDefect } from '@/lib/defect-utils';
-import { isStageDelayedAsOf, isActualComplete, isClosureComplete, isAtRisk } from '@/lib/defect-dashboard-utils';
+import { isStageDelayedAsOf, isActualComplete, isClosureComplete, isAtRisk, isStageDone as isDefectStageDone } from '@/lib/defect-dashboard-utils';
+import { DefectStageProgress, DefectStageProgressLegend } from '@/components/defects/DefectStageProgress';
 import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -52,6 +53,7 @@ const DEFECT_RAW_FIELDS = [
   'issue_no',
   'subcontractor_issue_no',
   'subcontractor_issue_source',
+  'stage_progress',
   'closure_status',
   'status',
   'completion_status',
