@@ -28,7 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DefectStatusBadge } from '@/components/defects/DefectStatusBadge';
 import { type DefectItem, formatPct, isOverdueDefect } from '@/lib/defect-utils';
-import { isStageDelayedAsOf, isActualComplete, isClosureComplete } from '@/lib/defect-dashboard-utils';
+import { isStageDelayedAsOf, isActualComplete, isClosureComplete, isAtRisk } from '@/lib/defect-dashboard-utils';
 import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -660,15 +660,11 @@ export default function DefectRawDataPage() {
       });
     }
     if (searchParams.get('atRisk') === 'true') {
+      // Match dashboard's isAtRisk: checks all stages (start/completion/closure)
+      // with cascade Done logic and lenient completion/closure definitions.
       const asOf = new Date().toISOString().slice(0, 10);
       const days = Number(searchParams.get('atRiskDays') ?? 7);
-      next = next.filter((item) => {
-        if (isOverdueDefect(item, asOf)) return false;
-        const due = item.planned_completion_date ?? item.planned_start_date;
-        if (!due || Number(item.actual_progress_pct ?? 0) >= 100) return false;
-        const diff = Math.round((new Date(due).getTime() - new Date(asOf).getTime()) / 86400000);
-        return diff >= 0 && diff <= days;
-      });
+      next = next.filter((item) => isAtRisk(item as any, asOf, days));
     }
     return next;
   }, [items, searchParams, dataDate]);
