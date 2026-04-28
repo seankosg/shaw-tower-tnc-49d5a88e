@@ -28,7 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DefectStatusBadge } from '@/components/defects/DefectStatusBadge';
 import { type DefectItem, formatPct, isOverdueDefect } from '@/lib/defect-utils';
-import { isStageDelayedAsOf } from '@/lib/defect-dashboard-utils';
+import { isStageDelayedAsOf, isActualComplete, isClosureComplete } from '@/lib/defect-dashboard-utils';
 import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -611,8 +611,13 @@ export default function DefectRawDataPage() {
       const dateValue = item.planned_completion_date ?? item.planned_start_date ?? '';
       return (!dateStart || dateValue >= dateStart) && (!dateEnd || dateValue <= dateEnd);
     });
-    if (searchParams.get('actualComplete') === 'true') next = next.filter((item) => Number(item.actual_progress_pct ?? 0) >= 100);
-    if (searchParams.get('closureComplete') === 'true') next = next.filter((item) => Boolean(item.actual_closure_date));
+    // Align with Dashboard card definitions (lenient): date OR progress/status indicator.
+    const ac = searchParams.get('actualComplete');
+    if (ac === 'true') next = next.filter((item) => isActualComplete(item as any));
+    else if (ac === 'false') next = next.filter((item) => !isActualComplete(item as any));
+    const cc = searchParams.get('closureComplete');
+    if (cc === 'true') next = next.filter((item) => isClosureComplete(item as any));
+    else if (cc === 'false') next = next.filter((item) => !isClosureComplete(item as any));
     if (searchParams.get('overdue') === 'true') {
       // URL `asOf` (Dashboard drill-down) takes precedence; otherwise use the project's Data Date.
       // NEVER fall back to today — overdue is always a Data-Date judgment.
