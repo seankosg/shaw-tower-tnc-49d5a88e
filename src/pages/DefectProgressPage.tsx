@@ -253,7 +253,7 @@ export default function DefectProgressPage() {
       return;
     }
     const { rowCount, fileName } = exportDefectScheduleToExcel(visibleData, {
-      groupHeader: DEFECT_GROUP_LABELS[groupBy],
+      groupHeader: groupHeaderLabel,
       stageFilter: stageFilterArg,
       bucket,
       today,
