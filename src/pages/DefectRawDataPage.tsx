@@ -1023,7 +1023,7 @@ export default function DefectRawDataPage() {
       <div className="flex flex-wrap gap-3">
         <div className="relative min-w-[220px] max-w-sm flex-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search defects..." value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="h-9 pl-8" />
+          <Input placeholder="Search defects... (comma = AND)" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="h-9 pl-8" />
         </div>
         <span className="self-center text-sm text-muted-foreground">{table.getFilteredRowModel().rows.length} records</span>
         {activeColumnFilterCount > 0 && (
