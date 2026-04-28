@@ -1759,7 +1759,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      _actual_date_ceiling: { Args: { _data_date: string }; Returns: string }
       _canonical_level: { Args: { v: string }; Returns: string }
       _compare_key: { Args: { v: string }; Returns: string }
       _event_log_actor_role: { Args: { _user_id: string }; Returns: string }
@@ -1900,7 +1899,6 @@ export type Database = {
         Args: { _batch_id: string; _force?: boolean }
         Returns: Json
       }
-      set_allow_actual_today: { Args: { _allow: boolean }; Returns: undefined }
       suggest_owner_code: { Args: { _name: string }; Returns: string }
     }
     Enums: {
