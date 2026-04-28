@@ -10,6 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import type { TcStatus } from '@/types/enums';
 import { TC_STATUS_OPTIONS } from '@/types/enums';
+import { validateSubtestActualDatesAgainstDataDate } from '@/lib/defect-date-validation';
+import { useLatestSubtestDataDate } from '@/hooks/useLatestSubtestDataDate';
 
 interface SubtestCard {
   id: string;
