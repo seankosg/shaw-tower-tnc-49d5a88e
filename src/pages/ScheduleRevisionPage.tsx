@@ -358,13 +358,18 @@ export default function ScheduleRevisionPage() {
     { accessorKey: 'item_no', header: 'Item No', filterFn: textFilterFn },
     { accessorKey: 'mos_code', header: 'MOS Code', filterFn: textFilterFn },
     { accessorKey: 'subtest_code', header: 'Subtest ID', filterFn: textFilterFn },
-    ...stageGroups.flatMap(stage => [
-      { accessorKey: `${stage}_old_date`, header: `${stageLabels[stage]} Old date`, filterFn: dateRangeFilterFn, meta: { filterType: 'date-range' } },
-      { accessorKey: `${stage}_new_date`, header: `${stageLabels[stage]} New date`, filterFn: dateRangeFilterFn, meta: { filterType: 'date-range' } },
-      { accessorKey: `${stage}_diff_days`, header: `${stageLabels[stage]} Diff`, filterFn: textFilterFn },
-      { accessorKey: `${stage}_prev_gap_days`, header: `${stageLabels[stage]} Prev.Gap`, filterFn: textFilterFn },
-      { accessorKey: `${stage}_cur_gap_days`, header: `${stageLabels[stage]} Cur.Gap`, filterFn: textFilterFn },
-    ] as ColumnDef<ScheduleRevisionRow>[]),
+    ...stageGroups.flatMap(stage => {
+      const baseCols: ColumnDef<ScheduleRevisionRow>[] = [
+        { accessorKey: `${stage}_old_date`, header: `${stageLabels[stage]} Old date`, filterFn: dateRangeFilterFn, meta: { filterType: 'date-range' } },
+        { accessorKey: `${stage}_new_date`, header: `${stageLabels[stage]} New date`, filterFn: dateRangeFilterFn, meta: { filterType: 'date-range' } },
+        { accessorKey: `${stage}_diff_days`, header: `${stageLabels[stage]} Diff`, filterFn: textFilterFn },
+        { accessorKey: `${stage}_prev_gap_days`, header: `${stageLabels[stage]} Prev.Gap`, filterFn: textFilterFn },
+      ];
+      if (stageHasSuccessor[stage]) {
+        baseCols.push({ accessorKey: `${stage}_cur_gap_days`, header: `${stageLabels[stage]} Cur.Gap`, filterFn: textFilterFn });
+      }
+      return baseCols;
+    }),
   ], []);
 
   const table = useReactTable({
