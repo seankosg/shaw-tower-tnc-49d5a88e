@@ -114,6 +114,18 @@ export default function MobileUpdatePage() {
       updates.pred_actual_date = today;
     }
 
+    // Business rule: actual dates cannot be later than the latest Data Date.
+    const dateCheck = validateSubtestActualDatesAgainstDataDate({
+      t1_actual_date: updates.t1_actual_date !== undefined ? updates.t1_actual_date : card.t1_actual_date,
+      t2_actual_date: updates.t2_actual_date !== undefined ? updates.t2_actual_date : card.t2_actual_date,
+      pred_actual_date: updates.pred_actual_date !== undefined ? updates.pred_actual_date : card.pred_actual_date,
+    }, dataDate);
+    if (!dateCheck.ok) {
+      toast({ title: 'Save blocked', description: dateCheck.message, variant: 'destructive' });
+      setSaving(null);
+      return;
+    }
+
     const { error } = await supabase.from('subtests').update(updates as any).eq('id', card.id);
     if (error) {
       toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
