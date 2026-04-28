@@ -1,65 +1,73 @@
-# Defect Progress — Group 선택 UI를 ToggleGroup 다중선택 방식으로 변경
+## 목표
+T&C Raw Data(`SubtestList`)와 Defect Raw Data(`DefectRawDataPage`)에서 가로 스크롤바를 리스트 **하단** 대신 **헤더 바로 아래(테이블 영역 상단)** 에 항상 노출되게 하여, 화면을 아래로 스크롤하지 않아도 가로 스크롤이 가능하도록 합니다.
 
-## 목적
-현재 Defect Progress(`/tc/progress` 옆 Defect Progress 탭)의 Group 선택은 단일 선택 Select 드롭다운입니다. 이를 T&C Progress의 Stage 토글과 동일한 형태인 **ToggleGroup `type="multiple"`** 으로 변경하여, 여러 그룹 차원(예: Team + Subcon, Sub-Sub + Level 등)을 동시에 적용한 집계를 볼 수 있게 합니다.
+## 배경
+- 현재 두 페이지 모두 `<div className="... overflow-auto">` 한 곳에서 가로/세로 스크롤을 모두 처리합니다. 브라우저는 horizontal scrollbar를 그 컨테이너의 **하단**에만 그릴 수 있습니다.
+- viewport 높이가 작거나 행 수가 많으면 horizontal scrollbar가 화면 아래로 밀려, 사용자가 가로 스크롤을 인지하지 못합니다.
+- 표준 해결책: **"미러 스크롤바"** — 실제 테이블과 동일한 가로폭만 가진 더미 div를 헤더 바로 아래에 sticky로 두고, 두 컨테이너의 `scrollLeft`를 양방향 동기화합니다.
 
-## 사용자가 보게 될 변화
-- Group 영역에 9개 토글 버튼이 가로로 노출 (Team / Subcontractor / Sub-Sub / HDEC PIC / HDEC ENG / Level / Main Trade / Sub Trade / Work Type) + 좌측에 `All` 단축 버튼
-- 여러 개를 켜면 각 그룹 키가 `값1 · 값2` 형식으로 합쳐진 복합 라벨로 행이 생성됨
-- 하나도 선택하지 않으면 자동으로 기본값(`team` 단독)으로 복귀
-- URL 파라미터 `?group=` 가 `team,subcontractor_name` 처럼 콤마 구분으로 직렬화 (단일이면 기존과 동일)
-- Critical Watchlist, Excel Export, 행 클릭 시 Raw Data 필터 이동 등 다운스트림은 모두 첫 번째 선택 그룹을 "primary" 로 사용하여 호환 유지
+## 동작 변경
+- 테이블 우측 스크롤 영역 **상단(헤더 바로 아래)** 에 항상 보이는 얇은 horizontal scrollbar가 sticky로 표시됩니다.
+- 사용자가 이 상단 스크롤바를 드래그하면 실제 테이블 영역도 같이 가로 이동합니다.
+- 사용자가 아래로 스크롤해서 테이블 하단의 기본 horizontal scrollbar를 사용해도, 상단 미러 스크롤바도 동기화되어 움직입니다.
+- frozen pane(좌측 고정 컬럼)과 scroll pane(우측 가변 컬럼)의 분리 구조는 그대로 유지됩니다.
+- 세로 스크롤 동작은 변경 없음.
+
+## 기술 구현
+
+### 1) 새 공용 컴포넌트
+- `src/components/raw-data/TopHorizontalScrollbar.tsx` 신규 생성.
+  - props: `targetRef: React.RefObject<HTMLDivElement>`, `width: number`, `className?: string`.
+  - 내부:
+    - 자체 `ref`로 `<div className="overflow-x-auto overflow-y-hidden h-3 sticky top-0 z-30 bg-background border-b">` 를 렌더하고, 안에 `<div style={{ width }}>` 로 가로폭 제공.
+    - `onScroll` 핸들러로 `targetRef.current.scrollLeft` 동기화.
+    - `useEffect`에서 `targetRef`에 `scroll` 리스너를 달아 반대 방향 동기화. 무한루프 방지를 위해 `isSyncingRef` 플래그 사용.
+    - `ResizeObserver`로 `width` 변경 시 자동 반영.
+  - 시각: `h-3` (12px) 정도 얇게, `bg-muted/40` 트랙, native scrollbar 그대로 사용.
+
+### 2) `DefectRawDataPage.tsx` (`DefectRawTableView` 내부, 약 1158번 줄 근처)
+- scroll pane 컨테이너 직전 위치에 `<TopHorizontalScrollbar targetRef={tableRef} width={scrollWidth} />` 삽입.
+- scroll pane 컨테이너의 sticky header(`<TableHeader className="sticky top-0 z-20 ...">`)의 `top` 값을 미러 스크롤바 높이(12px)만큼 내리거나, 미러 스크롤바를 scroll pane **외부 상단**(즉, 테이블 외곽 컨테이너 안쪽 / scroll pane 위)에 두는 방식 중 후자를 사용 — sticky header와 z-index 충돌을 피합니다.
+- 구체적으로 외곽 컨테이너를 `flex flex-col`로 한 단 더 감싸지 않고, 기존 `flex` 가로 분할은 유지한 채 scroll pane 영역만 `flex-col` 로 감싸 `[TopScrollbar][Table]` 두 행으로 구성:
+  ```
+  <div className="flex flex-col min-w-0 flex-1">
+    <TopHorizontalScrollbar targetRef={tableRef} width={scrollWidth} />
+    <div ref={tableRef} className="min-w-0 flex-1 overflow-auto">
+      <Table .../>
+    </div>
+  </div>
+  ```
+- frozen pane은 기존대로 좌측 별도.
+
+### 3) `SubtestList.tsx` (`SubtestTableView` 내부, 약 1452/1528번 줄 근처)
+- 동일한 방식으로 scroll pane을 `flex-col`로 감싸고 위에 `<TopHorizontalScrollbar targetRef={tableRef} width={scrollWidth} />` 추가.
+
+### 4) 동기화 세부사항
+- `scrollLeft` 양방향 동기화는 다음 패턴:
+  ```ts
+  const isSyncing = useRef(false);
+  const onTopScroll = (e) => {
+    if (isSyncing.current) return;
+    isSyncing.current = true;
+    targetRef.current!.scrollLeft = e.currentTarget.scrollLeft;
+    requestAnimationFrame(() => { isSyncing.current = false; });
+  };
+  // target → top 동기화도 effect에서 동일 패턴으로.
+  ```
+- frozen pane의 세로 동기화 로직(`handleScroll`, `handleFrozenWheel`)은 변경 없음.
+
+### 5) 부수 효과 / 주의
+- 새 미러 스크롤바가 약 12px의 세로 공간을 차지하므로, 테이블 외곽 `max-h-[calc(100vh-220px)]` 안에서 그만큼 scroll pane 가용 높이가 감소. 필요 시 외곽 max-h를 `calc(100vh-232px)` 로 12px 보정.
+- 좌측 frozen pane 상단에는 미러 스크롤바가 필요 없으므로(가로 이동 없음), 동일 높이의 빈 placeholder div를 추가해 frozen header와 scroll header의 수직 정렬을 맞춥니다.
+- 모바일 환경에서도 native scrollbar가 기본 노출되도록 별도 CSS 강제는 하지 않으나, 트랙 색상으로 시각적 가시성을 확보합니다.
 
 ## 영향 범위
-- `src/pages/DefectProgressPage.tsx` — UI 교체, 상태/URL 직렬화 변경
-- `src/lib/defect-schedule-utils.ts` — `DefectAggregateOptions.groupBy` 를 `DefectScheduleGroupBy | DefectScheduleGroupBy[]` 로 확장; 그룹 키 생성/라벨 함수에서 다중 차원 합성 처리
-- 다운스트림(`findDefectCritical`, `DEFECT_GROUP_QUERY_PARAM` 사용처, Excel export 헤더, Raw Data 이동) 은 **primary group(첫 번째 선택)** 만 사용하도록 보수적으로 처리하여 폭발적 변경 회피
-
-## 기술 상세
-
-### 1. `defect-schedule-utils.ts`
-- 새 헬퍼 추가:
-  ```ts
-  export type DefectGroupBySpec = DefectScheduleGroupBy | DefectScheduleGroupBy[];
-  const SEP = ' · ';
-  export function getDefectCompositeGroupKey(item, by: DefectGroupBySpec): string;
-  export function getDefectCompositeGroupLabel(by: DefectGroupBySpec, key: string): string;
-  export function getPrimaryGroupBy(by: DefectGroupBySpec): DefectScheduleGroupBy;
-  ```
-- `aggregateDefectSchedule` 의 `opts.groupBy` 타입을 `DefectGroupBySpec` 으로 확장. 내부 `groupMap` 키 생성을 `getDefectCompositeGroupKey` 로 교체. `row.label` 은 `getDefectCompositeGroupLabel` 사용.
-- `DEFECT_GROUP_LABELS` 헤더는 다중 선택 시 `Team · Subcon` 처럼 합성 표시.
-
-### 2. `DefectProgressPage.tsx`
-- 상태 변경:
-  ```ts
-  const [groupBy, setGroupBy] = useState<DefectScheduleGroupBy[]>(() => parseGroupParam(searchParams.get('group')));
-  const groupBySpec = groupBy.length === 1 ? groupBy[0] : groupBy;
-  const primaryGroup = groupBy[0] ?? 'team';
-  ```
-- `parseGroupParam`: 콤마 split → 유효 키 필터, 없으면 `['team']`.
-- URL 직렬화: `setOrDelete('group', groupBy.join(','), 'team')`.
-- UI 교체 (Stage 토글 패턴 재사용):
-  ```tsx
-  <ToolbarGroup label="Group">
-    <Button variant={isAllGroups ? 'default' : 'outline'} onClick={() => setGroupBy([...ALL_DEFECT_GROUP_KEYS])}>All</Button>
-    <ToggleGroup type="multiple" value={isAllGroups ? [] : groupBy} onValueChange={...}>
-      <ToggleGroupItem value="team">Team</ToggleGroupItem>
-      ...9 items
-    </ToggleGroup>
-  </ToolbarGroup>
-  ```
-- `isAllGroups` = 9개 모두 선택된 상태. 빈 배열이면 `['team']` 으로 자동 복귀.
-- `findDefectCritical`, `DEFECT_GROUP_QUERY_PARAM[...]`, `exportDefectScheduleToExcel({ groupHeader })` 호출부는 모두 `primaryGroup` 으로 대체.
-- Header 부 라벨은 `groupBy.map(g => DEFECT_GROUP_LABELS[g]).join(' · ')` 로 표시.
-
-### 3. 새 export
-- `defect-schedule-utils.ts` 에 `ALL_DEFECT_GROUP_KEYS: DefectScheduleGroupBy[]` 추가.
-
-## 비포함 (Out of Scope)
-- 9개 차원 전체 동시선택 시 행 폭발 가드(서버 페이지네이션 등) — 현재 데이터 규모에서 불필요
-- Raw Data 이동 시 다중 필터 동시 적용 — primary group만 적용 (단순화)
-- Excel Export 헤더가 합성 라벨 1열만 표시되는 구조 유지 (열 분리 안 함)
+- 신규 파일 1개: `src/components/raw-data/TopHorizontalScrollbar.tsx`
+- 수정 파일 2개: `src/pages/SubtestList.tsx`, `src/pages/DefectRawDataPage.tsx`
+- 데이터/스키마/RLS 변경 없음.
 
 ## 검증
-- `bun test src/test/defect-*` 회귀 통과
-- 수동: Group=Team 단독 → 기존과 동일 결과; Team + Subcon 동시 선택 → 행 라벨 `Mech · ABC Co` 등 합성; 모두 해제 → Team 단독으로 복귀; URL 새로고침 시 선택 복원
+- `/tc/raw-data` 직접 진입 및 `/tc/dashboard`에서 카드 클릭 후 진입 시, 헤더 아래에 미러 스크롤바가 sticky로 보이고 양방향 동기화 정상.
+- `/defects/raw-data` 동일 검증.
+- 컬럼 리사이즈/필터 변경 → `scrollWidth` 변경 시 미러 트랙 폭이 즉시 반영.
+- 좌측 frozen 컬럼은 영향 없음, 세로 스크롤 동작 유지.
