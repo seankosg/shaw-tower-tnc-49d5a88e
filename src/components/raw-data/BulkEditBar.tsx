@@ -91,7 +91,7 @@ export function BulkEditBar<TRow extends { id: string }>({
       && !setBlank
       && typeof computedValue === 'string'
     ) {
-      const result = validateActualDateNotAfterDataDate(field.field as ActualDateField, computedValue, dataDate);
+      const result = validateActualDateNotAfterDataDate(field.field as ActualDateField, computedValue, dataDate, { allowToday: true });
       if (!result.ok) {
         toast({ title: 'Save blocked', description: result.message, variant: 'destructive' });
         return;

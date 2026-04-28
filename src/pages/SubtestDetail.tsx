@@ -190,7 +190,7 @@ export default function SubtestDetailPage() {
       r1_actual_submission_date: form.r1_actual_submission_date,
       r2_actual_submission_date: form.r2_actual_submission_date,
       r2_actual_approval_date: form.r2_actual_approval_date,
-    }, dataDate);
+    }, dataDate, { allowToday: true });
     if (!dateCheck.ok) {
       toast({ title: 'Save blocked', description: dateCheck.message, variant: 'destructive' });
       return;

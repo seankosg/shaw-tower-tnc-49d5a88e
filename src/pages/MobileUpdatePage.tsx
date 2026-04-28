@@ -119,7 +119,7 @@ export default function MobileUpdatePage() {
       t1_actual_date: updates.t1_actual_date !== undefined ? updates.t1_actual_date : card.t1_actual_date,
       t2_actual_date: updates.t2_actual_date !== undefined ? updates.t2_actual_date : card.t2_actual_date,
       pred_actual_date: updates.pred_actual_date !== undefined ? updates.pred_actual_date : card.pred_actual_date,
-    }, dataDate);
+    }, dataDate, { allowToday: true });
     if (!dateCheck.ok) {
       toast({ title: 'Save blocked', description: dateCheck.message, variant: 'destructive' });
       setSaving(null);

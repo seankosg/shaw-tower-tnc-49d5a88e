@@ -182,7 +182,7 @@ export default function DefectDetailPage() {
       actual_start_date: form.actual_start_date as any,
       actual_completion_date: form.actual_completion_date as any,
       actual_closure_date: form.actual_closure_date as any,
-    }, dataDate);
+    }, dataDate, { allowToday: true });
     if (!actualValidation.ok) {
       toast({ title: 'Save blocked', description: actualValidation.message, variant: 'destructive' });
       return;
