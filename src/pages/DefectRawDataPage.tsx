@@ -38,6 +38,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
+import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import type { BulkEditableField } from '@/lib/bulk-edit';
 
 const EMPTY_TOKEN = '__EMPTY__';
@@ -1155,7 +1156,9 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
         </Table>
       </div>
 
-      <div ref={tableRef} onScroll={handleScroll} className="min-w-0 flex-1 overflow-auto">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopHorizontalScrollbar targetRef={tableRef} width={scrollWidth} />
+        <div ref={tableRef} onScroll={handleScroll} className="min-w-0 flex-1 overflow-auto">
         <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
           <TableHeader className="sticky top-0 z-20 bg-background"><TableRow className="border-b bg-background">{scrollHeaders.map(renderHeader)}</TableRow></TableHeader>
           <TableBody>
@@ -1175,6 +1178,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
     </div>
   );

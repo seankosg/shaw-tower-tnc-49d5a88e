@@ -39,6 +39,7 @@ import {
   type StageKey,
 } from '@/lib/stage-metrics';
 import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
+import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import type { BulkEditableField } from '@/lib/bulk-edit';
 
 interface SubtestRow {
@@ -1522,11 +1523,13 @@ function SubtestTableView({
       </div>
 
       {/* Scroll pane */}
-      <div
-        ref={scrollPaneRef}
-        onScroll={handleScroll}
-        className="flex-1 min-w-0 overflow-auto"
-      >
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopHorizontalScrollbar targetRef={scrollPaneRef} width={scrollWidth} />
+        <div
+          ref={scrollPaneRef}
+          onScroll={handleScroll}
+          className="min-w-0 flex-1 overflow-auto"
+        >
         <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
           <TableHeader className="sticky top-0 z-20 bg-background">
             <TableRow className="border-b bg-background">
@@ -1595,6 +1598,7 @@ function SubtestTableView({
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
     </div>
   );
