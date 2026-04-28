@@ -28,7 +28,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DefectStatusBadge } from '@/components/defects/DefectStatusBadge';
 import { type DefectItem, formatPct, isOverdueDefect } from '@/lib/defect-utils';
-import { isStageDelayedAsOf, isActualComplete, isClosureComplete, isAtRisk } from '@/lib/defect-dashboard-utils';
+import { isStageDelayedAsOf, isActualComplete, isClosureComplete, isAtRisk, isStageDone as isDefectStageDone } from '@/lib/defect-dashboard-utils';
+import { DefectStageProgress, DefectStageProgressLegend } from '@/components/defects/DefectStageProgress';
 import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -52,6 +53,7 @@ const DEFECT_RAW_FIELDS = [
   'issue_no',
   'subcontractor_issue_no',
   'subcontractor_issue_source',
+  'stage_progress',
   'closure_status',
   'status',
   'completion_status',
@@ -724,6 +726,23 @@ export default function DefectRawDataPage() {
     };
 
     const dataColumns: ColumnDef<DefectRawRow>[] = DEFECT_RAW_FIELDS.map((field) => {
+      // ─── Virtual Stage Progress column (Start → Completion → Closure pip pipeline) ───
+      if (field === 'stage_progress') {
+        return {
+          id: 'stage_progress',
+          header: 'Progress',
+          size: 110,
+          enableColumnFilter: false,
+          enableSorting: true,
+          accessorFn: (r: DefectRawRow) => {
+            const startDone = isDefectStageDone(r as any, 'start');
+            const compDone = isDefectStageDone(r as any, 'completion');
+            const closureDone = isDefectStageDone(r as any, 'closure');
+            return (startDone ? 1 : 0) + (compDone ? 2 : 0) + (closureDone ? 4 : 0);
+          },
+          cell: ({ row }) => <DefectStageProgress item={row.original as any} asOfDate={dataDate} />,
+        } as ColumnDef<DefectRawRow>;
+      }
       // ─── Virtual meta columns (Instructions / Comments / Replies / Last Activity) ───
       if (isMetaField(field)) {
         return {
@@ -831,11 +850,14 @@ export default function DefectRawDataPage() {
     });
 
     return [selectColumn, ...dataColumns];
-  }, [getLabel, optionFields, commentSummary, navigate]);
+  }, [getLabel, optionFields, commentSummary, navigate, dataDate]);
 
   const columnVisibility = useMemo<VisibilityState>(() => {
     const visibility: VisibilityState = { __select: true };
-    for (const field of DEFECT_RAW_FIELDS) visibility[field] = field === 'issue_no' ? true : isFieldVisible(field);
+    for (const field of DEFECT_RAW_FIELDS) {
+      if (field === 'issue_no' || field === 'stage_progress') visibility[field] = true;
+      else visibility[field] = isFieldVisible(field);
+    }
     return visibility;
   }, [isFieldVisible]);
 
@@ -1040,6 +1062,7 @@ export default function DefectRawDataPage() {
         <span className="hidden self-center text-xs text-muted-foreground md:inline">
           Tip: Shift+Click headers for multi-sort · Click <Filter className="inline h-3 w-3" /> to filter columns
         </span>
+        <div className="ml-auto"><DefectStageProgressLegend /></div>
       </div>
 
       <BulkEditBar
