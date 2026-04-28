@@ -1177,6 +1177,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
     </div>
   );
