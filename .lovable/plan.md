@@ -1,89 +1,110 @@
-# Instruction / Comment / Reply를 Field Config로 관리되는 가상 컬럼으로 노출
+## 문제 분석
 
-## 목표
+T&C(`SubtestList.tsx`)와 Defect(`DefectRawDataPage.tsx`) Raw Data 그리드에서 발생하는 3가지 레이아웃 문제:
 
-`defect_comments` / `subtest_comments`에 쌓이는 대화 내역(Instructions / Comments / Replies)을 Raw Data 그리드(Defects + T&C Subtests)에 **가상 컬럼**으로 표시하고, 일반 필드와 동일하게 **Field Config 화면에서 표시 토글 / 이름 변경 / 순서 변경**이 가능하도록 합니다.
+### 1. 가로 스크롤바 위치
+현재 `TopHorizontalScrollbar`가 **컬럼 헤더 위**에 렌더링됩니다. 사용자는 헤더 아래에 위치하기를 원함.
 
-## 사용자 화면 변화
-
-Defect Raw Data 그리드와 Subtest List 그리드에 새 컬럼이 추가됩니다 (기본값은 켜짐 또는 꺼짐 선택 가능):
-
-- **Instructions** — `type='instruction'` 개수
-- **Comments** — `type='comment'` 개수
-- **Replies** — `type='reply'` 개수
-- **Last Activity** — 가장 최근 활동 시간 (선택, 기본 꺼짐)
-
-각 셀 표시:
 ```text
-💬 3   ● (현재 사용자가 안 읽은 항목 있으면 amber 점)
-```
-- 빈 행은 `—`
-- 호버 시 툴팁: "3 instructions · 2 unread · last 2h ago"
-- 클릭 시 해당 Defect/Subtest 상세 페이지의 Comments 섹션으로 이동
-
-**Admin → Field Config** 화면에 (Defect / T&C 탭 모두) 다음 항목이 추가됩니다:
-
-| Field name | Display name | Source | Default |
-|---|---|---|---|
-| `_meta_instruction_count` | Instructions | System | enabled |
-| `_meta_comment_count` | Comments | System | enabled |
-| `_meta_reply_count` | Replies | System | disabled |
-| `_meta_last_activity_at` | Last Activity | System | disabled |
-
-→ 관리자는 일반 필드와 동일하게 활성/비활성, 이름 수정, 순서 변경이 가능합니다. "Virtual" 배지로 일반 필드와 시각적으로 구분합니다.
-
-## 동작 방식 (기술 설명)
-
-### 1. RPC 확장 — type별 개수 분리
-
-기존 `get_defect_comment_summary`, `get_subtest_comment_summary` RPC를 type별 개수와 마지막 활동 시간을 반환하도록 변경:
-
-```sql
--- 반환 컬럼:
--- id uuid, instruction_count int, comment_count int,
--- reply_count int, has_unread bool, last_activity_at timestamptz
+[현재]                          [원하는 모습]
+┌─ Frozen ┬─ scrollbar ────┐    ┌─ Frozen ┬─ Header ───────┐
+│ Header  │ Header         │    │ Header  │ Header         │
+│         ├────────────────┤    │         ├─ scrollbar ────┤
+│ rows    │ rows           │    │ rows    │ rows           │
+└─────────┴────────────────┘    └─────────┴────────────────┘
 ```
 
-프론트엔드는 이미 이 RPC들을 호출 중(`DefectRawDataPage.tsx:400`, `SubtestList.tsx:502`)이므로 페이로드만 풍부해집니다.
+### 2. 좌측 Sticky 컬럼 헤더와 우측 헤더 높이 불일치
+스크롤바가 우측 영역 위에 12px를 추가하면서 우측 헤더가 좌측 헤더보다 12px 아래로 밀려, 두 헤더의 baseline이 어긋남.
 
-### 2. Field Config 시드 데이터
+### 3. Sticky 컬럼 행과 우측 스크롤 영역 행의 높이 불일치
+- 좌측(Frozen): `style={{ height: virtualRow.size }}` 명시 적용
+- 우측(Scroll): `ref={(el) => rowVirtualizer.measureElement(el)}` 만 적용, 명시적 height 없음
+→ 우측이 자체 콘텐츠에 따라 높이가 달라져 좌/우 행 높이가 어긋남.
 
-`defect_field_config`와 `field_config` 각각에 `_meta_` 접두사가 붙은 4개 행을 INSERT (`source_origin = 'system'`). `_meta_` 접두사는 "가상 컬럼"임을 표시 — 실제 컬럼이 아니므로 Import / Export / Bulk Edit 대상에서 제외됩니다.
+---
 
-### 3. 그리드 통합
+## 해결 방안
 
-`DefectRawDataPage.tsx` / `SubtestList.tsx`에서:
+### A. 스크롤바를 헤더 **아래**로 이동
+`TopHorizontalScrollbar`를 헤더와 분리하기 위해 우측 pane 구조를 변경:
+- 우측 pane을 **(1) Header 영역 + (2) 스크롤바 + (3) Body 영역** 3단으로 분리
+- Header는 자체 가로 스크롤되는 컨테이너에 두고, 스크롤바·body와 `scrollLeft`를 동기화
+- Body의 native 가로 스크롤바는 숨김(`scrollbar-hide`) 처리해 위쪽 mirror 스크롤바만 사용
 
-- 컬럼 ID 목록(`DEFECT_RAW_FIELDS` 등)에 4개의 `_meta_*` ID 추가
-- 각 meta 필드용 cell renderer 작성 (확장된 `commentSummary` 상태 사용)
-- 표시 여부는 기존 `isFieldVisible(field)` 경로를 그대로 통과 → 별도 분기 없음
-- 정렬 순서도 기존 `sortFieldNames` / `orderedFieldNames` 경로 그대로 사용
-- Bulk Edit, Inline Edit, Excel Export(raw payload), Import 컬럼 매핑에서는 `_meta_*` 제외 처리
+```text
+┌──────────────────────────────────┐
+│ FROZEN HEADER │ SCROLL HEADER    │  ← 같은 높이 (둘 다 단일 행)
+├───────────────┼──────────────────┤
+│               │ ▭ 가로 스크롤바  │  ← 우측에만 표시
+│ FROZEN ROWS   ├──────────────────┤
+│               │ SCROLL ROWS      │
+└───────────────┴──────────────────┘
+```
 
-### 4. Field Config UI 보호
+좌측 Frozen pane에는 스크롤바 자리만큼의 spacer(`<div style={{ height: 12 }} />`)를 헤더와 body 사이에 삽입해 행이 동일한 Y 위치에서 시작하도록 함.
 
-Field Config 관리 화면에서 `_meta_*` 행은:
-- 작은 "Virtual" 배지 표시
-- "Required" 토글 비활성화 (가상 컬럼은 import 필수 항목이 될 수 없음)
-- 그 외(Display name 수정, Enable/Disable, 순서 변경, Role 가시성)는 동일하게 작동
+### B. 좌/우 헤더 높이 동기화
+- 양쪽 `TableHead`의 padding을 동일한 클래스(`h-9` 등)로 명시
+- 우측 헤더 위에 스크롤바를 두지 않으므로 자연히 같은 높이가 됨 (A 해결로 함께 해결)
 
-### 5. 클릭 동작
+### C. 좌/우 행 높이 동기화
+TanStack Virtual의 동적 measure는 한쪽 pane만 측정하면 다른 쪽이 어긋남. 두 가지 옵션 중 **옵션 1**을 적용:
 
-- Defect 행 셀 클릭 → `/defects/${id}#comments`
-- Subtest 행 셀 클릭 → `/subtests/${id}#comments`
-- 상세 페이지에서 hash가 `#comments`이면 Comments 섹션으로 자동 스크롤
+**옵션 1 (권장)**: 우측 행에도 `style={{ height: virtualRow.size }}` 적용 + 측정은 우측에서 수행하고, 좌측은 그 측정 결과를 따라감.
+- 측정 대상 셀은 콘텐츠가 가장 큰 우측으로 통일 (`measureElement` 우측 유지)
+- 좌·우 모두 `style={{ height: virtualRow.size }}` 명시
+- 셀에 `truncate` + `overflow-hidden`을 강화해 콘텐츠가 행 높이를 더 늘리지 못하도록 함
+- `MetaCell` 등 멀티라인 콘텐츠는 `whitespace-nowrap` 적용
 
-## 수정할 파일
+---
 
-- `supabase/migrations/<new>.sql` — RPC 2개 교체 + `_meta_*` 행 8개 INSERT
-- `src/pages/DefectRawDataPage.tsx` — 가상 컬럼 4개 추가, 타입별 summary 상태, 클릭 핸들러
-- `src/pages/SubtestList.tsx` — T&C 측에 동일 처리
-- `src/pages/AdminPage.tsx` (Field Config 편집 영역) — Virtual 배지 + Required 토글 비활성화
-- `src/pages/DefectDetailPage.tsx`, `src/pages/SubtestDetail.tsx` — `#comments` hash 시 스크롤
-- `src/lib/defect-excel-export.ts`, `src/lib/excel-export.ts` — `_meta_*` 제외
+## 수정 대상 파일
 
-## 범위 외 (이번 작업에서 안 함)
+1. **`src/components/raw-data/TopHorizontalScrollbar.tsx`**
+   - `scrollbar-hide` 유틸 클래스 또는 인라인 CSS로 본 body 스크롤바를 숨길 수 있도록 보조 prop 추가 (선택)
+   - 동작은 동일, 위치만 부모에서 변경
 
-- Comment 작성/수정 로직 변경 (`DefectComments.tsx` / `SubtestComments.tsx`는 손대지 않음)
-- 그리드에 메시지 본문 표시 (개수만 노출, 본문은 상세 페이지)
-- "안 읽은 것만 보기" 같은 그리드 필터링 (필요 시 추후 추가)
+2. **`src/pages/DefectRawDataPage.tsx`** (1178-1226 라인 근처)
+   - 우측 pane 레이아웃을 `Header → Scrollbar → Body` 순으로 재배치
+   - Header를 별도 가로 스크롤 컨테이너로 감싸고 `scrollLeft` 동기화 (기존 `handleScroll` 로직에 헤더 ref 동기화 추가)
+   - Body 컨테이너에 `overflow-x-hidden overflow-y-auto`로 변경 (가로는 mirror가 담당)
+   - 좌측 Frozen pane에 12px spacer 추가
+   - 우측 `TableRow`에 `style={{ height: virtualRow.size }}` 추가
+   - 셀에 `whitespace-nowrap` 추가 보강
+
+3. **`src/pages/SubtestList.tsx`** (1495-1648 라인 근처)
+   - 위와 동일한 패턴으로 우측 pane 3단 분리
+   - 좌측에 spacer, 우측 행에 명시적 height 적용
+
+4. **`src/index.css`** (필요 시)
+   - `.scrollbar-hide { scrollbar-width: none; } .scrollbar-hide::-webkit-scrollbar { display: none; }` 유틸 추가
+
+---
+
+## 기술 세부 (개발자용)
+
+- 우측 pane 새 구조 (Defect/Subtest 동일):
+  ```tsx
+  <div className="flex min-w-0 flex-1 flex-col">
+    {/* (1) Header - 가로 스크롤되지만 사용자에겐 숨김 */}
+    <div ref={headerScrollRef} className="overflow-hidden border-b">
+      <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
+        <TableHeader>...</TableHeader>
+      </Table>
+    </div>
+    {/* (2) Mirror 스크롤바 */}
+    <TopHorizontalScrollbar targetRef={tableRef} width={scrollWidth} />
+    {/* (3) Body */}
+    <div ref={tableRef} onScroll={handleScroll}
+         className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+      <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
+        <TableBody>...</TableBody>
+      </Table>
+    </div>
+  </div>
+  ```
+- `handleScroll`에 `headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft` 추가
+- `TopHorizontalScrollbar`의 기존 양방향 sync 로직은 그대로 유지(헤더는 body 스크롤을 단방향으로 따라감)
+- 좌측 Frozen pane은 헤더 직후 `<div style={{ height: 12 }} aria-hidden />` 삽입으로 우측 mirror 스크롤바 높이를 보정
+- 가상화 행 높이 동기화: 양쪽 모두 `style={{ height: virtualRow.size }}` + 측정은 우측 한 곳에서만(`measureElement`)
