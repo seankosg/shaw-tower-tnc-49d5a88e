@@ -395,7 +395,7 @@ export default function ScheduleRevisionPage() {
             Schedule Revision
           </h1>
           <p className="text-xs text-muted-foreground">
-            Pred / T1 / T2 planned date revision history · Recent 500 records · {changeCountLabel}
+            Pred / T1 / T2 / R1 Sub / R2 Sub planned date revision history · Recent 500 records · {changeCountLabel}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
