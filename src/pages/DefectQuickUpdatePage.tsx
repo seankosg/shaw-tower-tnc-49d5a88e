@@ -8,10 +8,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { type DefectEditScope, type DefectItem, formatPct } from '@/lib/defect-utils';
 import { computeDefectStatuses } from '@/lib/defect-status';
+import { validateActualDatesAgainstDataDate } from '@/lib/defect-date-validation';
+import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 
 export default function DefectQuickUpdatePage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { dataDate } = useLatestDataDate();
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<(DefectItem & { scope: DefectEditScope })[]>([]);
   const [edits, setEdits] = useState<Record<string, Partial<DefectItem>>>({});
@@ -29,6 +32,16 @@ export default function DefectQuickUpdatePage() {
     if (!user || item.scope === 'none') return;
     const patch = edits[item.id] ?? {};
     const merged = { ...item, ...patch } as DefectItem;
+    // Business rule: actual dates cannot be later than Data Date.
+    const validation = validateActualDatesAgainstDataDate({
+      actual_start_date: merged.actual_start_date,
+      actual_completion_date: merged.actual_completion_date,
+      actual_closure_date: merged.actual_closure_date,
+    }, dataDate);
+    if (!validation.ok) {
+      toast({ title: 'Save blocked', description: validation.message, variant: 'destructive' });
+      return;
+    }
     // Recompute statuses ONLY when status-affecting inputs (dates / actual progress) were actually edited.
     // Otherwise unrelated edits (e.g. remarks, work_type) would silently flip closure_status back to "Planned".
     const userSetCompletion = 'completion_status' in patch;
