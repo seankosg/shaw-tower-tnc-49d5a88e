@@ -49,16 +49,49 @@ export interface ActualDateValidationResult {
   message?: string;
 }
 
+export interface ActualDateValidationOptions {
+  /**
+   * When true, manual UI input is allowed up to "today" (Singapore Standard Time, UTC+8)
+   * even if today is later than the project's Data Date. This relaxation applies ONLY
+   * to direct user input screens — Excel imports and DB triggers remain strict (Data Date only).
+   */
+  allowToday?: boolean;
+}
+
+/** Returns today's date in Singapore Standard Time (UTC+8) as YYYY-MM-DD. */
+export function getSingaporeToday(): string {
+  // en-CA locale yields YYYY-MM-DD formatting
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Singapore',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+}
+
+function effectiveCeiling(dataDate: string, opts?: ActualDateValidationOptions): string {
+  if (!opts?.allowToday) return dataDate;
+  const today = getSingaporeToday();
+  return today > dataDate ? today : dataDate;
+}
+
+function ceilingLabel(dataDate: string, opts?: ActualDateValidationOptions): string {
+  const ceiling = effectiveCeiling(dataDate, opts);
+  return ceiling === dataDate
+    ? `Data Date (${dataDate})`
+    : `today (${ceiling}, SGT)`;
+}
+
 export function validateActualDateNotAfterDataDate(
   field: ActualDateField,
   value: string | null | undefined,
   dataDate: string,
+  opts?: ActualDateValidationOptions,
 ): ActualDateValidationResult {
   if (!value) return { ok: true };
-  if (value > dataDate) {
+  const ceiling = effectiveCeiling(dataDate, opts);
+  if (value > ceiling) {
     return {
       ok: false,
-      message: `${DEFECT_FIELD_LABEL[field]} (${value}) cannot be later than Data Date (${dataDate}).`,
+      message: `${DEFECT_FIELD_LABEL[field]} (${value}) cannot be later than ${ceilingLabel(dataDate, opts)}.`,
     };
   }
   return { ok: true };
@@ -67,10 +100,11 @@ export function validateActualDateNotAfterDataDate(
 export function validateActualDatesAgainstDataDate(
   values: Partial<Record<ActualDateField, string | null | undefined>>,
   dataDate: string,
+  opts?: ActualDateValidationOptions,
 ): ActualDateValidationResult {
   const violations: string[] = [];
   (Object.keys(values) as ActualDateField[]).forEach((field) => {
-    const result = validateActualDateNotAfterDataDate(field, values[field], dataDate);
+    const result = validateActualDateNotAfterDataDate(field, values[field], dataDate, opts);
     if (!result.ok && result.message) violations.push(result.message);
   });
   if (violations.length === 0) return { ok: true };
@@ -82,12 +116,14 @@ export function validateSubtestActualDateNotAfterDataDate(
   field: SubtestActualDateField,
   value: string | null | undefined,
   dataDate: string,
+  opts?: ActualDateValidationOptions,
 ): ActualDateValidationResult {
   if (!value) return { ok: true };
-  if (value > dataDate) {
+  const ceiling = effectiveCeiling(dataDate, opts);
+  if (value > ceiling) {
     return {
       ok: false,
-      message: `${SUBTEST_FIELD_LABEL[field]} (${value}) cannot be later than Data Date (${dataDate}).`,
+      message: `${SUBTEST_FIELD_LABEL[field]} (${value}) cannot be later than ${ceilingLabel(dataDate, opts)}.`,
     };
   }
   return { ok: true };
@@ -97,10 +133,11 @@ export function validateSubtestActualDateNotAfterDataDate(
 export function validateSubtestActualDatesAgainstDataDate(
   values: Partial<Record<SubtestActualDateField, string | null | undefined>>,
   dataDate: string,
+  opts?: ActualDateValidationOptions,
 ): ActualDateValidationResult {
   const violations: string[] = [];
   (Object.keys(values) as SubtestActualDateField[]).forEach((field) => {
-    const result = validateSubtestActualDateNotAfterDataDate(field, values[field], dataDate);
+    const result = validateSubtestActualDateNotAfterDataDate(field, values[field], dataDate, opts);
     if (!result.ok && result.message) violations.push(result.message);
   });
   if (violations.length === 0) return { ok: true };

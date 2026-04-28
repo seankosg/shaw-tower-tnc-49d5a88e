@@ -37,7 +37,7 @@ export default function DefectQuickUpdatePage() {
       actual_start_date: merged.actual_start_date,
       actual_completion_date: merged.actual_completion_date,
       actual_closure_date: merged.actual_closure_date,
-    }, dataDate);
+    }, dataDate, { allowToday: true });
     if (!validation.ok) {
       toast({ title: 'Save blocked', description: validation.message, variant: 'destructive' });
       return;
