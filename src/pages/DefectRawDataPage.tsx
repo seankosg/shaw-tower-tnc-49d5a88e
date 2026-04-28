@@ -205,7 +205,34 @@ function MultiSelectDropdown({ column, options }: { column: any; options: { valu
     const next = selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value];
     column.setFilterValue(next.length ? next : undefined);
   };
-  const allOptions = [{ value: EMPTY_TOKEN, label: '(Empty)' }, ...options];
+
+  const labelMap = useMemo(() => new Map(options.map((o) => [o.value, o.label])), [options]);
+  const facets = column.getFacetedUniqueValues?.() as Map<any, number> | undefined;
+
+  const items = useMemo(() => {
+    const counts = new Map<string, number>();
+    let emptyCount = 0;
+    if (facets) {
+      facets.forEach((count, rawVal) => {
+        if (rawVal == null || rawVal === '') {
+          emptyCount += count;
+        } else {
+          const key = String(rawVal);
+          counts.set(key, (counts.get(key) ?? 0) + count);
+        }
+      });
+    }
+    selected.forEach((v) => { if (v !== EMPTY_TOKEN && !counts.has(v)) counts.set(v, 0); });
+    options.forEach((o) => { if (!counts.has(o.value)) counts.set(o.value, 0); });
+
+    const list = [...counts.entries()].map(([value, count]) => ({
+      value,
+      label: labelMap.get(value) ?? value,
+      count,
+    }));
+    list.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+    return [{ value: EMPTY_TOKEN, label: '(Empty)', count: emptyCount }, ...list];
+  }, [facets, options, labelMap, selected]);
 
   return (
     <Popover>
@@ -218,14 +245,21 @@ function MultiSelectDropdown({ column, options }: { column: any; options: { valu
           <Filter className="h-3 w-3" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="max-h-60 w-52 overflow-auto p-2" align="start" onClick={(event) => event.stopPropagation()}>
+      <PopoverContent className="max-h-72 w-56 overflow-auto p-2" align="start" onClick={(event) => event.stopPropagation()}>
         <button className="mb-1 px-1 text-[11px] text-muted-foreground hover:underline" onClick={() => column.setFilterValue(undefined)}>
           Clear all
         </button>
-        {allOptions.map((option) => (
-          <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50">
+        {items.map((option) => (
+          <label
+            key={option.value}
+            className={cn(
+              'flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50',
+              option.count === 0 && !selected.includes(option.value) && 'text-muted-foreground/60'
+            )}
+          >
             <Checkbox checked={selected.includes(option.value)} onCheckedChange={() => toggle(option.value)} className="h-3.5 w-3.5" />
-            <span className="truncate">{option.label}</span>
+            <span className="flex-1 truncate">{option.label}</span>
+            <span className="text-[10px] text-muted-foreground tabular-nums">{option.count}</span>
           </label>
         ))}
       </PopoverContent>
