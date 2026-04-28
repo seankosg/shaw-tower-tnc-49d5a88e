@@ -907,6 +907,10 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         data_source_type: 'defect_import',
         updated_by: user.id,
         row_version: (existing?.row_version ?? 0) + 1,
+        // Re-activate any existing rows that were previously hidden (is_active=false).
+        // If a defect appears in the import file, it is by definition a current/valid issue
+        // and must be visible on the Raw Data page (which filters by is_active=true).
+        is_active: true,
       };
       // Strip non-column keys carried over from the parser / spread.
       delete payload.rawRowNo;
