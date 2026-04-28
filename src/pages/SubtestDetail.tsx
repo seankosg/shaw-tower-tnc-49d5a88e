@@ -641,7 +641,7 @@ export default function SubtestDetailPage() {
 
       {/* Comments */}
       {record && (
-        <Card>
+        <Card id="comments">
           <CardHeader className="py-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <MessageSquare className="h-4 w-4" />
