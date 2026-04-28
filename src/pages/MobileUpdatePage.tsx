@@ -43,6 +43,7 @@ const RESPONSIBILITY_FIELDS = ['subcontractor_name', 'subsub_name', 'hdec_pic_na
 export default function MobileUpdatePage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { dataDate } = useLatestSubtestDataDate();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SubtestCard[]>([]);
   const [loading, setLoading] = useState(false);
