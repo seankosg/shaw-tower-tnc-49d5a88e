@@ -23,6 +23,8 @@ import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import { SubtestComments } from '@/components/defects/SubtestComments';
 import { Badge } from '@/components/ui/badge';
 import { MessageSquare } from 'lucide-react';
+import { validateSubtestActualDatesAgainstDataDate } from '@/lib/defect-date-validation';
+import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 
 interface SubtestDetail {
   id: string;
