@@ -799,13 +799,21 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
 
       if (isReimport && !existing) {
         rejected++;
+        let reimportDetail: string;
+        if (!row.id) {
+          reimportDetail = `Re-import row has no defect id and issue_no="${row.issue_no}" was not found in the database. New rows are not created in re-import mode.`;
+        } else if (!existingById.has(String(row.id))) {
+          reimportDetail = `Re-import row id=${row.id} does not match any existing defect (issue_no="${row.issue_no}" also not found). The defect may have been deleted or the export is stale. New rows are not created in re-import mode.`;
+        } else {
+          reimportDetail = `Re-import row could not be matched (id=${row.id}, issue_no="${row.issue_no}"). New rows are not created in re-import mode.`;
+        }
         pendingLogs.push({
           upload_id: uploadId,
           raw_row_no: row.rawRowNo,
           issue_no: row.issue_no,
           action_taken: 'rejected',
           reason_code: 'reimport_not_found',
-          reason_detail: `Re-import row could not be matched to any existing defect (id=${row.id ?? 'n/a'}, issue_no=${row.issue_no}). New rows are not created in re-import mode.`,
+          reason_detail: reimportDetail,
         });
         await maybeFlush();
         continue;
