@@ -1,55 +1,89 @@
-# Import Row Logs 표시 누락 수정
+# Instruction / Comment / Reply를 Field Config로 관리되는 가상 컬럼으로 노출
 
-## 문제 진단
+## 목표
 
-방금 import한 `Aconex Registration Defects_280426_830AM.xlsx` (batch `1dc32f31...`) 의 실제 DB 상태:
+`defect_comments` / `subtest_comments`에 쌓이는 대화 내역(Instructions / Comments / Replies)을 Raw Data 그리드(Defects + T&C Subtests)에 **가상 컬럼**으로 표시하고, 일반 필드와 동일하게 **Field Config 화면에서 표시 토글 / 이름 변경 / 순서 변경**이 가능하도록 합니다.
 
-| action_taken | reason_code | count |
-|---|---|---|
-| skipped | no_changes | **1,721** |
-| updated | planned_pct_not_started | 1,356 |
-| updated | planned_pct_not_computable | 1,328 |
-| updated | missing_planned_dates | 1,327 |
-| updated | (null) | 1,013 |
-| updated | unclassified_defect | 315 |
-| updated | discipline_fallback | 109 |
-| inserted | (null) | 207 |
-| inserted | team_unresolved | 1 |
-| **합계** | | **6,877 행** |
+## 사용자 화면 변화
 
-**즉, skipped 1,721건은 DB에 정확히 저장되어 있습니다.** Import History 카운트도 정확합니다.
+Defect Raw Data 그리드와 Subtest List 그리드에 새 컬럼이 추가됩니다 (기본값은 켜짐 또는 꺼짐 선택 가능):
 
-화면에 안 보이는 이유는 단순합니다:
-- `DefectImportLogsPage.tsx` line 185 의 쿼리가 `.limit(500)` 으로 잘려 있음
-- 정렬이 `raw_row_no` 오름차순인데, 한 raw row가 여러 reason_code 로그를 만들어내므로 앞쪽 500건은 모두 inserted/updated로 채워지고 skipped는 잘려 나감
+- **Instructions** — `type='instruction'` 개수
+- **Comments** — `type='comment'` 개수
+- **Replies** — `type='reply'` 개수
+- **Last Activity** — 가장 최근 활동 시간 (선택, 기본 꺼짐)
 
-T&C `ImportLogsPage.tsx` (line 161) 도 동일한 500 limit 문제가 있어 같이 수정합니다.
+각 셀 표시:
+```text
+💬 3   ● (현재 사용자가 안 읽은 항목 있으면 amber 점)
+```
+- 빈 행은 `—`
+- 호버 시 툴팁: "3 instructions · 2 unread · last 2h ago"
+- 클릭 시 해당 Defect/Subtest 상세 페이지의 Comments 섹션으로 이동
 
-## 수정 사항
+**Admin → Field Config** 화면에 (Defect / T&C 탭 모두) 다음 항목이 추가됩니다:
 
-### 1. Row Logs 쿼리에서 500 limit 제거 + 액션/사유 카운트 표시
-- `DefectImportLogsPage.tsx`, `ImportLogsPage.tsx` 양쪽 모두
-- limit을 제거하고, Supabase 1000 row 기본 한도를 넘는 큰 배치를 위해 1000건씩 페이징해서 모두 가져옴 (range 반복)
-- 화면 상단에 action/reason별 요약 카운트(Inserted N · Updated N · Skipped N · Rejected N) 칩을 표시해 합계가 한눈에 일치하는지 확인 가능
+| Field name | Display name | Source | Default |
+|---|---|---|---|
+| `_meta_instruction_count` | Instructions | System | enabled |
+| `_meta_comment_count` | Comments | System | enabled |
+| `_meta_reply_count` | Replies | System | disabled |
+| `_meta_last_activity_at` | Last Activity | System | disabled |
 
-### 2. Action 필터 + Reason 필터 + 행번호 검색 UI
-Row Logs 탭에 작은 툴바 추가:
-- Action 드롭다운: All / inserted / updated / skipped / rejected
-- Reason 드롭다운: All / 해당 배치에 실제 등장한 reason_code 목록 (동적)
-- Row No 검색 input (raw_row_no 일치)
-- 클라이언트 사이드 필터링 (이미 모든 로그를 fetch했으므로 빠름)
+→ 관리자는 일반 필드와 동일하게 활성/비활성, 이름 수정, 순서 변경이 가능합니다. "Virtual" 배지로 일반 필드와 시각적으로 구분합니다.
 
-### 3. 가상 스크롤 또는 청크 렌더 (성능)
-- 6,877행을 그대로 DOM에 그리면 무거우므로 단순한 "Show more (다음 500건)" 버튼 방식으로 점진 렌더 — 현재 코드 스타일과 일관되고 추가 라이브러리 불필요. 필터가 적용되면 필터된 결과 전체를 렌더.
+## 동작 방식 (기술 설명)
 
-### 4. (선택) Schedule Changes 탭도 동일하게 limit 제거
-- 같은 500 limit 문제가 있어 큰 배치에서 일부 row가 잘림. 동일한 페이징 로직 적용.
+### 1. RPC 확장 — type별 개수 분리
 
-## 수정 파일
-- `src/pages/DefectImportLogsPage.tsx`
-- `src/pages/ImportLogsPage.tsx`
+기존 `get_defect_comment_summary`, `get_subtest_comment_summary` RPC를 type별 개수와 마지막 활동 시간을 반환하도록 변경:
 
-## 영향
-- 카운트는 변동 없음 (history의 skipped 1721은 이미 정확)
-- Row Logs 탭에서 skipped 1721건이 모두 보이게 됨
-- 큰 배치도 잘리지 않고 전부 조회 가능
+```sql
+-- 반환 컬럼:
+-- id uuid, instruction_count int, comment_count int,
+-- reply_count int, has_unread bool, last_activity_at timestamptz
+```
+
+프론트엔드는 이미 이 RPC들을 호출 중(`DefectRawDataPage.tsx:400`, `SubtestList.tsx:502`)이므로 페이로드만 풍부해집니다.
+
+### 2. Field Config 시드 데이터
+
+`defect_field_config`와 `field_config` 각각에 `_meta_` 접두사가 붙은 4개 행을 INSERT (`source_origin = 'system'`). `_meta_` 접두사는 "가상 컬럼"임을 표시 — 실제 컬럼이 아니므로 Import / Export / Bulk Edit 대상에서 제외됩니다.
+
+### 3. 그리드 통합
+
+`DefectRawDataPage.tsx` / `SubtestList.tsx`에서:
+
+- 컬럼 ID 목록(`DEFECT_RAW_FIELDS` 등)에 4개의 `_meta_*` ID 추가
+- 각 meta 필드용 cell renderer 작성 (확장된 `commentSummary` 상태 사용)
+- 표시 여부는 기존 `isFieldVisible(field)` 경로를 그대로 통과 → 별도 분기 없음
+- 정렬 순서도 기존 `sortFieldNames` / `orderedFieldNames` 경로 그대로 사용
+- Bulk Edit, Inline Edit, Excel Export(raw payload), Import 컬럼 매핑에서는 `_meta_*` 제외 처리
+
+### 4. Field Config UI 보호
+
+Field Config 관리 화면에서 `_meta_*` 행은:
+- 작은 "Virtual" 배지 표시
+- "Required" 토글 비활성화 (가상 컬럼은 import 필수 항목이 될 수 없음)
+- 그 외(Display name 수정, Enable/Disable, 순서 변경, Role 가시성)는 동일하게 작동
+
+### 5. 클릭 동작
+
+- Defect 행 셀 클릭 → `/defects/${id}#comments`
+- Subtest 행 셀 클릭 → `/subtests/${id}#comments`
+- 상세 페이지에서 hash가 `#comments`이면 Comments 섹션으로 자동 스크롤
+
+## 수정할 파일
+
+- `supabase/migrations/<new>.sql` — RPC 2개 교체 + `_meta_*` 행 8개 INSERT
+- `src/pages/DefectRawDataPage.tsx` — 가상 컬럼 4개 추가, 타입별 summary 상태, 클릭 핸들러
+- `src/pages/SubtestList.tsx` — T&C 측에 동일 처리
+- `src/pages/AdminPage.tsx` (Field Config 편집 영역) — Virtual 배지 + Required 토글 비활성화
+- `src/pages/DefectDetailPage.tsx`, `src/pages/SubtestDetail.tsx` — `#comments` hash 시 스크롤
+- `src/lib/defect-excel-export.ts`, `src/lib/excel-export.ts` — `_meta_*` 제외
+
+## 범위 외 (이번 작업에서 안 함)
+
+- Comment 작성/수정 로직 변경 (`DefectComments.tsx` / `SubtestComments.tsx`는 손대지 않음)
+- 그리드에 메시지 본문 표시 (개수만 노출, 본문은 상세 페이지)
+- "안 읽은 것만 보기" 같은 그리드 필터링 (필요 시 추후 추가)
