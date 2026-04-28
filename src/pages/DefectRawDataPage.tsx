@@ -300,7 +300,8 @@ function TextFilterDropdown({ column }: { column: any }) {
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-52 space-y-2 p-3" align="start" onClick={(event) => event.stopPropagation()}>
-        <Input placeholder="Search..." value={text} onChange={(event) => update({ text: event.target.value || undefined })} className="h-7 text-xs" disabled={emptyOnly} />
+        <Input placeholder="Search... (use , for AND)" value={text} onChange={(event) => update({ text: event.target.value || undefined })} className="h-7 text-xs" disabled={emptyOnly} />
+        <p className="text-[10px] text-muted-foreground">Tip: comma separates AND terms (e.g. <code>slab, rebar</code>)</p>
         <label className="flex cursor-pointer items-center gap-2 text-xs">
           <Checkbox checked={emptyOnly} onCheckedChange={(checked) => update({ emptyOnly: !!checked, text: undefined })} className="h-3.5 w-3.5" />
           Empty only
