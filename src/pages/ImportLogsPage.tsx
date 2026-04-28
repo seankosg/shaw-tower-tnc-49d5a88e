@@ -15,6 +15,9 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { formatDateTimeDdMmmYyyy, formatDdMmm, formatSignedDays, formatDuration } from '@/lib/format';
 import { RollbackDialog } from '@/components/import/RollbackDialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { fetchAllByUploadId } from '@/lib/fetch-all-rows';
 
 interface UploadBatch {
   id: string;
