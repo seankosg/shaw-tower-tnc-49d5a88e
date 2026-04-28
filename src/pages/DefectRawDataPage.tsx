@@ -676,6 +676,31 @@ export default function DefectRawDataPage() {
     };
 
     const dataColumns: ColumnDef<DefectRawRow>[] = DEFECT_RAW_FIELDS.map((field) => {
+      // ─── Virtual meta columns (Instructions / Comments / Replies / Last Activity) ───
+      if (isMetaField(field)) {
+        return {
+          id: field,
+          header: getLabel(field),
+          size: 110,
+          enableSorting: true,
+          enableColumnFilter: false,
+          accessorFn: (row: DefectRawRow) => {
+            const s = commentSummary[row.id] ?? EMPTY_SUMMARY;
+            if (field === '_meta_instruction_count') return s.instructionCount;
+            if (field === '_meta_comment_count') return s.commentCount;
+            if (field === '_meta_reply_count') return s.replyCount;
+            return s.lastActivityAt ? new Date(s.lastActivityAt).getTime() : 0;
+          },
+          cell: ({ row }) => (
+            <MetaCell
+              field={field as any}
+              summary={commentSummary[row.original.id]}
+              onClick={() => navigate(`/defects/${row.original.id}#comments`)}
+            />
+          ),
+        } as ColumnDef<DefectRawRow>;
+      }
+
       const sizeByField: Record<string, number> = {
         issue_no: 120,
         subcontractor_issue_no: 170,
