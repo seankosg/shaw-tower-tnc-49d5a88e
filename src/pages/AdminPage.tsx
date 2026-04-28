@@ -1989,7 +1989,11 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
                     <Switch checked={f.is_enabled} onCheckedChange={() => toggle(f, 'is_enabled')} />
                   </TableCell>
                   <TableCell className="text-center">
-                    <Switch checked={f.is_required} onCheckedChange={() => toggle(f, 'is_required')} />
+                    {f.field_name.startsWith('_meta_') ? (
+                      <span className="text-[10px] text-muted-foreground italic" title="Virtual columns cannot be required">N/A</span>
+                    ) : (
+                      <Switch checked={f.is_required} onCheckedChange={() => toggle(f, 'is_required')} />
+                    )}
                   </TableCell>
                   <TableCell><RoleChecks field={f} fieldKey="visible_to_roles" onToggle={toggleRole} /></TableCell>
                   <TableCell><RoleChecks field={f} fieldKey="editable_to_roles" onToggle={toggleRole} /></TableCell>
