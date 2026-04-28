@@ -1,69 +1,166 @@
-# Defect Raw Data — 콤마 구분 AND 텍스트 필터
+# One-off Migration: Reissue Subcontractor Issue Numbers
 
-## 목표
+## Current State
 
-Defect 시스템의 Raw Data 페이지(`/defect/raw`)에서 모든 **텍스트 입력형 필터**에 사용자가 콤마(`,`)로 여러 검색어를 구분해 입력하면, 모든 토큰을 **AND 조건**(대소문자 무시, 부분일치)으로 필터링합니다.
+- `defect_items` 활성 행: **2,935건** (모두 SC No 보유)
+- 현재 SC No prefix(owner)와 실제 `subcontractor_name`/`subsub_name`에서 도출되는 owner_code가 **불일치하는 행: 849건** (29%)
+- 가장 큰 변경 패턴: `HDEC → SYS` (145건), `GRB → SYS` (55건), `GRB → FINEBUILD` (51건) 등
+- 해결 불가능한 행(UNASSIGNED 매핑) **0건** — 모든 불일치 행은 master 테이블에서 새 owner_code로 매핑 가능
 
-예: `slab, rebar` 입력 → 셀 텍스트가 `slab` **그리고** `rebar`를 모두 포함해야 매칭.
+## Goal
 
-## 적용 범위
+기존에 잘못 남아있던 SC No를 현재 `subcontractor_name`/`subsub_name`에 맞는 새 owner의 카운터에서 재발급하고, 변경 이력을 `sc_no_history`에 기록합니다. **일회성 SQL 마이그레이션**으로 처리합니다.
 
-`src/pages/DefectRawDataPage.tsx` 내 텍스트 입력 기반 필터 3종:
+## Migration Logic
 
-1. **`textFilterFn`** — 모든 일반 텍스트 컬럼 (issue_no, description, area_location, subcontractor_name 등 `TEXT_FILTER_FIELDS`)
-2. **`progressFilterFn`** — Progress(%) 컬럼 (planned/actual progress)
-3. **`globalDefectFilterFn`** — 상단 전역 검색창 (RAW_SEARCH_FIELDS 전 필드 대상)
+### 1. 새 owner_code 결정 규칙 (앱 로직과 동일)
+1. `subsub_name`이 `subcontractor_master(type='subsub')`에 매칭되면 그 owner_code
+2. 아니면 `subcontractor_name`이 `subcontractor_master(type='sub')`에 매칭되면 그 owner_code
+3. 아니면 `team` 텍스트 (UPPER)
+4. 그래도 없으면 `UNASSIGNED`
 
-`multiSelectFilterFn`(Pulldown 필터)과 `dateRangeFilterFn`(날짜 필터)는 텍스트 입력이 아니므로 **변경 없음**.
+매칭은 `lower(btrim(name))` 기준 (현재 `master-name-match.ts` 로직과 동일).
 
-T&C(`SubtestList.tsx`)는 사용자가 "Defect 시스템"만 명시했으므로 이번 범위 외.
+### 2. 재배정 대상 선정
+- 활성 행 중 `current_owner_code`(SC No prefix 파싱)와 `expected_owner_code`가 다른 행만 처리
+- Issue No 오름차순으로 정렬 후 같은 새 owner끼리 그룹화 → 일관된 순번 부여
 
-## 동작 정의
+### 3. 새 SC No 발급
+- 각 새 owner별로 `allot_subcontractor_issue_no(project_id, new_owner_code, group_size)` RPC를 호출하여 카운터에서 N개의 시퀀스를 원자적으로 받아옴 (앱 import 로직과 동일한 방식 → 카운터 정합성 유지)
+- `SC-{NEW_OWNER}-{seq:05d}` 포맷으로 새 SC No 생성
 
-- 입력 문자열을 콤마(`,`)로 split → 각 토큰 trim → 빈 토큰 제거.
-- 토큰이 0개면 필터 비활성(전체 통과).
-- 토큰이 1개면 기존과 동일(부분일치).
-- 토큰이 2개 이상이면 **모든 토큰**이 대상 텍스트에 부분일치(case-insensitive)해야 통과 (AND).
-- `emptyOnly` 체크박스는 기존 우선순위 그대로 유지.
-- 콤마 자체를 검색하고 싶은 경우는 드물고 기존에도 콤마 검색은 의미가 없었으므로 이스케이프 문법은 도입하지 않음.
+### 4. 업데이트
+각 대상 행에 대해:
+- `defect_items.subcontractor_issue_no` ← 새 SC No
+- `defect_items.subcontractor_issue_source` ← `'reissued_migration'`
+- `defect_items.updated_at` ← now()
+- `defect_items.row_version` ← +1
 
-## 기술 변경
+### 5. 이력 기록
+각 대상 행에 대해 `sc_no_history`에 한 행 INSERT:
+- `defect_id`, `issue_no`
+- `old_subcontractor_issue_no`, `new_subcontractor_issue_no`
+- `old_subcontractor_name` ← (변경 전 이름은 알 수 없으므로 NULL — 현재 `subcontractor_name`은 이미 새 값)
+- `new_subcontractor_name` ← 현재 값
+- `old_owner_code`, `new_owner_code`
+- `reason` ← `'one_off_migration_2026_04'`
+- `changed_by` ← NULL (시스템 마이그레이션)
+- `changed_at` ← now() (default)
 
-`src/pages/DefectRawDataPage.tsx`:
+> 주의: `old_subcontractor_name`은 이미 import 시 덮어써져 사라졌으므로 NULL로 둡니다. 이력에는 owner_code 변경(SC prefix)이 명확히 남으므로 추적 가능합니다.
 
-```ts
-// 공용 헬퍼 추가 (파일 상단 utils 영역)
-const tokenizeAnd = (text: string): string[] =>
-  text.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+### 6. 안전 장치
+- `DO $$ ... $$` 블록 안에서 모두 단일 트랜잭션으로 실행 → 중간 실패 시 전체 롤백
+- 처리 전후 카운트를 RAISE NOTICE로 출력
+- `subcontractor_issue_counters`는 `allot_subcontractor_issue_no` RPC가 직접 갱신하므로 별도 처리 불필요
+- 비활성 행(`is_active = false`)은 처리하지 않음
 
-const matchesAllTokens = (haystack: string, query: string): boolean => {
-  const tokens = tokenizeAnd(query);
-  if (tokens.length === 0) return true;
-  const lower = haystack.toLowerCase();
-  return tokens.every((tok) => lower.includes(tok));
-};
+## Implementation
+
+단일 SQL 마이그레이션 파일로 작성. 핵심 구조:
+
+```sql
+DO $$
+DECLARE
+  rec RECORD;
+  new_owner TEXT;
+  new_seq INT;
+  new_sc_no TEXT;
+  total_done INT := 0;
+BEGIN
+  -- 새 owner별로 그룹핑하여 RPC 한 번에 N개 할당
+  FOR rec IN
+    WITH targets AS (
+      SELECT d.id, d.project_id, d.issue_no, d.subcontractor_issue_no AS old_sc,
+             d.subcontractor_name, d.subsub_name,
+             upper((regexp_match(d.subcontractor_issue_no, '^SC-([A-Z0-9]+)-'))[1]) AS old_owner,
+             upper(COALESCE(
+               (SELECT owner_code FROM subcontractor_master m WHERE m.is_active AND m.type='subsub'
+                 AND lower(btrim(m.name))=lower(btrim(d.subsub_name)) LIMIT 1),
+               (SELECT owner_code FROM subcontractor_master m WHERE m.is_active AND (m.type='sub' OR m.type IS NULL)
+                 AND lower(btrim(m.name))=lower(btrim(d.subcontractor_name)) LIMIT 1),
+               'UNASSIGNED'
+             )) AS new_owner
+      FROM defect_items d WHERE d.is_active = true
+    )
+    SELECT * FROM targets
+    WHERE old_owner IS DISTINCT FROM new_owner
+    ORDER BY project_id, new_owner, issue_no
+  LOOP
+    -- per-row allocation (loop) — keeps logic simple and ordered
+    SELECT (allot_subcontractor_issue_no(rec.project_id, rec.new_owner, 1))[1] INTO new_seq;
+    new_sc_no := 'SC-' || rec.new_owner || '-' || lpad(new_seq::text, 5, '0');
+
+    UPDATE defect_items
+       SET subcontractor_issue_no = new_sc_no,
+           subcontractor_issue_source = 'reissued_migration',
+           updated_at = now(),
+           row_version = row_version + 1
+     WHERE id = rec.id;
+
+    INSERT INTO sc_no_history (
+      defect_id, issue_no,
+      old_subcontractor_issue_no, new_subcontractor_issue_no,
+      old_subcontractor_name, new_subcontractor_name,
+      old_owner_code, new_owner_code,
+      reason, changed_by
+    ) VALUES (
+      rec.id, rec.issue_no,
+      rec.old_sc, new_sc_no,
+      NULL, rec.subcontractor_name,
+      rec.old_owner, rec.new_owner,
+      'one_off_migration_2026_04', NULL
+    );
+
+    total_done := total_done + 1;
+  END LOOP;
+
+  RAISE NOTICE 'Reissued % rows', total_done;
+END $$;
 ```
 
-세 함수를 헬퍼 사용으로 교체:
+> 단순성을 위해 루프 1행씩 RPC 호출. 2,935행 중 849건 처리이므로 충분히 빠릅니다(수 초 이내).
 
-- `textFilterFn`: `String(val).toLowerCase().includes(text.toLowerCase())` → `matchesAllTokens(String(val), text)`
-- `progressFilterFn`: `formatPct(val).toLowerCase().includes(text.toLowerCase())` → `matchesAllTokens(formatPct(val), text)`
-- `globalDefectFilterFn`: `RAW_SEARCH_FIELDS.some((f) => str.includes(text))` → `RAW_SEARCH_FIELDS.some((f) => matchesAllTokens(String(original[f] ?? ''), filterValue))`
-  - 단, 전역 검색은 "어느 한 필드라도 모든 토큰을 포함" 의미 (필드 across OR, 토큰 within AND).
+## Verification (마이그레이션 후 자동 확인 쿼리)
 
-## UI 힌트 (작은 개선)
+```sql
+-- 1. 더 이상 불일치 없는지
+SELECT count(*) AS remaining_mismatches FROM defect_items d
+ WHERE is_active=true
+   AND upper((regexp_match(subcontractor_issue_no,'^SC-([A-Z0-9]+)-'))[1])
+       IS DISTINCT FROM upper(COALESCE(
+         (SELECT owner_code FROM subcontractor_master m WHERE m.type='subsub' AND m.is_active
+           AND lower(btrim(m.name))=lower(btrim(d.subsub_name)) LIMIT 1),
+         (SELECT owner_code FROM subcontractor_master m WHERE (m.type='sub' OR m.type IS NULL) AND m.is_active
+           AND lower(btrim(m.name))=lower(btrim(d.subcontractor_name)) LIMIT 1),
+         'UNASSIGNED'));
+-- 기대: 0
 
-텍스트 필터 Popover와 전역 검색창의 placeholder/툴팁에 콤마 사용 안내를 추가:
+-- 2. 새 SC No 중복 없는지
+SELECT subcontractor_issue_no, count(*) FROM defect_items
+ WHERE is_active=true GROUP BY 1 HAVING count(*)>1;
+-- 기대: 0 rows
 
-- 컬럼 텍스트 필터 입력 placeholder: `"Contains... (use , for AND)"`
-- 전역 검색창 placeholder에 `"(comma = AND)"` 한 줄 추가 또는 옆에 작은 hint 텍스트.
+-- 3. 이력 기록 확인
+SELECT count(*) FROM sc_no_history WHERE reason='one_off_migration_2026_04';
+-- 기대: 849
+```
 
-## 비영향
+## What Will NOT Be Done
 
-- Pulldown(multi-select) 필터, 날짜 범위 필터, BulkEdit, Export, URL 필터 파라미터, faceted 옵션 카운트 — 모두 그대로.
-- T&C(Subtest) Raw Data — 이번 범위 외.
-- localStorage 저장 포맷 — 변경 없음(필터 값은 여전히 문자열).
+- 비활성(`is_active=false`) 행은 건드리지 않음
+- 이미 owner가 일치하는 2,086건은 그대로 (시퀀스 번호도 보존)
+- `subcontractor_name` 자체는 변경 없음 (이미 올바른 값으로 가정)
+- 이전 `subcontractor_name` 복원은 불가 (덮어써졌음 → `old_subcontractor_name`은 NULL로 기록)
+- `defect_change_log`에는 별도 기록 안 함 (SC No 변경은 `sc_no_history`가 전담)
 
-## 결과
+## Risk & Rollback
 
-Defect Raw Data의 모든 텍스트 필터에서 `slab, rebar, B1` 같은 다중 키워드 검색이 가능해지며, 각 토큰이 모두 포함된 행만 표시됩니다.
+- 단일 트랜잭션이므로 실패 시 자동 전체 롤백
+- 마이그레이션 후 문제가 발견되면 `sc_no_history` 테이블에 old↔new 매핑이 모두 남아있으므로 역마이그레이션 가능 (필요 시 별도 요청)
+- 카운터(`subcontractor_issue_counters`)는 새 시퀀스만큼 정상적으로 증가 → 향후 import에 영향 없음
+
+## Files Touched
+
+- 새 마이그레이션 파일 1개 (`supabase/migrations/<timestamp>_reissue_sc_numbers.sql`) — 마이그레이션 도구를 통해 적용
+- 코드 변경 없음
