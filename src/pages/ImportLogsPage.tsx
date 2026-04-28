@@ -347,41 +347,105 @@ export default function ImportLogsPage() {
                 <TabsTrigger value="schedule">Schedule Changes</TabsTrigger>
               </TabsList>
               <TabsContent value="rows">
-                <div className="rounded-md border max-h-[500px] overflow-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Row</TableHead>
-                        <TableHead className="text-xs">System</TableHead>
-                        <TableHead className="text-xs">Item No</TableHead>
-                        <TableHead className="text-xs">MOS Code</TableHead>
-                        <TableHead className="text-xs">Action</TableHead>
-                        <TableHead className="text-xs">Reason</TableHead>
-                        <TableHead className="text-xs">Detail</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {rowLogs.length === 0 ? (
-                        <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No row logs</TableCell></TableRow>
-                      ) : rowLogs.map(r => (
-                        <TableRow key={r.id}>
-                          <TableCell className="text-xs">{r.raw_row_no}</TableCell>
-                          <TableCell className="text-xs">{r.raw_system_name || '—'}</TableCell>
-                          <TableCell className="text-xs">{r.item_no || '—'}</TableCell>
-                          <TableCell className="text-xs">{r.mos_code || '—'}</TableCell>
-                          <TableCell>
-                            {r.action_taken ? (
-                              <Badge variant="outline" className={`text-xs ${actionColor[r.action_taken] || ''}`}>{r.action_taken}</Badge>
-                            ) : '—'}
-                          </TableCell>
-                          <TableCell className="text-xs">{r.reason_code || '—'}</TableCell>
-                          <TableCell className="text-xs truncate max-w-[200px]">{r.reason_detail || '—'}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                {(() => {
+                  const actionCounts = rowLogs.reduce<Record<string, number>>((acc, r) => {
+                    const k = r.action_taken || 'unknown';
+                    acc[k] = (acc[k] || 0) + 1;
+                    return acc;
+                  }, {});
+                  const reasonOptions = Array.from(new Set(rowLogs.map(r => r.reason_code).filter(Boolean) as string[])).sort();
+                  const filtered = rowLogs.filter(r => {
+                    if (actionFilter !== 'all' && (r.action_taken || '') !== actionFilter) return false;
+                    if (reasonFilter !== 'all') {
+                      if (reasonFilter === '__none__') { if (r.reason_code) return false; }
+                      else if (r.reason_code !== reasonFilter) return false;
+                    }
+                    if (rowSearch.trim() && String(r.raw_row_no ?? '') !== rowSearch.trim()) return false;
+                    return true;
+                  });
+                  const visible = filtered.slice(0, renderLimit);
+                  return (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <div className="flex flex-wrap gap-1.5 text-xs">
+                          <Badge variant="outline">Total {rowLogs.length}</Badge>
+                          {['inserted', 'updated', 'skipped', 'rejected'].map(a => (
+                            <Badge key={a} variant="outline" className={actionColor[a]}>
+                              {a} {actionCounts[a] || 0}
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="flex-1" />
+                        <Select value={actionFilter} onValueChange={(v) => { setActionFilter(v); setRenderLimit(500); }}>
+                          <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue placeholder="Action" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All actions</SelectItem>
+                            <SelectItem value="inserted">inserted</SelectItem>
+                            <SelectItem value="updated">updated</SelectItem>
+                            <SelectItem value="skipped">skipped</SelectItem>
+                            <SelectItem value="rejected">rejected</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={reasonFilter} onValueChange={(v) => { setReasonFilter(v); setRenderLimit(500); }}>
+                          <SelectTrigger className="h-8 w-[220px] text-xs"><SelectValue placeholder="Reason" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All reasons</SelectItem>
+                            <SelectItem value="__none__">(no reason)</SelectItem>
+                            {reasonOptions.map(rc => (<SelectItem key={rc} value={rc}>{rc}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          value={rowSearch}
+                          onChange={(e) => { setRowSearch(e.target.value); setRenderLimit(500); }}
+                          placeholder="Row #"
+                          className="h-8 w-[100px] text-xs"
+                        />
+                      </div>
+                      <div className="rounded-md border max-h-[500px] overflow-auto">
+                        <Table>
+                          <TableHeader className="sticky top-0 z-10 bg-background">
+                            <TableRow>
+                              <TableHead className="text-xs">Row</TableHead>
+                              <TableHead className="text-xs">System</TableHead>
+                              <TableHead className="text-xs">Item No</TableHead>
+                              <TableHead className="text-xs">MOS Code</TableHead>
+                              <TableHead className="text-xs">Action</TableHead>
+                              <TableHead className="text-xs">Reason</TableHead>
+                              <TableHead className="text-xs">Detail</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filtered.length === 0 ? (
+                              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No row logs</TableCell></TableRow>
+                            ) : visible.map(r => (
+                              <TableRow key={r.id}>
+                                <TableCell className="text-xs">{r.raw_row_no}</TableCell>
+                                <TableCell className="text-xs">{r.raw_system_name || '—'}</TableCell>
+                                <TableCell className="text-xs">{r.item_no || '—'}</TableCell>
+                                <TableCell className="text-xs">{r.mos_code || '—'}</TableCell>
+                                <TableCell>
+                                  {r.action_taken ? (
+                                    <Badge variant="outline" className={`text-xs ${actionColor[r.action_taken] || ''}`}>{r.action_taken}</Badge>
+                                  ) : '—'}
+                                </TableCell>
+                                <TableCell className="text-xs">{r.reason_code || '—'}</TableCell>
+                                <TableCell className="text-xs max-w-[420px] whitespace-normal break-words">{r.reason_detail || '—'}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                        <span>Showing {visible.length} of {filtered.length} {filtered.length !== rowLogs.length ? `(filtered from ${rowLogs.length})` : ''}</span>
+                        {visible.length < filtered.length && (
+                          <Button variant="outline" size="sm" onClick={() => setRenderLimit(l => l + 500)}>Show 500 more</Button>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </TabsContent>
+
               <TabsContent value="schedule">
                 <div className="rounded-md border max-h-[560px] overflow-auto">
                   <Table className="min-w-[1500px]">
