@@ -1250,28 +1250,22 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
   const scrollWidth = useMemo(() => scrollColumns.reduce((sum, column) => sum + column.getSize(), 0), [scrollColumns, table.getState().columnSizing]);
   const frozenPaneRef = useRef<HTMLDivElement>(null);
   const headerScrollRef = useRef<HTMLDivElement>(null);
-  const isSyncingScrollRef = useRef(false);
   const rows = table.getRowModel().rows;
-  const rowVirtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => tableRef.current, estimateSize: () => 36, overscan: 12 });
+  const ROW_HEIGHT = 36;
+  const rowVirtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => tableRef.current, estimateSize: () => ROW_HEIGHT, overscan: 12 });
   const virtualRows = rowVirtualizer.getVirtualItems();
   const totalSize = rowVirtualizer.getTotalSize();
   const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
   const paddingBottom = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
+  // The scroll-pane (right side) is the single source of truth for both vertical
+  // and horizontal scroll. The frozen pane has overflow:hidden — we manually push
+  // its scrollTop to match the body. This is the SubtestList pattern and prevents
+  // the frozen/scroll panes from drifting out of vertical alignment.
   const handleScroll = useCallback(() => {
-    if (isSyncingScrollRef.current) return;
-    isSyncingScrollRef.current = true;
     if (frozenPaneRef.current && tableRef.current) frozenPaneRef.current.scrollTop = tableRef.current.scrollTop;
     if (headerScrollRef.current && tableRef.current) headerScrollRef.current.scrollLeft = tableRef.current.scrollLeft;
-    requestAnimationFrame(() => { isSyncingScrollRef.current = false; });
-  }, [tableRef]);
-
-  const handleFrozenScroll = useCallback(() => {
-    if (isSyncingScrollRef.current) return;
-    isSyncingScrollRef.current = true;
-    if (tableRef.current && frozenPaneRef.current) tableRef.current.scrollTop = frozenPaneRef.current.scrollTop;
-    requestAnimationFrame(() => { isSyncingScrollRef.current = false; });
   }, [tableRef]);
 
   const handleFrozenWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
