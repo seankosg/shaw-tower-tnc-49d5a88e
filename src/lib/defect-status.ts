@@ -44,7 +44,13 @@ export function isValidDefectStatus(value: unknown): value is DefectStatusValue 
  */
 export function computeCompletionStatus(input: DefectStatusInputs, asOf: string): DefectStatusValue {
   const actualPct = Number(input.actual_progress_pct ?? 0);
-  if (input.actual_completion_date || actualPct >= 100) return 'Done';
+  // Aconex Status auto-mapping: "Work Done" or "Closed" → completion is Done.
+  if (
+    input.actual_completion_date
+    || actualPct >= 100
+    || isStatusWorkDone(input.status)
+    || isStatusClosed(input.status)
+  ) return 'Done';
   if (input.planned_start_date && asOf < input.planned_start_date) return 'Planned';
   const plannedPct = Number(input.planned_progress_pct ?? 0);
   if (actualPct < plannedPct) return 'Delay';
