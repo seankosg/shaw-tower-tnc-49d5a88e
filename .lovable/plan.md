@@ -1,60 +1,56 @@
-## 목표
+## 진단
 
-Defect Raw Data와 T&C Raw Data(SubtestList) 두 페이지에서, **컬럼 헤더에서 건 필터**를 URL 필터 칩과 동일한 스타일로 표시하고, 칩 클릭 시 해당 필터만 개별 해제할 수 있도록 한다.
+Defect Dashboard에서 **Tier 1 "Completion Done"** 카드를 클릭하면 `/defects/raw-data?source=dashboard&actualComplete=true`로 이동합니다. 데이터 자체는 필터링되어 32 records로 정상 표시되지만, 화면 상단의 **"Active URL filters" 파란 칩 배너가 보이지 않습니다.**
 
-## 현재 동작 vs 목표
+원인: `DefectRawDataPage.tsx`의 `activeUrlFilters` 헬퍼(라인 949–993)가 칩으로 변환하는 파라미터 라벨 맵에 **대시보드가 실제로 보내는 핵심 파라미터들이 누락**되어 있습니다.
 
-| | 현재 | 변경 후 |
+| 대시보드가 보내는 param | 데이터 필터링에 사용? | 칩으로 표시? |
 |---|---|---|
-| URL 필터 | 파란 배너 + 칩, 개별 해제 ✓ | 동일 유지 |
-| 컬럼 필터 | `Clear filters (3)` 버튼 — 무엇이 걸렸는지 안 보임 | 컬럼별 칩 (예: `Status: WIP, Done ✕`, `Planned Start: 2026-01-01 ~ 2026-03-31 ✕`, `Description contains "leak" ✕`), 칩 클릭 → 해당 컬럼만 해제 |
+| `actualComplete=true/false` | ✅ (라인 618) | ❌ 누락 |
+| `closureComplete=true/false` | ✅ (라인 621) | ❌ 누락 |
+| `overdue=true` + `stage` + `asOf` | ✅ (라인 624) | ❌ 누락 |
+| `atRisk=true` + `atRiskDays` | ✅ (라인 665) | ❌ 누락 |
+| `source=dashboard` | (마커) | ❌ 누락 (의도된 것) |
 
-## 구현 계획
+T&C(SubtestList) 쪽은 자체 매핑이 따로 있어 영향 없음. 본 수정은 Defect 페이지에만 한정.
 
-### 1. 공통 헬퍼: `formatColumnFilterChip(columnId, value, columnDef)`
-파일: 신규 `src/lib/filter-chip-utils.ts`
+## 변경
 
-`columnFilters` 배열의 각 항목을 사람이 읽을 수 있는 라벨로 변환:
-- **multi-select** (배열): `{label}: {값1, 값2}` (3개 초과 시 `값1, 값2 +N more`)
-- **text** (문자열 또는 `{text, emptyOnly}`): `{label} contains "{text}"` 또는 `{label}: (empty only)`
-- **date-range** (`{from, to, emptyOnly}`): `{label}: {from} ~ {to}` / `≥ {from}` / `≤ {to}` / `(empty only)`
-- **progress** (`{text, emptyOnly}`): `{label}: {text}` 또는 `(empty only)`
-- `EMPTY_TOKEN` 값은 `(empty)`로 치환
+### `src/pages/DefectRawDataPage.tsx` — `activeUrlFilters` 보강 (라인 949–993)
 
-컬럼 라벨은 `column.columnDef.header`(문자열) 또는 `meta.label` fallback 사용.
+기존 단순 라벨 맵 루프 다음에 다음 분기들을 추가:
 
-### 2. Defect Raw Data — `src/pages/DefectRawDataPage.tsx`
+1. **Completion 상태 (`actualComplete`)**
+   - `true` → 칩: `Completion: Done ✕`
+   - `false` → 칩: `Completion: Open ✕`
+   - clears: `['actualComplete']`
+   - 단, `closureComplete`도 함께 있으면 "Remain Inspection" 케이스이므로 별도 단일 칩 `Remain Inspection ✕`로 합쳐 표시 (clears: `['actualComplete', 'closureComplete']`)
 
-라인 1036-1058 영역 수정:
-- URL 필터 배너는 그대로 유지
-- 그 아래 (또는 같은 영역)에 **컬럼 필터 칩 줄** 추가:
-  ```
-  Active column filters: [Status: WIP ✕] [Team: A, B ✕] [Planned Start: ≥ 2026-01-01 ✕]   Clear all
-  ```
-- 칩 클릭 핸들러: `setColumnFilters(prev => prev.filter(f => f.id !== chipId))`
-- "Clear all" 버튼은 기존 `Clear filters (N)` 버튼을 대체 (또는 칩 줄 우측 끝으로 이동)
-- 검색창 옆 `Clear filters (N)` 버튼은 제거 (칩 줄로 통합)
+2. **Closure 상태 (`closureComplete`)** (위 합쳐진 케이스가 아닐 때만)
+   - `true` → 칩: `Closure: Done ✕`
+   - `false` → 칩: `Closure: Open ✕`
 
-### 3. T&C Raw Data — `src/pages/SubtestList.tsx`
+3. **Overdue (`overdue=true`)**
+   - `stage` 값에 따라 라벨: `Overdue — Start/Completion/Closure ✕` (stage 없으면 `Overdue ✕`)
+   - clears: `['overdue', 'stage', 'asOf']`
 
-라인 1336-1353 (URL 필터 배너) 다음에 동일한 컬럼 필터 칩 줄 추가. 동일한 헬퍼 사용.
+4. **At Risk (`atRisk=true`)**
+   - `atRiskDays`가 있으면 `At Risk (≤ Nd) ✕`, 없으면 `At Risk ✕`
+   - clears: `['atRisk', 'atRiskDays']`
 
-### 4. 스타일
+5. **`source` 파라미터**는 칩으로 표시하지 않음 (대시보드 진입 마커 용도). 다만 "Clear all" 동작 시에도 그대로 유지하거나 제거 — 기존 `clearAllUrlFilters` 동작을 따른다.
 
-기존 URL 필터 배너와 시각적으로 구분되도록:
-- URL 필터 배너: `border-primary/30 bg-primary/5` (현재)
-- 컬럼 필터 칩 줄: `border-muted bg-muted/30` + 칩은 `bg-secondary text-secondary-foreground`
+### 검증 포인트
 
-너무 많을 때 (5개 이상) 줄바꿈은 `flex-wrap`으로 자연스럽게 처리.
+- Completion Done 카드 진입 시 → `Active URL filters: Completion: Done ✕   Clear all` 배너 표시
+- Open Defect → `Completion: Open ✕`
+- Remain Inspection → `Remain Inspection ✕` (단일 칩, 두 param 동시 해제)
+- Overdue - Completion → `Overdue — Completion ✕`
+- At-Risk 배너 → `At Risk (≤ 7d) ✕`
+- 칩의 ✕ 클릭 시 해당 param들이 URL에서 제거되고 데이터 카운트가 다시 변경되는지 확인
 
-## 변경 파일 요약
+### 영향 범위
 
-1. `src/lib/filter-chip-utils.ts` — 신규: 컬럼 필터 → 칩 라벨 변환 헬퍼
-2. `src/pages/DefectRawDataPage.tsx` — 컬럼 필터 칩 영역 추가, 기존 `Clear filters (N)` 버튼 제거
-3. `src/pages/SubtestList.tsx` — 동일 패턴 적용
-
-## 영향 범위
-
-- 두 Raw Data 페이지에서 어떤 컬럼에 어떤 필터가 걸려 있는지 한눈에 보이고, 칩 단위로 해제 가능
-- 기존 URL 필터(대시보드 진입) 칩 동작은 변경 없음
-- 테이블 데이터/필터 로직 자체는 변경 없음 (UI 표시 레이어만 추가)
+- 표시 레이어만 변경. 기존 데이터 필터링 로직(라인 609 이후)은 그대로 동작.
+- T&C(SubtestList) 페이지는 변경 없음.
+- 기존에 라벨 맵에 있는 `team`, `subcontractor` 등 단순 칩들도 그대로 동작.
