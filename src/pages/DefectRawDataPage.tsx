@@ -45,6 +45,7 @@ import { Label } from '@/components/ui/label';
 import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import type { BulkEditableField } from '@/lib/bulk-edit';
+import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
 
 const EMPTY_TOKEN = '__EMPTY__';
 const DEFAULT_SORTING: SortingState = [{ id: 'issue_no', desc: false }];
