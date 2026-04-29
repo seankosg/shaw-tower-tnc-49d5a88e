@@ -1288,10 +1288,13 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
   const renderHeader = (header: any, index: number) => {
     const isSticky = index < frozenCount;
     const isLastSticky = index === frozenCount - 1;
+    const headerDef = header.column.columnDef.header;
+    const headerText = typeof headerDef === 'string' ? headerDef : header.column.id;
     return (
       <TableHead
         key={header.id}
         data-column-id={header.column.id}
+        title={headerText}
         style={{
           width: header.getSize(),
           minWidth: header.getSize(),

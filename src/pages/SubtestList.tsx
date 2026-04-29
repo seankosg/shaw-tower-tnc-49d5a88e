@@ -1498,10 +1498,13 @@ function SubtestTableView({
     const isSticky = index < frozenCount;
     const isLastSticky = index === frozenCount - 1;
     const canFilter = header.column.getCanFilter();
+    const headerDef = header.column.columnDef.header;
+    const headerText = typeof headerDef === 'string' ? headerDef : header.column.id;
     return (
       <TableHead
         key={header.id}
         data-column-id={header.column.id}
+        title={headerText}
         style={{
           width: header.getSize(),
           minWidth: header.getSize(),
