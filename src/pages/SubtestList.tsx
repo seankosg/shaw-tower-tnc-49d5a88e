@@ -1439,34 +1439,40 @@ function SubtestTableView({
   table, loading, columns, sorting, autoSizeColumn, navigate, tableRef, delayAsOfDate, overdueScope,
 }: SubtestTableViewProps) {
   const isMobile = useIsMobile();
-  const FROZEN_COUNT = (isMobile ? 1 : 4) + 1; // +1 for the always-on selection column
+  // +1 for the always-on selection column at the start
+  const frozenCount = (isMobile ? 1 : 4) + 1;
+
   const leafCols = table.getVisibleLeafColumns();
-  const frozenCols = useMemo(() => leafCols.slice(0, FROZEN_COUNT), [leafCols]);
-  const scrollCols = useMemo(() => leafCols.slice(FROZEN_COUNT), [leafCols]);
+
+  // Cumulative left offset for each frozen column (used by `position: sticky`).
+  const stickyLefts = useMemo(() => {
+    const lefts: number[] = [];
+    let acc = 0;
+    for (let i = 0; i < frozenCount && i < leafCols.length; i++) {
+      lefts.push(acc);
+      acc += leafCols[i].getSize();
+    }
+    return lefts;
+  }, [leafCols, frozenCount, table.getState().columnSizing]);
 
   const frozenWidth = useMemo(
-    () => frozenCols.reduce((s, c) => s + c.getSize(), 0),
-    [frozenCols, table.getState().columnSizing]
+    () => leafCols.slice(0, frozenCount).reduce((s, c) => s + c.getSize(), 0),
+    [leafCols, frozenCount, table.getState().columnSizing],
   );
-  const scrollWidth = useMemo(
-    () => scrollCols.reduce((s, c) => s + c.getSize(), 0),
-    [scrollCols, table.getState().columnSizing]
+  const totalWidth = useMemo(
+    () => leafCols.reduce((s, c) => s + c.getSize(), 0),
+    [leafCols, table.getState().columnSizing],
   );
-
-  const frozenPaneRef = useRef<HTMLDivElement>(null);
-  const scrollPaneRef = tableRef;
-  const headerScrollRef = useRef<HTMLDivElement>(null);
 
   const rows = table.getRowModel().rows;
   const ROW_HEIGHT = 36;
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
-    getScrollElement: () => scrollPaneRef.current,
+    getScrollElement: () => tableRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 12,
   });
-
   const virtualRows = rowVirtualizer.getVirtualItems();
   const totalSize = rowVirtualizer.getTotalSize();
   const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
@@ -1474,26 +1480,9 @@ function SubtestTableView({
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  const handleScroll = useCallback(() => {
-    if (frozenPaneRef.current && scrollPaneRef.current) {
-      frozenPaneRef.current.scrollTop = scrollPaneRef.current.scrollTop;
-    }
-    if (headerScrollRef.current && scrollPaneRef.current) {
-      headerScrollRef.current.scrollLeft = scrollPaneRef.current.scrollLeft;
-    }
-  }, [scrollPaneRef]);
-
-  const handleFrozenWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    if (scrollPaneRef.current && e.deltaY !== 0) {
-      scrollPaneRef.current.scrollTop += e.deltaY;
-    }
-  }, [scrollPaneRef]);
-
   const headerGroups = table.getHeaderGroups();
   const lastHeaderGroup = headerGroups[headerGroups.length - 1];
   const allHeaders = lastHeaderGroup ? lastHeaderGroup.headers : [];
-  const frozenHeaders = allHeaders.slice(0, FROZEN_COUNT);
-  const scrollHeaders = allHeaders.slice(FROZEN_COUNT);
 
   const renderRowBgClass = (r: SubtestRow) => {
     // Match active Overdue scope (Pred/T1/T2 default, or all 5 stages when scope=all).
@@ -1505,34 +1494,51 @@ function SubtestTableView({
     return { delayed, t2Done };
   };
 
-  const renderHeader = (header: any) => {
+  const renderHeader = (header: any, index: number) => {
+    const isSticky = index < frozenCount;
+    const isLastSticky = index === frozenCount - 1;
     const canFilter = header.column.getCanFilter();
     return (
       <TableHead
         key={header.id}
         data-column-id={header.column.id}
-        style={{ width: header.getSize() }}
-        className="relative h-9 py-0 text-xs font-medium cursor-pointer select-none whitespace-nowrap bg-background border-b"
+        style={{
+          width: header.getSize(),
+          minWidth: header.getSize(),
+          maxWidth: header.getSize(),
+          ...(isSticky
+            ? {
+                position: 'sticky',
+                left: stickyLefts[index],
+                zIndex: 3,
+                background: 'hsl(var(--background))',
+              }
+            : {}),
+        }}
+        className={cn(
+          'relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background px-4 py-0 text-left text-xs font-medium',
+          isLastSticky && 'shadow-[2px_0_4px_-2px_hsl(var(--border))]',
+        )}
         onClick={header.column.getToggleSortingHandler()}
       >
-        <span className="inline-flex items-center gap-1">
-          {flexRender(header.column.columnDef.header, header.getContext())}
-          {header.column.getIsSorted() && (
-            <span className="ml-0.5">
-              {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
-              {sorting.length > 1 && (
-                <sup className="ml-0.5 text-[9px] text-muted-foreground">
-                  {header.column.getSortIndex() + 1}
-                </sup>
-              )}
-            </span>
-          )}
+        <div className="flex w-full items-center justify-between gap-1">
+          <span className="inline-flex min-w-0 items-center gap-1 truncate">
+            <span className="truncate">{flexRender(header.column.columnDef.header, header.getContext())}</span>
+            {header.column.getIsSorted() && (
+              <span className="flex-shrink-0">
+                {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
+                {sorting.length > 1 && (
+                  <sup className="ml-0.5 text-[9px] text-muted-foreground">{header.column.getSortIndex() + 1}</sup>
+                )}
+              </span>
+            )}
+          </span>
           {canFilter && (
-            <span onClick={(e) => e.stopPropagation()}>
+            <span className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
               <ColumnFilterDropdown column={header.column} />
             </span>
           )}
-        </span>
+        </div>
         {header.column.getCanResize() && (
           <div
             onMouseDown={header.getResizeHandler()}
@@ -1542,7 +1548,7 @@ function SubtestTableView({
             title="Drag to resize, double-click to auto-fit"
             className={cn(
               'absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40',
-              header.column.getIsResizing() && 'bg-primary/60'
+              header.column.getIsResizing() && 'bg-primary/60',
             )}
           />
         )}
@@ -1550,165 +1556,123 @@ function SubtestTableView({
     );
   };
 
+  // Sticky cells MUST be fully opaque, otherwise scrolled content from the
+  // non-frozen columns shows through. Layer the row tint on top of an opaque
+  // base background using two stacked CSS background layers.
+  const stickyBgFor = (r: SubtestRow, index: number): string => {
+    const { delayed, t2Done } = renderRowBgClass(r);
+    const base = 'hsl(var(--background))';
+    const opaque = `linear-gradient(${base}, ${base})`;
+    if (hoveredIndex === index) return `${opaque}, hsl(var(--muted) / 0.5)`;
+    if (delayed && !t2Done) return `${opaque}, hsl(var(--destructive) / 0.05)`;
+    if (t2Done) return `${opaque}, hsl(var(--muted) / 0.3)`;
+    return base;
+  };
+
   return (
-    <div className="rounded-md border max-h-[calc(100vh-220px)] flex overflow-hidden bg-background">
-      {/* Frozen pane */}
+    <div className="flex max-h-[calc(100vh-220px)] flex-col overflow-hidden rounded-md border bg-background">
+      {/* Mirror horizontal scrollbar above the body. The visible track starts
+          AFTER the frozen area so it never appears to overlap sticky columns. */}
+      <TopHorizontalScrollbar
+        targetRef={tableRef}
+        width={totalWidth}
+        frozenWidth={frozenWidth}
+      />
+      {/* Single scroll container: owns BOTH horizontal and vertical scroll.
+          Header is rendered inside the same <table>, with sticky top rows so
+          it stays visible vertically while sharing the same horizontal scroll
+          coordinate space as the body. Frozen columns use position:sticky on
+          both header and body cells, guaranteeing alignment. */}
       <div
-        ref={frozenPaneRef}
-        onWheel={handleFrozenWheel}
-        className="overflow-hidden border-r border-border shadow-[2px_0_4px_-2px_hsl(var(--border))] bg-background"
-        style={{ width: frozenWidth, flexShrink: 0 }}
+        ref={tableRef}
+        className="min-w-0 flex-1 overflow-auto scrollbar-hide"
       >
-        <Table style={{ width: frozenWidth, tableLayout: 'fixed' }}>
-          <TableHeader className="sticky top-0 z-20 bg-background">
-            <TableRow className="border-b bg-background">
-              {frozenHeaders.map(renderHeader)}
+        <Table style={{ width: totalWidth, tableLayout: 'fixed' }}>
+          <TableHeader className="bg-background">
+            <TableRow className="border-b bg-background [&>th]:sticky [&>th]:top-0 [&>th]:z-[2] [&>th]:bg-background">
+              {allHeaders.map(renderHeader)}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {/* Spacer to align frozen rows with scroll-pane rows (matches mirror scrollbar height) */}
-            <tr aria-hidden><td colSpan={frozenCols.length} style={{ height: 12, padding: 0, border: 0 }} /></tr>
-            {loading || rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={frozenCols.length} className="text-center py-8 text-muted-foreground">
-                  &nbsp;
-                </TableCell>
-              </TableRow>
-            ) : (
-              <>
-                {paddingTop > 0 && (
-                  <tr style={{ height: paddingTop }} aria-hidden>
-                    <td colSpan={frozenCols.length} style={{ padding: 0, border: 0 }} />
-                  </tr>
-                )}
-                {virtualRows.map(virtualRow => {
-                  const row = rows[virtualRow.index];
-                  const r = row.original;
-                  const { delayed, t2Done } = renderRowBgClass(r);
-                  const isHovered = hoveredIndex === virtualRow.index;
-                  return (
-                    <TableRow
-                      style={{ height: virtualRow.size }}
-                      key={row.id}
-                      data-index={virtualRow.index}
-                      className={cn(
-                        'cursor-pointer',
-                        t2Done && 'bg-muted/30 text-muted-foreground',
-                        delayed && !t2Done && 'bg-destructive/5',
-                        isHovered && 'bg-muted/50'
-                      )}
-                      onMouseEnter={() => setHoveredIndex(virtualRow.index)}
-                      onMouseLeave={() => setHoveredIndex(null)}
-                      onClick={() => navigate(`/subtests/${r.id}${location.search}`)}
-                    >
-                      {row.getVisibleCells().slice(0, FROZEN_COUNT).map(cell => (
-                        <TableCell
-                          key={cell.id}
-                          data-column-id={cell.column.id}
-                          style={{ width: cell.column.getSize() }}
-                          className="text-xs py-2 truncate"
-                        >
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  );
-                })}
-                {paddingBottom > 0 && (
-                  <tr style={{ height: paddingBottom }} aria-hidden>
-                    <td colSpan={frozenCols.length} style={{ padding: 0, border: 0 }} />
-                  </tr>
-                )}
-              </>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Scroll pane */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Header: hidden horizontal scroll, synced with body */}
-        <div ref={headerScrollRef} className="overflow-hidden bg-background">
-          <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
-            <TableHeader className="bg-background">
-              <TableRow className="border-b bg-background">
-                {scrollHeaders.map(renderHeader)}
-              </TableRow>
-            </TableHeader>
-          </Table>
-        </div>
-        {/* Mirror horizontal scrollbar - sits BELOW the header */}
-        <TopHorizontalScrollbar targetRef={scrollPaneRef} width={scrollWidth} />
-        {/* Body: vertical scroll only */}
-        <div
-          ref={scrollPaneRef}
-          onScroll={handleScroll}
-          className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide"
-        >
-        <Table style={{ width: scrollWidth, tableLayout: 'fixed' }}>
-          <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={scrollCols.length} className="text-center py-8 text-muted-foreground">
-                  Loading...
-                </TableCell>
+                <TableCell colSpan={leafCols.length} className="py-8 text-center text-muted-foreground">Loading...</TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={scrollCols.length} className="text-center py-8 text-muted-foreground">
-                  No subtests found. Import data to get started.
-                </TableCell>
+                <TableCell colSpan={leafCols.length} className="py-8 text-center text-muted-foreground">No subtests found. Import data to get started.</TableCell>
               </TableRow>
             ) : (
               <>
                 {paddingTop > 0 && (
                   <tr style={{ height: paddingTop }} aria-hidden>
-                    <td colSpan={scrollCols.length} style={{ padding: 0, border: 0 }} />
+                    <td colSpan={leafCols.length} style={{ padding: 0, border: 0 }} />
                   </tr>
                 )}
-                {virtualRows.map(virtualRow => {
+                {virtualRows.map((virtualRow) => {
                   const row = rows[virtualRow.index];
                   const r = row.original;
                   const { delayed, t2Done } = renderRowBgClass(r);
-                  const isHovered = hoveredIndex === virtualRow.index;
+                  const stickyBg = stickyBgFor(r, virtualRow.index);
                   return (
                     <TableRow
                       key={row.id}
                       data-index={virtualRow.index}
-                      style={{ height: virtualRow.size }}
+                      style={{ height: ROW_HEIGHT, maxHeight: ROW_HEIGHT }}
                       className={cn(
                         'cursor-pointer',
                         t2Done && 'bg-muted/30 text-muted-foreground',
                         delayed && !t2Done && 'bg-destructive/5',
-                        isHovered && 'bg-muted/50'
+                        hoveredIndex === virtualRow.index && 'bg-muted/50',
                       )}
                       onMouseEnter={() => setHoveredIndex(virtualRow.index)}
                       onMouseLeave={() => setHoveredIndex(null)}
                       onClick={() => navigate(`/subtests/${r.id}${location.search}`)}
                     >
-                      {row.getVisibleCells().slice(FROZEN_COUNT).map(cell => (
-                        <TableCell
-                          key={cell.id}
-                          data-column-id={cell.column.id}
-                          style={{ width: cell.column.getSize() }}
-                          className="text-xs py-2 truncate whitespace-nowrap"
-                        >
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
+                      {row.getVisibleCells().map((cell, cellIdx) => {
+                        const isSticky = cellIdx < frozenCount;
+                        const isLastSticky = cellIdx === frozenCount - 1;
+                        return (
+                          <TableCell
+                            key={cell.id}
+                            data-column-id={cell.column.id}
+                            style={{
+                              width: cell.column.getSize(),
+                              minWidth: cell.column.getSize(),
+                              maxWidth: cell.column.getSize(),
+                              height: ROW_HEIGHT,
+                              maxHeight: ROW_HEIGHT,
+                              overflow: 'hidden',
+                              ...(isSticky
+                                ? {
+                                    position: 'sticky',
+                                    left: stickyLefts[cellIdx],
+                                    zIndex: 1,
+                                    background: stickyBg,
+                                  }
+                                : {}),
+                            }}
+                            className={cn(
+                              'truncate whitespace-nowrap px-4 py-2 text-xs',
+                              isLastSticky && 'shadow-[2px_0_4px_-2px_hsl(var(--border))]',
+                            )}
+                          >
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </TableCell>
+                        );
+                      })}
                     </TableRow>
                   );
                 })}
                 {paddingBottom > 0 && (
                   <tr style={{ height: paddingBottom }} aria-hidden>
-                    <td colSpan={scrollCols.length} style={{ padding: 0, border: 0 }} />
+                    <td colSpan={leafCols.length} style={{ padding: 0, border: 0 }} />
                   </tr>
                 )}
               </>
             )}
           </TableBody>
         </Table>
-        </div>
       </div>
     </div>
   );
