@@ -1000,6 +1000,8 @@ export default function DefectRawDataPage() {
 
   const clearAllUrlFilters = () => setSearchParams(new URLSearchParams(), { replace: true });
   const activeColumnFilterCount = columnFilters.length;
+  const columnFilterChips = useMemo(() => buildColumnFilterChips(table, columnFilters), [table, columnFilters]);
+  const removeColumnFilter = (id: string) => setColumnFilters((prev) => prev.filter((f) => f.id !== id));
 
   return (
     <div className="space-y-4">
