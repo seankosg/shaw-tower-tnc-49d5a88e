@@ -507,12 +507,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       throw new Error('No active project found. Please create or activate a project before importing.');
     }
 
-    const [rulesRes, fbRes] = await Promise.all([
-      (supabase as any).from('defect_classification_rules').select('*').eq('is_active', true),
-      (supabase as any).from('defect_discipline_fallback').select('*').eq('is_active', true),
-    ]);
-    const rules = (rulesRes.data ?? []) as ClassificationRule[];
-    const fallbacks = (fbRes.data ?? []) as DisciplineFallback[];
+    const classificationCtx = await loadClassificationContextV2();
 
     const mappedRows = item.parsed.map((row) => applyMasterDecisions(row, decisions));
 
