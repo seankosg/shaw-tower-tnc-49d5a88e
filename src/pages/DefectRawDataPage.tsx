@@ -493,8 +493,21 @@ export default function DefectRawDataPage() {
     };
   }, [user, items]);
 
+  // URL params that indicate the user arrived from a Dashboard drill-down.
+  // When ANY of these are present we ignore the localStorage-saved sort/column-filter state,
+  // so the user always sees the drill-down's own clean view (sorted by Issue No asc).
+  const DRILLDOWN_PARAMS = [
+    'source', 'actualComplete', 'closureComplete', 'overdue', 'atRisk',
+    'dueOn', 'unplannedActualOn', 'asOf', 'stage',
+    'team', 'subcontractor', 'subsub', 'hdecPic', 'hdecEng',
+    'level', 'mainTrade', 'subTrade', 'workType', 'classificationSource',
+    'status', 'closureStatus', 'issueNo', 'subcontractorIssueNo',
+    'dateStart', 'dateEnd', 'dateField',
+  ];
+
   useEffect(() => {
     setStateLoaded(false);
+    const isDrilldown = DRILLDOWN_PARAMS.some((p) => searchParams.has(p));
     let baseFilters: ColumnFiltersState = [];
     let baseSorting: SortingState = DEFAULT_SORTING;
     let baseGlobal = '';
@@ -503,10 +516,15 @@ export default function DefectRawDataPage() {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
-        baseSorting = Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING;
-        baseFilters = Array.isArray(parsed.columnFilters) ? parsed.columnFilters : [];
-        baseGlobal = typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '';
+        // Sizing and global search are always restored.
         baseSizing = parsed.columnSizing && typeof parsed.columnSizing === 'object' ? parsed.columnSizing : {};
+        baseGlobal = typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '';
+        // Sort and column filters are only restored on a clean entry (no drill-down params).
+        // This is the root-cause fix for "wrong / stale sort when entering from a dashboard card".
+        if (!isDrilldown) {
+          baseSorting = Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING;
+          baseFilters = Array.isArray(parsed.columnFilters) ? parsed.columnFilters : [];
+        }
       }
     } catch {
       // ignore invalid saved state
