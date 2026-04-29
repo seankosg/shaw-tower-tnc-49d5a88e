@@ -1,6 +1,14 @@
 // Rule-based defect classifier (no AI). Used during Import and Detail Auto-classify.
 
-export type ClassificationSource = 'rule' | 'discipline' | 'manual' | 'unclassified';
+export type ClassificationSource =
+  | 'rule'
+  | 'discipline'
+  | 'manual'
+  | 'unclassified'
+  | 'workscope'
+  | 'work_type_rule'
+  | 'legacy_keyword'
+  | 'legacy_discipline';
 
 export interface ClassificationRule {
   id: string;
