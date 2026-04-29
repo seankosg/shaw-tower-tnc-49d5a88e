@@ -23,11 +23,19 @@ interface DefectRow {
   actual_progress_pct: number | null;
   completion_status: string | null;
   closure_status: string | null;
+  status: string | null;
+}
+
+function isStatusClosed(s: string | null): boolean {
+  return String(s ?? '').trim().toLowerCase() === 'closed';
+}
+function isStatusWorkDone(s: string | null): boolean {
+  return String(s ?? '').trim().toLowerCase() === 'work done';
 }
 
 function computeCompletion(d: DefectRow, asOf: string): StatusValue {
   const actualPct = Number(d.actual_progress_pct ?? 0);
-  if (d.actual_completion_date || actualPct >= 100) return 'Done';
+  if (d.actual_completion_date || actualPct >= 100 || isStatusWorkDone(d.status) || isStatusClosed(d.status)) return 'Done';
   if (d.planned_start_date && asOf < d.planned_start_date) return 'Planned';
   const plannedPct = Number(d.planned_progress_pct ?? 0);
   if (actualPct < plannedPct) return 'Delay';
@@ -38,6 +46,7 @@ function computeCompletion(d: DefectRow, asOf: string): StatusValue {
 
 function computeClosure(d: DefectRow, asOf: string, completion: StatusValue): StatusValue {
   if (d.actual_closure_date) return 'Done';
+  if (isStatusClosed(d.status)) return 'Done';
   if (d.planned_closure_date && d.planned_closure_date < asOf) return 'Delay';
   if (completion === 'Done' && !d.actual_closure_date) return 'WIP';
   return 'Planned';
