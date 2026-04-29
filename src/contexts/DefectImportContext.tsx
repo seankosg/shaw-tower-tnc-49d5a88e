@@ -771,16 +771,19 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         (!excelHasSub && !dbHasSub) ||
         (!excelHasWork && !dbHasWork);
 
+      const rawLabel = (row.subsub_name ?? row.subcontractor_name ?? '') as string;
       const classification = needClassify
-        ? classifyDefect(
-            { description: row.description, field_discipline: row.trade_detail },
-            rules,
-            fallbacks,
+        ? classifyDefectV2(
+            {
+              description: row.description,
+              field_discipline: row.trade_detail,
+              raw_label: rawLabel,
+            },
+            classificationCtx,
           )
         : null;
 
-      // Treat empty-string classifier output (the 'unclassified' case) as null
-      // so the DB stores blank trade columns instead of a placeholder label.
+      // Priority: Excel value > existing DB value > classifier output. Empty → null.
       if (!excelHasMain) row.main_trade = existing?.main_trade ?? (classification?.main_trade || null);
       if (!excelHasSub) row.sub_trade = existing?.sub_trade ?? (classification?.sub_trade || null);
       if (!excelHasWork) row.work_type = existing?.work_type ?? (classification?.work_type || null);
@@ -797,13 +800,14 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       if (classifierApplied && classification) {
         classificationSource = classification.source;
         classifiedAt = new Date().toISOString();
-        if (classification.source === 'rule') classifiedRule++;
-        else if (classification.source === 'discipline') {
+        if (classification.source === 'work_type_rule' || classification.source === 'workscope' || classification.source === 'legacy_keyword' || classification.source === 'rule') {
+          classifiedRule++;
+        } else if (classification.source === 'legacy_discipline' || classification.source === 'discipline') {
           classifiedDiscipline++;
           pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'discipline_fallback', reason_detail: `Auto-classified via Field Discipline fallback (${row.trade_detail ?? ''}).` });
         } else {
           unclassified++;
-          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'unclassified_defect', reason_detail: 'Could not classify from description or Field Discipline.' });
+          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'unclassified_defect', reason_detail: 'Could not classify from description, label, or Field Discipline.' });
         }
       } else if (excelProvidedAny && !existing) {
         classificationSource = 'manual';
