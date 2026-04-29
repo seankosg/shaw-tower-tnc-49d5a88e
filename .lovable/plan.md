@@ -1,96 +1,160 @@
 ## 문제 정의
-지금 문제를 다시 정확히 정의하면, 사용자가 보는 현상은 단순한 "정렬(sort)" 문제가 아니라 Defect Raw Data 테이블의 **행 위치/행 매핑이 신뢰되지 않는 상태**입니다. 이전 수정들이 계속 실패한 이유는 좌우 패널의 스크롤 동기화만 손봤지, 실제로 행의 좌표계를 결정하는 핵심 구조를 바꾸지 않았기 때문입니다.
+지금 보이는 문제는 더 이상 "행 높이" 문제가 아닙니다. 스크린샷 기준으로는 **행끼리의 세로 정렬은 어느 정도 맞았지만**, 테이블 셸 자체가 잘못 구성되어 있어서 다음 두 문제가 새로 드러났습니다.
+
+1. **가로 스크롤바가 고정 컬럼 영역까지 침범함**
+2. **컬럼 헤더가 고정 컬럼처럼 유지되지 않아 화면에서 사라짐**
+
+즉, 현재 상태는 부분 수정으로 유지할 구조가 아니라, **헤더/바디/상단 스크롤바의 좌표계를 다시 설계해야 하는 상태**입니다.
 
 ## Do I know what the issue is?
 Yes.
 
-## 확인된 사실
-- 현재 코드에서 좌측/우측 행은 제 브라우저 검증 기준으로는 같은 `top`과 같은 `height`를 갖는 구간이 있었습니다.
-- 하지만 `DefectRawDataPage.tsx`는 여전히 **가상 스크롤이 `ROW_HEIGHT = 36`을 가정**하고 있고, 실제 브라우저에서 보이는 행 높이는 그보다 더 작게 렌더링되고 있습니다.
-- 즉, **좌우 패널끼리만 맞아 보여도, virtualizer가 생각하는 행 높이와 실제 DOM 행 높이가 다르면** 스크롤 위치, 복원된 위치, 중간/하단 구간의 레코드 매핑이 틀어질 수 있습니다.
-- 여기에 현재 구조는 **좌측 테이블 / 우측 테이블을 따로 렌더링**하고 있어, 사소한 padding, border, badge 높이, 브라우저 zoom 차이만 있어도 다시 drift가 생길 수 있습니다.
+## 정확한 원인
+### 1) 헤더에는 sticky 고정이 적용되지 않았습니다
+현재 `src/pages/DefectRawDataPage.tsx`를 확인해보면:
+- 바디 셀(`TableCell`)에는 `position: sticky`, `left: stickyLefts[cellIdx]`가 적용되어 있습니다.
+- 하지만 헤더 셀(`TableHead`)에는 동일한 sticky 처리가 없습니다.
 
-## 정확한 근본 원인
-근본 원인은 2개가 겹쳐 있습니다.
+결과:
+- 바디의 왼쪽 고정 컬럼은 남아 있음
+- 헤더는 전체가 통째로 좌우 스크롤됨
+- 그래서 가로 스크롤 시 **헤더 텍스트가 화면 밖으로 밀려 사라지는 것처럼 보임**
 
-1. **가상화 기준 높이와 실제 렌더 높이가 다름**
-   - 코드상 virtualizer는 모든 행을 36px로 계산합니다.
-   - 실제 DOM은 badge, checkbox, text line-height, browser zoom 조건에 따라 더 낮게 렌더링됩니다.
-   - 그래서 스크롤바 총 높이, paddingTop/paddingBottom, scroll restore 기준이 실제 행 위치와 어긋납니다.
+사용자 화면에서 "데이터는 보이는데 헤더는 안 보이는" 이유가 이것입니다.
 
-2. **한 화면을 두 개의 별도 테이블로 쪼개 놓은 구조 자체가 취약함**
-   - 좌측 frozen pane과 우측 scroll pane이 각각 독립적인 table/body/row tree를 가집니다.
-   - 현재는 같은 virtualRows를 써도, 브라우저가 각 DOM을 조금이라도 다르게 계산하면 다시 불일치가 생길 수 있습니다.
-   - 즉, 지금 구조는 "맞출 수는 있지만 항상 깨질 수 있는 구조"입니다.
+### 2) 상단 가로 스크롤바의 기준 폭이 잘못되었습니다
+현재 `TopHorizontalScrollbar`는 `width={totalWidth}`를 그대로 사용하고 있고, 바 전체가 테이블 전체 폭 기준으로 렌더됩니다.
 
-정리하면, 질문하신 "양측의 행 높이는 같은가요?"에 대한 답은 **일부 구간에서는 좌우끼리는 같게 보입니다.** 하지만 **그 행 높이가 virtualizer가 가정한 높이와는 다릅니다.** 그래서 지금까지의 수정이 근본 해결이 되지 못한 것입니다.
+하지만 실제 UI에서는:
+- 왼쪽 일부 컬럼은 고정 영역
+- 오른쪽만 진짜 가로 스크롤 대상
 
-## 해결 전략
-이번에는 scroll sync 미세조정이 아니라, **구조 자체를 바꾸는 방식**으로 해결합니다.
+이어야 합니다.
 
-### 1) Defect Raw Data를 단일 테이블 구조로 재구성
-- 좌측 frozen / 우측 scroll용으로 테이블을 두 벌 렌더링하는 방식을 제거합니다.
-- 하나의 scroll container + 하나의 row tree만 유지합니다.
-- 고정 컬럼은 `position: sticky` + `left` offset으로 처리합니다.
-- 이렇게 하면 브라우저가 한 행의 높이를 한 번만 계산하므로, 좌우 mismatch가 구조적으로 불가능해집니다.
+그런데 지금은 상단 스크롤바가 **고정 영역 + 스크롤 영역 전체**를 모두 자기 영역으로 간주하고 있어,
+사용자 눈에는 스크롤바가 고정 컬럼 위까지 이어진 것처럼 보입니다.
 
-### 2) 행 높이를 실제로 고정하거나 측정하도록 virtualizer 수정
-둘 중 하나로 정리합니다.
-- **고정 높이 방식**: 모든 body row/cell을 CSS로 확실히 36px에 맞춥니다.
-- **실측 방식**: TanStack Virtual 권장 패턴처럼 `measureElement`를 도입해 실제 행 높이를 virtualizer가 읽도록 바꿉니다.
+### 3) 헤더/상단 스크롤바/바디가 서로 다른 레이어로 분리되어 있습니다
+현재 구조는 크게 3조각입니다.
 
-이번 케이스는 내부 운영용 데이터 그리드이고, single-line/truncate 정책이 이미 강하므로 **고정 높이 방식이 1순위**입니다. 이렇게 하면 scroll geometry가 안정적입니다.
-
-### 3) 행 내부 콘텐츠 높이 통일
-- `Badge`, `Checkbox`, `DefectStageProgress`, 일반 text cell의 line-height/padding을 같은 기준으로 맞춥니다.
-- 모든 body cell을 single-line + truncate 기준으로 통일합니다.
-- 행 높이를 키우는 숨은 요소가 없는지 정리합니다.
-
-### 4) 잘못 저장된 scroll state 무효화
-- 현재 저장된 `localStorage` scroll 값은 잘못된 row geometry 기준일 가능성이 큽니다.
-- layout version key를 추가해서 새 구조에서는 예전 scroll 복원값을 버리겠습니다.
-- drilldown 진입 시에도 새 좌표계만 사용하게 정리합니다.
-
-### 5) 검증 범위 확대
-다음 조건을 모두 확인합니다.
-- `/defects/raw-data` 직접 진입
-- Dashboard 드릴다운 진입
-- 상단/중간/하단 scroll
-- 필터/정렬 적용 후 재진입
-- 사용자와 같은 넓은 데스크톱 뷰 조건
-- top scrollbar 사용 시 헤더/본문 정렬 유지
-
-## 구현 범위
-- `src/pages/DefectRawDataPage.tsx` 중심 리팩토링
-- 필요 시 공통 스타일 보정:
-  - `src/components/defects/DefectStatusBadge.tsx`
-  - `src/components/defects/DefectStageProgress.tsx`
-  - `src/components/ui/badge.tsx`
-
-## 기대 결과
-- 좌우 행 정렬 문제를 "동기화"가 아니라 **구조적으로 제거**
-- 스크롤 위치와 실제 레코드 매핑 일치
-- 재진입 시 blank area / jump / 어긋남 제거
-- 브라우저 zoom이나 데이터 내용 차이에 덜 민감한 안정적 테이블
-
-## 기술 메모
 ```text
-현재 구조
-[Left table]   +   [Right table]   +   virtual row height guessed as 36px
-=> 맞는 것처럼 보여도 언제든 다시 깨질 수 있음
-
-목표 구조
-[One table, one row tree, sticky left columns]
-=> 브라우저가 한 행 높이를 한 번만 계산
-=> 좌우 mismatch 자체가 사라짐
+[별도 헤더 컨테이너]
+[별도 상단 가로스크롤 미러]
+[별도 바디 스크롤 컨테이너]
 ```
 
-TanStack 문서 관점에서도, 현재처럼 실제 행 높이와 virtualizer 추정 높이가 다른 상태는 스크롤 geometry 오류를 만들기 쉽습니다. 이번 수정은 그 지점을 바로잡는 방향입니다.
+이 구조는 다음 문제가 있습니다.
+- 헤더는 자체적으로 스크롤되지 않고 body의 scrollLeft를 복사받음
+- 상단 바도 body의 scrollLeft를 복사받음
+- 바디만 실제 스크롤 원본임
 
-<lov-actions>
-  <lov-open-history>View History</lov-open-history>
-</lov-actions>
+즉, 한 축을 3개 레이어로 억지 동기화하는 구조라서,
+행 정렬 문제가 일부 해결되어도 **헤더/스크롤바 좌표 불일치가 계속 발생**합니다.
 
-<lov-actions>
-<lov-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</lov-link>
-</lov-actions>
+## 결론: 계속 덧패치할지, 다시 작업할지
+**다시 작업하는 쪽이 맞습니다.**
+
+정확히는 전체 페이지를 다시 만드는 것이 아니라,
+`Defect Raw Data`의 **테이블 셸(shell)** 만 다시 구성해야 합니다.
+
+계속 현재 구조에 패치를 얹으면:
+- 헤더 sticky 보정
+- 상단 스크롤바 보정
+- scrollLeft 복제 보정
+- z-index/background 보정
+- frozen width spacer 보정
+
+이 식으로 증상별 응급처치가 반복됩니다.
+
+이번에는 **행 렌더링은 유지하되, 헤더/스크롤/고정컬럼 레이어 구조를 재설계**하는 방식으로 가야 합니다.
+
+## 실행 계획
+### 1) 헤더를 별도 미러 컨테이너에서 분리하고, 같은 좌표계로 재배치
+현재의 `headerScrollRef` 기반 복제 구조를 제거합니다.
+
+목표는 두 가지 중 하나입니다.
+- **우선안**: 같은 스크롤 컨테이너 안에 헤더를 두고 `sticky top-0` 적용
+- **대안**: 헤더를 분리 유지하되, 바디와 동일하게 frozen/sticky 계산을 적용
+
+이번 케이스에서는 **우선안**이 더 안전합니다. 이렇게 하면:
+- 헤더와 바디가 같은 horizontal scroll context를 공유
+- 왼쪽 frozen 헤더도 body와 동일한 `left` 오프셋 사용 가능
+- 현재처럼 "body만 sticky, header는 비sticky" 상태가 사라짐
+
+### 2) 헤더 셀에도 frozen sticky 로직을 동일 적용
+바디에서 쓰는 아래 개념을 헤더에도 똑같이 적용합니다.
+- `cellIdx < frozenCount`
+- `left: stickyLefts[idx]`
+- 적절한 `z-index`
+- 배경색 고정
+- 마지막 frozen 컬럼 그림자 처리
+
+즉,
+- **헤더의 고정 컬럼**
+- **바디의 고정 컬럼**
+
+둘이 완전히 같은 기준으로 움직이게 만듭니다.
+
+### 3) 상단 가로 스크롤바를 "스크롤 가능 영역만" 담당하도록 재구성
+현재처럼 전체 폭 위에 얇은 바를 얹는 구조 대신,
+상단 바를 아래처럼 분리합니다.
+
+```text
+[왼쪽 frozen spacer: frozenWidth]
+[오른쪽 top scrollbar: totalWidth - frozenWidth]
+```
+
+핵심은:
+- 상단 바의 시작 위치를 `frozenWidth` 뒤로 밀기
+- 실제 thumb 계산도 non-frozen 영역 기준으로 맞추기
+- 시각적으로 스크롤바가 고정 컬럼 위를 지나가지 않게 만들기
+
+필요하면 `TopHorizontalScrollbar.tsx` 자체를 수정해서,
+`leftOffset` 또는 `stickyOffset` 개념을 받도록 바꿉니다.
+
+### 4) 스크롤 원본을 하나만 남기고 나머지는 파생 뷰로 단순화
+현재는 body scroll → header mirror / top scrollbar mirror 구조입니다.
+
+수정 후에는:
+- 실제 가로 스크롤 원본은 body 1개
+- 헤더는 같은 컨테이너 안에서 자동 동작하거나 최소한 동일 좌표계 사용
+- top scrollbar는 body의 단순 미러이되 frozen 영역을 제외한 레이아웃으로 표시
+
+즉, 동기화 포인트를 줄여서 다시 깨질 가능성을 낮춥니다.
+
+### 5) 시각적 검증 기준을 명확히 두고 마무리
+다음 조건을 모두 통과해야 완료로 보겠습니다.
+- 왼쪽 frozen 컬럼의 헤더가 항상 보일 것
+- 가로 스크롤 시 헤더와 바디의 컬럼 경계가 일치할 것
+- 상단 스크롤바가 frozen 영역 위를 덮지 않을 것
+- 스크롤 중 헤더 텍스트가 사라지지 않을 것
+- 현재 맞춰놓은 행 정렬을 다시 깨지 않을 것
+
+## 수정 대상 파일
+- `src/pages/DefectRawDataPage.tsx`
+- `src/components/raw-data/TopHorizontalScrollbar.tsx`
+- 필요 시 `src/components/ui/table.tsx`는 건드리지 않고 페이지 레벨에서 처리
+
+## 기술 메모
+현재 구조:
+```text
+Header (별도) + Top scrollbar (별도) + Body (별도 scroll source)
+=> 같은 축을 3개 레이어가 복제
+=> frozen/header/scrollbar 불일치 발생
+```
+
+목표 구조:
+```text
+Single horizontal coordinate system
+- sticky header
+- sticky left columns for both header/body
+- top scrollbar visually starts after frozen area
+```
+
+## 기대 결과
+이번 수정의 목표는 단순 미세조정이 아니라:
+- 헤더가 사라지는 문제 제거
+- 상단 가로스크롤바가 고정컬럼을 침범하는 문제 제거
+- 앞으로 frozen 컬럼 개수 변경에도 덜 깨지는 구조 확보
+
+승인해 주시면 이번에는 **현재 구조를 계속 덧대는 방식이 아니라, 테이블 셸을 다시 정리하는 방식**으로 작업하겠습니다.

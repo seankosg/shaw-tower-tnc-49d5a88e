@@ -1268,8 +1268,6 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
     [leafColumns, table.getState().columnSizing],
   );
 
-  const headerScrollRef = useRef<HTMLDivElement>(null);
-
   const rows = table.getRowModel().rows;
   const ROW_HEIGHT = 36;
   const rowVirtualizer = useVirtualizer({
@@ -1284,17 +1282,11 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
   const paddingBottom = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // The body is the sole vertical scroll source. Header mirrors horizontal scroll only.
-  const handleScroll = useCallback(() => {
-    if (headerScrollRef.current && tableRef.current) {
-      headerScrollRef.current.scrollLeft = tableRef.current.scrollLeft;
-    }
-  }, [tableRef]);
-
   const headerGroup = table.getHeaderGroups().at(-1);
   const allHeaders = headerGroup?.headers ?? [];
 
   const renderHeader = (header: any, index: number) => {
+    const isSticky = index < frozenCount;
     const isLastSticky = index === frozenCount - 1;
     return (
       <TableHead
@@ -1304,6 +1296,14 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
           width: header.getSize(),
           minWidth: header.getSize(),
           maxWidth: header.getSize(),
+          ...(isSticky
+            ? {
+                position: 'sticky',
+                left: stickyLefts[index],
+                zIndex: 3,
+                background: 'hsl(var(--background))',
+              }
+            : {}),
         }}
         className={cn(
           'relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background px-4 py-0 text-left text-xs font-medium',
@@ -1368,25 +1368,28 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
 
   return (
     <div className="flex max-h-[calc(100vh-220px)] flex-col overflow-hidden rounded-md border bg-background">
-      {/* Header pane: hidden horizontal scroll, synced from body */}
-      <div ref={headerScrollRef} className="overflow-hidden bg-background">
-        <Table style={{ width: totalWidth, tableLayout: 'fixed' }}>
-          <TableHeader className="bg-background">
-            <TableRow className="border-b bg-background">
-              {allHeaders.map(renderHeader)}
-            </TableRow>
-          </TableHeader>
-        </Table>
-      </div>
-      {/* Mirror horizontal scrollbar above the body */}
-      <TopHorizontalScrollbar targetRef={tableRef} width={totalWidth} />
-      {/* Body: single table, single row tree. Vertical + horizontal scroll. */}
+      {/* Mirror horizontal scrollbar above the body. The visible track starts
+          AFTER the frozen area so it never appears to overlap sticky columns. */}
+      <TopHorizontalScrollbar
+        targetRef={tableRef}
+        width={totalWidth}
+        frozenWidth={frozenWidth}
+      />
+      {/* Single scroll container: owns BOTH horizontal and vertical scroll.
+          Header is rendered inside the same <table>, with sticky top rows so
+          it stays visible vertically while sharing the same horizontal scroll
+          coordinate space as the body. Frozen columns use position:sticky on
+          both header and body cells, guaranteeing alignment. */}
       <div
         ref={tableRef}
-        onScroll={handleScroll}
         className="min-w-0 flex-1 overflow-auto scrollbar-hide"
       >
         <Table style={{ width: totalWidth, tableLayout: 'fixed' }}>
+          <TableHeader className="bg-background">
+            <TableRow className="border-b bg-background [&>th]:sticky [&>th]:top-0 [&>th]:z-[2] [&>th]:bg-background">
+              {allHeaders.map(renderHeader)}
+            </TableRow>
+          </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
