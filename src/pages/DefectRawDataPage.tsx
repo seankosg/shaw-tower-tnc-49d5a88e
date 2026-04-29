@@ -1321,12 +1321,10 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
 
   return (
     <div className="flex max-h-[calc(100vh-220px)] overflow-hidden rounded-md border bg-background">
-      {/* Frozen pane: header rendered as its OWN table above a non-scrolling body
-          container — exactly mirrors the scroll-pane structure so vertical row
-          alignment between the two panes can never drift. The pane only scrolls
-          when the right-side body scrolls and we manually push scrollTop. */}
+      {/* Frozen pane: header is a static (non-scrolling) layer at the top.
+          Only the BODY container scrolls vertically, mirroring the right body's
+          scrollTop. This keeps left/right rows aligned at every Y position. */}
       <div
-        ref={frozenPaneRef}
         onWheel={handleFrozenWheel}
         className="flex flex-col overflow-hidden border-r border-border bg-background shadow-[2px_0_4px_-2px_hsl(var(--border))]"
         style={{ width: frozenWidth, flexShrink: 0 }}
@@ -1338,7 +1336,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
         </div>
         {/* Spacer matching the right pane's TopHorizontalScrollbar height (16px) so the first row of both panes lines up */}
         <div aria-hidden className="h-[16px] shrink-0 border-b bg-muted/30" />
-        <div className="min-w-0 flex-1 overflow-hidden">
+        <div ref={frozenBodyRef} className="min-w-0 flex-1 overflow-hidden">
           <Table style={{ width: frozenWidth, tableLayout: 'fixed' }}>
             <TableBody>
               {loading || rows.length === 0 ? <TableRow><TableCell colSpan={frozenColumns.length} className="py-8 text-center text-muted-foreground">&nbsp;</TableCell></TableRow> : (
