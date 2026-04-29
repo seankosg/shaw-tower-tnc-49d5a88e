@@ -9,13 +9,23 @@ export interface DefectStatusInputs {
   actual_closure_date: string | null;
   planned_progress_pct: number | null;
   actual_progress_pct: number | null;
-  /** LL original Status field. When equal to "Closed" (case-insensitive), closure is treated as Done. */
+  /**
+   * Aconex (LL) original Status field. Auto-mapping rules:
+   *   - "Closed"     → closure_status = Done (and completion = Done)
+   *   - "Work Done"  → completion_status = Done (closure derived from dates)
+   *   - "Open" / "In dispute" / others → no auto-mapping
+   */
   status?: string | null;
 }
 
-/** Returns true when the LL `Status` column indicates the defect is closed. */
+/** Returns true when the Aconex `Status` column indicates the defect is closed. */
 export function isStatusClosed(status: string | null | undefined): boolean {
   return String(status ?? '').trim().toLowerCase() === 'closed';
+}
+
+/** Returns true when the Aconex `Status` column indicates work is done (but not yet closed). */
+export function isStatusWorkDone(status: string | null | undefined): boolean {
+  return String(status ?? '').trim().toLowerCase() === 'work done';
 }
 
 export function isValidDefectStatus(value: unknown): value is DefectStatusValue {
@@ -34,7 +44,13 @@ export function isValidDefectStatus(value: unknown): value is DefectStatusValue 
  */
 export function computeCompletionStatus(input: DefectStatusInputs, asOf: string): DefectStatusValue {
   const actualPct = Number(input.actual_progress_pct ?? 0);
-  if (input.actual_completion_date || actualPct >= 100) return 'Done';
+  // Aconex Status auto-mapping: "Work Done" or "Closed" → completion is Done.
+  if (
+    input.actual_completion_date
+    || actualPct >= 100
+    || isStatusWorkDone(input.status)
+    || isStatusClosed(input.status)
+  ) return 'Done';
   if (input.planned_start_date && asOf < input.planned_start_date) return 'Planned';
   const plannedPct = Number(input.planned_progress_pct ?? 0);
   if (actualPct < plannedPct) return 'Delay';
@@ -105,15 +121,45 @@ export function reconcileClosureCompletion(
   const completion = computeCompletionStatus(input, asOf);
   const closure = computeClosureStatus(input, asOf, completion);
 
-  if (closure !== 'Done' || completion === 'Done') {
-    return { completion_status: completion, closure_status: closure };
-  }
-
-  // Closure=Done, Completion!=Done → check for Excel conflict
   const excelPct = excelExplicit.actual_progress_pct;
   const excelDate = excelExplicit.actual_completion_date;
   const hasExplicitPct = excelPct !== null && excelPct !== undefined && Number(excelPct) < 100;
   const hasExplicitDate = excelDate !== null && excelDate !== undefined && String(excelDate).trim() !== '';
+
+  // Case A: Aconex Status="Work Done" or "Closed" implies completion=Done by status,
+  // but actual_completion_date / actual_progress_pct may be missing. Auto-fill them unless Excel
+  // explicitly contradicts.
+  if (
+    completion === 'Done'
+    && (isStatusWorkDone(input.status) || isStatusClosed(input.status))
+    && !input.actual_completion_date
+    && Number(input.actual_progress_pct ?? 0) < 100
+  ) {
+    if (hasExplicitPct || hasExplicitDate) {
+      return {
+        completion_status: completion,
+        closure_status: closure,
+        conflict: true,
+        conflictDetail: `Aconex Status="${input.status}" implies completion=Done but Excel provided actual_progress_pct=${excelPct ?? 'null'}, actual_completion_date=${excelDate ?? 'null'}. Auto-reconcile skipped (Excel value wins).`,
+      };
+    }
+    // Prefer closure date if available, otherwise asOf.
+    const completionDate = input.actual_closure_date ?? asOf;
+    return {
+      completion_status: completion,
+      closure_status: closure,
+      patch: {
+        actual_completion_date: completionDate,
+        actual_progress_pct: 100,
+      },
+    };
+  }
+
+  if (closure !== 'Done' || completion === 'Done') {
+    return { completion_status: completion, closure_status: closure };
+  }
+
+  // Case B (existing): Closure=Done, Completion!=Done → check for Excel conflict (vars reused from above)
 
   if (hasExplicitPct || hasExplicitDate) {
     return {
