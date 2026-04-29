@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeCompletionStatus, computeClosureStatus, computeDefectStatuses, isValidDefectStatus, reconcileClosureCompletion } from '@/lib/defect-status';
+import { computeCompletionStatus, computeClosureStatus, computeDefectStatuses, isValidDefectStatus, reconcileClosureCompletion, isStatusWorkDone, isStatusClosed } from '@/lib/defect-status';
 
 const base = {
   planned_start_date: null,
