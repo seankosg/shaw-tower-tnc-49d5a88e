@@ -862,9 +862,11 @@ export default function DefectRawDataPage() {
   }, [isFieldVisible]);
 
   const columnOrder = useMemo(() => {
-    const allIds = [...DEFECT_RAW_FIELDS] as string[];
-    const remaining = allIds.filter((id) => id !== 'issue_no');
-    return ['__select', 'issue_no', ...sortFieldNames(remaining)];
+    const PINNED_FRONT = ['__select', 'issue_no', 'stage_progress'];
+    const remaining = (DEFECT_RAW_FIELDS as readonly string[]).filter(
+      (id) => !PINNED_FRONT.includes(id),
+    );
+    return [...PINNED_FRONT, ...sortFieldNames(remaining)];
   }, [sortFieldNames]);
 
   const table = useReactTable({
