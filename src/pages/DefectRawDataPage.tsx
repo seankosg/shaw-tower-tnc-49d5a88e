@@ -1193,6 +1193,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
   const scrollWidth = useMemo(() => scrollColumns.reduce((sum, column) => sum + column.getSize(), 0), [scrollColumns, table.getState().columnSizing]);
   const frozenPaneRef = useRef<HTMLDivElement>(null);
   const headerScrollRef = useRef<HTMLDivElement>(null);
+  const isSyncingScrollRef = useRef(false);
   const rows = table.getRowModel().rows;
   const rowVirtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => tableRef.current, estimateSize: () => 36, overscan: 12 });
   const virtualRows = rowVirtualizer.getVirtualItems();
@@ -1202,8 +1203,18 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const handleScroll = useCallback(() => {
+    if (isSyncingScrollRef.current) return;
+    isSyncingScrollRef.current = true;
     if (frozenPaneRef.current && tableRef.current) frozenPaneRef.current.scrollTop = tableRef.current.scrollTop;
     if (headerScrollRef.current && tableRef.current) headerScrollRef.current.scrollLeft = tableRef.current.scrollLeft;
+    requestAnimationFrame(() => { isSyncingScrollRef.current = false; });
+  }, [tableRef]);
+
+  const handleFrozenScroll = useCallback(() => {
+    if (isSyncingScrollRef.current) return;
+    isSyncingScrollRef.current = true;
+    if (tableRef.current && frozenPaneRef.current) tableRef.current.scrollTop = frozenPaneRef.current.scrollTop;
+    requestAnimationFrame(() => { isSyncingScrollRef.current = false; });
   }, [tableRef]);
 
   const handleFrozenWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
