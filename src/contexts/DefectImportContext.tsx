@@ -887,6 +887,16 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         actualCompletionDate = reconciled.patch.actual_completion_date;
         actualProgressPct = reconciled.patch.actual_progress_pct;
         autoReconciled = true;
+        // Informational log: which Aconex Status drove the auto-fill (if any).
+        const sLower = String(row.status ?? '').trim().toLowerCase();
+        if (sLower === 'work done' || sLower === 'closed') {
+          pendingLogs.push({
+            upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no,
+            action_taken: existing ? 'updated' : 'inserted',
+            reason_code: 'aconex_status_auto_mapped',
+            reason_detail: `Aconex Status="${row.status}" → completion=Done auto-applied (actual_completion_date=${actualCompletionDate}, actual_progress_pct=100).`,
+          });
+        }
       }
       if (reconciled.conflict) {
         pendingLogs.push({
