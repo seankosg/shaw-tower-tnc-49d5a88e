@@ -1355,15 +1355,18 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
     );
   };
 
-  // Sticky cells need a background that matches the row state, otherwise the
-  // scrolled content shows through. We compute the matching bg per row.
+  // Sticky cells MUST be fully opaque, otherwise scrolled content from the
+  // non-frozen columns shows through. Layer the row tint on top of an opaque
+  // base background using two stacked CSS background layers.
   const stickyBgFor = (row: DefectRawRow, index: number): string => {
     const closed = Boolean(row.actual_closure_date) || /closed|complete|done/i.test(`${row.closure_status ?? ''} ${row.status ?? ''}`);
     const overdue = isOverdueDefect(row, dataDate);
-    if (hoveredIndex === index) return 'hsl(var(--muted) / 0.95)';
-    if (overdue && !closed) return 'hsl(var(--destructive) / 0.06)';
-    if (closed) return 'hsl(var(--muted) / 0.45)';
-    return 'hsl(var(--background))';
+    const base = 'hsl(var(--background))';
+    const opaque = `linear-gradient(${base}, ${base})`;
+    if (hoveredIndex === index) return `${opaque}, hsl(var(--muted) / 0.95)`;
+    if (overdue && !closed) return `${opaque}, hsl(var(--destructive) / 0.06)`;
+    if (closed) return `${opaque}, hsl(var(--muted) / 0.45)`;
+    return base;
   };
 
   return (
