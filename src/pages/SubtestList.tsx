@@ -44,6 +44,7 @@ import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrol
 import type { BulkEditableField } from '@/lib/bulk-edit';
 import { META_FIELD_NAMES, type CommentSummary, EMPTY_SUMMARY, isMetaField } from '@/lib/meta-fields';
 import { MetaCell } from '@/components/raw-data/MetaCell';
+import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
 
 interface SubtestRow {
   id: string;
@@ -1289,6 +1290,8 @@ export default function SubtestList() {
 
   // Count active column filters for display
   const activeColumnFilterCount = columnFilters.length;
+  const columnFilterChips = useMemo(() => buildColumnFilterChips(table, columnFilters), [table, columnFilters]);
+  const removeColumnFilter = (id: string) => setColumnFilters((prev) => prev.filter((f) => f.id !== id));
 
   return (
     <div className="space-y-4">
@@ -1352,6 +1355,25 @@ export default function SubtestList() {
         </div>
       )}
 
+      {columnFilterChips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
+          <span className="text-xs font-medium text-muted-foreground">Active column filters:</span>
+          {columnFilterChips.map((chip) => (
+            <button
+              key={chip.id}
+              onClick={() => removeColumnFilter(chip.id)}
+              className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground hover:bg-secondary/80"
+              title="Click to remove"
+            >
+              {chip.label} ✕
+            </button>
+          ))}
+          <Button variant="ghost" size="sm" className="h-6 text-xs ml-auto" onClick={() => setColumnFilters([])}>
+            Clear all
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -1365,17 +1387,6 @@ export default function SubtestList() {
         <span className="text-sm text-muted-foreground self-center">
           {table.getFilteredRowModel().rows.length} records
         </span>
-        {activeColumnFilterCount > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 text-xs"
-            onClick={() => setColumnFilters([])}
-          >
-            <X className="h-3 w-3 mr-1" />
-            Clear filters ({activeColumnFilterCount})
-          </Button>
-        )}
         <span className="text-xs text-muted-foreground self-center hidden md:inline">
           Tip: Shift+Click headers for multi-sort · Click <Filter className="inline h-3 w-3" /> to filter columns
         </span>
