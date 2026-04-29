@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
   while (true) {
     const { data, error } = await supabase
       .from('defect_items')
-      .select('id, issue_no, planned_start_date, planned_completion_date, planned_closure_date, actual_start_date, actual_completion_date, actual_closure_date, planned_progress_pct, actual_progress_pct, completion_status, closure_status')
+      .select('id, issue_no, planned_start_date, planned_completion_date, planned_closure_date, actual_start_date, actual_completion_date, actual_closure_date, planned_progress_pct, actual_progress_pct, completion_status, closure_status, status')
       .eq('is_active', true)
       .range(page * PAGE, page * PAGE + PAGE - 1);
     if (error) {
