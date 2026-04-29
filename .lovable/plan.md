@@ -1,67 +1,33 @@
-## 목표
+## 문제
 
-T&C Raw Data의 Progress 아이콘(Pred → T1 → T2 3-pip 파이프라인)과 **시각적·로직적으로 동일한** 진행 표시기를 Defect Raw Data 표에도 추가합니다. 단계 매핑은 Defect 도메인에 맞춰 **Start → Completion → Closure**로 합니다. 대시보드에서 필터(`actualComplete`, `closureComplete`, `atRisk` 등)를 들고 들어와도 그대로 유지됩니다(현재 이미 동작 중 — 추가 작업 불필요, 확인 완료).
+`Defect Raw Data` 표에 Progress 컬럼이 노출되지 않습니다(Legend는 헤더에 보이지만 실제 컬럼이 안 보임).
 
-## 단계 매핑 (T&C ↔ Defect)
+## 원인
 
-| T&C `StageProgress` | Defect 매핑 | 데이터 소스 |
-|---|---|---|
-| Predecessor (pred) | **Start** | `planned_start_date`, `actual_start_date`, cascade 적용 |
-| T1 | **Completion** | `planned_completion_date`, `actual_completion_date`, `actual_progress_pct ≥ 100` |
-| T2 | **Closure** | `planned_closure_date`, `actual_closure_date`, `closure_status ∈ {Done, Closed}` |
+`src/pages/DefectRawDataPage.tsx`의 `columnOrder` (864-868행)는 `__select`, `issue_no`만 앞에 핀(pin)하고 나머지는 `sortFieldNames(remaining)`로 정렬합니다.
 
-## 상태 분류 규칙 (T&C 동일)
+`sortFieldNames`는 `field_config.sort_order`를 기준으로 정렬하는데, `stage_progress`는 가상 컬럼이라 DB의 `defect_field_config`에 없으므로 `getOrder` 폴백 값인 **9999**가 적용됩니다 → 컬럼이 표의 **맨 끝**으로 밀려서 화면에 안 보입니다.
 
-각 단계마다 5가지 상태 중 하나로 분류 → 색상 pip로 표시:
-- `done` — 단계 완료 (녹색 ●)
-- `wip` — 진행 중 (앰버 ◐)
-- `planned` — 계획됨, 미시작 (회색 ○)
-- `hold`/`delay` — 계획일 지났는데 미완료 (빨강 ⊘)
-- `empty` — 계획 자체 없음 (옅은 ○)
+T&C 쪽 `SubtestList.tsx`는 같은 문제를 `PINNED_FRONT = ['__select', 'item_no', 'stage_progress']`로 해결하고 있습니다.
 
-판정 로직(`asOfDate = dataDate` 기준):
-1. `isStageDone(item, stage)` → `done` (cascade 적용: 하위 단계 done이면 상위도 done)
-2. plan이 있고 plan < asOfDate인데 done 아님 → `hold` (delay)
-3. completion_status / closure_status === `WIP` → `wip`
-4. plan이 있고 done 아님 → `planned`
-5. 그 외 → `empty`
+## 수정 (단일 파일, 한 줄 변경)
 
-`isStageDone`/cascade 로직은 이미 `src/lib/defect-dashboard-utils.ts`에 구현돼 있음 — 그대로 재사용.
+`src/pages/DefectRawDataPage.tsx` 864-868행의 `columnOrder`에 `stage_progress`를 명시적으로 핀(pin)하고 `remaining`에서 제외합니다.
 
-## 구현 단계
+```ts
+const columnOrder = useMemo(() => {
+  const PINNED_FRONT = ['__select', 'issue_no', 'stage_progress'];
+  const remaining = (DEFECT_RAW_FIELDS as string[]).filter(
+    (id) => !PINNED_FRONT.includes(id)
+  );
+  return [...PINNED_FRONT, ...sortFieldNames(remaining)];
+}, [sortFieldNames]);
+```
 
-### 1. 새 컴포넌트 `src/components/defects/DefectStageProgress.tsx`
-
-T&C `StageProgress`를 그대로 fork하되:
-- props를 Defect 필드로 교체 (`plannedStartDate`, `actualStartDate`, `plannedCompletionDate`, `actualCompletionDate`, `actualProgressPct`, `plannedClosureDate`, `actualClosureDate`, `closureStatus`, `completionStatus`, `asOfDate`)
-- `classifyStage` 내부에서 `defect-dashboard-utils`의 `isStageDone`, `isStageDelayedAsOf` 사용
-- pip 디자인/색상/툴팁 포맷은 T&C와 동일 (Done/WIP/Planned/Delay 라벨, `Delay as of <date>` 표기)
-- 동일하게 `DefectStageProgressLegend` export
-
-### 2. `DefectRawDataPage.tsx`에 컬럼 추가
-
-- `DEFECT_RAW_FIELDS`에 `'stage_progress'`를 끼워 넣음 (현재 위치는 `closure_status` 바로 앞 — Status 그룹 시작 지점 권장)
-- `useDefectFieldConfig`에서 `stage_progress`는 항상 visible로 처리(설정 페이지에 노출하지 않음) — `getLabel`은 `'Progress'` 폴백
-- 컬럼 정의 추가: T&C와 동일하게 `enableColumnFilter: false`, `enableSorting: true`, `accessorFn`은 `(startDone?1:0)+(compDone?2:0)+(closureDone?4:0)` 비트마스크 정렬값
-- `cell`에서 `<DefectStageProgress … asOfDate={dataDate} />` 렌더
-- 헤더 영역(필터 칩 줄) 우측에 `<DefectStageProgressLegend />` 추가 (T&C `SubtestList.tsx` 1387행과 동일 패턴)
-
-### 3. 컬럼 폭/순서/얼리기
-
-- size: 110px (T&C와 동일)
-- 사용자 column sizing/visibility 저장은 기존 localStorage 로직이 자동 처리 — 별도 조치 불필요
-
-### 4. 대시보드 필터 유지
-
-확인 결과 현재 `DefectRawDataPage`의 `filteredBaseData`(605-670행)가 `searchParams`를 직접 읽어 `actualComplete`, `closureComplete`, `overdue`, `atRisk`, `dueOn`, `unplannedActualOn`, `dateStart/dateEnd` 등을 모두 처리합니다. **추가 작업 없음.** Progress 컬럼은 단순 표시 컬럼이라 필터링 로직과 독립적입니다.
-
-## 변경 파일
-
-- 신규: `src/components/defects/DefectStageProgress.tsx`
-- 수정: `src/pages/DefectRawDataPage.tsx` (컬럼 추가, legend 노출)
+이렇게 하면 Progress 컬럼이 `Issue No` 바로 뒤(고정 영역 또는 그 직후)에 항상 표시됩니다 — T&C와 동일한 위치/동작.
 
 ## 비고
 
-- T&C `StageProgress`를 직접 재사용하지 않는 이유: props가 T&C 도메인(`predecessorRaw`, `t1Status`, `r1_status` 등)에 묶여 있어 의미가 안 맞음. 별도 컴포넌트가 코드 가독성에 유리.
-- 모든 라벨은 영어(Start / Completion / Closure / Done / WIP / Planned / Delay) — 프로젝트 규칙 준수.
-- 정렬 키는 "더 진행된 행이 아래로" 가게 비트마스크 사용 — T&C와 동일.
+- 컬럼 가시성(`columnVisibility`)은 이미 858행에서 `stage_progress`를 강제 visible로 처리 중이라 추가 작업 없음.
+- 사용자별 `localStorage` 저장값에는 `columnOrder`가 포함되지 않으므로(497-580행 확인) 캐시 무효화 불필요.
+- 대시보드 필터 유지 동작은 영향 없음.
