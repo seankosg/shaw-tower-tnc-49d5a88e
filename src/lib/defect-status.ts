@@ -126,13 +126,12 @@ export function reconcileClosureCompletion(
   const hasExplicitPct = excelPct !== null && excelPct !== undefined && Number(excelPct) < 100;
   const hasExplicitDate = excelDate !== null && excelDate !== undefined && String(excelDate).trim() !== '';
 
-  // Case A: Aconex Status="Work Done" (closure NOT Done yet) — completion is Done by status,
+  // Case A: Aconex Status="Work Done" or "Closed" implies completion=Done by status,
   // but actual_completion_date / actual_progress_pct may be missing. Auto-fill them unless Excel
   // explicitly contradicts.
   if (
-    closure !== 'Done'
-    && completion === 'Done'
-    && isStatusWorkDone(input.status)
+    completion === 'Done'
+    && (isStatusWorkDone(input.status) || isStatusClosed(input.status))
     && !input.actual_completion_date
     && Number(input.actual_progress_pct ?? 0) < 100
   ) {
@@ -141,14 +140,16 @@ export function reconcileClosureCompletion(
         completion_status: completion,
         closure_status: closure,
         conflict: true,
-        conflictDetail: `Aconex Status="Work Done" implies completion=Done but Excel provided actual_progress_pct=${excelPct ?? 'null'}, actual_completion_date=${excelDate ?? 'null'}. Auto-reconcile skipped (Excel value wins).`,
+        conflictDetail: `Aconex Status="${input.status}" implies completion=Done but Excel provided actual_progress_pct=${excelPct ?? 'null'}, actual_completion_date=${excelDate ?? 'null'}. Auto-reconcile skipped (Excel value wins).`,
       };
     }
+    // Prefer closure date if available, otherwise asOf.
+    const completionDate = input.actual_closure_date ?? asOf;
     return {
       completion_status: completion,
       closure_status: closure,
       patch: {
-        actual_completion_date: asOf,
+        actual_completion_date: completionDate,
         actual_progress_pct: 100,
       },
     };
