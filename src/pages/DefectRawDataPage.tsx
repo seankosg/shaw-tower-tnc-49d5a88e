@@ -1368,25 +1368,28 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
 
   return (
     <div className="flex max-h-[calc(100vh-220px)] flex-col overflow-hidden rounded-md border bg-background">
-      {/* Header pane: hidden horizontal scroll, synced from body */}
-      <div ref={headerScrollRef} className="overflow-hidden bg-background">
-        <Table style={{ width: totalWidth, tableLayout: 'fixed' }}>
-          <TableHeader className="bg-background">
-            <TableRow className="border-b bg-background">
-              {allHeaders.map(renderHeader)}
-            </TableRow>
-          </TableHeader>
-        </Table>
-      </div>
-      {/* Mirror horizontal scrollbar above the body */}
-      <TopHorizontalScrollbar targetRef={tableRef} width={totalWidth} />
-      {/* Body: single table, single row tree. Vertical + horizontal scroll. */}
+      {/* Mirror horizontal scrollbar above the body. The visible track starts
+          AFTER the frozen area so it never appears to overlap sticky columns. */}
+      <TopHorizontalScrollbar
+        targetRef={tableRef}
+        width={totalWidth}
+        frozenWidth={frozenWidth}
+      />
+      {/* Single scroll container: owns BOTH horizontal and vertical scroll.
+          Header is rendered inside the same <table>, with sticky top rows so
+          it stays visible vertically while sharing the same horizontal scroll
+          coordinate space as the body. Frozen columns use position:sticky on
+          both header and body cells, guaranteeing alignment. */}
       <div
         ref={tableRef}
-        onScroll={handleScroll}
         className="min-w-0 flex-1 overflow-auto scrollbar-hide"
       >
         <Table style={{ width: totalWidth, tableLayout: 'fixed' }}>
+          <TableHeader className="bg-background">
+            <TableRow className="border-b bg-background [&>th]:sticky [&>th]:top-0">
+              {allHeaders.map(renderHeader)}
+            </TableRow>
+          </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
