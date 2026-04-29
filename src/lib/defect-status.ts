@@ -121,11 +121,44 @@ export function reconcileClosureCompletion(
   const completion = computeCompletionStatus(input, asOf);
   const closure = computeClosureStatus(input, asOf, completion);
 
+  const excelPct = excelExplicit.actual_progress_pct;
+  const excelDate = excelExplicit.actual_completion_date;
+  const hasExplicitPct = excelPct !== null && excelPct !== undefined && Number(excelPct) < 100;
+  const hasExplicitDate = excelDate !== null && excelDate !== undefined && String(excelDate).trim() !== '';
+
+  // Case A: Aconex Status="Work Done" (closure NOT Done yet) — completion is Done by status,
+  // but actual_completion_date / actual_progress_pct may be missing. Auto-fill them unless Excel
+  // explicitly contradicts.
+  if (
+    closure !== 'Done'
+    && completion === 'Done'
+    && isStatusWorkDone(input.status)
+    && !input.actual_completion_date
+    && Number(input.actual_progress_pct ?? 0) < 100
+  ) {
+    if (hasExplicitPct || hasExplicitDate) {
+      return {
+        completion_status: completion,
+        closure_status: closure,
+        conflict: true,
+        conflictDetail: `Aconex Status="Work Done" implies completion=Done but Excel provided actual_progress_pct=${excelPct ?? 'null'}, actual_completion_date=${excelDate ?? 'null'}. Auto-reconcile skipped (Excel value wins).`,
+      };
+    }
+    return {
+      completion_status: completion,
+      closure_status: closure,
+      patch: {
+        actual_completion_date: asOf,
+        actual_progress_pct: 100,
+      },
+    };
+  }
+
   if (closure !== 'Done' || completion === 'Done') {
     return { completion_status: completion, closure_status: closure };
   }
 
-  // Closure=Done, Completion!=Done → check for Excel conflict
+  // Case B (existing): Closure=Done, Completion!=Done → check for Excel conflict
   const excelPct = excelExplicit.actual_progress_pct;
   const excelDate = excelExplicit.actual_completion_date;
   const hasExplicitPct = excelPct !== null && excelPct !== undefined && Number(excelPct) < 100;
