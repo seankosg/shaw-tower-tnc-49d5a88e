@@ -1268,8 +1268,6 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
     [leafColumns, table.getState().columnSizing],
   );
 
-  const headerScrollRef = useRef<HTMLDivElement>(null);
-
   const rows = table.getRowModel().rows;
   const ROW_HEIGHT = 36;
   const rowVirtualizer = useVirtualizer({
@@ -1284,17 +1282,11 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
   const paddingBottom = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // The body is the sole vertical scroll source. Header mirrors horizontal scroll only.
-  const handleScroll = useCallback(() => {
-    if (headerScrollRef.current && tableRef.current) {
-      headerScrollRef.current.scrollLeft = tableRef.current.scrollLeft;
-    }
-  }, [tableRef]);
-
   const headerGroup = table.getHeaderGroups().at(-1);
   const allHeaders = headerGroup?.headers ?? [];
 
   const renderHeader = (header: any, index: number) => {
+    const isSticky = index < frozenCount;
     const isLastSticky = index === frozenCount - 1;
     return (
       <TableHead
@@ -1304,6 +1296,14 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
           width: header.getSize(),
           minWidth: header.getSize(),
           maxWidth: header.getSize(),
+          ...(isSticky
+            ? {
+                position: 'sticky',
+                left: stickyLefts[index],
+                zIndex: 3,
+                background: 'hsl(var(--background))',
+              }
+            : {}),
         }}
         className={cn(
           'relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background px-4 py-0 text-left text-xs font-medium',
