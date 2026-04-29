@@ -547,6 +547,16 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Defensive self-heal: ensure SC counters are at least max(used_seq)+1 for every
+    // owner before we allocate new sequences. Protects against drift caused by manual
+    // SC No edits, owner reassignments, or legacy data that bypassed the counter.
+    // Idempotent on the DB side — no-op when counters are already correct.
+    try {
+      await (supabase as any).rpc('sync_all_subcontractor_counters', { _project_id: activeProjectId });
+    } catch (err) {
+      console.warn('sync_all_subcontractor_counters failed (continuing):', err);
+    }
+
     const assignments = await buildSubcontractorIssueAssignments(mappedRows, activeProjectId, issueRegistry, existingByIssueNo);
 
     const batchRes = await (supabase as any).from('defect_upload_batches').insert({ uploaded_file_name: item.name, uploaded_by: user.id, status: 'processing', total_rows: item.parsed.length, data_date: dataDate }).select('id').single();
