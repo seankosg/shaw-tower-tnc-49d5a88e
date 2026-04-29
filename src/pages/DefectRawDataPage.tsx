@@ -1322,28 +1322,43 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
 
   return (
     <div className="flex max-h-[calc(100vh-220px)] overflow-hidden rounded-md border bg-background">
-      <div ref={frozenPaneRef} onWheel={handleFrozenWheel} onScroll={handleFrozenScroll} className="overflow-y-auto overflow-x-hidden scrollbar-hide border-r border-border bg-background shadow-[2px_0_4px_-2px_hsl(var(--border))]" style={{ width: frozenWidth, flexShrink: 0 }}>
-        <Table style={{ width: frozenWidth, tableLayout: 'fixed' }}>
-          <TableHeader className="sticky top-0 z-20 bg-background"><TableRow className="border-b bg-background">{frozenHeaders.map(renderHeader)}</TableRow></TableHeader>
-          <TableBody>
-            {/* Spacer to align frozen rows with scroll-pane rows (matches mirror scrollbar height) */}
-            <tr aria-hidden><td colSpan={frozenColumns.length} style={{ height: 16, padding: 0, border: 0 }} /></tr>
-            {loading || rows.length === 0 ? <TableRow><TableCell colSpan={frozenColumns.length} className="py-8 text-center text-muted-foreground">&nbsp;</TableCell></TableRow> : (
-              <>
-                {paddingTop > 0 && <tr style={{ height: paddingTop }} aria-hidden><td colSpan={frozenColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
-                {virtualRows.map((virtualRow) => {
-                  const row = rows[virtualRow.index];
-                  return (
-                    <TableRow key={row.id} data-index={virtualRow.index} style={{ height: virtualRow.size, maxHeight: virtualRow.size }} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}${location.search}`)}>
-                      {row.getVisibleCells().slice(0, frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize(), height: virtualRow.size, maxHeight: virtualRow.size, overflow: 'hidden' }} className="truncate whitespace-nowrap py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
-                    </TableRow>
-                  );
-                })}
-                {paddingBottom > 0 && <tr style={{ height: paddingBottom }} aria-hidden><td colSpan={frozenColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
-              </>
-            )}
-          </TableBody>
-        </Table>
+      {/* Frozen pane: header rendered as its OWN table above a non-scrolling body
+          container — exactly mirrors the scroll-pane structure so vertical row
+          alignment between the two panes can never drift. The pane only scrolls
+          when the right-side body scrolls and we manually push scrollTop. */}
+      <div
+        ref={frozenPaneRef}
+        onWheel={handleFrozenWheel}
+        className="flex flex-col overflow-hidden border-r border-border bg-background shadow-[2px_0_4px_-2px_hsl(var(--border))]"
+        style={{ width: frozenWidth, flexShrink: 0 }}
+      >
+        <div className="overflow-hidden bg-background">
+          <Table style={{ width: frozenWidth, tableLayout: 'fixed' }}>
+            <TableHeader className="bg-background"><TableRow className="border-b bg-background">{frozenHeaders.map(renderHeader)}</TableRow></TableHeader>
+          </Table>
+        </div>
+        {/* Spacer matching the right pane's TopHorizontalScrollbar height (16px) so the first row of both panes lines up */}
+        <div aria-hidden className="h-[16px] shrink-0 border-b bg-muted/30" />
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <Table style={{ width: frozenWidth, tableLayout: 'fixed' }}>
+            <TableBody>
+              {loading || rows.length === 0 ? <TableRow><TableCell colSpan={frozenColumns.length} className="py-8 text-center text-muted-foreground">&nbsp;</TableCell></TableRow> : (
+                <>
+                  {paddingTop > 0 && <tr style={{ height: paddingTop }} aria-hidden><td colSpan={frozenColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
+                  {virtualRows.map((virtualRow) => {
+                    const row = rows[virtualRow.index];
+                    return (
+                      <TableRow key={row.id} data-index={virtualRow.index} style={{ height: virtualRow.size, maxHeight: virtualRow.size }} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}${location.search}`)}>
+                        {row.getVisibleCells().slice(0, frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize(), height: virtualRow.size, maxHeight: virtualRow.size, overflow: 'hidden' }} className="truncate whitespace-nowrap py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
+                      </TableRow>
+                    );
+                  })}
+                  {paddingBottom > 0 && <tr style={{ height: paddingBottom }} aria-hidden><td colSpan={frozenColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
+                </>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
