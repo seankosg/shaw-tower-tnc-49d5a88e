@@ -2002,6 +2002,13 @@ export type Database = {
         Returns: Json
       }
       suggest_owner_code: { Args: { _name: string }; Returns: string }
+      sync_all_subcontractor_counters: {
+        Args: { _project_id: string }
+        Returns: {
+          out_next_seq: number
+          out_owner_code: string
+        }[]
+      }
     }
     Enums: {
       action_taken: "inserted" | "updated" | "skipped" | "rejected"
