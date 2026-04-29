@@ -989,6 +989,28 @@ export default function DefectRawDataPage() {
       const stageLabel = stage === 'completion' ? 'Completion' : stage === 'closure' ? 'Closure' : stage === 'start' ? 'Start' : 'Stage';
       out.push({ label: `${stageLabel} actual ${unplannedActualOn} (unplanned)`, param: 'unplannedActualOn', clears: ['unplannedActualOn', 'stage'] });
     }
+    // Dashboard-driven status filters
+    const ac = searchParams.get('actualComplete');
+    const cc = searchParams.get('closureComplete');
+    if (ac === 'true' && cc === 'false') {
+      out.push({ label: 'Remain Inspection', param: 'actualComplete', clears: ['actualComplete', 'closureComplete'] });
+    } else {
+      if (ac === 'true' || ac === 'false') {
+        out.push({ label: `Completion: ${ac === 'true' ? 'Done' : 'Open'}`, param: 'actualComplete', clears: ['actualComplete'] });
+      }
+      if (cc === 'true' || cc === 'false') {
+        out.push({ label: `Closure: ${cc === 'true' ? 'Done' : 'Open'}`, param: 'closureComplete', clears: ['closureComplete'] });
+      }
+    }
+    if (searchParams.get('overdue') === 'true') {
+      const stage = searchParams.get('stage');
+      const stageLabel = stage === 'completion' ? 'Completion' : stage === 'closure' ? 'Closure' : stage === 'start' ? 'Start' : null;
+      out.push({ label: stageLabel ? `Overdue — ${stageLabel}` : 'Overdue', param: 'overdue', clears: ['overdue', 'stage', 'asOf'] });
+    }
+    if (searchParams.get('atRisk') === 'true') {
+      const days = searchParams.get('atRiskDays');
+      out.push({ label: days ? `At Risk (≤ ${days}d)` : 'At Risk', param: 'atRisk', clears: ['atRisk', 'atRiskDays'] });
+    }
     return out;
   }, [searchParams, getLabel]);
 
