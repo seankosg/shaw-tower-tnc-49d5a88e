@@ -1248,7 +1248,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
   const scrollColumns = useMemo(() => leafColumns.slice(frozenCount), [leafColumns, frozenCount]);
   const frozenWidth = useMemo(() => frozenColumns.reduce((sum, column) => sum + column.getSize(), 0), [frozenColumns, table.getState().columnSizing]);
   const scrollWidth = useMemo(() => scrollColumns.reduce((sum, column) => sum + column.getSize(), 0), [scrollColumns, table.getState().columnSizing]);
-  const frozenPaneRef = useRef<HTMLDivElement>(null);
+  const frozenBodyRef = useRef<HTMLDivElement>(null);
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const rows = table.getRowModel().rows;
   const ROW_HEIGHT = 36;
@@ -1259,12 +1259,11 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
   const paddingBottom = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // The scroll-pane (right side) is the single source of truth for both vertical
-  // and horizontal scroll. The frozen pane has overflow:hidden — we manually push
-  // its scrollTop to match the body. This is the SubtestList pattern and prevents
-  // the frozen/scroll panes from drifting out of vertical alignment.
+  // The right body is the single source of truth for vertical scroll. The frozen
+  // BODY container (not the outer pane) mirrors scrollTop so left/right rows
+  // always sit at the same Y. Header + spacer are outside of the scroll target.
   const handleScroll = useCallback(() => {
-    if (frozenPaneRef.current && tableRef.current) frozenPaneRef.current.scrollTop = tableRef.current.scrollTop;
+    if (frozenBodyRef.current && tableRef.current) frozenBodyRef.current.scrollTop = tableRef.current.scrollTop;
     if (headerScrollRef.current && tableRef.current) headerScrollRef.current.scrollLeft = tableRef.current.scrollLeft;
   }, [tableRef]);
 
