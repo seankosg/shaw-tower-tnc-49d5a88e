@@ -1271,20 +1271,20 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
 
   return (
     <div className="flex max-h-[calc(100vh-220px)] overflow-hidden rounded-md border bg-background">
-      <div ref={frozenPaneRef} onWheel={handleFrozenWheel} className="overflow-hidden border-r border-border bg-background shadow-[2px_0_4px_-2px_hsl(var(--border))]" style={{ width: frozenWidth, flexShrink: 0 }}>
+      <div ref={frozenPaneRef} onWheel={handleFrozenWheel} onScroll={handleFrozenScroll} className="overflow-y-auto overflow-x-hidden scrollbar-hide border-r border-border bg-background shadow-[2px_0_4px_-2px_hsl(var(--border))]" style={{ width: frozenWidth, flexShrink: 0 }}>
         <Table style={{ width: frozenWidth, tableLayout: 'fixed' }}>
           <TableHeader className="sticky top-0 z-20 bg-background"><TableRow className="border-b bg-background">{frozenHeaders.map(renderHeader)}</TableRow></TableHeader>
           <TableBody>
             {/* Spacer to align frozen rows with scroll-pane rows (matches mirror scrollbar height) */}
-            <tr aria-hidden><td colSpan={frozenColumns.length} style={{ height: 12, padding: 0, border: 0 }} /></tr>
+            <tr aria-hidden><td colSpan={frozenColumns.length} style={{ height: 16, padding: 0, border: 0 }} /></tr>
             {loading || rows.length === 0 ? <TableRow><TableCell colSpan={frozenColumns.length} className="py-8 text-center text-muted-foreground">&nbsp;</TableCell></TableRow> : (
               <>
                 {paddingTop > 0 && <tr style={{ height: paddingTop }} aria-hidden><td colSpan={frozenColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
                 {virtualRows.map((virtualRow) => {
                   const row = rows[virtualRow.index];
                   return (
-                    <TableRow key={row.id} data-index={virtualRow.index} style={{ height: virtualRow.size }} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}${location.search}`)}>
-                      {row.getVisibleCells().slice(0, frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize() }} className="truncate whitespace-nowrap py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
+                    <TableRow key={row.id} data-index={virtualRow.index} style={{ height: virtualRow.size, maxHeight: virtualRow.size }} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}${location.search}`)}>
+                      {row.getVisibleCells().slice(0, frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize(), height: virtualRow.size, maxHeight: virtualRow.size, overflow: 'hidden' }} className="truncate whitespace-nowrap py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
                     </TableRow>
                   );
                 })}
