@@ -129,14 +129,164 @@ export default function AdminClassificationPage() {
     load();
   };
 
+  // Workscopes
+  const addWs = async () => {
+    if (!newWs.label || !newWs.full_name) { toast({ title: 'label & full_name required', variant: 'destructive' }); return; }
+    const { error } = await (supabase as any).from('defect_subcontractor_workscope').insert({
+      label: newWs.label.trim(),
+      full_name: newWs.full_name.trim(),
+      keywords: csvToArr(newWs.keywords ?? ''),
+      match_priority: newWs.match_priority ?? 100,
+      is_active: newWs.is_active ?? true,
+    });
+    if (error) { toast({ title: 'Insert failed', description: error.message, variant: 'destructive' }); return; }
+    setNewWs({ match_priority: 100, is_active: true });
+    load();
+  };
+  const updateWs = async (id: string, patch: any) => { await (supabase as any).from('defect_subcontractor_workscope').update(patch).eq('id', id); load(); };
+  const deleteWs = async (id: string) => { await (supabase as any).from('defect_subcontractor_workscope').delete().eq('id', id); load(); };
+
+  // Work Types
+  const addWt = async () => {
+    if (!newWt.name) { toast({ title: 'name required', variant: 'destructive' }); return; }
+    const { error } = await (supabase as any).from('defect_work_types').insert({
+      trade: newWt.trade ?? '',
+      name: newWt.name.trim(),
+      sub_match: csvToArr(newWt.sub_match ?? ''),
+      desc_keywords: csvToArr(newWt.desc_keywords ?? ''),
+      default_main_trade: newWt.default_main_trade || null,
+      default_sub_trade: newWt.default_sub_trade || null,
+      match_order: newWt.match_order ?? 100,
+      is_active: newWt.is_active ?? true,
+    });
+    if (error) { toast({ title: 'Insert failed', description: error.message, variant: 'destructive' }); return; }
+    setNewWt({ match_order: 100, is_active: true });
+    load();
+  };
+  const updateWt = async (id: string, patch: any) => { await (supabase as any).from('defect_work_types').update(patch).eq('id', id); load(); };
+  const deleteWt = async (id: string) => { await (supabase as any).from('defect_work_types').delete().eq('id', id); load(); };
+
+  // Aliases
+  const addAl = async () => {
+    if (!newAl.raw_label || !newAl.canonical_label) { toast({ title: 'raw & canonical label required', variant: 'destructive' }); return; }
+    const { error } = await (supabase as any).from('defect_classification_alias').insert({
+      raw_label: newAl.raw_label.trim(),
+      canonical_label: newAl.canonical_label.trim(),
+      is_active: newAl.is_active ?? true,
+    });
+    if (error) { toast({ title: 'Insert failed', description: error.message, variant: 'destructive' }); return; }
+    setNewAl({ is_active: true });
+    load();
+  };
+  const updateAl = async (id: string, patch: Partial<AliasRow>) => { await (supabase as any).from('defect_classification_alias').update(patch).eq('id', id); load(); };
+  const deleteAl = async (id: string) => { await (supabase as any).from('defect_classification_alias').delete().eq('id', id); load(); };
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Defect Classification</h1>
-      <Tabs defaultValue="rules">
+      <Tabs defaultValue="workscopes">
         <TabsList>
+          <TabsTrigger value="workscopes">Workscopes</TabsTrigger>
+          <TabsTrigger value="worktypes">Work Types</TabsTrigger>
+          <TabsTrigger value="aliases">Aliases</TabsTrigger>
           <TabsTrigger value="rules">Keyword Rules</TabsTrigger>
           <TabsTrigger value="fallback">Discipline Fallback</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="workscopes">
+          <Card>
+            <CardHeader><CardTitle>Subcontractor Workscopes ({workscopes.length})</CardTitle></CardHeader>
+            <CardContent>
+              <div className="grid gap-2 md:grid-cols-6 mb-4">
+                <Input placeholder="label (e.g. Puretech)" value={newWs.label ?? ''} onChange={(e) => setNewWs({ ...newWs, label: e.target.value })} />
+                <Input placeholder="full name" value={newWs.full_name ?? ''} onChange={(e) => setNewWs({ ...newWs, full_name: e.target.value })} />
+                <Input placeholder="keywords (comma-separated)" value={newWs.keywords ?? ''} onChange={(e) => setNewWs({ ...newWs, keywords: e.target.value })} />
+                <Input type="number" placeholder="match_priority" value={newWs.match_priority ?? 100} onChange={(e) => setNewWs({ ...newWs, match_priority: Number(e.target.value) })} />
+                <Switch checked={newWs.is_active ?? true} onCheckedChange={(v) => setNewWs({ ...newWs, is_active: v })} />
+                <Button onClick={addWs}><Plus className="h-4 w-4 mr-1" />Add</Button>
+              </div>
+              <Table>
+                <TableHeader><TableRow><TableHead>Label</TableHead><TableHead>Full Name</TableHead><TableHead>Keywords</TableHead><TableHead>Priority</TableHead><TableHead>Active</TableHead><TableHead></TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {workscopes.map((w) => (
+                    <TableRow key={w.id}>
+                      <TableCell><Input value={w.label} onBlur={(e) => updateWs(w.id, { label: e.target.value.trim() })} onChange={(e) => setWorkscopes((cur) => cur.map((x) => x.id === w.id ? { ...x, label: e.target.value } : x))} /></TableCell>
+                      <TableCell><Input value={w.full_name} onBlur={(e) => updateWs(w.id, { full_name: e.target.value.trim() })} onChange={(e) => setWorkscopes((cur) => cur.map((x) => x.id === w.id ? { ...x, full_name: e.target.value } : x))} /></TableCell>
+                      <TableCell><Input value={arrToCsv(w.keywords)} onBlur={(e) => updateWs(w.id, { keywords: csvToArr(e.target.value) })} onChange={(e) => setWorkscopes((cur) => cur.map((x) => x.id === w.id ? { ...x, keywords: e.target.value.split(',').map((s) => s.trim()) } : x))} /></TableCell>
+                      <TableCell><Input type="number" value={w.match_priority} onBlur={(e) => updateWs(w.id, { match_priority: Number(e.target.value) })} onChange={(e) => setWorkscopes((cur) => cur.map((x) => x.id === w.id ? { ...x, match_priority: Number(e.target.value) } : x))} /></TableCell>
+                      <TableCell><Switch checked={w.is_active} onCheckedChange={(v) => updateWs(w.id, { is_active: v })} /></TableCell>
+                      <TableCell><Button size="icon" variant="ghost" onClick={() => deleteWs(w.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="worktypes">
+          <Card>
+            <CardHeader><CardTitle>Work Types ({workTypes.length})</CardTitle></CardHeader>
+            <CardContent>
+              <div className="grid gap-2 md:grid-cols-9 mb-4">
+                <Input placeholder="trade" value={newWt.trade ?? ''} onChange={(e) => setNewWt({ ...newWt, trade: e.target.value })} />
+                <Input placeholder="name" value={newWt.name ?? ''} onChange={(e) => setNewWt({ ...newWt, name: e.target.value })} />
+                <Input placeholder="sub_match (csv)" value={newWt.sub_match ?? ''} onChange={(e) => setNewWt({ ...newWt, sub_match: e.target.value })} />
+                <Input placeholder="desc_keywords (csv)" value={newWt.desc_keywords ?? ''} onChange={(e) => setNewWt({ ...newWt, desc_keywords: e.target.value })} />
+                <Input placeholder="default main_trade" value={newWt.default_main_trade ?? ''} onChange={(e) => setNewWt({ ...newWt, default_main_trade: e.target.value })} />
+                <Input placeholder="default sub_trade" value={newWt.default_sub_trade ?? ''} onChange={(e) => setNewWt({ ...newWt, default_sub_trade: e.target.value })} />
+                <Input type="number" placeholder="match_order" value={newWt.match_order ?? 100} onChange={(e) => setNewWt({ ...newWt, match_order: Number(e.target.value) })} />
+                <Switch checked={newWt.is_active ?? true} onCheckedChange={(v) => setNewWt({ ...newWt, is_active: v })} />
+                <Button onClick={addWt}><Plus className="h-4 w-4 mr-1" />Add</Button>
+              </div>
+              <Table>
+                <TableHeader><TableRow><TableHead>Trade</TableHead><TableHead>Name</TableHead><TableHead>Sub Match</TableHead><TableHead>Desc Keywords</TableHead><TableHead>Main Trade</TableHead><TableHead>Sub Trade</TableHead><TableHead>Order</TableHead><TableHead>Active</TableHead><TableHead></TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {workTypes.map((w) => (
+                    <TableRow key={w.id}>
+                      <TableCell><Input value={w.trade ?? ''} onBlur={(e) => updateWt(w.id, { trade: e.target.value })} onChange={(e) => setWorkTypes((cur) => cur.map((x) => x.id === w.id ? { ...x, trade: e.target.value } : x))} /></TableCell>
+                      <TableCell><Input value={w.name} onBlur={(e) => updateWt(w.id, { name: e.target.value })} onChange={(e) => setWorkTypes((cur) => cur.map((x) => x.id === w.id ? { ...x, name: e.target.value } : x))} /></TableCell>
+                      <TableCell><Input value={arrToCsv(w.sub_match)} onBlur={(e) => updateWt(w.id, { sub_match: csvToArr(e.target.value) })} onChange={(e) => setWorkTypes((cur) => cur.map((x) => x.id === w.id ? { ...x, sub_match: e.target.value.split(',').map((s) => s.trim()) } : x))} /></TableCell>
+                      <TableCell><Input value={arrToCsv(w.desc_keywords)} onBlur={(e) => updateWt(w.id, { desc_keywords: csvToArr(e.target.value) })} onChange={(e) => setWorkTypes((cur) => cur.map((x) => x.id === w.id ? { ...x, desc_keywords: e.target.value.split(',').map((s) => s.trim()) } : x))} /></TableCell>
+                      <TableCell><Input value={w.default_main_trade ?? ''} onBlur={(e) => updateWt(w.id, { default_main_trade: e.target.value || null })} onChange={(e) => setWorkTypes((cur) => cur.map((x) => x.id === w.id ? { ...x, default_main_trade: e.target.value } : x))} /></TableCell>
+                      <TableCell><Input value={w.default_sub_trade ?? ''} onBlur={(e) => updateWt(w.id, { default_sub_trade: e.target.value || null })} onChange={(e) => setWorkTypes((cur) => cur.map((x) => x.id === w.id ? { ...x, default_sub_trade: e.target.value } : x))} /></TableCell>
+                      <TableCell><Input type="number" value={w.match_order} onBlur={(e) => updateWt(w.id, { match_order: Number(e.target.value) })} onChange={(e) => setWorkTypes((cur) => cur.map((x) => x.id === w.id ? { ...x, match_order: Number(e.target.value) } : x))} /></TableCell>
+                      <TableCell><Switch checked={w.is_active} onCheckedChange={(v) => updateWt(w.id, { is_active: v })} /></TableCell>
+                      <TableCell><Button size="icon" variant="ghost" onClick={() => deleteWt(w.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="aliases">
+          <Card>
+            <CardHeader><CardTitle>Label Aliases ({aliases.length})</CardTitle></CardHeader>
+            <CardContent>
+              <div className="grid gap-2 md:grid-cols-4 mb-4">
+                <Input placeholder="raw_label (e.g. Puretec)" value={newAl.raw_label ?? ''} onChange={(e) => setNewAl({ ...newAl, raw_label: e.target.value })} />
+                <Input placeholder="canonical_label (e.g. Puretech)" value={newAl.canonical_label ?? ''} onChange={(e) => setNewAl({ ...newAl, canonical_label: e.target.value })} />
+                <Switch checked={newAl.is_active ?? true} onCheckedChange={(v) => setNewAl({ ...newAl, is_active: v })} />
+                <Button onClick={addAl}><Plus className="h-4 w-4 mr-1" />Add</Button>
+              </div>
+              <Table>
+                <TableHeader><TableRow><TableHead>Raw Label</TableHead><TableHead>Canonical Label</TableHead><TableHead>Active</TableHead><TableHead></TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {aliases.map((a) => (
+                    <TableRow key={a.id}>
+                      <TableCell><Input value={a.raw_label} onBlur={(e) => updateAl(a.id, { raw_label: e.target.value.trim() })} onChange={(e) => setAliases((cur) => cur.map((x) => x.id === a.id ? { ...x, raw_label: e.target.value } : x))} /></TableCell>
+                      <TableCell><Input value={a.canonical_label} onBlur={(e) => updateAl(a.id, { canonical_label: e.target.value.trim() })} onChange={(e) => setAliases((cur) => cur.map((x) => x.id === a.id ? { ...x, canonical_label: e.target.value } : x))} /></TableCell>
+                      <TableCell><Switch checked={a.is_active} onCheckedChange={(v) => updateAl(a.id, { is_active: v })} /></TableCell>
+                      <TableCell><Button size="icon" variant="ghost" onClick={() => deleteAl(a.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="rules">
           <Card>
