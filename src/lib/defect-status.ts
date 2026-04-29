@@ -9,13 +9,23 @@ export interface DefectStatusInputs {
   actual_closure_date: string | null;
   planned_progress_pct: number | null;
   actual_progress_pct: number | null;
-  /** LL original Status field. When equal to "Closed" (case-insensitive), closure is treated as Done. */
+  /**
+   * Aconex (LL) original Status field. Auto-mapping rules:
+   *   - "Closed"     → closure_status = Done (and completion = Done)
+   *   - "Work Done"  → completion_status = Done (closure derived from dates)
+   *   - "Open" / "In dispute" / others → no auto-mapping
+   */
   status?: string | null;
 }
 
-/** Returns true when the LL `Status` column indicates the defect is closed. */
+/** Returns true when the Aconex `Status` column indicates the defect is closed. */
 export function isStatusClosed(status: string | null | undefined): boolean {
   return String(status ?? '').trim().toLowerCase() === 'closed';
+}
+
+/** Returns true when the Aconex `Status` column indicates work is done (but not yet closed). */
+export function isStatusWorkDone(status: string | null | undefined): boolean {
+  return String(status ?? '').trim().toLowerCase() === 'work done';
 }
 
 export function isValidDefectStatus(value: unknown): value is DefectStatusValue {
