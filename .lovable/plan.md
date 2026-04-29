@@ -1,53 +1,64 @@
-## SC No Counter Drift 영구 차단 (옵션 2)
+# Aconex Status 기반 Completion/Closure 자동 매핑
 
-### 배경
-이번 import 실패의 직접 원인은 `subcontractor_issue_counters.next_seq`(KURIHARA=115)가 실제 사용 중인 최대 시퀀스(122)보다 작아서, RPC `allot_subcontractor_issue_no`가 이미 존재하는 `SC-KURIHARA-115` 등을 다시 발급하다가 unique index `defect_items_subcontractor_issue_unique`에 걸린 것. 2026-04-28에 한 번 동기화 마이그레이션을 돌렸지만, 이후 또 어긋남. 매번 수동 정정은 한계가 있으므로 영구 차단 장치를 넣는다.
+## 목표
+Excel import 시 Aconex `Status` 컬럼 값에 따라 `completion_status` / `closure_status` 를 자동으로 채운다.
 
-### 변경 1 — DB 마이그레이션 (신규 파일)
+| Aconex Status | 의미 | 자동 매핑 |
+|---|---|---|
+| `Open` | 진행 중 | 별도 처리 없음 (날짜·진행률 기반 자동 계산 유지) |
+| `Work Done` | 완료됨 | **completion_status = Done** (그리고 `actual_completion_date`/`actual_progress_pct=100` 자동 보정) |
+| `Closed` | 폐쇄됨 | **closure_status = Done** (기존 동작 유지) + 결과적으로 completion 도 Done |
+| `In dispute` | 분쟁 중 | 별도 처리 없음 (`status` 원문만 보존) |
 
-**`supabase/migrations/<timestamp>_sync_sc_counters_rpc.sql`**
+원본 Aconex `Status` 텍스트는 `defect_items.status` 컬럼에 그대로 보존된다.
 
-1. **새 RPC `public.sync_all_subcontractor_counters(_project_id uuid)`** 생성
-   - 해당 project의 모든 활성 defect_items에서 owner별 max(seq) 산출
-   - `subcontractor_issue_counters.next_seq`를 `GREATEST(현재값, max_used+1)`로 upsert
-   - SECURITY DEFINER, search_path=public, authenticated에 EXECUTE 권한
-   - 멱등성 보장 — 이미 카운터가 충분히 크면 no-op
-   - 반환: owner_code별 변경 내역 (디버깅용)
+## Excel 우선순위 (기존 정책 유지)
+- Excel 에 `Completion Status` / `Closure Status` 또는 `Actual Completion Date` 가 명시되어 있으면 **Excel 값이 우선**.
+- Aconex Status 자동 매핑은 Excel 명시값이 없을 때만 적용.
+- 충돌이 발생하면 (예: Status=Closed 인데 Excel 이 actual_progress_pct=50) 기존 `closure_completion_conflict` 로그 메커니즘이 그대로 동작.
 
-2. **즉시 1회 실행** — DO 블록으로 모든 활성 project에 대해 호출 → KURIHARA를 비롯한 현재 drift를 그 자리에서 모두 정정.
+## 기술적 변경
 
-```sql
-CREATE OR REPLACE FUNCTION public.sync_all_subcontractor_counters(_project_id uuid)
-RETURNS TABLE(owner_code text, new_next_seq int) ...
--- (regex로 SC-OWNER-NNNNN 파싱 후 GREATEST upsert)
+### 1. `src/lib/defect-status.ts`
+- 새 헬퍼 추가: `isStatusWorkDone(status)` — `"work done"` (대소문자/공백 무시) 매칭.
+- `computeCompletionStatus()` 1번 규칙 확장:
+  ```ts
+  if (input.actual_completion_date 
+      || actualPct >= 100 
+      || isStatusWorkDone(input.status) 
+      || isStatusClosed(input.status)) return 'Done';
+  ```
+  → `Closed` 도 자연스럽게 completion=Done 으로 승격 (현재는 closure 만 Done 처리).
+- `reconcileClosureCompletion()` 의 자동 보정 로직 확장:
+  - 기존: `closure=Done && completion!=Done` → `actual_completion_date`, `actual_progress_pct=100` 자동 채움.
+  - 추가: `Status=Work Done && actual_completion_date 없음` → `actual_completion_date = data date`, `actual_progress_pct = 100` 채움 (Excel 명시값이 없을 때만, 기존 conflict 가드 동일 적용).
 
-DO $$ ... PERFORM ... FOR each active project ... $$;
-```
+### 2. `src/contexts/DefectImportContext.tsx`
+- 별도 변경 거의 없음. 이미 `statusInputs.status = row.status` 를 `reconcileClosureCompletion` 으로 전달 중.
+- `excelExplicit` 충돌 가드는 그대로 사용 — Work Done 자동 보정도 동일 가드를 통과해야 적용됨.
+- `pendingLogs` 에 정보성 로그 추가:
+  - `reason_code: 'aconex_status_auto_mapped'`, detail 에 `"Status=Work Done → completion=Done auto-applied"` 또는 `"Status=Closed → closure=Done auto-applied"`.
 
-### 변경 2 — Client 코드
+### 3. 테스트 (`src/test/defect-status.test.ts` — 기존 파일 확장)
+- Status=`Work Done` + 빈 actual_completion_date → completion=Done, patch 발생.
+- Status=`Closed` + 빈 actual_completion_date → completion=Done, closure=Done, patch 발생.
+- Status=`Open` → 기존 날짜·진행률 로직만 동작 (변경 없음).
+- Status=`In dispute` → 기존 로직만 동작 (변경 없음).
+- Status=`Work Done` + Excel 이 actual_progress_pct=50 명시 → conflict 플래그, patch 없음.
 
-**`src/contexts/DefectImportContext.tsx`** (line 550 직전)
+### 4. 영향 범위
+- 신규 import 행: 즉시 적용.
+- 기존 데이터: 자동 재계산은 기존 일일 cron(`recompute-defect-status`)이 처리. cron 도 동일 로직(`computeCompletion/Closure`)을 호출하지만 이 함수는 edge function 안에 인라인 복제되어 있음.
+  - **포함 권장**: edge function `supabase/functions/recompute-defect-status/index.ts` 의 `computeCompletion` / `computeClosure` 에도 동일한 `Work Done` / `Closed` 분기 추가. 이렇게 해야 다음 cron 실행 시 기존 122건의 Work Done 행과 4건의 Closed 행이 일관되게 보정됨.
 
-`buildSubcontractorIssueAssignments` 호출 직전에 sync RPC를 한 번 호출한다. 실패해도 import는 계속 진행(방어용 try/catch + console.warn). 이로써 카운터가 어떤 경로로 어긋나도 import 시작 시점에 self-heal.
+## 변경되지 않는 것
+- DB 스키마 변경 없음.
+- `defect_items.status` 컬럼은 Aconex 원문 그대로 저장.
+- Excel 명시값 우선 정책 유지.
+- StatusBadge UI 변경 없음 (별도 요청 시 추가 가능).
 
-```ts
-try {
-  await supabase.rpc('sync_all_subcontractor_counters', { _project_id: activeProjectId });
-} catch (err) {
-  console.warn('sync_all_subcontractor_counters failed (continuing):', err);
-}
-const assignments = await buildSubcontractorIssueAssignments(...);
-```
-
-### 변경 없음
-- `defect_items` 스키마 / 기존 발번 RPC / unique index — 그대로
-- 다른 import/page 영향 없음 (사용자 정정 정책 유지)
-
-### 확인 단계
-1. 마이그레이션 적용 후 `subcontractor_issue_counters` 조회 → KURIHARA next_seq ≥ 123 확인
-2. 사용자에게 실패한 엑셀 재업로드 요청 → 정상 import (208행 모두 신규 INSERT) 확인
-3. 콘솔에 sync_all_subcontractor_counters 호출이 보이는지 네트워크 로그로 확인
-
-### 향후 효과
-- 수동 SC No 입력, owner 재할당, 백필 마이그레이션 등 어떤 경로로 카운터가 뒤처지더라도 다음 import 시작 시점에 자동으로 따라잡힘
-- 재발 시 별도 마이그레이션 필요 없음
+## 파일 목록
+- `src/lib/defect-status.ts` (수정)
+- `src/contexts/DefectImportContext.tsx` (로그 추가만)
+- `supabase/functions/recompute-defect-status/index.ts` (동일 규칙 반영)
+- `src/test/defect-status.test.ts` (테스트 추가)
