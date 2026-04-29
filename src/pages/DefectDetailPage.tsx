@@ -510,21 +510,23 @@ export default function DefectDetailPage() {
         <ReadonlyField label="Classification Source" value={form.classification_source ?? record.classification_source} />
         <div className="md:col-span-3 flex items-center gap-2">
           <Button variant="outline" size="sm" disabled={!canEdit} onClick={async () => {
-            const [rulesRes, fbRes] = await Promise.all([
-              (supabase as any).from('defect_classification_rules').select('*').eq('is_active', true),
-              (supabase as any).from('defect_discipline_fallback').select('*').eq('is_active', true),
-            ]);
-            const c = classifyDefect(
-              { description: form.description ?? record.description, field_discipline: form.trade_detail ?? record.trade_detail },
-              (rulesRes.data ?? []) as ClassificationRule[],
-              (fbRes.data ?? []) as DisciplineFallback[],
+            const ctx = await loadClassificationContextV2();
+            // raw_label = sub-sub name first (Tier 2 like "Puretech"), then sub name
+            const rawLabel = (form.subsub_name ?? record.subsub_name ?? form.subcontractor_name ?? record.subcontractor_name ?? '') as string;
+            const c = classifyDefectV2(
+              {
+                description: form.description ?? record.description,
+                field_discipline: form.trade_detail ?? record.trade_detail,
+                raw_label: rawLabel,
+              },
+              ctx,
             );
-            // Empty-string classifier output (unclassified) → keep field blank (null).
+            // Priority: keep existing value if present; only fill blanks. Empty classifier output → null.
             setForm((cur) => ({
               ...cur,
               main_trade: cur.main_trade || c.main_trade || null,
               sub_trade: cur.sub_trade || c.sub_trade || null,
-              work_type: c.work_type || null,
+              work_type: cur.work_type || c.work_type || null,
               classification_source: c.source,
             }));
             toast({ title: 'Auto-classified', description: c.work_type ? `${c.source} → ${c.work_type}` : `${c.source} (no match — fields left blank)` });
