@@ -1,58 +1,55 @@
-## Goal
-Defect Raw Data 페이지에서 사용자가 느끼는 “같은 행 정렬이 안 맞는다 / 정렬이 개선되지 않는다” 문제의 근본 원인을 제거합니다. 단순히 칩 표시만 고치는 것이 아니라, 대시보드 진입 시 정렬 상태와 좌/우 분할 테이블의 행 정렬 일관성까지 함께 바로잡습니다.
+## 문제 정의
+현재 보이는 문제는 "정렬 상태"가 아니라, Defect Raw Data의 좌측 고정 컬럼 영역과 우측 본문 영역이 서로 다른 스크롤 좌표계를 쓰게 되면서 같은 레코드가 서로 다른 Y 위치에 렌더링되는 것입니다. 그래서 사용자가 보기에는 같은 행이 어긋나고, 지금 스크린샷처럼 좌측이 비정상적으로 비어 보이거나 정렬이 더 나빠진 것처럼 보입니다.
 
-## Root cause
-현재 문제는 한 가지가 아니라 두 가지가 겹쳐 보입니다.
+## Do I know what the issue is?
+Yes.
 
-1. 저장된 정렬 상태가 대시보드 진입 컨텍스트를 덮어씀
-- `src/pages/DefectRawDataPage.tsx`에서 정렬 상태를 항상 `localStorage`에서 복원합니다.
-- 그래서 대시보드 카드로 들어와도 사용자가 기대하는 “카드 기준 필터 + 기본 정렬”이 아니라, 이전 세션의 정렬이 그대로 살아남을 수 있습니다.
-- 스크린샷의 `Clear sort (1)`은 실제로 활성 정렬이 남아 있다는 증거입니다.
+## 정확한 근본 원인
+1. `DefectRawDataPage.tsx`에서 우측 본문 스크롤(`tableRef.current.scrollTop`)을 좌측의 `frozenPaneRef`에 그대로 복사하고 있습니다.
+2. 그런데 현재 Defect 쪽 좌측 영역은 이전 수정으로 인해 다음 구조로 바뀌어 있습니다.
 
-2. Defect Raw Data의 분할 테이블 구현이 SubtestList보다 더 취약함
-- 좌측 frozen pane과 우측 scroll pane을 별도 `<Table>`로 렌더링하면서, 같은 virtual row 인덱스를 공유해 동기화합니다.
-- 그러나 현재 Defect 쪽은 scroll sync / spacer / pane scroll 처리 방식이 SubtestList와 다르고, frozen pane에 `overflow-y-auto` + `onScroll`까지 걸려 있어 미세한 vertical drift가 생길 여지가 큽니다.
-- 사용자는 이것을 “같은 행의 정렬이 안 맞는다”로 체감합니다.
+```text
+frozenPaneRef (scrollTop이 적용되는 바깥 wrapper)
+├─ 좌측 헤더 테이블
+├─ 16px spacer
+└─ 실제 좌측 바디 테이블 컨테이너
+```
 
-## Implementation plan
-1. Defect Raw Data의 정렬 초기화 정책 재설계
-- `source=dashboard` 또는 URL 기반 drill-down 진입 시에는 저장된 sort를 무조건 복원하지 않도록 변경합니다.
-- dashboard 진입에서는 기본 정렬을 명확히 적용하고, URL filter 컨텍스트를 우선합니다.
-- 필요하면 “사용자 수동 정렬”과 “드릴다운 기본 정렬”을 구분하는 작은 헬퍼를 둡니다.
+3. 즉, 스크롤을 맞춰야 하는 대상은 "좌측 바디"인데, 실제로는 "헤더 + spacer + 바디를 모두 감싼 바깥 wrapper"에 scrollTop을 주고 있습니다.
+4. 반면 우측은 헤더와 상단 가로 스크롤바가 body scroll 영역 바깥에 있고, 실제 scrollTop은 body에만 적용됩니다.
+5. 이 구조 비대칭 때문에 좌우가 같은 `scrollTop` 값을 받아도 같은 위치를 가리키지 않습니다. 이게 이번에 더 악화된 직접 원인입니다.
+6. 저장된 scroll 위치를 재진입 시 복원하는 로직까지 있어서, 구조가 틀린 상태에서는 페이지 진입 직후부터 mismatch가 더 크게 드러납니다.
 
-2. 정렬 상태를 화면에 더 명확하게 드러내기
-- 현재 active URL filters / active column filters 외에, 대시보드 진입 시 적용되는 기본 정렬을 사용자가 오해하지 않도록 sort summary 표현을 정리합니다.
-- `Clear sort` 동작도 일관되게 맞춰, 기본 정렬로 돌아가는지 완전 초기화인지 의도를 분명히 합니다.
+정리하면, 현재 문제의 핵심은 "정렬 알고리즘"이 아니라 "스크롤 동기화 대상이 잘못된 구조적 버그"입니다. 이전에 손본 sorting/localStorage 이슈는 부차적이고, 지금 스크린샷의 어긋남을 직접 만든 원인은 아닙니다.
 
-3. Defect Raw TableView를 SubtestList의 안정적인 패턴에 맞춰 정렬
-- `DefectRawTableView`의 scroll/frozen/header 동기화 로직을 `SubtestTableView` 기준으로 재구성합니다.
-- frozen pane의 vertical scroll 처리, spacer 높이, hover/row height 적용을 동일 패턴으로 맞춰 좌우 행 mismatch 가능성을 제거합니다.
-- 특히 frozen pane이 자체 스크롤 이벤트로 다시 본문을 밀어내는 구조를 단순화합니다.
+## 수정 계획
+1. `DefectRawTableView`의 좌측 frozen 영역에 `frozenBodyRef`를 별도로 두고, 우측 body scroll과 동기화되는 대상은 이 `frozenBodyRef`만 사용하도록 변경합니다.
+2. 좌측 헤더와 spacer는 고정 레이어로 두고, scrollTop 적용 대상에서 완전히 분리합니다.
+3. 좌우 body의 DOM 구조를 최대한 동일하게 맞춥니다.
+   - 동일한 virtual padding 위치
+   - 동일한 row height/style
+   - 동일한 top offset 처리
+4. 현재처럼 바깥 wrapper에 scrollTop을 주는 방식은 제거합니다. 이 부분이 이번 악화의 핵심이므로 반드시 되돌립니다.
+5. scroll restore는 새 구조 기준으로 다시 맞춥니다.
+   - body ref가 준비된 뒤에만 복원
+   - 필요하면 레이아웃 버전 키를 둬서 기존 잘못 저장된 scroll 값이 새 구조에 그대로 적용되지 않게 차단
+6. sorting/drilldown 로직은 유지하되, 행 정렬 문제와 분리해서 검증합니다. 즉 이번 수정의 1차 목표는 "같은 행이 같은 높이와 같은 위치에 보이는 것"입니다.
 
-4. 정렬 안정성 보강
-- 필요 시 tie-breaker가 없는 컬럼들에 대해 stable sort 관점에서 보조 정렬 기준을 검토합니다.
-- 최소한 dashboard drill-down 기본 상태에서는 동일 값이 많은 컬럼 때문에 행 순서가 불안정하게 보이지 않도록 정책을 고정합니다.
-
-5. 회귀 점검 범위
-- Dashboard → Completion Done
-- Dashboard → Remain Inspection
-- 일반 직접 진입(`/defects/raw-data`)
-- 컬럼 필터 + URL 필터 + 정렬 동시 적용
-- 좌우 frozen/scroll pane에서 같은 행이 끝까지 맞는지 확인
-
-## Files likely to change
+## 구현 범위
 - `src/pages/DefectRawDataPage.tsx`
-- 필요 시 공통 헬퍼 분리: 정렬/드릴다운 상태 해석용 유틸 파일
+- 필요 시 동일 파일 내부 `DefectRawTableView` 구조 정리
 
-## Technical details
-- 현재 확인된 핵심 지점:
-  - `baseSorting`이 항상 localStorage에서 복원됨
-  - `source=dashboard`를 정렬 정책에 반영하지 않음
-  - Defect의 `handleFrozenScroll` / `handleScroll` 구조가 SubtestList보다 복잡하고 drift 가능성이 있음
-  - `Clear sort`가 Defect에서는 `DEFAULT_SORTING`으로, SubtestList에서는 `[]`로 동작해 UX 의미가 다름
-- 수정 방향:
-  - dashboard/source-aware sorting policy
-  - split-table scroll sync refactor
-  - deterministic fallback ordering
+## 기대 결과
+- 좌측 고정 컬럼과 우측 본문이 끝까지 같은 행을 가리킴
+- 스크롤 중간/하단으로 내려가도 행 mismatch가 재발하지 않음
+- 재진입 시에도 저장된 scroll 때문에 좌측이 비어 보이거나 밀리는 현상이 사라짐
+- 대시보드 진입 필터와 정렬 상태는 별도 이슈로 유지되더라도, 적어도 행 정렬 자체는 안정적으로 맞음
 
-승인해주시면 위 방향으로 실제 코드를 수정하겠습니다.
+## 검증 항목
+- `/defects/raw-data` 직접 진입
+- Dashboard 드릴다운 진입
+- 중간/하단 scroll 후 재진입
+- sort/filter 적용 상태에서 좌우 행 일치 여부
+- 상단 가로 스크롤바 사용 시 header/body/frozen 동기화
+
+승인되면 이번에는 추측성 수정이 아니라, 잘못된 scroll sync 대상 자체를 바로잡는 방식으로 고치겠습니다.
