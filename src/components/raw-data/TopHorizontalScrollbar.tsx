@@ -6,16 +6,29 @@ interface TopHorizontalScrollbarProps {
   targetRef: React.RefObject<HTMLDivElement>;
   /** Total inner width of the scrollable content (e.g. sum of column widths). */
   width: number;
+  /**
+   * Width of the left frozen / sticky area of the underlying table. The mirror
+   * scrollbar will visually start AFTER this offset so it never appears to
+   * overlap the frozen columns.
+   */
+  frozenWidth?: number;
   className?: string;
 }
 
 /**
  * A thin horizontal scrollbar rendered above a scrollable container, kept in
- * sync with the container's scrollLeft in both directions. Lets users scroll
- * horizontally without having to scroll the page down to find the native
- * scrollbar at the bottom of the table.
+ * sync with the container's scrollLeft in both directions.
+ *
+ * When `frozenWidth` is provided we render an inert spacer over the frozen
+ * area and only the right side acts as a real scroll mirror, matching the
+ * sticky-column layout in the body.
  */
-export function TopHorizontalScrollbar({ targetRef, width, className }: TopHorizontalScrollbarProps) {
+export function TopHorizontalScrollbar({
+  targetRef,
+  width,
+  frozenWidth = 0,
+  className,
+}: TopHorizontalScrollbarProps) {
   const selfRef = useRef<HTMLDivElement>(null);
   const isSyncingRef = useRef(false);
 
@@ -35,7 +48,6 @@ export function TopHorizontalScrollbar({ targetRef, width, className }: TopHoriz
     };
 
     target.addEventListener('scroll', onTargetScroll, { passive: true });
-    // Initial sync (e.g. when restoring saved scroll position).
     self.scrollLeft = target.scrollLeft;
     return () => target.removeEventListener('scroll', onTargetScroll);
   }, [targetRef]);
@@ -52,19 +64,28 @@ export function TopHorizontalScrollbar({ targetRef, width, className }: TopHoriz
     });
   };
 
+  const innerWidth = Math.max(width, 1);
+
   return (
     <div
-      ref={selfRef}
-      onScroll={handleSelfScroll}
-      className={cn(
-        'overflow-x-auto overflow-y-hidden border-b bg-muted/30',
-        // Tall enough for users to grab comfortably with mouse/trackpad.
-        'h-[16px] shrink-0',
-        className,
-      )}
+      className={cn('flex h-[16px] shrink-0 border-b bg-muted/30', className)}
       aria-hidden
     >
-      <div style={{ width: Math.max(width, 1), height: 1 }} />
+      {frozenWidth > 0 && (
+        <div
+          style={{ width: frozenWidth, minWidth: frozenWidth }}
+          className="border-r bg-background"
+        />
+      )}
+      <div
+        ref={selfRef}
+        onScroll={handleSelfScroll}
+        className="h-full flex-1 overflow-x-auto overflow-y-hidden"
+      >
+        {/* The inner spacer mirrors the FULL scroll width so scrollLeft stays
+            1:1 with the body. The visible track just starts after frozenWidth. */}
+        <div style={{ width: innerWidth, height: 1 }} />
+      </div>
     </div>
   );
 }
