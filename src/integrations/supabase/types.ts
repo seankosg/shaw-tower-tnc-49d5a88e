@@ -107,6 +107,33 @@ export type Database = {
         }
         Relationships: []
       }
+      defect_classification_alias: {
+        Row: {
+          canonical_label: string
+          created_at: string
+          id: string
+          is_active: boolean
+          raw_label: string
+          updated_at: string
+        }
+        Insert: {
+          canonical_label: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          raw_label: string
+          updated_at?: string
+        }
+        Update: {
+          canonical_label?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          raw_label?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       defect_classification_rules: {
         Row: {
           created_at: string
@@ -613,6 +640,39 @@ export type Database = {
         }
         Relationships: []
       }
+      defect_subcontractor_workscope: {
+        Row: {
+          created_at: string
+          full_name: string
+          id: string
+          is_active: boolean
+          keywords: string[]
+          label: string
+          match_priority: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          full_name: string
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          label: string
+          match_priority?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          label?: string
+          match_priority?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       defect_upload_batches: {
         Row: {
           data_date: string | null
@@ -700,6 +760,48 @@ export type Database = {
           reason_code?: string | null
           reason_detail?: string | null
           upload_id?: string
+        }
+        Relationships: []
+      }
+      defect_work_types: {
+        Row: {
+          created_at: string
+          default_main_trade: string | null
+          default_sub_trade: string | null
+          desc_keywords: string[]
+          id: string
+          is_active: boolean
+          match_order: number
+          name: string
+          sub_match: string[]
+          trade: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_main_trade?: string | null
+          default_sub_trade?: string | null
+          desc_keywords?: string[]
+          id?: string
+          is_active?: boolean
+          match_order?: number
+          name: string
+          sub_match?: string[]
+          trade: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_main_trade?: string | null
+          default_sub_trade?: string | null
+          desc_keywords?: string[]
+          id?: string
+          is_active?: boolean
+          match_order?: number
+          name?: string
+          sub_match?: string[]
+          trade?: string
+          updated_at?: string
         }
         Relationships: []
       }
