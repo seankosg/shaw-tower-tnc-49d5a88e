@@ -1295,7 +1295,6 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
   const allHeaders = headerGroup?.headers ?? [];
 
   const renderHeader = (header: any, index: number) => {
-    const isSticky = index < frozenCount;
     const isLastSticky = index === frozenCount - 1;
     return (
       <TableHead
@@ -1305,9 +1304,6 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
           width: header.getSize(),
           minWidth: header.getSize(),
           maxWidth: header.getSize(),
-          ...(isSticky
-            ? { position: 'sticky', left: stickyLefts[index], zIndex: 3 }
-            : {}),
         }}
         className={cn(
           'relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background px-4 py-0 text-left text-xs font-medium',
