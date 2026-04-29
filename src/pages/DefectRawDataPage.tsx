@@ -493,8 +493,21 @@ export default function DefectRawDataPage() {
     };
   }, [user, items]);
 
+  // URL params that indicate the user arrived from a Dashboard drill-down.
+  // When ANY of these are present we ignore the localStorage-saved sort/column-filter state,
+  // so the user always sees the drill-down's own clean view (sorted by Issue No asc).
+  const DRILLDOWN_PARAMS = [
+    'source', 'actualComplete', 'closureComplete', 'overdue', 'atRisk',
+    'dueOn', 'unplannedActualOn', 'asOf', 'stage',
+    'team', 'subcontractor', 'subsub', 'hdecPic', 'hdecEng',
+    'level', 'mainTrade', 'subTrade', 'workType', 'classificationSource',
+    'status', 'closureStatus', 'issueNo', 'subcontractorIssueNo',
+    'dateStart', 'dateEnd', 'dateField',
+  ];
+
   useEffect(() => {
     setStateLoaded(false);
+    const isDrilldown = DRILLDOWN_PARAMS.some((p) => searchParams.has(p));
     let baseFilters: ColumnFiltersState = [];
     let baseSorting: SortingState = DEFAULT_SORTING;
     let baseGlobal = '';
@@ -503,10 +516,15 @@ export default function DefectRawDataPage() {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
-        baseSorting = Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING;
-        baseFilters = Array.isArray(parsed.columnFilters) ? parsed.columnFilters : [];
-        baseGlobal = typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '';
+        // Sizing and global search are always restored.
         baseSizing = parsed.columnSizing && typeof parsed.columnSizing === 'object' ? parsed.columnSizing : {};
+        baseGlobal = typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '';
+        // Sort and column filters are only restored on a clean entry (no drill-down params).
+        // This is the root-cause fix for "wrong / stale sort when entering from a dashboard card".
+        if (!isDrilldown) {
+          baseSorting = Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING;
+          baseFilters = Array.isArray(parsed.columnFilters) ? parsed.columnFilters : [];
+        }
       }
     } catch {
       // ignore invalid saved state
@@ -1232,28 +1250,22 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
   const scrollWidth = useMemo(() => scrollColumns.reduce((sum, column) => sum + column.getSize(), 0), [scrollColumns, table.getState().columnSizing]);
   const frozenPaneRef = useRef<HTMLDivElement>(null);
   const headerScrollRef = useRef<HTMLDivElement>(null);
-  const isSyncingScrollRef = useRef(false);
   const rows = table.getRowModel().rows;
-  const rowVirtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => tableRef.current, estimateSize: () => 36, overscan: 12 });
+  const ROW_HEIGHT = 36;
+  const rowVirtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => tableRef.current, estimateSize: () => ROW_HEIGHT, overscan: 12 });
   const virtualRows = rowVirtualizer.getVirtualItems();
   const totalSize = rowVirtualizer.getTotalSize();
   const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
   const paddingBottom = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
+  // The scroll-pane (right side) is the single source of truth for both vertical
+  // and horizontal scroll. The frozen pane has overflow:hidden — we manually push
+  // its scrollTop to match the body. This is the SubtestList pattern and prevents
+  // the frozen/scroll panes from drifting out of vertical alignment.
   const handleScroll = useCallback(() => {
-    if (isSyncingScrollRef.current) return;
-    isSyncingScrollRef.current = true;
     if (frozenPaneRef.current && tableRef.current) frozenPaneRef.current.scrollTop = tableRef.current.scrollTop;
     if (headerScrollRef.current && tableRef.current) headerScrollRef.current.scrollLeft = tableRef.current.scrollLeft;
-    requestAnimationFrame(() => { isSyncingScrollRef.current = false; });
-  }, [tableRef]);
-
-  const handleFrozenScroll = useCallback(() => {
-    if (isSyncingScrollRef.current) return;
-    isSyncingScrollRef.current = true;
-    if (tableRef.current && frozenPaneRef.current) tableRef.current.scrollTop = frozenPaneRef.current.scrollTop;
-    requestAnimationFrame(() => { isSyncingScrollRef.current = false; });
   }, [tableRef]);
 
   const handleFrozenWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
@@ -1310,28 +1322,43 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
 
   return (
     <div className="flex max-h-[calc(100vh-220px)] overflow-hidden rounded-md border bg-background">
-      <div ref={frozenPaneRef} onWheel={handleFrozenWheel} onScroll={handleFrozenScroll} className="overflow-y-auto overflow-x-hidden scrollbar-hide border-r border-border bg-background shadow-[2px_0_4px_-2px_hsl(var(--border))]" style={{ width: frozenWidth, flexShrink: 0 }}>
-        <Table style={{ width: frozenWidth, tableLayout: 'fixed' }}>
-          <TableHeader className="sticky top-0 z-20 bg-background"><TableRow className="border-b bg-background">{frozenHeaders.map(renderHeader)}</TableRow></TableHeader>
-          <TableBody>
-            {/* Spacer to align frozen rows with scroll-pane rows (matches mirror scrollbar height) */}
-            <tr aria-hidden><td colSpan={frozenColumns.length} style={{ height: 16, padding: 0, border: 0 }} /></tr>
-            {loading || rows.length === 0 ? <TableRow><TableCell colSpan={frozenColumns.length} className="py-8 text-center text-muted-foreground">&nbsp;</TableCell></TableRow> : (
-              <>
-                {paddingTop > 0 && <tr style={{ height: paddingTop }} aria-hidden><td colSpan={frozenColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
-                {virtualRows.map((virtualRow) => {
-                  const row = rows[virtualRow.index];
-                  return (
-                    <TableRow key={row.id} data-index={virtualRow.index} style={{ height: virtualRow.size, maxHeight: virtualRow.size }} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}${location.search}`)}>
-                      {row.getVisibleCells().slice(0, frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize(), height: virtualRow.size, maxHeight: virtualRow.size, overflow: 'hidden' }} className="truncate whitespace-nowrap py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
-                    </TableRow>
-                  );
-                })}
-                {paddingBottom > 0 && <tr style={{ height: paddingBottom }} aria-hidden><td colSpan={frozenColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
-              </>
-            )}
-          </TableBody>
-        </Table>
+      {/* Frozen pane: header rendered as its OWN table above a non-scrolling body
+          container — exactly mirrors the scroll-pane structure so vertical row
+          alignment between the two panes can never drift. The pane only scrolls
+          when the right-side body scrolls and we manually push scrollTop. */}
+      <div
+        ref={frozenPaneRef}
+        onWheel={handleFrozenWheel}
+        className="flex flex-col overflow-hidden border-r border-border bg-background shadow-[2px_0_4px_-2px_hsl(var(--border))]"
+        style={{ width: frozenWidth, flexShrink: 0 }}
+      >
+        <div className="overflow-hidden bg-background">
+          <Table style={{ width: frozenWidth, tableLayout: 'fixed' }}>
+            <TableHeader className="bg-background"><TableRow className="border-b bg-background">{frozenHeaders.map(renderHeader)}</TableRow></TableHeader>
+          </Table>
+        </div>
+        {/* Spacer matching the right pane's TopHorizontalScrollbar height (16px) so the first row of both panes lines up */}
+        <div aria-hidden className="h-[16px] shrink-0 border-b bg-muted/30" />
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <Table style={{ width: frozenWidth, tableLayout: 'fixed' }}>
+            <TableBody>
+              {loading || rows.length === 0 ? <TableRow><TableCell colSpan={frozenColumns.length} className="py-8 text-center text-muted-foreground">&nbsp;</TableCell></TableRow> : (
+                <>
+                  {paddingTop > 0 && <tr style={{ height: paddingTop }} aria-hidden><td colSpan={frozenColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
+                  {virtualRows.map((virtualRow) => {
+                    const row = rows[virtualRow.index];
+                    return (
+                      <TableRow key={row.id} data-index={virtualRow.index} style={{ height: virtualRow.size, maxHeight: virtualRow.size }} className={renderRowClass(row.original, virtualRow.index)} onMouseEnter={() => setHoveredIndex(virtualRow.index)} onMouseLeave={() => setHoveredIndex(null)} onClick={() => navigate(`/defects/${row.original.id}${location.search}`)}>
+                        {row.getVisibleCells().slice(0, frozenCount).map((cell) => <TableCell key={cell.id} data-column-id={cell.column.id} style={{ width: cell.column.getSize(), height: virtualRow.size, maxHeight: virtualRow.size, overflow: 'hidden' }} className="truncate whitespace-nowrap py-2 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>)}
+                      </TableRow>
+                    );
+                  })}
+                  {paddingBottom > 0 && <tr style={{ height: paddingBottom }} aria-hidden><td colSpan={frozenColumns.length} style={{ padding: 0, border: 0 }} /></tr>}
+                </>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
