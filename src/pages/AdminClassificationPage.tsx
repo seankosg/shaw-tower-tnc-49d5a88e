@@ -63,16 +63,28 @@ export default function AdminClassificationPage() {
   const { toast } = useToast();
   const [rules, setRules] = useState<RuleRow[]>([]);
   const [fallbacks, setFallbacks] = useState<FallbackRow[]>([]);
+  const [workscopes, setWorkscopes] = useState<WorkscopeRow[]>([]);
+  const [workTypes, setWorkTypes] = useState<WorkTypeRow[]>([]);
+  const [aliases, setAliases] = useState<AliasRow[]>([]);
   const [newRule, setNewRule] = useState<Partial<RuleRow>>({ priority: 100, is_active: true });
   const [newFb, setNewFb] = useState<Partial<FallbackRow>>({ is_active: true });
+  const [newWs, setNewWs] = useState<{ label?: string; full_name?: string; keywords?: string; match_priority?: number; is_active?: boolean }>({ match_priority: 100, is_active: true });
+  const [newWt, setNewWt] = useState<{ trade?: string; name?: string; sub_match?: string; desc_keywords?: string; default_main_trade?: string; default_sub_trade?: string; match_order?: number; is_active?: boolean }>({ match_order: 100, is_active: true });
+  const [newAl, setNewAl] = useState<Partial<AliasRow>>({ is_active: true });
 
   const load = async () => {
-    const [r, f] = await Promise.all([
+    const [r, f, ws, wt, al] = await Promise.all([
       (supabase as any).from('defect_classification_rules').select('*').order('priority').order('keyword'),
       (supabase as any).from('defect_discipline_fallback').select('*').order('field_discipline'),
+      (supabase as any).from('defect_subcontractor_workscope').select('*').order('match_priority').order('label'),
+      (supabase as any).from('defect_work_types').select('*').order('match_order').order('name'),
+      (supabase as any).from('defect_classification_alias').select('*').order('raw_label'),
     ]);
     setRules((r.data ?? []) as RuleRow[]);
     setFallbacks((f.data ?? []) as FallbackRow[]);
+    setWorkscopes((ws.data ?? []) as WorkscopeRow[]);
+    setWorkTypes((wt.data ?? []) as WorkTypeRow[]);
+    setAliases((al.data ?? []) as AliasRow[]);
   };
 
   useEffect(() => { load(); }, []);
