@@ -1048,17 +1048,31 @@ export default function DefectRawDataPage() {
         </div>
       )}
 
+      {columnFilterChips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
+          <span className="text-xs font-medium text-muted-foreground">Active column filters:</span>
+          {columnFilterChips.map((chip) => (
+            <button
+              key={chip.id}
+              onClick={() => removeColumnFilter(chip.id)}
+              className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground hover:bg-secondary/80"
+              title="Click to remove"
+            >
+              {chip.label} ✕
+            </button>
+          ))}
+          <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs" onClick={() => setColumnFilters([])}>
+            Clear all
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-3">
         <div className="relative min-w-[220px] max-w-sm flex-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search defects... (comma = AND)" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} className="h-9 pl-8" />
         </div>
         <span className="self-center text-sm text-muted-foreground">{table.getFilteredRowModel().rows.length} records</span>
-        {activeColumnFilterCount > 0 && (
-          <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setColumnFilters([])}>
-            <X className="mr-1 h-3 w-3" /> Clear filters ({activeColumnFilterCount})
-          </Button>
-        )}
         {sorting.length > 0 && (
           <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setSorting(DEFAULT_SORTING)}>
             Clear sort ({sorting.length})
