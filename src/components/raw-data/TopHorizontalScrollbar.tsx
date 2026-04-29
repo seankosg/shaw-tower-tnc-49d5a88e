@@ -58,8 +58,8 @@ export function TopHorizontalScrollbar({ targetRef, width, className }: TopHoriz
       onScroll={handleSelfScroll}
       className={cn(
         'overflow-x-auto overflow-y-hidden border-b bg-muted/30',
-        // Keep height tight; native scrollbar will render inside.
-        'h-[12px] shrink-0',
+        // Tall enough for users to grab comfortably with mouse/trackpad.
+        'h-[16px] shrink-0',
         className,
       )}
       aria-hidden

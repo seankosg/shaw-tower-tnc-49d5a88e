@@ -1,91 +1,45 @@
-## 목표
+## 문제 진단
 
-DB의 라이브 운영 테이블에 잘못 저장된 **2001년 날짜를 2026년으로 일회 일괄 변경**합니다 (같은 월/일 유지, +25년).
+스크린샷과 `src/pages/DefectRawDataPage.tsx` (라인 1261-1319), `src/components/raw-data/TopHorizontalScrollbar.tsx` 검토 결과:
 
-## 영향 범위 (실측 결과)
+### 문제 1: 가로 스크롤바가 너무 얇음
+- `TopHorizontalScrollbar.tsx` 62번 줄에서 미러 스크롤바 높이가 **`h-[12px]`**로 하드코딩되어 있어 마우스로 잡기 어려움.
+- 좌측 frozen 패널 본문 첫 행에도 동일한 `height: 12` spacer (1268번 줄)가 있어, 미러 스크롤바 높이를 변경하면 함께 맞춰야 함.
 
-방금 DB를 조회해 확인한 결과:
+### 문제 2: 좌/우 패널 같은 행이 정렬되지 않고 동시에 움직이지 않음
+세 가지 원인이 결합되어 있음:
 
-| 테이블 | 컬럼 | 영향 행 수 |
-|---|---|---|
-| `defect_items` | `planned_start_date` | **3** |
-| `defect_items` | `planned_completion_date` | **3** |
-| 그 외 모든 날짜 컬럼 (subtests T1/T2/Pred/R1/R2, defect actual_*, upload_batches.data_date 등) | — | 0 |
+1. **행 높이가 가변**: `estimateSize: () => 36`이지만 셀 내용(아이콘 vs 텍스트, 줄바꿈)에 따라 좌/우 패널의 실제 행 높이가 달라져 점점 어긋남. `style={{ height: virtualRow.size }}`만으로는 td 내부 컨텐츠가 더 크면 늘어나는 것을 막지 못함.
+2. **수직 스크롤이 좌→우 단방향**: `handleScroll`은 우측(tableRef) 스크롤만 좌측(frozenPaneRef)에 동기화. 좌측 패널은 wheel을 우측으로 위임만 하고 자체 스크롤은 못 받음 → 트랙패드 모멘텀/터치에서 미세한 어긋남 발생.
+3. **첫 행 spacer 높이 불일치 가능성**: 좌측 본문에는 12px spacer가 있지만 우측 본문에는 없음(우측은 미러 스크롤바가 테이블 밖에 있어 spacer 불필요). 현재는 의도적이지만, 미러 스크롤바 높이를 키울 경우 다시 점검 필요.
 
-실제 변경되는 건 `defect_items`의 동일한 ~3개 행입니다. 나머지는 방어적으로 같은 마이그레이션에 포함하지만 0행에 영향.
+## 수정 계획
 
-## 마이그레이션 SQL (실행할 것)
+### A. `src/components/raw-data/TopHorizontalScrollbar.tsx`
+- 스크롤바 트랙 높이를 **`h-[12px]` → `h-[16px]`**로 확대 (윈도우/맥 기본 스크롤바와 비슷하게 잡기 쉬운 두께).
+- 콘텐츠 spacer height도 동일하게 조정.
 
-```sql
-BEGIN;
+### B. `src/pages/DefectRawDataPage.tsx` (DefectRawTableView)
 
--- defect_items: 2001 → 2026 (+25 years, 월/일 유지)
-UPDATE public.defect_items
-SET
-  planned_start_date      = CASE WHEN EXTRACT(YEAR FROM planned_start_date)      = 2001 THEN (planned_start_date      + INTERVAL '25 years')::date ELSE planned_start_date      END,
-  planned_completion_date = CASE WHEN EXTRACT(YEAR FROM planned_completion_date) = 2001 THEN (planned_completion_date + INTERVAL '25 years')::date ELSE planned_completion_date END,
-  planned_closure_date    = CASE WHEN EXTRACT(YEAR FROM planned_closure_date)    = 2001 THEN (planned_closure_date    + INTERVAL '25 years')::date ELSE planned_closure_date    END,
-  actual_start_date       = CASE WHEN EXTRACT(YEAR FROM actual_start_date)       = 2001 THEN (actual_start_date       + INTERVAL '25 years')::date ELSE actual_start_date       END,
-  actual_completion_date  = CASE WHEN EXTRACT(YEAR FROM actual_completion_date)  = 2001 THEN (actual_completion_date  + INTERVAL '25 years')::date ELSE actual_completion_date  END,
-  actual_closure_date     = CASE WHEN EXTRACT(YEAR FROM actual_closure_date)     = 2001 THEN (actual_closure_date     + INTERVAL '25 years')::date ELSE actual_closure_date     END,
-  updated_at              = now()
-WHERE EXTRACT(YEAR FROM planned_start_date)      = 2001
-   OR EXTRACT(YEAR FROM planned_completion_date) = 2001
-   OR EXTRACT(YEAR FROM planned_closure_date)    = 2001
-   OR EXTRACT(YEAR FROM actual_start_date)       = 2001
-   OR EXTRACT(YEAR FROM actual_completion_date)  = 2001
-   OR EXTRACT(YEAR FROM actual_closure_date)     = 2001;
+**행 높이 강제 고정 (정렬 문제 핵심 수정)**
+- 좌/우 양쪽 `<TableRow>`에 `style={{ height: virtualRow.size }}` 외에 **`maxHeight` 고정 + 셀 `overflow: hidden`** 적용.
+- 좌측 본문 첫 줄 spacer를 12 → 16으로 변경 (미러 스크롤바 높이 변경에 맞춤).
 
--- subtests: 동일 처리 (현재 0건이지만 방어적으로 포함)
-UPDATE public.subtests
-SET
-  pred_planned_date          = CASE WHEN EXTRACT(YEAR FROM pred_planned_date)          = 2001 THEN (pred_planned_date          + INTERVAL '25 years')::date ELSE pred_planned_date          END,
-  pred_actual_date           = CASE WHEN EXTRACT(YEAR FROM pred_actual_date)           = 2001 THEN (pred_actual_date           + INTERVAL '25 years')::date ELSE pred_actual_date           END,
-  t1_planned_date            = CASE WHEN EXTRACT(YEAR FROM t1_planned_date)            = 2001 THEN (t1_planned_date            + INTERVAL '25 years')::date ELSE t1_planned_date            END,
-  t1_actual_date             = CASE WHEN EXTRACT(YEAR FROM t1_actual_date)             = 2001 THEN (t1_actual_date             + INTERVAL '25 years')::date ELSE t1_actual_date             END,
-  t2_planned_date            = CASE WHEN EXTRACT(YEAR FROM t2_planned_date)            = 2001 THEN (t2_planned_date            + INTERVAL '25 years')::date ELSE t2_planned_date            END,
-  t2_actual_date             = CASE WHEN EXTRACT(YEAR FROM t2_actual_date)             = 2001 THEN (t2_actual_date             + INTERVAL '25 years')::date ELSE t2_actual_date             END,
-  r1_target_submission_date  = CASE WHEN EXTRACT(YEAR FROM r1_target_submission_date)  = 2001 THEN (r1_target_submission_date  + INTERVAL '25 years')::date ELSE r1_target_submission_date  END,
-  r1_actual_submission_date  = CASE WHEN EXTRACT(YEAR FROM r1_actual_submission_date)  = 2001 THEN (r1_actual_submission_date  + INTERVAL '25 years')::date ELSE r1_actual_submission_date  END,
-  r2_target_submission_date  = CASE WHEN EXTRACT(YEAR FROM r2_target_submission_date)  = 2001 THEN (r2_target_submission_date  + INTERVAL '25 years')::date ELSE r2_target_submission_date  END,
-  r2_actual_submission_date  = CASE WHEN EXTRACT(YEAR FROM r2_actual_submission_date)  = 2001 THEN (r2_actual_submission_date  + INTERVAL '25 years')::date ELSE r2_actual_submission_date  END,
-  r2_target_approval_date    = CASE WHEN EXTRACT(YEAR FROM r2_target_approval_date)    = 2001 THEN (r2_target_approval_date    + INTERVAL '25 years')::date ELSE r2_target_approval_date    END,
-  r2_actual_approval_date    = CASE WHEN EXTRACT(YEAR FROM r2_actual_approval_date)    = 2001 THEN (r2_actual_approval_date    + INTERVAL '25 years')::date ELSE r2_actual_approval_date    END,
-  updated_at                 = now()
-WHERE EXTRACT(YEAR FROM pred_planned_date)         = 2001
-   OR EXTRACT(YEAR FROM pred_actual_date)          = 2001
-   OR EXTRACT(YEAR FROM t1_planned_date)           = 2001
-   OR EXTRACT(YEAR FROM t1_actual_date)            = 2001
-   OR EXTRACT(YEAR FROM t2_planned_date)           = 2001
-   OR EXTRACT(YEAR FROM t2_actual_date)            = 2001
-   OR EXTRACT(YEAR FROM r1_target_submission_date) = 2001
-   OR EXTRACT(YEAR FROM r1_actual_submission_date) = 2001
-   OR EXTRACT(YEAR FROM r2_target_submission_date) = 2001
-   OR EXTRACT(YEAR FROM r2_actual_submission_date) = 2001
-   OR EXTRACT(YEAR FROM r2_target_approval_date)   = 2001
-   OR EXTRACT(YEAR FROM r2_actual_approval_date)   = 2001;
+**수직 스크롤 양방향 동기화**
+- 좌측 frozen 패널을 `overflow-hidden` → `overflow-y-auto scrollbar-hide`로 바꾸고, 좌측 스크롤 이벤트도 우측 `tableRef`로 동기화하는 핸들러 추가. (현재는 `onWheel`만 처리해서 트랙패드 모멘텀 시 미세 어긋남 발생)
+- 양방향 sync 무한루프 방지를 위해 `isSyncingRef` 플래그 사용 (TopHorizontalScrollbar와 동일 패턴).
 
--- Upload data_date (현재 0건, 방어적)
-UPDATE public.upload_batches
-SET data_date = (data_date + INTERVAL '25 years')::date
-WHERE EXTRACT(YEAR FROM data_date) = 2001;
+**Virtualizer 단일화**
+- 현재 좌/우가 같은 `rowVirtualizer`를 공유하므로 `paddingTop/paddingBottom`은 동일. 이 부분은 그대로 유지.
 
-UPDATE public.defect_upload_batches
-SET data_date = (data_date + INTERVAL '25 years')::date
-WHERE EXTRACT(YEAR FROM data_date) = 2001;
+### C. (선택) SubtestList의 동일 컴포넌트도 같은 수정 적용 여부
+- `SubtestList.tsx`도 `TopHorizontalScrollbar`를 사용 → A의 변경사항(높이 16px)이 자동 적용됨. 별도 코드 수정 불필요하나, 행 정렬 이슈가 동일하게 있다면 사용자 피드백 후 동일 패턴 적용 가능.
 
-COMMIT;
-```
+## 변경 파일 요약
+1. `src/components/raw-data/TopHorizontalScrollbar.tsx` — 트랙 높이 12 → 16px
+2. `src/pages/DefectRawDataPage.tsx` — 좌측 패널 수직 스크롤 양방향 동기화, 셀 overflow 고정, spacer 높이 조정
 
-## 처리 원칙
-
-- **+25 years 방식**: 월/일은 그대로 유지하면서 연도만 2001 → 2026으로 이동 (예: `2001-04-29` → `2026-04-29`).
-- **이력/감사/스냅샷 테이블은 손대지 않음**: `defect_change_log`, `subtest_change_log`, `defect_schedule_change_audit`, `schedule_change_audit`, `defect_daily_snapshots`, `database_snapshots`, `event_log` — 이전 잘못 입력된 시점의 사실 기록이라 보존.
-- **트랜잭션**: 단일 BEGIN/COMMIT으로 원자적으로 적용.
-- **`updated_at` 갱신**: 라이브 테이블의 `updated_at`도 같이 업데이트해 변경 추적 일관성 유지.
-- **검증**: 적용 후 동일한 카운트 쿼리를 다시 돌려 모두 0인지 확인.
-
-## 비고
-
-- 단일 마이그레이션 파일로 1회만 실행 후 끝(재실행해도 무해 — 0건만 매칭).
-- RLS는 마이그레이션(서비스 권한)에서는 우회되므로 권한 영향 없음.
+## 영향 범위
+- Defect Raw Data 페이지의 가로 스크롤바가 두꺼워져 조작이 쉬워짐.
+- 좌/우 패널 행이 픽셀 단위로 정렬되며, 트랙패드/마우스 휠/터치 어디서 스크롤해도 동시에 움직임.
+- SubtestList의 가로 스크롤바도 동일하게 두꺼워짐 (보너스).
