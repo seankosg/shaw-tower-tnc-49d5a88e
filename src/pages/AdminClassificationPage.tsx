@@ -28,6 +28,37 @@ interface FallbackRow {
   is_active: boolean;
 }
 
+interface WorkscopeRow {
+  id: string;
+  label: string;
+  full_name: string;
+  keywords: string[];
+  match_priority: number;
+  is_active: boolean;
+}
+
+interface WorkTypeRow {
+  id: string;
+  trade: string;
+  name: string;
+  sub_match: string[];
+  desc_keywords: string[];
+  default_main_trade: string | null;
+  default_sub_trade: string | null;
+  match_order: number;
+  is_active: boolean;
+}
+
+interface AliasRow {
+  id: string;
+  raw_label: string;
+  canonical_label: string;
+  is_active: boolean;
+}
+
+const csvToArr = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
+const arrToCsv = (a: string[] | null | undefined) => (a ?? []).join(', ');
+
 export default function AdminClassificationPage() {
   const { toast } = useToast();
   const [rules, setRules] = useState<RuleRow[]>([]);
