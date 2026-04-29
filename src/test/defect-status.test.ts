@@ -160,3 +160,77 @@ describe('reconcileClosureCompletion', () => {
     expect(r.conflict).toBeUndefined();
   });
 });
+
+describe('Aconex Status auto-mapping', () => {
+  const asOf = '2026-04-25';
+  const noExcel = { actual_progress_pct: null, actual_completion_date: null };
+
+  it('isStatusWorkDone matches case/whitespace insensitively', () => {
+    expect(isStatusWorkDone('Work Done')).toBe(true);
+    expect(isStatusWorkDone('  work done  ')).toBe(true);
+    expect(isStatusWorkDone('WORK DONE')).toBe(true);
+    expect(isStatusWorkDone('Open')).toBe(false);
+    expect(isStatusWorkDone(null)).toBe(false);
+  });
+
+  it('Status="Work Done" → completion=Done even with no actual_completion_date / pct', () => {
+    expect(computeCompletionStatus({ ...base, status: 'Work Done' }, asOf)).toBe('Done');
+  });
+
+  it('Status="Closed" → completion=Done as well', () => {
+    expect(computeCompletionStatus({ ...base, status: 'Closed' }, asOf)).toBe('Done');
+  });
+
+  it('Status="Open" → no auto-mapping (falls through to default)', () => {
+    expect(computeCompletionStatus({ ...base, status: 'Open' }, asOf)).toBe('Planned');
+  });
+
+  it('Status="In dispute" → no auto-mapping', () => {
+    expect(computeCompletionStatus({ ...base, status: 'In dispute' }, asOf)).toBe('Planned');
+  });
+
+  it('reconcile: Status="Work Done" + no completion data → patches actual_completion_date=asOf, pct=100', () => {
+    const r = reconcileClosureCompletion(
+      { ...base, status: 'Work Done', planned_closure_date: '2026-12-01' },
+      asOf,
+      noExcel,
+    );
+    expect(r.completion_status).toBe('Done');
+    expect(r.closure_status).toBe('WIP'); // completion done, no actual_closure_date
+    expect(r.patch).toEqual({ actual_completion_date: asOf, actual_progress_pct: 100 });
+  });
+
+  it('reconcile: Status="Work Done" but Excel says pct=50 → conflict, no patch', () => {
+    const r = reconcileClosureCompletion(
+      { ...base, status: 'Work Done', actual_progress_pct: 50 },
+      asOf,
+      { actual_progress_pct: 50, actual_completion_date: null },
+    );
+    expect(r.completion_status).toBe('Done');
+    expect(r.conflict).toBe(true);
+    expect(r.patch).toBeUndefined();
+  });
+
+  it('reconcile: Status="Open" → no patch, falls through to existing logic', () => {
+    const r = reconcileClosureCompletion(
+      { ...base, status: 'Open', planned_closure_date: '2026-12-01' },
+      asOf,
+      noExcel,
+    );
+    expect(r.completion_status).toBe('Planned');
+    expect(r.closure_status).toBe('Planned');
+    expect(r.patch).toBeUndefined();
+    expect(r.conflict).toBeUndefined();
+  });
+
+  it('reconcile: Status="Work Done" + actual_completion_date already present → no patch needed', () => {
+    const r = reconcileClosureCompletion(
+      { ...base, status: 'Work Done', actual_completion_date: '2026-04-20' },
+      asOf,
+      noExcel,
+    );
+    expect(r.completion_status).toBe('Done');
+    expect(r.patch).toBeUndefined();
+    expect(r.conflict).toBeUndefined();
+  });
+});
