@@ -863,7 +863,7 @@ export default function DefectRawDataPage() {
 
   const columnOrder = useMemo(() => {
     const PINNED_FRONT = ['__select', 'issue_no', 'stage_progress'];
-    const remaining = (DEFECT_RAW_FIELDS as string[]).filter(
+    const remaining = (DEFECT_RAW_FIELDS as readonly string[]).filter(
       (id) => !PINNED_FRONT.includes(id),
     );
     return [...PINNED_FRONT, ...sortFieldNames(remaining)];
