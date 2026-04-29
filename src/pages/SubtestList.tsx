@@ -1290,6 +1290,8 @@ export default function SubtestList() {
 
   // Count active column filters for display
   const activeColumnFilterCount = columnFilters.length;
+  const columnFilterChips = useMemo(() => buildColumnFilterChips(table, columnFilters), [table, columnFilters]);
+  const removeColumnFilter = (id: string) => setColumnFilters((prev) => prev.filter((f) => f.id !== id));
 
   return (
     <div className="space-y-4">
