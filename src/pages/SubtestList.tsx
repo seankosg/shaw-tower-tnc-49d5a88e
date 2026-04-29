@@ -44,6 +44,7 @@ import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrol
 import type { BulkEditableField } from '@/lib/bulk-edit';
 import { META_FIELD_NAMES, type CommentSummary, EMPTY_SUMMARY, isMetaField } from '@/lib/meta-fields';
 import { MetaCell } from '@/components/raw-data/MetaCell';
+import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
 
 interface SubtestRow {
   id: string;
