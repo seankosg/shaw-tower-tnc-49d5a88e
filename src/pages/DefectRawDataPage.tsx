@@ -1386,7 +1386,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
       >
         <Table style={{ width: totalWidth, tableLayout: 'fixed' }}>
           <TableHeader className="bg-background">
-            <TableRow className="border-b bg-background [&>th]:sticky [&>th]:top-0">
+            <TableRow className="border-b bg-background [&>th]:sticky [&>th]:top-0 [&>th]:z-[2] [&>th]:bg-background">
               {allHeaders.map(renderHeader)}
             </TableRow>
           </TableHeader>
