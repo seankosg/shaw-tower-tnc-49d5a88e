@@ -158,11 +158,7 @@ export function reconcileClosureCompletion(
     return { completion_status: completion, closure_status: closure };
   }
 
-  // Case B (existing): Closure=Done, Completion!=Done → check for Excel conflict
-  const excelPct = excelExplicit.actual_progress_pct;
-  const excelDate = excelExplicit.actual_completion_date;
-  const hasExplicitPct = excelPct !== null && excelPct !== undefined && Number(excelPct) < 100;
-  const hasExplicitDate = excelDate !== null && excelDate !== undefined && String(excelDate).trim() !== '';
+  // Case B (existing): Closure=Done, Completion!=Done → check for Excel conflict (vars reused from above)
 
   if (hasExplicitPct || hasExplicitDate) {
     return {
