@@ -1051,8 +1051,8 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
           )}
           {!showGroups && (
             <>
-              <Bar yAxisId="bar" dataKey="planInc" fill="hsl(var(--muted-foreground) / 0.25)" name="Plan (daily)" hide={hidden.has('planInc')} barSize={6} />
-              <Bar yAxisId="bar" dataKey="actualInc" fill="hsl(var(--primary) / 0.35)" name="Actual (daily)" hide={hidden.has('actualInc')} barSize={6} />
+              <Bar yAxisId="bar" dataKey="planInc" fill="hsla(0, 0%, 50%, 0.35)" name="Plan (daily)" hide={hidden.has('planInc')} barSize={6} />
+              <Bar yAxisId="bar" dataKey="actualInc" fill="hsla(217, 91%, 60%, 0.55)" name="Actual (daily)" hide={hidden.has('actualInc')} barSize={6} />
             </>
           )}
           {!showGroups && (
@@ -1120,9 +1120,9 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
 // ─── All-Stage variants ─────────────────────────────────────────────────────
 
 const STAGE_COLORS: Record<DefectScheduleStage, { line: string; bar: string }> = {
-  start:      { line: 'hsl(217 91% 60%)',   bar: 'hsl(217 91% 60% / 0.45)' },
-  completion: { line: 'hsl(38 92% 50%)',    bar: 'hsl(38 92% 50% / 0.45)' },
-  closure:    { line: 'hsl(160 60% 45%)',   bar: 'hsl(160 60% 45% / 0.45)' },
+  start:      { line: 'hsl(217, 91%, 60%)',  bar: 'hsla(217, 91%, 60%, 0.45)' },
+  completion: { line: 'hsl(38, 92%, 50%)',   bar: 'hsla(38, 92%, 50%, 0.45)'  },
+  closure:    { line: 'hsl(160, 60%, 45%)',  bar: 'hsla(160, 60%, 45%, 0.45)' },
 };
 
 function SCurveAllKpiStrip({ scurveAll, today, windowStart, windowEnd }: {

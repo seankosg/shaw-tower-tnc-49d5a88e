@@ -1,35 +1,47 @@
-## Group 모드 S-Curve에 일일 막대 추가
+## 문제 진단
 
-### 진단 (확정)
-`src/pages/DefectDashboardPage.tsx:1212` 주석 — `Group mode: per stage × per group cumulative lines only (no daily bars).` 즉 **시인성 문제가 아니라 의도적으로 막대를 그리지 않는 분기**입니다. 데이터가 등록되지 않으므로 투명도/색을 바꿔도 보이지 않습니다.
+S-Curve 차트의 Group 모드에서 일일 막대(`Bar`)가 시각적으로 보이지 않는 근본 원인은 **데이터 누락이 아니라 색상 표기법 문제**입니다.
 
-### 변경 파일
-`src/pages/DefectDashboardPage.tsx` (단일 파일)
+- 호버 툴팁에 plan/actual 숫자가 정상 표시됨 → `planInc_*`, `actualInc_*` 데이터는 잘 합산되고 있음
+- 그런데도 막대가 화면에 안 그려짐 → Recharts `<Bar fill=...>`에 전달되는 색상값이 SVG에서 파싱 실패
 
-### 구체 변경
+### 코드상 색상 정의 (`STAGE_COLORS`, line 1122)
+```ts
+start:      { line: 'hsl(217 91% 60%)',   bar: 'hsl(217 91% 60% / 0.45)' },
+completion: { line: 'hsl(38 92% 50%)',    bar: 'hsl(38 92% 50% / 0.45)' },
+closure:    { line: 'hsl(160 60% 45%)',   bar: 'hsl(160 60% 45% / 0.45)' },
+```
 
-1. **데이터 빌더 (line 1211–1234, Group 모드 분기)**
-   - 기존 `planSum / actualSum / prevPlanSum / prevActualSum` 계산을 활용해 Stage별 일일 합계 행을 추가:
-     - `row[`planInc_${s}`] = planSum - prevPlanSum`
-     - `row[`actualInc_${s}`] = anyActualNull ? null : (actualSum - prevActualSum)`
-   - 누적선용 `gp_${s}_${gk}` / `ga_${s}_${gk}`는 그대로 유지
+이 값들은 `<Bar fill={STAGE_COLORS[s].bar} />` 형태로 SVG `fill` 속성에 그대로 전달됩니다. SVG는 CSS Color Module Level 4의 **공백/슬래시 구분 `hsl()` 표기법을 지원하지 않습니다**. SVG가 인식하는 형태는 `hsl(217, 91%, 60%)`(콤마 구분) 또는 `hsla(217, 91%, 60%, 0.45)`입니다. 따라서 막대가 투명하거나 무색으로 그려져 보이지 않게 됩니다. 비-Group 모드의 막대(`hsl(var(--muted-foreground) / 0.25)`)는 CSS var를 한 번 거치면서 브라우저에 의해 일부 보정되거나, 회색 톤이라 부분적으로 렌더된 것처럼 보였을 수 있습니다.
 
-2. **보조 Y축 활성화 (line 1285–1287)**
-   - `!isGroupMode` 조건 제거 → Group 모드에서도 우측 `yAxisId="bar"` 렌더
+## 수정 내용
 
-3. **Stage별 stacked Bar 렌더 (line 1293–1308)**
-   - Bar 두 줄(plan stack / actual stack)을 `!isGroupMode` 분기 밖으로 이동, 항상 렌더
-   - 누적선(`cumPlan_*`, `cumActual_*`)은 비-Group에서만 유지
-   - Group별 누적선(line 1309–1341)은 그대로
+`src/pages/DefectDashboardPage.tsx`의 `STAGE_COLORS` 상수를 SVG가 안전하게 인식하는 콤마 구분 표기로 변경합니다.
 
-4. **ChartConfig (line 1240–1256)**
-   - Group 모드 cfg에도 `planInc_${s}` / `actualInc_${s}` 항목 추가 → 범례·툴팁 라벨 정상 표시
+```ts
+const STAGE_COLORS: Record<DefectScheduleStage, { line: string; bar: string }> = {
+  start:      { line: 'hsl(217, 91%, 60%)',  bar: 'hsla(217, 91%, 60%, 0.45)' },
+  completion: { line: 'hsl(38, 92%, 50%)',   bar: 'hsla(38, 92%, 50%, 0.45)'  },
+  closure:    { line: 'hsl(160, 60%, 45%)',  bar: 'hsla(160, 60%, 45%, 0.45)' },
+};
+```
 
-### 시각 결과
-- "None" 화면과 동일한 **Stage별 stacked daily bars** + Today 기준 향후 계획 막대가 Subcontractor / 특정 서브콘 선택 시에도 표시됨
-- 합계 의미: 선택된 그룹들의 plan/actual 일일 증가분 합 (누적선의 합과 일관)
-- 누적선은 기존대로 Stage 색 + Group dash 패턴 유지
+추가로 비-Group 모드 막대의 색상도 동일한 SVG-호환 표기로 변경합니다 (line 1054-1055):
 
-### 영향 없음
-- DB·유틸(`defect-dashboard-utils.ts`)·테스트 변경 없음
-- 비-Group 모드 동작 변화 없음
+```tsx
+<Bar ... fill="hsla(0, 0%, 50%, 0.35)" name="Plan (daily)" ... />
+<Bar ... fill="hsla(217, 91%, 60%, 0.45)" name="Actual (daily)" ... />
+```
+
+이렇게 하면:
+- Group 선택 시 Stage별로 색상이 입혀진 일일 stacked 막대(Plan은 반투명, Actual은 더 진한 색)가 보조 Y축 기준으로 보이게 됩니다.
+- 누적선과 일일 막대가 같은 색 계열로 시각적 연관성을 가집니다.
+
+## 영향 범위
+
+- 차트의 데이터/구조/축은 변경하지 않음 — 색상 문자열만 수정
+- KPI 스트립 좌측 테두리(line 1148) 색상은 같은 `STAGE_COLORS[s].line`을 사용하지만 CSS `border-left-color`로 들어가므로 두 표기 모두 정상 동작 (변경 없음)
+
+## 변경 파일
+
+- `src/pages/DefectDashboardPage.tsx` (`STAGE_COLORS` 상수 + 비-Group 모드 두 `Bar`의 `fill`)
