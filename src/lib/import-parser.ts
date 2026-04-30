@@ -1,5 +1,11 @@
 import * as XLSX from 'xlsx';
 import { getMappedField } from '@/lib/header-mappings-cache';
+import {
+  coerceCustomValue,
+  getCustomField,
+  isCustomTarget,
+  parseCustomTarget,
+} from '@/lib/custom-fields-cache';
 
 // ── Header normalization ──────────────────────────────────────────────
 const HEADER_MAP: Record<string, string> = {
