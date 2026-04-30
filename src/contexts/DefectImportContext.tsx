@@ -901,6 +901,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
           reason_code: 'reimport_not_found',
           reason_detail: reimportDetail,
         });
+        fl(row.rawRowNo, '__row__', 'rejected_invalid', { code: 'reimport_not_found', detail: reimportDetail });
         await maybeFlush();
         continue;
       }
@@ -913,12 +914,16 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       if (issueAssignment.duplicate) {
         rejected++;
         pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'rejected', reason_code: 'duplicate_subcontractor_issue_no', reason_detail: `Subcontractor Issue No "${issueAssignment.subcontractor_issue_no}" is already used (either by another row in this import or by an existing defect in the project).` });
+        fl(row.rawRowNo, 'subcontractor_issue_no', 'rejected_conflict', { raw: issueAssignment.subcontractor_issue_no, code: 'duplicate_subcontractor_issue_no', detail: `Already used by another row or existing defect in the project.` });
         await maybeFlush();
         continue;
       }
       const resolvedTeam = resolveDefectTeam(row, profileTeamMap) ?? existing?.team ?? null;
       const logReason = resolvedTeam ? {} : { reason_code: 'team_unresolved', reason_detail: 'Team could not be resolved from Field Discipline or User Management profile.' };
-      if (!resolvedTeam) teamUnresolved++;
+      if (!resolvedTeam) {
+        teamUnresolved++;
+        fl(row.rawRowNo, 'team', 'skipped_empty', { code: 'team_unresolved', detail: 'Team could not be resolved from Field Discipline or User Management profile.' });
+      }
       let actualCompletionDate = Number(row.actual_progress_pct ?? 0) >= 100
         ? (row.actual_completion_date ?? existing?.actual_completion_date ?? dataDate)
         : (row.actual_completion_date ?? existing?.actual_completion_date ?? null);
@@ -952,6 +957,8 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
             reason_code: 'aconex_status_auto_mapped',
             reason_detail: `Aconex Status="${row.status}" → completion=Done auto-applied (actual_completion_date=${actualCompletionDate}, actual_progress_pct=100).`,
           });
+          fl(row.rawRowNo, 'actual_completion_date', 'auto_filled', { applied: actualCompletionDate, code: 'aconex_status_auto_mapped', detail: `Aconex Status="${row.status}" → Done auto-applied` });
+          fl(row.rawRowNo, 'actual_progress_pct', 'auto_filled', { applied: 100, code: 'aconex_status_auto_mapped', detail: `Aconex Status="${row.status}" → Done auto-applied` });
         }
       }
       if (reconciled.conflict) {
@@ -961,20 +968,29 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
           reason_code: 'closure_completion_conflict',
           reason_detail: reconciled.conflictDetail,
         });
+        fl(row.rawRowNo, 'completion_status', 'corrected', { code: 'closure_completion_conflict', detail: reconciled.conflictDetail });
+        fl(row.rawRowNo, 'closure_status', 'corrected', { code: 'closure_completion_conflict', detail: reconciled.conflictDetail });
       }
 
       if (row.completion_status) {
         if (isValidDefectStatus(row.completion_status)) completionStatus = row.completion_status;
-        else pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'invalid_status_value', reason_detail: `completion_status="${row.completion_status}" not in Planned/Delay/Done/WIP. Auto-computed.` });
+        else {
+          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'invalid_status_value', reason_detail: `completion_status="${row.completion_status}" not in Planned/Delay/Done/WIP. Auto-computed.` });
+          fl(row.rawRowNo, 'completion_status', 'corrected', { raw: row.completion_status, applied: completionStatus, code: 'invalid_status_value', detail: `Not in Planned/Delay/Done/WIP — auto-computed.` });
+        }
       } else if (!row.planned_completion_date && !row.planned_closure_date && !autoReconciled) {
         completionStatus = existing?.completion_status ?? null;
         if (completionStatus == null) {
           pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'missing_planned_dates', reason_detail: 'No planned dates; completion_status set to null.' });
+          fl(row.rawRowNo, 'completion_status', 'skipped_empty', { code: 'missing_planned_dates', detail: 'No planned dates; completion_status set to null.' });
         }
       }
       if (row.closure_status) {
         if (isValidDefectStatus(row.closure_status)) closureStatus = row.closure_status;
-        else pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'invalid_status_value', reason_detail: `closure_status="${row.closure_status}" not in Planned/Delay/Done/WIP. Auto-computed.` });
+        else {
+          pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'invalid_status_value', reason_detail: `closure_status="${row.closure_status}" not in Planned/Delay/Done/WIP. Auto-computed.` });
+          fl(row.rawRowNo, 'closure_status', 'corrected', { raw: row.closure_status, applied: closureStatus, code: 'invalid_status_value', detail: `Not in Planned/Delay/Done/WIP — auto-computed.` });
+        }
       } else if (!row.planned_completion_date && !row.planned_closure_date) {
         closureStatus = existing?.closure_status ?? null;
       }
