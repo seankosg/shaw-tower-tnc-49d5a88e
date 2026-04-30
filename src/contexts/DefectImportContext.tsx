@@ -807,10 +807,13 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       if (computedPlanned == null) {
         if (!row.planned_start_date || !row.planned_completion_date) {
           pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_not_computable', reason_detail: 'Missing planned_start_date or planned_completion_date' });
+          fl(row.rawRowNo, 'planned_progress_pct', 'skipped_empty', { code: 'planned_pct_not_computable', detail: 'Missing planned_start_date or planned_completion_date' });
         } else if (row.planned_completion_date < row.planned_start_date) {
           pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_invalid_dates', reason_detail: 'Planned completion is earlier than planned start' });
+          fl(row.rawRowNo, 'planned_progress_pct', 'rejected_invalid', { code: 'planned_pct_invalid_dates', detail: 'Planned completion is earlier than planned start' });
         } else if (dataDate < row.planned_start_date) {
           pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'planned_pct_not_started', reason_detail: 'Data date is before planned start date' });
+          fl(row.rawRowNo, 'planned_progress_pct', 'derived', { applied: 0, code: 'planned_pct_not_started', detail: 'Data date is before planned start date — set to 0' });
         }
       }
 
