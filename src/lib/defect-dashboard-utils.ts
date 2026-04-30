@@ -1,4 +1,10 @@
 import { type DefectItem } from '@/lib/defect-utils';
+import {
+  getDefectGroupKey,
+  getDefectGroupLabel,
+  type DefectScheduleGroupBy,
+  type DefectScheduleStage,
+} from '@/lib/defect-schedule-utils';
 
 export const NONE_LABEL = '(None)';
 export type DefectDashboardStage = 'start' | 'completion' | 'closure';
