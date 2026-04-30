@@ -197,12 +197,20 @@ function MultiSelectDropdown({ column, options }: {
         onClick={(e) => e.stopPropagation()}
         onPointerDownOutside={(e) => e.stopPropagation()}
       >
-        <button
-          className="text-[11px] text-muted-foreground hover:underline mb-1 px-1"
-          onClick={() => column.setFilterValue(undefined)}
-        >
-          Clear all
-        </button>
+        <div className="flex items-center gap-2 mb-1 px-1">
+          <button
+            className="text-[11px] text-muted-foreground hover:underline"
+            onClick={() => column.setFilterValue(items.map(o => o.value))}
+          >
+            Select all
+          </button>
+          <button
+            className="text-[11px] text-muted-foreground hover:underline"
+            onClick={() => column.setFilterValue(undefined)}
+          >
+            Clear all
+          </button>
+        </div>
         {items.map(o => (
           <label
             key={o.value}

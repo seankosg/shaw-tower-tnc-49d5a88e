@@ -259,9 +259,14 @@ function MultiSelectDropdown({ column, options }: { column: any; options: { valu
         </button>
       </PopoverTrigger>
       <PopoverContent className="max-h-72 w-56 overflow-auto p-2" align="start" onClick={(event) => event.stopPropagation()}>
-        <button className="mb-1 px-1 text-[11px] text-muted-foreground hover:underline" onClick={() => column.setFilterValue(undefined)}>
-          Clear all
-        </button>
+        <div className="mb-1 flex items-center gap-2 px-1">
+          <button className="text-[11px] text-muted-foreground hover:underline" onClick={() => column.setFilterValue(items.map((o) => o.value))}>
+            Select all
+          </button>
+          <button className="text-[11px] text-muted-foreground hover:underline" onClick={() => column.setFilterValue(undefined)}>
+            Clear all
+          </button>
+        </div>
         {items.map((option) => (
           <label
             key={option.value}
