@@ -34,8 +34,18 @@ import DefectQuickUpdatePage from "./pages/DefectQuickUpdatePage";
 import DefectScheduleRevisionPage from "./pages/DefectScheduleRevisionPage";
 import AllSubtestCommentsPage from "./pages/AllSubtestCommentsPage";
 import AllDefectCommentsPage from "./pages/AllDefectCommentsPage";
+import { useHeaderMappingsSync } from "@/hooks/useHeaderMappings";
+import { loadHeaderMappingsCache } from "@/lib/header-mappings-cache";
 
 const queryClient = new QueryClient();
+
+// Kick off cache load as early as possible (non-blocking).
+loadHeaderMappingsCache().catch(() => {});
+
+function HeaderMappingsBootstrap() {
+  useHeaderMappingsSync();
+  return null;
+}
 
 function RedirectPreserveSearch({ to }: { to: string }) {
   const location = useLocation();
@@ -45,6 +55,7 @@ function RedirectPreserveSearch({ to }: { to: string }) {
 const App = () => (
   <AuthProvider>
     <QueryClientProvider client={queryClient}>
+      <HeaderMappingsBootstrap />
       <ModuleStatusProvider>
       <ImportProvider>
         <DefectImportProvider>

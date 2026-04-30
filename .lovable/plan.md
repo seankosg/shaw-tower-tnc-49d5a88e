@@ -1,77 +1,83 @@
-# Planned Closure Date 자동 계산 + 일회성 백필
 
-## 요구사항
-`planned_closure_date`가 비어있고 `planned_completion_date`가 존재할 때, `planned_completion_date + 4 영업일`(일요일만 skip, 토요일은 영업일로 카운트)로 자동 채웁니다.
+# Excel 헤더 매핑 관리 기능 (Admin)
 
-**예시 검증**: 4/29(수) + 4 = 4/30(목)→5/1(금)→5/2(토)→5/3(일,skip)→5/4(월) ✓
+엑셀 임포트 시 사용되는 헤더 → 시스템 필드 매핑을 코드 하드코딩에서 DB 기반으로 전환하고, Admin 페이지에서 관리할 수 있게 합니다. 기존 로직과의 충돌을 방지하기 위한 보강 사항을 모두 반영합니다.
 
-DB의 `add_business_days_no_sun(date, days)` 함수와 클라이언트의 `addBusinessDaysNoSunday()` (`src/lib/business-days.ts`) 모두 동일한 로직을 이미 구현하고 있어 그대로 재사용합니다.
+## 1. 데이터베이스 변경
 
-## 현재 DB 상태
-- 전체 active defect: 3,332건
-- planned_closure_date 없음: 2,914건
-- 그 중 채울 수 있는 것 (planned_completion_date 존재): **2,391건** ← 백필 대상
+### 신규 테이블: `import_header_mappings`
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | uuid PK | |
+| module | text | `tnc` 또는 `defect` |
+| header_alias | text | 정규화된 헤더 별칭 |
+| target_field | text | 시스템 필드명 (예: `issue_no`) |
+| is_system | boolean | true면 Admin이 수정/삭제 불가 (필수 매핑 보호) |
+| is_active | boolean | |
+| note | text | 관리자 메모 |
+| created_at / updated_at | timestamptz | |
+| updated_by | uuid | |
 
-## 구현 범위
+- UNIQUE 제약: `(module, header_alias)` — 동일 모듈 내 별칭 중복 방지
+- RLS: 읽기는 모든 인증 사용자, 쓰기는 admin/superuser만
+- 시드: 기존 `import-parser.ts`, `defect-parser.ts`의 모든 별칭 (~150개) 일괄 삽입, 핵심 식별 필드(`issue_no`, `item_no`, `mos_code` 등)는 `is_system=true`로 설정
 
-### 1) 일회성 백필 마이그레이션
-DB의 `add_business_days_no_sun` 함수를 사용하여 기존 데이터 일괄 업데이트:
+### `app_settings` 활용
+- `header_mappings_version` 키를 두어, 매핑 변경 시 카운터 증가 → 클라이언트가 Realtime/refetch로 즉시 반영
 
-```sql
-UPDATE public.defect_items
-SET planned_closure_date = public.add_business_days_no_sun(planned_completion_date, 4),
-    updated_at = now(),
-    row_version = row_version + 1
-WHERE is_active = true
-  AND planned_closure_date IS NULL
-  AND planned_completion_date IS NOT NULL;
-```
+## 2. 헤더 정규화 & 캐시 전략
 
-스키마 변경은 아니지만 일회성 대량 데이터 변경이므로 migration 파일로 처리합니다 (감사 추적 목적).
+`src/lib/header-normalize.ts` (신규)
+- T&C용: 소문자, 공백 제거, 특수문자 제거
+- Defect용: 위 + `(h)` 접미사 제거, 한글 처리
+- 모듈별로 정규화 규칙을 명확히 분리
 
-추가로, 백필된 행에 대해 `closure_status`도 재계산 가능하도록 `recompute-defect-status` edge function을 한 번 호출합니다(상태 보정).
+`src/hooks/useHeaderMappings.ts` (신규)
+- React Query로 `import_header_mappings` 전체 로드 (앱 시작 시 prefetch)
+- `loadHeaderMappingsCache()`: 모듈별 `Map<normalizedAlias, targetField>` 메모리 캐시 구축
+- `getMappedField(module, rawHeader)`: 동기 조회 — 캐시 미스 시 기존 하드코딩 fallback
 
-### 2) Import 시 자동 채움 (`src/lib/defect-parser.ts`)
-`parseDefectRow` 결과에서 `planned_closure_date`가 null이고 `planned_completion_date`가 있으면 `addBusinessDaysNoSunday(planned_completion_date, 4)`로 자동 derive.
-- Excel에 명시적 closure date가 있으면 그대로 우선 (덮어쓰지 않음).
+→ 비동기 호출로 인한 파서 변경 최소화. 파서는 그대로 동기 함수 유지.
 
-### 3) Raw Data 인라인 편집 / Detail 페이지 자동 채움
-대상: `src/pages/DefectRawDataPage.tsx`, `src/pages/DefectDetailPage.tsx`
+## 3. 파서 수정
 
-사용자가 `planned_completion_date`를 변경하거나 입력할 때, 같은 행의 `planned_closure_date`가 비어있으면 동일 공식으로 자동 derive해서 함께 저장.
-- 사용자가 직접 closure date를 입력한 경우는 절대 덮어쓰지 않음.
-- 인라인 편집(셀 단위)에서도 동일 로직 적용.
+`src/lib/import-parser.ts`, `src/lib/defect-parser.ts`
+- 기존 하드코딩된 별칭 매핑을 **fallback**으로 보존
+- 각 헤더 분석 시 우선순위: `DB 캐시 → 하드코딩 fallback`
+- 파서 진입점에서 `loadHeaderMappingsCache()` 보장 (앱 부팅 시 1회 prefetch + 임포트 직전 재확인)
 
-### 4) (선택) DB 트리거로 안전망 추가
-백엔드 어디서 들어와도 안전하게 채워지도록 `defect_items`에 `BEFORE INSERT OR UPDATE` 트리거를 추가하는 옵션. 이를 적용하면 향후 모든 경로(REST, edge function 등)에서 자동 보정됩니다.
+## 4. Admin UI
 
-```sql
-CREATE OR REPLACE FUNCTION public.fn_defect_autofill_planned_closure()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  IF NEW.planned_closure_date IS NULL AND NEW.planned_completion_date IS NOT NULL THEN
-    NEW.planned_closure_date := public.add_business_days_no_sun(NEW.planned_completion_date, 4);
-  END IF;
-  RETURN NEW;
-END $$;
+`src/pages/admin/HeaderMappingsTab.tsx` (신규)
+- 탭: T&C / Defect 분리
+- 테이블 컬럼: Header Alias, Target Field (드롭다운, 시스템 필드 화이트리스트), System (잠금 아이콘), Active, Note, Updated
+- 동작:
+  - 추가/편집/비활성화 (시스템 행은 `is_system=true`라 잠금 표시, 편집 버튼 비활성)
+  - **매핑 테스트 도구**: 헤더 입력 → 모듈 선택 → 정규화 결과 + 매칭된 target_field 미리보기
+  - 충돌 감지: 같은 alias가 여러 번 등록되려 하면 차단
+  - 검색/필터
+- `src/pages/AdminPage.tsx`에 새 탭 "Header Mappings" 추가
 
-CREATE TRIGGER trg_defect_autofill_planned_closure
-BEFORE INSERT OR UPDATE OF planned_completion_date, planned_closure_date
-ON public.defect_items
-FOR EACH ROW EXECUTE FUNCTION public.fn_defect_autofill_planned_closure();
-```
+## 5. 안전장치
 
-이 트리거를 두면 클라이언트 코드 누락이 있어도 자동 보정됩니다. **권장** 옵션.
+- **시스템 보호 필드** (`is_system=true`)는 DB 트리거로도 수정/삭제 차단 (UI 우회 방지)
+- 변경 시 `event_log`에 기록 (감사 추적)
+- 하드코딩 fallback 유지로 DB가 비어도 임포트 정상 작동 (점진적 마이그레이션 안전)
+- Admin UI에서 시스템 필드명은 enum/리스트로 제공 → 오타 방지
 
-## 수정 대상 파일
-- `supabase/migrations/<new>.sql` — 일회성 백필 + 자동 채움 트리거(권장)
-- `src/lib/defect-parser.ts` — import 시 자동 derive
-- `src/pages/DefectRawDataPage.tsx` — 인라인 편집 시 자동 derive (UI 즉시 반영)
-- `src/pages/DefectDetailPage.tsx` — Detail 페이지 저장 시 자동 derive
+## 6. 알려진 한계
 
-## 영향
-- 기존 2,391건 즉시 보정됨.
-- 신규 import / 편집 / 직접 DB 변경 모든 경로에서 일관되게 자동 채움.
-- closure date를 사용자가 직접 입력한 케이스는 보존(덮어쓰기 없음).
+- 매핑은 단순 1:1만 지원 (1개 헤더 → 1개 필드). 복합 매핑(예: 두 컬럼 합치기)은 향후 과제
+- 캐시 갱신은 `app_settings.header_mappings_version` 변경을 React Query로 polling/refetch — 실시간 즉시성보다 일관성 우선
+- 사용자가 잘못된 매핑 설정 시 임포트 결과가 비어 보일 수 있음 → 매핑 테스트 도구로 사전 검증 권장
 
-승인하시면 진행하겠습니다.
+## 변경/생성 파일
+
+- 신규 마이그레이션: `import_header_mappings` 테이블 + RLS + 트리거 + 시드 + `app_settings` 버전 키
+- 신규: `src/lib/header-normalize.ts`
+- 신규: `src/hooks/useHeaderMappings.ts`
+- 신규: `src/pages/admin/HeaderMappingsTab.tsx`
+- 수정: `src/lib/import-parser.ts`, `src/lib/defect-parser.ts` — DB 우선 + 하드코딩 fallback
+- 수정: `src/pages/AdminPage.tsx` — 새 탭 추가
+- 수정: `src/App.tsx` 또는 main entry — 앱 부팅 시 매핑 prefetch
+Implementation complete: header mappings DB + Admin tab
