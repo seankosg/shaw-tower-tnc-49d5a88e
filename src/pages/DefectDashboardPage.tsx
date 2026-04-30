@@ -955,23 +955,48 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
   onToggleSeries: (key: string) => void;
   onBucketClick: (bucketIso: string) => void;
 }) {
-  // Build chart data row per bucket — each series exposes its own keys for line chart
+  const showGroupsForData = scurve.groups.length > 0;
+  // Build chart data row per bucket — each series exposes its own keys for line chart.
+  // In group mode, omit total* fields so Recharts' Y-axis auto-domain is driven only by
+  // the visible per-group lines (otherwise the unfiltered total inflates the scale and
+  // visually flattens the group lines to the X axis).
   const data = scurve.bucketLabels.map((label, i) => {
-    const prevPlan = i > 0 ? (scurve.total.plan[i - 1] ?? 0) : 0;
-    const planInc = (scurve.total.plan[i] ?? 0) - prevPlan;
-    const curActual = scurve.total.actual[i];
-    const prevActual = i > 0 ? scurve.total.actual[i - 1] : 0;
-    const actualInc = curActual == null ? null : (curActual - (prevActual ?? 0));
     const row: Record<string, any> = {
       bucket: scurve.buckets[i],
       bucketLabel: label,
       __isFuture: scurve.todayIndex >= 0 && i > scurve.todayIndex,
-      totalPlan: scurve.total.plan[i],
-      totalActual: scurve.total.actual[i],
-      variance: scurve.total.variance[i],
-      planInc,
-      actualInc,
     };
+    if (!showGroupsForData) {
+      const prevPlan = i > 0 ? (scurve.total.plan[i - 1] ?? 0) : 0;
+      const planInc = (scurve.total.plan[i] ?? 0) - prevPlan;
+      const curActual = scurve.total.actual[i];
+      const prevActual = i > 0 ? scurve.total.actual[i - 1] : 0;
+      const actualInc = curActual == null ? null : (curActual - (prevActual ?? 0));
+      row.totalPlan = scurve.total.plan[i];
+      row.totalActual = scurve.total.actual[i];
+      row.variance = scurve.total.variance[i];
+      row.planInc = planInc;
+      row.actualInc = actualInc;
+    } else {
+      // Group mode: variance bars use sum of selected group series so they match the
+      // KPI strip and the visible cumulative lines.
+      let planSum = 0;
+      let actualSum = 0;
+      let anyActualNull = false;
+      for (const g of scurve.groups) {
+        planSum += g.plan[i] ?? 0;
+        const a = g.actual[i];
+        if (a == null) anyActualNull = true; else actualSum += a;
+      }
+      const prevPlanSum = i > 0
+        ? scurve.groups.reduce((s, g) => s + (g.plan[i - 1] ?? 0), 0)
+        : 0;
+      const prevActualSum = i > 0
+        ? scurve.groups.reduce((s, g) => s + (g.actual[i - 1] ?? 0), 0)
+        : 0;
+      const inc = (planSum - prevPlanSum);
+      row.variance = anyActualNull ? null : ((actualSum - prevActualSum) - inc);
+    }
     scurve.groups.forEach((g) => {
       row[`g_plan_${g.key}`] = g.plan[i];
       row[`g_actual_${g.key}`] = g.actual[i];
