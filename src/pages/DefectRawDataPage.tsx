@@ -85,6 +85,7 @@ const DEFECT_RAW_FIELDS = [
   'actual_completion_date',
   'actual_closure_date',
   'remarks',
+  'aconex_comments',
   'hdec_comments',
   'updated_at',
   'created_at',
