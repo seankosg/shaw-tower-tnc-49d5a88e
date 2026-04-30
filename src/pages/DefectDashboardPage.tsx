@@ -102,10 +102,11 @@ export default function DefectDashboardPage() {
   }, [scurveOpen]);
   const [scurveStart, setScurveStart] = useState(searchParams.get('scurve_start') || '2026-04-15');
   const [scurveEnd, setScurveEnd] = useState(searchParams.get('scurve_end') || '2026-06-07');
-  const [scurveStage, setScurveStage] = useState<DefectScheduleStage>(() => {
+  const [scurveStage, setScurveStage] = useState<DefectSCurveStageOpt>(() => {
     const raw = searchParams.get('stage_view');
-    const first = raw?.split(',').map(s => s.trim()).find(Boolean) as DefectScheduleStage | undefined;
-    return (first && (ALL_DEFECT_STAGE_KEYS as string[]).includes(first)) ? first : 'completion';
+    const first = raw?.split(',').map(s => s.trim()).find(Boolean);
+    if (first === 'all') return 'all';
+    return (first && (ALL_DEFECT_STAGE_KEYS as string[]).includes(first)) ? (first as DefectScheduleStage) : 'completion';
   });
   const [scurveGroup, setScurveGroup] = useState<DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE>(() => {
     const raw = searchParams.get('group');
