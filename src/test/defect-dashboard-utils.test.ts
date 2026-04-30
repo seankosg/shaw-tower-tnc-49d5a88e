@@ -38,6 +38,7 @@ const makeDefect = (id: string, patch: Partial<DefectForDashboard>): DefectForDa
   closure_status: null,
   remarks: null,
   hdec_comments: null,
+  aconex_comments: null,
   work_type: null,
   classification_source: null,
   classified_at: null,
