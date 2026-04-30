@@ -129,7 +129,8 @@ const HEADER_MAP: Record<string, string> = {
 
 function normalizeHeader(raw: string): string {
   const cleaned = raw.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-  return HEADER_MAP[cleaned] || cleaned;
+  // DB-managed mapping wins, hardcoded HEADER_MAP is the fallback when DB cache misses or is unloaded.
+  return getMappedField('tnc', cleaned) ?? HEADER_MAP[cleaned] ?? cleaned;
 }
 
 // ── Date normalization ────────────────────────────────────────────────
