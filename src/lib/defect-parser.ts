@@ -418,6 +418,31 @@ function getMapped(row: Record<string, unknown>, field: string): unknown {
   return entry?.[1];
 }
 
+// ── Custom field extraction (target_field starts with "custom:") ─────
+function extractDefectCustomFields(row: Record<string, unknown>): {
+  custom_payload: Record<string, string | number | boolean | null>;
+  custom_field_errors: Array<{ field_name: string; raw: string; reason: string }>;
+} {
+  const payload: Record<string, string | number | boolean | null> = {};
+  const errors: Array<{ field_name: string; raw: string; reason: string }> = [];
+  for (const [header, raw] of Object.entries(row)) {
+    const target = toFieldName(header);
+    if (!isCustomTarget(target)) continue;
+    const fieldName = parseCustomTarget(target);
+    if (!fieldName) continue;
+    const def = getCustomField('defect', fieldName);
+    if (!def || !def.is_active) continue;
+    if (raw == null || String(raw).trim() === '') continue;
+    const coerced = coerceCustomValue(def.data_type, raw);
+    if (coerced.ok === false) {
+      errors.push({ field_name: fieldName, raw: String(raw), reason: coerced.reason });
+    } else if (coerced.value !== null) {
+      payload[fieldName] = coerced.value;
+    }
+  }
+  return { custom_payload: payload, custom_field_errors: errors };
+}
+
 // Increased to 20 so re-import files (with extra metadata block / marker rows) still parse.
 const HEADER_SCAN_LIMIT = 20;
 
