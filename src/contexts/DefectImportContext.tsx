@@ -11,6 +11,7 @@ import { classifyDefectV2 } from '@/lib/defect-classifier';
 import { loadClassificationContextV2 } from '@/lib/defect-classifier-context';
 import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
 import { normalizeTeamValue, type TeamType } from '@/types/enums';
+import { buildFieldLog, type PendingFieldLog } from '@/lib/import-field-log';
 
 const trackedFields = ['planned_start_date', 'planned_completion_date', 'planned_closure_date', 'actual_start_date', 'actual_completion_date', 'actual_closure_date', 'planned_progress_pct', 'actual_progress_pct', 'completion_status', 'closure_status'] as const;
 
