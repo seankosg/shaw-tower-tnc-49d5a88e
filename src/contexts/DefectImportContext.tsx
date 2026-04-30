@@ -1027,6 +1027,20 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       // Strip non-column keys carried over from the parser / spread.
       delete payload.rawRowNo;
       delete payload.id;
+      delete payload.custom_field_errors;
+
+      // Merge custom_payload with existing values (do not overwrite the whole JSONB).
+      const newCustom = (row.custom_payload && Object.keys(row.custom_payload).length > 0)
+        ? row.custom_payload : null;
+      if (newCustom) {
+        const existingCustom = ((existing as any)?.custom_payload ?? {}) as Record<string, unknown>;
+        payload.custom_payload = { ...existingCustom, ...newCustom };
+      } else if (existing) {
+        // No new custom values — don't touch existing custom_payload during update
+        delete payload.custom_payload;
+      } else {
+        payload.custom_payload = {};
+      }
 
       if (existing) {
         // Change-detection skips fields the user did NOT map from Excel — without this,
