@@ -366,10 +366,8 @@ export default function DefectDashboardPage() {
                     setScurveGroup(v as DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE);
                     setScurveGroupValues([]);
                   }}
-                </Select>
-              </SCurveToolbarGroup>
-
-              {scurveGroup !== SCURVE_GROUP_NONE && (
+                >
+                  <SelectTrigger className="h-8 w-[160px] text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -381,7 +379,7 @@ export default function DefectDashboardPage() {
                 </Select>
               </SCurveToolbarGroup>
 
-              {scurveStage !== 'all' && scurveGroup !== SCURVE_GROUP_NONE && (
+              {scurveGroup !== SCURVE_GROUP_NONE && (
                 <SCurveToolbarGroup label={`${DEFECT_GROUP_LABELS[scurveGroup as DefectScheduleGroupBy]} values`}>
                   <Popover>
                     <PopoverTrigger asChild>
