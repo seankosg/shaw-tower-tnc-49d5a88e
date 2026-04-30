@@ -1,57 +1,35 @@
-## 목표
+## Group 모드 S-Curve에 일일 막대 추가
 
-Defect Dashboard S-Curve(group mode) 라인 차트의 **인코딩 방향을 사용자 원래 지시대로 정정**하고, Plan 라인의 가독성 값을 합의값으로 맞춘다.
+### 진단 (확정)
+`src/pages/DefectDashboardPage.tsx:1212` 주석 — `Group mode: per stage × per group cumulative lines only (no daily bars).` 즉 **시인성 문제가 아니라 의도적으로 막대를 그리지 않는 분기**입니다. 데이터가 등록되지 않으므로 투명도/색을 바꿔도 보이지 않습니다.
 
-## 현재 상태 (점검 결과)
+### 변경 파일
+`src/pages/DefectDashboardPage.tsx` (단일 파일)
 
-`src/pages/DefectDashboardPage.tsx` 1306~1335 group mode 블록:
+### 구체 변경
 
-| 항목 | 현재 | 목표 |
-|---|---|---|
-| 색 인코딩 | Group별 색 (`GROUP_LINE_COLORS[idx]`) | **Stage별 색** (`STAGE_COLORS[s].line`) |
-| Dash 인코딩 | Stage별 dash (`stageDash[s]`) | **Group별 dash** (`GROUP_DASH[idx]`) |
-| Plan opacity | `0.55` | **`0.85`** |
-| Plan width | `1.25` | **`1.75`** |
+1. **데이터 빌더 (line 1211–1234, Group 모드 분기)**
+   - 기존 `planSum / actualSum / prevPlanSum / prevActualSum` 계산을 활용해 Stage별 일일 합계 행을 추가:
+     - `row[`planInc_${s}`] = planSum - prevPlanSum`
+     - `row[`actualInc_${s}`] = anyActualNull ? null : (actualSum - prevActualSum)`
+   - 누적선용 `gp_${s}_${gk}` / `ga_${s}_${gk}`는 그대로 유지
 
-## 변경 사항
+2. **보조 Y축 활성화 (line 1285–1287)**
+   - `!isGroupMode` 조건 제거 → Group 모드에서도 우측 `yAxisId="bar"` 렌더
 
-### 1. 새 상수 추가
+3. **Stage별 stacked Bar 렌더 (line 1293–1308)**
+   - Bar 두 줄(plan stack / actual stack)을 `!isGroupMode` 분기 밖으로 이동, 항상 렌더
+   - 누적선(`cumPlan_*`, `cumActual_*`)은 비-Group에서만 유지
+   - Group별 누적선(line 1309–1341)은 그대로
 
-```ts
-// Group별 dash 패턴 (라인 패턴으로 group 구분)
-const GROUP_DASH = [
-  undefined,  // 1st group: solid
-  '6 3',      // 2nd: long dash
-  '2 3',      // 3rd: dotted
-  '8 3 2 3',  // 4th: dash-dot
-  '4 2 2 2',  // 5th
-  '10 4',     // 6th
-];
-```
+4. **ChartConfig (line 1240–1256)**
+   - Group 모드 cfg에도 `planInc_${s}` / `actualInc_${s}` 항목 추가 → 범례·툴팁 라벨 정상 표시
 
-### 2. group mode `<Line>` 두 개 (Plan, Actual) 수정
+### 시각 결과
+- "None" 화면과 동일한 **Stage별 stacked daily bars** + Today 기준 향후 계획 막대가 Subcontractor / 특정 서브콘 선택 시에도 표시됨
+- 합계 의미: 선택된 그룹들의 plan/actual 일일 증가분 합 (누적선의 합과 일관)
+- 누적선은 기존대로 Stage 색 + Group dash 패턴 유지
 
-- `stroke={color}` → `stroke={STAGE_COLORS[s].line}`
-- Plan: `strokeDasharray={dash ? \`${dash}\` : '4 3'}` → `strokeDasharray={GROUP_DASH[idx % GROUP_DASH.length]}`
-- Actual: `strokeDasharray={dash}` → `strokeDasharray={GROUP_DASH[idx % GROUP_DASH.length]}`
-- Plan: `strokeOpacity={0.55}` → `strokeOpacity={0.85}`
-- Plan: `strokeWidth={1.25}` → `strokeWidth={1.75}`
-- Actual: `strokeWidth={2}` 유지
-
-### 3. Tooltip/legend `cfg` 색상 정합성
-
-`cfg`에서 `gp_${s}_${gk}`, `ga_${s}_${gk}` 항목의 `color`를 `STAGE_COLORS[s].line`로 변경 (현재는 GROUP_LINE_COLORS 기반).
-
-### 4. 기존 unused 변수 정리
-
-- group mode 블록 내 `color` 지역변수 제거
-- `stageDash` 상수가 다른 곳에서 안 쓰이면 제거 (다른 사용처가 있으면 유지)
-
-## 영향 없는 부분
-
-- non-group mode 차트 (라인 1290~1305) — 변경 없음
-- 데이터 계산 로직, group 정의
-
-## 리스크
-
-- Group이 많을 때(>6) dash 패턴 순환 — 색은 모두 같으므로(stage별) 구분이 어려워질 수 있음. 일반적으로 group 수는 4~5개 이하로 제한적이라 OK.
+### 영향 없음
+- DB·유틸(`defect-dashboard-utils.ts`)·테스트 변경 없음
+- 비-Group 모드 동작 변화 없음
