@@ -57,6 +57,8 @@ export interface ParsedDefectRow {
   aconex_comments: string | null;
   work_type: string | null;
   raw_payload: Record<string, unknown>;
+  custom_payload: Record<string, string | number | boolean | null>;
+  custom_field_errors: Array<{ field_name: string; raw: string; reason: string }>;
 }
 
 export interface ParseDefectResult {
