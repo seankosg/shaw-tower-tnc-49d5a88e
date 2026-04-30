@@ -590,7 +590,12 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
       hdec_eng_name: toText(getMapped(raw, 'hdec_eng_name')),
       planned_start_date: normalizeDate(getMapped(raw, 'planned_start_date')),
       planned_completion_date: normalizeDate(getMapped(raw, 'planned_completion_date')),
-      planned_closure_date: normalizeDate(getMapped(raw, 'planned_closure_date')),
+      planned_closure_date: (() => {
+        const explicit = normalizeDate(getMapped(raw, 'planned_closure_date'));
+        if (explicit) return explicit;
+        const completion = normalizeDate(getMapped(raw, 'planned_completion_date'));
+        return completion ? addBusinessDaysNoSunday(completion, 4) : null;
+      })(),
       actual_start_date: normalizeDate(getMapped(raw, 'actual_start_date')),
       actual_completion_date: normalizeDate(getMapped(raw, 'actual_completion_date')),
       actual_closure_date: normalizeDate(getMapped(raw, 'actual_closure_date')),
