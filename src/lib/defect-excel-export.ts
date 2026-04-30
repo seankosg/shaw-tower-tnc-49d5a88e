@@ -359,8 +359,31 @@ function buildDefectWorkbook<TRow>(params: BuildSheetParams<TRow>): XLSX.WorkBoo
   for (let c = 0; c < headerRow.length; c++) {
     setCell(ws, 7, c, headerRow[c], STYLE_HEADER);
   }
+  // Build column-index → field id map (re-import id columns precede visibleCols).
+  const fieldIdByColIdx: (string | null)[] = [
+    ...reimportIdFields,
+    ...visibleCols.map((c) => c.id),
+  ];
+
   for (let r = 0; r < dataRows.length; r++) {
+    const original = sortedRows[r].original as any;
     for (let c = 0; c < dataRows[r].length; c++) {
+      const fieldId = fieldIdByColIdx[c];
+      if (fieldId && DATE_FIELDS.has(fieldId)) {
+        const rawIso = original?.[fieldId];
+        const serial = isoToExcelSerial(rawIso);
+        if (serial != null) {
+          setDateCell(ws, 8 + r, c, serial, STYLE_DATA, DATE_NUMFMT);
+          continue;
+        }
+      } else if (fieldId && DATETIME_FIELDS.has(fieldId)) {
+        const rawIso = original?.[fieldId];
+        const serial = isoTimestampToExcelSerial(rawIso);
+        if (serial != null) {
+          setDateCell(ws, 8 + r, c, serial, STYLE_DATA, DATETIME_NUMFMT);
+          continue;
+        }
+      }
       setCell(ws, 8 + r, c, dataRows[r][c], STYLE_DATA);
     }
   }
