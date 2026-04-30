@@ -335,13 +335,11 @@ export function buildDefectSCurve(items: DefectForDashboard[], options: BuildSCu
       const s = seriesMap.get(k);
       if (!s) continue;
       for (const [b, v] of s.byBucket) {
-        if (firstBucket && b < firstBucket) {
-          preP += v.p; preA += v.a;
-        } else {
-          let cur = merged.get(b);
-          if (!cur) { cur = { p: 0, a: 0 }; merged.set(b, cur); }
-          cur.p += v.p; cur.a += v.a;
-        }
+        // Exclude any data outside the selected window so the cumulative line starts at 0.
+        if (firstBucket && b < firstBucket) continue;
+        let cur = merged.get(b);
+        if (!cur) { cur = { p: 0, a: 0 }; merged.set(b, cur); }
+        cur.p += v.p; cur.a += v.a;
       }
     }
     return {
