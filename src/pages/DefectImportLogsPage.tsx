@@ -193,8 +193,10 @@ export default function DefectImportLogsPage() {
   const loadBatchDetails = async (id: string) => {
     setActionFilter('all');
     setReasonFilter('all');
+    setOutcomeFilter('all');
     setRowSearch('');
     setRenderLimit(500);
+    setExpandedRows(new Set());
     try {
       const rows = await fetchAllByUploadId<DefectRowLog>(
         'defect_upload_row_logs',
@@ -217,6 +219,18 @@ export default function DefectImportLogsPage() {
     } catch (e) {
       console.error('Failed to load defect schedule audit', e);
       setScheduleChanges([]);
+    }
+
+    try {
+      const fl = await fetchAllByUploadId<FieldLog>(
+        'import_field_logs',
+        'id, raw_row_no, field_name, outcome, raw_value, applied_value, previous_value, reason_code, reason_detail',
+        id,
+      );
+      setFieldLogs(fl);
+    } catch (e) {
+      console.error('Failed to load field logs', e);
+      setFieldLogs([]);
     }
   };
 
