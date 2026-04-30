@@ -874,7 +874,7 @@ export default function DefectRawDataPage() {
           }
           if (DATE_FILTER_FIELDS.has(field)) return formatDdMmm(value ? String(value).slice(0, 10) : null);
           const text = String(value ?? '—');
-          if (['description', 'area_location', 'area_raw', 'remarks', 'hdec_comments'].includes(field)) return <span className="block truncate">{text}</span>;
+          if (['description', 'area_location', 'area_raw', 'remarks', 'hdec_comments', 'aconex_comments'].includes(field)) return <span className="block truncate">{text}</span>;
           return text;
         },
       };
