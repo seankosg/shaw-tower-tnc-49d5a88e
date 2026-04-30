@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ChevronLeft, Loader2, Trash2 } from 'lucide-react';
+import { Fragment, useEffect, useState } from 'react';
+import { ChevronLeft, Loader2, Trash2, ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,6 +25,7 @@ import { RollbackDialog } from '@/components/import/RollbackDialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fetchAllByUploadId } from '@/lib/fetch-all-rows';
+import { FieldLog, FieldLogTable, FieldLogSummaryChips, OUTCOME_LABELS, downloadFieldLevelCsv } from '@/components/import/FieldLogTable';
 
 interface DefectBatch {
   id: string;
@@ -124,8 +125,11 @@ export default function DefectImportLogsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionFilter, setActionFilter] = useState<string>('all');
   const [reasonFilter, setReasonFilter] = useState<string>('all');
+  const [outcomeFilter, setOutcomeFilter] = useState<string>('all');
   const [rowSearch, setRowSearch] = useState<string>('');
   const [renderLimit, setRenderLimit] = useState<number>(500);
+  const [fieldLogs, setFieldLogs] = useState<FieldLog[]>([]);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   useEffect(() => { void fetchBatches(); }, []);
 
@@ -189,8 +193,10 @@ export default function DefectImportLogsPage() {
   const loadBatchDetails = async (id: string) => {
     setActionFilter('all');
     setReasonFilter('all');
+    setOutcomeFilter('all');
     setRowSearch('');
     setRenderLimit(500);
+    setExpandedRows(new Set());
     try {
       const rows = await fetchAllByUploadId<DefectRowLog>(
         'defect_upload_row_logs',
@@ -213,6 +219,18 @@ export default function DefectImportLogsPage() {
     } catch (e) {
       console.error('Failed to load defect schedule audit', e);
       setScheduleChanges([]);
+    }
+
+    try {
+      const fl = await fetchAllByUploadId<FieldLog>(
+        'import_field_logs',
+        'id, raw_row_no, field_name, outcome, raw_value, applied_value, previous_value, reason_code, reason_detail',
+        id,
+      );
+      setFieldLogs(fl);
+    } catch (e) {
+      console.error('Failed to load field logs', e);
+      setFieldLogs([]);
     }
   };
 
@@ -352,11 +370,27 @@ export default function DefectImportLogsPage() {
                     return acc;
                   }, {});
                   const reasonOptions = Array.from(new Set(rowLogs.map(r => r.reason_code).filter(Boolean) as string[])).sort();
+
+                  const fieldLogsByRow = new Map<number, FieldLog[]>();
+                  for (const fl of fieldLogs) {
+                    if (fl.raw_row_no == null) continue;
+                    const arr = fieldLogsByRow.get(fl.raw_row_no) || [];
+                    arr.push(fl);
+                    fieldLogsByRow.set(fl.raw_row_no, arr);
+                  }
+                  const outcomeCounts: Record<string, number> = {};
+                  for (const fl of fieldLogs) outcomeCounts[fl.outcome] = (outcomeCounts[fl.outcome] || 0) + 1;
+                  const outcomeOptions = Object.keys(outcomeCounts).sort();
+
                   const filtered = rowLogs.filter(r => {
                     if (actionFilter !== 'all' && (r.action_taken || '') !== actionFilter) return false;
                     if (reasonFilter !== 'all') {
                       if (reasonFilter === '__none__') { if (r.reason_code) return false; }
                       else if (r.reason_code !== reasonFilter) return false;
+                    }
+                    if (outcomeFilter !== 'all') {
+                      const fls = r.raw_row_no != null ? fieldLogsByRow.get(r.raw_row_no) : undefined;
+                      if (!fls || !fls.some(f => f.outcome === outcomeFilter)) return false;
                     }
                     if (rowSearch.trim() && String(r.raw_row_no ?? '') !== rowSearch.trim()) return false;
                     return true;
@@ -385,11 +419,20 @@ export default function DefectImportLogsPage() {
                           </SelectContent>
                         </Select>
                         <Select value={reasonFilter} onValueChange={(v) => { setReasonFilter(v); setRenderLimit(500); }}>
-                          <SelectTrigger className="h-8 w-[220px] text-xs"><SelectValue placeholder="Reason" /></SelectTrigger>
+                          <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue placeholder="Reason" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">All reasons</SelectItem>
                             <SelectItem value="__none__">(no reason)</SelectItem>
                             {reasonOptions.map(rc => (<SelectItem key={rc} value={rc}>{rc}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                        <Select value={outcomeFilter} onValueChange={(v) => { setOutcomeFilter(v); setRenderLimit(500); }}>
+                          <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="Field outcome" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All field outcomes</SelectItem>
+                            {outcomeOptions.map(o => (
+                              <SelectItem key={o} value={o}>{OUTCOME_LABELS[o] || o} ({outcomeCounts[o]})</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <Input
@@ -398,39 +441,82 @@ export default function DefectImportLogsPage() {
                           placeholder="Row #"
                           className="h-8 w-[100px] text-xs"
                         />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          disabled={fieldLogs.length === 0}
+                          onClick={() => downloadFieldLevelCsv(fieldLogs, `defect-field-logs-${selectedBatch}.csv`)}
+                        >
+                          <Download className="h-3.5 w-3.5 mr-1" />
+                          Field-level CSV
+                        </Button>
                       </div>
+                      {fieldLogs.length > 0 && (
+                        <div className="mb-3">
+                          <FieldLogSummaryChips logs={fieldLogs} />
+                        </div>
+                      )}
                       <div className="rounded-md border max-h-[500px] overflow-auto">
                         <Table>
                           <TableHeader className="sticky top-0 z-10 bg-background">
                             <TableRow>
+                              <TableHead className="text-xs w-8"></TableHead>
                               <TableHead className="text-xs">Row</TableHead>
                               <TableHead className="text-xs">Issue No</TableHead>
                               <TableHead className="text-xs">Action</TableHead>
                               <TableHead className="text-xs">Reason</TableHead>
                               <TableHead className="text-xs">Detail</TableHead>
+                              <TableHead className="text-xs">Fields</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {filtered.length === 0 ? (
-                              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No row logs</TableCell></TableRow>
-                            ) : visible.map((r) => (
-                              <TableRow key={r.id}>
-                                <TableCell className="text-xs">{r.raw_row_no}</TableCell>
-                                <TableCell className="text-xs">{r.issue_no || '—'}</TableCell>
-                                <TableCell>
-                                  {r.action_taken ? (
-                                    <Badge variant="outline" className={`text-xs ${actionColor[r.action_taken] || ''}`}>{r.action_taken}</Badge>
-                                  ) : '—'}
-                                </TableCell>
-                                <TableCell className="text-xs">{r.reason_code || '—'}</TableCell>
-                                <TableCell className="text-xs max-w-[420px] whitespace-normal break-words">{r.reason_detail || '—'}</TableCell>
-                              </TableRow>
-                            ))}
+                              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No row logs</TableCell></TableRow>
+                            ) : visible.map((r) => {
+                              const fls = r.raw_row_no != null ? fieldLogsByRow.get(r.raw_row_no) || [] : [];
+                              const isExpanded = expandedRows.has(r.id);
+                              const toggle = () => {
+                                setExpandedRows(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(r.id)) next.delete(r.id); else next.add(r.id);
+                                  return next;
+                                });
+                              };
+                              return (
+                                <Fragment key={r.id}>
+                                  <TableRow className={fls.length > 0 ? 'cursor-pointer' : ''} onClick={fls.length > 0 ? toggle : undefined}>
+                                    <TableCell className="text-xs">
+                                      {fls.length > 0 ? (
+                                        isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />
+                                      ) : null}
+                                    </TableCell>
+                                    <TableCell className="text-xs">{r.raw_row_no}</TableCell>
+                                    <TableCell className="text-xs">{r.issue_no || '—'}</TableCell>
+                                    <TableCell>
+                                      {r.action_taken ? (
+                                        <Badge variant="outline" className={`text-xs ${actionColor[r.action_taken] || ''}`}>{r.action_taken}</Badge>
+                                      ) : '—'}
+                                    </TableCell>
+                                    <TableCell className="text-xs">{r.reason_code || '—'}</TableCell>
+                                    <TableCell className="text-xs max-w-[360px] whitespace-normal break-words">{r.reason_detail || '—'}</TableCell>
+                                    <TableCell className="text-xs text-muted-foreground">{fls.length || '—'}</TableCell>
+                                  </TableRow>
+                                  {isExpanded && fls.length > 0 && (
+                                    <TableRow className="bg-muted/20 hover:bg-muted/20">
+                                      <TableCell colSpan={7} className="p-2">
+                                        <FieldLogTable logs={fls} />
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                </Fragment>
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       </div>
                       <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-                        <span>Showing {visible.length} of {filtered.length} {filtered.length !== rowLogs.length ? `(filtered from ${rowLogs.length})` : ''}</span>
+                        <span>Showing {visible.length} of {filtered.length} {filtered.length !== rowLogs.length ? `(filtered from ${rowLogs.length})` : ''} · {fieldLogs.length} field logs</span>
                         {visible.length < filtered.length && (
                           <Button variant="outline" size="sm" onClick={() => setRenderLimit(l => l + 500)}>Show 500 more</Button>
                         )}
