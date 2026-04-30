@@ -235,13 +235,14 @@ interface DialogProps {
   onClose: () => void;
   module: ModuleKey;
   fieldList: readonly string[];
+  customOptions?: { value: string; label: string }[];
   existing: HeaderMappingRow[];
   userId: string | null;
   editing?: HeaderMappingRow | null;
   onSaved: () => void;
 }
 
-function MappingDialog({ open, onClose, module, fieldList, existing, userId, editing, onSaved }: DialogProps) {
+function MappingDialog({ open, onClose, module, fieldList, customOptions = [], existing, userId, editing, onSaved }: DialogProps) {
   const { toast } = useToast();
   const [alias, setAlias] = useState('');
   const [target, setTarget] = useState<string>('');
