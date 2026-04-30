@@ -196,23 +196,42 @@ export default function DefectDashboardPage() {
     workType: { rows: byWorkType, header: 'Work Type', param: 'workType' },
   };
 
-  const scurve: DefectSCurveResult = useMemo(() => buildDefectSCurve(filteredItems, {
+  // Available group-value options for the secondary dropdown (based on team-filtered items, excluding group-value filter itself).
+  const groupValueOptions = useMemo(() => {
+    if (scurveGroup === SCURVE_GROUP_NONE) return [] as { key: string; label: string }[];
+    const seen = new Map<string, string>();
+    for (const it of filteredItems) {
+      const k = getDefectGroupKey(it, scurveGroup);
+      if (!seen.has(k)) seen.set(k, getDefectGroupLabel(scurveGroup, k));
+    }
+    return Array.from(seen.entries())
+      .map(([key, label]) => ({ key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [filteredItems, scurveGroup]);
+
+  // Items used for S-Curve: apply secondary group-value filter on top of team filter.
+  const scurveItems = useMemo(() => {
+    if (scurveGroup === SCURVE_GROUP_NONE || scurveGroupValues.length === 0) return filteredItems;
+    return filteredItems.filter(it => scurveGroupValues.includes(getDefectGroupKey(it, scurveGroup)));
+  }, [filteredItems, scurveGroup, scurveGroupValues]);
+
+  const scurve: DefectSCurveResult = useMemo(() => buildDefectSCurve(scurveItems, {
     granularity: scurveBucket,
     startDate: scurveStart,
     endDate: scurveEnd,
     today,
     stage: scurveStage === 'all' ? 'completion' : scurveStage,
     groupBy: scurveStage === 'all' ? null : (scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup),
-  }), [filteredItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
+  }), [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
   const scurveAll: DefectSCurveAllResult | null = useMemo(() => {
     if (scurveStage !== 'all') return null;
-    return buildDefectSCurveAllStages(filteredItems, {
+    return buildDefectSCurveAllStages(scurveItems, {
       granularity: scurveBucket,
       startDate: scurveStart,
       endDate: scurveEnd,
       today,
     });
-  }, [filteredItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage]);
+  }, [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage]);
   const topOverdue = useMemo(() => filteredItems.map(item => ({ item, delay: maxDelayDays(item, dataDate) })).filter(row => row.delay > 0 && !isClosureComplete(row.item)).sort((a, b) => b.delay - a.delay).slice(0, 10), [filteredItems, dataDate]);
   const actualPie = useMemo(() => buildActualPie(filteredItems), [filteredItems]);
   const closurePie = useMemo(() => buildClosurePie(filteredItems), [filteredItems]);
