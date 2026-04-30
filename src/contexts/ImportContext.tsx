@@ -581,6 +581,23 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
             item_no: row.item_no, mos_code: row.mos_code, action_taken: 'updated' as any,
             mapped_system_id: systemId,
           });
+          // Per-cell field logs for every column actually written by this update.
+          for (const [k, v] of Object.entries(updates)) {
+            if (k === 'data_source_type' || k === 'source_upload_id' || k === 'row_version' || k === 'subtest_id' || k === 'is_active') continue;
+            // 'planned' status auto-fills are recognizable: the original parsed row had no value.
+            const wasAutoStatus = (k === 't1_status' || k === 't2_status' || k === 'pred_status' || k === 'r1_status' || k === 'r2_status') && !(row as any)[k];
+            const wasAutoActual = (k === 't1_actual_date' || k === 't2_actual_date' || k === 'pred_actual_date') && !(row as any)[k];
+            const wasDerivedR = (k === 'r1_target_submission_date' || k === 'r2_target_submission_date' || k === 'r2_target_approval_date') && !(row as any)[k];
+            if (wasAutoStatus) {
+              fl(row.raw_row_no, k, 'auto_filled', { applied: v, code: 'status_auto_planned', detail: 'Planned date present but status missing — set to Planned.' });
+            } else if (wasAutoActual) {
+              fl(row.raw_row_no, k, 'auto_filled', { applied: v, code: 'actual_autofilled_on_done', detail: `Status=Done with no actual date — auto-filled to data date.` });
+            } else if (wasDerivedR) {
+              fl(row.raw_row_no, k, 'derived', { applied: v, code: 'derived_from_t2', detail: 'R1/R2 target derived from T2 planned date.' });
+            } else {
+              fl(row.raw_row_no, k, 'applied', { applied: v });
+            }
+          }
         }
       } else {
         // Auto-fill status to 'Planned' when planned_date exists but status is null (new inserts)
