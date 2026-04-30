@@ -123,6 +123,7 @@ export default function AdminPage() {
         <TabsContent value="fields"><FieldConfigTab /></TabsContent>
         <TabsContent value="settings"><SettingsTab /></TabsContent>
         <TabsContent value="modules"><ModuleControlTab /></TabsContent>
+        <TabsContent value="mappings"><HeaderMappingsTab /></TabsContent>
         <TabsContent value="backup"><BackupTab /></TabsContent>
         <TabsContent value="audit"><AuditTab /></TabsContent>
         <TabsContent value="events"><EventLogTab /></TabsContent>
