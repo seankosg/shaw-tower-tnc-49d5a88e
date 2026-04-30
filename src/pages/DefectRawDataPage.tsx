@@ -85,6 +85,7 @@ const DEFECT_RAW_FIELDS = [
   'actual_completion_date',
   'actual_closure_date',
   'remarks',
+  'aconex_comments',
   'hdec_comments',
   'updated_at',
   'created_at',
@@ -100,6 +101,7 @@ const TEXT_FILTER_FIELDS = new Set([
   'description',
   'remarks',
   'hdec_comments',
+  'aconex_comments',
   'trade_detail',
 ]);
 
@@ -142,6 +144,7 @@ const RAW_SEARCH_FIELDS = [
   'closure_status',
   'remarks',
   'hdec_comments',
+  'aconex_comments',
 ] as const;
 
 type DefectRawRow = DefectItem & { created_at?: string | null };
@@ -808,6 +811,7 @@ export default function DefectRawDataPage() {
         area_raw: 180,
         remarks: 220,
         hdec_comments: 220,
+        aconex_comments: 220,
         updated_at: 130,
         created_at: 130,
         classified_at: 130,
@@ -870,7 +874,7 @@ export default function DefectRawDataPage() {
           }
           if (DATE_FILTER_FIELDS.has(field)) return formatDdMmm(value ? String(value).slice(0, 10) : null);
           const text = String(value ?? '—');
-          if (['description', 'area_location', 'area_raw', 'remarks', 'hdec_comments'].includes(field)) return <span className="block truncate">{text}</span>;
+          if (['description', 'area_location', 'area_raw', 'remarks', 'hdec_comments', 'aconex_comments'].includes(field)) return <span className="block truncate">{text}</span>;
           return text;
         },
       };
@@ -965,6 +969,7 @@ export default function DefectRawDataPage() {
     // Notes
     { field: 'remarks', label: getLabel('remarks'), inputType: 'text', group: 'Notes' },
     { field: 'hdec_comments', label: getLabel('hdec_comments'), inputType: 'text', group: 'Notes' },
+    { field: 'aconex_comments', label: getLabel('aconex_comments'), inputType: 'text', group: 'Notes' },
   ], [getLabel, optionFields]);
 
   const handleBulkApplied = useCallback(({ field, value, ids }: { field: string; value: string | number | null; ids: string[] }) => {

@@ -41,6 +41,7 @@ export interface DefectItem {
   closure_status: DefectStatusValue | string | null;
   remarks: string | null;
   hdec_comments: string | null;
+  aconex_comments: string | null;
   work_type: string | null;
   classification_source: string | null;
   classified_at: string | null;

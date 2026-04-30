@@ -378,6 +378,7 @@ export type Database = {
       }
       defect_items: {
         Row: {
+          aconex_comments: string | null
           actual_closure_date: string | null
           actual_completion_date: string | null
           actual_progress_pct: number | null
@@ -424,6 +425,7 @@ export type Database = {
           work_type: string | null
         }
         Insert: {
+          aconex_comments?: string | null
           actual_closure_date?: string | null
           actual_completion_date?: string | null
           actual_progress_pct?: number | null
@@ -470,6 +472,7 @@ export type Database = {
           work_type?: string | null
         }
         Update: {
+          aconex_comments?: string | null
           actual_closure_date?: string | null
           actual_completion_date?: string | null
           actual_progress_pct?: number | null

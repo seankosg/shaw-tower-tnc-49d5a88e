@@ -46,6 +46,7 @@ export interface ParsedDefectRow {
   closure_status: string | null;
   remarks: string | null;
   hdec_comments: string | null;
+  aconex_comments: string | null;
   work_type: string | null;
   raw_payload: Record<string, unknown>;
 }
@@ -111,7 +112,8 @@ const FIELD_ALIASES: Record<string, string> = {
   level: 'area_level',
   location: 'area_location',
   remarks: 'remarks',
-  comments: 'hdec_comments',
+  comments: 'aconex_comments',
+  'aconex comments': 'aconex_comments',
   'hdec comments': 'hdec_comments',
   // New lifecycle headers
   'planned start date': 'planned_start_date',
@@ -597,6 +599,7 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
       closure_status: toText(getMapped(raw, 'closure_status')),
       remarks: toText(getMapped(raw, 'remarks')),
       hdec_comments: toText(getMapped(raw, 'hdec_comments')),
+      aconex_comments: toText(getMapped(raw, 'aconex_comments')),
       work_type: toText(getMapped(raw, 'work_type')),
       raw_payload: raw,
     };
