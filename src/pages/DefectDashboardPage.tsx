@@ -212,7 +212,7 @@ export default function DefectDashboardPage() {
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
     const setOrDelete = (key: string, value: string, defaultValue: string) => value && value !== defaultValue ? next.set(key, value) : next.delete(key);
-    setOrDelete('team', teamFilter, 'all');
+    teamFilter.length ? next.set('team', teamFilter.join(',')) : next.delete('team');
     setOrDelete('tab', breakdownTab, 'subcon');
     setOrDelete('bucket', scurveBucket, 'day');
     setOrDelete('scurve_start', scurveStart, '2026-04-15');
