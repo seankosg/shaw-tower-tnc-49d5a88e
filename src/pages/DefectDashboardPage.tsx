@@ -180,7 +180,14 @@ export default function DefectDashboardPage() {
     workType: { rows: byWorkType, header: 'Work Type', param: 'workType' },
   };
 
-  const scurve = useMemo(() => buildDefectSCurve(filteredItems, scurveBucket, scurveStart, scurveEnd, today), [filteredItems, scurveBucket, scurveStart, scurveEnd, today]);
+  const scurve: DefectSCurveResult = useMemo(() => buildDefectSCurve(filteredItems, {
+    granularity: scurveBucket,
+    startDate: scurveStart,
+    endDate: scurveEnd,
+    today,
+    stage: scurveStage,
+    groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
+  }), [filteredItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
   const topOverdue = useMemo(() => filteredItems.map(item => ({ item, delay: maxDelayDays(item, dataDate) })).filter(row => row.delay > 0 && !isClosureComplete(row.item)).sort((a, b) => b.delay - a.delay).slice(0, 10), [filteredItems, dataDate]);
   const actualPie = useMemo(() => buildActualPie(filteredItems), [filteredItems]);
   const closurePie = useMemo(() => buildClosurePie(filteredItems), [filteredItems]);
@@ -193,10 +200,12 @@ export default function DefectDashboardPage() {
     setOrDelete('bucket', scurveBucket, 'day');
     setOrDelete('scurve_start', scurveStart, '2026-04-15');
     setOrDelete('scurve_end', scurveEnd, '2026-06-07');
+    setOrDelete('stage_view', scurveStage, 'completion');
+    setOrDelete('group', scurveGroup, SCURVE_GROUP_NONE);
     setOrDelete('sub_trade_text', subTradeTextFilter, '');
     selectedSubTradeFilters.length ? next.set('sub_trades', selectedSubTradeFilters.join(',')) : next.delete('sub_trades');
     setSearchParams(next, { replace: true });
-  }, [teamFilter, breakdownTab, scurveBucket, scurveStart, scurveEnd, subTradeTextFilter, selectedSubTradeFilters]);
+  }, [teamFilter, breakdownTab, scurveBucket, scurveStart, scurveEnd, scurveStage, scurveGroup, subTradeTextFilter, selectedSubTradeFilters]);
 
   const goRaw = (params: Record<string, string>) => navigate(`/defects/raw-data?${new URLSearchParams({ source: 'dashboard', ...params }).toString()}`);
   const handleBreakdownExport = () => {
