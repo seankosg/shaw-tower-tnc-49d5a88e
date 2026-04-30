@@ -189,9 +189,18 @@ export default function DefectDashboardPage() {
     startDate: scurveStart,
     endDate: scurveEnd,
     today,
-    stage: scurveStage,
-    groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
+    stage: scurveStage === 'all' ? 'completion' : scurveStage,
+    groupBy: scurveStage === 'all' ? null : (scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup),
   }), [filteredItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
+  const scurveAll: DefectSCurveAllResult | null = useMemo(() => {
+    if (scurveStage !== 'all') return null;
+    return buildDefectSCurveAllStages(filteredItems, {
+      granularity: scurveBucket,
+      startDate: scurveStart,
+      endDate: scurveEnd,
+      today,
+    });
+  }, [filteredItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage]);
   const topOverdue = useMemo(() => filteredItems.map(item => ({ item, delay: maxDelayDays(item, dataDate) })).filter(row => row.delay > 0 && !isClosureComplete(row.item)).sort((a, b) => b.delay - a.delay).slice(0, 10), [filteredItems, dataDate]);
   const actualPie = useMemo(() => buildActualPie(filteredItems), [filteredItems]);
   const closurePie = useMemo(() => buildClosurePie(filteredItems), [filteredItems]);
