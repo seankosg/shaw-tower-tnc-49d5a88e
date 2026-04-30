@@ -36,14 +36,18 @@ import AllSubtestCommentsPage from "./pages/AllSubtestCommentsPage";
 import AllDefectCommentsPage from "./pages/AllDefectCommentsPage";
 import { useHeaderMappingsSync } from "@/hooks/useHeaderMappings";
 import { loadHeaderMappingsCache } from "@/lib/header-mappings-cache";
+import { useCustomFieldsSync } from "@/hooks/useCustomFields";
+import { loadCustomFieldsCache } from "@/lib/custom-fields-cache";
 
 const queryClient = new QueryClient();
 
-// Kick off cache load as early as possible (non-blocking).
+// Kick off cache loads as early as possible (non-blocking).
 loadHeaderMappingsCache().catch(() => {});
+loadCustomFieldsCache().catch(() => {});
 
 function HeaderMappingsBootstrap() {
   useHeaderMappingsSync();
+  useCustomFieldsSync();
   return null;
 }
 
