@@ -811,6 +811,7 @@ export default function DefectRawDataPage() {
         area_raw: 180,
         remarks: 220,
         hdec_comments: 220,
+        aconex_comments: 220,
         updated_at: 130,
         created_at: 130,
         classified_at: 130,
