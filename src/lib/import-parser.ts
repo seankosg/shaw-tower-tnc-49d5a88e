@@ -323,10 +323,6 @@ export interface ParsedSubtest {
   r2_actual_approval_date: string | null;
   remarks: string | null;
   punchlist_comments: string | null;
-}
-
-  remarks: string | null;
-  punchlist_comments: string | null;
   custom_payload: Record<string, string | number | boolean | null>;
   custom_field_errors: Array<{ field_name: string; raw: string; reason: string }>;
 }
