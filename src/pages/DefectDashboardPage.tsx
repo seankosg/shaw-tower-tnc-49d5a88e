@@ -892,14 +892,21 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
         >
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} />
-          <YAxis tick={{ fontSize: 11 }} />
+          <YAxis yAxisId="cum" tick={{ fontSize: 11 }} allowDecimals={false} domain={['auto', 'auto']} />
+          <YAxis yAxisId="bar" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} domain={['auto', 'auto']} />
           <ChartTooltip content={<ChartTooltipContent />} />
           <Legend
             wrapperStyle={{ fontSize: 11 }}
             onClick={(o: any) => o?.dataKey && onToggleSeries(String(o.dataKey))}
           />
           {todayLabel && (
-            <ReferenceLine x={todayLabel} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} />
+            <ReferenceLine yAxisId="cum" x={todayLabel} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} />
+          )}
+          {!showGroups && (
+            <>
+              <Bar yAxisId="bar" dataKey="planInc" fill="hsl(var(--muted-foreground) / 0.25)" name="Plan (daily)" hide={hidden.has('planInc')} barSize={6} />
+              <Bar yAxisId="bar" dataKey="actualInc" fill="hsl(var(--primary) / 0.35)" name="Actual (daily)" hide={hidden.has('actualInc')} barSize={6} />
+            </>
           )}
           {!showGroups && (
             <>
