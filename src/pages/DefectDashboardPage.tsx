@@ -835,6 +835,11 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
 }) {
   // Build chart data row per bucket — each series exposes its own keys for line chart
   const data = scurve.bucketLabels.map((label, i) => {
+    const prevPlan = i > 0 ? (scurve.total.plan[i - 1] ?? 0) : 0;
+    const planInc = (scurve.total.plan[i] ?? 0) - prevPlan;
+    const curActual = scurve.total.actual[i];
+    const prevActual = i > 0 ? scurve.total.actual[i - 1] : 0;
+    const actualInc = curActual == null ? null : (curActual - (prevActual ?? 0));
     const row: Record<string, any> = {
       bucket: scurve.buckets[i],
       bucketLabel: label,
@@ -842,6 +847,8 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
       totalPlan: scurve.total.plan[i],
       totalActual: scurve.total.actual[i],
       variance: scurve.total.variance[i],
+      planInc,
+      actualInc,
     };
     scurve.groups.forEach((g) => {
       row[`g_plan_${g.key}`] = g.plan[i];
