@@ -412,10 +412,16 @@ export default function SchedulePage() {
             Track planned vs actual progress by {GROUP_LABELS[groupBy]} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Data Date {formatDdMmm(dataDate)} · Today {formatDdMmm(today)} · Cumulative: {asOfLabel}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleScheduleExport}>
-          <Download className="mr-1.5 h-4 w-4" />
-          Excel
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleScheduleExport}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Excel (Matrix)
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleRowsExport}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Excel (Rows)
+          </Button>
+        </div>
       </div>
 
       {/* Toolbar */}
