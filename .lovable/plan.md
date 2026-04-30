@@ -80,3 +80,4 @@
 - 수정: `src/lib/import-parser.ts`, `src/lib/defect-parser.ts` — DB 우선 + 하드코딩 fallback
 - 수정: `src/pages/AdminPage.tsx` — 새 탭 추가
 - 수정: `src/App.tsx` 또는 main entry — 앱 부팅 시 매핑 prefetch
+Implementation complete: header mappings DB + Admin tab
