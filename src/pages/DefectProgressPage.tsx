@@ -267,6 +267,42 @@ export default function DefectProgressPage() {
     toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
   };
 
+  const { fields: defectFieldConfig } = useDefectFieldConfig();
+  const { profile } = useAuth();
+
+  const handleRowsExport = () => {
+    if (!filteredItems.length) {
+      toast({ title: 'No rows to export', variant: 'destructive' });
+      return;
+    }
+    const filterParts = [
+      `team=${teamFilter}`,
+      `group=${groupBy.join('+')}`,
+      `bucket=${bucket}`,
+      `stages=${Array.isArray(stageFilterArg) ? stageFilterArg.join('+') : String(stageFilterArg)}`,
+      `range=${rangeDays}d`,
+      `asOf=${asOfLabel}(${asOfDate})`,
+      `hidePast=${hidePast ? '1' : '0'}`,
+    ];
+    try {
+      const { rowCount, fileName } = exportDefectArrayToExcel({
+        rows: filteredItems as any[],
+        fieldConfig: defectFieldConfig,
+        meta: {
+          userName: profile?.name || profile?.login_id || 'Unknown',
+          userType: profile?.user_type ? USER_TYPE_LABELS[profile.user_type] : '',
+        },
+        sourceLabel: 'Defect Progress → Filtered rows',
+        filterSummary: filterParts.join(' · '),
+        fileStem: 'SHAW_Defects_Progress',
+      });
+      toast({ title: 'Export complete', description: `${rowCount} rows → ${fileName}` });
+    } catch (err) {
+      console.error('Excel export failed', err);
+      toast({ title: 'Export failed', description: String((err as Error)?.message ?? err), variant: 'destructive' });
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 p-4">
       {/* Header */}
@@ -280,10 +316,16 @@ export default function DefectProgressPage() {
             Track planned vs actual progress by {groupHeaderLabel} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Data Date {formatDdMmm(dataDate)}{dataDateSource === 'fallback' && ' (fallback)'} · Today {formatDdMmm(today)} · Cumulative: {asOfLabel}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleExport}>
-          <Download className="mr-1.5 h-4 w-4" />
-          Excel
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Excel (Matrix)
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleRowsExport}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Excel (Rows)
+          </Button>
+        </div>
       </div>
 
       {/* Toolbar */}
