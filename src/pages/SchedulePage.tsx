@@ -5,6 +5,10 @@ import { format } from 'date-fns';
 import { Calendar as CalendarIcon, AlertTriangle, TrendingUp, ChevronsLeft, ChevronsRight, CalendarSearch, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { exportScheduleToExcel } from '@/lib/schedule-excel-export';
+import { exportSubtestsArrayToExcel } from '@/lib/excel-export';
+import { useFieldConfig } from '@/hooks/useFieldConfig';
+import { useAuth } from '@/contexts/AuthContext';
+import { USER_TYPE_LABELS } from '@/types/enums';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -313,6 +317,8 @@ export default function SchedulePage() {
     goSubtests({ source: 'schedule_group', [key]: value });
   };
   const { toast } = useToast();
+  const { fields: fieldConfigRows } = useFieldConfig();
+  const { profile } = useAuth();
   const handleScheduleExport = () => {
     if (!visibleData.rows.length) {
       toast({ title: 'No data to export', variant: 'destructive' });
@@ -329,6 +335,70 @@ export default function SchedulePage() {
     toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
   };
 
+  // Build the same row set the page is actually showing (after team / system filters),
+  // then export every row using the Subtest Master List Excel layout.
+  const handleRowsExport = () => {
+    // Apply the page's filters to get the raw row list.
+    let rowsForExport = filteredSubtests as any[];
+
+    // System group filters (text + selected list) only apply when grouped by system.
+    if (groupBy === 'system') {
+      const text = systemTextFilter.trim().toLowerCase();
+      const selected = new Set(selectedSystemFilters);
+      rowsForExport = rowsForExport.filter((r) => {
+        const code = sysCodeById.get(r.system_id) ?? '';
+        const matchesText = !text || code.toLowerCase().includes(text);
+        const matchesSelection = selected.size === 0 || selected.has(code || '(None)');
+        return matchesText && matchesSelection;
+      });
+    }
+
+    // Inject system_code so the Excel column resolves like in the master list.
+    const enriched = rowsForExport.map((r) => ({
+      ...r,
+      system_code: r.system_code ?? sysCodeById.get(r.system_id) ?? '',
+    }));
+
+    if (enriched.length === 0) {
+      toast({ title: 'No rows to export', variant: 'destructive' });
+      return;
+    }
+
+    const filterParts: string[] = [
+      `team=${teamFilter}`,
+      `group=${groupBy}`,
+      `bucket=${bucket}`,
+      `stages=${Array.isArray(stageFilterArg) ? stageFilterArg.join('+') : String(stageFilterArg)}`,
+      `range=${rangeDays}d`,
+      `asOf=${asOfLabel}(${asOfDate})`,
+      `hidePast=${hidePast ? '1' : '0'}`,
+    ];
+    if (groupBy === 'system' && (systemTextFilter || selectedSystemFilters.length)) {
+      filterParts.push(
+        `system_text="${systemTextFilter}"`,
+        `systems=[${selectedSystemFilters.join(', ')}]`,
+      );
+    }
+
+    try {
+      const { rowCount, fileName } = exportSubtestsArrayToExcel({
+        rows: enriched,
+        fieldConfig: fieldConfigRows,
+        meta: {
+          userName: profile?.name || profile?.login_id || 'Unknown',
+          userType: profile?.user_type ? USER_TYPE_LABELS[profile.user_type] : '',
+        },
+        sourceLabel: 'Progress → Filtered rows',
+        filterSummary: filterParts.join(' · '),
+        fileStem: 'SHAW_Subtests_Progress',
+      });
+      toast({ title: 'Export complete', description: `${rowCount} rows → ${fileName}` });
+    } catch (err) {
+      console.error('Excel export failed', err);
+      toast({ title: 'Export failed', description: String((err as Error)?.message ?? err), variant: 'destructive' });
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 p-4">
       {/* Header */}
@@ -342,10 +412,16 @@ export default function SchedulePage() {
             Track planned vs actual progress by {GROUP_LABELS[groupBy]} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Data Date {formatDdMmm(dataDate)} · Today {formatDdMmm(today)} · Cumulative: {asOfLabel}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleScheduleExport}>
-          <Download className="mr-1.5 h-4 w-4" />
-          Excel
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleScheduleExport}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Excel (Matrix)
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleRowsExport}>
+            <Download className="mr-1.5 h-4 w-4" />
+            Excel (Rows)
+          </Button>
+        </div>
       </div>
 
       {/* Toolbar */}

@@ -524,3 +524,146 @@ function setDateCell(
   const addr = XLSX.utils.encode_cell({ r, c });
   ws[addr] = { t: 'n', v: serial, z: numFmt, s: { ...style, numFmt } };
 }
+
+// ---------------------------------------------------------------------------
+// Array-based export (for pages without a react-table instance, e.g. Progress)
+//
+// Mirrors `exportDefectRawToExcel` (view format) using a plain rows array
+// and an explicit field list derived from `defect_field_config`.
+// ---------------------------------------------------------------------------
+
+export interface ExportDefectArrayOptions {
+  rows: any[];
+  fieldConfig: DefectFieldConfigRow[];
+  fieldNames?: string[];
+  meta: { userName: string; userType: string };
+  sourceLabel: string;
+  filterSummary: string;
+  sheetName?: string;
+  fileStem?: string;
+}
+
+function defectLabelFor(field: DefectFieldConfigRow): string {
+  return field.display_name || DEFECT_DEFAULT_FIELD_LABELS[field.field_name] || field.field_name;
+}
+
+function formatDefectRawValue(fieldName: string, raw: unknown): string {
+  if (raw == null || raw === '') return '';
+  if (fieldName === 'team') return formatTeamLabel(raw as any);
+  if (PROGRESS_FIELDS.has(fieldName)) return formatPct(raw as any);
+  if (DATE_FIELDS.has(fieldName)) return formatDdMmm(String(raw).slice(0, 10));
+  if (DATETIME_FIELDS.has(fieldName)) return formatDdMmmYyyy(String(raw));
+  if (fieldName === 'classification_source') return String(raw).toLowerCase();
+  return String(raw);
+}
+
+export function exportDefectArrayToExcel(opts: ExportDefectArrayOptions): {
+  rowCount: number;
+  fileName: string;
+} {
+  const { rows, fieldConfig, meta, sourceLabel, filterSummary } = opts;
+
+  const explicit = opts.fieldNames;
+  const orderedFields: DefectFieldConfigRow[] = explicit
+    ? explicit
+        .map((n) => fieldConfig.find((f) => f.field_name === n))
+        .filter((f): f is DefectFieldConfigRow => !!f)
+    : [...fieldConfig]
+        .filter((f) => f.is_enabled !== false)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+        .filter((f) => !isMetaField(f.field_name));
+
+  const headerRow = orderedFields.map(defectLabelFor);
+  const fieldNames = orderedFields.map((f) => f.field_name);
+
+  const dataRows = rows.map((r) =>
+    fieldNames.map((fname) => formatDefectRawValue(fname, r?.[fname])),
+  );
+
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const exportedTs = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const fileTs = timestampForFilename();
+
+  const colCount = Math.max(headerRow.length, 2);
+  const lastColLetter = XLSX.utils.encode_col(colCount - 1);
+
+  const aoa: any[][] = [
+    [`SHAW T&C — Defect Export  (View-friendly)`],
+    [`Exported: ${exportedTs}  by  ${meta.userName}${meta.userType ? ` (${meta.userType})` : ''}`],
+    [`Source: ${sourceLabel}`],
+    [`Search: (none)`],
+    [`Filters: ${filterSummary}`],
+    [`Sort: (default)`],
+    [],
+    headerRow,
+    ...dataRows,
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  const merges: XLSX.Range[] = [];
+  for (let r = 0; r < 6; r++) merges.push({ s: { r, c: 0 }, e: { r, c: colCount - 1 } });
+  ws['!merges'] = merges;
+
+  ws['!cols'] = headerRow.map(() => ({ wch: 18 }));
+
+  const rowsInfo: XLSX.RowInfo[] = [];
+  rowsInfo[0] = { hpt: 24 };
+  for (let i = 1; i <= 5; i++) rowsInfo[i] = { hpt: 16 };
+  rowsInfo[6] = { hpt: 6 };
+  rowsInfo[7] = { hpt: 28 };
+  for (let i = 0; i < dataRows.length; i++) rowsInfo[8 + i] = { hpt: 20 };
+  ws['!rows'] = rowsInfo;
+
+  const xSplit = Math.min(3, headerRow.length);
+  ws['!freeze'] = { xSplit, ySplit: 8 };
+  (ws as any)['!views'] = [
+    {
+      state: 'frozen',
+      xSplit,
+      ySplit: 8,
+      topLeftCell: XLSX.utils.encode_cell({ r: 8, c: xSplit }),
+      activePane: 'bottomRight',
+    },
+  ];
+
+  setCell(ws, 0, 0, aoa[0][0], STYLE_TITLE);
+  for (let r = 1; r <= 5; r++) {
+    setCell(ws, r, 0, aoa[r][0], r === 1 ? STYLE_META_LABEL : STYLE_META_VALUE);
+  }
+  for (let c = 0; c < headerRow.length; c++) {
+    setCell(ws, 7, c, headerRow[c], STYLE_HEADER);
+  }
+  for (let r = 0; r < dataRows.length; r++) {
+    const original = rows[r];
+    for (let c = 0; c < dataRows[r].length; c++) {
+      const fname = fieldNames[c];
+      if (DATE_FIELDS.has(fname)) {
+        const serial = isoToExcelSerial(original?.[fname]);
+        if (serial != null) {
+          setDateCell(ws, 8 + r, c, serial, STYLE_DATA, DATE_NUMFMT);
+          continue;
+        }
+      } else if (DATETIME_FIELDS.has(fname)) {
+        const serial = isoTimestampToExcelSerial(original?.[fname]);
+        if (serial != null) {
+          setDateCell(ws, 8 + r, c, serial, STYLE_DATA, DATETIME_NUMFMT);
+          continue;
+        }
+      }
+      setCell(ws, 8 + r, c, dataRows[r][c], STYLE_DATA);
+    }
+  }
+
+  const lastRow = 8 + dataRows.length - 1;
+  ws['!ref'] = `A1:${lastColLetter}${Math.max(lastRow + 1, 8)}`;
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, opts.sheetName ?? 'Defects');
+
+  const fileName = `${opts.fileStem ?? 'SHAW_Defects'}_${fileTs}.xlsx`;
+  XLSX.writeFile(wb, fileName);
+
+  return { rowCount: dataRows.length, fileName };
+}
