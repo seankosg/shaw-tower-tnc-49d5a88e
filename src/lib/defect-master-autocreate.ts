@@ -61,6 +61,10 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
   const hdecPics = new Set<string>();
   const hdecEngs = new Set<string>();
   const profileKeys = new Set<string>();
+  // Track which HDEC role columns are already filled per person (by name key).
+  // A person can hold both PIC and ENG roles; we only need to call backend
+  // when a role is missing for that person.
+  const hdecPersonRoles = new Map<string, { pic: boolean; eng: boolean }>();
 
   (subData as MasterRow[] | null || []).forEach((master) => {
     const name = normalizeName(master.name);
@@ -95,26 +99,45 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
     if (profile.user_type === 'subsub' && profile.subsub_name && profile.subcontractor_name) {
       profileKeys.add(`subsub:${subsubKey(profile.subcontractor_name, profile.subsub_name)}`);
     }
-    if (profile.user_type === 'hdec' && profile.hdec_pic_name) {
-      profileKeys.add(`hdec:${keyOf(profile.hdec_pic_name)}`);
-    }
-    if (profile.user_type === 'hdec' && profile.hdec_eng_name) {
-      profileKeys.add(`hdec_eng:${keyOf(profile.hdec_eng_name)}`);
+    if (profile.user_type === 'hdec') {
+      const picName = normalizeName(profile.hdec_pic_name);
+      const engName = normalizeName(profile.hdec_eng_name);
+      // Same person if either column matches the imported name.
+      [picName, engName].forEach((n) => {
+        if (!n) return;
+        const k = keyOf(n);
+        const cur = hdecPersonRoles.get(k) ?? { pic: false, eng: false };
+        if (picName && keyOf(picName) === k) cur.pic = true;
+        if (engName && keyOf(engName) === k) cur.eng = true;
+        hdecPersonRoles.set(k, cur);
+      });
     }
   });
 
-  async function createMasterUser(type: MasterType, name: string, parentName?: string | null) {
-    const profileKey = type === 'subcontractor'
-      ? `sub:${keyOf(name)}`
-      : type === 'subsub' && parentName
-        ? `subsub:${subsubKey(parentName, name)}`
-        : type === 'hdec_pic'
-          ? `hdec:${keyOf(name)}`
-          : type === 'hdec_eng'
-            ? `hdec_eng:${keyOf(name)}`
-            : null;
+  function getHdecRoles(name: string) {
+    return hdecPersonRoles.get(keyOf(name)) ?? { pic: false, eng: false };
+  }
 
-    if (profileKey && profileKeys.has(profileKey)) return;
+  function markHdecRole(name: string, role: 'pic' | 'eng') {
+    const k = keyOf(name);
+    const cur = hdecPersonRoles.get(k) ?? { pic: false, eng: false };
+    cur[role] = true;
+    hdecPersonRoles.set(k, cur);
+  }
+
+  async function createMasterUser(type: MasterType, name: string, parentName?: string | null) {
+    if (type === 'subcontractor') {
+      const profileKey = `sub:${keyOf(name)}`;
+      if (profileKeys.has(profileKey)) return;
+    } else if (type === 'subsub' && parentName) {
+      const profileKey = `subsub:${subsubKey(parentName, name)}`;
+      if (profileKeys.has(profileKey)) return;
+    } else if (type === 'hdec_pic' || type === 'hdec_eng') {
+      const roles = getHdecRoles(name);
+      const role = type === 'hdec_pic' ? 'pic' : 'eng';
+      // Skip backend call only if this person already has THIS role filled.
+      if (roles[role]) return;
+    }
 
     const { data, error } = await supabase.functions.invoke('auto-create-master-user', {
       body: {
@@ -132,7 +155,10 @@ export async function createDefectMasterEnsurer(supabase: SupabaseClient): Promi
       warnings.push(`${name} (${type}): ${error?.message ?? functionError}`);
       return;
     }
-    if (profileKey) profileKeys.add(profileKey);
+    if (type === 'subcontractor') profileKeys.add(`sub:${keyOf(name)}`);
+    else if (type === 'subsub' && parentName) profileKeys.add(`subsub:${subsubKey(parentName, name)}`);
+    else if (type === 'hdec_pic') markHdecRole(name, 'pic');
+    else if (type === 'hdec_eng') markHdecRole(name, 'eng');
   }
 
   const ciEqArg = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
