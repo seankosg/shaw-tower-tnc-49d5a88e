@@ -55,6 +55,7 @@ function RedirectPreserveSearch({ to }: { to: string }) {
 const App = () => (
   <AuthProvider>
     <QueryClientProvider client={queryClient}>
+      <HeaderMappingsBootstrap />
       <ModuleStatusProvider>
       <ImportProvider>
         <DefectImportProvider>
