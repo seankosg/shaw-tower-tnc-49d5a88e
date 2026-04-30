@@ -969,6 +969,7 @@ export default function DefectRawDataPage() {
     // Notes
     { field: 'remarks', label: getLabel('remarks'), inputType: 'text', group: 'Notes' },
     { field: 'hdec_comments', label: getLabel('hdec_comments'), inputType: 'text', group: 'Notes' },
+    { field: 'aconex_comments', label: getLabel('aconex_comments'), inputType: 'text', group: 'Notes' },
   ], [getLabel, optionFields]);
 
   const handleBulkApplied = useCallback(({ field, value, ids }: { field: string; value: string | number | null; ids: string[] }) => {
