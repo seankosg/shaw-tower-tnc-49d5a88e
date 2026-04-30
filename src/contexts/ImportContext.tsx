@@ -661,6 +661,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           punchlist_comments: row.punchlist_comments,
           data_source_type: dataSourceType as any, source_upload_id: uploadId,
           team: (resolvedTeam === undefined ? null : resolvedTeam) as any,
+          custom_payload: row.custom_payload ?? {},
         } as any);
         if (error) {
           res.rejected++;
