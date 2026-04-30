@@ -31,21 +31,21 @@ export interface DefectPlanActualRow {
   closure: DefectPlanActualMetrics;
 }
 
-export interface DefectSCurvePoint {
-  bucket: string;
-  bucketLabel: string;
-  completionPlan: number;
-  completionActual: number | null;
-  closurePlan: number;
-  closureActual: number | null;
-  completionMet: number;
-  completionShortfall: number;
-  completionExcess: number;
-  completionFuturePlan: number;
-  closureMet: number;
-  closureShortfall: number;
-  closureExcess: number;
-  closureFuturePlan: number;
+export interface DefectSCurveSeries {
+  key: string;       // group key, '__total__' for aggregate, or 'Others'
+  label: string;
+  plan: number[];          // cumulative, length === buckets.length
+  actual: (number | null)[]; // cumulative, null for future buckets
+  variance: (number | null)[]; // actual - plan per-bucket increment, null for future
+}
+
+export interface DefectSCurveResult {
+  buckets: string[];        // ISO bucket starts
+  bucketLabels: string[];   // formatted DD-MMM
+  todayIndex: number;       // index of today's bucket in buckets[], or -1 if outside range
+  total: DefectSCurveSeries;
+  groups: DefectSCurveSeries[];   // empty if no group breakdown requested
+  stage: DefectScheduleStage;
 }
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
