@@ -112,7 +112,8 @@ const FIELD_ALIASES: Record<string, string> = {
   level: 'area_level',
   location: 'area_location',
   remarks: 'remarks',
-  comments: 'hdec_comments',
+  comments: 'aconex_comments',
+  'aconex comments': 'aconex_comments',
   'hdec comments': 'hdec_comments',
   // New lifecycle headers
   'planned start date': 'planned_start_date',
