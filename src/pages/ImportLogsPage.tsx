@@ -490,7 +490,7 @@ export default function ImportLogsPage() {
                                 });
                               };
                               return (
-                                <>
+                                <Fragment key={r.id}>
                                   <TableRow key={r.id} className={fls.length > 0 ? 'cursor-pointer' : ''} onClick={fls.length > 0 ? toggle : undefined}>
                                     <TableCell className="text-xs">
                                       {fls.length > 0 ? (
