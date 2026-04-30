@@ -99,6 +99,18 @@ export default function DefectDashboardPage() {
   }, [scurveOpen]);
   const [scurveStart, setScurveStart] = useState(searchParams.get('scurve_start') || '2026-04-15');
   const [scurveEnd, setScurveEnd] = useState(searchParams.get('scurve_end') || '2026-06-07');
+  const [scurveStage, setScurveStage] = useState<DefectScheduleStage>(() => {
+    const raw = searchParams.get('stage_view');
+    const first = raw?.split(',').map(s => s.trim()).find(Boolean) as DefectScheduleStage | undefined;
+    return (first && (ALL_DEFECT_STAGE_KEYS as string[]).includes(first)) ? first : 'completion';
+  });
+  const [scurveGroup, setScurveGroup] = useState<DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE>(() => {
+    const raw = searchParams.get('group');
+    const first = raw?.split(',').map(s => s.trim()).find(Boolean);
+    if (!first || first === SCURVE_GROUP_NONE) return SCURVE_GROUP_NONE;
+    return (ALL_DEFECT_GROUP_KEYS as string[]).includes(first) ? (first as DefectScheduleGroupBy) : SCURVE_GROUP_NONE;
+  });
+  const [hiddenScurveSeries, setHiddenScurveSeries] = useState<Set<string>>(new Set());
   const [subTradeTextFilter, setSubTradeTextFilter] = useState(searchParams.get('sub_trade_text') || '');
   const [selectedSubTradeFilters, setSelectedSubTradeFilters] = useState<string[]>(searchParams.get('sub_trades')?.split(',').filter(Boolean) || []);
 
