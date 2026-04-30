@@ -982,6 +982,45 @@ export type Database = {
         }
         Relationships: []
       }
+      import_header_mappings: {
+        Row: {
+          created_at: string
+          header_alias: string
+          id: string
+          is_active: boolean
+          is_system: boolean
+          module: string
+          note: string | null
+          target_field: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          header_alias: string
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          module: string
+          note?: string | null
+          target_field: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          header_alias?: string
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          module?: string
+          note?: string | null
+          target_field?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
