@@ -210,6 +210,7 @@ export default function HeaderMappingsTab() {
         onClose={() => setCreateOpen(false)}
         module={active}
         fieldList={fieldList as readonly string[]}
+        customOptions={customForActive}
         existing={mappings}
         userId={user?.id ?? null}
         onSaved={refetch}
@@ -219,6 +220,7 @@ export default function HeaderMappingsTab() {
         onClose={() => setEditTarget(null)}
         module={active}
         fieldList={fieldList as readonly string[]}
+        customOptions={customForActive}
         existing={mappings}
         userId={user?.id ?? null}
         editing={editTarget}
