@@ -60,19 +60,24 @@ const PIE_COLORS: Record<string, string> = {
 };
 
 const chartConfig = {
-  completionPlan: { label: 'Completion Plan', color: 'hsl(var(--muted-foreground))' },
-  completionActual: { label: 'Completion Actual', color: 'hsl(var(--primary))' },
-  closurePlan: { label: 'Closure Plan', color: 'hsl(var(--accent-foreground))' },
-  closureActual: { label: 'Closure Actual', color: 'hsl(var(--destructive))' },
-  completionMet: { label: 'Completion Met', color: 'hsl(var(--primary))' },
-  completionShortfall: { label: 'Completion Shortfall', color: 'hsl(var(--destructive))' },
-  completionExcess: { label: 'Completion Excess', color: 'hsl(var(--foreground))' },
-  completionFuturePlan: { label: 'Completion Future Plan', color: 'hsl(var(--muted))' },
-  closureMet: { label: 'Closure Met', color: 'hsl(var(--accent-foreground))' },
-  closureShortfall: { label: 'Closure Shortfall', color: 'hsl(var(--destructive))' },
-  closureExcess: { label: 'Closure Excess', color: 'hsl(var(--foreground))' },
-  closureFuturePlan: { label: 'Closure Future Plan', color: 'hsl(var(--muted))' },
+  plan: { label: 'Plan (cum)', color: 'hsl(var(--muted-foreground))' },
+  actual: { label: 'Actual (cum)', color: 'hsl(var(--primary))' },
+  variance: { label: 'Variance', color: 'hsl(var(--destructive))' },
 } satisfies ChartConfig;
+
+const GROUP_LINE_COLORS = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))',
+  'hsl(217 91% 60%)',
+  'hsl(160 60% 45%)',
+  'hsl(280 70% 60%)',
+  'hsl(var(--muted-foreground))',
+] as const;
+
+const SCURVE_GROUP_NONE = 'none' as const;
 
 export default function DefectDashboardPage() {
   const navigate = useNavigate();
