@@ -55,12 +55,18 @@ export default function HeaderMappingsTab() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: mappings = [], isLoading, refetch } = useHeaderMappings();
+  const { data: customFields = [] } = useCustomFields();
   const [active, setActive] = useState<ModuleKey>('tnc');
   const [search, setSearch] = useState('');
   const [editTarget, setEditTarget] = useState<HeaderMappingRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [testHeader, setTestHeader] = useState('');
 
+  const customForActive = useMemo(
+    () => customFields.filter((f) => f.module === active && f.is_active)
+      .map((f) => ({ value: `custom:${f.field_name}`, label: `[Custom] ${f.display_name} (${f.data_type})` })),
+    [customFields, active],
+  );
   const fieldList = active === 'tnc' ? TNC_FIELDS : DEFECT_FIELDS;
 
   const filtered = useMemo(() => {
