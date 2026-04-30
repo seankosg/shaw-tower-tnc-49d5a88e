@@ -409,6 +409,17 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         const resolvedTeam = resolveValue(rowTeamValue, null);
         if (resolvedTeam !== undefined) updates.team = resolvedTeam;
 
+        // Merge custom_payload (only when there are new custom values)
+        if (row.custom_payload && Object.keys(row.custom_payload).length > 0) {
+          const existingCustom = ((existing as any).custom_payload ?? {}) as Record<string, unknown>;
+          const merged = { ...existingCustom, ...row.custom_payload };
+          // Only update if there's an actual diff
+          const changed = Object.keys(row.custom_payload).some(
+            (k) => JSON.stringify(existingCustom[k]) !== JSON.stringify(row.custom_payload[k]),
+          );
+          if (changed) updates.custom_payload = merged;
+        }
+
         const needsReactivation = (existing as any).is_active === false;
         if (Object.keys(updates).length === 0 && !needsReactivation) {
           res.skipped++;
