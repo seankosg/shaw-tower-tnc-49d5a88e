@@ -246,10 +246,11 @@ export default function DefectDashboardPage() {
     setOrDelete('scurve_end', scurveEnd, '2026-06-07');
     setOrDelete('stage_view', scurveStage, 'completion');
     setOrDelete('group', scurveGroup, SCURVE_GROUP_NONE);
+    scurveGroupValues.length ? next.set('group_values', scurveGroupValues.join(',')) : next.delete('group_values');
     setOrDelete('sub_trade_text', subTradeTextFilter, '');
     selectedSubTradeFilters.length ? next.set('sub_trades', selectedSubTradeFilters.join(',')) : next.delete('sub_trades');
     setSearchParams(next, { replace: true });
-  }, [teamFilter, breakdownTab, scurveBucket, scurveStart, scurveEnd, scurveStage, scurveGroup, subTradeTextFilter, selectedSubTradeFilters]);
+  }, [teamFilter, breakdownTab, scurveBucket, scurveStart, scurveEnd, scurveStage, scurveGroup, scurveGroupValues, subTradeTextFilter, selectedSubTradeFilters]);
 
   const goRaw = (params: Record<string, string>) => navigate(`/defects/raw-data?${new URLSearchParams({ source: 'dashboard', ...params }).toString()}`);
   const handleBreakdownExport = () => {
