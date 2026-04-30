@@ -556,6 +556,7 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
       r2_actual_approval_date: normalizeDate(row.r2_actual_approval_date),
       remarks: row.remarks?.trim() || null,
       punchlist_comments: row.punchlist_comments?.trim() || null,
+      ...extractCustomFields(row),
     });
   }
   return result;
