@@ -367,7 +367,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       // Look up by natural key WITHOUT is_active filter, so previously deactivated
       // subtests are matched and re-activated below (instead of triggering a duplicate insert).
       const { data: existing } = await supabase.from('subtests')
-        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date, r1_target_submission_date, r2_target_submission_date, is_active')
+        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date, r1_target_submission_date, r2_target_submission_date, is_active, custom_payload')
         .eq('project_id', projectId!).eq('system_id', systemId)
         .eq('item_no', row.item_no).eq('mos_code', row.mos_code)
         .maybeSingle();
