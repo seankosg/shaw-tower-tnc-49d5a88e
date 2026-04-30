@@ -306,7 +306,7 @@ export default function DefectDashboardPage() {
                 <ToggleGroup
                   type="single"
                   value={scurveStage}
-                  onValueChange={(v) => v && setScurveStage(v as DefectScheduleStage)}
+                  onValueChange={(v) => v && setScurveStage(v as DefectSCurveStageOpt)}
                   className="gap-1"
                 >
                   {ALL_DEFECT_STAGE_KEYS.map((k) => (
@@ -314,19 +314,29 @@ export default function DefectDashboardPage() {
                       {DEFECT_STAGE_LABELS[k]}
                     </ToggleGroupItem>
                   ))}
+                  <ToggleGroupItem value="all" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                    All
+                  </ToggleGroupItem>
                 </ToggleGroup>
               </SCurveToolbarGroup>
 
               <SCurveToolbarGroup label="Group">
-                <Select value={scurveGroup} onValueChange={(v) => setScurveGroup(v as DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE)}>
-                  <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={SCURVE_GROUP_NONE}>No breakdown</SelectItem>
-                    {ALL_DEFECT_GROUP_KEYS.map((k) => (
-                      <SelectItem key={k} value={k}>{DEFECT_GROUP_LABELS[k]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ToggleGroup
+                  type="single"
+                  value={scurveGroup}
+                  onValueChange={(v) => v && setScurveGroup(v as DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE)}
+                  className="gap-1 flex-wrap"
+                  disabled={scurveStage === 'all'}
+                >
+                  <ToggleGroupItem value={SCURVE_GROUP_NONE} className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                    None
+                  </ToggleGroupItem>
+                  {ALL_DEFECT_GROUP_KEYS.map((k) => (
+                    <ToggleGroupItem key={k} value={k} className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                      {DEFECT_GROUP_LABELS[k]}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
               </SCurveToolbarGroup>
 
               <SCurveToolbarGroup label="Team">
@@ -354,33 +364,57 @@ export default function DefectDashboardPage() {
         </CardHeader>
         {scurveOpen && (
           <CardContent className="space-y-3">
-            <SCurveKpiStrip scurve={scurve} today={today} stage={scurveStage} windowStart={scurveStart} windowEnd={scurveEnd} />
-            {scurve.buckets.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p>
+            {scurveStage === 'all' && scurveAll ? (
+              <>
+                <SCurveAllKpiStrip scurveAll={scurveAll} today={today} windowStart={scurveStart} windowEnd={scurveEnd} />
+                {scurveAll.buckets.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p>
+                ) : (
+                  <SCurveChartsAllStages
+                    scurveAll={scurveAll}
+                    onBucketClick={(bucketIso) => {
+                      const start = new Date(bucketIso + 'T00:00:00Z');
+                      const end = new Date(start);
+                      if (scurveBucket === 'week') end.setUTCDate(end.getUTCDate() + 6);
+                      const dateTo = end.toISOString().slice(0, 10);
+                      goRaw({ dateField: 'planned_completion_date', dateFrom: bucketIso, dateTo });
+                    }}
+                  />
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  All-stage view: Group breakdown disabled. Stacked bars show daily Plan/Actual workload across Start, Completion, Closure.
+                </p>
+              </>
             ) : (
-              <SCurveCharts
-                scurve={scurve}
-                today={today}
-                hidden={hiddenScurveSeries}
-                onToggleSeries={(key) => {
-                  setHiddenScurveSeries((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(key)) next.delete(key); else next.add(key);
-                    return next;
-                  });
-                }}
-                onBucketClick={(bucketIso) => {
-                  const dateField = scurveStage === 'start' ? 'planned_start_date'
-                    : scurveStage === 'completion' ? 'planned_completion_date'
-                    : 'planned_closure_date';
-                  // Compute end-of-bucket
-                  const start = new Date(bucketIso + 'T00:00:00Z');
-                  const end = new Date(start);
-                  if (scurveBucket === 'week') end.setUTCDate(end.getUTCDate() + 6);
-                  const dateTo = end.toISOString().slice(0, 10);
-                  goRaw({ dateField, dateFrom: bucketIso, dateTo });
-                }}
-              />
+              <>
+                <SCurveKpiStrip scurve={scurve} today={today} stage={scurveStage as DefectScheduleStage} windowStart={scurveStart} windowEnd={scurveEnd} />
+                {scurve.buckets.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p>
+                ) : (
+                  <SCurveCharts
+                    scurve={scurve}
+                    today={today}
+                    hidden={hiddenScurveSeries}
+                    onToggleSeries={(key) => {
+                      setHiddenScurveSeries((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(key)) next.delete(key); else next.add(key);
+                        return next;
+                      });
+                    }}
+                    onBucketClick={(bucketIso) => {
+                      const dateField = scurveStage === 'start' ? 'planned_start_date'
+                        : scurveStage === 'completion' ? 'planned_completion_date'
+                        : 'planned_closure_date';
+                      const start = new Date(bucketIso + 'T00:00:00Z');
+                      const end = new Date(start);
+                      if (scurveBucket === 'week') end.setUTCDate(end.getUTCDate() + 6);
+                      const dateTo = end.toISOString().slice(0, 10);
+                      goRaw({ dateField, dateFrom: bucketIso, dateTo });
+                    }}
+                  />
+                )}
+              </>
             )}
           </CardContent>
         )}
