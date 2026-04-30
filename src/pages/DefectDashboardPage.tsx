@@ -359,23 +359,109 @@ export default function DefectDashboardPage() {
               </SCurveToolbarGroup>
 
               <SCurveToolbarGroup label="Group">
-                <ToggleGroup
-                  type="single"
+                <Select
                   value={scurveGroup}
-                  onValueChange={(v) => v && setScurveGroup(v as DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE)}
-                  className="gap-1 flex-wrap"
+                  onValueChange={(v) => {
+                    setScurveGroup(v as DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE);
+                    setScurveGroupValues([]);
+                  }}
                   disabled={scurveStage === 'all'}
                 >
-                  <ToggleGroupItem value={SCURVE_GROUP_NONE} className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
-                    None
-                  </ToggleGroupItem>
-                  {ALL_DEFECT_GROUP_KEYS.map((k) => (
-                    <ToggleGroupItem key={k} value={k} className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
-                      {DEFECT_GROUP_LABELS[k]}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
+                  <SelectTrigger className="h-8 w-[160px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SCURVE_GROUP_NONE}>None</SelectItem>
+                    {ALL_DEFECT_GROUP_KEYS.map((k) => (
+                      <SelectItem key={k} value={k}>{DEFECT_GROUP_LABELS[k]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </SCurveToolbarGroup>
+
+              {scurveStage !== 'all' && scurveGroup !== SCURVE_GROUP_NONE && (
+                <SCurveToolbarGroup label={`${DEFECT_GROUP_LABELS[scurveGroup as DefectScheduleGroupBy]} values`}>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8 text-xs justify-between min-w-[180px]">
+                        <span className="truncate">
+                          {scurveGroupValues.length === 0
+                            ? 'All'
+                            : scurveGroupValues.length <= 2
+                              ? scurveGroupValues
+                                  .map((k) => groupValueOptions.find((o) => o.key === k)?.label ?? k)
+                                  .join(', ')
+                              : `${scurveGroupValues.length} selected`}
+                        </span>
+                        <ChevronDown className="ml-2 h-3 w-3 opacity-60" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[280px] p-2" align="start">
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {scurveGroupValues.length} / {groupValueOptions.length} selected
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-xs"
+                          onClick={() => setScurveGroupValues([])}
+                          disabled={scurveGroupValues.length === 0}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                      <div className="max-h-[280px] overflow-y-auto space-y-1">
+                        {groupValueOptions.length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-2 text-center">No values</p>
+                        ) : (
+                          groupValueOptions.map((opt) => {
+                            const checked = scurveGroupValues.includes(opt.key);
+                            return (
+                              <label
+                                key={opt.key}
+                                className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-accent cursor-pointer text-xs"
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(c) => {
+                                    setScurveGroupValues((prev) =>
+                                      c ? [...prev, opt.key] : prev.filter((k) => k !== opt.key),
+                                    );
+                                  }}
+                                />
+                                <span className="truncate flex-1">{opt.label}</span>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  {scurveGroupValues.length > 0 && (
+                    <div className="flex flex-wrap gap-1 ml-2 max-w-[400px]">
+                      {scurveGroupValues.slice(0, 4).map((k) => {
+                        const label = groupValueOptions.find((o) => o.key === k)?.label ?? k;
+                        return (
+                          <Badge key={k} variant="secondary" className="h-6 gap-1 text-[11px]">
+                            <span className="truncate max-w-[120px]">{label}</span>
+                            <button
+                              onClick={() => setScurveGroupValues((prev) => prev.filter((x) => x !== k))}
+                              className="hover:text-destructive"
+                              aria-label={`Remove ${label}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                      {scurveGroupValues.length > 4 && (
+                        <Badge variant="outline" className="h-6 text-[11px]">+{scurveGroupValues.length - 4}</Badge>
+                      )}
+                    </div>
+                  )}
+                </SCurveToolbarGroup>
+              )}
 
               <SCurveToolbarGroup label="Team">
                 <ToggleGroup type="multiple" value={teamFilter} onValueChange={setTeamFilter} className="gap-1 flex-wrap">
