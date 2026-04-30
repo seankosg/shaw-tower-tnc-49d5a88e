@@ -726,3 +726,181 @@ function PlanActualTable({
 function buildActualPie(items: DefectForDashboard[]) { const complete = items.filter(isActualComplete).length; const inProgress = items.filter(item => !isActualComplete(item) && Number(item.actual_progress_pct ?? 0) > 0).length; const notStarted = items.length - complete - inProgress; return [{ name: 'Complete', value: complete }, { name: 'In Progress', value: inProgress }, { name: 'Not Started', value: notStarted }].filter(item => item.value > 0); }
 function buildClosurePie(items: DefectForDashboard[]) { const closed = items.filter(isClosureComplete).length; return [{ name: 'Closed', value: closed }, { name: 'Not Closed', value: items.length - closed }].filter(item => item.value > 0); }
 function PieBlock({ title, data, onSliceClick }: { title: string; data: { name: string; value: number }[]; onSliceClick: (name: string) => void }) { return <div><p className="mb-1 text-center text-xs font-medium text-muted-foreground">{title}</p><ChartContainer config={Object.fromEntries(data.map(d => [d.name, { label: d.name, color: PIE_COLORS[d.name] }]))} className="mx-auto h-[170px] w-[170px]"><PieChart><Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={38}>{data.map(entry => <Cell key={entry.name} fill={PIE_COLORS[entry.name]} className="cursor-pointer" onClick={() => onSliceClick(entry.name)} />)}</Pie><ChartTooltip content={<ChartTooltipContent />} /></PieChart></ChartContainer><div className="mt-1 flex flex-wrap justify-center gap-2 text-[10px]">{data.map(d => <button key={d.name} onClick={() => onSliceClick(d.name)} className="flex items-center gap-1 hover:underline"><span className="inline-block h-2 w-2 rounded-sm" style={{ background: PIE_COLORS[d.name] }} />{d.name} ({d.value})</button>)}</div></div>; }
+
+function SCurveToolbarGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function SCurveKpiStrip({ scurve, today, stage, windowStart, windowEnd }: {
+  scurve: DefectSCurveResult;
+  today: string;
+  stage: DefectScheduleStage;
+  windowStart: string;
+  windowEnd: string;
+}) {
+  const idx = scurve.todayIndex >= 0 ? scurve.todayIndex : scurve.buckets.length - 1;
+  const plan = scurve.total.plan[idx] ?? 0;
+  const actual = scurve.total.actual[idx] ?? 0;
+  const delta = (actual ?? 0) - plan;
+  const pct = plan > 0 ? (delta / plan) * 100 : 0;
+  const stageLabel = stage === 'start' ? 'Start' : stage === 'completion' ? 'Completion' : 'Closure';
+  const sign = delta > 0 ? '+' : '';
+  const accentClass = delta < 0 ? 'text-destructive' : delta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground';
+  return (
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-md border bg-muted/30 px-3 py-2">
+      <div className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Stage</span>
+        <span className="text-sm font-semibold">{stageLabel}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Plan (cum)</span>
+        <span className="text-sm font-semibold tabular-nums">{plan.toLocaleString()}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Actual (cum)</span>
+        <span className="text-sm font-semibold tabular-nums">{(actual ?? 0).toLocaleString()}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Δ Variance</span>
+        <span className={cn('text-sm font-semibold tabular-nums', accentClass)}>
+          {sign}{delta.toLocaleString()} <span className="text-[10px] font-normal">({sign}{pct.toFixed(1)}%)</span>
+        </span>
+      </div>
+      <div className="ml-auto flex flex-col text-right">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Today / Window</span>
+        <span className="text-xs">{formatDdMmm(today)} · {formatDdMmm(windowStart)} ~ {formatDdMmm(windowEnd)}</span>
+      </div>
+    </div>
+  );
+}
+
+function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: {
+  scurve: DefectSCurveResult;
+  today: string;
+  hidden: Set<string>;
+  onToggleSeries: (key: string) => void;
+  onBucketClick: (bucketIso: string) => void;
+}) {
+  // Build chart data row per bucket — each series exposes its own keys for line chart
+  const data = scurve.bucketLabels.map((label, i) => {
+    const row: Record<string, any> = {
+      bucket: scurve.buckets[i],
+      bucketLabel: label,
+      __isFuture: scurve.todayIndex >= 0 && i > scurve.todayIndex,
+      totalPlan: scurve.total.plan[i],
+      totalActual: scurve.total.actual[i],
+      variance: scurve.total.variance[i],
+    };
+    scurve.groups.forEach((g) => {
+      row[`g_plan_${g.key}`] = g.plan[i];
+      row[`g_actual_${g.key}`] = g.actual[i];
+    });
+    return row;
+  });
+
+  const todayLabel = (() => {
+    const idx = scurve.todayIndex;
+    if (idx < 0) return null;
+    return scurve.bucketLabels[idx] ?? null;
+  })();
+
+  const showGroups = scurve.groups.length > 0;
+
+  const lineCfg: ChartConfig = {
+    totalPlan: { label: 'Plan (cum)', color: 'hsl(var(--muted-foreground))' },
+    totalActual: { label: 'Actual (cum)', color: 'hsl(var(--primary))' },
+    ...Object.fromEntries(scurve.groups.flatMap((g, i) => [
+      [`g_plan_${g.key}`, { label: `${g.label} Plan`, color: GROUP_LINE_COLORS[i % GROUP_LINE_COLORS.length] }],
+      [`g_actual_${g.key}`, { label: `${g.label} Actual`, color: GROUP_LINE_COLORS[i % GROUP_LINE_COLORS.length] }],
+    ])),
+  } as ChartConfig;
+
+  const varianceCfg: ChartConfig = {
+    variance: { label: 'Δ Actual − Plan', color: 'hsl(var(--destructive))' },
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* Cumulative lines */}
+      <ChartContainer config={lineCfg} className="h-[300px] w-full">
+        <ComposedChart data={data} margin={{ left: 12, right: 16, top: 8, bottom: 0 }}
+          onClick={(e: any) => { if (e?.activeLabel) {
+            const idx = scurve.bucketLabels.indexOf(e.activeLabel);
+            if (idx >= 0) onBucketClick(scurve.buckets[idx]);
+          } }}
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} />
+          <YAxis tick={{ fontSize: 11 }} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <Legend
+            wrapperStyle={{ fontSize: 11 }}
+            onClick={(o: any) => o?.dataKey && onToggleSeries(String(o.dataKey))}
+          />
+          {todayLabel && (
+            <ReferenceLine x={todayLabel} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} />
+          )}
+          {!showGroups && (
+            <>
+              <Line type="monotone" dataKey="totalPlan" stroke="var(--color-totalPlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Plan (cum)" hide={hidden.has('totalPlan')} />
+              <Line type="monotone" dataKey="totalActual" stroke="var(--color-totalActual)" strokeWidth={2.5} dot={false} name="Actual (cum)" hide={hidden.has('totalActual')} connectNulls={false} />
+            </>
+          )}
+          {showGroups && scurve.groups.map((g, i) => (
+            <Line
+              key={`plan-${g.key}`}
+              type="monotone"
+              dataKey={`g_plan_${g.key}`}
+              stroke={GROUP_LINE_COLORS[i % GROUP_LINE_COLORS.length]}
+              strokeDasharray="4 3"
+              strokeWidth={1.5}
+              dot={false}
+              name={`${g.label} Plan`}
+              hide={hidden.has(`g_plan_${g.key}`)}
+            />
+          ))}
+          {showGroups && scurve.groups.map((g, i) => (
+            <Line
+              key={`actual-${g.key}`}
+              type="monotone"
+              dataKey={`g_actual_${g.key}`}
+              stroke={GROUP_LINE_COLORS[i % GROUP_LINE_COLORS.length]}
+              strokeWidth={2}
+              dot={false}
+              name={`${g.label} Actual`}
+              hide={hidden.has(`g_actual_${g.key}`)}
+              connectNulls={false}
+            />
+          ))}
+        </ComposedChart>
+      </ChartContainer>
+
+      {/* Variance bars (total only) */}
+      <ChartContainer config={varianceCfg} className="h-[140px] w-full">
+        <ComposedChart data={data} margin={{ left: 12, right: 16, top: 4, bottom: 0 }}
+          onClick={(e: any) => { if (e?.activeLabel) {
+            const idx = scurve.bucketLabels.indexOf(e.activeLabel);
+            if (idx >= 0) onBucketClick(scurve.buckets[idx]);
+          } }}
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} />
+          <YAxis tick={{ fontSize: 11 }} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          {todayLabel && <ReferenceLine x={todayLabel} stroke="hsl(var(--destructive))" strokeDasharray="4 2" />}
+          <ReferenceLine y={0} stroke="hsl(var(--border))" />
+          <Bar dataKey="variance" name="Δ Actual − Plan" barSize={8}>
+            {data.map((row, i) => (
+              <Cell key={i} fill={row.variance == null ? 'hsl(var(--muted))' : (row.variance < 0 ? 'hsl(var(--destructive))' : 'hsl(160 60% 45%)')} />
+            ))}
+          </Bar>
+        </ComposedChart>
+      </ChartContainer>
+    </div>
+  );
+}
