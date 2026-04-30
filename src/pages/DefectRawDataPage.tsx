@@ -101,6 +101,7 @@ const TEXT_FILTER_FIELDS = new Set([
   'description',
   'remarks',
   'hdec_comments',
+  'aconex_comments',
   'trade_detail',
 ]);
 
