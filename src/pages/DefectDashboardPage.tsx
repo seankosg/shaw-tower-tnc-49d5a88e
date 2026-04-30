@@ -221,7 +221,7 @@ export default function DefectDashboardPage() {
     endDate: scurveEnd,
     today,
     stage: scurveStage === 'all' ? 'completion' : scurveStage,
-    groupBy: scurveStage === 'all' ? null : (scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup),
+    groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
   }), [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
   const scurveAll: DefectSCurveAllResult | null = useMemo(() => {
     if (scurveStage !== 'all') return null;
@@ -230,8 +230,9 @@ export default function DefectDashboardPage() {
       startDate: scurveStart,
       endDate: scurveEnd,
       today,
+      groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
     });
-  }, [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage]);
+  }, [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
   const topOverdue = useMemo(() => filteredItems.map(item => ({ item, delay: maxDelayDays(item, dataDate) })).filter(row => row.delay > 0 && !isClosureComplete(row.item)).sort((a, b) => b.delay - a.delay).slice(0, 10), [filteredItems, dataDate]);
   const actualPie = useMemo(() => buildActualPie(filteredItems), [filteredItems]);
   const closurePie = useMemo(() => buildClosurePie(filteredItems), [filteredItems]);
@@ -365,7 +366,6 @@ export default function DefectDashboardPage() {
                     setScurveGroup(v as DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE);
                     setScurveGroupValues([]);
                   }}
-                  disabled={scurveStage === 'all'}
                 >
                   <SelectTrigger className="h-8 w-[160px] text-xs">
                     <SelectValue />
@@ -379,7 +379,7 @@ export default function DefectDashboardPage() {
                 </Select>
               </SCurveToolbarGroup>
 
-              {scurveStage !== 'all' && scurveGroup !== SCURVE_GROUP_NONE && (
+              {scurveGroup !== SCURVE_GROUP_NONE && (
                 <SCurveToolbarGroup label={`${DEFECT_GROUP_LABELS[scurveGroup as DefectScheduleGroupBy]} values`}>
                   <Popover>
                     <PopoverTrigger asChild>
@@ -1171,44 +1171,104 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
   const stages: DefectScheduleStage[] = ['start', 'completion', 'closure'];
   const stageLabel: Record<DefectScheduleStage, string> = { start: 'Start', completion: 'Comp', closure: 'Close' };
 
+  // Detect group mode: any stage has at least one per-group series.
+  const groupKeys: string[] = (() => {
+    const seen = new Set<string>();
+    for (const s of stages) for (const g of scurveAll.byStageGroups[s]) seen.add(g.key);
+    return Array.from(seen);
+  })();
+  const isGroupMode = groupKeys.length > 0;
+
+  // Build a label lookup per group key (use the first stage that has it).
+  const groupLabelByKey = new Map<string, string>();
+  for (const s of stages) {
+    for (const g of scurveAll.byStageGroups[s]) {
+      if (!groupLabelByKey.has(g.key)) groupLabelByKey.set(g.key, g.label);
+    }
+  }
+
   const data = scurveAll.bucketLabels.map((label, i) => {
     const row: Record<string, any> = {
       bucket: scurveAll.buckets[i],
       bucketLabel: label,
       __isFuture: scurveAll.todayIndex >= 0 && i > scurveAll.todayIndex,
     };
-    for (const s of stages) {
-      const series = scurveAll.byStage[s];
-      const prevPlan = i > 0 ? (series.plan[i - 1] ?? 0) : 0;
-      const planInc = (series.plan[i] ?? 0) - prevPlan;
-      const cur = series.actual[i];
-      const prev = i > 0 ? series.actual[i - 1] : 0;
-      const actualInc = cur == null ? null : (cur - (prev ?? 0));
-      row[`planInc_${s}`] = planInc;
-      row[`actualInc_${s}`] = actualInc;
-      row[`cumPlan_${s}`] = series.plan[i];
-      row[`cumActual_${s}`] = series.actual[i];
-      row[`variance_${s}`] = series.variance[i];
+    if (!isGroupMode) {
+      // Non-group mode: per-stage totals + daily increments + variance.
+      for (const s of stages) {
+        const series = scurveAll.byStage[s];
+        const prevPlan = i > 0 ? (series.plan[i - 1] ?? 0) : 0;
+        const planInc = (series.plan[i] ?? 0) - prevPlan;
+        const cur = series.actual[i];
+        const prev = i > 0 ? series.actual[i - 1] : 0;
+        const actualInc = cur == null ? null : (cur - (prev ?? 0));
+        row[`planInc_${s}`] = planInc;
+        row[`actualInc_${s}`] = actualInc;
+        row[`cumPlan_${s}`] = series.plan[i];
+        row[`cumActual_${s}`] = series.actual[i];
+        row[`variance_${s}`] = series.variance[i];
+      }
+    } else {
+      // Group mode: per stage × per group cumulative lines only (no daily bars).
+      // Variance = sum of selected groups per stage.
+      for (const s of stages) {
+        let planSum = 0;
+        let actualSum = 0;
+        let anyActualNull = false;
+        for (const g of scurveAll.byStageGroups[s]) {
+          row[`gp_${s}_${g.key}`] = g.plan[i];
+          row[`ga_${s}_${g.key}`] = g.actual[i];
+          planSum += g.plan[i] ?? 0;
+          const a = g.actual[i];
+          if (a == null) anyActualNull = true; else actualSum += a;
+        }
+        const prevPlanSum = i > 0
+          ? scurveAll.byStageGroups[s].reduce((sum, g) => sum + (g.plan[i - 1] ?? 0), 0)
+          : 0;
+        const prevActualSum = i > 0
+          ? scurveAll.byStageGroups[s].reduce((sum, g) => sum + (g.actual[i - 1] ?? 0), 0)
+          : 0;
+        const planInc = planSum - prevPlanSum;
+        row[`variance_${s}`] = anyActualNull ? null : ((actualSum - prevActualSum) - planInc);
+      }
     }
     return row;
   });
 
   const todayLabel = scurveAll.todayIndex >= 0 ? (scurveAll.bucketLabels[scurveAll.todayIndex] ?? null) : null;
 
-  const cfg: ChartConfig = Object.fromEntries(stages.flatMap((s) => [
-    [`planInc_${s}`,    { label: `${stageLabel[s]} Plan (daily)`,    color: STAGE_COLORS[s].bar }],
-    [`actualInc_${s}`,  { label: `${stageLabel[s]} Actual (daily)`,  color: STAGE_COLORS[s].line }],
-    [`cumPlan_${s}`,    { label: `${stageLabel[s]} Plan (cum)`,      color: STAGE_COLORS[s].line }],
-    [`cumActual_${s}`,  { label: `${stageLabel[s]} Actual (cum)`,    color: STAGE_COLORS[s].line }],
-  ])) as ChartConfig;
+  const cfg: ChartConfig = isGroupMode
+    ? Object.fromEntries(stages.flatMap((s) =>
+        groupKeys.flatMap((gk, idx) => {
+          const color = GROUP_LINE_COLORS[idx % GROUP_LINE_COLORS.length];
+          const gLabel = groupLabelByKey.get(gk) ?? gk;
+          return [
+            [`gp_${s}_${gk}`, { label: `${stageLabel[s]} · ${gLabel} Plan`,   color }],
+            [`ga_${s}_${gk}`, { label: `${stageLabel[s]} · ${gLabel} Actual`, color }],
+          ];
+        }),
+      )) as ChartConfig
+    : (Object.fromEntries(stages.flatMap((s) => [
+        [`planInc_${s}`,    { label: `${stageLabel[s]} Plan (daily)`,    color: STAGE_COLORS[s].bar }],
+        [`actualInc_${s}`,  { label: `${stageLabel[s]} Actual (daily)`,  color: STAGE_COLORS[s].line }],
+        [`cumPlan_${s}`,    { label: `${stageLabel[s]} Plan (cum)`,      color: STAGE_COLORS[s].line }],
+        [`cumActual_${s}`,  { label: `${stageLabel[s]} Actual (cum)`,    color: STAGE_COLORS[s].line }],
+      ])) as ChartConfig);
 
   const varianceCfg: ChartConfig = Object.fromEntries(stages.map((s) => [
     `variance_${s}`, { label: `${stageLabel[s]} Δ`, color: STAGE_COLORS[s].line },
   ])) as ChartConfig;
 
+  // Stage stroke pattern in group mode: differentiate stages by dash style.
+  const stageDash: Record<DefectScheduleStage, string | undefined> = {
+    start: '2 3',
+    completion: undefined,
+    closure: '6 3',
+  };
+
   return (
     <div className="space-y-2">
-      {/* Cumulative lines + stacked daily bars (Plan stacked, Actual stacked side-by-side) */}
+      {/* Cumulative lines + (non-group only) stacked daily bars */}
       <ChartContainer config={cfg} className="h-[340px] w-full">
         <ComposedChart data={data} margin={{ left: 12, right: 16, top: 8, bottom: 0 }}
           onClick={(e: any) => { if (e?.activeLabel) {
@@ -1219,31 +1279,67 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} />
           <YAxis yAxisId="cum" tick={{ fontSize: 11 }} allowDecimals={false} domain={['auto', 'auto']} />
-          <YAxis yAxisId="bar" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} domain={['auto', 'auto']} />
+          {!isGroupMode && (
+            <YAxis yAxisId="bar" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} domain={['auto', 'auto']} />
+          )}
           <ChartTooltip content={<ChartTooltipContent />} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           {todayLabel && (
             <ReferenceLine yAxisId="cum" x={todayLabel} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} />
           )}
-          {/* Stacked daily Plan bars (one bar per bucket, 3 stages stacked) */}
-          {stages.map((s) => (
-            <Bar key={`plan-${s}`} yAxisId="bar" dataKey={`planInc_${s}`} stackId="plan" fill={STAGE_COLORS[s].bar} name={`${stageLabel[s]} Plan (daily)`} barSize={10} />
-          ))}
-          {/* Stacked daily Actual bars (separate stack, side-by-side) */}
-          {stages.map((s) => (
-            <Bar key={`actual-${s}`} yAxisId="bar" dataKey={`actualInc_${s}`} stackId="actual" fill={STAGE_COLORS[s].line} name={`${stageLabel[s]} Actual (daily)`} barSize={10} />
-          ))}
-          {/* Cumulative lines */}
-          {stages.map((s) => (
-            <Line key={`cumPlan-${s}`} yAxisId="cum" type="monotone" dataKey={`cumPlan_${s}`} stroke={STAGE_COLORS[s].line} strokeDasharray="5 3" strokeWidth={1.5} dot={false} name={`${stageLabel[s]} Plan (cum)`} />
-          ))}
-          {stages.map((s) => (
-            <Line key={`cumActual-${s}`} yAxisId="cum" type="monotone" dataKey={`cumActual_${s}`} stroke={STAGE_COLORS[s].line} strokeWidth={2.5} dot={false} name={`${stageLabel[s]} Actual (cum)`} connectNulls={false} />
-          ))}
+          {!isGroupMode && (
+            <>
+              {stages.map((s) => (
+                <Bar key={`plan-${s}`} yAxisId="bar" dataKey={`planInc_${s}`} stackId="plan" fill={STAGE_COLORS[s].bar} name={`${stageLabel[s]} Plan (daily)`} barSize={10} />
+              ))}
+              {stages.map((s) => (
+                <Bar key={`actual-${s}`} yAxisId="bar" dataKey={`actualInc_${s}`} stackId="actual" fill={STAGE_COLORS[s].line} name={`${stageLabel[s]} Actual (daily)`} barSize={10} />
+              ))}
+              {stages.map((s) => (
+                <Line key={`cumPlan-${s}`} yAxisId="cum" type="monotone" dataKey={`cumPlan_${s}`} stroke={STAGE_COLORS[s].line} strokeDasharray="5 3" strokeWidth={1.5} dot={false} name={`${stageLabel[s]} Plan (cum)`} />
+              ))}
+              {stages.map((s) => (
+                <Line key={`cumActual-${s}`} yAxisId="cum" type="monotone" dataKey={`cumActual_${s}`} stroke={STAGE_COLORS[s].line} strokeWidth={2.5} dot={false} name={`${stageLabel[s]} Actual (cum)`} connectNulls={false} />
+              ))}
+            </>
+          )}
+          {isGroupMode && stages.flatMap((s) =>
+            groupKeys.flatMap((gk, idx) => {
+              const color = GROUP_LINE_COLORS[idx % GROUP_LINE_COLORS.length];
+              const gLabel = groupLabelByKey.get(gk) ?? gk;
+              const dash = stageDash[s];
+              return [
+                <Line
+                  key={`gp-${s}-${gk}`}
+                  yAxisId="cum"
+                  type="monotone"
+                  dataKey={`gp_${s}_${gk}`}
+                  stroke={color}
+                  strokeDasharray={dash ? `${dash}` : '4 3'}
+                  strokeOpacity={0.55}
+                  strokeWidth={1.25}
+                  dot={false}
+                  name={`${stageLabel[s]} · ${gLabel} Plan`}
+                />,
+                <Line
+                  key={`ga-${s}-${gk}`}
+                  yAxisId="cum"
+                  type="monotone"
+                  dataKey={`ga_${s}_${gk}`}
+                  stroke={color}
+                  strokeDasharray={dash}
+                  strokeWidth={2}
+                  dot={false}
+                  name={`${stageLabel[s]} · ${gLabel} Actual`}
+                  connectNulls={false}
+                />,
+              ];
+            })
+          )}
         </ComposedChart>
       </ChartContainer>
 
-      {/* Variance bars per stage (grouped) */}
+      {/* Variance bars per stage (grouped) — sum of selected groups in group mode */}
       <ChartContainer config={varianceCfg} className="h-[160px] w-full">
         <ComposedChart data={data} margin={{ left: 12, right: 16, top: 4, bottom: 0 }}
           onClick={(e: any) => { if (e?.activeLabel) {
@@ -1266,4 +1362,5 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
     </div>
   );
 }
+
 

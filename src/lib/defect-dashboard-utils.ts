@@ -422,30 +422,41 @@ export interface DefectSCurveAllResult {
   bucketLabels: string[];
   todayIndex: number;
   byStage: Record<DefectScheduleStage, DefectSCurveSeries>;
+  /** Per-stage group breakdown. Empty arrays when no groupBy was provided. */
+  byStageGroups: Record<DefectScheduleStage, DefectSCurveSeries[]>;
 }
 
 /**
  * All-stage S-curve: builds Plan/Actual cumulative + per-bucket increments
  * for Start, Completion, and Closure stages over the same bucket axis.
+ *
+ * When `groupBy` is provided, each stage also returns its per-group series
+ * (top-N by total plan), enabling combined Stage=All + Group=… filtering.
  */
 export function buildDefectSCurveAllStages(
   items: DefectForDashboard[],
-  options: Omit<BuildSCurveOptions, 'stage' | 'groupBy' | 'topN'>,
+  options: Omit<BuildSCurveOptions, 'stage'>,
 ): DefectSCurveAllResult {
   const stages: DefectScheduleStage[] = ['start', 'completion', 'closure'];
   const results = stages.map((s) =>
-    buildDefectSCurve(items, { ...options, stage: s, groupBy: null }),
+    buildDefectSCurve(items, { ...options, stage: s }),
   );
   const byStage = {
     start: results[0].total,
     completion: results[1].total,
     closure: results[2].total,
   };
+  const byStageGroups = {
+    start: results[0].groups,
+    completion: results[1].groups,
+    closure: results[2].groups,
+  };
   return {
     buckets: results[0].buckets,
     bucketLabels: results[0].bucketLabels,
     todayIndex: results[0].todayIndex,
     byStage,
+    byStageGroups,
   };
 }
 
