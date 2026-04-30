@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import EventLogTab from './admin/EventLogTab';
 import { ModuleControlTab } from './admin/ModuleControlTab';
+import HeaderMappingsTab from './admin/HeaderMappingsTab';
 
 /* ───── Types ───── */
 interface Profile {
