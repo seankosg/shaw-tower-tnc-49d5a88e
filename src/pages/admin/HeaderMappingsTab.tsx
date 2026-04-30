@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useHeaderMappings, type HeaderMappingRow } from '@/hooks/useHeaderMappings';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
