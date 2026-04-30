@@ -406,6 +406,30 @@ export function getExcelSheetNames(file: ArrayBuffer): string[] {
   return wb.SheetNames ?? [];
 }
 
+// ── Custom field extraction (target_field = "custom:<field_name>") ───
+function extractCustomFields(row: Record<string, string>): {
+  custom_payload: Record<string, string | number | boolean | null>;
+  custom_field_errors: Array<{ field_name: string; raw: string; reason: string }>;
+} {
+  const payload: Record<string, string | number | boolean | null> = {};
+  const errors: Array<{ field_name: string; raw: string; reason: string }> = [];
+  for (const [key, raw] of Object.entries(row)) {
+    if (!isCustomTarget(key)) continue;
+    const fieldName = parseCustomTarget(key);
+    if (!fieldName) continue;
+    const def = getCustomField('tnc', fieldName);
+    if (!def || !def.is_active) continue; // unknown/inactive — skip silently
+    if (raw == null || String(raw).trim() === '') continue;
+    const coerced = coerceCustomValue(def.data_type, raw);
+    if (coerced.ok) {
+      if (coerced.value !== null) payload[fieldName] = coerced.value;
+    } else {
+      errors.push({ field_name: fieldName, raw: String(raw), reason: coerced.reason });
+    }
+  }
+  return { custom_payload: payload, custom_field_errors: errors };
+}
+
 // ── Legacy parse: 1 row → multiple subtests (MOS-1~5) ────────────────
 export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
   const result: ParsedSubtest[] = [];
