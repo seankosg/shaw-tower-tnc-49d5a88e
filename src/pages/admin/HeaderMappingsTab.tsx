@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { useToast } from '@/hooks/use-toast';
 import { Lock, Plus, Trash2, Pencil } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCustomFields } from '@/hooks/useCustomFields';
 
 type ModuleKey = 'tnc' | 'defect';
 
