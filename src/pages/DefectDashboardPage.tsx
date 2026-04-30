@@ -242,7 +242,13 @@ export default function DefectDashboardPage() {
           <DDayBadge targetDate={MECHANICAL_COMPLETION_DDAY} />
         </div>
         <div className="flex items-center gap-3">
-          <Select value={teamFilter} onValueChange={setTeamFilter}><SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Teams</SelectItem>{ALL_TEAMS.map(team => <SelectItem key={team} value={team}>{TEAM_LABELS[team]}</SelectItem>)}</SelectContent></Select>
+          <ToggleGroup type="multiple" value={teamFilter} onValueChange={setTeamFilter} className="gap-1 flex-wrap">
+            {ALL_TEAMS.map((team) => (
+              <ToggleGroupItem key={team} value={team} className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                {TEAM_LABELS[team]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
           <p className="text-xs text-muted-foreground">At-Risk threshold: ≤ {atRiskDays} day{atRiskDays === 1 ? '' : 's'}</p>
         </div>
       </div>
