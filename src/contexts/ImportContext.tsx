@@ -658,6 +658,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
             item_no: row.item_no, mos_code: row.mos_code, action_taken: 'rejected' as any,
             reason_code: 'insert_failed', reason_detail: formatPgError(error), mapped_system_id: systemId,
           });
+          fl(row.raw_row_no, '__row__', 'rejected_invalid', { code: 'insert_failed', detail: formatPgError(error) });
         } else {
           res.inserted++;
           rowLogs.push({
@@ -665,6 +666,36 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
             item_no: row.item_no, mos_code: row.mos_code, action_taken: 'inserted' as any,
             mapped_system_id: systemId,
           });
+          // Per-cell field logs for new inserts (non-empty values only).
+          const insertedPayload: Record<string, unknown> = {
+            description: row.description, equipment: row.equipment, level: row.level,
+            t1_planned_date: row.t1_planned_date, t1_status: insertT1Status, t1_actual_date: insertT1Actual,
+            t2_planned_date: row.t2_planned_date, t2_status: insertT2Status, t2_actual_date: insertT2Actual,
+            pred_status: insertPredStatus, pred_planned_date: row.pred_planned_date, pred_actual_date: insertPredActual,
+            subcontractor_name: row.subcontractor_name, subsub_name: row.subsub_name, hdec_pic_name: row.hdec_pic_name,
+            r1_status: insertR1Status, r1_report_ref: row.r1_report_ref,
+            r1_target_submission_date: insertR1Target, r1_actual_submission_date: row.r1_actual_submission_date,
+            r2_status: insertR2Status, aconex_ref_no: row.aconex_ref_no,
+            r2_target_submission_date: insertR2SubTarget, r2_actual_submission_date: row.r2_actual_submission_date,
+            r2_target_approval_date: insertR2ApprovalTarget, r2_actual_approval_date: row.r2_actual_approval_date,
+            remarks: row.remarks, punchlist_comments: row.punchlist_comments,
+            team: resolvedTeam,
+          };
+          for (const [k, v] of Object.entries(insertedPayload)) {
+            if (v === null || v === undefined || v === '') continue;
+            const wasAutoStatus = (k === 't1_status' || k === 't2_status' || k === 'pred_status' || k === 'r1_status' || k === 'r2_status') && !(row as any)[k];
+            const wasAutoActual = (k === 't1_actual_date' || k === 't2_actual_date' || k === 'pred_actual_date') && !(row as any)[k];
+            const wasDerivedR = (k === 'r1_target_submission_date' || k === 'r2_target_submission_date' || k === 'r2_target_approval_date') && !(row as any)[k];
+            if (wasAutoStatus) {
+              fl(row.raw_row_no, k, 'auto_filled', { applied: v, code: 'status_auto_planned', detail: 'Planned date present but status missing — set to Planned.' });
+            } else if (wasAutoActual) {
+              fl(row.raw_row_no, k, 'auto_filled', { applied: v, code: 'actual_autofilled_on_done', detail: 'Status=Done with no actual date — auto-filled to data date.' });
+            } else if (wasDerivedR) {
+              fl(row.raw_row_no, k, 'derived', { applied: v, code: 'derived_from_t2', detail: 'R1/R2 target derived from T2 planned date.' });
+            } else {
+              fl(row.raw_row_no, k, 'applied', { applied: v });
+            }
+          }
         }
       }
     }
@@ -677,6 +708,24 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     }
     for (let i = 0; i < changeLogs.length; i += 100) {
       await supabase.from('subtest_change_log').insert(changeLogs.slice(i, i + 100));
+    }
+    if (fieldLogs.length > 0) {
+      const fieldRows = fieldLogs.map((b) => ({
+        upload_id: uploadId,
+        kind: 'tnc' as const,
+        raw_row_no: b.raw_row_no,
+        field_name: b.field_name,
+        outcome: b.outcome,
+        raw_value: b.raw_value,
+        applied_value: b.applied_value,
+        previous_value: b.previous_value,
+        reason_code: b.reason_code,
+        reason_detail: b.reason_detail,
+        created_by: user.id,
+      }));
+      for (let i = 0; i < fieldRows.length; i += 200) {
+        await (supabase as any).from('import_field_logs').insert(fieldRows.slice(i, i + 200));
+      }
     }
 
     await supabase.from('upload_batches').update({
