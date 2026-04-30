@@ -1067,7 +1067,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         // Per-cell field logs + defect_change_log entries for every actual diff
         // (covers both schedule fields and general fields like description, PIC, area, etc.).
         for (const [key, newValue] of Object.entries(payload)) {
-          if (key === 'raw_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id' || key === 'is_active' || key === 'project_id') continue;
+          if (key === 'raw_payload' || key === 'custom_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id' || key === 'is_active' || key === 'project_id') continue;
           if (isFieldExcluded(key)) continue;
           const oldValue = (existing as any)[key];
           if (!changed(oldValue, newValue)) continue;
@@ -1136,7 +1136,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         });
         // Per-cell field logs for every non-empty inserted value.
         for (const [key, newValue] of Object.entries(payload)) {
-          if (key === 'raw_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id' || key === 'is_active' || key === 'project_id') continue;
+          if (key === 'raw_payload' || key === 'custom_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id' || key === 'is_active' || key === 'project_id') continue;
           if (isFieldExcluded(key)) continue;
           if (newValue === null || newValue === undefined || newValue === '') continue;
           fl(row.rawRowNo, key, 'applied', { applied: newValue });
