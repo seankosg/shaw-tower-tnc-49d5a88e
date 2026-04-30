@@ -432,8 +432,35 @@ export default function SubtestList() {
     setColumnSizing(prev => ({ ...prev, [columnId]: finalWidth }));
   };
 
+  // URL params that indicate the user arrived from a Dashboard / Progress drill-down.
+  // When ANY of these are present we discard saved column filters & sorting so the
+  // drill-down view is shown clean (only URL-derived filters apply).
+  const SUBTEST_DRILLDOWN_PARAMS = [
+    'source', 'q',
+    // urlMap keys (column-equality drill-downs)
+    'system', 'subcon', 'subsub', 'hdec_pic', 'team',
+    'pred_status', 't1_status', 't2_status',
+    // date / delay / unplanned cell drill-downs
+    'pred_planned_to', 't1_planned_to', 't2_planned_to',
+    'pred_actual_to', 't1_actual_to', 't2_actual_to',
+    'pred_planned_on', 't1_planned_on', 't2_planned_on',
+    'pred_actual_on', 't1_actual_on', 't2_actual_on',
+    'pred_delay_asof', 't1_delay_asof', 't2_delay_asof',
+    'pred_delay_on', 't1_delay_on', 't2_delay_on',
+    'pred_actual_unplanned_on', 't1_actual_unplanned_on', 't2_actual_unplanned_on',
+    // R1 / R2 cell drill-downs
+    'r1_planned_to', 'r2_planned_to', 'r1_actual_to', 'r2_actual_to',
+    'r1_planned_on', 'r2_planned_on', 'r1_actual_on', 'r2_actual_on',
+    'r1_delay_asof', 'r2_delay_asof', 'r1_delay_on', 'r2_delay_on',
+    'r1_actual_unplanned_on', 'r2_actual_unplanned_on',
+    'r1_status', 'r2_status',
+    // schedule-cell drill-downs
+    'date_from', 'date_to', 'date_field', 'stage', 'cell_status', 'as_of', 'status',
+  ];
+
   useEffect(() => {
     setStateLoaded(false);
+    const isDrilldown = SUBTEST_DRILLDOWN_PARAMS.some((p) => searchParams.has(p));
     let baseFilters: ColumnFiltersState = [];
     let baseSorting: SortingState = DEFAULT_SORTING;
     let baseGlobal = '';
@@ -442,10 +469,16 @@ export default function SubtestList() {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
-        baseSorting = Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING;
-        baseFilters = Array.isArray(parsed.columnFilters) ? parsed.columnFilters : [];
-        baseGlobal = typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '';
+        // Sizing always restored.
         baseSizing = parsed.columnSizing && typeof parsed.columnSizing === 'object' ? parsed.columnSizing : {};
+        // Sort, column filters and global search only restored on a clean entry
+        // (no drill-down params). On drill-down entry, saved state is discarded
+        // so only URL-derived filters apply.
+        if (!isDrilldown) {
+          baseSorting = Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING;
+          baseFilters = Array.isArray(parsed.columnFilters) ? parsed.columnFilters : [];
+          baseGlobal = typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '';
+        }
       }
     } catch {
       // ignore
@@ -462,6 +495,7 @@ export default function SubtestList() {
       t2_status: 't2_status',
     };
     // Merge: keep saved column filters except those that the URL is going to override.
+    // (When isDrilldown, baseFilters is already empty so this is a no-op filter.)
     const urlOverriddenColIds = new Set<string>();
     for (const [param, col] of Object.entries(urlMap)) {
       if (searchParams.has(param)) urlOverriddenColIds.add(col);
@@ -478,10 +512,12 @@ export default function SubtestList() {
         }
       }
     }
+    const urlQ = searchParams.get('q');
+    const effectiveGlobal = urlQ !== null ? urlQ : baseGlobal;
     setSorting(baseSorting);
     setColumnFilters(next);
-    setGlobalFilter(baseGlobal);
-    setSearchInput(baseGlobal);
+    setGlobalFilter(effectiveGlobal);
+    setSearchInput(effectiveGlobal);
     setColumnSizing(baseSizing);
     setStateLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps

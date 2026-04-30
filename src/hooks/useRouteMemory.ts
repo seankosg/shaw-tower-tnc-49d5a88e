@@ -4,16 +4,35 @@ import { useLocation } from 'react-router-dom';
 const MEMORY_PREFIX = 'last-route:';
 
 const ROUTE_KEYS = [
+  // Legacy paths (kept for backwards-compat)
   '/dashboard',
   '/raw-data',
   '/schedule/revision',
   '/schedule',
-  '/import',
   '/import/logs',
+  '/import',
   '/export',
   '/mobile',
   '/admin/classification',
   '/admin',
+  // T&C system paths
+  '/tc/dashboard',
+  '/tc/progress',
+  '/tc/schedule-revision',
+  '/tc/raw-data',
+  '/tc/import/logs',
+  '/tc/import',
+  '/tc/export',
+  '/tc/quick-update',
+  // Defect system paths
+  '/defects/dashboard',
+  '/defects/progress',
+  '/defects/schedule-revision',
+  '/defects/raw-data',
+  '/defects/import/logs',
+  '/defects/import',
+  '/defects/export',
+  '/defects/quick-update',
 ];
 
 const routeKeyForPath = (pathname: string) =>
