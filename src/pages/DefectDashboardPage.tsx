@@ -366,9 +366,10 @@ export default function DefectDashboardPage() {
                     setScurveGroup(v as DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE);
                     setScurveGroupValues([]);
                   }}
-                  disabled={scurveStage === 'all'}
-                >
-                  <SelectTrigger className="h-8 w-[160px] text-xs">
+                </Select>
+              </SCurveToolbarGroup>
+
+              {scurveGroup !== SCURVE_GROUP_NONE && (
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
