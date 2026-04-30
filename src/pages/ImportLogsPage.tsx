@@ -18,6 +18,7 @@ import { RollbackDialog } from '@/components/import/RollbackDialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fetchAllByUploadId } from '@/lib/fetch-all-rows';
+import { FieldLog, FieldLogTable, FieldLogSummaryChips, OUTCOME_LABELS, downloadFieldLevelCsv } from '@/components/import/FieldLogTable';
 
 interface UploadBatch {
   id: string;
