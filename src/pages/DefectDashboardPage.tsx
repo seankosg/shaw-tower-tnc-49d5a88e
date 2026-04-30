@@ -28,6 +28,7 @@ import {
   NONE_LABEL,
   aggregateDefectPlanActualByGroup,
   buildDefectSCurve,
+  buildDefectSCurveAllStages,
   diffMetrics,
   isActualComplete,
   isAtRisk,
@@ -40,6 +41,8 @@ import {
   type DefectPlanActualMetrics,
   type DefectPlanActualRow,
   type DefectSCurveResult,
+  type DefectSCurveAllResult,
+  type DefectSCurveStageOpt,
 } from '@/lib/defect-dashboard-utils';
 import {
   ALL_DEFECT_GROUP_KEYS,
