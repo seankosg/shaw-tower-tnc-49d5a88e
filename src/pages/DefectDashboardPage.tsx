@@ -1209,7 +1209,7 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
         row[`variance_${s}`] = series.variance[i];
       }
     } else {
-      // Group mode: per stage × per group cumulative lines only (no daily bars).
+      // Group mode: per stage × per group cumulative lines + Stage-level daily bars (sum of selected groups).
       // Variance = sum of selected groups per stage.
       for (const s of stages) {
         let planSum = 0;
@@ -1229,6 +1229,8 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
           ? scurveAll.byStageGroups[s].reduce((sum, g) => sum + (g.actual[i - 1] ?? 0), 0)
           : 0;
         const planInc = planSum - prevPlanSum;
+        row[`planInc_${s}`] = planInc;
+        row[`actualInc_${s}`] = anyActualNull ? null : (actualSum - prevActualSum);
         row[`variance_${s}`] = anyActualNull ? null : ((actualSum - prevActualSum) - planInc);
       }
     }
@@ -1238,16 +1240,22 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
   const todayLabel = scurveAll.todayIndex >= 0 ? (scurveAll.bucketLabels[scurveAll.todayIndex] ?? null) : null;
 
   const cfg: ChartConfig = isGroupMode
-    ? Object.fromEntries(stages.flatMap((s) =>
-        groupKeys.flatMap((gk) => {
-          const color = STAGE_COLORS[s].line;
-          const gLabel = groupLabelByKey.get(gk) ?? gk;
-          return [
-            [`gp_${s}_${gk}`, { label: `${stageLabel[s]} · ${gLabel} Plan`,   color }],
-            [`ga_${s}_${gk}`, { label: `${stageLabel[s]} · ${gLabel} Actual`, color }],
-          ];
-        }),
-      )) as ChartConfig
+    ? Object.fromEntries([
+        ...stages.flatMap((s) => [
+          [`planInc_${s}`,   { label: `${stageLabel[s]} Plan (daily)`,   color: STAGE_COLORS[s].bar }],
+          [`actualInc_${s}`, { label: `${stageLabel[s]} Actual (daily)`, color: STAGE_COLORS[s].line }],
+        ]),
+        ...stages.flatMap((s) =>
+          groupKeys.flatMap((gk) => {
+            const color = STAGE_COLORS[s].line;
+            const gLabel = groupLabelByKey.get(gk) ?? gk;
+            return [
+              [`gp_${s}_${gk}`, { label: `${stageLabel[s]} · ${gLabel} Plan`,   color }],
+              [`ga_${s}_${gk}`, { label: `${stageLabel[s]} · ${gLabel} Actual`, color }],
+            ];
+          }),
+        ),
+      ]) as ChartConfig
     : (Object.fromEntries(stages.flatMap((s) => [
         [`planInc_${s}`,    { label: `${stageLabel[s]} Plan (daily)`,    color: STAGE_COLORS[s].bar }],
         [`actualInc_${s}`,  { label: `${stageLabel[s]} Actual (daily)`,  color: STAGE_COLORS[s].line }],
@@ -1282,22 +1290,20 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} />
           <YAxis yAxisId="cum" tick={{ fontSize: 11 }} allowDecimals={false} domain={['auto', 'auto']} />
-          {!isGroupMode && (
-            <YAxis yAxisId="bar" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} domain={['auto', 'auto']} />
-          )}
+          <YAxis yAxisId="bar" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} domain={['auto', 'auto']} />
           <ChartTooltip content={<ChartTooltipContent />} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           {todayLabel && (
             <ReferenceLine yAxisId="cum" x={todayLabel} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} />
           )}
+          {stages.map((s) => (
+            <Bar key={`plan-${s}`} yAxisId="bar" dataKey={`planInc_${s}`} stackId="plan" fill={STAGE_COLORS[s].bar} name={`${stageLabel[s]} Plan (daily)`} barSize={10} />
+          ))}
+          {stages.map((s) => (
+            <Bar key={`actual-${s}`} yAxisId="bar" dataKey={`actualInc_${s}`} stackId="actual" fill={STAGE_COLORS[s].line} name={`${stageLabel[s]} Actual (daily)`} barSize={10} />
+          ))}
           {!isGroupMode && (
             <>
-              {stages.map((s) => (
-                <Bar key={`plan-${s}`} yAxisId="bar" dataKey={`planInc_${s}`} stackId="plan" fill={STAGE_COLORS[s].bar} name={`${stageLabel[s]} Plan (daily)`} barSize={10} />
-              ))}
-              {stages.map((s) => (
-                <Bar key={`actual-${s}`} yAxisId="bar" dataKey={`actualInc_${s}`} stackId="actual" fill={STAGE_COLORS[s].line} name={`${stageLabel[s]} Actual (daily)`} barSize={10} />
-              ))}
               {stages.map((s) => (
                 <Line key={`cumPlan-${s}`} yAxisId="cum" type="monotone" dataKey={`cumPlan_${s}`} stroke={STAGE_COLORS[s].line} strokeDasharray="5 3" strokeWidth={1.5} dot={false} name={`${stageLabel[s]} Plan (cum)`} />
               ))}
