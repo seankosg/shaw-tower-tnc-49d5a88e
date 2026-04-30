@@ -517,7 +517,7 @@ export default function ImportLogsPage() {
                                       </TableCell>
                                     </TableRow>
                                   )}
-                                </>
+                                </Fragment>
                               );
                             })}
                           </TableBody>
