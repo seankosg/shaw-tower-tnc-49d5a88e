@@ -867,9 +867,13 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         } else if (classification.source === 'legacy_discipline' || classification.source === 'discipline') {
           classifiedDiscipline++;
           pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'discipline_fallback', reason_detail: `Auto-classified via Field Discipline fallback (${row.trade_detail ?? ''}).` });
+          fl(row.rawRowNo, 'main_trade', 'derived', { applied: row.main_trade, code: 'discipline_fallback', detail: `From Field Discipline "${row.trade_detail ?? ''}"` });
+          fl(row.rawRowNo, 'sub_trade', 'derived', { applied: row.sub_trade, code: 'discipline_fallback', detail: `From Field Discipline "${row.trade_detail ?? ''}"` });
+          fl(row.rawRowNo, 'work_type', 'derived', { applied: row.work_type, code: 'discipline_fallback', detail: `From Field Discipline "${row.trade_detail ?? ''}"` });
         } else {
           unclassified++;
           pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'updated', reason_code: 'unclassified_defect', reason_detail: 'Could not classify from description, label, or Field Discipline.' });
+          fl(row.rawRowNo, 'work_type', 'skipped_empty', { code: 'unclassified_defect', detail: 'Could not classify from description, label, or Field Discipline.' });
         }
       } else if (excelProvidedAny && !existing) {
         classificationSource = 'manual';
