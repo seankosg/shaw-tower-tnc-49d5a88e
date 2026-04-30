@@ -81,32 +81,46 @@ async function loginIdTaken(admin: SupabaseClient, lid: string): Promise<boolean
   return !!data;
 }
 
+type ExistingProfile = {
+  user_id: string;
+  login_id: string;
+  hdec_pic_name: string | null;
+  hdec_eng_name: string | null;
+};
+
 async function findExistingMasterUser(
   admin: SupabaseClient,
   body: Body,
-): Promise<{ user_id: string; login_id: string } | null> {
+): Promise<ExistingProfile | null> {
   const userType = body.master_type === 'hdec_pic' || body.master_type === 'hdec_eng'
     ? 'hdec'
     : body.master_type === 'subsub' ? 'subsub' : 'subcontractor';
 
   // Case-insensitive exact match — escape PostgREST wildcards (%, _, \)
   const ciEq = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
-  let query = admin.from('profiles').select('user_id, login_id').eq('user_type', userType).limit(1);
+  const trimmed = body.name.trim();
+  let query = admin
+    .from('profiles')
+    .select('user_id, login_id, hdec_pic_name, hdec_eng_name')
+    .eq('user_type', userType)
+    .limit(1);
 
   if (body.master_type === 'subcontractor') {
-    query = query.ilike('subcontractor_name', ciEq(body.name.trim())).is('subsub_name', null);
+    query = query.ilike('subcontractor_name', ciEq(trimmed)).is('subsub_name', null);
   } else if (body.master_type === 'subsub') {
-    query = query.ilike('subcontractor_name', ciEq(body.subcontractor_name ?? '')).ilike('subsub_name', ciEq(body.name.trim()));
-  } else if (body.master_type === 'hdec_pic') {
-    query = query.ilike('hdec_pic_name', ciEq(body.name.trim()));
+    query = query
+      .ilike('subcontractor_name', ciEq(body.subcontractor_name ?? ''))
+      .ilike('subsub_name', ciEq(trimmed));
   } else {
-    // hdec_eng
-    query = query.ilike('hdec_eng_name', ciEq(body.name.trim()));
+    // HDEC: same person if name matches EITHER hdec_pic_name OR hdec_eng_name.
+    // PIC and ENG are roles a single HDEC person can hold simultaneously.
+    const escaped = ciEq(trimmed);
+    query = query.or(`hdec_pic_name.ilike.${escaped},hdec_eng_name.ilike.${escaped}`);
   }
 
   const { data, error } = await query.maybeSingle();
   if (error) throw error;
-  return (data as { user_id: string; login_id: string } | null) ?? null;
+  return (data as ExistingProfile | null) ?? null;
 }
 
 async function findUniqueLoginId(
