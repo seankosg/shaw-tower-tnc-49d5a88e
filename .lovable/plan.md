@@ -1,64 +1,46 @@
-문제를 다시 정리하면 이렇습니다.
+## Goal
 
-- Group 미선택: 일일 세로막대가 보임
-- Group 선택: 누적선/호버 숫자는 보이지만 일일 세로막대가 사라짐
-- 즉, 시인성 문제가 아니라 Group 모드에서 막대가 구조적으로 빠지는 문제입니다.
+Make every date/timestamp column in the two remaining Excel exports a true Excel date cell (numeric serial + `numFmt`), so Excel sorts/filters them as dates instead of text.
 
-Do I know what the issue is?
-예. 이번에는 원인을 특정했습니다.
+## Files to edit
 
-정확한 원인
-1. 문제 파일
-- `src/pages/DefectDashboardPage.tsx`
-- 특히 `SCurveCharts()` 함수 내부
+### 1. `src/pages/ExportPage.tsx` (T&C → Export Data page)
 
-2. 실제 문제 로직
-- `showGroups = scurve.groups.length > 0` 가 되면, 단일 Stage 차트에서:
-  - `row.planInc`, `row.actualInc` 를 데이터 row에 넣지 않고
-  - 상단 일일 막대 `<Bar dataKey="planInc" />`, `<Bar dataKey="actualInc" />` 도 `!showGroups` 조건으로 아예 렌더링하지 않습니다.
-- 즉, Group 선택 순간 막대는 “색이 연해서 안 보이는 것”이 아니라 “그릴 데이터도 없고 컴포넌트도 빠지는 상태”가 됩니다.
+Currently uses `XLSX.utils.json_to_sheet(rows)` with raw ISO strings for `T1 Planned`, `T2 Planned`, and a pre-formatted `Updated` string. Result: text cells.
 
-3. 왜 호버 숫자는 보이는데 막대는 안 보이냐
-- 현재 Group 모드에서는 `g_plan_*`, `g_actual_*` 그룹별 누적선 데이터만 남아 있습니다.
-- 그래서 툴팁에는 선 데이터 값이 나오지만, 막대용 `planInc`/`actualInc` 시리즈는 존재하지 않아 화면에 세로막대가 없습니다.
+Changes:
+- Switch to `xlsx-js-style` (already used elsewhere) and use `aoa_to_sheet` so we can write per-cell types.
+- Use `isoToExcelSerial` + `DATE_NUMFMT` (`dd-mmm`) for `T1 Planned` and `T2 Planned`.
+- Use `isoTimestampToExcelSerial` + `DATETIME_NUMFMT` (`dd-mmm-yyyy hh:mm`) for `Updated` (replacing the current `formatDdMmmYyyy` text).
+- Keep all other columns as strings; preserve current header order and column auto-sizing.
+- Header row stays at row 1; data rows from row 2 onward.
 
-4. 왜 이전 색상 수정으로 해결되지 않았나
-- 색상 문법 이슈는 SVG fill 호환성 문제였고,
-- 이번 증상은 그 이전 단계인 “Group 모드에서 막대 렌더링 자체를 꺼버린 조건문”이 본질입니다.
+### 2. `src/lib/defect-export-utils.ts` (Defect → Advanced Export workbook)
 
-외부 확인
-- Recharts 관련 동작도 확인했습니다. `Bar`는 chart data row에 해당 `dataKey` 값이 있어야 하고, 컴포넌트 자체를 조건부로 빼면 당연히 막대가 나오지 않습니다.
-- 툴팁이 다른 series 데이터를 계속 보여주는 상황과, 막대가 없는 상황은 동시에 발생할 수 있습니다.
+`exportDefectsWorkbook` currently passes raw ISO strings into `XLSX.utils.json_to_sheet` for date fields like `planned_start_date`, `planned_completion_date`, `planned_closure_date`, `actual_start_date`, `actual_completion_date`, `actual_closure_date`, plus `updated_at`.
 
-수정 계획
-1. 단일 Stage `SCurveCharts()`를 all-stage 패턴과 동일하게 정리
-- Group 모드여도 `planInc`, `actualInc`, `variance`를 항상 계산
-- 기준은 사용자가 요청한 대로 “선택된 그룹들의 합계”
+Changes:
+- Define a `DATE_FIELDS` set (the 6 plan/actual date fields) and a `DATETIME_FIELDS` set (`updated_at`, plus any other timestamp columns surfaced — verify by inspecting `DefectItem` keys actually included).
+- Build the Defects sheet with `aoa_to_sheet`:
+  - Header row from `opts.columns` labels.
+  - For each row/column, if the field is in `DATE_FIELDS`, write `{ t: 'n', v: isoToExcelSerial(raw), z: DATE_NUMFMT }` (skip when null → empty cell).
+  - If in `DATETIME_FIELDS`, same pattern with `isoTimestampToExcelSerial` + `DATETIME_NUMFMT`.
+  - Otherwise write the existing string/number value.
+- The `Summary` and `Export Info` sheets stay as-is (no date columns that need typing; `Data Date` is a single field — leave as text to preserve current display, or optionally also convert — see Decision below).
 
-2. Group 모드에서도 상단 일일 Bar를 항상 렌더링
-- 현재 `!showGroups` 조건으로 막아둔 `Bar` 두 개 제거
-- Group 선택 여부와 무관하게 daily bars 표시
+## Shared helpers
 
-3. 툴팁/범례 일관성 보정
-- Group 모드에서는 막대 설명이 “selected groups summed daily plan/actual” 의미와 맞도록 유지
-- 누적선과 막대 합계가 서로 같은 기준을 쓰도록 검증
+Reuse the existing utilities — no new helpers needed:
+- `isoToExcelSerial`, `isoTimestampToExcelSerial`, `DATE_NUMFMT`, `DATETIME_NUMFMT` from `src/lib/excel-date-cell.ts`.
+- `xlsx-js-style` (already a dependency, used in `src/lib/excel-export.ts`).
 
-4. 필요 시 축 스케일 미세조정
-- daily 막대 축(`yAxisId="bar"`)이 increments 합계 기준으로 안정적으로 보이도록 확인
-- 하지만 1차 원인은 축/색상이 아니라 렌더링 조건문입니다
+## Decision points (defaults shown — will apply unless told otherwise)
 
-예상 수정 포인트
-- `src/pages/DefectDashboardPage.tsx`
-  - `SCurveCharts()`의 data 생성부
-  - `!showGroups && <Bar ... />` 조건부 렌더링 제거
-  - Group 모드에서 `planInc`, `actualInc` 합산값 주입
+- `Updated` / `updated_at` columns → datetime cell with format `dd-mmm-yyyy hh:mm` (matches existing pattern in `excel-export.ts`).
+- `Data Date` field in Defect Export Info sheet → keep as text (it's a meta label, not a sortable column).
+- Empty/null date values → empty cell (no zero serial), so Excel shows blank.
 
-승인해 주시면 이 근본 원인 기준으로 바로 수정하겠습니다.
+## Out of scope
 
-<lov-actions>
-  <lov-open-history>View History</lov-open-history>
-</lov-actions>
-
-<lov-actions>
-<lov-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</lov-link>
-</lov-actions>
+- `src/lib/excel-export.ts` (T&C Subtest Master DB) and `src/lib/defect-excel-export.ts` (Defect List/Raw Data) — already correct.
+- No schema/RLS changes; no migrations.
