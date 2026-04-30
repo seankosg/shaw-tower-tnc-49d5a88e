@@ -509,6 +509,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
             item_no: row.item_no, mos_code: row.mos_code, action_taken: 'rejected' as any,
             reason_code: 'update_failed', reason_detail: formatPgError(error), mapped_system_id: systemId,
           });
+          fl(row.raw_row_no, '__row__', 'rejected_invalid', { code: 'update_failed', detail: formatPgError(error) });
         } else {
           res.updated++;
           if (hasScheduleChangeImpact(scheduleImpact)) {
