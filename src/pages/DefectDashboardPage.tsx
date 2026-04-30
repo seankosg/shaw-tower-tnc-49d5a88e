@@ -15,6 +15,7 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useToast } from '@/hooks/use-toast';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import { cn } from '@/lib/utils';
@@ -38,7 +39,17 @@ import {
   type DefectForDashboard,
   type DefectPlanActualMetrics,
   type DefectPlanActualRow,
+  type DefectSCurveResult,
 } from '@/lib/defect-dashboard-utils';
+import {
+  ALL_DEFECT_GROUP_KEYS,
+  ALL_DEFECT_STAGE_KEYS,
+  DEFECT_GROUP_LABELS,
+  DEFECT_STAGE_LABELS,
+  DEFECT_GROUP_QUERY_PARAM,
+  type DefectScheduleGroupBy,
+  type DefectScheduleStage,
+} from '@/lib/defect-schedule-utils';
 
 const PIE_COLORS: Record<string, string> = {
   Complete: 'hsl(var(--primary))',
