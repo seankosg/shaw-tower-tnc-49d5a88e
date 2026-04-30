@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { buildScheduleChangeImpact, hasScheduleChangeImpact } from '@/lib/schedule-change-utils';
 import { derivePlanFromT2 } from '@/lib/business-days';
 import { SUBTEST_ACTUAL_DATE_FIELDS, type SubtestActualDateField } from '@/lib/defect-date-validation';
+import { buildFieldLog, type PendingFieldLog } from '@/lib/import-field-log';
 
 export type ImportType = 'legacy' | 'standard';
 export type FileStatus = 'pending' | 'parsing' | 'pending_sheet_selection' | 'ready' | 'processing' | 'done' | 'failed';
