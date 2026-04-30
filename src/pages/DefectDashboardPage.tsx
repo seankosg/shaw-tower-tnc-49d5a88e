@@ -978,8 +978,8 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
       row.planInc = planInc;
       row.actualInc = actualInc;
     } else {
-      // Group mode: variance bars use sum of selected group series so they match the
-      // KPI strip and the visible cumulative lines.
+      // Group mode: daily bars + variance use the sum of the selected group series so
+      // they stay consistent with the KPI strip and the visible cumulative lines.
       let planSum = 0;
       let actualSum = 0;
       let anyActualNull = false;
@@ -994,8 +994,11 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
       const prevActualSum = i > 0
         ? scurve.groups.reduce((s, g) => s + (g.actual[i - 1] ?? 0), 0)
         : 0;
-      const inc = (planSum - prevPlanSum);
-      row.variance = anyActualNull ? null : ((actualSum - prevActualSum) - inc);
+      const planInc = planSum - prevPlanSum;
+      const actualInc = anyActualNull ? null : (actualSum - prevActualSum);
+      row.planInc = planInc;
+      row.actualInc = actualInc;
+      row.variance = anyActualNull ? null : (actualInc! - planInc);
     }
     scurve.groups.forEach((g) => {
       row[`g_plan_${g.key}`] = g.plan[i];
@@ -1049,12 +1052,9 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
           {todayLabel && (
             <ReferenceLine yAxisId="cum" x={todayLabel} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} />
           )}
-          {!showGroups && (
-            <>
-              <Bar yAxisId="bar" dataKey="planInc" fill="hsla(0, 0%, 50%, 0.35)" name="Plan (daily)" hide={hidden.has('planInc')} barSize={6} />
-              <Bar yAxisId="bar" dataKey="actualInc" fill="hsla(217, 91%, 60%, 0.55)" name="Actual (daily)" hide={hidden.has('actualInc')} barSize={6} />
-            </>
-          )}
+          <Bar yAxisId="bar" dataKey="planInc" fill="hsla(0, 0%, 50%, 0.35)" name={showGroups ? 'Plan (daily, sum)' : 'Plan (daily)'} hide={hidden.has('planInc')} barSize={6} />
+          <Bar yAxisId="bar" dataKey="actualInc" fill="hsla(217, 91%, 60%, 0.55)" name={showGroups ? 'Actual (daily, sum)' : 'Actual (daily)'} hide={hidden.has('actualInc')} barSize={6} />
+
           {!showGroups && (
             <>
               <Line yAxisId="cum" type="monotone" dataKey="totalPlan" stroke="var(--color-totalPlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Plan (cum)" hide={hidden.has('totalPlan')} />
