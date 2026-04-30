@@ -731,9 +731,11 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       await flushUpdates();
       await flushAudits();
       await flushLogs();
+      await flushFieldLogs();
+      await flushChangeLogs();
     };
     const maybeFlush = async () => {
-      const total = pendingLogs.length + pendingAudits.length + pendingInserts.length + pendingUpdates.length;
+      const total = pendingLogs.length + pendingAudits.length + pendingInserts.length + pendingUpdates.length + pendingFieldLogs.length + pendingChangeLogs.length;
       if (total >= FLUSH_THRESHOLD) await flushAll();
     };
 
