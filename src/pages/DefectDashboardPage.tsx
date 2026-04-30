@@ -350,15 +350,13 @@ export default function DefectDashboardPage() {
               </SCurveToolbarGroup>
 
               <SCurveToolbarGroup label="Team">
-                <Select value={teamFilter} onValueChange={setTeamFilter}>
-                  <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Teams</SelectItem>
-                    {ALL_TEAMS.map((t) => (
-                      <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ToggleGroup type="multiple" value={teamFilter} onValueChange={setTeamFilter} className="gap-1 flex-wrap">
+                  {ALL_TEAMS.map((t) => (
+                    <ToggleGroupItem key={t} value={t} className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                      {TEAM_LABELS[t]}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
               </SCurveToolbarGroup>
 
               <SCurveToolbarGroup label="Bucket">
