@@ -31,6 +31,7 @@ import {
 import EventLogTab from './admin/EventLogTab';
 import { ModuleControlTab } from './admin/ModuleControlTab';
 import HeaderMappingsTab from './admin/HeaderMappingsTab';
+import CustomFieldsTab from './admin/CustomFieldsTab';
 
 /* ───── Types ───── */
 interface Profile {
