@@ -1045,10 +1045,29 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
             ? 'All importable fields match existing values; no update needed.'
             : 'All importable fields match existing values; no update needed. (Team also could not be resolved from Field Discipline or User Management profile.)';
           pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'skipped', reason_code: 'no_changes', reason_detail: skipDetail });
+          fl(row.rawRowNo, '__row__', 'info', { code: 'no_changes', detail: skipDetail });
           await maybeFlush();
           continue;
         }
         pendingUpdates.push({ id: existing.id, payload, rawRowNo: row.rawRowNo, issueNo: row.issue_no });
+        // Per-cell field logs + defect_change_log entries for every actual diff
+        // (covers both schedule fields and general fields like description, PIC, area, etc.).
+        for (const [key, newValue] of Object.entries(payload)) {
+          if (key === 'raw_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id' || key === 'is_active' || key === 'project_id') continue;
+          if (isFieldExcluded(key)) continue;
+          const oldValue = (existing as any)[key];
+          if (!changed(oldValue, newValue)) continue;
+          fl(row.rawRowNo, key, 'applied', { applied: newValue, previous: oldValue });
+          pendingChangeLogs.push({
+            defect_id: existing.id,
+            changed_field: key,
+            old_value: oldValue == null ? null : String(oldValue),
+            new_value: newValue == null ? null : String(newValue),
+            changed_by: user.id,
+            change_source: 'excel_import',
+            upload_id: uploadId,
+          });
+        }
         for (const field of activeTrackedFields) {
           if (changed(existing[field], (row as any)[field])) {
             const isDate = field.endsWith('_date');
@@ -1101,6 +1120,13 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
             created_by: user.id,
           },
         });
+        // Per-cell field logs for every non-empty inserted value.
+        for (const [key, newValue] of Object.entries(payload)) {
+          if (key === 'raw_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id' || key === 'is_active' || key === 'project_id') continue;
+          if (isFieldExcluded(key)) continue;
+          if (newValue === null || newValue === undefined || newValue === '') continue;
+          fl(row.rawRowNo, key, 'applied', { applied: newValue });
+        }
         insertedCount++;
         pendingLogs.push({ upload_id: uploadId, raw_row_no: row.rawRowNo, issue_no: row.issue_no, action_taken: 'inserted', ...logReason });
       }
