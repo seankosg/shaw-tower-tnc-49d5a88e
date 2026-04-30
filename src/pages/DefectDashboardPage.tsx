@@ -273,17 +273,103 @@ export default function DefectDashboardPage() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-col space-y-2 pb-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-          <button type="button" onClick={() => setScurveOpen((v) => !v)} className="flex items-center gap-2 text-left hover:opacity-80" aria-expanded={scurveOpen} aria-label="Toggle S-Curve chart">
-            {scurveOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            <CardTitle className="text-base">Plan vs Actual — S-Curve</CardTitle>
-          </button>
+        <CardHeader className="flex flex-col gap-2 pb-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <button type="button" onClick={() => setScurveOpen((v) => !v)} className="flex items-center gap-2 text-left hover:opacity-80" aria-expanded={scurveOpen} aria-label="Toggle S-Curve chart">
+              {scurveOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              <CardTitle className="text-base">Plan vs Actual — S-Curve</CardTitle>
+            </button>
+            {scurveOpen && (
+              <div className="flex flex-wrap items-center gap-2">
+                <DateButton value={scurveStart} onChange={setScurveStart} />
+                <span className="text-xs text-muted-foreground">~</span>
+                <DateButton value={scurveEnd} onChange={setScurveEnd} />
+              </div>
+            )}
+          </div>
           {scurveOpen && (
-            <div className="flex flex-wrap items-center gap-2"><DateButton value={scurveStart} onChange={setScurveStart} /><span className="text-xs text-muted-foreground">~</span><DateButton value={scurveEnd} onChange={setScurveEnd} /><div className="flex gap-1 rounded-md border p-0.5"><button onClick={() => setScurveBucket('day')} className={cn('rounded px-3 py-1 text-xs', scurveBucket === 'day' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>Daily</button><button onClick={() => setScurveBucket('week')} className={cn('rounded px-3 py-1 text-xs', scurveBucket === 'week' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>Weekly</button></div></div>
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <SCurveToolbarGroup label="Stage">
+                <ToggleGroup
+                  type="single"
+                  value={scurveStage}
+                  onValueChange={(v) => v && setScurveStage(v as DefectScheduleStage)}
+                  className="gap-1"
+                >
+                  {ALL_DEFECT_STAGE_KEYS.map((k) => (
+                    <ToggleGroupItem key={k} value={k} className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                      {DEFECT_STAGE_LABELS[k]}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </SCurveToolbarGroup>
+
+              <SCurveToolbarGroup label="Group">
+                <Select value={scurveGroup} onValueChange={(v) => setScurveGroup(v as DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE)}>
+                  <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SCURVE_GROUP_NONE}>No breakdown</SelectItem>
+                    {ALL_DEFECT_GROUP_KEYS.map((k) => (
+                      <SelectItem key={k} value={k}>{DEFECT_GROUP_LABELS[k]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SCurveToolbarGroup>
+
+              <SCurveToolbarGroup label="Team">
+                <Select value={teamFilter} onValueChange={setTeamFilter}>
+                  <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Teams</SelectItem>
+                    {ALL_TEAMS.map((t) => (
+                      <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SCurveToolbarGroup>
+
+              <SCurveToolbarGroup label="Bucket">
+                <Tabs value={scurveBucket} onValueChange={(v) => setScurveBucket(v as 'day' | 'week')}>
+                  <TabsList className="h-8">
+                    <TabsTrigger value="day" className="h-6 px-2 text-xs">Day</TabsTrigger>
+                    <TabsTrigger value="week" className="h-6 px-2 text-xs">Week</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </SCurveToolbarGroup>
+            </div>
           )}
         </CardHeader>
         {scurveOpen && (
-          <CardContent>{scurve.length === 0 ? <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p> : <ChartContainer config={chartConfig} className="h-[360px] w-full"><ComposedChart data={scurve} margin={{ left: 12, right: 16, top: 8, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} /><YAxis yAxisId="left" tick={{ fontSize: 11 }} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} /><ChartTooltip content={<ChartTooltipContent />} /><Legend wrapperStyle={{ fontSize: 11 }} /><ReferenceLine yAxisId="left" x={formatDdMmm(today)} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} /><Bar yAxisId="right" dataKey="completionMet" stackId="completion" fill="var(--color-completionMet)" name="Completion Met" barSize={10} /><Bar yAxisId="right" dataKey="completionShortfall" stackId="completion" fill="var(--color-completionShortfall)" name="Completion Shortfall" barSize={10} /><Bar yAxisId="right" dataKey="completionExcess" stackId="completion" fill="var(--color-completionExcess)" name="Completion Excess" barSize={10} /><Bar yAxisId="right" dataKey="completionFuturePlan" stackId="completion" fill="var(--color-completionFuturePlan)" name="Completion Plan (Future)" barSize={10} /><Bar yAxisId="right" dataKey="closureMet" stackId="closure" fill="var(--color-closureMet)" name="Closure Met" barSize={10} /><Bar yAxisId="right" dataKey="closureShortfall" stackId="closure" fill="var(--color-closureShortfall)" name="Closure Shortfall" barSize={10} /><Bar yAxisId="right" dataKey="closureExcess" stackId="closure" fill="var(--color-closureExcess)" name="Closure Excess" barSize={10} /><Bar yAxisId="right" dataKey="closureFuturePlan" stackId="closure" fill="var(--color-closureFuturePlan)" name="Closure Plan (Future)" barSize={10} /><Line yAxisId="left" type="monotone" dataKey="completionPlan" stroke="var(--color-completionPlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Completion Plan (cum)" /><Line yAxisId="left" type="monotone" dataKey="completionActual" stroke="var(--color-completionActual)" strokeWidth={2} dot={false} name="Completion Actual (cum)" /><Line yAxisId="left" type="monotone" dataKey="closurePlan" stroke="var(--color-closurePlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Closure Plan (cum)" /><Line yAxisId="left" type="monotone" dataKey="closureActual" stroke="var(--color-closureActual)" strokeWidth={2} dot={false} name="Closure Actual (cum)" /></ComposedChart></ChartContainer>}</CardContent>
+          <CardContent className="space-y-3">
+            <SCurveKpiStrip scurve={scurve} today={today} stage={scurveStage} windowStart={scurveStart} windowEnd={scurveEnd} />
+            {scurve.buckets.length === 0 ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p>
+            ) : (
+              <SCurveCharts
+                scurve={scurve}
+                today={today}
+                hidden={hiddenScurveSeries}
+                onToggleSeries={(key) => {
+                  setHiddenScurveSeries((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(key)) next.delete(key); else next.add(key);
+                    return next;
+                  });
+                }}
+                onBucketClick={(bucketIso) => {
+                  const dateField = scurveStage === 'start' ? 'planned_start_date'
+                    : scurveStage === 'completion' ? 'planned_completion_date'
+                    : 'planned_closure_date';
+                  // Compute end-of-bucket
+                  const start = new Date(bucketIso + 'T00:00:00Z');
+                  const end = new Date(start);
+                  if (scurveBucket === 'week') end.setUTCDate(end.getUTCDate() + 6);
+                  const dateTo = end.toISOString().slice(0, 10);
+                  goRaw({ dateField, dateFrom: bucketIso, dateTo });
+                }}
+              />
+            )}
+          </CardContent>
         )}
       </Card>
 
