@@ -242,6 +242,8 @@ export default function ImportLogsPage() {
       if (e1) throw e1;
       const { error: auditErr } = await supabase.from('schedule_change_audit').delete().eq('upload_id', batch.id);
       if (auditErr) throw auditErr;
+      const { error: flErr } = await supabase.from('import_field_logs').delete().eq('upload_id', batch.id).eq('kind', 'tnc');
+      if (flErr) throw flErr;
       const { error: e2 } = await supabase.from('upload_row_logs').delete().eq('upload_id', batch.id);
       if (e2) throw e2;
       const { error: e3 } = await supabase.from('upload_batches').delete().eq('id', batch.id);
