@@ -1,74 +1,54 @@
-## 증상 요약
+## 목표
 
-S-Curve 차트에서 Group=Subcontractor, Subcontractor Values=Finebuild (1개 선택) 상황:
+전체 export 엑셀 파일에서 날짜 컬럼을 **진짜 Excel 날짜 셀(serial number + dd-mmm 형식)** 로 출력하여, Excel 이 해당 셀을 날짜로 인식하도록 한다. 이로써:
+- 정렬/필터가 날짜 순으로 정확히 동작
+- 사용자가 "TBD", "내일" 같은 텍스트 입력 시 셀 형식이 어긋나 시각적으로 즉시 구분
+- 사용자가 다양한 날짜 형식("5/4", "May 4")을 입력하면 Excel 이 자동으로 dd-mmm 으로 변환
 
-- KPI 카드는 정상: Plan(cum)=26, Actual(cum)=21
-- **상단 누적 라인 차트의 Y축이 0~600** 으로 잡혀, 실제 값(21~26)인 라인이 X축 바로 위에 깔려 보이지 않음
-- 하단 variance 막대 차트는 -12 ~ +4 범위로 정상 표시
-- 범례에 Finebuild Plan / Finebuild Actual 만 정상 표시
-
-## 근본 원인
-
-`src/pages/DefectDashboardPage.tsx` 의 차트 데이터(`data` 배열, 958~980줄)에 **Subcontractor 필터링과 무관한 Total 누적값(`totalPlan`, `totalActual`)이 항상 함께 들어갑니다**. 
-
-Recharts 의 `<YAxis domain={['auto', 'auto']}>` 는 **현재 ComposedChart 의 자식 컴포넌트가 dataKey 로 참조하는 모든 값**을 보고 도메인을 계산합니다. 그룹 모드(`showGroups=true`)에서는 화면에 `<Line dataKey="g_plan_Finebuild">` 만 그려지지만, **`<Bar dataKey="variance">` 가 같은 데이터 row 의 variance 필드를 참조**하고 있어 (실제로는 하단 별도 차트지만 Recharts 내부 계산상) 또는 더 정확히는 **누적 차트의 일부 Bar/Line 정의에 hide 된 필드들이 여전히 도메인 계산에 포함**되고 있습니다.
-
-추가로, `seriesCountsAggregator` (`src/lib/defect-dashboard-utils.ts` 330~349줄)가 첫 bucket 이전 데이터를 제외하긴 하지만, **window 내부에 있는 다른 Subcontractor 들의 데이터가 `TOTAL_KEY` 시리즈에는 여전히 포함**되어 `totalPlan` 값이 600 가까이 올라갑니다 (전체 활성 defect 수가 그 정도 규모).
-
-요컨대: **그룹 모드에서 화면에는 Finebuild 만 그려지지만, 차트 데이터 row 의 `totalPlan` 필드는 여전히 전체(필터 전) 합계가 들어가 Y축 자동 도메인을 부풀립니다.**
-
-## 수정 계획
-
-### 1. `buildDefectSCurve()` 의 Total 시리즈 정의 변경
-
-`scurveItems` 가 이미 협력사로 필터링되어 들어오므로, **그룹 모드일 때 `totalSeries` 를 별도로 만들 필요가 없습니다**. 그대로 두면 그룹 모드에서 totalSeries 와 그룹 시리즈가 사실상 같은 값이 되어 redundancy 만 발생.
-
-수정: `buildDefectSCurve` 가 `groupBy != null` 인 경우 `totalSeries` 를 빈 plan/actual 배열로 반환하거나, 페이지에서 그룹 모드일 때 `data` row 에 `totalPlan` / `totalActual` 필드를 **아예 넣지 않도록** 변경.
-
-### 2. 차트 데이터 빌드(`SCurveSinglePanel`, 958~980줄) 수정
-
-```typescript
-const data = scurve.bucketLabels.map((label, i) => {
-  const row: Record<string, any> = {
-    bucket: scurve.buckets[i],
-    bucketLabel: label,
-    __isFuture: scurve.todayIndex >= 0 && i > scurve.todayIndex,
-  };
-  if (!showGroups) {
-    // Total/non-grouped 모드에서만 total 필드 포함
-    row.totalPlan = scurve.total.plan[i];
-    row.totalActual = scurve.total.actual[i];
-    row.variance = scurve.total.variance[i];
-    row.planInc = ...;
-    row.actualInc = ...;
-  } else {
-    // 그룹 모드: variance 막대용 데이터를 그룹 시리즈 합계로 재계산
-    const planSum = scurve.groups.reduce((s, g) => s + (g.plan[i] ?? 0), 0);
-    const actualSum = scurve.groups.reduce((s, g) => s + (g.actual[i] ?? 0), 0);
-    row.variance = (actualSum - planSum);
-  }
-  scurve.groups.forEach((g) => {
-    row[`g_plan_${g.key}`] = g.plan[i];
-    row[`g_actual_${g.key}`] = g.actual[i];
-  });
-  return row;
-});
-```
-
-이렇게 하면 그룹 모드에서 Y축 도메인은 **선택된 Subcontractor 들의 누적값(0~26)** 만 보고 자동 계산되어 라인이 정상 크기로 표시됩니다.
-
-### 3. 검증
-
-- Subcontractor=Finebuild 선택 시 Y축이 0~30 정도로 잡혀 라인이 잘 보이는지 확인
-- 여러 Subcontractor 다중 선택 시 각 라인이 비례적으로 표시되는지 확인
-- Group=None 으로 되돌릴 때 기존 Total 차트가 여전히 정상인지 확인
-- variance 막대 차트의 값이 합리적으로 표시되는지 확인 (그룹 모드에선 선택된 그룹 합산 기준)
+xlsx-js-style 라이브러리 한계로 진정한 Data Validation(잘못된 입력 차단 팝업)은 불가능. 위와 같은 약한 보호임을 사용자가 이미 인지하고 선택함.
 
 ## 변경 파일
 
-- `src/pages/DefectDashboardPage.tsx` — `SCurveSinglePanel` 의 `data` 빌드 로직 (958~980줄)
+### 1. 신규 파일
 
-## 위험 / 가정
+`src/lib/excel-date-cell.ts`
+- `isoToExcelSerial(iso)`: ISO 날짜 → Excel serial number (1900 date system, 1899-12-30 epoch 사용)
+- `isoTimestampToExcelSerial(iso)`: ISO 타임스탬프 → time fraction 포함 serial
+- `DATE_NUMFMT = 'dd-mmm'`, `DATETIME_NUMFMT = 'dd-mmm-yyyy hh:mm'` 상수
 
-- variance 차트는 그룹 모드에선 "선택된 그룹들의 합산 variance" 를 보여주게 됩니다. 이는 의미상 합리적이며, KPI 카드의 ΔVariance(-5)와 일치할 것입니다.
-- KPI 카드는 별도로 `scurve.total` 을 읽고 있으므로(916줄) 영향 없습니다 — `total` 은 builder 내부에서 여전히 `scurveItems` 기준으로 계산되며 21/26 값을 그대로 반환합니다.
+### 2. Subtest export — `src/lib/excel-export.ts`
+
+- `formatCellValue` 가 날짜 컬럼은 빈 문자열 외 더이상 변환하지 않게 하고, **raw ISO 를 보존**하는 분기 추가 (또는 별도 `getRawDateValue` 헬퍼 사용)
+- `setCell` 시그니처 확장: `setCell(ws, r, c, value, style, opts?)` — `opts` 에 `numFmt` 와 `type: 'date'` 추가
+- 데이터 row 작성 루프에서 `DATE_COLUMN_IDS.has(col.id)` 인 경우:
+  - row.original 에서 raw ISO 추출
+  - `isoToExcelSerial()` 변환
+  - 성공 시 `{ t: 'n', v: serial, z: 'dd-mmm', s: { ...STYLE_DATA, numFmt: 'dd-mmm' } }`
+  - 실패 또는 빈 값 시 빈 문자열 셀
+
+### 3. Defect export — `src/lib/defect-excel-export.ts`
+
+위와 동일한 패턴:
+- `DATE_FIELDS` 6개 + `classified_at` → date serial
+- `DATETIME_FIELDS` (`updated_at`, `created_at`) → datetime serial + `dd-mmm-yyyy hh:mm` 형식
+- `view` 포맷과 `reimport` 포맷 모두 동일하게 진짜 날짜 셀로 출력
+- `reimport` 포맷은 import 파서가 이미 Excel serial 을 처리할 수 있으므로 round-trip 안전
+
+### 4. 기타 export 파일 검토
+
+- `schedule-excel-export.ts`, `dashboard-excel-export.ts`, `defect-schedule-excel-export.ts`, `defect-dashboard-excel-export.ts`: 이 파일들은 **집계 데이터**(헤더에 "20-Jan", "20-Jan~26-Jan" 같은 bucket 라벨, 셀 값은 누적 카운트 숫자)이므로 "사용자가 직접 편집할 날짜 컬럼"이 없음. 헤더는 라벨 텍스트로 유지. 변경 불필요.
+- `defect-export-utils.ts`: `defect-excel-export.ts` 의 헬퍼이므로 동일 변경 흐름에 포함되거나 영향 없음 — 확인 후 필요 시 동일 처리.
+
+## 검증
+
+1. Subtest Master DB export → T1/T2 planned/actual 컬럼이 Excel 에서 셀 클릭 시 "사용자 지정 (dd-mmm)" 형식으로 표시되는지 확인
+2. Defect Raw Data export → 6개 날짜 컬럼 + classified_at, updated_at 동일 확인
+3. 정렬: Excel 에서 날짜 컬럼 정렬 시 알파벳순(04-Apr 다음 04-Aug)이 아니라 시간순으로 정렬되는지 확인
+4. Round-trip: export 한 파일에 임의로 "TEST" 텍스트 입력 → 다시 import 시 import 파서의 normalizeDate 가 그 행을 "정상 날짜 아님" 으로 처리하는지 확인 (현재 normalizeDate 는 invalid 입력에 null 반환)
+5. 빈 날짜 셀이 빈칸으로 보이고 0(=1899-12-30) 으로 표시되지 않는지 확인
+
+## 위험
+
+- Excel serial 변환 시 timezone 문제: UTC 기반으로 통일 → DB의 ISO 날짜가 'YYYY-MM-DD' 형태이므로 안전
+- 1900 leap-year bug: epoch 를 1899-12-30 으로 잡아 회피
+- `xlsx-js-style` 의 `z` 속성 vs `s.numFmt` 속성: 둘 다 함께 지정해 호환성 확보

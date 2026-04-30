@@ -5,6 +5,7 @@ import { formatTeamLabel } from '@/types/enums';
 import { formatPct } from '@/lib/defect-utils';
 import { type DefectFieldConfigRow, DEFECT_DEFAULT_FIELD_LABELS } from '@/hooks/useDefectFieldConfig';
 import { isMetaField } from '@/lib/meta-fields';
+import { isoToExcelSerial, isoTimestampToExcelSerial, DATE_NUMFMT, DATETIME_NUMFMT } from '@/lib/excel-date-cell';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -358,8 +359,31 @@ function buildDefectWorkbook<TRow>(params: BuildSheetParams<TRow>): XLSX.WorkBoo
   for (let c = 0; c < headerRow.length; c++) {
     setCell(ws, 7, c, headerRow[c], STYLE_HEADER);
   }
+  // Build column-index → field id map (re-import id columns precede visibleCols).
+  const fieldIdByColIdx: (string | null)[] = [
+    ...reimportIdFields,
+    ...visibleCols.map((c) => c.id),
+  ];
+
   for (let r = 0; r < dataRows.length; r++) {
+    const original = sortedRows[r].original as any;
     for (let c = 0; c < dataRows[r].length; c++) {
+      const fieldId = fieldIdByColIdx[c];
+      if (fieldId && DATE_FIELDS.has(fieldId)) {
+        const rawIso = original?.[fieldId];
+        const serial = isoToExcelSerial(rawIso);
+        if (serial != null) {
+          setDateCell(ws, 8 + r, c, serial, STYLE_DATA, DATE_NUMFMT);
+          continue;
+        }
+      } else if (fieldId && DATETIME_FIELDS.has(fieldId)) {
+        const rawIso = original?.[fieldId];
+        const serial = isoTimestampToExcelSerial(rawIso);
+        if (serial != null) {
+          setDateCell(ws, 8 + r, c, serial, STYLE_DATA, DATETIME_NUMFMT);
+          continue;
+        }
+      }
       setCell(ws, 8 + r, c, dataRows[r][c], STYLE_DATA);
     }
   }
@@ -487,4 +511,16 @@ function setCell(
   const addr = XLSX.utils.encode_cell({ r, c });
   const v = value == null ? '' : value;
   ws[addr] = { t: 's', v: String(v), s: style };
+}
+
+function setDateCell(
+  ws: XLSX.WorkSheet,
+  r: number,
+  c: number,
+  serial: number,
+  style: Record<string, unknown>,
+  numFmt: string,
+) {
+  const addr = XLSX.utils.encode_cell({ r, c });
+  ws[addr] = { t: 'n', v: serial, z: numFmt, s: { ...style, numFmt } };
 }

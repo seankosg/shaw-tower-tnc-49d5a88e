@@ -4,6 +4,7 @@ import { formatDdMmm, formatDdMmmYyyy } from './format';
 import { DATA_SOURCE_LABELS, type DataSource, type TcStatus } from '@/types/enums';
 import type { FieldConfigRow } from '@/hooks/useFieldConfig';
 import { isMetaField } from '@/lib/meta-fields';
+import { isoToExcelSerial, isoTimestampToExcelSerial, DATE_NUMFMT, DATETIME_NUMFMT } from '@/lib/excel-date-cell';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -307,6 +308,27 @@ export function exportSubtestsToExcel<TRow>(opts: ExportSubtestsOptions<TRow>): 
   // Data rows
   for (let r = 0; r < dataRows.length; r++) {
     for (let c = 0; c < dataRows[r].length; c++) {
+      const col = visibleCols[c];
+      const colId = col?.id;
+      if (colId && DATE_COLUMN_IDS.has(colId)) {
+        // Write a real Excel date cell so sorting/filtering treats it as a date
+        const original = sortedRows[r].original as any;
+        const rawIso = original?.[colId];
+        const serial = isoToExcelSerial(rawIso);
+        if (serial != null) {
+          setDateCell(ws, 8 + r, c, serial, STYLE_DATA, DATE_NUMFMT);
+          continue;
+        }
+      }
+      if (colId === 'updated_at') {
+        const original = sortedRows[r].original as any;
+        const rawIso = original?.updated_at;
+        const serial = isoTimestampToExcelSerial(rawIso);
+        if (serial != null) {
+          setDateCell(ws, 8 + r, c, serial, STYLE_DATA, DATETIME_NUMFMT);
+          continue;
+        }
+      }
       setCell(ws, 8 + r, c, dataRows[r][c], STYLE_DATA);
     }
   }
@@ -338,4 +360,16 @@ function setCell(
   const addr = XLSX.utils.encode_cell({ r, c });
   const v = value == null ? '' : value;
   ws[addr] = { t: 's', v: String(v), s: style };
+}
+
+function setDateCell(
+  ws: XLSX.WorkSheet,
+  r: number,
+  c: number,
+  serial: number,
+  style: Record<string, unknown>,
+  numFmt: string,
+) {
+  const addr = XLSX.utils.encode_cell({ r, c });
+  ws[addr] = { t: 'n', v: serial, z: numFmt, s: { ...style, numFmt } };
 }
