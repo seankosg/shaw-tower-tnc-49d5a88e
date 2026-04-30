@@ -41,6 +41,10 @@ import {
 import { DefectScheduleMatrix } from '@/components/defects/DefectScheduleMatrix';
 import { DefectCriticalWatchlist } from '@/components/defects/DefectCriticalWatchlist';
 import { exportDefectScheduleToExcel } from '@/lib/defect-schedule-excel-export';
+import { exportDefectArrayToExcel } from '@/lib/defect-excel-export';
+import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
+import { useAuth } from '@/contexts/AuthContext';
+import { USER_TYPE_LABELS } from '@/types/enums';
 
 export default function DefectProgressPage() {
   const navigate = useNavigate();
