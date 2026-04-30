@@ -866,6 +866,8 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
   const showGroups = scurve.groups.length > 0;
 
   const lineCfg: ChartConfig = {
+    planInc: { label: 'Plan (daily)', color: 'hsl(var(--muted-foreground))' },
+    actualInc: { label: 'Actual (daily)', color: 'hsl(var(--primary))' },
     totalPlan: { label: 'Plan (cum)', color: 'hsl(var(--muted-foreground))' },
     totalActual: { label: 'Actual (cum)', color: 'hsl(var(--primary))' },
     ...Object.fromEntries(scurve.groups.flatMap((g, i) => [
