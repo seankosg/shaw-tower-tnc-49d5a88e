@@ -2,6 +2,17 @@ import * as XLSX from 'xlsx';
 import { type DefectItem, isClosedDefect, isOverdueDefect } from '@/lib/defect-utils';
 import { DEFECT_DEFAULT_FIELD_LABELS, type DefectFieldConfigRow } from '@/hooks/useDefectFieldConfig';
 import { formatTeamLabel } from '@/types/enums';
+import { isoToExcelSerial, isoTimestampToExcelSerial, DATE_NUMFMT, DATETIME_NUMFMT } from '@/lib/excel-date-cell';
+
+const DATE_FIELDS = new Set([
+  'planned_start_date',
+  'planned_completion_date',
+  'planned_closure_date',
+  'actual_start_date',
+  'actual_completion_date',
+  'actual_closure_date',
+]);
+const DATETIME_FIELDS = new Set(['updated_at', 'created_at']);
 
 export type DefectExportDateField =
   | 'planned_start_date'
@@ -92,11 +103,40 @@ export function exportDefectsWorkbook(
 ) {
   const configMap = new Map(opts.configs.map((field) => [field.field_name, field]));
   const label = (field: string) => configMap.get(field)?.display_name || DEFECT_DEFAULT_FIELD_LABELS[field] || field;
-  const rows = items.map((item) => Object.fromEntries(opts.columns.map((field) => {
-    const raw = (item as any)[field];
-    const value = field === 'team' ? formatTeamLabel(raw) : raw ?? '';
-    return [label(field), value];
-  })));
+
+  // Build Defects sheet manually so date fields become real Excel date cells.
+  const headers = opts.columns.map(label);
+  const defectsSheet = XLSX.utils.aoa_to_sheet([headers]);
+  for (let r = 0; r < items.length; r++) {
+    const item = items[r] as any;
+    for (let c = 0; c < opts.columns.length; c++) {
+      const field = opts.columns[c];
+      const raw = item[field];
+      const addr = XLSX.utils.encode_cell({ r: r + 1, c });
+      if (DATE_FIELDS.has(field)) {
+        const serial = isoToExcelSerial(raw);
+        if (serial != null) {
+          defectsSheet[addr] = { t: 'n', v: serial, z: DATE_NUMFMT };
+          continue;
+        }
+      } else if (DATETIME_FIELDS.has(field)) {
+        const serial = isoTimestampToExcelSerial(raw);
+        if (serial != null) {
+          defectsSheet[addr] = { t: 'n', v: serial, z: DATETIME_NUMFMT };
+          continue;
+        }
+      }
+      const value = field === 'team' ? formatTeamLabel(raw) : raw ?? '';
+      if (typeof value === 'number') {
+        defectsSheet[addr] = { t: 'n', v: value };
+      } else {
+        defectsSheet[addr] = { t: 's', v: value === '' ? '' : String(value) };
+      }
+    }
+  }
+  const lastCol = XLSX.utils.encode_col(Math.max(opts.columns.length - 1, 0));
+  defectsSheet['!ref'] = `A1:${lastCol}${items.length + 1}`;
+
   const summary = [
     { Metric: 'Total', Value: items.length },
     { Metric: 'Closed', Value: items.filter(isClosedDefect).length },
@@ -109,10 +149,10 @@ export function exportDefectsWorkbook(
     ...Object.entries(opts.filters).map(([Field, Value]) => ({ Field, Value: Value || '—' })),
   ];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Defects');
+  XLSX.utils.book_append_sheet(wb, defectsSheet, 'Defects');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(info), 'Export Info');
   const fileName = `${opts.filePrefix ?? 'defect_advanced_export'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.writeFile(wb, fileName);
-  return { fileName, rowCount: rows.length };
+  return { fileName, rowCount: items.length };
 }
