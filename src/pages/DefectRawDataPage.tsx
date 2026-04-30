@@ -144,6 +144,7 @@ const RAW_SEARCH_FIELDS = [
   'closure_status',
   'remarks',
   'hdec_comments',
+  'aconex_comments',
 ] as const;
 
 type DefectRawRow = DefectItem & { created_at?: string | null };
