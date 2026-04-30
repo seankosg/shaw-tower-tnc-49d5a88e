@@ -5,6 +5,7 @@ import { formatTeamLabel } from '@/types/enums';
 import { formatPct } from '@/lib/defect-utils';
 import { type DefectFieldConfigRow, DEFECT_DEFAULT_FIELD_LABELS } from '@/hooks/useDefectFieldConfig';
 import { isMetaField } from '@/lib/meta-fields';
+import { isoToExcelSerial, isoTimestampToExcelSerial, DATE_NUMFMT, DATETIME_NUMFMT } from '@/lib/excel-date-cell';
 
 // ---------------------------------------------------------------------------
 // Types
