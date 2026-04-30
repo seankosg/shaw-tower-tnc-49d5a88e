@@ -955,7 +955,7 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
         >
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} />
-          <YAxis tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} allowDecimals={false} domain={['auto', 'auto']} />
           <ChartTooltip content={<ChartTooltipContent />} />
           {todayLabel && <ReferenceLine x={todayLabel} stroke="hsl(var(--destructive))" strokeDasharray="4 2" />}
           <ReferenceLine y={0} stroke="hsl(var(--border))" />
