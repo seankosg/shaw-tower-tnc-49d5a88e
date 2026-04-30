@@ -90,7 +90,11 @@ export default function DefectDashboardPage() {
   const [items, setItems] = useState<DefectForDashboard[]>([]);
   const [loading, setLoading] = useState(true);
   const [dataDate, setDataDate] = useState(todayIso());
-  const [teamFilter, setTeamFilter] = useState(searchParams.get('team') || 'all');
+  const [teamFilter, setTeamFilter] = useState<string[]>(() => {
+    const raw = searchParams.get('team');
+    if (!raw || raw === 'all') return [];
+    return raw.split(',').map(s => s.trim()).filter(Boolean);
+  });
   const [breakdownTab, setBreakdownTab] = useState(searchParams.get('tab') || 'subcon');
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>((searchParams.get('bucket') as 'day' | 'week') || 'day');
   const [scurveOpen, setScurveOpen] = useState<boolean>(() => {
