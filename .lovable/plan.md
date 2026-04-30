@@ -1,64 +1,66 @@
-# Aconex Status 기반 Completion/Closure 자동 매핑
+## Goal
 
-## 목표
-Excel import 시 Aconex `Status` 컬럼 값에 따라 `completion_status` / `closure_status` 를 자동으로 채운다.
+Extend the T&C Raw Data **Progress** icon column from the current 3 stages (**Pred → T1 → T2**) to **5 stages** by appending:
 
-| Aconex Status | 의미 | 자동 매핑 |
-|---|---|---|
-| `Open` | 진행 중 | 별도 처리 없음 (날짜·진행률 기반 자동 계산 유지) |
-| `Work Done` | 완료됨 | **completion_status = Done** (그리고 `actual_completion_date`/`actual_progress_pct=100` 자동 보정) |
-| `Closed` | 폐쇄됨 | **closure_status = Done** (기존 동작 유지) + 결과적으로 completion 도 Done |
-| `In dispute` | 분쟁 중 | 별도 처리 없음 (`status` 원문만 보존) |
+- **R1** — Subcontractor submitted report to HDEC (uses `r1_status` / `r1_target_submission_date` / `r1_actual_submission_date`).
+- **R2A** — Client approved HDEC's report (uses `r2_status` / `r2_target_approval_date` / `r2_actual_approval_date`).
 
-원본 Aconex `Status` 텍스트는 `defect_items.status` 컬럼에 그대로 보존된다.
+Per the user's request, only R1 and R2A are added (R2 Submission "R2S" is intentionally skipped — only the final approval matters as the closing milestone).
 
-## Excel 우선순위 (기존 정책 유지)
-- Excel 에 `Completion Status` / `Closure Status` 또는 `Actual Completion Date` 가 명시되어 있으면 **Excel 값이 우선**.
-- Aconex Status 자동 매핑은 Excel 명시값이 없을 때만 적용.
-- 충돌이 발생하면 (예: Status=Closed 인데 Excel 이 actual_progress_pct=50) 기존 `closure_completion_conflict` 로그 메커니즘이 그대로 동작.
+## Scope
 
-## 기술적 변경
+Affects only `src/components/shared/StageProgress.tsx` (shared icon) and its caller `src/pages/SubtestList.tsx` (T&C Raw Data page). Does not touch the Defect equivalent (`DefectStageProgress.tsx`).
 
-### 1. `src/lib/defect-status.ts`
-- 새 헬퍼 추가: `isStatusWorkDone(status)` — `"work done"` (대소문자/공백 무시) 매칭.
-- `computeCompletionStatus()` 1번 규칙 확장:
-  ```ts
-  if (input.actual_completion_date 
-      || actualPct >= 100 
-      || isStatusWorkDone(input.status) 
-      || isStatusClosed(input.status)) return 'Done';
+## Changes
+
+### 1. `src/components/shared/StageProgress.tsx`
+
+- Extend `StageProgressProps` with optional R1/R2A fields:
+  - `r1Status`, `r1ActualSubmissionDate`, `r1TargetSubmissionDate`
+  - `r2Status`, `r2ActualApprovalDate`, `r2TargetApprovalDate`
+- Pass these into the `StageMetricRow` shape consumed by `isStageDone` / `isStageDelayedAsOf` from `@/lib/stage-metrics` (already supports `r1` and `r2a` stage keys — no library change needed).
+- Classify two new pips:
+  - **R1**: done when `isR1Done(r1_status)` (Submitted / Under Review / Approved) — already handled in `stage-metrics`.
+  - **R2A**: done when `isR2Done(r2_status)` (Approved) — already handled.
+  - WIP/Planned/Hold/Empty derived the same way as existing stages.
+- Render the row of pips as: `Pred ─ T1 ─ T2 ─ R1 ─ R2A` with the same connector dashes.
+- Extend the Tooltip to include R1 and R2A lines (label + actual or planned date via `formatDdMmm`).
+- Update `StageProgressLegend` footer text from `Stages: Pred → T1 → T2` to `Stages: Pred → T1 → T2 → R1 → R2A`.
+- Keep all new props optional so any other (currently none beyond SubtestList) caller continues to work; missing data renders as the "empty" pip.
+
+### 2. `src/pages/SubtestList.tsx`
+
+- The DB select (line 624) already pulls all needed R1/R2 columns — no query change.
+- In the Progress column cell (≈ line 758), pass the additional props:
+  ```tsx
+  <StageProgress
+    /* existing props */
+    r1Status={row.original.r1_status}
+    r1ActualSubmissionDate={row.original.r1_actual_submission_date}
+    r1TargetSubmissionDate={row.original.r1_target_submission_date}
+    r2Status={row.original.r2_status}
+    r2ActualApprovalDate={row.original.r2_actual_approval_date}
+    r2TargetApprovalDate={row.original.r2_target_approval_date}
+    asOfDate={dataDate}
+  />
   ```
-  → `Closed` 도 자연스럽게 completion=Done 으로 승격 (현재는 closure 만 Done 처리).
-- `reconcileClosureCompletion()` 의 자동 보정 로직 확장:
-  - 기존: `closure=Done && completion!=Done` → `actual_completion_date`, `actual_progress_pct=100` 자동 채움.
-  - 추가: `Status=Work Done && actual_completion_date 없음` → `actual_completion_date = data date`, `actual_progress_pct = 100` 채움 (Excel 명시값이 없을 때만, 기존 conflict 가드 동일 적용).
+- Optional: extend the `sortingFn` for the Progress column to also weight R1 (8) and R2A (16) so sorting reflects all 5 stages.
+- Optional: bump the column `size` slightly (e.g. 110 → 160) to fit two extra pips + connectors comfortably.
 
-### 2. `src/contexts/DefectImportContext.tsx`
-- 별도 변경 거의 없음. 이미 `statusInputs.status = row.status` 를 `reconcileClosureCompletion` 으로 전달 중.
-- `excelExplicit` 충돌 가드는 그대로 사용 — Work Done 자동 보정도 동일 가드를 통과해야 적용됨.
-- `pendingLogs` 에 정보성 로그 추가:
-  - `reason_code: 'aconex_status_auto_mapped'`, detail 에 `"Status=Work Done → completion=Done auto-applied"` 또는 `"Status=Closed → closure=Done auto-applied"`.
+### 3. Out of scope
 
-### 3. 테스트 (`src/test/defect-status.test.ts` — 기존 파일 확장)
-- Status=`Work Done` + 빈 actual_completion_date → completion=Done, patch 발생.
-- Status=`Closed` + 빈 actual_completion_date → completion=Done, closure=Done, patch 발생.
-- Status=`Open` → 기존 날짜·진행률 로직만 동작 (변경 없음).
-- Status=`In dispute` → 기존 로직만 동작 (변경 없음).
-- Status=`Work Done` + Excel 이 actual_progress_pct=50 명시 → conflict 플래그, patch 없음.
+- `DefectStageProgress.tsx` (Defect module) — not requested.
+- `stage-metrics.ts` — already contains `r1` / `r2s` / `r2a` logic; no change needed.
+- DB schema, imports, edge functions, exports — unaffected.
 
-### 4. 영향 범위
-- 신규 import 행: 즉시 적용.
-- 기존 데이터: 자동 재계산은 기존 일일 cron(`recompute-defect-status`)이 처리. cron 도 동일 로직(`computeCompletion/Closure`)을 호출하지만 이 함수는 edge function 안에 인라인 복제되어 있음.
-  - **포함 권장**: edge function `supabase/functions/recompute-defect-status/index.ts` 의 `computeCompletion` / `computeClosure` 에도 동일한 `Work Done` / `Closed` 분기 추가. 이렇게 해야 다음 cron 실행 시 기존 122건의 Work Done 행과 4건의 Closed 행이 일관되게 보정됨.
+## Visual Result
 
-## 변경되지 않는 것
-- DB 스키마 변경 없음.
-- `defect_items.status` 컬럼은 Aconex 원문 그대로 저장.
-- Excel 명시값 우선 정책 유지.
-- StatusBadge UI 변경 없음 (별도 요청 시 추가 가능).
+```text
+Before:  ● ─ ● ─ ◐
+         Pred  T1   T2
 
-## 파일 목록
-- `src/lib/defect-status.ts` (수정)
-- `src/contexts/DefectImportContext.tsx` (로그 추가만)
-- `supabase/functions/recompute-defect-status/index.ts` (동일 규칙 반영)
-- `src/test/defect-status.test.ts` (테스트 추가)
+After:   ● ─ ● ─ ◐ ─ ○ ─ ○
+         Pred  T1   T2   R1   R2A
+```
+
+Tooltip will list all 5 stages with their actual or planned dates and the "Delay as of" reference date, identical in style to the existing Pred/T1/T2 entries.

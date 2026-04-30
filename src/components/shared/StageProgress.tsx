@@ -1,17 +1,27 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { TcStatus } from '@/types/enums';
+import type { TcStatus, ReportStatus } from '@/types/enums';
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
-import { isStageDelayedAsOf, isStageDone, todayIso, type StageKey } from '@/lib/stage-metrics';
+import { isStageDelayedAsOf, isStageDone, todayIso, type StageKey, type StageMetricRow } from '@/lib/stage-metrics';
 
 type StageState = 'done' | 'wip' | 'planned' | 'hold' | 'empty';
 
-function classifyStage(row: Parameters<typeof isStageDone>[0], stage: StageKey, status: TcStatus | null | undefined, asOfDate: string): StageState {
+function classifyStage(
+  row: StageMetricRow,
+  stage: StageKey,
+  status: TcStatus | ReportStatus | null | undefined,
+  asOfDate: string,
+): StageState {
   if (isStageDone(row, stage)) return 'done';
   if (isStageDelayedAsOf(row, stage, asOfDate)) return 'hold';
   if (status === 'Hold') return 'hold';
+  // For T&C stages, 'WIP' literal exists; for Report stages, treat 'Submitted'/'Under Review' (non-done) as WIP
   if (status === 'WIP') return 'wip';
+  if (stage === 'r2a' && (status === 'Submitted' || status === 'Under Review')) return 'wip';
   if (status === 'Planned') return 'planned';
+  // Planned date present but not yet done → planned
+  if (stage === 'r1' && row.r1_target_submission_date) return 'planned';
+  if (stage === 'r2a' && row.r2_target_approval_date) return 'planned';
   return 'empty';
 }
 
@@ -50,6 +60,14 @@ export interface StageProgressProps {
   t2Status: TcStatus | null;
   t2ActualDate: string | null;
   t2PlannedDate?: string | null;
+  // R1 — Subcontractor → HDEC report submission
+  r1Status?: ReportStatus | null;
+  r1ActualSubmissionDate?: string | null;
+  r1TargetSubmissionDate?: string | null;
+  // R2A — Client approval of HDEC report
+  r2Status?: ReportStatus | null;
+  r2ActualApprovalDate?: string | null;
+  r2TargetApprovalDate?: string | null;
   asOfDate?: string | null;
 }
 
@@ -64,10 +82,16 @@ export function StageProgress({
   t2Status,
   t2ActualDate,
   t2PlannedDate = null,
+  r1Status = null,
+  r1ActualSubmissionDate = null,
+  r1TargetSubmissionDate = null,
+  r2Status = null,
+  r2ActualApprovalDate = null,
+  r2TargetApprovalDate = null,
   asOfDate = null,
 }: StageProgressProps) {
   const delayAsOfDate = asOfDate ?? todayIso();
-  const row = {
+  const row: StageMetricRow = {
     predecessor_status_raw: predecessorRaw,
     pred_status: predStatus,
     pred_planned_date: predPlannedDate,
@@ -78,13 +102,23 @@ export function StageProgress({
     t2_status: t2Status,
     t2_planned_date: t2PlannedDate,
     t2_actual_date: t2ActualDate,
+    r1_status: r1Status,
+    r1_target_submission_date: r1TargetSubmissionDate,
+    r1_actual_submission_date: r1ActualSubmissionDate,
+    r2_status: r2Status,
+    r2_target_approval_date: r2TargetApprovalDate,
+    r2_actual_approval_date: r2ActualApprovalDate,
   };
   const pred = classifyStage(row, 'pred', predStatus, delayAsOfDate);
   const t1 = classifyStage(row, 't1', t1Status, delayAsOfDate);
   const t2 = classifyStage(row, 't2', t2Status, delayAsOfDate);
+  const r1 = classifyStage(row, 'r1', r1Status, delayAsOfDate);
+  const r2a = classifyStage(row, 'r2a', r2Status, delayAsOfDate);
 
   const stateLabel = (s: StageState) =>
     s === 'done' ? 'Done' : s === 'wip' ? 'WIP' : s === 'hold' ? 'Delay' : s === 'planned' ? 'Planned' : '—';
+
+  const Connector = () => <span className="h-px w-2 bg-muted-foreground/30" aria-hidden />;
 
   return (
     <Tooltip delayDuration={150}>
@@ -94,10 +128,14 @@ export function StageProgress({
           onClick={(e) => e.stopPropagation()}
         >
           <Pip state={pred} label={`Predecessor: ${stateLabel(pred)}`} />
-          <span className="h-px w-2 bg-muted-foreground/30" aria-hidden />
+          <Connector />
           <Pip state={t1} label={`T1: ${stateLabel(t1)}`} />
-          <span className="h-px w-2 bg-muted-foreground/30" aria-hidden />
+          <Connector />
           <Pip state={t2} label={`T2: ${stateLabel(t2)}`} />
+          <Connector />
+          <Pip state={r1} label={`R1: ${stateLabel(r1)}`} />
+          <Connector />
+          <Pip state={r2a} label={`R2A: ${stateLabel(r2a)}`} />
         </span>
       </TooltipTrigger>
       <TooltipContent side="right" className="text-xs">
@@ -109,11 +147,27 @@ export function StageProgress({
           </div>
           <div>
             <span className="font-medium">T1:</span> {stateLabel(t1)}
-            {t1ActualDate ? <span className="text-muted-foreground"> · {formatDdMmm(t1ActualDate)}</span> : null}
+            {t1ActualDate ? <span className="text-muted-foreground"> · {formatDdMmm(t1ActualDate)}</span> : (t1PlannedDate ? <span className="text-muted-foreground"> (plan {formatDdMmm(t1PlannedDate)})</span> : null)}
           </div>
           <div>
             <span className="font-medium">T2:</span> {stateLabel(t2)}
-            {t2ActualDate ? <span className="text-muted-foreground"> · {formatDdMmm(t2ActualDate)}</span> : null}
+            {t2ActualDate ? <span className="text-muted-foreground"> · {formatDdMmm(t2ActualDate)}</span> : (t2PlannedDate ? <span className="text-muted-foreground"> (plan {formatDdMmm(t2PlannedDate)})</span> : null)}
+          </div>
+          <div>
+            <span className="font-medium">R1 (Sub→HDEC):</span> {stateLabel(r1)}
+            {r1ActualSubmissionDate ? (
+              <span className="text-muted-foreground"> · {formatDdMmm(r1ActualSubmissionDate)}</span>
+            ) : r1TargetSubmissionDate ? (
+              <span className="text-muted-foreground"> (plan {formatDdMmm(r1TargetSubmissionDate)})</span>
+            ) : null}
+          </div>
+          <div>
+            <span className="font-medium">R2A (Client Apv.):</span> {stateLabel(r2a)}
+            {r2ActualApprovalDate ? (
+              <span className="text-muted-foreground"> · {formatDdMmm(r2ActualApprovalDate)}</span>
+            ) : r2TargetApprovalDate ? (
+              <span className="text-muted-foreground"> (plan {formatDdMmm(r2TargetApprovalDate)})</span>
+            ) : null}
           </div>
         </div>
       </TooltipContent>
@@ -129,7 +183,7 @@ export function StageProgressLegend() {
       <span className="inline-flex items-center gap-1"><Pip state="wip" label="WIP" /> WIP</span>
       <span className="inline-flex items-center gap-1"><Pip state="planned" label="Planned" /> Planned</span>
       <span className="inline-flex items-center gap-1"><Pip state="hold" label="Delay" /> Delay</span>
-      <span className="ml-2">Stages: Pred → T1 → T2</span>
+      <span className="ml-2">Stages: Pred → T1 → T2 → R1 → R2A</span>
     </div>
   );
 }
