@@ -1,83 +1,124 @@
+# Custom 시스템 필드 생성/매핑 기능 구현 계획
 
-# Excel 헤더 매핑 관리 기능 (Admin)
+관리자가 엑셀 임포트 시 매핑할 새로운 시스템 필드를 직접 생성/관리할 수 있도록 합니다. 데이터는 JSONB(`raw_payload` / `custom_payload`)에 저장되며, T&C와 Defect 모두 지원합니다.
 
-엑셀 임포트 시 사용되는 헤더 → 시스템 필드 매핑을 코드 하드코딩에서 DB 기반으로 전환하고, Admin 페이지에서 관리할 수 있게 합니다. 기존 로직과의 충돌을 방지하기 위한 보강 사항을 모두 반영합니다.
+## 1. 데이터베이스 마이그레이션
 
-## 1. 데이터베이스 변경
+**새 테이블: `custom_field_definitions`**
+- `id uuid PK`
+- `module text` — `'tnc'` | `'defect'` (CHECK 제약)
+- `field_name text` — 코드용 키 (snake_case, 영문/숫자/_, 생성 후 변경 불가)
+- `display_name text` — 화면 표시명
+- `data_type text` — `'text'` | `'number'` | `'date'` | `'boolean'` (CHECK)
+- `is_active bool default true`
+- `sort_order int default 0`
+- `created_by uuid`, `created_at timestamptz`, `updated_at timestamptz`
+- UNIQUE `(module, field_name)`
+- RLS: SELECT 모두 인증, ALL은 admin/superuser만
 
-### 신규 테이블: `import_header_mappings`
-| 컬럼 | 타입 | 설명 |
-|------|------|------|
-| id | uuid PK | |
-| module | text | `tnc` 또는 `defect` |
-| header_alias | text | 정규화된 헤더 별칭 |
-| target_field | text | 시스템 필드명 (예: `issue_no`) |
-| is_system | boolean | true면 Admin이 수정/삭제 불가 (필수 매핑 보호) |
-| is_active | boolean | |
-| note | text | 관리자 메모 |
-| created_at / updated_at | timestamptz | |
-| updated_by | uuid | |
+**`subtests` 테이블 변경**
+- `custom_payload jsonb NOT NULL DEFAULT '{}'::jsonb` 컬럼 추가
+- (Defect는 기존 `defect_items.raw_payload` 활용)
 
-- UNIQUE 제약: `(module, header_alias)` — 동일 모듈 내 별칭 중복 방지
-- RLS: 읽기는 모든 인증 사용자, 쓰기는 admin/superuser만
-- 시드: 기존 `import-parser.ts`, `defect-parser.ts`의 모든 별칭 (~150개) 일괄 삽입, 핵심 식별 필드(`issue_no`, `item_no`, `mos_code` 등)는 `is_system=true`로 설정
+**`app_settings` 버전 키**
+- `custom_fields_version` 키 추가 (변경 시 트리거로 갱신 → 클라이언트 캐시 무효화)
 
-### `app_settings` 활용
-- `header_mappings_version` 키를 두어, 매핑 변경 시 카운터 증가 → 클라이언트가 Realtime/refetch로 즉시 반영
+**검증 트리거**
+- `custom_field_definitions` INSERT/UPDATE 시:
+  - `field_name`이 `^[a-z][a-z0-9_]*$` 정규식 매칭 검증
+  - 시스템 예약 필드명(예: `id`, `item_no`, `mos_code`, `t1_planned_date` 등)과 충돌 차단
+  - UPDATE 시 `field_name`, `module` 변경 차단
+  - `data_type` 변경 시: 해당 모듈에서 데이터가 존재하면 차단(안전장치)
+- `import_header_mappings` 검증 트리거 보강:
+  - `target_field`가 `custom:<field_name>` 형태이면 `custom_field_definitions`에 존재 + 활성화 확인
 
-## 2. 헤더 정규화 & 캐시 전략
+**감사 로그**
+- `custom_field_definitions` 변경을 `event_log`에 기록하는 트리거
 
-`src/lib/header-normalize.ts` (신규)
-- T&C용: 소문자, 공백 제거, 특수문자 제거
-- Defect용: 위 + `(h)` 접미사 제거, 한글 처리
-- 모듈별로 정규화 규칙을 명확히 분리
+## 2. 매핑 표현 방식
 
-`src/hooks/useHeaderMappings.ts` (신규)
-- React Query로 `import_header_mappings` 전체 로드 (앱 시작 시 prefetch)
-- `loadHeaderMappingsCache()`: 모듈별 `Map<normalizedAlias, targetField>` 메모리 캐시 구축
-- `getMappedField(module, rawHeader)`: 동기 조회 — 캐시 미스 시 기존 하드코딩 fallback
+`import_header_mappings.target_field` 값 규칙:
+- 시스템 필드: 기존대로 `t1_planned_date`, `description` 등
+- 커스텀 필드: `custom:<field_name>` 접두사 (예: `custom:client_ref`)
 
-→ 비동기 호출로 인한 파서 변경 최소화. 파서는 그대로 동기 함수 유지.
+## 3. 파서 로직 변경
 
-## 3. 파서 수정
+**`src/lib/import-parser.ts` (T&C)**
+- 매핑 적용 시 `target_field`가 `custom:`로 시작하면:
+  1. `custom_field_definitions`에서 정의 조회 (캐시)
+  2. `data_type`에 따라 변환:
+     - `text` → 문자열
+     - `number` → `Number()` 파싱, NaN이면 reject
+     - `date` → 기존 날짜 파서 재사용 (ISO date)
+     - `boolean` → `'Y'/'N'/'true'/'false'/'1'/'0'` 변환
+  3. 변환 실패 시 `import_field_logs`에 reject 기록
+  4. 성공 시 `subtests.custom_payload[field_name] = value`로 누적 후 upsert
+- 시스템 필드 처리 로직은 변경 없음 (기존 동작 유지)
 
-`src/lib/import-parser.ts`, `src/lib/defect-parser.ts`
-- 기존 하드코딩된 별칭 매핑을 **fallback**으로 보존
-- 각 헤더 분석 시 우선순위: `DB 캐시 → 하드코딩 fallback`
-- 파서 진입점에서 `loadHeaderMappingsCache()` 보장 (앱 부팅 시 1회 prefetch + 임포트 직전 재확인)
+**`src/lib/defect-parser.ts` (Defect)**
+- 동일 로직, 저장 위치는 `defect_items.raw_payload[field_name]`
+- 단, `raw_payload`는 현재 "원본 행 전체"를 저장하는 용도로 쓰일 가능성이 있어 **충돌 방지**:
+  - 옵션: `raw_payload._custom` 하위 객체로 분리 저장 → 기존 raw 보존
+  - 또는 별도 컬럼 `custom_payload` 추가 (T&C와 동일 패턴, 일관성 ↑) ← **권장**
+  - 결정: Defect도 `custom_payload jsonb` 컬럼 신규 추가하여 일관성 유지
 
-## 4. Admin UI
+## 4. 새 훅/캐시
 
-`src/pages/admin/HeaderMappingsTab.tsx` (신규)
-- 탭: T&C / Defect 분리
-- 테이블 컬럼: Header Alias, Target Field (드롭다운, 시스템 필드 화이트리스트), System (잠금 아이콘), Active, Note, Updated
-- 동작:
-  - 추가/편집/비활성화 (시스템 행은 `is_system=true`라 잠금 표시, 편집 버튼 비활성)
-  - **매핑 테스트 도구**: 헤더 입력 → 모듈 선택 → 정규화 결과 + 매칭된 target_field 미리보기
-  - 충돌 감지: 같은 alias가 여러 번 등록되려 하면 차단
-  - 검색/필터
-- `src/pages/AdminPage.tsx`에 새 탭 "Header Mappings" 추가
+- `src/hooks/useCustomFields.ts` — 모듈별 활성 필드 조회, `custom_fields_version` 기반 무효화
+- `src/lib/custom-fields-cache.ts` — `header-mappings-cache.ts`와 동일 패턴
 
-## 5. 안전장치
+## 5. Admin UI
 
-- **시스템 보호 필드** (`is_system=true`)는 DB 트리거로도 수정/삭제 차단 (UI 우회 방지)
-- 변경 시 `event_log`에 기록 (감사 추적)
-- 하드코딩 fallback 유지로 DB가 비어도 임포트 정상 작동 (점진적 마이그레이션 안전)
-- Admin UI에서 시스템 필드명은 enum/리스트로 제공 → 오타 방지
+**신규 탭: `src/pages/admin/CustomFieldsTab.tsx`**
+- 모듈 선택 (T&C / Defect)
+- 필드 목록 (display_name, field_name, data_type, active, sort_order)
+- 추가/수정 다이얼로그:
+  - field_name (생성 후 lock)
+  - display_name
+  - data_type 선택
+  - data_type 변경 시 데이터 존재 경고
+- 비활성화/삭제 (데이터 있으면 삭제 차단, 비활성만 가능)
 
-## 6. 알려진 한계
+**`HeaderMappingsTab.tsx` 수정**
+- target_field 드롭다운에 활성 custom field들을 `[Custom] display_name` 형태로 추가
+- 선택 시 내부적으로 `custom:<field_name>`으로 저장
+- "+ Create new system field" 바로가기 버튼 → CustomFieldsTab 다이얼로그 열기
 
-- 매핑은 단순 1:1만 지원 (1개 헤더 → 1개 필드). 복합 매핑(예: 두 컬럼 합치기)은 향후 과제
-- 캐시 갱신은 `app_settings.header_mappings_version` 변경을 React Query로 polling/refetch — 실시간 즉시성보다 일관성 우선
-- 사용자가 잘못된 매핑 설정 시 임포트 결과가 비어 보일 수 있음 → 매핑 테스트 도구로 사전 검증 권장
+**`AdminPage.tsx`**
+- 탭 라우팅에 `Custom Fields` 추가
 
-## 변경/생성 파일
+## 6. 표시/내보내기 (최소 변경)
 
-- 신규 마이그레이션: `import_header_mappings` 테이블 + RLS + 트리거 + 시드 + `app_settings` 버전 키
-- 신규: `src/lib/header-normalize.ts`
-- 신규: `src/hooks/useHeaderMappings.ts`
-- 신규: `src/pages/admin/HeaderMappingsTab.tsx`
-- 수정: `src/lib/import-parser.ts`, `src/lib/defect-parser.ts` — DB 우선 + 하드코딩 fallback
-- 수정: `src/pages/AdminPage.tsx` — 새 탭 추가
-- 수정: `src/App.tsx` 또는 main entry — 앱 부팅 시 매핑 prefetch
-Implementation complete: header mappings DB + Admin tab
+이번 단계는 **임포트→저장**까지가 스코프. 상세화면/Export에서 custom field를 열로 보여주는 것은 다음 단계 옵션으로 남깁니다(요청 시 추가). 현재는:
+- 데이터는 정확히 JSONB에 저장
+- Detail 페이지에서 raw_payload/custom_payload 영역에 "Custom Fields" 섹션으로 key-value 표시 (간단 렌더만)
+
+## 7. 안전장치 요약
+
+- field_name immutable, module immutable
+- 시스템 예약어 충돌 방지
+- 데이터 존재 시 type 변경/삭제 차단
+- 매핑 트리거가 존재하지 않는 custom 필드로의 매핑 차단
+- 모든 변경 event_log 기록
+
+## 영향 파일
+
+신규:
+- `supabase/migrations/<ts>_custom_field_definitions.sql`
+- `src/hooks/useCustomFields.ts`
+- `src/lib/custom-fields-cache.ts`
+- `src/pages/admin/CustomFieldsTab.tsx`
+
+수정:
+- `src/lib/import-parser.ts`
+- `src/lib/defect-parser.ts`
+- `src/pages/admin/HeaderMappingsTab.tsx`
+- `src/pages/AdminPage.tsx`
+- (옵션) Subtest/Defect Detail 페이지 — Custom Fields 섹션
+
+## 기존 로직과의 호환성
+
+- 기존 시스템 필드 매핑 흐름은 변경 없음 (분기 추가만)
+- `raw_payload`(defect) 기존 사용처 영향 없음 — 별도 `custom_payload` 컬럼 사용
+- `import_header_mappings` 스키마는 변경 없음 (값 규약만 확장)
+- 캐시 무효화는 `header_mappings_version`과 같은 패턴
