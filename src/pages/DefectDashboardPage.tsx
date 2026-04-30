@@ -148,7 +148,7 @@ export default function DefectDashboardPage() {
   const today = todayIso();
   const dataDateLabel = formatDdMmm(dataDate);
   const todayLabel = formatDdMmm(today);
-  const filteredItems = useMemo(() => teamFilter === 'all' ? items : items.filter((item) => item.team === teamFilter), [items, teamFilter]);
+  const filteredItems = useMemo(() => teamFilter.length === 0 ? items : items.filter((item) => item.team && teamFilter.includes(item.team)), [items, teamFilter]);
 
   const kpis = useMemo(() => {
     const total = filteredItems.length;
