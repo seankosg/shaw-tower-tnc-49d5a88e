@@ -910,13 +910,14 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
           )}
           {!showGroups && (
             <>
-              <Line type="monotone" dataKey="totalPlan" stroke="var(--color-totalPlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Plan (cum)" hide={hidden.has('totalPlan')} />
-              <Line type="monotone" dataKey="totalActual" stroke="var(--color-totalActual)" strokeWidth={2.5} dot={false} name="Actual (cum)" hide={hidden.has('totalActual')} connectNulls={false} />
+              <Line yAxisId="cum" type="monotone" dataKey="totalPlan" stroke="var(--color-totalPlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Plan (cum)" hide={hidden.has('totalPlan')} />
+              <Line yAxisId="cum" type="monotone" dataKey="totalActual" stroke="var(--color-totalActual)" strokeWidth={2.5} dot={false} name="Actual (cum)" hide={hidden.has('totalActual')} connectNulls={false} />
             </>
           )}
           {showGroups && scurve.groups.map((g, i) => (
             <Line
               key={`plan-${g.key}`}
+              yAxisId="cum"
               type="monotone"
               dataKey={`g_plan_${g.key}`}
               stroke={GROUP_LINE_COLORS[i % GROUP_LINE_COLORS.length]}
@@ -930,6 +931,7 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
           {showGroups && scurve.groups.map((g, i) => (
             <Line
               key={`actual-${g.key}`}
+              yAxisId="cum"
               type="monotone"
               dataKey={`g_actual_${g.key}`}
               stroke={GROUP_LINE_COLORS[i % GROUP_LINE_COLORS.length]}
