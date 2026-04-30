@@ -325,6 +325,12 @@ export interface ParsedSubtest {
   punchlist_comments: string | null;
 }
 
+  remarks: string | null;
+  punchlist_comments: string | null;
+  custom_payload: Record<string, string | number | boolean | null>;
+  custom_field_errors: Array<{ field_name: string; raw: string; reason: string }>;
+}
+
 // ── Known target field names (after normalization) ───────────────────
 export const KNOWN_FIELDS = new Set<string>([
   'system', 'item_no', 'team', 'level', 'equipment', 'description',
