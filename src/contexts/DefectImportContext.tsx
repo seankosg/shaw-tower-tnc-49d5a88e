@@ -600,6 +600,20 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
     const pendingSnapshots: SnapshotRow[] = [];
     const pendingUpdates: UpdateOp[] = [];
     const pendingInserts: InsertOp[] = [];
+    // Field-level logs (one row per cell-level outcome). Linked to row logs by raw_row_no.
+    const pendingFieldLogs: PendingFieldLog[] = [];
+    // Field-level change log entries for defect_change_log (only real before/after diffs).
+    const pendingChangeLogs: LogRow[] = [];
+
+    // Helper to push a field log with the kind already set.
+    const fl = (
+      rawRowNo: number | null,
+      field: string,
+      outcome: PendingFieldLog['outcome'],
+      opts: { raw?: unknown; applied?: unknown; previous?: unknown; code?: string | null; detail?: string | null } = {}
+    ) => {
+      pendingFieldLogs.push(buildFieldLog('defect', { rawRowNo, field, outcome, ...opts }));
+    };
 
     const FLUSH_THRESHOLD = 250;       // rows of accumulated work before we flush
     const INSERT_CHUNK = 200;          // PostgREST batch size for inserts
@@ -610,6 +624,33 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       const batch = pendingLogs.splice(0, pendingLogs.length);
       for (let i = 0; i < batch.length; i += INSERT_CHUNK) {
         await (supabase as any).from('defect_upload_row_logs').insert(batch.slice(i, i + INSERT_CHUNK));
+      }
+    };
+    const flushFieldLogs = async () => {
+      if (pendingFieldLogs.length === 0) return;
+      const batch = pendingFieldLogs.splice(0, pendingFieldLogs.length);
+      const rows = batch.map((b) => ({
+        upload_id: uploadId,
+        kind: 'defect',
+        raw_row_no: b.raw_row_no,
+        field_name: b.field_name,
+        outcome: b.outcome,
+        raw_value: b.raw_value,
+        applied_value: b.applied_value,
+        previous_value: b.previous_value,
+        reason_code: b.reason_code,
+        reason_detail: b.reason_detail,
+        created_by: user.id,
+      }));
+      for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
+        await (supabase as any).from('import_field_logs').insert(rows.slice(i, i + INSERT_CHUNK));
+      }
+    };
+    const flushChangeLogs = async () => {
+      if (pendingChangeLogs.length === 0) return;
+      const batch = pendingChangeLogs.splice(0, pendingChangeLogs.length);
+      for (let i = 0; i < batch.length; i += INSERT_CHUNK) {
+        await (supabase as any).from('defect_change_log').insert(batch.slice(i, i + INSERT_CHUNK));
       }
     };
     const flushAudits = async () => {
