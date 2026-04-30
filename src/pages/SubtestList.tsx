@@ -743,7 +743,7 @@ export default function SubtestList() {
     {
       id: 'stage_progress',
       header: 'Progress',
-      size: 110,
+      size: 170,
       enableColumnFilter: false,
       enableSorting: true,
       accessorFn: (r) => {
@@ -752,8 +752,10 @@ export default function SubtestList() {
         const predDone = r.pred_status === 'Done' || (r.pred_status == null && r.predecessor_status_raw
           ? /done|완료|complete|completed|finished/i.test(r.predecessor_status_raw ?? '')
           : false);
-        const t1Done2 = r.t1_status === 'Done';
-        return (predDone ? 1 : 0) + (t1Done2 ? 2 : 0) + (t2Done ? 4 : 0);
+        const r1Done = r.r1_status === 'Submitted' || r.r1_status === 'Under Review' || r.r1_status === 'Approved'
+          || (!r.r1_status && !!r.r1_actual_submission_date);
+        const r2aDone = r.r2_status === 'Approved' || (!r.r2_status && !!r.r2_actual_approval_date);
+        return (predDone ? 1 : 0) + (t1Done ? 2 : 0) + (t2Done ? 4 : 0) + (r1Done ? 8 : 0) + (r2aDone ? 16 : 0);
       },
       cell: ({ row }) => (
         <StageProgress
@@ -767,6 +769,12 @@ export default function SubtestList() {
           t2Status={row.original.t2_status}
           t2ActualDate={row.original.t2_actual_date}
           t2PlannedDate={row.original.t2_planned_date}
+          r1Status={row.original.r1_status}
+          r1ActualSubmissionDate={row.original.r1_actual_submission_date}
+          r1TargetSubmissionDate={row.original.r1_target_submission_date}
+          r2Status={row.original.r2_status}
+          r2ActualApprovalDate={row.original.r2_actual_approval_date}
+          r2TargetApprovalDate={row.original.r2_target_approval_date}
           asOfDate={dataDate}
         />
       ),
