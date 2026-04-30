@@ -93,6 +93,7 @@ export default function DefectDashboardPage() {
   const { toast } = useToast();
   const [items, setItems] = useState<DefectForDashboard[]>([]);
   const [loading, setLoading] = useState(true);
+  useMainScrollRestoration(!loading);
   const [dataDate, setDataDate] = useState(todayIso());
   const [teamFilter, setTeamFilter] = useState<string[]>(() => {
     const raw = searchParams.get('team');

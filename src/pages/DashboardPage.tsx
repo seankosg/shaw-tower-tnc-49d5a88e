@@ -53,6 +53,7 @@ export default function DashboardPage() {
   const [subtests, setSubtests] = useState<SubtestForDashboard[]>([]);
   const [systems, setSystems] = useState<SystemRef[]>([]);
   const [loading, setLoading] = useState(true);
+  useMainScrollRestoration(!loading);
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>((searchParams.get('bucket') as 'day' | 'week') || 'day');
   const [scurveOpen, setScurveOpen] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
