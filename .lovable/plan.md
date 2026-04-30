@@ -1,124 +1,38 @@
-# Custom 시스템 필드 생성/매핑 기능 구현 계획
+# Progress 탭 — 필터링된 Raw 행 Excel Export
 
-관리자가 엑셀 임포트 시 매핑할 새로운 시스템 필드를 직접 생성/관리할 수 있도록 합니다. 데이터는 JSONB(`raw_payload` / `custom_payload`)에 저장되며, T&C와 Defect 모두 지원합니다.
+## 목표
+- T&C Progress (`/tc/progress`)와 Defect Progress (`/defects/progress`) 두 화면에서, 현재 툴바 필터가 적용된 데이터를 **행 단위 raw Excel**로 내보낼 수 있게 한다.
+- 출력 포맷(헤더, 메타블록, 스타일, 날짜 셀, freeze, column widths)은 **Subtest Master List의 `exportSubtestsToExcel` / Defect Raw Data의 `exportDefectRawToExcel`과 동일**하게 사용한다.
 
-## 1. 데이터베이스 마이그레이션
+## UX
+- 기존 "Excel" 버튼(스케줄 매트릭스 export)은 그대로 유지하고 라벨을 "Excel (Matrix)"로 변경.
+- 옆에 "Excel (Rows)" 버튼을 추가. 클릭 시 현재 필터링된 raw 행들을 즉시 다운로드.
+- 행이 0개면 toast 경고.
 
-**새 테이블: `custom_field_definitions`**
-- `id uuid PK`
-- `module text` — `'tnc'` | `'defect'` (CHECK 제약)
-- `field_name text` — 코드용 키 (snake_case, 영문/숫자/_, 생성 후 변경 불가)
-- `display_name text` — 화면 표시명
-- `data_type text` — `'text'` | `'number'` | `'date'` | `'boolean'` (CHECK)
-- `is_active bool default true`
-- `sort_order int default 0`
-- `created_by uuid`, `created_at timestamptz`, `updated_at timestamptz`
-- UNIQUE `(module, field_name)`
-- RLS: SELECT 모두 인증, ALL은 admin/superuser만
+## T&C Progress (SchedulePage)
+- 사용 데이터: 페이지가 이미 로드한 `subtests` (또는 `filteredItems`) 배열 — `team`, `stageFilter`, `rangeStart..rangeEnd`, `asOfMode` 등 페이지 필터를 적용한 것과 동일한 행 집합.
+- 헤더/필드: `useFieldConfig`로 가져온 `FieldConfigRow[]`의 표시 가능한 필드를 SubtestList와 동일한 순서로 사용 (메타필드 제외).
+- 진입점: 새 함수 `exportSubtestsArrayToExcel(rows, fieldConfig, { sourceLabel, filterSummary, sortSummary, meta })` 를 `src/lib/excel-export.ts`에 추가. 내부적으로 기존 `exportSubtestsToExcel`의 본문을 공유 — react-table에 의존하던 부분(visibleCols/sortedRows/filterSummary/sortSummary)을 인자로 주입받는 형태로 리팩터.
+- `sourceLabel`은 "Progress → Filtered (team=..., stages=..., range=..., asOf=...)" 형식의 한 줄로 빌드.
 
-**`subtests` 테이블 변경**
-- `custom_payload jsonb NOT NULL DEFAULT '{}'::jsonb` 컬럼 추가
-- (Defect는 기존 `defect_items.raw_payload` 활용)
+## Defect Progress (DefectProgressPage)
+- 사용 데이터: 페이지의 `filteredItems` (team 필터 적용 후) 또는 추가로 stage/range를 만족하는 부분집합.
+- 헤더/필드: `useDefectFieldConfig`의 `DefectFieldConfigRow[]` 사용. SubtestList 패턴과 동일하게 메타필드 제외, 기본 라벨 사용.
+- 진입점: 새 함수 `exportDefectArrayToExcel(rows, fieldConfig, { sourceLabel, filterSummary, meta })` 를 `src/lib/defect-excel-export.ts`에 추가. `exportDefectRawToExcel` 본문을 동일 방식으로 공유.
 
-**`app_settings` 버전 키**
-- `custom_fields_version` 키 추가 (변경 시 트리거로 갱신 → 클라이언트 캐시 무효화)
+## 필터 요약(텍스트)
+- Progress 페이지의 상태값(team, stageFilter, asOfMode, rangeDays, hidePast, bucket, groupBy)을 그대로 한 줄 문자열로 직렬화하여 메타블록의 `Filters:` 라인에 기록.
 
-**검증 트리거**
-- `custom_field_definitions` INSERT/UPDATE 시:
-  - `field_name`이 `^[a-z][a-z0-9_]*$` 정규식 매칭 검증
-  - 시스템 예약 필드명(예: `id`, `item_no`, `mos_code`, `t1_planned_date` 등)과 충돌 차단
-  - UPDATE 시 `field_name`, `module` 변경 차단
-  - `data_type` 변경 시: 해당 모듈에서 데이터가 존재하면 차단(안전장치)
-- `import_header_mappings` 검증 트리거 보강:
-  - `target_field`가 `custom:<field_name>` 형태이면 `custom_field_definitions`에 존재 + 활성화 확인
+## 변경/생성 파일
+- `src/lib/excel-export.ts` — 공용 빌더 추출 + `exportSubtestsArrayToExcel` 추가
+- `src/lib/defect-excel-export.ts` — 공용 빌더 추출 + `exportDefectArrayToExcel` 추가
+- `src/pages/SchedulePage.tsx` — "Excel (Rows)" 버튼 + 핸들러
+- `src/pages/DefectProgressPage.tsx` — "Excel (Rows)" 버튼 + 핸들러
+- (필요 시) `src/lib/excel-export.ts` 내 메타블록/스타일/freeze/날짜 셀 처리 로직을 별도 헬퍼로 분리해 두 함수가 공유
 
-**감사 로그**
-- `custom_field_definitions` 변경을 `event_log`에 기록하는 트리거
+## 비변경 사항
+- 기존 매트릭스 Excel export 로직, Subtest Master / Defect Raw 페이지의 export, 데이터베이스, 권한 체계는 변경 없음.
+- 신규 컬럼/필드 추가 없음.
 
-## 2. 매핑 표현 방식
-
-`import_header_mappings.target_field` 값 규칙:
-- 시스템 필드: 기존대로 `t1_planned_date`, `description` 등
-- 커스텀 필드: `custom:<field_name>` 접두사 (예: `custom:client_ref`)
-
-## 3. 파서 로직 변경
-
-**`src/lib/import-parser.ts` (T&C)**
-- 매핑 적용 시 `target_field`가 `custom:`로 시작하면:
-  1. `custom_field_definitions`에서 정의 조회 (캐시)
-  2. `data_type`에 따라 변환:
-     - `text` → 문자열
-     - `number` → `Number()` 파싱, NaN이면 reject
-     - `date` → 기존 날짜 파서 재사용 (ISO date)
-     - `boolean` → `'Y'/'N'/'true'/'false'/'1'/'0'` 변환
-  3. 변환 실패 시 `import_field_logs`에 reject 기록
-  4. 성공 시 `subtests.custom_payload[field_name] = value`로 누적 후 upsert
-- 시스템 필드 처리 로직은 변경 없음 (기존 동작 유지)
-
-**`src/lib/defect-parser.ts` (Defect)**
-- 동일 로직, 저장 위치는 `defect_items.raw_payload[field_name]`
-- 단, `raw_payload`는 현재 "원본 행 전체"를 저장하는 용도로 쓰일 가능성이 있어 **충돌 방지**:
-  - 옵션: `raw_payload._custom` 하위 객체로 분리 저장 → 기존 raw 보존
-  - 또는 별도 컬럼 `custom_payload` 추가 (T&C와 동일 패턴, 일관성 ↑) ← **권장**
-  - 결정: Defect도 `custom_payload jsonb` 컬럼 신규 추가하여 일관성 유지
-
-## 4. 새 훅/캐시
-
-- `src/hooks/useCustomFields.ts` — 모듈별 활성 필드 조회, `custom_fields_version` 기반 무효화
-- `src/lib/custom-fields-cache.ts` — `header-mappings-cache.ts`와 동일 패턴
-
-## 5. Admin UI
-
-**신규 탭: `src/pages/admin/CustomFieldsTab.tsx`**
-- 모듈 선택 (T&C / Defect)
-- 필드 목록 (display_name, field_name, data_type, active, sort_order)
-- 추가/수정 다이얼로그:
-  - field_name (생성 후 lock)
-  - display_name
-  - data_type 선택
-  - data_type 변경 시 데이터 존재 경고
-- 비활성화/삭제 (데이터 있으면 삭제 차단, 비활성만 가능)
-
-**`HeaderMappingsTab.tsx` 수정**
-- target_field 드롭다운에 활성 custom field들을 `[Custom] display_name` 형태로 추가
-- 선택 시 내부적으로 `custom:<field_name>`으로 저장
-- "+ Create new system field" 바로가기 버튼 → CustomFieldsTab 다이얼로그 열기
-
-**`AdminPage.tsx`**
-- 탭 라우팅에 `Custom Fields` 추가
-
-## 6. 표시/내보내기 (최소 변경)
-
-이번 단계는 **임포트→저장**까지가 스코프. 상세화면/Export에서 custom field를 열로 보여주는 것은 다음 단계 옵션으로 남깁니다(요청 시 추가). 현재는:
-- 데이터는 정확히 JSONB에 저장
-- Detail 페이지에서 raw_payload/custom_payload 영역에 "Custom Fields" 섹션으로 key-value 표시 (간단 렌더만)
-
-## 7. 안전장치 요약
-
-- field_name immutable, module immutable
-- 시스템 예약어 충돌 방지
-- 데이터 존재 시 type 변경/삭제 차단
-- 매핑 트리거가 존재하지 않는 custom 필드로의 매핑 차단
-- 모든 변경 event_log 기록
-
-## 영향 파일
-
-신규:
-- `supabase/migrations/<ts>_custom_field_definitions.sql`
-- `src/hooks/useCustomFields.ts`
-- `src/lib/custom-fields-cache.ts`
-- `src/pages/admin/CustomFieldsTab.tsx`
-
-수정:
-- `src/lib/import-parser.ts`
-- `src/lib/defect-parser.ts`
-- `src/pages/admin/HeaderMappingsTab.tsx`
-- `src/pages/AdminPage.tsx`
-- (옵션) Subtest/Defect Detail 페이지 — Custom Fields 섹션
-
-## 기존 로직과의 호환성
-
-- 기존 시스템 필드 매핑 흐름은 변경 없음 (분기 추가만)
-- `raw_payload`(defect) 기존 사용처 영향 없음 — 별도 `custom_payload` 컬럼 사용
-- `import_header_mappings` 스키마는 변경 없음 (값 규약만 확장)
-- 캐시 무효화는 `header_mappings_version`과 같은 패턴
+## 검증
+- 두 페이지에서 필터를 바꿔 가며 Export → 행 수 toast가 화면 행 수와 일치하는지, 헤더/날짜 포맷/freeze가 SubtestList(또는 DefectRawData) export와 동일한지 확인.
