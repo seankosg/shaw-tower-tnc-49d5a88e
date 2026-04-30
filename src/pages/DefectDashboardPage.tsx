@@ -1239,8 +1239,8 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
 
   const cfg: ChartConfig = isGroupMode
     ? Object.fromEntries(stages.flatMap((s) =>
-        groupKeys.flatMap((gk, idx) => {
-          const color = GROUP_LINE_COLORS[idx % GROUP_LINE_COLORS.length];
+        groupKeys.flatMap((gk) => {
+          const color = STAGE_COLORS[s].line;
           const gLabel = groupLabelByKey.get(gk) ?? gk;
           return [
             [`gp_${s}_${gk}`, { label: `${stageLabel[s]} · ${gLabel} Plan`,   color }],
@@ -1259,12 +1259,15 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
     `variance_${s}`, { label: `${stageLabel[s]} Δ`, color: STAGE_COLORS[s].line },
   ])) as ChartConfig;
 
-  // Stage stroke pattern in group mode: differentiate stages by dash style.
-  const stageDash: Record<DefectScheduleStage, string | undefined> = {
-    start: '2 3',
-    completion: undefined,
-    closure: '6 3',
-  };
+  // Group stroke pattern in group mode: differentiate groups by dash style (color encodes stage).
+  const GROUP_DASH: (string | undefined)[] = [
+    undefined,    // 1st group: solid
+    '6 3',        // 2nd: long dash
+    '2 3',        // 3rd: dotted
+    '8 3 2 3',    // 4th: dash-dot
+    '4 2 2 2',    // 5th
+    '10 4',       // 6th
+  ];
 
   return (
     <div className="space-y-2">
@@ -1305,19 +1308,19 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
           )}
           {isGroupMode && stages.flatMap((s) =>
             groupKeys.flatMap((gk, idx) => {
-              const color = GROUP_LINE_COLORS[idx % GROUP_LINE_COLORS.length];
+              const stageColor = STAGE_COLORS[s].line;
               const gLabel = groupLabelByKey.get(gk) ?? gk;
-              const dash = stageDash[s];
+              const dash = GROUP_DASH[idx % GROUP_DASH.length];
               return [
                 <Line
                   key={`gp-${s}-${gk}`}
                   yAxisId="cum"
                   type="monotone"
                   dataKey={`gp_${s}_${gk}`}
-                  stroke={color}
-                  strokeDasharray={dash ? `${dash}` : '4 3'}
-                  strokeOpacity={0.55}
-                  strokeWidth={1.25}
+                  stroke={stageColor}
+                  strokeDasharray={dash}
+                  strokeOpacity={0.85}
+                  strokeWidth={1.75}
                   dot={false}
                   name={`${stageLabel[s]} · ${gLabel} Plan`}
                 />,
@@ -1326,7 +1329,7 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
                   yAxisId="cum"
                   type="monotone"
                   dataKey={`ga_${s}_${gk}`}
-                  stroke={color}
+                  stroke={stageColor}
                   strokeDasharray={dash}
                   strokeWidth={2}
                   dot={false}
