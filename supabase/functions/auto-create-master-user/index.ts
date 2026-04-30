@@ -180,6 +180,20 @@ Deno.serve(async (req) => {
       hdec_eng_name: body.hdec_eng_name?.trim() ?? null,
     });
     if (existing) {
+      // Backfill missing HDEC role columns when the same person is now imported
+      // under a role they didn't previously have (PIC ↔ ENG).
+      if (body.master_type === 'hdec_pic' || body.master_type === 'hdec_eng') {
+        const patch: Record<string, string> = {};
+        if (body.master_type === 'hdec_pic' && !existing.hdec_pic_name) {
+          patch.hdec_pic_name = trimmedName;
+        }
+        if (body.master_type === 'hdec_eng' && !existing.hdec_eng_name) {
+          patch.hdec_eng_name = trimmedName;
+        }
+        if (Object.keys(patch).length > 0) {
+          await admin.from('profiles').update(patch).eq('user_id', existing.user_id);
+        }
+      }
       return json({ ok: true, user_id: existing.user_id, login_id: existing.login_id, already_exists: true });
     }
 
