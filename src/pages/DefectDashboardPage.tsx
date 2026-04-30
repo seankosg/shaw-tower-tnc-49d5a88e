@@ -221,7 +221,7 @@ export default function DefectDashboardPage() {
     endDate: scurveEnd,
     today,
     stage: scurveStage === 'all' ? 'completion' : scurveStage,
-    groupBy: scurveStage === 'all' ? null : (scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup),
+    groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
   }), [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
   const scurveAll: DefectSCurveAllResult | null = useMemo(() => {
     if (scurveStage !== 'all') return null;
@@ -230,8 +230,9 @@ export default function DefectDashboardPage() {
       startDate: scurveStart,
       endDate: scurveEnd,
       today,
+      groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
     });
-  }, [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage]);
+  }, [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
   const topOverdue = useMemo(() => filteredItems.map(item => ({ item, delay: maxDelayDays(item, dataDate) })).filter(row => row.delay > 0 && !isClosureComplete(row.item)).sort((a, b) => b.delay - a.delay).slice(0, 10), [filteredItems, dataDate]);
   const actualPie = useMemo(() => buildActualPie(filteredItems), [filteredItems]);
   const closurePie = useMemo(() => buildClosurePie(filteredItems), [filteredItems]);
