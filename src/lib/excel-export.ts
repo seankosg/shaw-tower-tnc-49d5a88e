@@ -308,6 +308,27 @@ export function exportSubtestsToExcel<TRow>(opts: ExportSubtestsOptions<TRow>): 
   // Data rows
   for (let r = 0; r < dataRows.length; r++) {
     for (let c = 0; c < dataRows[r].length; c++) {
+      const col = visibleCols[c];
+      const colId = col?.id;
+      if (colId && DATE_COLUMN_IDS.has(colId)) {
+        // Write a real Excel date cell so sorting/filtering treats it as a date
+        const original = sortedRows[r].original as any;
+        const rawIso = original?.[colId];
+        const serial = isoToExcelSerial(rawIso);
+        if (serial != null) {
+          setDateCell(ws, 8 + r, c, serial, STYLE_DATA, DATE_NUMFMT);
+          continue;
+        }
+      }
+      if (colId === 'updated_at') {
+        const original = sortedRows[r].original as any;
+        const rawIso = original?.updated_at;
+        const serial = isoTimestampToExcelSerial(rawIso);
+        if (serial != null) {
+          setDateCell(ws, 8 + r, c, serial, STYLE_DATA, DATETIME_NUMFMT);
+          continue;
+        }
+      }
       setCell(ws, 8 + r, c, dataRows[r][c], STYLE_DATA);
     }
   }
