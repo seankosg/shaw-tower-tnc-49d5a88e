@@ -1,47 +1,64 @@
-## 문제 진단
+문제를 다시 정리하면 이렇습니다.
 
-S-Curve 차트의 Group 모드에서 일일 막대(`Bar`)가 시각적으로 보이지 않는 근본 원인은 **데이터 누락이 아니라 색상 표기법 문제**입니다.
+- Group 미선택: 일일 세로막대가 보임
+- Group 선택: 누적선/호버 숫자는 보이지만 일일 세로막대가 사라짐
+- 즉, 시인성 문제가 아니라 Group 모드에서 막대가 구조적으로 빠지는 문제입니다.
 
-- 호버 툴팁에 plan/actual 숫자가 정상 표시됨 → `planInc_*`, `actualInc_*` 데이터는 잘 합산되고 있음
-- 그런데도 막대가 화면에 안 그려짐 → Recharts `<Bar fill=...>`에 전달되는 색상값이 SVG에서 파싱 실패
+Do I know what the issue is?
+예. 이번에는 원인을 특정했습니다.
 
-### 코드상 색상 정의 (`STAGE_COLORS`, line 1122)
-```ts
-start:      { line: 'hsl(217 91% 60%)',   bar: 'hsl(217 91% 60% / 0.45)' },
-completion: { line: 'hsl(38 92% 50%)',    bar: 'hsl(38 92% 50% / 0.45)' },
-closure:    { line: 'hsl(160 60% 45%)',   bar: 'hsl(160 60% 45% / 0.45)' },
-```
+정확한 원인
+1. 문제 파일
+- `src/pages/DefectDashboardPage.tsx`
+- 특히 `SCurveCharts()` 함수 내부
 
-이 값들은 `<Bar fill={STAGE_COLORS[s].bar} />` 형태로 SVG `fill` 속성에 그대로 전달됩니다. SVG는 CSS Color Module Level 4의 **공백/슬래시 구분 `hsl()` 표기법을 지원하지 않습니다**. SVG가 인식하는 형태는 `hsl(217, 91%, 60%)`(콤마 구분) 또는 `hsla(217, 91%, 60%, 0.45)`입니다. 따라서 막대가 투명하거나 무색으로 그려져 보이지 않게 됩니다. 비-Group 모드의 막대(`hsl(var(--muted-foreground) / 0.25)`)는 CSS var를 한 번 거치면서 브라우저에 의해 일부 보정되거나, 회색 톤이라 부분적으로 렌더된 것처럼 보였을 수 있습니다.
+2. 실제 문제 로직
+- `showGroups = scurve.groups.length > 0` 가 되면, 단일 Stage 차트에서:
+  - `row.planInc`, `row.actualInc` 를 데이터 row에 넣지 않고
+  - 상단 일일 막대 `<Bar dataKey="planInc" />`, `<Bar dataKey="actualInc" />` 도 `!showGroups` 조건으로 아예 렌더링하지 않습니다.
+- 즉, Group 선택 순간 막대는 “색이 연해서 안 보이는 것”이 아니라 “그릴 데이터도 없고 컴포넌트도 빠지는 상태”가 됩니다.
 
-## 수정 내용
+3. 왜 호버 숫자는 보이는데 막대는 안 보이냐
+- 현재 Group 모드에서는 `g_plan_*`, `g_actual_*` 그룹별 누적선 데이터만 남아 있습니다.
+- 그래서 툴팁에는 선 데이터 값이 나오지만, 막대용 `planInc`/`actualInc` 시리즈는 존재하지 않아 화면에 세로막대가 없습니다.
 
-`src/pages/DefectDashboardPage.tsx`의 `STAGE_COLORS` 상수를 SVG가 안전하게 인식하는 콤마 구분 표기로 변경합니다.
+4. 왜 이전 색상 수정으로 해결되지 않았나
+- 색상 문법 이슈는 SVG fill 호환성 문제였고,
+- 이번 증상은 그 이전 단계인 “Group 모드에서 막대 렌더링 자체를 꺼버린 조건문”이 본질입니다.
 
-```ts
-const STAGE_COLORS: Record<DefectScheduleStage, { line: string; bar: string }> = {
-  start:      { line: 'hsl(217, 91%, 60%)',  bar: 'hsla(217, 91%, 60%, 0.45)' },
-  completion: { line: 'hsl(38, 92%, 50%)',   bar: 'hsla(38, 92%, 50%, 0.45)'  },
-  closure:    { line: 'hsl(160, 60%, 45%)',  bar: 'hsla(160, 60%, 45%, 0.45)' },
-};
-```
+외부 확인
+- Recharts 관련 동작도 확인했습니다. `Bar`는 chart data row에 해당 `dataKey` 값이 있어야 하고, 컴포넌트 자체를 조건부로 빼면 당연히 막대가 나오지 않습니다.
+- 툴팁이 다른 series 데이터를 계속 보여주는 상황과, 막대가 없는 상황은 동시에 발생할 수 있습니다.
 
-추가로 비-Group 모드 막대의 색상도 동일한 SVG-호환 표기로 변경합니다 (line 1054-1055):
+수정 계획
+1. 단일 Stage `SCurveCharts()`를 all-stage 패턴과 동일하게 정리
+- Group 모드여도 `planInc`, `actualInc`, `variance`를 항상 계산
+- 기준은 사용자가 요청한 대로 “선택된 그룹들의 합계”
 
-```tsx
-<Bar ... fill="hsla(0, 0%, 50%, 0.35)" name="Plan (daily)" ... />
-<Bar ... fill="hsla(217, 91%, 60%, 0.45)" name="Actual (daily)" ... />
-```
+2. Group 모드에서도 상단 일일 Bar를 항상 렌더링
+- 현재 `!showGroups` 조건으로 막아둔 `Bar` 두 개 제거
+- Group 선택 여부와 무관하게 daily bars 표시
 
-이렇게 하면:
-- Group 선택 시 Stage별로 색상이 입혀진 일일 stacked 막대(Plan은 반투명, Actual은 더 진한 색)가 보조 Y축 기준으로 보이게 됩니다.
-- 누적선과 일일 막대가 같은 색 계열로 시각적 연관성을 가집니다.
+3. 툴팁/범례 일관성 보정
+- Group 모드에서는 막대 설명이 “selected groups summed daily plan/actual” 의미와 맞도록 유지
+- 누적선과 막대 합계가 서로 같은 기준을 쓰도록 검증
 
-## 영향 범위
+4. 필요 시 축 스케일 미세조정
+- daily 막대 축(`yAxisId="bar"`)이 increments 합계 기준으로 안정적으로 보이도록 확인
+- 하지만 1차 원인은 축/색상이 아니라 렌더링 조건문입니다
 
-- 차트의 데이터/구조/축은 변경하지 않음 — 색상 문자열만 수정
-- KPI 스트립 좌측 테두리(line 1148) 색상은 같은 `STAGE_COLORS[s].line`을 사용하지만 CSS `border-left-color`로 들어가므로 두 표기 모두 정상 동작 (변경 없음)
+예상 수정 포인트
+- `src/pages/DefectDashboardPage.tsx`
+  - `SCurveCharts()`의 data 생성부
+  - `!showGroups && <Bar ... />` 조건부 렌더링 제거
+  - Group 모드에서 `planInc`, `actualInc` 합산값 주입
 
-## 변경 파일
+승인해 주시면 이 근본 원인 기준으로 바로 수정하겠습니다.
 
-- `src/pages/DefectDashboardPage.tsx` (`STAGE_COLORS` 상수 + 비-Group 모드 두 `Bar`의 `fill`)
+<lov-actions>
+  <lov-open-history>View History</lov-open-history>
+</lov-actions>
+
+<lov-actions>
+<lov-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</lov-link>
+</lov-actions>
