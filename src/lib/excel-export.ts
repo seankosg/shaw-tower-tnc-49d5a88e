@@ -373,3 +373,166 @@ function setDateCell(
   const addr = XLSX.utils.encode_cell({ r, c });
   ws[addr] = { t: 'n', v: serial, z: numFmt, s: { ...style, numFmt } };
 }
+
+// ---------------------------------------------------------------------------
+// Array-based export (for pages without a react-table instance, e.g. Progress)
+//
+// Mirrors the layout, styles, freeze panes and date-cell handling of
+// `exportSubtestsToExcel`, but takes a plain `rows` array and an explicit
+// list of field names to include as columns. The display labels and order
+// come from `fieldConfig` (sort_order ascending, enabled fields).
+// ---------------------------------------------------------------------------
+
+export interface ExportSubtestsArrayOptions {
+  rows: any[];
+  fieldConfig: FieldConfigRow[];
+  /** Optional override of which fields to include (in order). Defaults to all
+   *  enabled fields from `fieldConfig`, sorted by sort_order. */
+  fieldNames?: string[];
+  meta: { userName: string; userType: string };
+  sourceLabel: string;
+  filterSummary: string;
+  /** "Subtests" by default. */
+  sheetName?: string;
+  /** Filename stem; the timestamp + .xlsx is appended. */
+  fileStem?: string;
+}
+
+function formatRawValue(fieldName: string, raw: unknown, original: any): string {
+  if (raw == null || raw === '') return '';
+  if (fieldName === 'system_code' || fieldName === 'system') {
+    // Some callers pre-resolve system_code; otherwise fall back to system_id.
+    return String(raw);
+  }
+  if (DATE_COLUMN_IDS.has(fieldName)) return formatDdMmm(raw as string);
+  if (fieldName === 'updated_at' || fieldName === 'created_at') {
+    return formatDdMmmYyyy(raw as string);
+  }
+  if (fieldName === 'data_source_type') {
+    return DATA_SOURCE_LABELS[raw as DataSource] ?? String(raw);
+  }
+  if (fieldName === 't1_status' || fieldName === 't2_status') {
+    return String(raw as TcStatus);
+  }
+  if (fieldName === 'stage_progress') {
+    const t1 = original?.t1_status === 'Done' ? '✓T1' : original?.t1_status === 'WIP' ? '⋯T1' : '';
+    const t2 = original?.t2_status === 'Done' ? '✓T2' : original?.t2_status === 'WIP' ? '⋯T2' : '';
+    const parts = [t1, t2].filter(Boolean);
+    return parts.length ? parts.join(' ') : '—';
+  }
+  return String(raw);
+}
+
+export function exportSubtestsArrayToExcel(opts: ExportSubtestsArrayOptions): {
+  rowCount: number;
+  fileName: string;
+} {
+  const { rows, fieldConfig, meta, sourceLabel, filterSummary } = opts;
+
+  // Determine field list: explicit override, else enabled fields by sort_order.
+  const explicit = opts.fieldNames;
+  const orderedFields: FieldConfigRow[] = explicit
+    ? explicit
+        .map((n) => fieldConfig.find((f) => f.field_name === n))
+        .filter((f): f is FieldConfigRow => !!f)
+    : [...fieldConfig]
+        .filter((f) => f.is_enabled !== false)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+        .filter((f) => !isMetaField(f.field_name));
+
+  const headerRow = orderedFields.map((f) => f.display_name || f.field_name);
+  const fieldNames = orderedFields.map((f) => f.field_name);
+
+  const dataRows = rows.map((r) =>
+    fieldNames.map((fname) => formatRawValue(fname, r?.[fname], r)),
+  );
+
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const exportedTs = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const fileTs = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+
+  const colCount = Math.max(headerRow.length, 2);
+  const lastColLetter = XLSX.utils.encode_col(colCount - 1);
+
+  const aoa: any[][] = [
+    ['SHAW T&C — Subtest Export'],
+    [`Exported: ${exportedTs}  by  ${meta.userName}${meta.userType ? ` (${meta.userType})` : ''}`],
+    [`Source: ${sourceLabel}`],
+    [`Search: (none)`],
+    [`Filters: ${filterSummary}`],
+    [`Sort: (default)`],
+    [],
+    headerRow,
+    ...dataRows,
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  const merges: XLSX.Range[] = [];
+  for (let r = 0; r < 6; r++) merges.push({ s: { r, c: 0 }, e: { r, c: colCount - 1 } });
+  ws['!merges'] = merges;
+
+  // Reasonable default widths
+  ws['!cols'] = headerRow.map(() => ({ wch: 18 }));
+
+  const rowsInfo: XLSX.RowInfo[] = [];
+  rowsInfo[0] = { hpt: 24 };
+  for (let i = 1; i <= 5; i++) rowsInfo[i] = { hpt: 16 };
+  rowsInfo[6] = { hpt: 6 };
+  rowsInfo[7] = { hpt: 28 };
+  for (let i = 0; i < dataRows.length; i++) rowsInfo[8 + i] = { hpt: 20 };
+  ws['!rows'] = rowsInfo;
+
+  const xSplit = Math.min(3, headerRow.length);
+  ws['!freeze'] = { xSplit, ySplit: 8 };
+  (ws as any)['!views'] = [
+    {
+      state: 'frozen',
+      xSplit,
+      ySplit: 8,
+      topLeftCell: XLSX.utils.encode_cell({ r: 8, c: xSplit }),
+      activePane: 'bottomRight',
+    },
+  ];
+
+  setCell(ws, 0, 0, aoa[0][0], STYLE_TITLE);
+  for (let r = 1; r <= 5; r++) {
+    setCell(ws, r, 0, aoa[r][0], r === 1 ? STYLE_META_LABEL : STYLE_META_VALUE);
+  }
+  for (let c = 0; c < headerRow.length; c++) {
+    setCell(ws, 7, c, headerRow[c], STYLE_HEADER);
+  }
+  for (let r = 0; r < dataRows.length; r++) {
+    const original = rows[r];
+    for (let c = 0; c < dataRows[r].length; c++) {
+      const fname = fieldNames[c];
+      if (DATE_COLUMN_IDS.has(fname)) {
+        const serial = isoToExcelSerial(original?.[fname]);
+        if (serial != null) {
+          setDateCell(ws, 8 + r, c, serial, STYLE_DATA, DATE_NUMFMT);
+          continue;
+        }
+      }
+      if (fname === 'updated_at' || fname === 'created_at') {
+        const serial = isoTimestampToExcelSerial(original?.[fname]);
+        if (serial != null) {
+          setDateCell(ws, 8 + r, c, serial, STYLE_DATA, DATETIME_NUMFMT);
+          continue;
+        }
+      }
+      setCell(ws, 8 + r, c, dataRows[r][c], STYLE_DATA);
+    }
+  }
+
+  const lastRow = 8 + dataRows.length - 1;
+  ws['!ref'] = `A1:${lastColLetter}${Math.max(lastRow + 1, 8)}`;
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, opts.sheetName ?? 'Subtests');
+
+  const fileName = `${opts.fileStem ?? 'SHAW_Subtests'}_${fileTs}.xlsx`;
+  XLSX.writeFile(wb, fileName);
+
+  return { rowCount: dataRows.length, fileName };
+}
