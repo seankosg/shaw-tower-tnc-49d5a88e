@@ -1308,19 +1308,19 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
           )}
           {isGroupMode && stages.flatMap((s) =>
             groupKeys.flatMap((gk, idx) => {
-              const color = GROUP_LINE_COLORS[idx % GROUP_LINE_COLORS.length];
+              const stageColor = STAGE_COLORS[s].line;
               const gLabel = groupLabelByKey.get(gk) ?? gk;
-              const dash = stageDash[s];
+              const dash = GROUP_DASH[idx % GROUP_DASH.length];
               return [
                 <Line
                   key={`gp-${s}-${gk}`}
                   yAxisId="cum"
                   type="monotone"
                   dataKey={`gp_${s}_${gk}`}
-                  stroke={color}
-                  strokeDasharray={dash ? `${dash}` : '4 3'}
-                  strokeOpacity={0.55}
-                  strokeWidth={1.25}
+                  stroke={stageColor}
+                  strokeDasharray={dash}
+                  strokeOpacity={0.85}
+                  strokeWidth={1.75}
                   dot={false}
                   name={`${stageLabel[s]} · ${gLabel} Plan`}
                 />,
@@ -1329,7 +1329,7 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
                   yAxisId="cum"
                   type="monotone"
                   dataKey={`ga_${s}_${gk}`}
-                  stroke={color}
+                  stroke={stageColor}
                   strokeDasharray={dash}
                   strokeWidth={2}
                   dot={false}
