@@ -969,3 +969,154 @@ function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: 
     </div>
   );
 }
+
+// ─── All-Stage variants ─────────────────────────────────────────────────────
+
+const STAGE_COLORS: Record<DefectScheduleStage, { line: string; bar: string }> = {
+  start:      { line: 'hsl(217 91% 60%)',   bar: 'hsl(217 91% 60% / 0.45)' },
+  completion: { line: 'hsl(38 92% 50%)',    bar: 'hsl(38 92% 50% / 0.45)' },
+  closure:    { line: 'hsl(160 60% 45%)',   bar: 'hsl(160 60% 45% / 0.45)' },
+};
+
+function SCurveAllKpiStrip({ scurveAll, today, windowStart, windowEnd }: {
+  scurveAll: DefectSCurveAllResult;
+  today: string;
+  windowStart: string;
+  windowEnd: string;
+}) {
+  const idx = scurveAll.todayIndex >= 0 ? scurveAll.todayIndex : scurveAll.buckets.length - 1;
+  const stages: DefectScheduleStage[] = ['start', 'completion', 'closure'];
+  const labels: Record<DefectScheduleStage, string> = { start: 'Start', completion: 'Completion', closure: 'Closure' };
+  return (
+    <div className="flex flex-wrap items-stretch gap-2 rounded-md border bg-muted/30 px-3 py-2">
+      {stages.map((s) => {
+        const series = scurveAll.byStage[s];
+        const plan = series.plan[idx] ?? 0;
+        const actual = series.actual[idx] ?? 0;
+        const delta = (actual ?? 0) - plan;
+        const pct = plan > 0 ? (delta / plan) * 100 : 0;
+        const sign = delta > 0 ? '+' : '';
+        const accent = delta < 0 ? 'text-destructive' : delta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground';
+        return (
+          <div key={s} className="flex flex-col gap-0.5 rounded border-l-4 px-3 py-1" style={{ borderLeftColor: STAGE_COLORS[s].line }}>
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{labels[s]}</span>
+            <span className="text-xs tabular-nums">
+              <span className="text-muted-foreground">P</span> {plan.toLocaleString()} · <span className="text-muted-foreground">A</span> {(actual ?? 0).toLocaleString()}
+            </span>
+            <span className={cn('text-xs font-semibold tabular-nums', accent)}>
+              Δ {sign}{delta.toLocaleString()} ({sign}{pct.toFixed(1)}%)
+            </span>
+          </div>
+        );
+      })}
+      <div className="ml-auto flex flex-col text-right">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Today / Window</span>
+        <span className="text-xs">{formatDdMmm(today)} · {formatDdMmm(windowStart)} ~ {formatDdMmm(windowEnd)}</span>
+      </div>
+    </div>
+  );
+}
+
+function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
+  scurveAll: DefectSCurveAllResult;
+  onBucketClick: (bucketIso: string) => void;
+}) {
+  const stages: DefectScheduleStage[] = ['start', 'completion', 'closure'];
+  const stageLabel: Record<DefectScheduleStage, string> = { start: 'Start', completion: 'Comp', closure: 'Close' };
+
+  const data = scurveAll.bucketLabels.map((label, i) => {
+    const row: Record<string, any> = {
+      bucket: scurveAll.buckets[i],
+      bucketLabel: label,
+      __isFuture: scurveAll.todayIndex >= 0 && i > scurveAll.todayIndex,
+    };
+    for (const s of stages) {
+      const series = scurveAll.byStage[s];
+      const prevPlan = i > 0 ? (series.plan[i - 1] ?? 0) : 0;
+      const planInc = (series.plan[i] ?? 0) - prevPlan;
+      const cur = series.actual[i];
+      const prev = i > 0 ? series.actual[i - 1] : 0;
+      const actualInc = cur == null ? null : (cur - (prev ?? 0));
+      row[`planInc_${s}`] = planInc;
+      row[`actualInc_${s}`] = actualInc;
+      row[`cumPlan_${s}`] = series.plan[i];
+      row[`cumActual_${s}`] = series.actual[i];
+      row[`variance_${s}`] = series.variance[i];
+    }
+    return row;
+  });
+
+  const todayLabel = scurveAll.todayIndex >= 0 ? (scurveAll.bucketLabels[scurveAll.todayIndex] ?? null) : null;
+
+  const cfg: ChartConfig = Object.fromEntries(stages.flatMap((s) => [
+    [`planInc_${s}`,    { label: `${stageLabel[s]} Plan (daily)`,    color: STAGE_COLORS[s].bar }],
+    [`actualInc_${s}`,  { label: `${stageLabel[s]} Actual (daily)`,  color: STAGE_COLORS[s].line }],
+    [`cumPlan_${s}`,    { label: `${stageLabel[s]} Plan (cum)`,      color: STAGE_COLORS[s].line }],
+    [`cumActual_${s}`,  { label: `${stageLabel[s]} Actual (cum)`,    color: STAGE_COLORS[s].line }],
+  ])) as ChartConfig;
+
+  const varianceCfg: ChartConfig = Object.fromEntries(stages.map((s) => [
+    `variance_${s}`, { label: `${stageLabel[s]} Δ`, color: STAGE_COLORS[s].line },
+  ])) as ChartConfig;
+
+  return (
+    <div className="space-y-2">
+      {/* Cumulative lines + stacked daily bars (Plan stacked, Actual stacked side-by-side) */}
+      <ChartContainer config={cfg} className="h-[340px] w-full">
+        <ComposedChart data={data} margin={{ left: 12, right: 16, top: 8, bottom: 0 }}
+          onClick={(e: any) => { if (e?.activeLabel) {
+            const idx = scurveAll.bucketLabels.indexOf(e.activeLabel);
+            if (idx >= 0) onBucketClick(scurveAll.buckets[idx]);
+          } }}
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} />
+          <YAxis yAxisId="cum" tick={{ fontSize: 11 }} allowDecimals={false} domain={['auto', 'auto']} />
+          <YAxis yAxisId="bar" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} domain={['auto', 'auto']} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          {todayLabel && (
+            <ReferenceLine yAxisId="cum" x={todayLabel} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} />
+          )}
+          {/* Stacked daily Plan bars (one bar per bucket, 3 stages stacked) */}
+          {stages.map((s) => (
+            <Bar key={`plan-${s}`} yAxisId="bar" dataKey={`planInc_${s}`} stackId="plan" fill={STAGE_COLORS[s].bar} name={`${stageLabel[s]} Plan (daily)`} barSize={10} />
+          ))}
+          {/* Stacked daily Actual bars (separate stack, side-by-side) */}
+          {stages.map((s) => (
+            <Bar key={`actual-${s}`} yAxisId="bar" dataKey={`actualInc_${s}`} stackId="actual" fill={STAGE_COLORS[s].line} name={`${stageLabel[s]} Actual (daily)`} barSize={10} />
+          ))}
+          {/* Cumulative lines */}
+          {stages.map((s) => (
+            <Line key={`cumPlan-${s}`} yAxisId="cum" type="monotone" dataKey={`cumPlan_${s}`} stroke={STAGE_COLORS[s].line} strokeDasharray="5 3" strokeWidth={1.5} dot={false} name={`${stageLabel[s]} Plan (cum)`} />
+          ))}
+          {stages.map((s) => (
+            <Line key={`cumActual-${s}`} yAxisId="cum" type="monotone" dataKey={`cumActual_${s}`} stroke={STAGE_COLORS[s].line} strokeWidth={2.5} dot={false} name={`${stageLabel[s]} Actual (cum)`} connectNulls={false} />
+          ))}
+        </ComposedChart>
+      </ChartContainer>
+
+      {/* Variance bars per stage (grouped) */}
+      <ChartContainer config={varianceCfg} className="h-[160px] w-full">
+        <ComposedChart data={data} margin={{ left: 12, right: 16, top: 4, bottom: 0 }}
+          onClick={(e: any) => { if (e?.activeLabel) {
+            const idx = scurveAll.bucketLabels.indexOf(e.activeLabel);
+            if (idx >= 0) onBucketClick(scurveAll.buckets[idx]);
+          } }}
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} />
+          <YAxis tick={{ fontSize: 11 }} allowDecimals={false} domain={['auto', 'auto']} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          {todayLabel && <ReferenceLine x={todayLabel} stroke="hsl(var(--destructive))" strokeDasharray="4 2" />}
+          <ReferenceLine y={0} stroke="hsl(var(--border))" />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          {stages.map((s) => (
+            <Bar key={`var-${s}`} dataKey={`variance_${s}`} fill={STAGE_COLORS[s].line} name={`${stageLabel[s]} Δ`} barSize={6} />
+          ))}
+        </ComposedChart>
+      </ChartContainer>
+    </div>
+  );
+}
+
