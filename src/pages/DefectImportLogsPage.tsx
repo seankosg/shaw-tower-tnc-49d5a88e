@@ -125,8 +125,11 @@ export default function DefectImportLogsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionFilter, setActionFilter] = useState<string>('all');
   const [reasonFilter, setReasonFilter] = useState<string>('all');
+  const [outcomeFilter, setOutcomeFilter] = useState<string>('all');
   const [rowSearch, setRowSearch] = useState<string>('');
   const [renderLimit, setRenderLimit] = useState<number>(500);
+  const [fieldLogs, setFieldLogs] = useState<FieldLog[]>([]);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   useEffect(() => { void fetchBatches(); }, []);
 
