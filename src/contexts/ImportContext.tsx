@@ -419,6 +419,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
             reason_detail: 'All mapped columns match existing values; no update needed.',
             mapped_system_id: systemId,
           });
+          fl(row.raw_row_no, '__row__', 'info', { code: 'no_changes', detail: 'All mapped columns match existing values; no update needed.' });
           continue;
         }
 
