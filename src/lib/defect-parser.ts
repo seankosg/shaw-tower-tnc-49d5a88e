@@ -171,7 +171,7 @@ function clampReasonable(iso: string | null): string | null {
   return iso;
 }
 
-function normalizeDate(value: unknown): string | null {
+export function normalizeDate(value: unknown): string | null {
   if (value == null || value === '') return null;
 
   // 1. Excel serial number
