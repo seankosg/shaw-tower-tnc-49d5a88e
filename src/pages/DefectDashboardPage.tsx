@@ -50,9 +50,13 @@ import {
   DEFECT_GROUP_LABELS,
   DEFECT_STAGE_LABELS,
   DEFECT_GROUP_QUERY_PARAM,
+  getDefectGroupKey,
+  getDefectGroupLabel,
   type DefectScheduleGroupBy,
   type DefectScheduleStage,
 } from '@/lib/defect-schedule-utils';
+import { Badge } from '@/components/ui/badge';
+import { X } from 'lucide-react';
 
 const PIE_COLORS: Record<string, string> = {
   Complete: 'hsl(var(--primary))',
@@ -117,6 +121,10 @@ export default function DefectDashboardPage() {
     const first = raw?.split(',').map(s => s.trim()).find(Boolean);
     if (!first || first === SCURVE_GROUP_NONE) return SCURVE_GROUP_NONE;
     return (ALL_DEFECT_GROUP_KEYS as string[]).includes(first) ? (first as DefectScheduleGroupBy) : SCURVE_GROUP_NONE;
+  });
+  const [scurveGroupValues, setScurveGroupValues] = useState<string[]>(() => {
+    const raw = searchParams.get('group_values');
+    return raw ? raw.split(',').filter(Boolean) : [];
   });
   const [hiddenScurveSeries, setHiddenScurveSeries] = useState<Set<string>>(new Set());
   const [subTradeTextFilter, setSubTradeTextFilter] = useState(searchParams.get('sub_trade_text') || '');
@@ -188,23 +196,42 @@ export default function DefectDashboardPage() {
     workType: { rows: byWorkType, header: 'Work Type', param: 'workType' },
   };
 
-  const scurve: DefectSCurveResult = useMemo(() => buildDefectSCurve(filteredItems, {
+  // Available group-value options for the secondary dropdown (based on team-filtered items, excluding group-value filter itself).
+  const groupValueOptions = useMemo(() => {
+    if (scurveGroup === SCURVE_GROUP_NONE) return [] as { key: string; label: string }[];
+    const seen = new Map<string, string>();
+    for (const it of filteredItems) {
+      const k = getDefectGroupKey(it, scurveGroup);
+      if (!seen.has(k)) seen.set(k, getDefectGroupLabel(scurveGroup, k));
+    }
+    return Array.from(seen.entries())
+      .map(([key, label]) => ({ key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [filteredItems, scurveGroup]);
+
+  // Items used for S-Curve: apply secondary group-value filter on top of team filter.
+  const scurveItems = useMemo(() => {
+    if (scurveGroup === SCURVE_GROUP_NONE || scurveGroupValues.length === 0) return filteredItems;
+    return filteredItems.filter(it => scurveGroupValues.includes(getDefectGroupKey(it, scurveGroup)));
+  }, [filteredItems, scurveGroup, scurveGroupValues]);
+
+  const scurve: DefectSCurveResult = useMemo(() => buildDefectSCurve(scurveItems, {
     granularity: scurveBucket,
     startDate: scurveStart,
     endDate: scurveEnd,
     today,
     stage: scurveStage === 'all' ? 'completion' : scurveStage,
     groupBy: scurveStage === 'all' ? null : (scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup),
-  }), [filteredItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
+  }), [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
   const scurveAll: DefectSCurveAllResult | null = useMemo(() => {
     if (scurveStage !== 'all') return null;
-    return buildDefectSCurveAllStages(filteredItems, {
+    return buildDefectSCurveAllStages(scurveItems, {
       granularity: scurveBucket,
       startDate: scurveStart,
       endDate: scurveEnd,
       today,
     });
-  }, [filteredItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage]);
+  }, [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage]);
   const topOverdue = useMemo(() => filteredItems.map(item => ({ item, delay: maxDelayDays(item, dataDate) })).filter(row => row.delay > 0 && !isClosureComplete(row.item)).sort((a, b) => b.delay - a.delay).slice(0, 10), [filteredItems, dataDate]);
   const actualPie = useMemo(() => buildActualPie(filteredItems), [filteredItems]);
   const closurePie = useMemo(() => buildClosurePie(filteredItems), [filteredItems]);
@@ -219,10 +246,11 @@ export default function DefectDashboardPage() {
     setOrDelete('scurve_end', scurveEnd, '2026-06-07');
     setOrDelete('stage_view', scurveStage, 'completion');
     setOrDelete('group', scurveGroup, SCURVE_GROUP_NONE);
+    scurveGroupValues.length ? next.set('group_values', scurveGroupValues.join(',')) : next.delete('group_values');
     setOrDelete('sub_trade_text', subTradeTextFilter, '');
     selectedSubTradeFilters.length ? next.set('sub_trades', selectedSubTradeFilters.join(',')) : next.delete('sub_trades');
     setSearchParams(next, { replace: true });
-  }, [teamFilter, breakdownTab, scurveBucket, scurveStart, scurveEnd, scurveStage, scurveGroup, subTradeTextFilter, selectedSubTradeFilters]);
+  }, [teamFilter, breakdownTab, scurveBucket, scurveStart, scurveEnd, scurveStage, scurveGroup, scurveGroupValues, subTradeTextFilter, selectedSubTradeFilters]);
 
   const goRaw = (params: Record<string, string>) => navigate(`/defects/raw-data?${new URLSearchParams({ source: 'dashboard', ...params }).toString()}`);
   const handleBreakdownExport = () => {
@@ -331,23 +359,109 @@ export default function DefectDashboardPage() {
               </SCurveToolbarGroup>
 
               <SCurveToolbarGroup label="Group">
-                <ToggleGroup
-                  type="single"
+                <Select
                   value={scurveGroup}
-                  onValueChange={(v) => v && setScurveGroup(v as DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE)}
-                  className="gap-1 flex-wrap"
+                  onValueChange={(v) => {
+                    setScurveGroup(v as DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE);
+                    setScurveGroupValues([]);
+                  }}
                   disabled={scurveStage === 'all'}
                 >
-                  <ToggleGroupItem value={SCURVE_GROUP_NONE} className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
-                    None
-                  </ToggleGroupItem>
-                  {ALL_DEFECT_GROUP_KEYS.map((k) => (
-                    <ToggleGroupItem key={k} value={k} className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
-                      {DEFECT_GROUP_LABELS[k]}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
+                  <SelectTrigger className="h-8 w-[160px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SCURVE_GROUP_NONE}>None</SelectItem>
+                    {ALL_DEFECT_GROUP_KEYS.map((k) => (
+                      <SelectItem key={k} value={k}>{DEFECT_GROUP_LABELS[k]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </SCurveToolbarGroup>
+
+              {scurveStage !== 'all' && scurveGroup !== SCURVE_GROUP_NONE && (
+                <SCurveToolbarGroup label={`${DEFECT_GROUP_LABELS[scurveGroup as DefectScheduleGroupBy]} values`}>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8 text-xs justify-between min-w-[180px]">
+                        <span className="truncate">
+                          {scurveGroupValues.length === 0
+                            ? 'All'
+                            : scurveGroupValues.length <= 2
+                              ? scurveGroupValues
+                                  .map((k) => groupValueOptions.find((o) => o.key === k)?.label ?? k)
+                                  .join(', ')
+                              : `${scurveGroupValues.length} selected`}
+                        </span>
+                        <ChevronDown className="ml-2 h-3 w-3 opacity-60" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[280px] p-2" align="start">
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {scurveGroupValues.length} / {groupValueOptions.length} selected
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-xs"
+                          onClick={() => setScurveGroupValues([])}
+                          disabled={scurveGroupValues.length === 0}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                      <div className="max-h-[280px] overflow-y-auto space-y-1">
+                        {groupValueOptions.length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-2 text-center">No values</p>
+                        ) : (
+                          groupValueOptions.map((opt) => {
+                            const checked = scurveGroupValues.includes(opt.key);
+                            return (
+                              <label
+                                key={opt.key}
+                                className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-accent cursor-pointer text-xs"
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(c) => {
+                                    setScurveGroupValues((prev) =>
+                                      c ? [...prev, opt.key] : prev.filter((k) => k !== opt.key),
+                                    );
+                                  }}
+                                />
+                                <span className="truncate flex-1">{opt.label}</span>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  {scurveGroupValues.length > 0 && (
+                    <div className="flex flex-wrap gap-1 ml-2 max-w-[400px]">
+                      {scurveGroupValues.slice(0, 4).map((k) => {
+                        const label = groupValueOptions.find((o) => o.key === k)?.label ?? k;
+                        return (
+                          <Badge key={k} variant="secondary" className="h-6 gap-1 text-[11px]">
+                            <span className="truncate max-w-[120px]">{label}</span>
+                            <button
+                              onClick={() => setScurveGroupValues((prev) => prev.filter((x) => x !== k))}
+                              className="hover:text-destructive"
+                              aria-label={`Remove ${label}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                      {scurveGroupValues.length > 4 && (
+                        <Badge variant="outline" className="h-6 text-[11px]">+{scurveGroupValues.length - 4}</Badge>
+                      )}
+                    </div>
+                  )}
+                </SCurveToolbarGroup>
+              )}
 
               <SCurveToolbarGroup label="Team">
                 <ToggleGroup type="multiple" value={teamFilter} onValueChange={setTeamFilter} className="gap-1 flex-wrap">
