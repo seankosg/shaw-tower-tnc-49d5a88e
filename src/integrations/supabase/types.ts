@@ -35,6 +35,51 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_field_definitions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_type: string
+          display_name: string
+          field_name: string
+          id: string
+          is_active: boolean
+          module: string
+          note: string | null
+          sort_order: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_type: string
+          display_name: string
+          field_name: string
+          id?: string
+          is_active?: boolean
+          module: string
+          note?: string | null
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_type?: string
+          display_name?: string
+          field_name?: string
+          id?: string
+          is_active?: boolean
+          module?: string
+          note?: string | null
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       database_snapshots: {
         Row: {
           created_at: string
@@ -392,6 +437,7 @@ export type Database = {
           closure_status: string | null
           completion_status: string | null
           created_at: string
+          custom_payload: Json
           data_source_type: string | null
           defect_type: string | null
           description: string | null
@@ -439,6 +485,7 @@ export type Database = {
           closure_status?: string | null
           completion_status?: string | null
           created_at?: string
+          custom_payload?: Json
           data_source_type?: string | null
           defect_type?: string | null
           description?: string | null
@@ -486,6 +533,7 @@ export type Database = {
           closure_status?: string | null
           completion_status?: string | null
           created_at?: string
+          custom_payload?: Json
           data_source_type?: string | null
           defect_type?: string | null
           description?: string | null
@@ -1444,6 +1492,7 @@ export type Database = {
       subtests: {
         Row: {
           aconex_ref_no: string | null
+          custom_payload: Json
           data_source_type: Database["public"]["Enums"]["data_source"] | null
           description: string | null
           equipment: string | null
@@ -1489,6 +1538,7 @@ export type Database = {
         }
         Insert: {
           aconex_ref_no?: string | null
+          custom_payload?: Json
           data_source_type?: Database["public"]["Enums"]["data_source"] | null
           description?: string | null
           equipment?: string | null
@@ -1534,6 +1584,7 @@ export type Database = {
         }
         Update: {
           aconex_ref_no?: string | null
+          custom_payload?: Json
           data_source_type?: Database["public"]["Enums"]["data_source"] | null
           description?: string | null
           equipment?: string | null
@@ -2076,6 +2127,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin_or_superuser: { Args: { _user_id: string }; Returns: boolean }
+      is_reserved_custom_field: {
+        Args: { _field_name: string; _module: string }
+        Returns: boolean
+      }
       normalize_owner_code: { Args: { _value: string }; Returns: string }
       preview_rollback_defect_import_batch: {
         Args: { _batch_id: string }

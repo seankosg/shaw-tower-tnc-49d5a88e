@@ -1,5 +1,11 @@
 import * as XLSX from 'xlsx';
 import { getMappedField } from '@/lib/header-mappings-cache';
+import {
+  coerceCustomValue,
+  getCustomField,
+  isCustomTarget,
+  parseCustomTarget,
+} from '@/lib/custom-fields-cache';
 
 // ── Header normalization ──────────────────────────────────────────────
 const HEADER_MAP: Record<string, string> = {
@@ -317,6 +323,8 @@ export interface ParsedSubtest {
   r2_actual_approval_date: string | null;
   remarks: string | null;
   punchlist_comments: string | null;
+  custom_payload: Record<string, string | number | boolean | null>;
+  custom_field_errors: Array<{ field_name: string; raw: string; reason: string }>;
 }
 
 // ── Known target field names (after normalization) ───────────────────
@@ -398,6 +406,30 @@ export function getExcelSheetNames(file: ArrayBuffer): string[] {
   return wb.SheetNames ?? [];
 }
 
+// ── Custom field extraction (target_field = "custom:<field_name>") ───
+function extractCustomFields(row: Record<string, string>): {
+  custom_payload: Record<string, string | number | boolean | null>;
+  custom_field_errors: Array<{ field_name: string; raw: string; reason: string }>;
+} {
+  const payload: Record<string, string | number | boolean | null> = {};
+  const errors: Array<{ field_name: string; raw: string; reason: string }> = [];
+  for (const [key, raw] of Object.entries(row)) {
+    if (!isCustomTarget(key)) continue;
+    const fieldName = parseCustomTarget(key);
+    if (!fieldName) continue;
+    const def = getCustomField('tnc', fieldName);
+    if (!def || !def.is_active) continue; // unknown/inactive — skip silently
+    if (raw == null || String(raw).trim() === '') continue;
+    const coerced = coerceCustomValue(def.data_type, raw);
+    if (coerced.ok === false) {
+      errors.push({ field_name: fieldName, raw: String(raw), reason: coerced.reason });
+    } else if (coerced.value !== null) {
+      payload[fieldName] = coerced.value;
+    }
+  }
+  return { custom_payload: payload, custom_field_errors: errors };
+}
+
 // ── Legacy parse: 1 row → multiple subtests (MOS-1~5) ────────────────
 export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
   const result: ParsedSubtest[] = [];
@@ -446,6 +478,7 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
       r2_actual_approval_date: normalizeDate(row.r2_actual_approval_date),
       remarks: row.remarks?.trim() || null,
       punchlist_comments: row.punchlist_comments?.trim() || null,
+      ...extractCustomFields(row),
     };
 
     const mosCodes: string[] = [];
@@ -523,6 +556,7 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
       r2_actual_approval_date: normalizeDate(row.r2_actual_approval_date),
       remarks: row.remarks?.trim() || null,
       punchlist_comments: row.punchlist_comments?.trim() || null,
+      ...extractCustomFields(row),
     });
   }
   return result;

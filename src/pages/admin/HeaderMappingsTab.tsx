@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { useToast } from '@/hooks/use-toast';
 import { Lock, Plus, Trash2, Pencil } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCustomFields } from '@/hooks/useCustomFields';
 
 type ModuleKey = 'tnc' | 'defect';
 
@@ -54,12 +55,18 @@ export default function HeaderMappingsTab() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: mappings = [], isLoading, refetch } = useHeaderMappings();
+  const { data: customFields = [] } = useCustomFields();
   const [active, setActive] = useState<ModuleKey>('tnc');
   const [search, setSearch] = useState('');
   const [editTarget, setEditTarget] = useState<HeaderMappingRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [testHeader, setTestHeader] = useState('');
 
+  const customForActive = useMemo(
+    () => customFields.filter((f) => f.module === active && f.is_active)
+      .map((f) => ({ value: `custom:${f.field_name}`, label: `[Custom] ${f.display_name} (${f.data_type})` })),
+    [customFields, active],
+  );
   const fieldList = active === 'tnc' ? TNC_FIELDS : DEFECT_FIELDS;
 
   const filtered = useMemo(() => {
@@ -203,6 +210,7 @@ export default function HeaderMappingsTab() {
         onClose={() => setCreateOpen(false)}
         module={active}
         fieldList={fieldList as readonly string[]}
+        customOptions={customForActive}
         existing={mappings}
         userId={user?.id ?? null}
         onSaved={refetch}
@@ -212,6 +220,7 @@ export default function HeaderMappingsTab() {
         onClose={() => setEditTarget(null)}
         module={active}
         fieldList={fieldList as readonly string[]}
+        customOptions={customForActive}
         existing={mappings}
         userId={user?.id ?? null}
         editing={editTarget}
@@ -226,13 +235,14 @@ interface DialogProps {
   onClose: () => void;
   module: ModuleKey;
   fieldList: readonly string[];
+  customOptions?: { value: string; label: string }[];
   existing: HeaderMappingRow[];
   userId: string | null;
   editing?: HeaderMappingRow | null;
   onSaved: () => void;
 }
 
-function MappingDialog({ open, onClose, module, fieldList, existing, userId, editing, onSaved }: DialogProps) {
+function MappingDialog({ open, onClose, module, fieldList, customOptions = [], existing, userId, editing, onSaved }: DialogProps) {
   const { toast } = useToast();
   const [alias, setAlias] = useState('');
   const [target, setTarget] = useState<string>('');
@@ -320,6 +330,14 @@ function MappingDialog({ open, onClose, module, fieldList, existing, userId, edi
                 {fieldList.map((f) => (
                   <SelectItem key={f} value={f}>{f}</SelectItem>
                 ))}
+                {customOptions.length > 0 && (
+                  <>
+                    <div className="px-2 py-1 text-xs text-muted-foreground border-t mt-1">Custom Fields</div>
+                    {customOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>

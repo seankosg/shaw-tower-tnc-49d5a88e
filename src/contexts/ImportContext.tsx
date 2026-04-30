@@ -367,7 +367,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       // Look up by natural key WITHOUT is_active filter, so previously deactivated
       // subtests are matched and re-activated below (instead of triggering a duplicate insert).
       const { data: existing } = await supabase.from('subtests')
-        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date, r1_target_submission_date, r2_target_submission_date, is_active')
+        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date, r1_target_submission_date, r2_target_submission_date, is_active, custom_payload')
         .eq('project_id', projectId!).eq('system_id', systemId)
         .eq('item_no', row.item_no).eq('mos_code', row.mos_code)
         .maybeSingle();
@@ -408,6 +408,17 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         }
         const resolvedTeam = resolveValue(rowTeamValue, null);
         if (resolvedTeam !== undefined) updates.team = resolvedTeam;
+
+        // Merge custom_payload (only when there are new custom values)
+        if (row.custom_payload && Object.keys(row.custom_payload).length > 0) {
+          const existingCustom = ((existing as any).custom_payload ?? {}) as Record<string, unknown>;
+          const merged = { ...existingCustom, ...row.custom_payload };
+          // Only update if there's an actual diff
+          const changed = Object.keys(row.custom_payload).some(
+            (k) => JSON.stringify(existingCustom[k]) !== JSON.stringify(row.custom_payload[k]),
+          );
+          if (changed) updates.custom_payload = merged;
+        }
 
         const needsReactivation = (existing as any).is_active === false;
         if (Object.keys(updates).length === 0 && !needsReactivation) {
@@ -650,6 +661,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           punchlist_comments: row.punchlist_comments,
           data_source_type: dataSourceType as any, source_upload_id: uploadId,
           team: (resolvedTeam === undefined ? null : resolvedTeam) as any,
+          custom_payload: row.custom_payload ?? {},
         } as any);
         if (error) {
           res.rejected++;

@@ -1027,13 +1027,27 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       // Strip non-column keys carried over from the parser / spread.
       delete payload.rawRowNo;
       delete payload.id;
+      delete payload.custom_field_errors;
+
+      // Merge custom_payload with existing values (do not overwrite the whole JSONB).
+      const newCustom = (row.custom_payload && Object.keys(row.custom_payload).length > 0)
+        ? row.custom_payload : null;
+      if (newCustom) {
+        const existingCustom = ((existing as any)?.custom_payload ?? {}) as Record<string, unknown>;
+        payload.custom_payload = { ...existingCustom, ...newCustom };
+      } else if (existing) {
+        // No new custom values — don't touch existing custom_payload during update
+        delete payload.custom_payload;
+      } else {
+        payload.custom_payload = {};
+      }
 
       if (existing) {
         // Change-detection skips fields the user did NOT map from Excel — without this,
         // every "preserved" field would be re-compared and audited even though it never
         // changed, which is the root cause of "4 columns and 32 columns take the same time".
         const hasAnyChange = Object.entries(payload).some(([key, value]) => {
-          if (key === 'raw_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id') return false;
+          if (key === 'raw_payload' || key === 'custom_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id') return false;
           if (isFieldExcluded(key)) return false;
           return changed(existing[key], value);
         });
@@ -1053,7 +1067,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         // Per-cell field logs + defect_change_log entries for every actual diff
         // (covers both schedule fields and general fields like description, PIC, area, etc.).
         for (const [key, newValue] of Object.entries(payload)) {
-          if (key === 'raw_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id' || key === 'is_active' || key === 'project_id') continue;
+          if (key === 'raw_payload' || key === 'custom_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id' || key === 'is_active' || key === 'project_id') continue;
           if (isFieldExcluded(key)) continue;
           const oldValue = (existing as any)[key];
           if (!changed(oldValue, newValue)) continue;
@@ -1122,7 +1136,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         });
         // Per-cell field logs for every non-empty inserted value.
         for (const [key, newValue] of Object.entries(payload)) {
-          if (key === 'raw_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id' || key === 'is_active' || key === 'project_id') continue;
+          if (key === 'raw_payload' || key === 'custom_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id' || key === 'is_active' || key === 'project_id') continue;
           if (isFieldExcluded(key)) continue;
           if (newValue === null || newValue === undefined || newValue === '') continue;
           fl(row.rawRowNo, key, 'applied', { applied: newValue });

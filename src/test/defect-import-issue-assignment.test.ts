@@ -54,6 +54,8 @@ function makeRow(overrides: RowOverrides): ParsedDefectRow {
     aconex_comments: overrides.aconex_comments ?? null,
     work_type: overrides.work_type ?? null,
     raw_payload: overrides.raw_payload ?? {},
+    custom_payload: overrides.custom_payload ?? {},
+    custom_field_errors: overrides.custom_field_errors ?? [],
   };
 }
 
