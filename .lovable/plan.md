@@ -1,54 +1,63 @@
-## 목표
+## 요청 해석
 
-전체 export 엑셀 파일에서 날짜 컬럼을 **진짜 Excel 날짜 셀(serial number + dd-mmm 형식)** 로 출력하여, Excel 이 해당 셀을 날짜로 인식하도록 한다. 이로써:
-- 정렬/필터가 날짜 순으로 정확히 동작
-- 사용자가 "TBD", "내일" 같은 텍스트 입력 시 셀 형식이 어긋나 시각적으로 즉시 구분
-- 사용자가 다양한 날짜 형식("5/4", "May 4")을 입력하면 Excel 이 자동으로 dd-mmm 으로 변환
+현재 S-Curve 필터 영역의 **3개 축**(Stage / Group+Values / Team)이 임의로 자유롭게 조합 가능해야 합니다. 사용자가 든 예시:
 
-xlsx-js-style 라이브러리 한계로 진정한 Data Validation(잘못된 입력 차단 팝업)은 불가능. 위와 같은 약한 보호임을 사용자가 이미 인지하고 선택함.
+- Stage = **All** (모든 단계)
+- Group = **Subcontractor**
+- Subcontractor Values = **All** (모두)
+- Team = **Architectural**
+
+→ "Architectural 팀의 데이터를 협력사별로 묶어, Start/Completion/Closure 세 stage 누적선을 동시에 표시"
+
+## 현재 제약 (해제 대상)
+
+`src/pages/DefectDashboardPage.tsx` 에 두 가지 제약이 있어 위 조합이 불가능합니다:
+
+1. **368줄**: Group 드롭다운이 `disabled={scurveStage === 'all'}` — Stage=All 이면 Group 선택 자체 불가
+2. **224줄**: `groupBy: scurveStage === 'all' ? null : ...` — Stage=All 이면 group breakdown 비활성
+3. **382줄**: `{scurveStage !== 'all' && scurveGroup !== SCURVE_GROUP_NONE && (...)}` — Group Values 멀티셀렉트 UI 도 Stage=All 이면 숨겨짐
+
+또한 데이터 빌더 (`buildDefectSCurveAllStages`, `src/lib/defect-dashboard-utils.ts` 431~450줄) 는 `groupBy: null` 로 고정 호출되어 그룹 분해를 지원하지 않습니다.
+
+## 변경 계획
+
+### A. UI 제약 해제 (DefectDashboardPage.tsx)
+
+1. **Group 드롭다운 활성화**: 368줄 `disabled={scurveStage === 'all'}` 제거. Stage=All 에서도 Group 선택 가능.
+2. **Group Values 멀티셀렉트 표시 조건**: 382줄을 `scurveGroup !== SCURVE_GROUP_NONE` 만 검사하도록 변경 (Stage 무관).
+3. **groupBy 전달 조건**: 224줄을 `scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup` 으로 단순화.
+
+### B. All-Stage S-Curve 의 그룹 분해 지원
+
+`buildDefectSCurveAllStages` 가 그룹별 분해를 지원하도록 확장:
+
+- `BuildSCurveOptions` 의 `groupBy` 와 동일한 옵션을 받아 각 stage 별로 그룹 시리즈를 계산
+- 반환 타입에 `byStageGroups: { start: DefectSCurveSeries[]; completion: ...; closure: ... }` 추가 (선택된 협력사가 1개 이상일 때 채워짐)
+- 그룹 미선택 시 기존 동작 유지
+
+### C. All-Stage 차트 컴포넌트 (`SCurveAllPanel` 부근) 의 라인 렌더링 확장
+
+기존: 3 stage × {Plan, Actual} = 6 라인  
+변경: 그룹이 활성일 때 stage × group × {Plan, Actual} 라인. 다만 라인 수가 폭증하므로:
+
+- 그룹 모드에서는 stage 별로 묶어 표시하되, **선택된 협력사 값 개수 × 3 stage × 2 (plan/actual)** 가 됨
+- 시각적 혼잡 완화: 선택 그룹 값이 많으면 (예: >3) 자동으로 "stage 별 plan 만" 또는 "actual 만" 보이는 단순화 옵션을 둘지 — 일단 모두 표시하고 사용자 피드백 후 조정
+- 색상: stage 는 dash 패턴(start=점선, completion=실선, closure=긴 점선), 그룹은 hue 로 구분
+
+### D. 검증
+
+- Stage=All + Group=Subcontractor + Values=Finebuild → 3개 stage × 2 (plan/actual) = 6 라인 (Finebuild 만)
+- Stage=All + Group=Subcontractor + Values=All + Team=Architectural → Architectural 팀에 속한 협력사들 × 3 stage × 2
+- Stage=Comp + Group=None → 기존 단일 누적선 (변동 없음)
+- Y축 도메인이 선택된 데이터 범위에 맞춰 자동 조정되는지
 
 ## 변경 파일
 
-### 1. 신규 파일
+- `src/pages/DefectDashboardPage.tsx` — 3개 UI 제약 해제, All-Stage 패널 호출부에 group 옵션 전달
+- `src/lib/defect-dashboard-utils.ts` — `buildDefectSCurveAllStages` 에 `groupBy` 지원, 반환 타입 확장
+- `src/pages/DefectDashboardPage.tsx` 내 `SCurveAllPanel` 컴포넌트 — 그룹별 라인 렌더링 로직 추가
 
-`src/lib/excel-date-cell.ts`
-- `isoToExcelSerial(iso)`: ISO 날짜 → Excel serial number (1900 date system, 1899-12-30 epoch 사용)
-- `isoTimestampToExcelSerial(iso)`: ISO 타임스탬프 → time fraction 포함 serial
-- `DATE_NUMFMT = 'dd-mmm'`, `DATETIME_NUMFMT = 'dd-mmm-yyyy hh:mm'` 상수
+## 위험 / 참고
 
-### 2. Subtest export — `src/lib/excel-export.ts`
-
-- `formatCellValue` 가 날짜 컬럼은 빈 문자열 외 더이상 변환하지 않게 하고, **raw ISO 를 보존**하는 분기 추가 (또는 별도 `getRawDateValue` 헬퍼 사용)
-- `setCell` 시그니처 확장: `setCell(ws, r, c, value, style, opts?)` — `opts` 에 `numFmt` 와 `type: 'date'` 추가
-- 데이터 row 작성 루프에서 `DATE_COLUMN_IDS.has(col.id)` 인 경우:
-  - row.original 에서 raw ISO 추출
-  - `isoToExcelSerial()` 변환
-  - 성공 시 `{ t: 'n', v: serial, z: 'dd-mmm', s: { ...STYLE_DATA, numFmt: 'dd-mmm' } }`
-  - 실패 또는 빈 값 시 빈 문자열 셀
-
-### 3. Defect export — `src/lib/defect-excel-export.ts`
-
-위와 동일한 패턴:
-- `DATE_FIELDS` 6개 + `classified_at` → date serial
-- `DATETIME_FIELDS` (`updated_at`, `created_at`) → datetime serial + `dd-mmm-yyyy hh:mm` 형식
-- `view` 포맷과 `reimport` 포맷 모두 동일하게 진짜 날짜 셀로 출력
-- `reimport` 포맷은 import 파서가 이미 Excel serial 을 처리할 수 있으므로 round-trip 안전
-
-### 4. 기타 export 파일 검토
-
-- `schedule-excel-export.ts`, `dashboard-excel-export.ts`, `defect-schedule-excel-export.ts`, `defect-dashboard-excel-export.ts`: 이 파일들은 **집계 데이터**(헤더에 "20-Jan", "20-Jan~26-Jan" 같은 bucket 라벨, 셀 값은 누적 카운트 숫자)이므로 "사용자가 직접 편집할 날짜 컬럼"이 없음. 헤더는 라벨 텍스트로 유지. 변경 불필요.
-- `defect-export-utils.ts`: `defect-excel-export.ts` 의 헬퍼이므로 동일 변경 흐름에 포함되거나 영향 없음 — 확인 후 필요 시 동일 처리.
-
-## 검증
-
-1. Subtest Master DB export → T1/T2 planned/actual 컬럼이 Excel 에서 셀 클릭 시 "사용자 지정 (dd-mmm)" 형식으로 표시되는지 확인
-2. Defect Raw Data export → 6개 날짜 컬럼 + classified_at, updated_at 동일 확인
-3. 정렬: Excel 에서 날짜 컬럼 정렬 시 알파벳순(04-Apr 다음 04-Aug)이 아니라 시간순으로 정렬되는지 확인
-4. Round-trip: export 한 파일에 임의로 "TEST" 텍스트 입력 → 다시 import 시 import 파서의 normalizeDate 가 그 행을 "정상 날짜 아님" 으로 처리하는지 확인 (현재 normalizeDate 는 invalid 입력에 null 반환)
-5. 빈 날짜 셀이 빈칸으로 보이고 0(=1899-12-30) 으로 표시되지 않는지 확인
-
-## 위험
-
-- Excel serial 변환 시 timezone 문제: UTC 기반으로 통일 → DB의 ISO 날짜가 'YYYY-MM-DD' 형태이므로 안전
-- 1900 leap-year bug: epoch 를 1899-12-30 으로 잡아 회피
-- `xlsx-js-style` 의 `z` 속성 vs `s.numFmt` 속성: 둘 다 함께 지정해 호환성 확보
+- All-Stage + 그룹 모드는 라인 수가 많아질 수 있어 가독성 저하 가능. 이 PR 에서는 기능 활성화에 집중하고, 시각적 단순화(toggle 등)는 후속 작업으로 분리.
+- KPI strip(`SCurveAllKpiStrip`) 은 stage 별 total 만 보여주므로 그룹 모드에서도 동일하게 동작 (필터된 subset 의 합계).
