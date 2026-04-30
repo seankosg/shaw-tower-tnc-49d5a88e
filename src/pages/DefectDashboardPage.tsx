@@ -90,7 +90,11 @@ export default function DefectDashboardPage() {
   const [items, setItems] = useState<DefectForDashboard[]>([]);
   const [loading, setLoading] = useState(true);
   const [dataDate, setDataDate] = useState(todayIso());
-  const [teamFilter, setTeamFilter] = useState(searchParams.get('team') || 'all');
+  const [teamFilter, setTeamFilter] = useState<string[]>(() => {
+    const raw = searchParams.get('team');
+    if (!raw || raw === 'all') return [];
+    return raw.split(',').map(s => s.trim()).filter(Boolean);
+  });
   const [breakdownTab, setBreakdownTab] = useState(searchParams.get('tab') || 'subcon');
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>((searchParams.get('bucket') as 'day' | 'week') || 'day');
   const [scurveOpen, setScurveOpen] = useState<boolean>(() => {
@@ -144,7 +148,7 @@ export default function DefectDashboardPage() {
   const today = todayIso();
   const dataDateLabel = formatDdMmm(dataDate);
   const todayLabel = formatDdMmm(today);
-  const filteredItems = useMemo(() => teamFilter === 'all' ? items : items.filter((item) => item.team === teamFilter), [items, teamFilter]);
+  const filteredItems = useMemo(() => teamFilter.length === 0 ? items : items.filter((item) => item.team && teamFilter.includes(item.team)), [items, teamFilter]);
 
   const kpis = useMemo(() => {
     const total = filteredItems.length;
@@ -208,7 +212,7 @@ export default function DefectDashboardPage() {
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
     const setOrDelete = (key: string, value: string, defaultValue: string) => value && value !== defaultValue ? next.set(key, value) : next.delete(key);
-    setOrDelete('team', teamFilter, 'all');
+    teamFilter.length ? next.set('team', teamFilter.join(',')) : next.delete('team');
     setOrDelete('tab', breakdownTab, 'subcon');
     setOrDelete('bucket', scurveBucket, 'day');
     setOrDelete('scurve_start', scurveStart, '2026-04-15');
@@ -238,7 +242,13 @@ export default function DefectDashboardPage() {
           <DDayBadge targetDate={MECHANICAL_COMPLETION_DDAY} />
         </div>
         <div className="flex items-center gap-3">
-          <Select value={teamFilter} onValueChange={setTeamFilter}><SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Teams</SelectItem>{ALL_TEAMS.map(team => <SelectItem key={team} value={team}>{TEAM_LABELS[team]}</SelectItem>)}</SelectContent></Select>
+          <ToggleGroup type="multiple" value={teamFilter} onValueChange={setTeamFilter} className="gap-1 flex-wrap">
+            {ALL_TEAMS.map((team) => (
+              <ToggleGroupItem key={team} value={team} className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                {TEAM_LABELS[team]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
           <p className="text-xs text-muted-foreground">At-Risk threshold: ≤ {atRiskDays} day{atRiskDays === 1 ? '' : 's'}</p>
         </div>
       </div>
@@ -340,15 +350,13 @@ export default function DefectDashboardPage() {
               </SCurveToolbarGroup>
 
               <SCurveToolbarGroup label="Team">
-                <Select value={teamFilter} onValueChange={setTeamFilter}>
-                  <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Teams</SelectItem>
-                    {ALL_TEAMS.map((t) => (
-                      <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ToggleGroup type="multiple" value={teamFilter} onValueChange={setTeamFilter} className="gap-1 flex-wrap">
+                  {ALL_TEAMS.map((t) => (
+                    <ToggleGroupItem key={t} value={t} className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                      {TEAM_LABELS[t]}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
               </SCurveToolbarGroup>
 
               <SCurveToolbarGroup label="Bucket">
