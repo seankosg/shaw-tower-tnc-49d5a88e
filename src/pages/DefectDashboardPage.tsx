@@ -50,9 +50,13 @@ import {
   DEFECT_GROUP_LABELS,
   DEFECT_STAGE_LABELS,
   DEFECT_GROUP_QUERY_PARAM,
+  getDefectGroupKey,
+  getDefectGroupLabel,
   type DefectScheduleGroupBy,
   type DefectScheduleStage,
 } from '@/lib/defect-schedule-utils';
+import { Badge } from '@/components/ui/badge';
+import { X } from 'lucide-react';
 
 const PIE_COLORS: Record<string, string> = {
   Complete: 'hsl(var(--primary))',
