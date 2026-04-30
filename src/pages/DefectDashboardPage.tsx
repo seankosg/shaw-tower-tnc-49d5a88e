@@ -122,6 +122,10 @@ export default function DefectDashboardPage() {
     if (!first || first === SCURVE_GROUP_NONE) return SCURVE_GROUP_NONE;
     return (ALL_DEFECT_GROUP_KEYS as string[]).includes(first) ? (first as DefectScheduleGroupBy) : SCURVE_GROUP_NONE;
   });
+  const [scurveGroupValues, setScurveGroupValues] = useState<string[]>(() => {
+    const raw = searchParams.get('group_values');
+    return raw ? raw.split(',').filter(Boolean) : [];
+  });
   const [hiddenScurveSeries, setHiddenScurveSeries] = useState<Set<string>>(new Set());
   const [subTradeTextFilter, setSubTradeTextFilter] = useState(searchParams.get('sub_trade_text') || '');
   const [selectedSubTradeFilters, setSelectedSubTradeFilters] = useState<string[]>(searchParams.get('sub_trades')?.split(',').filter(Boolean) || []);
