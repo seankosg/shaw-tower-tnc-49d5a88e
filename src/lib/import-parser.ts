@@ -421,10 +421,10 @@ function extractCustomFields(row: Record<string, string>): {
     if (!def || !def.is_active) continue; // unknown/inactive — skip silently
     if (raw == null || String(raw).trim() === '') continue;
     const coerced = coerceCustomValue(def.data_type, raw);
-    if (coerced.ok) {
-      if (coerced.value !== null) payload[fieldName] = coerced.value;
-    } else {
+    if (!coerced.ok) {
       errors.push({ field_name: fieldName, raw: String(raw), reason: coerced.reason });
+    } else if (coerced.value !== null) {
+      payload[fieldName] = coerced.value;
     }
   }
   return { custom_payload: payload, custom_field_errors: errors };
