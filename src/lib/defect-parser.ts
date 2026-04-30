@@ -645,6 +645,7 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
       aconex_comments: toText(getMapped(raw, 'aconex_comments')),
       work_type: toText(getMapped(raw, 'work_type')),
       raw_payload: raw,
+      ...extractDefectCustomFields(raw),
     };
   });
 
