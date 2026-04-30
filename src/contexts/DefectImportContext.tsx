@@ -1047,7 +1047,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         // every "preserved" field would be re-compared and audited even though it never
         // changed, which is the root cause of "4 columns and 32 columns take the same time".
         const hasAnyChange = Object.entries(payload).some(([key, value]) => {
-          if (key === 'raw_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id') return false;
+          if (key === 'raw_payload' || key === 'custom_payload' || key === 'row_version' || key === 'updated_by' || key === 'source_upload_id') return false;
           if (isFieldExcluded(key)) return false;
           return changed(existing[key], value);
         });
