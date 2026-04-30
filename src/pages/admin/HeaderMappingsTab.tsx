@@ -240,7 +240,7 @@ function MappingDialog({ open, onClose, module, fieldList, existing, userId, edi
   const [saving, setSaving] = useState(false);
 
   // Sync state when dialog opens
-  useMemoSync(() => {
+  useEffect(() => {
     if (open) {
       setAlias(editing?.header_alias ?? '');
       setTarget(editing?.target_field ?? '');
