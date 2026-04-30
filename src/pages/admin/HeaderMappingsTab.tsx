@@ -337,8 +337,3 @@ function MappingDialog({ open, onClose, module, fieldList, existing, userId, edi
   );
 }
 
-// Tiny helper to sync state on prop changes without importing useEffect noise.
-function useMemoSync(fn: () => void, deps: unknown[]) {
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useMemo(() => { fn(); }, deps);
-}
