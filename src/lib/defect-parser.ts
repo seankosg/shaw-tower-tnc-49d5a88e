@@ -46,6 +46,7 @@ export interface ParsedDefectRow {
   closure_status: string | null;
   remarks: string | null;
   hdec_comments: string | null;
+  aconex_comments: string | null;
   work_type: string | null;
   raw_payload: Record<string, unknown>;
 }
