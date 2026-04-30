@@ -302,6 +302,15 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     const rowLogs: any[] = [];
     const scheduleChangeAudits: any[] = [];
     const changeLogs: any[] = [];
+    const fieldLogs: PendingFieldLog[] = [];
+    const fl = (
+      rawRowNo: number | null,
+      field: string,
+      outcome: PendingFieldLog['outcome'],
+      opts: { raw?: unknown; applied?: unknown; previous?: unknown; code?: string | null; detail?: string | null } = {}
+    ) => {
+      fieldLogs.push(buildFieldLog('tnc', { rawRowNo, field, outcome, ...opts }));
+    };
     for (let i = 0; i < parsed.length; i++) {
       const row = parsed[i];
       updateFile(item.id, { progress: Math.round(((i + 1) / parsed.length) * 100) });
