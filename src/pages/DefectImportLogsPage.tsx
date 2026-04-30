@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ChevronLeft, Loader2, Trash2 } from 'lucide-react';
+import { Fragment, useEffect, useState } from 'react';
+import { ChevronLeft, Loader2, Trash2, ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
