@@ -154,17 +154,99 @@ function toText(value: unknown): string | null {
   return text === '' ? null : text;
 }
 
+const MONTH_ABBR: Record<string, string> = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+};
+
+function pad2(n: number | string): string {
+  return String(n).padStart(2, '0');
+}
+
+function clampReasonable(iso: string | null): string | null {
+  if (!iso) return null;
+  // Reject obviously bogus parsed years (e.g., 1901/2001 from year-less input bugs)
+  const y = Number(iso.slice(0, 4));
+  if (!Number.isFinite(y) || y < 2010 || y > 2100) return null;
+  return iso;
+}
+
 function normalizeDate(value: unknown): string | null {
   if (value == null || value === '') return null;
+
+  // 1. Excel serial number
   if (typeof value === 'number') {
     const parsed = XLSX.SSF.parse_date_code(value);
-    if (parsed) return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`;
+    if (parsed) return clampReasonable(`${parsed.y}-${pad2(parsed.m)}-${pad2(parsed.d)}`);
+    return null;
   }
+
   const text = String(value).trim();
   if (!text) return null;
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) return text.slice(0, 10);
-  return date.toISOString().slice(0, 10);
+
+  // 2. Numeric string → Excel serial
+  if (/^\d+(\.\d+)?$/.test(text)) {
+    const parsed = XLSX.SSF.parse_date_code(parseFloat(text));
+    if (parsed) return clampReasonable(`${parsed.y}-${pad2(parsed.m)}-${pad2(parsed.d)}`);
+  }
+
+  // 3. ISO YYYY-MM-DD
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return clampReasonable(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`);
+
+  // 4. dd-MMM or dd-MMM-YYYY (e.g. "27-Apr", "03-May-2026", "3 May 26")
+  const ddMmmMatch = text.match(/^(\d{1,2})[\s\-\/]+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[\s\-\/]+(\d{2,4}))?$/i);
+  if (ddMmmMatch) {
+    const day = pad2(ddMmmMatch[1]);
+    const month = MONTH_ABBR[ddMmmMatch[2].toLowerCase()];
+    let yearStr = ddMmmMatch[3];
+    let year: number;
+    if (yearStr) {
+      year = Number(yearStr);
+      if (year < 100) year += 2000;
+    } else {
+      year = new Date().getFullYear();
+    }
+    return clampReasonable(`${year}-${month}-${day}`);
+  }
+
+  // 5. MMM-dd or MMM-dd-YYYY (e.g. "Apr-27", "May 3, 2026")
+  const mmmDdMatch = text.match(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\-\/,]+(\d{1,2})(?:[\s\-\/,]+(\d{2,4}))?$/i);
+  if (mmmDdMatch) {
+    const month = MONTH_ABBR[mmmDdMatch[1].toLowerCase()];
+    const day = pad2(mmmDdMatch[2]);
+    let yearStr = mmmDdMatch[3];
+    let year: number;
+    if (yearStr) {
+      year = Number(yearStr);
+      if (year < 100) year += 2000;
+    } else {
+      year = new Date().getFullYear();
+    }
+    return clampReasonable(`${year}-${month}-${day}`);
+  }
+
+  // 6. Slash formats: try DD/MM/YYYY first (project locale), then MM/DD/YYYY
+  const slashMatch = text.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+  if (slashMatch) {
+    let a = Number(slashMatch[1]);
+    let b = Number(slashMatch[2]);
+    let y = Number(slashMatch[3]);
+    if (y < 100) y += 2000;
+    // If first part > 12, it must be day (DD/MM)
+    // Otherwise default to DD/MM (project convention)
+    let day: number, month: number;
+    if (a > 12) { day = a; month = b; }
+    else if (b > 12) { month = a; day = b; }
+    else { day = a; month = b; } // ambiguous → DD/MM
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return clampReasonable(`${y}-${pad2(month)}-${pad2(day)}`);
+    }
+  }
+
+  // 7. Last-resort fallback — but NEVER use new Date() on year-less strings
+  //    (V8 silently maps to 1901/2001). If we got here, give up.
+  return null;
 }
 
 function normalizePct(value: unknown): number | null {
