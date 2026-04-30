@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useToast } from '@/hooks/use-toast';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
+import { useMainScrollRestoration } from '@/hooks/useMainScrollRestoration';
 import { cn } from '@/lib/utils';
 import { DDayBadge } from '@/components/shared/DDayBadge';
 import { MECHANICAL_COMPLETION_DDAY } from '@/lib/constants';

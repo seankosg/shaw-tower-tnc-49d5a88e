@@ -28,6 +28,7 @@ import { DDayBadge } from '@/components/shared/DDayBadge';
 import { MECHANICAL_COMPLETION_DDAY } from '@/lib/constants';
 import { formatDdMmm } from '@/lib/format';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
+import { useMainScrollRestoration } from '@/hooks/useMainScrollRestoration';
 import {
   type SubtestForDashboard, type PlanActualRow, type PlanActualMetrics,
   todayIso, yesterdayIso, isOverdue, isAtRisk, maxDelayDays, isOverdueAllStages, isAtRiskAllStages,
