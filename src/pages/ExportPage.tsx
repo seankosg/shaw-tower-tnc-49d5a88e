@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { TcStatus, DataSource } from '@/types/enums';
 import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS } from '@/types/enums';
 import { useSearchParams } from 'react-router-dom';
-import { formatDdMmmYyyy } from '@/lib/format';
+
 
 export default function ExportPage() {
   const { toast } = useToast();
@@ -57,38 +57,73 @@ export default function ExportPage() {
         return;
       }
 
-      const rows = data.map((r: any) => ({
-        'System': r.system_master?.system_code || '',
-        'Item No': r.item_no,
-        'Equipment': r.equipment || '',
-        'Subtest ID': r.subtest_id,
-        'MOS Code': r.mos_code,
-        'Description': r.description || '',
-        'Predecessor Status': r.predecessor_status_raw || '',
-        'T1 Planned': r.t1_planned_date || '',
-        'T1 Status': r.t1_status || '',
-        'T2 Planned': r.t2_planned_date || '',
-        'T2 Status': r.t2_status || '',
-        'Subcontractor': r.subcontractor_name || '',
-        'Sub-Sub': r.subsub_name || '',
-        'HDEC PIC': r.hdec_pic_name || '',
-        'Source': r.data_source_type ? (DATA_SOURCE_LABELS[r.data_source_type as DataSource] || r.data_source_type) : '',
-        'Updated': formatDdMmmYyyy(r.updated_at),
-      }));
+      const headers = [
+        'System', 'Item No', 'Equipment', 'Subtest ID', 'MOS Code', 'Description',
+        'Predecessor Status', 'T1 Planned', 'T1 Status', 'T2 Planned', 'T2 Status',
+        'Subcontractor', 'Sub-Sub', 'HDEC PIC', 'Source', 'Updated',
+      ];
+      // index of date / datetime columns
+      const DATE_COL_IDX = new Set([7, 9]);     // T1 Planned, T2 Planned
+      const DATETIME_COL_IDX = new Set([15]);   // Updated
 
-      const ws = XLSX.utils.json_to_sheet(rows);
+      const rawRows = data.map((r: any) => [
+        r.system_master?.system_code || '',
+        r.item_no,
+        r.equipment || '',
+        r.subtest_id,
+        r.mos_code,
+        r.description || '',
+        r.predecessor_status_raw || '',
+        r.t1_planned_date || '',
+        r.t1_status || '',
+        r.t2_planned_date || '',
+        r.t2_status || '',
+        r.subcontractor_name || '',
+        r.subsub_name || '',
+        r.hdec_pic_name || '',
+        r.data_source_type ? (DATA_SOURCE_LABELS[r.data_source_type as DataSource] || r.data_source_type) : '',
+        r.updated_at || '',
+      ]);
+
+      const ws = XLSX.utils.aoa_to_sheet([headers]);
+      for (let r = 0; r < rawRows.length; r++) {
+        const rowIdx = r + 1; // header at row 0
+        for (let c = 0; c < headers.length; c++) {
+          const value = rawRows[r][c];
+          const addr = XLSX.utils.encode_cell({ r: rowIdx, c });
+          if (DATE_COL_IDX.has(c)) {
+            const serial = isoToExcelSerial(value as string);
+            if (serial != null) {
+              ws[addr] = { t: 'n', v: serial, z: DATE_NUMFMT };
+              continue;
+            }
+          } else if (DATETIME_COL_IDX.has(c)) {
+            const serial = isoTimestampToExcelSerial(value as string);
+            if (serial != null) {
+              ws[addr] = { t: 'n', v: serial, z: DATETIME_NUMFMT };
+              continue;
+            }
+          }
+          ws[addr] = { t: 's', v: value == null ? '' : String(value) };
+        }
+      }
+      const lastCol = XLSX.utils.encode_col(headers.length - 1);
+      ws['!ref'] = `A1:${lastCol}${rawRows.length + 1}`;
+
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Subtests');
 
       // Auto-size columns
-      const colWidths = Object.keys(rows[0]).map(key => ({
-        wch: Math.max(key.length, ...rows.map(r => String((r as any)[key]).length)).toString().length + 2,
+      ws['!cols'] = headers.map((key, c) => ({
+        wch: Math.max(
+          key.length,
+          ...rawRows.map(row => String(row[c] ?? '').length),
+        ) + 2,
       }));
-      ws['!cols'] = colWidths;
 
       const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       XLSX.writeFile(wb, `SHAW_TC_Export_${date}.xlsx`);
-      toast({ title: 'Export complete', description: `${rows.length} rows exported` });
+      toast({ title: 'Export complete', description: `${rawRows.length} rows exported` });
     } catch (e: any) {
       toast({ title: 'Export failed', description: e.message, variant: 'destructive' });
     }
