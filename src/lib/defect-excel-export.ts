@@ -512,3 +512,15 @@ function setCell(
   const v = value == null ? '' : value;
   ws[addr] = { t: 's', v: String(v), s: style };
 }
+
+function setDateCell(
+  ws: XLSX.WorkSheet,
+  r: number,
+  c: number,
+  serial: number,
+  style: Record<string, unknown>,
+  numFmt: string,
+) {
+  const addr = XLSX.utils.encode_cell({ r, c });
+  ws[addr] = { t: 'n', v: serial, z: numFmt, s: { ...style, numFmt } };
+}
