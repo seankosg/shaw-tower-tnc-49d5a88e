@@ -524,14 +524,16 @@ export default function DefectRawDataPage() {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
-        // Sizing and global search are always restored.
+        // Sizing is always restored.
         baseSizing = parsed.columnSizing && typeof parsed.columnSizing === 'object' ? parsed.columnSizing : {};
-        baseGlobal = typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '';
-        // Sort and column filters are only restored on a clean entry (no drill-down params).
-        // This is the root-cause fix for "wrong / stale sort when entering from a dashboard card".
+        // Sort, column filters and global search are only restored on a clean entry
+        // (no drill-down params). On drill-down entry, saved state is discarded so
+        // only URL-derived filters apply — prevents stale filters from polluting
+        // a fresh drill-down view.
         if (!isDrilldown) {
           baseSorting = Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING;
           baseFilters = Array.isArray(parsed.columnFilters) ? parsed.columnFilters : [];
+          baseGlobal = typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '';
         }
       }
     } catch {
