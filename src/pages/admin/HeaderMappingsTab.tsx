@@ -330,6 +330,14 @@ function MappingDialog({ open, onClose, module, fieldList, customOptions = [], e
                 {fieldList.map((f) => (
                   <SelectItem key={f} value={f}>{f}</SelectItem>
                 ))}
+                {customOptions.length > 0 && (
+                  <>
+                    <div className="px-2 py-1 text-xs text-muted-foreground border-t mt-1">Custom Fields</div>
+                    {customOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
