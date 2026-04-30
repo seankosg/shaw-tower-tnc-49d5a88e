@@ -15,6 +15,7 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useToast } from '@/hooks/use-toast';
 import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import { cn } from '@/lib/utils';
@@ -38,7 +39,17 @@ import {
   type DefectForDashboard,
   type DefectPlanActualMetrics,
   type DefectPlanActualRow,
+  type DefectSCurveResult,
 } from '@/lib/defect-dashboard-utils';
+import {
+  ALL_DEFECT_GROUP_KEYS,
+  ALL_DEFECT_STAGE_KEYS,
+  DEFECT_GROUP_LABELS,
+  DEFECT_STAGE_LABELS,
+  DEFECT_GROUP_QUERY_PARAM,
+  type DefectScheduleGroupBy,
+  type DefectScheduleStage,
+} from '@/lib/defect-schedule-utils';
 
 const PIE_COLORS: Record<string, string> = {
   Complete: 'hsl(var(--primary))',
@@ -49,19 +60,24 @@ const PIE_COLORS: Record<string, string> = {
 };
 
 const chartConfig = {
-  completionPlan: { label: 'Completion Plan', color: 'hsl(var(--muted-foreground))' },
-  completionActual: { label: 'Completion Actual', color: 'hsl(var(--primary))' },
-  closurePlan: { label: 'Closure Plan', color: 'hsl(var(--accent-foreground))' },
-  closureActual: { label: 'Closure Actual', color: 'hsl(var(--destructive))' },
-  completionMet: { label: 'Completion Met', color: 'hsl(var(--primary))' },
-  completionShortfall: { label: 'Completion Shortfall', color: 'hsl(var(--destructive))' },
-  completionExcess: { label: 'Completion Excess', color: 'hsl(var(--foreground))' },
-  completionFuturePlan: { label: 'Completion Future Plan', color: 'hsl(var(--muted))' },
-  closureMet: { label: 'Closure Met', color: 'hsl(var(--accent-foreground))' },
-  closureShortfall: { label: 'Closure Shortfall', color: 'hsl(var(--destructive))' },
-  closureExcess: { label: 'Closure Excess', color: 'hsl(var(--foreground))' },
-  closureFuturePlan: { label: 'Closure Future Plan', color: 'hsl(var(--muted))' },
+  plan: { label: 'Plan (cum)', color: 'hsl(var(--muted-foreground))' },
+  actual: { label: 'Actual (cum)', color: 'hsl(var(--primary))' },
+  variance: { label: 'Variance', color: 'hsl(var(--destructive))' },
 } satisfies ChartConfig;
+
+const GROUP_LINE_COLORS = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))',
+  'hsl(217 91% 60%)',
+  'hsl(160 60% 45%)',
+  'hsl(280 70% 60%)',
+  'hsl(var(--muted-foreground))',
+] as const;
+
+const SCURVE_GROUP_NONE = 'none' as const;
 
 export default function DefectDashboardPage() {
   const navigate = useNavigate();
@@ -83,6 +99,18 @@ export default function DefectDashboardPage() {
   }, [scurveOpen]);
   const [scurveStart, setScurveStart] = useState(searchParams.get('scurve_start') || '2026-04-15');
   const [scurveEnd, setScurveEnd] = useState(searchParams.get('scurve_end') || '2026-06-07');
+  const [scurveStage, setScurveStage] = useState<DefectScheduleStage>(() => {
+    const raw = searchParams.get('stage_view');
+    const first = raw?.split(',').map(s => s.trim()).find(Boolean) as DefectScheduleStage | undefined;
+    return (first && (ALL_DEFECT_STAGE_KEYS as string[]).includes(first)) ? first : 'completion';
+  });
+  const [scurveGroup, setScurveGroup] = useState<DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE>(() => {
+    const raw = searchParams.get('group');
+    const first = raw?.split(',').map(s => s.trim()).find(Boolean);
+    if (!first || first === SCURVE_GROUP_NONE) return SCURVE_GROUP_NONE;
+    return (ALL_DEFECT_GROUP_KEYS as string[]).includes(first) ? (first as DefectScheduleGroupBy) : SCURVE_GROUP_NONE;
+  });
+  const [hiddenScurveSeries, setHiddenScurveSeries] = useState<Set<string>>(new Set());
   const [subTradeTextFilter, setSubTradeTextFilter] = useState(searchParams.get('sub_trade_text') || '');
   const [selectedSubTradeFilters, setSelectedSubTradeFilters] = useState<string[]>(searchParams.get('sub_trades')?.split(',').filter(Boolean) || []);
 
@@ -152,7 +180,14 @@ export default function DefectDashboardPage() {
     workType: { rows: byWorkType, header: 'Work Type', param: 'workType' },
   };
 
-  const scurve = useMemo(() => buildDefectSCurve(filteredItems, scurveBucket, scurveStart, scurveEnd, today), [filteredItems, scurveBucket, scurveStart, scurveEnd, today]);
+  const scurve: DefectSCurveResult = useMemo(() => buildDefectSCurve(filteredItems, {
+    granularity: scurveBucket,
+    startDate: scurveStart,
+    endDate: scurveEnd,
+    today,
+    stage: scurveStage,
+    groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
+  }), [filteredItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
   const topOverdue = useMemo(() => filteredItems.map(item => ({ item, delay: maxDelayDays(item, dataDate) })).filter(row => row.delay > 0 && !isClosureComplete(row.item)).sort((a, b) => b.delay - a.delay).slice(0, 10), [filteredItems, dataDate]);
   const actualPie = useMemo(() => buildActualPie(filteredItems), [filteredItems]);
   const closurePie = useMemo(() => buildClosurePie(filteredItems), [filteredItems]);
@@ -165,10 +200,12 @@ export default function DefectDashboardPage() {
     setOrDelete('bucket', scurveBucket, 'day');
     setOrDelete('scurve_start', scurveStart, '2026-04-15');
     setOrDelete('scurve_end', scurveEnd, '2026-06-07');
+    setOrDelete('stage_view', scurveStage, 'completion');
+    setOrDelete('group', scurveGroup, SCURVE_GROUP_NONE);
     setOrDelete('sub_trade_text', subTradeTextFilter, '');
     selectedSubTradeFilters.length ? next.set('sub_trades', selectedSubTradeFilters.join(',')) : next.delete('sub_trades');
     setSearchParams(next, { replace: true });
-  }, [teamFilter, breakdownTab, scurveBucket, scurveStart, scurveEnd, subTradeTextFilter, selectedSubTradeFilters]);
+  }, [teamFilter, breakdownTab, scurveBucket, scurveStart, scurveEnd, scurveStage, scurveGroup, subTradeTextFilter, selectedSubTradeFilters]);
 
   const goRaw = (params: Record<string, string>) => navigate(`/defects/raw-data?${new URLSearchParams({ source: 'dashboard', ...params }).toString()}`);
   const handleBreakdownExport = () => {
@@ -236,17 +273,103 @@ export default function DefectDashboardPage() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-col space-y-2 pb-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-          <button type="button" onClick={() => setScurveOpen((v) => !v)} className="flex items-center gap-2 text-left hover:opacity-80" aria-expanded={scurveOpen} aria-label="Toggle S-Curve chart">
-            {scurveOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            <CardTitle className="text-base">Plan vs Actual — S-Curve</CardTitle>
-          </button>
+        <CardHeader className="flex flex-col gap-2 pb-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <button type="button" onClick={() => setScurveOpen((v) => !v)} className="flex items-center gap-2 text-left hover:opacity-80" aria-expanded={scurveOpen} aria-label="Toggle S-Curve chart">
+              {scurveOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              <CardTitle className="text-base">Plan vs Actual — S-Curve</CardTitle>
+            </button>
+            {scurveOpen && (
+              <div className="flex flex-wrap items-center gap-2">
+                <DateButton value={scurveStart} onChange={setScurveStart} />
+                <span className="text-xs text-muted-foreground">~</span>
+                <DateButton value={scurveEnd} onChange={setScurveEnd} />
+              </div>
+            )}
+          </div>
           {scurveOpen && (
-            <div className="flex flex-wrap items-center gap-2"><DateButton value={scurveStart} onChange={setScurveStart} /><span className="text-xs text-muted-foreground">~</span><DateButton value={scurveEnd} onChange={setScurveEnd} /><div className="flex gap-1 rounded-md border p-0.5"><button onClick={() => setScurveBucket('day')} className={cn('rounded px-3 py-1 text-xs', scurveBucket === 'day' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>Daily</button><button onClick={() => setScurveBucket('week')} className={cn('rounded px-3 py-1 text-xs', scurveBucket === 'week' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>Weekly</button></div></div>
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <SCurveToolbarGroup label="Stage">
+                <ToggleGroup
+                  type="single"
+                  value={scurveStage}
+                  onValueChange={(v) => v && setScurveStage(v as DefectScheduleStage)}
+                  className="gap-1"
+                >
+                  {ALL_DEFECT_STAGE_KEYS.map((k) => (
+                    <ToggleGroupItem key={k} value={k} className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                      {DEFECT_STAGE_LABELS[k]}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </SCurveToolbarGroup>
+
+              <SCurveToolbarGroup label="Group">
+                <Select value={scurveGroup} onValueChange={(v) => setScurveGroup(v as DefectScheduleGroupBy | typeof SCURVE_GROUP_NONE)}>
+                  <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SCURVE_GROUP_NONE}>No breakdown</SelectItem>
+                    {ALL_DEFECT_GROUP_KEYS.map((k) => (
+                      <SelectItem key={k} value={k}>{DEFECT_GROUP_LABELS[k]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SCurveToolbarGroup>
+
+              <SCurveToolbarGroup label="Team">
+                <Select value={teamFilter} onValueChange={setTeamFilter}>
+                  <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Teams</SelectItem>
+                    {ALL_TEAMS.map((t) => (
+                      <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SCurveToolbarGroup>
+
+              <SCurveToolbarGroup label="Bucket">
+                <Tabs value={scurveBucket} onValueChange={(v) => setScurveBucket(v as 'day' | 'week')}>
+                  <TabsList className="h-8">
+                    <TabsTrigger value="day" className="h-6 px-2 text-xs">Day</TabsTrigger>
+                    <TabsTrigger value="week" className="h-6 px-2 text-xs">Week</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </SCurveToolbarGroup>
+            </div>
           )}
         </CardHeader>
         {scurveOpen && (
-          <CardContent>{scurve.length === 0 ? <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p> : <ChartContainer config={chartConfig} className="h-[360px] w-full"><ComposedChart data={scurve} margin={{ left: 12, right: 16, top: 8, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} /><YAxis yAxisId="left" tick={{ fontSize: 11 }} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} /><ChartTooltip content={<ChartTooltipContent />} /><Legend wrapperStyle={{ fontSize: 11 }} /><ReferenceLine yAxisId="left" x={formatDdMmm(today)} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} /><Bar yAxisId="right" dataKey="completionMet" stackId="completion" fill="var(--color-completionMet)" name="Completion Met" barSize={10} /><Bar yAxisId="right" dataKey="completionShortfall" stackId="completion" fill="var(--color-completionShortfall)" name="Completion Shortfall" barSize={10} /><Bar yAxisId="right" dataKey="completionExcess" stackId="completion" fill="var(--color-completionExcess)" name="Completion Excess" barSize={10} /><Bar yAxisId="right" dataKey="completionFuturePlan" stackId="completion" fill="var(--color-completionFuturePlan)" name="Completion Plan (Future)" barSize={10} /><Bar yAxisId="right" dataKey="closureMet" stackId="closure" fill="var(--color-closureMet)" name="Closure Met" barSize={10} /><Bar yAxisId="right" dataKey="closureShortfall" stackId="closure" fill="var(--color-closureShortfall)" name="Closure Shortfall" barSize={10} /><Bar yAxisId="right" dataKey="closureExcess" stackId="closure" fill="var(--color-closureExcess)" name="Closure Excess" barSize={10} /><Bar yAxisId="right" dataKey="closureFuturePlan" stackId="closure" fill="var(--color-closureFuturePlan)" name="Closure Plan (Future)" barSize={10} /><Line yAxisId="left" type="monotone" dataKey="completionPlan" stroke="var(--color-completionPlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Completion Plan (cum)" /><Line yAxisId="left" type="monotone" dataKey="completionActual" stroke="var(--color-completionActual)" strokeWidth={2} dot={false} name="Completion Actual (cum)" /><Line yAxisId="left" type="monotone" dataKey="closurePlan" stroke="var(--color-closurePlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Closure Plan (cum)" /><Line yAxisId="left" type="monotone" dataKey="closureActual" stroke="var(--color-closureActual)" strokeWidth={2} dot={false} name="Closure Actual (cum)" /></ComposedChart></ChartContainer>}</CardContent>
+          <CardContent className="space-y-3">
+            <SCurveKpiStrip scurve={scurve} today={today} stage={scurveStage} windowStart={scurveStart} windowEnd={scurveEnd} />
+            {scurve.buckets.length === 0 ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p>
+            ) : (
+              <SCurveCharts
+                scurve={scurve}
+                today={today}
+                hidden={hiddenScurveSeries}
+                onToggleSeries={(key) => {
+                  setHiddenScurveSeries((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(key)) next.delete(key); else next.add(key);
+                    return next;
+                  });
+                }}
+                onBucketClick={(bucketIso) => {
+                  const dateField = scurveStage === 'start' ? 'planned_start_date'
+                    : scurveStage === 'completion' ? 'planned_completion_date'
+                    : 'planned_closure_date';
+                  // Compute end-of-bucket
+                  const start = new Date(bucketIso + 'T00:00:00Z');
+                  const end = new Date(start);
+                  if (scurveBucket === 'week') end.setUTCDate(end.getUTCDate() + 6);
+                  const dateTo = end.toISOString().slice(0, 10);
+                  goRaw({ dateField, dateFrom: bucketIso, dateTo });
+                }}
+              />
+            )}
+          </CardContent>
         )}
       </Card>
 
@@ -603,3 +726,181 @@ function PlanActualTable({
 function buildActualPie(items: DefectForDashboard[]) { const complete = items.filter(isActualComplete).length; const inProgress = items.filter(item => !isActualComplete(item) && Number(item.actual_progress_pct ?? 0) > 0).length; const notStarted = items.length - complete - inProgress; return [{ name: 'Complete', value: complete }, { name: 'In Progress', value: inProgress }, { name: 'Not Started', value: notStarted }].filter(item => item.value > 0); }
 function buildClosurePie(items: DefectForDashboard[]) { const closed = items.filter(isClosureComplete).length; return [{ name: 'Closed', value: closed }, { name: 'Not Closed', value: items.length - closed }].filter(item => item.value > 0); }
 function PieBlock({ title, data, onSliceClick }: { title: string; data: { name: string; value: number }[]; onSliceClick: (name: string) => void }) { return <div><p className="mb-1 text-center text-xs font-medium text-muted-foreground">{title}</p><ChartContainer config={Object.fromEntries(data.map(d => [d.name, { label: d.name, color: PIE_COLORS[d.name] }]))} className="mx-auto h-[170px] w-[170px]"><PieChart><Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={38}>{data.map(entry => <Cell key={entry.name} fill={PIE_COLORS[entry.name]} className="cursor-pointer" onClick={() => onSliceClick(entry.name)} />)}</Pie><ChartTooltip content={<ChartTooltipContent />} /></PieChart></ChartContainer><div className="mt-1 flex flex-wrap justify-center gap-2 text-[10px]">{data.map(d => <button key={d.name} onClick={() => onSliceClick(d.name)} className="flex items-center gap-1 hover:underline"><span className="inline-block h-2 w-2 rounded-sm" style={{ background: PIE_COLORS[d.name] }} />{d.name} ({d.value})</button>)}</div></div>; }
+
+function SCurveToolbarGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function SCurveKpiStrip({ scurve, today, stage, windowStart, windowEnd }: {
+  scurve: DefectSCurveResult;
+  today: string;
+  stage: DefectScheduleStage;
+  windowStart: string;
+  windowEnd: string;
+}) {
+  const idx = scurve.todayIndex >= 0 ? scurve.todayIndex : scurve.buckets.length - 1;
+  const plan = scurve.total.plan[idx] ?? 0;
+  const actual = scurve.total.actual[idx] ?? 0;
+  const delta = (actual ?? 0) - plan;
+  const pct = plan > 0 ? (delta / plan) * 100 : 0;
+  const stageLabel = stage === 'start' ? 'Start' : stage === 'completion' ? 'Completion' : 'Closure';
+  const sign = delta > 0 ? '+' : '';
+  const accentClass = delta < 0 ? 'text-destructive' : delta > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground';
+  return (
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-md border bg-muted/30 px-3 py-2">
+      <div className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Stage</span>
+        <span className="text-sm font-semibold">{stageLabel}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Plan (cum)</span>
+        <span className="text-sm font-semibold tabular-nums">{plan.toLocaleString()}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Actual (cum)</span>
+        <span className="text-sm font-semibold tabular-nums">{(actual ?? 0).toLocaleString()}</span>
+      </div>
+      <div className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Δ Variance</span>
+        <span className={cn('text-sm font-semibold tabular-nums', accentClass)}>
+          {sign}{delta.toLocaleString()} <span className="text-[10px] font-normal">({sign}{pct.toFixed(1)}%)</span>
+        </span>
+      </div>
+      <div className="ml-auto flex flex-col text-right">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Today / Window</span>
+        <span className="text-xs">{formatDdMmm(today)} · {formatDdMmm(windowStart)} ~ {formatDdMmm(windowEnd)}</span>
+      </div>
+    </div>
+  );
+}
+
+function SCurveCharts({ scurve, today, hidden, onToggleSeries, onBucketClick }: {
+  scurve: DefectSCurveResult;
+  today: string;
+  hidden: Set<string>;
+  onToggleSeries: (key: string) => void;
+  onBucketClick: (bucketIso: string) => void;
+}) {
+  // Build chart data row per bucket — each series exposes its own keys for line chart
+  const data = scurve.bucketLabels.map((label, i) => {
+    const row: Record<string, any> = {
+      bucket: scurve.buckets[i],
+      bucketLabel: label,
+      __isFuture: scurve.todayIndex >= 0 && i > scurve.todayIndex,
+      totalPlan: scurve.total.plan[i],
+      totalActual: scurve.total.actual[i],
+      variance: scurve.total.variance[i],
+    };
+    scurve.groups.forEach((g) => {
+      row[`g_plan_${g.key}`] = g.plan[i];
+      row[`g_actual_${g.key}`] = g.actual[i];
+    });
+    return row;
+  });
+
+  const todayLabel = (() => {
+    const idx = scurve.todayIndex;
+    if (idx < 0) return null;
+    return scurve.bucketLabels[idx] ?? null;
+  })();
+
+  const showGroups = scurve.groups.length > 0;
+
+  const lineCfg: ChartConfig = {
+    totalPlan: { label: 'Plan (cum)', color: 'hsl(var(--muted-foreground))' },
+    totalActual: { label: 'Actual (cum)', color: 'hsl(var(--primary))' },
+    ...Object.fromEntries(scurve.groups.flatMap((g, i) => [
+      [`g_plan_${g.key}`, { label: `${g.label} Plan`, color: GROUP_LINE_COLORS[i % GROUP_LINE_COLORS.length] }],
+      [`g_actual_${g.key}`, { label: `${g.label} Actual`, color: GROUP_LINE_COLORS[i % GROUP_LINE_COLORS.length] }],
+    ])),
+  } as ChartConfig;
+
+  const varianceCfg: ChartConfig = {
+    variance: { label: 'Δ Actual − Plan', color: 'hsl(var(--destructive))' },
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* Cumulative lines */}
+      <ChartContainer config={lineCfg} className="h-[300px] w-full">
+        <ComposedChart data={data} margin={{ left: 12, right: 16, top: 8, bottom: 0 }}
+          onClick={(e: any) => { if (e?.activeLabel) {
+            const idx = scurve.bucketLabels.indexOf(e.activeLabel);
+            if (idx >= 0) onBucketClick(scurve.buckets[idx]);
+          } }}
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} />
+          <YAxis tick={{ fontSize: 11 }} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <Legend
+            wrapperStyle={{ fontSize: 11 }}
+            onClick={(o: any) => o?.dataKey && onToggleSeries(String(o.dataKey))}
+          />
+          {todayLabel && (
+            <ReferenceLine x={todayLabel} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: 'Today', fontSize: 10, fill: 'hsl(var(--destructive))' }} />
+          )}
+          {!showGroups && (
+            <>
+              <Line type="monotone" dataKey="totalPlan" stroke="var(--color-totalPlan)" strokeDasharray="5 3" strokeWidth={2} dot={false} name="Plan (cum)" hide={hidden.has('totalPlan')} />
+              <Line type="monotone" dataKey="totalActual" stroke="var(--color-totalActual)" strokeWidth={2.5} dot={false} name="Actual (cum)" hide={hidden.has('totalActual')} connectNulls={false} />
+            </>
+          )}
+          {showGroups && scurve.groups.map((g, i) => (
+            <Line
+              key={`plan-${g.key}`}
+              type="monotone"
+              dataKey={`g_plan_${g.key}`}
+              stroke={GROUP_LINE_COLORS[i % GROUP_LINE_COLORS.length]}
+              strokeDasharray="4 3"
+              strokeWidth={1.5}
+              dot={false}
+              name={`${g.label} Plan`}
+              hide={hidden.has(`g_plan_${g.key}`)}
+            />
+          ))}
+          {showGroups && scurve.groups.map((g, i) => (
+            <Line
+              key={`actual-${g.key}`}
+              type="monotone"
+              dataKey={`g_actual_${g.key}`}
+              stroke={GROUP_LINE_COLORS[i % GROUP_LINE_COLORS.length]}
+              strokeWidth={2}
+              dot={false}
+              name={`${g.label} Actual`}
+              hide={hidden.has(`g_actual_${g.key}`)}
+              connectNulls={false}
+            />
+          ))}
+        </ComposedChart>
+      </ChartContainer>
+
+      {/* Variance bars (total only) */}
+      <ChartContainer config={varianceCfg} className="h-[140px] w-full">
+        <ComposedChart data={data} margin={{ left: 12, right: 16, top: 4, bottom: 0 }}
+          onClick={(e: any) => { if (e?.activeLabel) {
+            const idx = scurve.bucketLabels.indexOf(e.activeLabel);
+            if (idx >= 0) onBucketClick(scurve.buckets[idx]);
+          } }}
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} />
+          <YAxis tick={{ fontSize: 11 }} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          {todayLabel && <ReferenceLine x={todayLabel} stroke="hsl(var(--destructive))" strokeDasharray="4 2" />}
+          <ReferenceLine y={0} stroke="hsl(var(--border))" />
+          <Bar dataKey="variance" name="Δ Actual − Plan" barSize={8}>
+            {data.map((row, i) => (
+              <Cell key={i} fill={row.variance == null ? 'hsl(var(--muted))' : (row.variance < 0 ? 'hsl(var(--destructive))' : 'hsl(160 60% 45%)')} />
+            ))}
+          </Bar>
+        </ComposedChart>
+      </ChartContainer>
+    </div>
+  );
+}

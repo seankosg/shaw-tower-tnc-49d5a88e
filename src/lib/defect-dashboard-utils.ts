@@ -1,4 +1,10 @@
 import { type DefectItem } from '@/lib/defect-utils';
+import {
+  getDefectGroupKey,
+  getDefectGroupLabel,
+  type DefectScheduleGroupBy,
+  type DefectScheduleStage,
+} from '@/lib/defect-schedule-utils';
 
 export const NONE_LABEL = '(None)';
 export type DefectDashboardStage = 'start' | 'completion' | 'closure';
@@ -25,21 +31,21 @@ export interface DefectPlanActualRow {
   closure: DefectPlanActualMetrics;
 }
 
-export interface DefectSCurvePoint {
-  bucket: string;
-  bucketLabel: string;
-  completionPlan: number;
-  completionActual: number | null;
-  closurePlan: number;
-  closureActual: number | null;
-  completionMet: number;
-  completionShortfall: number;
-  completionExcess: number;
-  completionFuturePlan: number;
-  closureMet: number;
-  closureShortfall: number;
-  closureExcess: number;
-  closureFuturePlan: number;
+export interface DefectSCurveSeries {
+  key: string;       // group key, '__total__' for aggregate, or 'Others'
+  label: string;
+  plan: number[];          // cumulative, length === buckets.length
+  actual: (number | null)[]; // cumulative, null for future buckets
+  variance: (number | null)[]; // actual - plan per-bucket increment, null for future
+}
+
+export interface DefectSCurveResult {
+  buckets: string[];        // ISO bucket starts
+  bucketLabels: string[];   // formatted DD-MMM
+  todayIndex: number;       // index of today's bucket in buckets[], or -1 if outside range
+  total: DefectSCurveSeries;
+  groups: DefectSCurveSeries[];   // empty if no group breakdown requested
+  stage: DefectScheduleStage;
 }
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -225,53 +231,189 @@ export function diffMetrics(row: DefectPlanActualRow): DefectPlanActualMetrics {
   };
 }
 
-export function buildDefectSCurve(items: DefectForDashboard[], granularity: DefectSCurveBucket, startDate: string, endDate: string, today: string): DefectSCurvePoint[] {
-  const counts = new Map<string, { cmp: number; cma: number; cp: number; ca: number }>();
-  const ensure = (bucket: string) => {
-    let value = counts.get(bucket);
-    if (!value) { value = { cmp: 0, cma: 0, cp: 0, ca: 0 }; counts.set(bucket, value); }
-    return value;
-  };
-  for (const item of items) {
-    const completionPlan = getStagePlanDate(item, 'completion');
-    const completionActual = getStageActualDate(item, 'completion');
-    const closurePlan = getStagePlanDate(item, 'closure');
-    const closureActual = getStageActualDate(item, 'closure');
-    if (completionPlan) ensure(bucketize(completionPlan, granularity)).cmp++;
-    if (completionActual) ensure(bucketize(completionActual, granularity)).cma++;
-    if (closurePlan) ensure(bucketize(closurePlan, granularity)).cp++;
-    if (closureActual) ensure(bucketize(closureActual, granularity)).ca++;
-  }
-  const buckets = generateBuckets(startDate, endDate, granularity);
-  if (!buckets.length) return [];
-  let ccmp = 0, ccma = 0, ccp = 0, cca = 0;
-  for (const [bucket, value] of counts) {
-    if (bucket < buckets[0]) { ccmp += value.cmp; ccma += value.cma; ccp += value.cp; cca += value.ca; }
-  }
-  const todayBucket = bucketize(today, granularity);
-  return buckets.map((bucket) => {
-    const value = counts.get(bucket) ?? { cmp: 0, cma: 0, cp: 0, ca: 0 };
-    ccmp += value.cmp; ccma += value.cma; ccp += value.cp; cca += value.ca;
-    const isFuture = bucket > todayBucket;
-    const completionPlan = value.cmp;
-    const completionDone = isFuture ? 0 : value.cma;
-    const closurePlan = value.cp;
-    const closureDone = isFuture ? 0 : value.ca;
-    return {
-      bucket,
-      bucketLabel: labelDdMmm(bucket),
-      completionPlan: ccmp,
-      completionActual: isFuture ? null : ccma,
-      closurePlan: ccp,
-      closureActual: isFuture ? null : cca,
-      completionMet: isFuture ? 0 : Math.min(completionPlan, completionDone),
-      completionShortfall: isFuture ? 0 : Math.max(0, completionPlan - completionDone),
-      completionExcess: isFuture ? 0 : Math.max(0, completionDone - completionPlan),
-      completionFuturePlan: isFuture ? completionPlan : 0,
-      closureMet: isFuture ? 0 : Math.min(closurePlan, closureDone),
-      closureShortfall: isFuture ? 0 : Math.max(0, closurePlan - closureDone),
-      closureExcess: isFuture ? 0 : Math.max(0, closureDone - closurePlan),
-      closureFuturePlan: isFuture ? closurePlan : 0,
-    };
-  });
+export interface BuildSCurveOptions {
+  granularity: DefectSCurveBucket;
+  startDate: string;
+  endDate: string;
+  today: string;
+  stage: DefectScheduleStage;
+  groupBy?: DefectScheduleGroupBy | null;
+  topN?: number; // for grouped breakdown; default 8
 }
+
+const TOTAL_KEY = '__total__';
+const OTHERS_KEY = '__others__';
+
+interface PerSeriesCounts {
+  // bucket -> { plan, actual }
+  byBucket: Map<string, { p: number; a: number }>;
+  totalPlan: number;
+}
+
+function getStageDates(item: DefectForDashboard, stage: DefectScheduleStage): { plan: string | null; actual: string | null } {
+  return { plan: getStagePlanDate(item, stage), actual: getStageActualDate(item, stage) };
+}
+
+export function buildDefectSCurve(items: DefectForDashboard[], options: BuildSCurveOptions): DefectSCurveResult {
+  const { granularity, startDate, endDate, today, stage, groupBy, topN = 8 } = options;
+  const buckets = generateBuckets(startDate, endDate, granularity);
+  const bucketLabels = buckets.map(labelDdMmm);
+  const todayBucket = bucketize(today, granularity);
+  const todayIndex = buckets.findIndex((b) => b >= todayBucket);
+
+  // Count per series (always compute total; compute per-group only if groupBy)
+  const seriesMap = new Map<string, PerSeriesCounts>();
+  const ensureSeries = (key: string) => {
+    let s = seriesMap.get(key);
+    if (!s) { s = { byBucket: new Map(), totalPlan: 0 }; seriesMap.set(key, s); }
+    return s;
+  };
+  const addToSeries = (key: string, bucket: string, field: 'p' | 'a', delta = 1) => {
+    const s = ensureSeries(key);
+    let v = s.byBucket.get(bucket);
+    if (!v) { v = { p: 0, a: 0 }; s.byBucket.set(bucket, v); }
+    v[field] += delta;
+    if (field === 'p') s.totalPlan += delta;
+  };
+
+  for (const item of items) {
+    const { plan, actual } = getStageDates(item, stage);
+    if (plan) addToSeries(TOTAL_KEY, bucketize(plan, granularity), 'p');
+    if (actual) addToSeries(TOTAL_KEY, bucketize(actual, granularity), 'a');
+    if (groupBy) {
+      const gKey = getDefectGroupKey(item, groupBy);
+      if (plan) addToSeries(gKey, bucketize(plan, granularity), 'p');
+      if (actual) addToSeries(gKey, bucketize(actual, granularity), 'a');
+    }
+  }
+
+  // Determine top-N groups by total plan; collapse rest into Others
+  let groupOrder: string[] = [];
+  let othersKeys = new Set<string>();
+  if (groupBy) {
+    const groupKeys = [...seriesMap.keys()].filter((k) => k !== TOTAL_KEY);
+    groupKeys.sort((a, b) => (seriesMap.get(b)!.totalPlan - seriesMap.get(a)!.totalPlan) || a.localeCompare(b));
+    groupOrder = groupKeys.slice(0, topN);
+    othersKeys = new Set(groupKeys.slice(topN));
+  }
+
+  const buildSeries = (key: string, label: string, getCounts: (bucket: string) => { p: number; a: number }): DefectSCurveSeries => {
+    // Pre-fill cumulative from any pre-window data: count all bucket entries < first bucket
+    const plan: number[] = [];
+    const actual: (number | null)[] = [];
+    const variance: (number | null)[] = [];
+
+    if (!buckets.length) return { key, label, plan, actual, variance };
+
+    // Initial cumulative from before window
+    let cumP = 0;
+    let cumA = 0;
+    if (key === TOTAL_KEY || key === OTHERS_KEY) {
+      // For composite series we still need pre-window. We'll iterate via getCounts per bucket only for window.
+      // Pre-window aggregation handled by caller via series counts map snapshot below.
+    }
+
+    for (let i = 0; i < buckets.length; i++) {
+      const b = buckets[i];
+      const inc = getCounts(b);
+      cumP += inc.p;
+      const isFuture = i > todayIndex && todayIndex >= 0;
+      cumA += isFuture ? 0 : inc.a;
+      plan.push(cumP);
+      actual.push(isFuture ? null : cumA);
+      variance.push(isFuture ? null : (inc.a - inc.p));
+    }
+    return { key, label, plan, actual, variance };
+  };
+
+  // Helper: returns counts for a bucket aggregating from the provided keys, also adding pre-window cumulative
+  const seriesCountsAggregator = (keys: string[]): { pre: { p: number; a: number }; perBucket: (b: string) => { p: number; a: number } } => {
+    let preP = 0, preA = 0;
+    const firstBucket = buckets[0];
+    const merged = new Map<string, { p: number; a: number }>();
+    for (const k of keys) {
+      const s = seriesMap.get(k);
+      if (!s) continue;
+      for (const [b, v] of s.byBucket) {
+        if (firstBucket && b < firstBucket) {
+          preP += v.p; preA += v.a;
+        } else {
+          let cur = merged.get(b);
+          if (!cur) { cur = { p: 0, a: 0 }; merged.set(b, cur); }
+          cur.p += v.p; cur.a += v.a;
+        }
+      }
+    }
+    return {
+      pre: { p: preP, a: preA },
+      perBucket: (b: string) => merged.get(b) ?? { p: 0, a: 0 },
+    };
+  };
+
+  // Total series — with pre-window cumulative seeded
+  const totalAgg = seriesCountsAggregator([TOTAL_KEY]);
+  const totalSeries = ((): DefectSCurveSeries => {
+    const plan: number[] = [];
+    const actual: (number | null)[] = [];
+    const variance: (number | null)[] = [];
+    let cumP = totalAgg.pre.p;
+    let cumA = totalAgg.pre.a;
+    for (let i = 0; i < buckets.length; i++) {
+      const b = buckets[i];
+      const inc = totalAgg.perBucket(b);
+      cumP += inc.p;
+      const isFuture = todayIndex >= 0 && i > todayIndex;
+      cumA += isFuture ? 0 : inc.a;
+      plan.push(cumP);
+      actual.push(isFuture ? null : cumA);
+      variance.push(isFuture ? null : (inc.a - inc.p));
+    }
+    return { key: TOTAL_KEY, label: 'Total', plan, actual, variance };
+  })();
+
+  // Per-group series
+  const groupSeries: DefectSCurveSeries[] = [];
+  if (groupBy) {
+    for (const gKey of groupOrder) {
+      const agg = seriesCountsAggregator([gKey]);
+      let cumP = agg.pre.p;
+      let cumA = agg.pre.a;
+      const plan: number[] = [];
+      const actual: (number | null)[] = [];
+      const variance: (number | null)[] = [];
+      for (let i = 0; i < buckets.length; i++) {
+        const b = buckets[i];
+        const inc = agg.perBucket(b);
+        cumP += inc.p;
+        const isFuture = todayIndex >= 0 && i > todayIndex;
+        cumA += isFuture ? 0 : inc.a;
+        plan.push(cumP);
+        actual.push(isFuture ? null : cumA);
+        variance.push(isFuture ? null : (inc.a - inc.p));
+      }
+      groupSeries.push({ key: gKey, label: getDefectGroupLabel(groupBy, gKey), plan, actual, variance });
+    }
+    if (othersKeys.size > 0) {
+      const agg = seriesCountsAggregator([...othersKeys]);
+      let cumP = agg.pre.p;
+      let cumA = agg.pre.a;
+      const plan: number[] = [];
+      const actual: (number | null)[] = [];
+      const variance: (number | null)[] = [];
+      for (let i = 0; i < buckets.length; i++) {
+        const b = buckets[i];
+        const inc = agg.perBucket(b);
+        cumP += inc.p;
+        const isFuture = todayIndex >= 0 && i > todayIndex;
+        cumA += isFuture ? 0 : inc.a;
+        plan.push(cumP);
+        actual.push(isFuture ? null : cumA);
+        variance.push(isFuture ? null : (inc.a - inc.p));
+      }
+      groupSeries.push({ key: OTHERS_KEY, label: `Others (${othersKeys.size})`, plan, actual, variance });
+    }
+  }
+
+  return { buckets, bucketLabels, todayIndex, total: totalSeries, groups: groupSeries, stage };
+}
+

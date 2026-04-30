@@ -1,107 +1,192 @@
 ## Goal
 
-T&C와 Defect 두 시스템에서 import되는 HDEC 인원을 이름 기준으로 동일인으로 인식하도록 통합합니다.
+Defect Dashboard의 **Plan vs Actual — S-Curve** 차트를 **계획 대비 실적 및 차이(Variance)** 관리가 핵심 목적임을 반영하도록 재디자인하고, **Progress 탭과 동일한 Group / Team / Bucket / Stage 토글 필터**를 S-Curve에 추가해 두 화면이 동일 기준으로 연동되도록 합니다.
 
-핵심 원칙:
-- 같은 이름의 **HDEC PIC** 는 T&C/Defect 어느 파일에서 들어오든 동일인
-- 한 사람이 **HDEC PIC + HDEC ENG** 를 동시에 맡을 수 있음
-- 따라서 **이름이 같으면 기본적으로 동일인** 으로 판단
-- 이 경우 **새 사용자를 생성하지 않고**, 기존 HDEC 프로필에 필요한 역할 컬럼만 채움
+## 현재 진단
 
-## Scope
+S-Curve 현재 구현의 한계:
 
-- `supabase/functions/auto-create-master-user/index.ts`
-- `src/lib/defect-master-autocreate.ts`
-- 필요 시 관련 테스트 보강
+1. **시각적 우선순위가 모호** — Plan(누적), Actual(누적), Met/Shortfall/Excess/FuturePlan bar 등 12개 시리즈가 한 차트에 동시 표출되어 "차이"가 한눈에 들어오지 않음.
+2. **Stage 선택 불가** — Completion과 Closure가 항상 함께 그려져, Start 단계나 특정 stage만 보고 싶을 때 불가능.
+3. **그룹 분해 불가** — 전체 합산 곡선만 표시되어 어느 Team/Sub Trade가 지연을 유발하는지 알 수 없음.
+4. **필터 불일치** — Progress 탭의 Group/Team/Bucket/Stage 필터와 별개 동작 → 두 페이지를 오갈 때 기준이 끊김.
+5. **Variance 미표시** — Plan과 Actual 간 차이를 별도 지표/시각화로 강조하지 않음.
 
-DB 스키마 변경은 필요 없습니다.
+## 제안 디자인
 
-## Changes
+### 1. 차트 구성 — 3-zone 레이아웃 (Variance 중심)
 
-### 1. HDEC 동일인 판정 규칙 통합
-
-`auto-create-master-user`의 기존 HDEC 조회 로직은 PIC와 ENG를 별도 사람처럼 찾고 있습니다.
-
-현재:
-- `hdec_pic` 요청 시 `hdec_pic_name`만 검색
-- `hdec_eng` 요청 시 `hdec_eng_name`만 검색
-
-변경:
-- HDEC 요청(`hdec_pic`, `hdec_eng`)이면 `profiles.user_type = 'hdec'` 범위에서
-- `hdec_pic_name` 또는 `hdec_eng_name` 중 **어느 컬럼에든 같은 이름이 있으면 기존 사용자로 매칭**
-
-즉, 같은 이름의 HDEC 인원은 역할 컬럼과 import 출처와 무관하게 한 사람으로 취급합니다.
-
-### 2. 기존 사용자 재사용 + 역할 컬럼 백필
-
-기존 HDEC 프로필을 찾은 경우:
-- `hdec_pic` 요청인데 `hdec_pic_name`이 비어 있으면 채움
-- `hdec_eng` 요청인데 `hdec_eng_name`이 비어 있으면 채움
-- 이미 값이 있으면 그대로 유지
-
-예시:
 ```text
-기존:  jh_lee  { hdec_pic_name: 'JH Lee', hdec_eng_name: null }
-새 요청: hdec_eng / 'JH Lee'
-결과:  jh_lee  { hdec_pic_name: 'JH Lee', hdec_eng_name: 'JH Lee' }
+┌─────────────────────────────────────────────────────────────┐
+│  Plan vs Actual — S-Curve            [Stage: Comp ▼]        │
+│                                       [Group · Team · Bucket]│
+├─────────────────────────────────────────────────────────────┤
+│  KPI strip:                                                  │
+│   Plan(cum) 1,240   Actual(cum) 1,083   Δ -157 (-12.7%)      │
+│   Today: 30 Apr 2026   Window: 15 Apr ~ 07 Jun               │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│   [Main chart] Cumulative Plan vs Actual (선)                │
+│     · Plan:    dashed line                                   │
+│     · Actual:  solid line, today 이후는 끊어짐               │
+│     · Today:   세로 reference line                           │
+│     · Group 분해 시: 각 그룹별 색상 line (최대 8개)          │
+│                                                              │
+├─────────────────────────────────────────────────────────────┤
+│   [Variance subchart] Δ = Actual - Plan (막대)               │
+│     · 음수(빨강) = 지연, 양수(녹색) = 초과 달성              │
+│     · today 이후 그레이 = "Plan ahead" (예정 물량)           │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-즉, 동일인이라면 새 user를 만들지 않고 기존 프로필만 보강합니다.
+핵심 포인트:
+- **메인 차트는 누적 plan vs actual 라인만** — 시각적으로 가장 중요한 "벌어진 갭"을 즉시 인지 가능.
+- **하단 보조 차트가 Variance bar** — 어느 시점부터 갭이 벌어졌는지/회복됐는지 한눈에 파악.
+- **상단 KPI strip** — Plan(cum), Actual(cum), Δ(절댓값+%), 기간 정보를 차트 위에 고정 표시.
+- **Today reference line** 양 차트에 동기화.
 
-### 3. 신규 생성 조건 축소
+### 2. Stage 단일 선택 (Completion / Closure / Start)
 
-새 HDEC 사용자는 아래 조건에서만 생성합니다.
-- 같은 이름으로 매칭되는 기존 HDEC 프로필이 전혀 없을 때
+Progress 탭과 달리 S-Curve는 **한 번에 한 stage만** 그리는 것이 가독성에 유리합니다.
+이유: stage별로 곡선의 의미와 척도가 달라 겹쳐 그리면 비교가 어렵습니다.
 
-즉 아래 경우에는 생성하지 않습니다.
-- T&C에서 이미 PIC로 생성된 이름이 Defect에서 다시 PIC로 들어온 경우
-- PIC로 있던 사람이 ENG로도 들어온 경우
-- ENG로 먼저 있던 사람이 PIC로 들어온 경우
+토글:
+- **Start** — 착공 plan vs actual
+- **Comp** — 완료 plan vs actual (기본값)
+- **Close** — 종결 plan vs actual
 
-### 4. 클라이언트 import 캐시 정렬
+(Progress 탭에서는 multi-select이지만, S-Curve에서는 single-select로 운용 — 단 토글 UI 외형은 Progress와 동일)
 
-`src/lib/defect-master-autocreate.ts`에서도 현재 HDEC PIC와 HDEC ENG를 분리 캐시하고 있으므로,
-이를 **사람(person) 단위 캐시**로 정리합니다.
+### 3. Group 분해
 
-변경 방향:
-- HDEC는 `name` 기준 단일 person key로 인지
-- 다만 PIC/ENG 중 어떤 역할이 이미 채워졌는지는 별도로 추적
-- 같은 batch 내에서 같은 사람이 다른 역할로 다시 등장하면 호출을 완전히 막지 않고,
-  필요한 경우 backend를 한 번 더 호출해 누락 역할 컬럼이 백필되도록 함
+- **Group: 단일 차원 single-select** (Progress의 multi-select와 차별화)
+  - 'All (no breakdown)' 기본값 — 전체 단일 곡선
+  - 선택 시 해당 차원의 상위 N개(기본 8) 그룹별로 plan/actual 곡선 분리
+  - 9번째 이후는 "Others"로 묶음
+- 너무 많은 라인이 그려지면 차트가 무의미해지므로 N=8 상한 적용.
+- Group 선택 시 메인 차트는 그룹별 plan(점선) + actual(실선) — 같은 색상으로 짝지어 표시.
 
-이렇게 하면 import 중에도 동일인을 중복 user로 만들지 않고, 필요한 역할 정보만 안전하게 보강할 수 있습니다.
+### 4. Team 필터
 
-### 5. 테스트 보강
+- Progress 탭과 동일한 Select (All / 각 Team)
+- 동일한 `team` 쿼리 파라미터 공유 → 두 페이지에서 자동 연동.
 
-다음 시나리오를 검증합니다.
+### 5. Bucket 필터
 
-1. 같은 이름의 HDEC PIC가 서로 다른 import 경로(T&C/Defect)에서 들어와도 기존 사용자 재사용
-2. 같은 이름이 PIC → ENG 순서로 들어오면 새 user 없이 기존 프로필에 `hdec_eng_name` 추가
-3. 같은 이름이 ENG → PIC 순서로 들어오면 새 user 없이 기존 프로필에 `hdec_pic_name` 추가
-4. 완전히 새로운 이름일 때만 신규 user 생성
-5. 동일 이름 재호출 시 `jh_le2` 같은 파생 login_id가 더 이상 생기지 않음
+- Day / Week 토글 (Progress 탭과 동일 외형)
+- 동일한 `bucket` 쿼리 파라미터 공유.
+
+### 6. URL 쿼리 파라미터 통합
+
+S-Curve와 Progress 탭이 같은 키를 공유하도록 합니다:
+
+| 파라미터 | Progress | S-Curve | 비고 |
+|---|---|---|---|
+| `team` | ✓ | ✓ | 완전 공유 |
+| `bucket` | ✓ | ✓ | 완전 공유 |
+| `stage_view` | multi (`start,completion,closure`) | single (`completion`) | 형식 호환, S-Curve는 첫 값 사용 |
+| `group` | multi | single | S-Curve는 첫 값 사용; `none` = no breakdown |
+| `scurve_start` | — | ✓ | 기존 유지 |
+| `scurve_end` | — | ✓ | 기존 유지 |
+
+→ Dashboard에서 Team을 'PE2'로 설정 후 Progress 탭으로 이동 시 동일 Team이 적용된 상태로 진입.
+
+### 7. 인터랙션
+
+- **차트 클릭**: 특정 bucket bar 또는 line point 클릭 시 해당 기간/stage의 Defect 목록(Raw Data)으로 이동
+  - 쿼리: `dateField` + `dateFrom`/`dateTo` (Progress 탭의 `goRaw` 패턴 그대로 재사용)
+- **Legend 클릭**: 그룹 라인 토글 표시/숨김
+- **Hover tooltip**: 해당 bucket의 Plan, Actual, Δ, Δ% 표기
+
+### 8. 토글 필터 UI 위치
+
+S-Curve Card의 헤더 영역에 Progress 탭과 동일 컴포넌트 배치:
+
+```text
+[▼ Plan vs Actual — S-Curve]         [Date range] [Bucket] [Export]
+                                      ──────────────────────────────
+[Group: All · Team · Sub Trade ...]  [Team: All Teams ▼]
+[Stage: Start · Comp · Close]
+```
+
+`ToolbarGroup` / `ToggleGroup` / `Select` 컴포넌트 모두 Progress 탭과 동일하게 재사용.
 
 ## Technical details
 
-구현 방식:
-- `findExistingMasterUser`에서 HDEC는 두 컬럼 OR 검색
-- 기존 row를 찾으면 현재 프로필을 재조회해 누락된 HDEC 역할 컬럼만 patch
-- 신규 생성 시에는 요청된 역할 컬럼만 우선 채우고, 이후 다른 역할 요청이 오면 백필 로직이 처리
-- 클라이언트 측 `profileKeys` / role tracking도 이름 기준으로 통합
+### 변경 파일
 
-예상 최종 데이터 형태:
+1. **`src/lib/defect-dashboard-utils.ts`** — `buildDefectSCurve` 시그니처 확장
+   - 인자에 `stage: DefectScheduleStage` 추가 (단일 stage 처리)
+   - 인자에 `groupBy?: DefectScheduleGroupBy | null` 추가 (없으면 전체 합산)
+   - 반환 타입 변경: 그룹별로 plan/actual 분해된 시리즈
+   - 새 반환 형태:
+     ```ts
+     type DefectSCurvePoint = {
+       bucket: string;
+       bucketLabel: string;
+       isFuture: boolean;
+       totalPlan: number;
+       totalActual: number | null;
+       totalVariance: number | null;     // actual - plan (today까지만)
+       byGroup?: Record<string, { plan: number; actual: number | null }>;
+     };
+     ```
+
+2. **`src/pages/DefectDashboardPage.tsx`** — S-Curve Card 재작성
+   - 기존 12-series 차트 제거 → 누적 라인 차트 + Variance bar 차트(분리된 ComposedChart 또는 2-row layout)
+   - Progress 탭에서 사용하는 `ToolbarGroup`, `ToggleGroup` 임포트 후 헤더에 배치
+   - 새 state: `scurveGroup`, `scurveStage` (Team/Bucket은 기존 `teamFilter` / `scurveBucket` 재사용 — Team은 dashboard 전체 필터로 승격)
+   - URL sync: `group`, `stage_view` 추가 (Progress와 동일 키)
+   - KPI strip 컴포넌트 (Plan/Actual/Δ/Δ%) 추가
+   - Group 분해 시 상위 8개 그룹 산출 + Others 합산 헬퍼
+
+3. **`src/lib/defect-dashboard-utils.ts`** — 헬퍼 추가
+   - `topGroups(items, groupBy, n)` — 그룹별 plan 총량 기준 상위 N
+   - `getGroupKeyFor(item, groupBy)` — Progress의 `getDefectGroupKey` 재사용
+
+### Progress 탭 변동 사항
+
+코드 수정 없음. URL 키만 호환 유지 (`team`, `bucket`은 이미 동일).
+S-Curve가 `group`/`stage_view`에 단일 값을 쓰더라도 Progress 탭 파서는 multi-value로 받기 때문에 정상 동작.
+
+### Color palette
+
+- **Plan**: `hsl(var(--muted-foreground))` (점선)
+- **Actual**: `hsl(var(--primary))` (실선)
+- **Variance(-)**: `hsl(var(--destructive))`
+- **Variance(+)**: emerald(녹색 토큰 추가 또는 chart-2)
+- **Future Plan**: `hsl(var(--muted))`
+- **Group 분해 시**: chart-1 ~ chart-8 토큰 순환
+
+### Visual mockup (data flow 예시)
+
 ```text
-profiles
-- login_id: jh_lee
-- user_type: hdec
-- hdec_pic_name: 'JH Lee'
-- hdec_eng_name: 'JH Lee'
+Cumulative Completion (count)
+  1,500 ┤            Plan ╱╱╱╱╱
+  1,250 ┤        ╱╱╱╱
+  1,000 ┤    ╱╱╱╱  Actual ────
+    750 ┤ ╱╱╱─────
+    500 ┤╱──
+        └─────────────────────────────  ← Today
+        15 Apr   30 Apr   15 May   31 May
+
+Variance (Actual − Plan, 일자별 증분)
+   +20 ┤                  ▇
+     0 ┼──▇──▇──▇──▇──▇──────▇──
+   −20 ┤        ▇   ▇  ▇        ▇  ▇    ← 지연 발생
+   −40 ┤              ▇    ▇
+        15 Apr   30 Apr   15 May
 ```
 
 ## Out of scope
 
-- subcontractor / subsub 동일인 규칙 변경
-- 기존 데이터 대량 정리 마이그레이션
-- 화면 UI 변경
+- T&C 모듈의 S-Curve 변경 (요청은 Defect 한정)
+- 새 DB 컬럼/마이그레이션 (기존 plan/actual 날짜 컬럼만 사용)
+- 다른 dashboard 카드(Top 10 Overdue, Status Distribution 등)의 디자인 변경
+- 기존 export 포맷 변경
 
-필요하다면 구현 후 별도로, 이미 생성된 중복 HDEC 계정을 정리하는 후속 작업 계획을 추가할 수 있습니다.
+## 구현 후 사용자 가치
+
+- "어느 stage에서, 어느 team이, 언제부터, 얼마나 지연되었는가"를 차트 한 장에서 즉시 파악
+- Progress 탭과 동일한 필터 mental model로 두 화면을 자연스럽게 오갈 수 있음
+- Variance bar로 회복 추세 / 악화 추세도 시각적으로 분명히 구분
