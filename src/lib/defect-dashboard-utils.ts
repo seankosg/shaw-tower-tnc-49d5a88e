@@ -417,3 +417,37 @@ export function buildDefectSCurve(items: DefectForDashboard[], options: BuildSCu
   return { buckets, bucketLabels, todayIndex, total: totalSeries, groups: groupSeries, stage };
 }
 
+export type DefectSCurveStageOpt = DefectScheduleStage | 'all';
+
+export interface DefectSCurveAllResult {
+  buckets: string[];
+  bucketLabels: string[];
+  todayIndex: number;
+  byStage: Record<DefectScheduleStage, DefectSCurveSeries>;
+}
+
+/**
+ * All-stage S-curve: builds Plan/Actual cumulative + per-bucket increments
+ * for Start, Completion, and Closure stages over the same bucket axis.
+ */
+export function buildDefectSCurveAllStages(
+  items: DefectForDashboard[],
+  options: Omit<BuildSCurveOptions, 'stage' | 'groupBy' | 'topN'>,
+): DefectSCurveAllResult {
+  const stages: DefectScheduleStage[] = ['start', 'completion', 'closure'];
+  const results = stages.map((s) =>
+    buildDefectSCurve(items, { ...options, stage: s, groupBy: null }),
+  );
+  const byStage = {
+    start: results[0].total,
+    completion: results[1].total,
+    closure: results[2].total,
+  };
+  return {
+    buckets: results[0].buckets,
+    bucketLabels: results[0].bucketLabels,
+    todayIndex: results[0].todayIndex,
+    byStage,
+  };
+}
+
