@@ -1239,8 +1239,8 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
 
   const cfg: ChartConfig = isGroupMode
     ? Object.fromEntries(stages.flatMap((s) =>
-        groupKeys.flatMap((gk, idx) => {
-          const color = GROUP_LINE_COLORS[idx % GROUP_LINE_COLORS.length];
+        groupKeys.flatMap((gk) => {
+          const color = STAGE_COLORS[s].line;
           const gLabel = groupLabelByKey.get(gk) ?? gk;
           return [
             [`gp_${s}_${gk}`, { label: `${stageLabel[s]} · ${gLabel} Plan`,   color }],
@@ -1259,12 +1259,15 @@ function SCurveChartsAllStages({ scurveAll, onBucketClick }: {
     `variance_${s}`, { label: `${stageLabel[s]} Δ`, color: STAGE_COLORS[s].line },
   ])) as ChartConfig;
 
-  // Stage stroke pattern in group mode: differentiate stages by dash style.
-  const stageDash: Record<DefectScheduleStage, string | undefined> = {
-    start: '2 3',
-    completion: undefined,
-    closure: '6 3',
-  };
+  // Group stroke pattern in group mode: differentiate groups by dash style (color encodes stage).
+  const GROUP_DASH: (string | undefined)[] = [
+    undefined,    // 1st group: solid
+    '6 3',        // 2nd: long dash
+    '2 3',        // 3rd: dotted
+    '8 3 2 3',    // 4th: dash-dot
+    '4 2 2 2',    // 5th
+    '10 4',       // 6th
+  ];
 
   return (
     <div className="space-y-2">
