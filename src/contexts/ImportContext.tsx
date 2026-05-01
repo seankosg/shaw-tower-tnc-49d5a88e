@@ -358,9 +358,109 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     ) => {
       fieldLogs.push(buildFieldLog('tnc', { rawRowNo, field, outcome, ...opts }));
     };
+
+    // -------- BULK MASTER PRE-CREATION --------
+    // Scan parsed rows once, find all subcontractor / subsub / hdec_pic names that
+    // do not yet exist, insert them in a single batch, then fire all
+    // auto-create-master-user edge function calls in parallel. This replaces the
+    // previous per-row sequential `await ensureXxx()` pattern.
+    {
+      const subToCreate = new Map<string, string>(); // key -> displayName
+      const subsubToCreate = new Map<string, { name: string; parentName: string | null }>();
+      const hdecToCreate = new Map<string, string>();
+      for (const row of parsed) {
+        const sName = row.subcontractor_name?.trim();
+        if (sName && !subconCache.has(sName.toLowerCase())) subToCreate.set(sName.toLowerCase(), sName);
+        const ssName = row.subsub_name?.trim();
+        if (ssName && !subsubCache.has(ssName.toLowerCase())) {
+          subsubToCreate.set(ssName.toLowerCase(), { name: ssName, parentName: row.subcontractor_name?.trim() || null });
+        }
+        const hName = row.hdec_pic_name?.trim();
+        if (hName && !hdecCache.has(hName.toLowerCase())) hdecToCreate.set(hName.toLowerCase(), hName);
+      }
+
+      // Insert new sub-contractors
+      if (subToCreate.size > 0) {
+        const rows = Array.from(subToCreate.values()).map(name => ({ name, type: 'sub' as const }));
+        const { data: inserted } = await supabase.from('subcontractor_master').insert(rows as any).select('id, name');
+        (inserted || []).forEach(r => subconCache.set(r.name.toLowerCase().trim(), { id: r.id, active: true }));
+      }
+      // Insert new subsubs (after parents exist)
+      if (subsubToCreate.size > 0) {
+        const fallbackParent = subconCache.values().next().value?.id ?? null;
+        const rows = Array.from(subsubToCreate.values()).map(({ name, parentName }) => {
+          const pid = parentName ? subconCache.get(parentName.toLowerCase().trim())?.id ?? fallbackParent : fallbackParent;
+          return pid ? { name, type: 'subsub' as const, parent_subcontractor_id: pid } : null;
+        }).filter(Boolean) as any[];
+        if (rows.length > 0) {
+          const { data: inserted } = await supabase.from('subcontractor_master').insert(rows).select('id, name, parent_subcontractor_id');
+          (inserted || []).forEach((r: any) => subsubCache.set(r.name.toLowerCase().trim(), { id: r.id, active: true, parent_id: r.parent_subcontractor_id }));
+        }
+      }
+      // Insert new hdec_pics
+      if (hdecToCreate.size > 0) {
+        const rows = Array.from(hdecToCreate.values()).map(name => ({ name }));
+        const { data: inserted } = await supabase.from('hdec_pic_master').insert(rows).select('id, name');
+        (inserted || []).forEach(r => hdecCache.set(r.name.toLowerCase().trim(), { id: r.id, active: true }));
+      }
+
+      // Fire auto-create-master-user edge calls in parallel (best-effort).
+      const userCreateCalls: Promise<void>[] = [];
+      for (const name of subToCreate.values()) {
+        userCreateCalls.push(
+          supabase.functions.invoke('auto-create-master-user', {
+            body: { name, master_type: 'subcontractor', subcontractor_name: name },
+          }).then(({ error }) => { if (error) userCreateFails.push(`${name} (sub): ${error.message}`); }),
+        );
+      }
+      for (const { name, parentName } of subsubToCreate.values()) {
+        userCreateCalls.push(
+          supabase.functions.invoke('auto-create-master-user', {
+            body: { name, master_type: 'subsub', subcontractor_name: parentName, subsub_name: name },
+          }).then(({ error }) => { if (error) userCreateFails.push(`${name} (subsub): ${error.message}`); }),
+        );
+      }
+      for (const name of hdecToCreate.values()) {
+        userCreateCalls.push(
+          supabase.functions.invoke('auto-create-master-user', {
+            body: { name, master_type: 'hdec_pic', hdec_pic_name: name },
+          }).then(({ error }) => { if (error) userCreateFails.push(`${name} (hdec_pic): ${error.message}`); }),
+        );
+      }
+      // Don't block import on user-account creation; let it run in background.
+      void Promise.all(userCreateCalls);
+    }
+
+    // -------- BULK PREFETCH OF EXISTING SUBTESTS --------
+    // Single query (chunked by item_no) replaces three per-row selects.
+    const existingByKey = new Map<string, any>();
+    {
+      const itemNos = Array.from(new Set(parsed.map(r => r.item_no).filter(Boolean) as string[]));
+      const CHUNK = 500;
+      for (let i = 0; i < itemNos.length; i += CHUNK) {
+        const slice = itemNos.slice(i, i + CHUNK);
+        const { data: existingRows } = await supabase.from('subtests')
+          .select('id, project_id, system_id, item_no, mos_code, subtest_id, row_version, is_active, custom_payload, ' +
+                  'pred_planned_date, t1_planned_date, t2_planned_date, ' +
+                  'r1_target_submission_date, r2_target_submission_date, r2_target_approval_date, ' +
+                  't1_status, t1_actual_date, t2_status, t2_actual_date, ' +
+                  'pred_status, pred_actual_date, r1_status, r2_status')
+          .eq('project_id', projectId!)
+          .in('item_no', slice);
+        (existingRows || []).forEach((r: any) => {
+          existingByKey.set(`${r.system_id}|${r.item_no}|${r.mos_code}`, r);
+        });
+      }
+    }
+
+    // Throttled progress: only re-render every PROGRESS_STEP rows.
+    const PROGRESS_STEP = Math.max(1, Math.floor(parsed.length / 50));
+
     for (let i = 0; i < parsed.length; i++) {
       const row = parsed[i];
-      updateFile(item.id, { progress: Math.round(((i + 1) / parsed.length) * 100) });
+      if (i % PROGRESS_STEP === 0 || i === parsed.length - 1) {
+        updateFile(item.id, { progress: Math.round(((i + 1) / parsed.length) * 100) });
+      }
 
       const systemId = await resolveSystem(row.raw_system_name);
       if (!systemId) {
