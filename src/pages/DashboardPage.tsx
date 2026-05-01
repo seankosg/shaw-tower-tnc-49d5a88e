@@ -258,6 +258,36 @@ export default function DashboardPage() {
     [filteredSubtests, scurveBucket, scurveStart, scurveEnd, today]
   );
 
+  const handleSCurveExport = async () => {
+    if (scurve.length === 0) {
+      toast({ title: 'No data to export', description: 'S-Curve has no points in the selected range.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const filters: Array<[string, string]> = [
+        ['Team', teamFilter === 'all' ? 'All teams' : (TEAM_LABELS[teamFilter as TeamType] ?? teamFilter)],
+      ];
+      if (selectedSystemFilters.length > 0) filters.push(['Systems', selectedSystemFilters.join(', ')]);
+      if (systemTextFilter.trim()) filters.push(['System search', systemTextFilter.trim()]);
+      const { rowCount, fileName } = await exportTncSCurveToExcel({
+        scurve,
+        today,
+        bucket: scurveBucket,
+        rangeStart: scurveStart,
+        rangeEnd: scurveEnd,
+        filters,
+        totalIncluded: filteredSubtests.length,
+        exportedByName: profile?.name || profile?.login_id || 'unknown',
+        exportedByRole: roles[0] || profile?.user_type || 'user',
+        chartElement: scurveChartRef.current,
+      });
+      toast({ title: 'Export complete', description: `${rowCount} buckets → ${fileName}` });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: 'Export failed', description: msg, variant: 'destructive' });
+    }
+  };
+
   // ───── Top Overdue
   const topOverdue = useMemo(() => {
     return filteredSubtests
