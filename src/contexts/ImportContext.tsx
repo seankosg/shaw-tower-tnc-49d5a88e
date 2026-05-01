@@ -189,9 +189,19 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         return;
       }
     }
-    updateFile(id, { status: 'parsing', selectedSheet: sheetName });
+    // Sheet change → headers may differ → reset excludedHeaders.
+    updateFile(id, { status: 'parsing', selectedSheet: sheetName, excludedHeaders: [], excludedFields: undefined });
     parseAndApply(id, buf, sheetName);
   }, [files, parseAndApply]);
+
+  const setFileExcludedHeaders = useCallback((id: string, excluded: string[]) => {
+    const fields = new Set<string>();
+    for (const h of excluded) {
+      const f = normalizeHeader(h);
+      if (f) fields.add(f);
+    }
+    updateFile(id, { excludedHeaders: excluded, excludedFields: fields });
+  }, []);
 
   const processFile = async (item: ImportFileItem): Promise<{ inserted: number; updated: number; skipped: number; rejected: number } | null> => {
     if (!item.parsed) return null;
@@ -823,7 +833,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   return (
     <ImportContext.Provider value={{
       files, isRunning, currentIndex,
-      addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet,
+      addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet, setFileExcludedHeaders,
     }}>
       {children}
     </ImportContext.Provider>
