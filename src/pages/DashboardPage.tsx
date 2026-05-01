@@ -53,6 +53,8 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { value: atRiskDays } = useAtRiskThreshold();
+  const { profile, roles } = useAuth();
+  const scurveChartRef = useRef<HTMLDivElement | null>(null);
   const [subtests, setSubtests] = useState<SubtestForDashboard[]>([]);
   const [systems, setSystems] = useState<SystemRef[]>([]);
   const [loading, setLoading] = useState(true);
