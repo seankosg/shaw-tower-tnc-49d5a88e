@@ -1,89 +1,106 @@
-## T&C Import — Column Select Dialog 추가
 
-Defect Import의 "Select Columns" 다이얼로그(체크박스로 import 컬럼 선택)를 T&C Import 페이지에도 동일한 UX로 붙입니다.
+## 목적
 
-### Defect 쪽 동작 (참고)
+T&C Re-import는 현재 **행 1개당 3~5회의 Supabase 왕복**을 실행합니다. 1,000행이면 3,000~5,000회 네트워크 호출이 직렬로 발생해, 대형 파일에서는 분 단위로 늘어집니다. 이를 **파일 시작 시 1회 prefetch + 행 처리는 메모리 연산 + 끝에서 배치 쓰기**로 재구성해 **5~20배** 빠르게 만듭니다.
 
-- `addFiles` 시 `getDefectExcelHeaders()`로 헤더만 먼저 빠르게 읽어 `availableHeaders` + `headerSamples` 보관
-- 파일 카드에 "Select Columns (N/M)" 버튼 → 모달 오픈
-- 모달에서 컬럼별 checkbox, "Select all / Deselect all / Reset" 등 액션, sample 미리보기, "Required" 뱃지(필수 필드 제외 시 경고)
-- Apply 시 `excludedHeaders` 갱신 → 재파싱(`parseDefectExcel(file, sheet, excluded)`) → `excludedFields`(canonical 필드명) 도출 → import 단계에서 해당 필드의 변경 감지/감사/payload 작성을 스킵 → import 속도 향상
+## 현재 병목 (`src/contexts/ImportContext.tsx`, `processFile` 루프)
 
-### T&C에 이식할 때의 차이점
+행당 발생하는 await:
+1. `subtests select` — 본 레코드 조회 (line 407)
+2. `subtests select` — t1/t2/pred status·actual_date 재조회 (line 489) ← **(1)과 동일 행**
+3. `subtests select` — r1/r2 target/status 재조회 (line 523) ← **(1)과 동일 행**
+4. `subtests update` 또는 `insert` (line 556 / 675)
+5. `ensureSubcontractor / ensureSubsub / ensureHdecPic` — 캐시 미스 시 insert + edge function 호출
 
-1. **헤더 detection anchor가 다르다**
-   - Defect: `issue_no` 1개로 헤더 행 식별
-   - T&C: `item_no | subtest_id | mos_code | mos_1..mos_5` 중 하나
-   - → 헤더 미리보기 함수도 T&C용으로 별도 구현 필요
+추가로 `system_master`/`alias`/`subcontractor_master`/`hdec_pic_master`는 파일당 1회만 prefetch하지만, **upload_row_logs / change_log / field_logs는 끝에서 100~200건씩 직렬 chunk insert**라 수천 행에서 누적 지연이 큽니다.
 
-2. **field config hook이 다르다**
-   - Defect: `useDefectFieldConfig` (`isFieldRequired`, `getLabel`, `getSourceOrigin`, `getSourceLabel`)
-   - T&C: `useFieldConfig` (`isFieldRequired`만 있음, label/origin 없음)
-   - → ColumnSelectDialog는 **module-agnostic하게 일반화**하거나, T&C용 별도 dialog를 만들거나 둘 중 하나
-   - 채택안: `ColumnSelectDialog` 시그니처를 props로 받도록 일반화 (parser-specific 로직 주입)
+## 효율화 전략
 
-3. **필수 컬럼 정의가 다르다**
-   - Defect: `issue_no`(시스템), Re-import 시 `id`, field config의 required
-   - T&C: `item_no` + `mos_code`(또는 `subtest_id`)가 system, field config의 required 필드들. 또한 standard/legacy 판정에 필요한 키 컬럼들(`subtest_id`, `t1_planned_date`, `team` 등)을 빼면 import가 unknown으로 떨어질 수 있음 → 이런 컬럼은 "system required"로 잠금
+### 1. 행당 select 3회 → 0회 (가장 큰 이득)
 
-4. **excludedFields 적용 지점**
-   - 현재 T&C `processFile`은 `fields: [string, string|null][]` 배열로 일괄 update 빌드 → `excludedFields` set이 있으면 `fields.filter(([f]) => !excluded.has(f))` 한 줄로 적용 가능
-   - 변경 감지/필드 로그/audit도 동일한 set을 참조해 스킵
+`existing`, `existingDates`, `existingR`은 사실상 **같은 row의 다른 컬럼**입니다. 다음으로 통합:
 
-### 변경 파일
+- 파일 시작 시 `(item_no, mos_code)` 쌍 전체를 모아서 **단일 쿼리**로 prefetch:
+  ```ts
+  // chunk by 500쌍씩 .or() 또는 IN tuple
+  supabase.from('subtests')
+    .select('id, project_id, system_id, item_no, mos_code, subtest_id, row_version, is_active,
+             pred_planned_date, t1_planned_date, t2_planned_date,
+             r1_target_submission_date, r2_target_submission_date, r2_target_approval_date,
+             t1_status, t1_actual_date, t2_status, t2_actual_date,
+             pred_status, pred_actual_date, r1_status, r2_status, custom_payload')
+    .eq('project_id', projectId)
+    .in('item_no', uniqueItemNos)   // 1차 좁히기
+  ```
+  결과를 `Map<\`${item_no}|${mos_code}\`, ExistingRow>`로 메모리에 보관.
+- 행 루프에서는 `existingMap.get(key)` 단일 조회 — **DB 왕복 0회**.
+- 효과: 1,000행 기준 **3,000회 → ~2회** select.
 
-**`src/lib/import-parser.ts`** — 헤더 미리보기 함수 추가
-- `getTncExcelHeaders(file: File, sheetName?: string): Promise<{ headers: string[]; sample: Record<string, unknown>; sheetName: string; headerRowIdx: number } | null>`
-  - 이미 있는 `detectTncHeaderRow` + `parseExcelFile`을 활용
-  - `parseExcelFile` 결과의 `rawHeaders`와 첫 데이터 행을 묶어서 반환
-- `parseExcelFile`에 `excludedHeaders?: string[]` 옵션 추가
-  - 추가 처리 없이 그대로 두고, **excludedFields 적용은 ImportContext에서 한다** (parseExcelFile 출력은 그대로 두고 ImportContext가 excluded set을 참조)
-  - 이유: 헤더 매핑 결과(`mappedHeaders`, `unmappedHeaders`)는 그대로 두는 게 detector(`detectImportType`)에 유리하므로
+### 2. update/insert 배치화
 
-**`src/components/import/ColumnSelectDialog.tsx`** — 일반화
-- 현재 hard-coded인 `toFieldName`(defect-parser) / `useDefectFieldConfig` 의존성을 props로 분리:
-  - `toFieldName: (header: string) => string` — parser별로 주입
-  - `getRequirement: (header: string) => Requirement` — module별 정책 주입 (or 전체 logic을 호출자에서 만들어 props로 전달)
-  - `getSourceLabel?(field): string` / `getSourceOrigin?(field): 'hdec'|'aconex'|'system'` — optional, T&C에서는 미사용
-  - "Aconex only / HDEC only" 빠른 액션 버튼 → optional 노출 (T&C는 숨김)
-- 기존 Defect 호출부는 helper 객체를 만들어 `{ toFieldName, getRequirement, getSourceLabel, getSourceOrigin }`을 넘기는 방식으로 1줄 수정
+행 단위 `await update/insert`를 두 개의 버킷에 적재:
+- `pendingInserts: SubtestInsert[]`
+- `pendingUpdates: { id, patch }[]`
 
-**`src/contexts/ImportContext.tsx`**
-- `ImportFileItem`에 추가:
-  - `availableHeaders?: string[]`
-  - `headerSamples?: Record<string, unknown>`
-  - `excludedHeaders?: string[]` (default `[]`)
-  - `excludedFields?: Set<string>` (canonical 필드명 set, derive)
-- `addFiles` 흐름:
-  - 시트 1개일 때: `parseAndApply` 직후 `availableHeaders`/`headerSamples` 같이 채우기 (parseExcelFile 결과 활용)
-  - 시트 여러 개일 때: 시트 선택 후 동일하게 채우기 (`setFileSheet` 안에서)
-- 새 메서드 `setFileExcludedHeaders(id, excluded)`:
-  - 파일의 `excludedHeaders` 갱신 → `excludedFields` 재계산(`new Set(excluded.map(normalizeHeader))`) → 상태 patch
-  - 재파싱은 불필요 (파싱 결과는 그대로, import 단계에서 필터링)
-- `processFile` 내 `fields: [string, string|null][]` 빌드 직후 `excludedFields` 있으면 `fields = fields.filter(([f]) => !excludedFields.has(f))` 적용
-  - 필드 로그(`fl(...)`)도 같은 set으로 스킵
-  - changeLogs/audit 작성 부분도 `excludedFields.has(field)` 체크 추가
+루프 종료 후:
+- **Insert**: `supabase.from('subtests').insert(pendingInserts, { defaultToNull: false })`를 **500건 chunk**로.
+- **Update**: 동일한 컬럼 셋을 갖는 행은 `upsert(rows, { onConflict: 'id' })`로 한 번에 보냄. 컬럼 셋이 다양하면 100건 chunk의 `upsert` 호출로도 충분 (행당 단일 update 1,000회 → 10회).
+- 단, `row_version` 낙관적 잠금이 필요한 경우 update만 별도 처리. 현재 코드는 `existing.row_version + 1`을 단순 증가만 하므로 conflict 검사 없이 upsert 가능.
 
-**`src/pages/ImportPage.tsx`**
-- import 추가: `Settings2` 아이콘, `ColumnSelectDialog`, `useState` for `columnDialogFileId`
-- 파일 카드의 컨트롤 줄(Sheet/Date/Team 옆)에 "Select Columns (N/M)" 버튼 추가 (`availableHeaders`가 있을 때만 노출)
-- 모달 렌더 (DefectImportPage와 동일한 패턴)
-- Required helper 정의 (T&C 정책):
-  - `item_no`, `mos_code` 또는 `subtest_id` → system required
-  - `useFieldConfig.isFieldRequired(field)` → config required
-  - 메시지 한글 톤은 Defect와 일관되게 영어 유지(코어 룰: UI labels in English)
+효과: 1,000행 기준 **1,000회 update → 10~20회 upsert**.
 
-### 비목표
+### 3. 마스터 자동 생성(ensureXxx) 비동기 직렬 → 사전 일괄
 
-- DB 스키마/RLS 변경 없음
-- Header Mappings(별칭) 관리 UI 변경 없음
-- excludedHeaders는 파일별 1회성 — 영구 저장 없음 (Defect와 동일)
+루프 전에 `parsed` 전체를 스캔해 **새로 생성해야 할 subcontractor/subsub/hdec_pic 이름 집합**을 구함. 그 다음:
+- `subcontractor_master`에 일괄 insert (chunk 100).
+- `auto-create-master-user` edge function 호출은 **`Promise.all`로 병렬화** (현재는 행 처리 중간에 직렬 await).
+- 캐시를 다시 한번 채운 뒤 행 루프 진입.
 
-### 테스트 시나리오
+효과: 신규 마스터 N건일 때 **N회 직렬 await → 1~2회 batch + 병렬 edge call**.
 
-1. SHAW_Subtests export 파일 업로드 → 25개 헤더 인식 → "Select Columns (25/25)" 버튼 노출
-2. 모달에서 `__select`, `Progress` 체크 해제 → Apply → 버튼 라벨 "23/25"로 갱신, unmapped 경고 영향 없음
-3. `item_no` 체크 해제 시도 → toast 경고 "required" + 적용은 가능하지만 모달 하단 경고 박스 표시
-4. Execute Import → 제외된 필드는 update payload, 필드 로그, audit에서 빠짐 (DB query로 확인)
-5. legacy(MOS-1~5) 파일 → 동일하게 동작, `mos_1` 등은 system required로 표시
-6. 시트 변경 → `availableHeaders`/`headerSamples`도 새 시트 기준으로 갱신, `excludedHeaders` 초기화
+### 4. 로그 insert 병렬화
+
+현재 `rowLogs / scheduleChangeAudits / changeLogs / fieldLogs`를 100~200건씩 **순차** chunk insert. 이들은 서로 무관하므로:
+- 각 테이블별로 chunk 배열을 만든 뒤 `Promise.all(chunks.map(c => supabase.from(t).insert(c)))`.
+- chunk 크기를 500으로 상향 (PostgREST 기본 한계 내).
+
+효과: 로그 쓰기 시간 **N배 (병렬도)** 단축.
+
+### 5. progress 업데이트 throttle
+
+`updateFile(item.id, { progress })`를 **행마다** 호출 → React 전체 리렌더가 1,000회. 50행마다 또는 100ms마다 업데이트하도록 변경.
+
+### 6. 기타 마이크로 최적화
+- `fields` 배열의 `JSON.stringify` 비교는 그대로 두되, custom_payload 비교만 별도 헬퍼로 분리.
+- `formatPgError`는 그대로 유지.
+
+## 변경 파일
+
+| 파일 | 변경 |
+|---|---|
+| `src/contexts/ImportContext.tsx` | `processFile` 재구성: prefetch → 메모리 처리 → 배치 쓰기 → 병렬 로그 insert |
+| (신규 헬퍼 권장) `src/lib/import-prefetch.ts` | `prefetchExistingSubtests`, `prefetchMasters`, `bulkEnsureMasters` 추출 |
+
+기능적 동작(자동채움 규칙, schedule audit, field log, row log, T1/T2 보정 등)은 **완전히 동일**하게 유지합니다 — 단지 실행 형태만 변경.
+
+## 예상 성능 (1,000행 파일 기준, 가정: 50ms RTT)
+
+```text
+                       현재          개선 후
+select per row         3 × 1000      0
+master ensure await    ~50           ~5 (병렬)
+update/insert          1 × 1000      ~10 (chunk)
+log inserts (직렬)     ~30           ~5 (병렬)
+─────────────────────────────────
+총 await (대략)        ~3,080        ~25
+예상 소요              ~150s         ~5~10s
+```
+
+## 리스크 & 검증
+
+- **메모리**: 1,000행 × 컬럼 30개 = 무시 가능 (~수 MB).
+- **트랜잭션 원자성**: 현재도 트랜잭션 없음 (행별 commit). 배치 upsert로 바뀌어도 동일한 의미.
+- **row_version 동시성**: 다중 사용자가 같은 subtest를 동시에 import할 가능성이 낮으므로 단순 +1 유지. 향후 RPC로 옮기는 옵션은 별도 작업.
+- **검증**: 동일 파일을 (a) 첫 import (b) 변경 없이 재import (c) 일부 셀 변경 후 재import 세 시나리오로 row_logs / field_logs 결과가 변경 전과 동일한지 비교.
+
+승인하시면 이 변경을 그대로 구현합니다.

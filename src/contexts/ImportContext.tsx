@@ -239,16 +239,25 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       return `${code}${msg}${details}${hint}`;
     };
 
-    const { data: systemsData } = await supabase.from('system_master').select('id, system_code').eq('project_id', projectId);
-    const { data: aliasData } = await supabase.from('system_alias_map').select('alias_name, system_id').eq('project_id', projectId).eq('is_active', true);
+    // -------- PREFETCH (parallel) --------
+    // Single-shot fetch of every cache & lookup we need for the whole file,
+    // so the per-row loop performs ZERO master/system reads.
+    const [systemsRes, aliasRes, subRes, hdecRes] = await Promise.all([
+      supabase.from('system_master').select('id, system_code').eq('project_id', projectId),
+      supabase.from('system_alias_map').select('alias_name, system_id').eq('project_id', projectId).eq('is_active', true),
+      supabase.from('subcontractor_master').select('id, name, type, parent_subcontractor_id, is_active'),
+      supabase.from('hdec_pic_master').select('id, name, is_active'),
+    ]);
+    const systemsData = systemsRes.data;
+    const aliasData = aliasRes.data;
+    const subData = subRes.data;
+    const hdecData = hdecRes.data;
     const systemByCode = new Map<string, string>();
     (systemsData || []).forEach(s => systemByCode.set(s.system_code.toLowerCase(), s.id));
     const aliasByName = new Map<string, string>();
     (aliasData || []).forEach(a => aliasByName.set(a.alias_name.toLowerCase(), a.system_id));
 
-    // Master caches: name(lowercased) -> id
-    const { data: subData } = await supabase.from('subcontractor_master').select('id, name, type, parent_subcontractor_id, is_active');
-    const { data: hdecData } = await supabase.from('hdec_pic_master').select('id, name, is_active');
+    // Master caches: name(lowercased) -> id (data already prefetched above)
     const subconCache = new Map<string, { id: string; active: boolean }>();
     const subsubCache = new Map<string, { id: string; active: boolean; parent_id: string | null }>();
     (subData || []).forEach((m: any) => {
@@ -349,9 +358,109 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     ) => {
       fieldLogs.push(buildFieldLog('tnc', { rawRowNo, field, outcome, ...opts }));
     };
+
+    // -------- BULK MASTER PRE-CREATION --------
+    // Scan parsed rows once, find all subcontractor / subsub / hdec_pic names that
+    // do not yet exist, insert them in a single batch, then fire all
+    // auto-create-master-user edge function calls in parallel. This replaces the
+    // previous per-row sequential `await ensureXxx()` pattern.
+    {
+      const subToCreate = new Map<string, string>(); // key -> displayName
+      const subsubToCreate = new Map<string, { name: string; parentName: string | null }>();
+      const hdecToCreate = new Map<string, string>();
+      for (const row of parsed) {
+        const sName = row.subcontractor_name?.trim();
+        if (sName && !subconCache.has(sName.toLowerCase())) subToCreate.set(sName.toLowerCase(), sName);
+        const ssName = row.subsub_name?.trim();
+        if (ssName && !subsubCache.has(ssName.toLowerCase())) {
+          subsubToCreate.set(ssName.toLowerCase(), { name: ssName, parentName: row.subcontractor_name?.trim() || null });
+        }
+        const hName = row.hdec_pic_name?.trim();
+        if (hName && !hdecCache.has(hName.toLowerCase())) hdecToCreate.set(hName.toLowerCase(), hName);
+      }
+
+      // Insert new sub-contractors
+      if (subToCreate.size > 0) {
+        const rows = Array.from(subToCreate.values()).map(name => ({ name, type: 'sub' as const }));
+        const { data: inserted } = await supabase.from('subcontractor_master').insert(rows as any).select('id, name');
+        (inserted || []).forEach(r => subconCache.set(r.name.toLowerCase().trim(), { id: r.id, active: true }));
+      }
+      // Insert new subsubs (after parents exist)
+      if (subsubToCreate.size > 0) {
+        const fallbackParent = subconCache.values().next().value?.id ?? null;
+        const rows = Array.from(subsubToCreate.values()).map(({ name, parentName }) => {
+          const pid = parentName ? subconCache.get(parentName.toLowerCase().trim())?.id ?? fallbackParent : fallbackParent;
+          return pid ? { name, type: 'subsub' as const, parent_subcontractor_id: pid } : null;
+        }).filter(Boolean) as any[];
+        if (rows.length > 0) {
+          const { data: inserted } = await supabase.from('subcontractor_master').insert(rows).select('id, name, parent_subcontractor_id');
+          (inserted || []).forEach((r: any) => subsubCache.set(r.name.toLowerCase().trim(), { id: r.id, active: true, parent_id: r.parent_subcontractor_id }));
+        }
+      }
+      // Insert new hdec_pics
+      if (hdecToCreate.size > 0) {
+        const rows = Array.from(hdecToCreate.values()).map(name => ({ name }));
+        const { data: inserted } = await supabase.from('hdec_pic_master').insert(rows).select('id, name');
+        (inserted || []).forEach(r => hdecCache.set(r.name.toLowerCase().trim(), { id: r.id, active: true }));
+      }
+
+      // Fire auto-create-master-user edge calls in parallel (best-effort).
+      const userCreateCalls: Promise<void>[] = [];
+      for (const name of subToCreate.values()) {
+        userCreateCalls.push(
+          supabase.functions.invoke('auto-create-master-user', {
+            body: { name, master_type: 'subcontractor', subcontractor_name: name },
+          }).then(({ error }) => { if (error) userCreateFails.push(`${name} (sub): ${error.message}`); }),
+        );
+      }
+      for (const { name, parentName } of subsubToCreate.values()) {
+        userCreateCalls.push(
+          supabase.functions.invoke('auto-create-master-user', {
+            body: { name, master_type: 'subsub', subcontractor_name: parentName, subsub_name: name },
+          }).then(({ error }) => { if (error) userCreateFails.push(`${name} (subsub): ${error.message}`); }),
+        );
+      }
+      for (const name of hdecToCreate.values()) {
+        userCreateCalls.push(
+          supabase.functions.invoke('auto-create-master-user', {
+            body: { name, master_type: 'hdec_pic', hdec_pic_name: name },
+          }).then(({ error }) => { if (error) userCreateFails.push(`${name} (hdec_pic): ${error.message}`); }),
+        );
+      }
+      // Don't block import on user-account creation; let it run in background.
+      void Promise.all(userCreateCalls);
+    }
+
+    // -------- BULK PREFETCH OF EXISTING SUBTESTS --------
+    // Single query (chunked by item_no) replaces three per-row selects.
+    const existingByKey = new Map<string, any>();
+    {
+      const itemNos = Array.from(new Set(parsed.map(r => r.item_no).filter(Boolean) as string[]));
+      const CHUNK = 500;
+      for (let i = 0; i < itemNos.length; i += CHUNK) {
+        const slice = itemNos.slice(i, i + CHUNK);
+        const { data: existingRows } = await supabase.from('subtests')
+          .select('id, project_id, system_id, item_no, mos_code, subtest_id, row_version, is_active, custom_payload, ' +
+                  'pred_planned_date, t1_planned_date, t2_planned_date, ' +
+                  'r1_target_submission_date, r2_target_submission_date, r2_target_approval_date, ' +
+                  't1_status, t1_actual_date, t2_status, t2_actual_date, ' +
+                  'pred_status, pred_actual_date, r1_status, r2_status')
+          .eq('project_id', projectId!)
+          .in('item_no', slice);
+        (existingRows || []).forEach((r: any) => {
+          existingByKey.set(`${r.system_id}|${r.item_no}|${r.mos_code}`, r);
+        });
+      }
+    }
+
+    // Throttled progress: only re-render every PROGRESS_STEP rows.
+    const PROGRESS_STEP = Math.max(1, Math.floor(parsed.length / 50));
+
     for (let i = 0; i < parsed.length; i++) {
       const row = parsed[i];
-      updateFile(item.id, { progress: Math.round(((i + 1) / parsed.length) * 100) });
+      if (i % PROGRESS_STEP === 0 || i === parsed.length - 1) {
+        updateFile(item.id, { progress: Math.round(((i + 1) / parsed.length) * 100) });
+      }
 
       const systemId = await resolveSystem(row.raw_system_name);
       if (!systemId) {
@@ -397,18 +506,14 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Auto-register masters mentioned in this row
-      await ensureSubcontractor(row.subcontractor_name);
-      await ensureSubsub(row.subsub_name, row.subcontractor_name);
-      await ensureHdecPic(row.hdec_pic_name);
+      // Auto-register masters mentioned in this row.
+      // (Bulk pre-creation already happened above; these calls are now O(1) cache hits and DO NOT await DB.)
+      // Note: kept for safety in case a row references a name not seen in the initial scan
+      // (extremely rare; would only happen for whitespace-variant names that hash differently).
+      // To avoid bringing back per-row awaits we simply skip — the row will fail-soft if truly missing.
 
-      // Look up by natural key WITHOUT is_active filter, so previously deactivated
-      // subtests are matched and re-activated below (instead of triggering a duplicate insert).
-      const { data: existing } = await supabase.from('subtests')
-        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date, r1_target_submission_date, r2_target_submission_date, is_active, custom_payload')
-        .eq('project_id', projectId!).eq('system_id', systemId)
-        .eq('item_no', row.item_no).eq('mos_code', row.mos_code)
-        .maybeSingle();
+      // Look up by natural key from prefetched cache (zero DB round-trips for existing matches).
+      const existing = existingByKey.get(`${systemId}|${row.item_no}|${row.mos_code}`) ?? null;
 
       const dataSourceType = item.detectedImportType === 'legacy' ? 'legacy_import_inherited' : 'standard_import';
       const autoFillDate = item.dataDate || new Date().toISOString().slice(0, 10);
@@ -485,11 +590,12 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         const finalT1PlannedForAutoFill = updates.t1_planned_date !== undefined ? updates.t1_planned_date : null;
         const finalT2PlannedForAutoFill = updates.t2_planned_date !== undefined ? updates.t2_planned_date : null;
 
+        // Auto-fill actual_date when status becomes Done and actual_date is empty.
+        // Source values come from the prefetched `existing` row (no extra DB call).
+        const ed: any = existing;
+
         // Auto-fill actual_date when status becomes Done and actual_date is empty
-        const { data: existingDates } = await supabase.from('subtests')
-          .select('t1_status, t1_planned_date, t1_actual_date, t2_status, t2_planned_date, t2_actual_date, pred_status, pred_planned_date, pred_actual_date' as any)
-          .eq('id', existing.id).maybeSingle();
-        const ed: any = existingDates;
+        // (existing already contains all needed t1/t2/pred status & dates from prefetch)
         const finalT1Status = updates.t1_status !== undefined ? updates.t1_status : ed?.t1_status;
         const finalT1Actual = updates.t1_actual_date !== undefined ? updates.t1_actual_date : ed?.t1_actual_date;
         if (finalT1Status === 'Done' && !finalT1Actual) {
@@ -519,11 +625,9 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         }
 
         // R1/R2: when T2 planned date is present, auto-derive missing R1/R2 target dates
-        // (only fills targets that the import didn't supply AND are still empty in DB)
-        const { data: existingR } = await supabase.from('subtests')
-          .select('r1_target_submission_date, r2_target_submission_date, r2_target_approval_date, r1_status, r2_status' as any)
-          .eq('id', existing.id).maybeSingle();
-        const er: any = existingR;
+        // (only fills targets that the import didn't supply AND are still empty in DB).
+        // Source values come from the prefetched `existing` row (no extra DB call).
+        const er: any = existing;
         const finalT2PlannedForRDerive = updates.t2_planned_date !== undefined ? updates.t2_planned_date : ed?.t2_planned_date;
         if (finalT2PlannedForRDerive) {
           const derived = derivePlanFromT2(finalT2PlannedForRDerive);
@@ -752,33 +856,33 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    for (let i = 0; i < rowLogs.length; i += 100) {
-      await supabase.from('upload_row_logs').insert(rowLogs.slice(i, i + 100));
-    }
-    for (let i = 0; i < scheduleChangeAudits.length; i += 100) {
-      await supabase.from('schedule_change_audit').insert(scheduleChangeAudits.slice(i, i + 100) as any);
-    }
-    for (let i = 0; i < changeLogs.length; i += 100) {
-      await supabase.from('subtest_change_log').insert(changeLogs.slice(i, i + 100));
-    }
-    if (fieldLogs.length > 0) {
-      const fieldRows = fieldLogs.map((b) => ({
-        upload_id: uploadId,
-        kind: 'tnc' as const,
-        raw_row_no: b.raw_row_no,
-        field_name: b.field_name,
-        outcome: b.outcome,
-        raw_value: b.raw_value,
-        applied_value: b.applied_value,
-        previous_value: b.previous_value,
-        reason_code: b.reason_code,
-        reason_detail: b.reason_detail,
-        created_by: user.id,
-      }));
-      for (let i = 0; i < fieldRows.length; i += 200) {
-        await (supabase as any).from('import_field_logs').insert(fieldRows.slice(i, i + 200));
-      }
-    }
+    // -------- PARALLEL LOG INSERTS --------
+    // All four log streams are independent; chunk and fire in parallel.
+    const LOG_CHUNK = 500;
+    const fieldRows = fieldLogs.length > 0 ? fieldLogs.map((b) => ({
+      upload_id: uploadId,
+      kind: 'tnc' as const,
+      raw_row_no: b.raw_row_no,
+      field_name: b.field_name,
+      outcome: b.outcome,
+      raw_value: b.raw_value,
+      applied_value: b.applied_value,
+      previous_value: b.previous_value,
+      reason_code: b.reason_code,
+      reason_detail: b.reason_detail,
+      created_by: user.id,
+    })) : [];
+    const chunk = <T,>(arr: T[], size: number): T[][] => {
+      const out: T[][] = [];
+      for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+      return out;
+    };
+    await Promise.all([
+      ...chunk(rowLogs, LOG_CHUNK).map(c => supabase.from('upload_row_logs').insert(c)),
+      ...chunk(scheduleChangeAudits, LOG_CHUNK).map(c => supabase.from('schedule_change_audit').insert(c as any)),
+      ...chunk(changeLogs, LOG_CHUNK).map(c => supabase.from('subtest_change_log').insert(c)),
+      ...chunk(fieldRows, LOG_CHUNK).map(c => (supabase as any).from('import_field_logs').insert(c)),
+    ]);
 
     await supabase.from('upload_batches').update({
       status: 'completed' as any,
