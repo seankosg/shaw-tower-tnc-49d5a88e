@@ -1125,17 +1125,17 @@ function SubcontractorMasterTable() {
     setNewSubName(''); setNewSubOwnerCode(''); load();
   };
 
-  const addSubSub = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSubSubName.trim() || !newSubSubParent) {
-      toast({ title: 'Name and parent required', variant: 'destructive' });
+  const addSubSubInline = async (parentId: string) => {
+    const draft = subSubDraft[parentId];
+    if (!draft || !draft.name.trim()) {
+      toast({ title: 'Name required', variant: 'destructive' });
       return;
     }
-    const name = newSubSubName.trim();
-    const parentName = subs.find(s => s.id === newSubSubParent)?.name ?? null;
-    const owner_code = normalizeOwnerCode(newSubSubOwnerCode) ?? suggestOwnerCode(name);
+    const name = draft.name.trim();
+    const parentName = rows.find(s => s.id === parentId)?.name ?? null;
+    const owner_code = normalizeOwnerCode(draft.owner) ?? suggestOwnerCode(name);
     const { error } = await supabase.from('subcontractor_master').insert({
-      name, type: 'subsub', parent_subcontractor_id: newSubSubParent, owner_code,
+      name, type: 'subsub', parent_subcontractor_id: parentId, owner_code,
     } as any);
     if (error) { toast({ title: 'Add failed', description: error.message, variant: 'destructive' }); return; }
     const { error: fnErr } = await supabase.functions.invoke('auto-create-master-user', {
@@ -1143,7 +1143,8 @@ function SubcontractorMasterTable() {
     });
     if (fnErr) toast({ title: 'Added (user creation failed)', description: fnErr.message, variant: 'destructive' });
     else toast({ title: 'Sub-Sub added', description: `User account created (PW: ${DEFAULT_PASSWORD})` });
-    setNewSubSubName(''); setNewSubSubParent(''); setNewSubSubOwnerCode(''); load();
+    setSubSubDraft(prev => ({ ...prev, [parentId]: { name: '', owner: '' } }));
+    load();
   };
 
   const [pendingToggle, setPendingToggle] = useState<{ row: MasterRow; linkedCount: number } | null>(null);
