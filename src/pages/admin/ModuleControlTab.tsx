@@ -17,7 +17,8 @@ import { useToast } from '@/hooks/use-toast';
 import { PasswordReverifyDialog } from '@/components/admin/PasswordReverifyDialog';
 import { FinalConfirmDialog } from '@/components/admin/FinalConfirmDialog';
 
-const LABEL = { tnc: 'T&C', defect: 'Defect' } as const;
+const LABEL = { tnc: 'T&C', defect: 'Defect', docs: 'Docs' } as const;
+type ModKey = keyof typeof LABEL;
 
 function formatDateTime(iso?: string) {
   if (!iso) return '—';
