@@ -1,38 +1,75 @@
-# Progress 탭 — 필터링된 Raw 행 Excel Export
+# S-Curve Excel Export — 화면 디자인 그대로 반영
 
 ## 목표
-- T&C Progress (`/tc/progress`)와 Defect Progress (`/defects/progress`) 두 화면에서, 현재 툴바 필터가 적용된 데이터를 **행 단위 raw Excel**로 내보낼 수 있게 한다.
-- 출력 포맷(헤더, 메타블록, 스타일, 날짜 셀, freeze, column widths)은 **Subtest Master List의 `exportSubtestsToExcel` / Defect Raw Data의 `exportDefectRawToExcel`과 동일**하게 사용한다.
+Dashboard (T&C + Defect)의 **Plan vs Actual — S-Curve** 패널을 현재 화면에 보이는 데이터/필터/색상/구성 그대로 Excel(.xlsx)로 내보낸다. Excel을 열면 화면과 동일한 컴포 차트(누적 라인 + Stacked Bar + Today 기준선)가 즉시 보이고, 데이터 시트에서 숫자 검증·재가공이 가능하다.
 
 ## UX
-- 기존 "Excel" 버튼(스케줄 매트릭스 export)은 그대로 유지하고 라벨을 "Excel (Matrix)"로 변경.
-- 옆에 "Excel (Rows)" 버튼을 추가. 클릭 시 현재 필터링된 raw 행들을 즉시 다운로드.
-- 행이 0개면 toast 경고.
+- S-Curve 카드 헤더 우측 도구 영역에 `Export Excel` 버튼 추가 (Daily/Weekly 토글 옆).
+- 클릭 시 현재 적용된 모든 상태값 — **bucket(day/week)**, **start/end date**, **team filter**, **system filter**, **breakdown tab**, (Defect의 경우) **stage**, **group by**, **숨김 시리즈** — 을 그대로 반영해서 다운로드.
+- 데이터 0건이면 toast 경고. 패널이 닫혀있어도 동작.
+- 파일명: `SCurve_TnC_<bucket>_<start>_<end>_<yyyymmdd-hhmm>.xlsx` / `SCurve_Defect_...`
 
-## T&C Progress (SchedulePage)
-- 사용 데이터: 페이지가 이미 로드한 `subtests` (또는 `filteredItems`) 배열 — `team`, `stageFilter`, `rangeStart..rangeEnd`, `asOfMode` 등 페이지 필터를 적용한 것과 동일한 행 집합.
-- 헤더/필드: `useFieldConfig`로 가져온 `FieldConfigRow[]`의 표시 가능한 필드를 SubtestList와 동일한 순서로 사용 (메타필드 제외).
-- 진입점: 새 함수 `exportSubtestsArrayToExcel(rows, fieldConfig, { sourceLabel, filterSummary, sortSummary, meta })` 를 `src/lib/excel-export.ts`에 추가. 내부적으로 기존 `exportSubtestsToExcel`의 본문을 공유 — react-table에 의존하던 부분(visibleCols/sortedRows/filterSummary/sortSummary)을 인자로 주입받는 형태로 리팩터.
-- `sourceLabel`은 "Progress → Filtered (team=..., stages=..., range=..., asOf=...)" 형식의 한 줄로 빌드.
+## 시트 구성 (3 시트)
 
-## Defect Progress (DefectProgressPage)
-- 사용 데이터: 페이지의 `filteredItems` (team 필터 적용 후) 또는 추가로 stage/range를 만족하는 부분집합.
-- 헤더/필드: `useDefectFieldConfig`의 `DefectFieldConfigRow[]` 사용. SubtestList 패턴과 동일하게 메타필드 제외, 기본 라벨 사용.
-- 진입점: 새 함수 `exportDefectArrayToExcel(rows, fieldConfig, { sourceLabel, filterSummary, meta })` 를 `src/lib/defect-excel-export.ts`에 추가. `exportDefectRawToExcel` 본문을 동일 방식으로 공유.
+**1) `Meta`** — 추출 컨텍스트 한눈에
+- Module / Source page (`/dashboard` or `/defects/dashboard`)
+- Exported by, Exported at, Today 기준일
+- Bucket (Daily/Weekly), Date range
+- Filters: Team, System, Breakdown / Stage / Group By
+- Hidden series (있으면)
+- Total subtests (or defects) included
+- 기존 `excel-export.ts`의 메타 블록 스타일과 동일 (헤더 굵게, 회색 배경, freeze)
 
-## 필터 요약(텍스트)
-- Progress 페이지의 상태값(team, stageFilter, asOfMode, rangeDays, hidePast, bucket, groupBy)을 그대로 한 줄 문자열로 직렬화하여 메타블록의 `Filters:` 라인에 기록.
+**2) `Data`** — 차트의 원천 데이터
+- 컬럼: `Date Bucket | T1 Planned (cum) | T1 Actual (cum) | T2 Planned (cum) | T2 Actual (cum) | T1 Met | T1 Shortfall | T1 Excess | T1 Plan(Future) | T2 Met | T2 Shortfall | T2 Excess | T2 Plan(Future)`
+- Defect 버전: stage/group 설정에 따라 시리즈 컬럼이 동적으로 생성
+- 날짜 셀은 Excel 날짜 시리얼로 (`excel-date-cell.ts` 재사용)
+- 1행 freeze, 헤더 굵게, 숫자 포맷 `#,##0`, % 컬럼은 `0.0%`
+- Today 행에 옅은 빨강 배경 강조
+
+**3) `Chart`** — 화면과 동일한 콤보 차트
+- ExcelJS Chart API 사용:
+  - **Stacked Bar (보조축)**: T1 4계열 + T2 4계열 — 화면과 같은 색상(파란/녹/빨/연한 톤)
+  - **Line (주축, 누적)**: T1 Planned(점선), T1 Actual(실선), T2 Planned(점선), T2 Actual(실선) — 화면 hsl 컬러를 hex로 변환
+  - **Today 수직 기준선**: 해당 X 카테고리에 빨간 점선 ReferenceLine 효과
+- X축: bucket 라벨, Y축 좌(누적), Y축 우(증분 카운트)
+- 범례 하단, 차트 크기 ~ A4 가로 절반(약 720x420px)
+- 차트가 `Data` 시트의 표를 직접 참조해서, 사용자가 데이터를 수정하면 차트가 자동 갱신됨
+
+## 색상 매핑 (화면 → Excel)
+화면의 hsl 색을 hex로 고정:
+```
+T1 Planned line   hsl(220,65%,55%) → #4F8BD9 (점선)
+T1 Actual  line   hsl(220,65%,36%) → #1F4E91 (실선)
+T2 Planned line   hsl(142,50%,55%) → #5FBF7A (점선)
+T2 Actual  line   hsl(0,72%,50%)   → #DC2626 (실선)
+T1 Met / Shortfall / Excess / Future Plan → 화면 동일 톤
+T2 Met / Shortfall / Excess / Future Plan → 화면 동일 톤
+Today line                          → #DC2626 점선
+```
 
 ## 변경/생성 파일
-- `src/lib/excel-export.ts` — 공용 빌더 추출 + `exportSubtestsArrayToExcel` 추가
-- `src/lib/defect-excel-export.ts` — 공용 빌더 추출 + `exportDefectArrayToExcel` 추가
-- `src/pages/SchedulePage.tsx` — "Excel (Rows)" 버튼 + 핸들러
-- `src/pages/DefectProgressPage.tsx` — "Excel (Rows)" 버튼 + 핸들러
-- (필요 시) `src/lib/excel-export.ts` 내 메타블록/스타일/freeze/날짜 셀 처리 로직을 별도 헬퍼로 분리해 두 함수가 공유
+- **신규** `src/lib/scurve-excel-export.ts`
+  - `exportTncSCurveToExcel({ scurve, today, filters, meta })` 
+  - `exportDefectSCurveToExcel({ scurveResult, scurveAll, hiddenSeries, today, filters, meta })`
+  - 공통 헬퍼: 메타 블록 작성, 색상 팔레트, 차트 빌더
+- **수정** `src/pages/DashboardPage.tsx` — 헤더에 `Export Excel` 버튼 + 핸들러
+- **수정** `src/pages/DefectDashboardPage.tsx` — 동일
 
 ## 비변경 사항
-- 기존 매트릭스 Excel export 로직, Subtest Master / Defect Raw 페이지의 export, 데이터베이스, 권한 체계는 변경 없음.
-- 신규 컬럼/필드 추가 없음.
+- `buildSCurve` / `buildDefectSCurve*` 데이터 빌더 로직은 그대로 사용 (재계산 없음)
+- 화면 차트, 다른 export 기능, 권한, DB 스키마 변경 없음
+- 새 라이브러리 추가 없음 (이미 들어있는 `exceljs` 사용 — 기존 `excel-export.ts`와 동일)
 
-## 검증
-- 두 페이지에서 필터를 바꿔 가며 Export → 행 수 toast가 화면 행 수와 일치하는지, 헤더/날짜 포맷/freeze가 SubtestList(또는 DefectRawData) export와 동일한지 확인.
+## 기술 메모
+- ExcelJS는 BarChart + LineChart 콤보를 지원. `addChart`는 `xl/charts/chartN.xml` 를 직접 작성해야 하는 케이스가 있어, 차트 렌더가 일부 환경에서 제한적일 수 있음. 만약 콤보 차트 렌더 한계에 부딪히면 Fallback으로:
+  - **Plan A**: Stacked Bar + Line 콤보 (목표)
+  - **Plan B**: Line 차트(누적)와 Stacked Bar 차트(증분)를 **세로로 두 개** 배치 — 동일 X축 정렬
+- 두 경우 모두 화면 정보는 100% 보존됨.
+
+## 검증 (구현 후 자동 QA)
+- 두 페이지에서 필터 조합 3가지(team 적용/미적용, day/week, 좁은/넓은 범위)로 export → Excel 열어 확인:
+  - Data 시트 행 수 = 화면 차트 X 포인트 수
+  - 차트 시리즈 색·이름이 화면과 일치
+  - Today 마커가 올바른 X 위치
+  - 메타 시트의 필터 요약이 URL 쿼리스트링과 일치

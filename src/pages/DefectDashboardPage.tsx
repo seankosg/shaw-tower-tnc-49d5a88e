@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { exportDefectSCurveToExcel } from '@/lib/scurve-excel-export';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, CalendarIcon, CheckCircle2, ChevronDown, ChevronRight, Clock, Download, Filter, ListChecks, ShieldCheck, TrendingUp } from 'lucide-react';
 import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ReferenceLine, XAxis, YAxis } from 'recharts';
@@ -92,6 +94,8 @@ export default function DefectDashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { value: atRiskDays } = useAtRiskThreshold();
   const { toast } = useToast();
+  const { profile, roles } = useAuth();
+  const scurveChartRef = useRef<HTMLDivElement | null>(null);
   const [items, setItems] = useState<DefectForDashboard[]>([]);
   const [loading, setLoading] = useState(true);
   useMainScrollRestoration(!loading);
@@ -235,6 +239,41 @@ export default function DefectDashboardPage() {
       groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
     });
   }, [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
+
+  const handleSCurveExport = async () => {
+    const hasData = scurveStage === 'all' ? (scurveAll?.buckets.length ?? 0) > 0 : scurve.buckets.length > 0;
+    if (!hasData) {
+      toast({ title: 'No data to export', description: 'S-Curve has no points in the selected range.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const filters: Array<[string, string]> = [
+        ['Stage', scurveStage === 'all' ? 'All stages' : (DEFECT_STAGE_LABELS[scurveStage as DefectScheduleStage] ?? scurveStage)],
+        ['Team', teamFilter.length === 0 ? 'All teams' : teamFilter.map(t => TEAM_LABELS[t as keyof typeof TEAM_LABELS] ?? t).join(', ')],
+        ['Group by', scurveGroup === SCURVE_GROUP_NONE ? 'None' : DEFECT_GROUP_LABELS[scurveGroup as DefectScheduleGroupBy]],
+      ];
+      if (scurveGroupValues.length > 0) filters.push(['Group values', scurveGroupValues.join(', ')]);
+      const { rowCount, fileName } = await exportDefectSCurveToExcel({
+        stage: scurveStage,
+        single: scurveStage === 'all' ? undefined : scurve,
+        all: scurveStage === 'all' ? scurveAll ?? undefined : undefined,
+        hiddenSeries: hiddenScurveSeries,
+        today,
+        bucket: scurveBucket,
+        rangeStart: scurveStart,
+        rangeEnd: scurveEnd,
+        filters,
+        totalIncluded: scurveItems.length,
+        exportedByName: profile?.name || profile?.login_id || 'unknown',
+        exportedByRole: roles[0] || profile?.user_type || 'user',
+        chartElement: scurveChartRef.current,
+      });
+      toast({ title: 'Export complete', description: `${rowCount} buckets → ${fileName}` });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: 'Export failed', description: msg, variant: 'destructive' });
+    }
+  };
   const topOverdue = useMemo(() => filteredItems.map(item => ({ item, delay: maxDelayDays(item, dataDate) })).filter(row => row.delay > 0 && !isClosureComplete(row.item)).sort((a, b) => b.delay - a.delay).slice(0, 10), [filteredItems, dataDate]);
   const actualPie = useMemo(() => buildActualPie(filteredItems), [filteredItems]);
   const closurePie = useMemo(() => buildClosurePie(filteredItems), [filteredItems]);
@@ -338,6 +377,10 @@ export default function DefectDashboardPage() {
                 <DateButton value={scurveStart} onChange={setScurveStart} />
                 <span className="text-xs text-muted-foreground">~</span>
                 <DateButton value={scurveEnd} onChange={setScurveEnd} />
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handleSCurveExport}>
+                  <Download className="h-3.5 w-3.5" />
+                  Export Excel
+                </Button>
               </div>
             )}
           </div>
@@ -487,7 +530,7 @@ export default function DefectDashboardPage() {
           )}
         </CardHeader>
         {scurveOpen && (
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3" ref={scurveChartRef}>
             {scurveStage === 'all' && scurveAll ? (
               <>
                 <SCurveAllKpiStrip scurveAll={scurveAll} today={today} windowStart={scurveStart} windowEnd={scurveEnd} />

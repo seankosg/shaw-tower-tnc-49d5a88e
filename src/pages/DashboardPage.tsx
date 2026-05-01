@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { exportTncSCurveToExcel } from '@/lib/scurve-excel-export';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -51,6 +53,8 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { value: atRiskDays } = useAtRiskThreshold();
+  const { profile, roles } = useAuth();
+  const scurveChartRef = useRef<HTMLDivElement | null>(null);
   const [subtests, setSubtests] = useState<SubtestForDashboard[]>([]);
   const [systems, setSystems] = useState<SystemRef[]>([]);
   const [loading, setLoading] = useState(true);
@@ -253,6 +257,36 @@ export default function DashboardPage() {
     () => buildSCurve(filteredSubtests, scurveBucket, scurveStart, scurveEnd, today),
     [filteredSubtests, scurveBucket, scurveStart, scurveEnd, today]
   );
+
+  const handleSCurveExport = async () => {
+    if (scurve.length === 0) {
+      toast({ title: 'No data to export', description: 'S-Curve has no points in the selected range.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const filters: Array<[string, string]> = [
+        ['Team', teamFilter === 'all' ? 'All teams' : (TEAM_LABELS[teamFilter as TeamType] ?? teamFilter)],
+      ];
+      if (selectedSystemFilters.length > 0) filters.push(['Systems', selectedSystemFilters.join(', ')]);
+      if (systemTextFilter.trim()) filters.push(['System search', systemTextFilter.trim()]);
+      const { rowCount, fileName } = await exportTncSCurveToExcel({
+        scurve,
+        today,
+        bucket: scurveBucket,
+        rangeStart: scurveStart,
+        rangeEnd: scurveEnd,
+        filters,
+        totalIncluded: filteredSubtests.length,
+        exportedByName: profile?.name || profile?.login_id || 'unknown',
+        exportedByRole: roles[0] || profile?.user_type || 'user',
+        chartElement: scurveChartRef.current,
+      });
+      toast({ title: 'Export complete', description: `${rowCount} buckets → ${fileName}` });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: 'Export failed', description: msg, variant: 'destructive' });
+    }
+  };
 
   // ───── Top Overdue
   const topOverdue = useMemo(() => {
@@ -493,6 +527,11 @@ export default function DashboardPage() {
                   Weekly
                 </button>
               </div>
+              {/* Export Excel */}
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handleSCurveExport}>
+                <Download className="h-3.5 w-3.5" />
+                Export Excel
+              </Button>
             </div>
           )}
         </CardHeader>
@@ -501,7 +540,7 @@ export default function DashboardPage() {
             {scurve.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p>
           ) : (
-            <ChartContainer config={chartConfig} className="h-[360px] w-full">
+            <ChartContainer ref={scurveChartRef} config={chartConfig} className="h-[360px] w-full">
               <ComposedChart data={scurve} margin={{ left: 12, right: 16, top: 8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} />
