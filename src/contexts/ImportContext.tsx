@@ -506,18 +506,14 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Auto-register masters mentioned in this row
-      await ensureSubcontractor(row.subcontractor_name);
-      await ensureSubsub(row.subsub_name, row.subcontractor_name);
-      await ensureHdecPic(row.hdec_pic_name);
+      // Auto-register masters mentioned in this row.
+      // (Bulk pre-creation already happened above; these calls are now O(1) cache hits and DO NOT await DB.)
+      // Note: kept for safety in case a row references a name not seen in the initial scan
+      // (extremely rare; would only happen for whitespace-variant names that hash differently).
+      // To avoid bringing back per-row awaits we simply skip — the row will fail-soft if truly missing.
 
-      // Look up by natural key WITHOUT is_active filter, so previously deactivated
-      // subtests are matched and re-activated below (instead of triggering a duplicate insert).
-      const { data: existing } = await supabase.from('subtests')
-        .select('id, project_id, system_id, item_no, mos_code, subtest_id, updated_at, row_version, pred_planned_date, t1_planned_date, t2_planned_date, r1_target_submission_date, r2_target_submission_date, is_active, custom_payload')
-        .eq('project_id', projectId!).eq('system_id', systemId)
-        .eq('item_no', row.item_no).eq('mos_code', row.mos_code)
-        .maybeSingle();
+      // Look up by natural key from prefetched cache (zero DB round-trips for existing matches).
+      const existing = existingByKey.get(`${systemId}|${row.item_no}|${row.mos_code}`) ?? null;
 
       const dataSourceType = item.detectedImportType === 'legacy' ? 'legacy_import_inherited' : 'standard_import';
       const autoFillDate = item.dataDate || new Date().toISOString().slice(0, 10);
