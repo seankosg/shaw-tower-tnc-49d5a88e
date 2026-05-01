@@ -530,7 +530,7 @@ export default function DefectDashboardPage() {
           )}
         </CardHeader>
         {scurveOpen && (
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3" ref={scurveChartRef}>
             {scurveStage === 'all' && scurveAll ? (
               <>
                 <SCurveAllKpiStrip scurveAll={scurveAll} today={today} windowStart={scurveStart} windowEnd={scurveEnd} />
