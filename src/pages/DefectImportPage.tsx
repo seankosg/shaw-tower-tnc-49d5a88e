@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle, Settings2, Lock } from 'lucide-react';
 import { useDefectImport, type DefectFileStatus } from '@/contexts/DefectImportContext';
-import { ColumnSelectDialog } from '@/components/import/ColumnSelectDialog';
+import { DefectColumnSelect } from '@/components/import/DefectColumnSelect';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { useAuth } from '@/contexts/AuthContext';
 
