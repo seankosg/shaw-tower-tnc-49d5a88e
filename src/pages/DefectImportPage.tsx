@@ -263,14 +263,15 @@ export default function DefectImportPage() {
       )}
 
       {columnDialogFile && columnDialogFile.availableHeaders && (
-        <ColumnSelectDialog
-          open={!!columnDialogFileId}
-          onOpenChange={(open) => { if (!open) setColumnDialogFileId(null); }}
+        <DefectColumnSelect
+          fileId={columnDialogFile.id}
           fileName={columnDialogFile.name}
           headers={columnDialogFile.availableHeaders}
           samples={columnDialogFile.headerSamples ?? {}}
           defaultExcluded={columnDialogFile.excludedHeaders ?? []}
           isReimport={!!columnDialogFile.isReimport}
+          open={!!columnDialogFileId}
+          onClose={() => setColumnDialogFileId(null)}
           onApply={(excluded) => setFileExcludedHeaders(columnDialogFile.id, excluded)}
         />
       )}
