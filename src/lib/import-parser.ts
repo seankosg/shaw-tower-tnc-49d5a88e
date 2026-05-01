@@ -371,38 +371,145 @@ export interface ParseExcelResult {
   rawHeaders: string[];
   mappedHeaders: string[];
   unmappedHeaders: string[];
+  resolvedSheetName?: string;
+  /** 0-based index of the header row that was actually used. */
+  headerRowIdx?: number;
+  /** True when the detector could not find a key column and fell back to row 0. */
+  headerAutodetected?: boolean;
+}
+
+// ── Header auto-detection ─────────────────────────────────────────────
+// Scan up to this many rows from the top of a sheet looking for the header row.
+const HEADER_SCAN_LIMIT = 20;
+
+// A row qualifies as the header if any of its cells normalizes to one of these targets.
+const TNC_HEADER_KEY_FIELDS = new Set<string>([
+  'item_no', 'subtest_id', 'mos_code',
+  'mos_1', 'mos_2', 'mos_3', 'mos_4', 'mos_5',
+]);
+
+function detectTncHeaderRow(ws: XLSX.WorkSheet): { headerRowIdx: number; headers: string[] } | null {
+  // blankrows:true keeps row indices aligned with sheet coordinates so that
+  // sheet_to_json({range: idx}) downstream picks up the right starting row.
+  const matrix: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: true });
+  const limit = Math.min(matrix.length, HEADER_SCAN_LIMIT);
+  for (let i = 0; i < limit; i += 1) {
+    const row = matrix[i] ?? [];
+    const headers = row.map((c: any) => cleanHeader(c));
+    const mapped = headers.map((h) => normalizeHeader(h));
+    if (mapped.some((m) => TNC_HEADER_KEY_FIELDS.has(m))) {
+      return { headerRowIdx: i, headers };
+    }
+  }
+  return null;
 }
 
 // ── Parse Excel file ──────────────────────────────────────────────────
 /**
  * Parse a single sheet from an Excel buffer.
- * @param file ArrayBuffer of the .xlsx/.xls file
- * @param sheetName Optional sheet name. Defaults to the first sheet.
+ *
+ * Behaviour (mirrors Defect parser):
+ *  - If `sheetName` is provided, only that sheet is considered. Otherwise every
+ *    sheet is scanned and the first one whose top rows contain a recognisable
+ *    header (item_no / subtest_id / mos_code / mos_1..5) is used.
+ *  - Header row may sit anywhere in the first 20 rows — title/meta rows above
+ *    are skipped.
+ *  - If no sheet yields a detected header, falls back to the original
+ *    "first sheet, row 0 = header" behaviour for backwards compatibility.
  */
 export function parseExcelFile(file: ArrayBuffer, sheetName?: string): ParseExcelResult {
   const wb = XLSX.read(file, { type: 'array', cellDates: false });
-  const targetSheet = sheetName && wb.SheetNames.includes(sheetName) ? sheetName : wb.SheetNames[0];
-  const ws = wb.Sheets[targetSheet];
-  const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-  if (raw.length < 2) {
+  const allSheets = wb.SheetNames ?? [];
+  if (allSheets.length === 0) {
     return { rows: [], rawHeaders: [], mappedHeaders: [], unmappedHeaders: [] };
   }
 
-  const rawHeaders = (raw[0] as any[]).map(h => String(h ?? '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim());
-  const mappedHeaders = rawHeaders.map(h => normalizeHeader(h));
+  const sheetsToScan = sheetName && allSheets.includes(sheetName) ? [sheetName] : allSheets;
+
+  let chosen: { name: string; ws: XLSX.WorkSheet; headerRowIdx: number; headers: string[] } | null = null;
+  let headerOnlyFallback: { name: string; ws: XLSX.WorkSheet; headerRowIdx: number; headers: string[] } | null = null;
+
+  for (const name of sheetsToScan) {
+    const ws = wb.Sheets[name];
+    if (!ws) continue;
+    const detected = detectTncHeaderRow(ws);
+    if (!detected) continue;
+
+    // Probe whether there is at least one data row after the detected header.
+    const probe: any[][] = XLSX.utils.sheet_to_json(ws, {
+      header: 1,
+      defval: '',
+      blankrows: false,
+      range: detected.headerRowIdx + 1,
+    });
+    const hasData = probe.some((r) => r.some((c: any) => c !== '' && c != null));
+
+    if (hasData) {
+      chosen = { name, ws, headerRowIdx: detected.headerRowIdx, headers: detected.headers };
+      break;
+    }
+    if (!headerOnlyFallback) {
+      headerOnlyFallback = { name, ws, headerRowIdx: detected.headerRowIdx, headers: detected.headers };
+    }
+  }
+
+  // Strict mode: if a sheet was specifically requested but detection failed,
+  // try detection only on that sheet — if still nothing, fall through to row-0
+  // fallback against the requested sheet.
+  let autodetected = true;
+  if (!chosen && headerOnlyFallback) {
+    chosen = headerOnlyFallback;
+  }
+  if (!chosen) {
+    autodetected = false;
+    const fallbackName = sheetName && allSheets.includes(sheetName) ? sheetName : allSheets[0];
+    const ws = wb.Sheets[fallbackName];
+    if (!ws) {
+      return { rows: [], rawHeaders: [], mappedHeaders: [], unmappedHeaders: [], resolvedSheetName: fallbackName };
+    }
+    const matrix: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    if (matrix.length < 2) {
+      return {
+        rows: [], rawHeaders: [], mappedHeaders: [], unmappedHeaders: [],
+        resolvedSheetName: fallbackName, headerRowIdx: 0, headerAutodetected: false,
+      };
+    }
+    const headerRow = (matrix[0] as any[]).map((h) => cleanHeader(h));
+    chosen = { name: fallbackName, ws, headerRowIdx: 0, headers: headerRow };
+  }
+
+  // Build rows from chosen sheet starting one row past the header.
+  const matrix: any[][] = XLSX.utils.sheet_to_json(chosen.ws, {
+    header: 1,
+    defval: '',
+    blankrows: false,
+    range: chosen.headerRowIdx,
+  });
+  // matrix[0] is the header row we already have; data starts at index 1
+  const rawHeaders = chosen.headers.map((h) => String(h ?? '').trim());
+  const mappedHeaders = rawHeaders.map((h) => normalizeHeader(h));
   const unmappedHeaders = rawHeaders.filter((h, i) => h !== '' && !KNOWN_FIELDS.has(mappedHeaders[i]));
 
-  const rows = raw.slice(1)
-    .filter(row => row.some((c: any) => c !== '' && c != null))
-    .map((row, idx) => {
-      const obj: Record<string, string> = { __row_no: String(idx + 2) };
-      mappedHeaders.forEach((h, i) => {
-        obj[h] = row[i] != null ? String(row[i]) : '';
-      });
-      return obj;
+  const dataRows = matrix.slice(1).filter((row) => row.some((c: any) => c !== '' && c != null));
+  // Excel displays rows as 1-based; header is at headerRowIdx+1, data starts at headerRowIdx+2
+  const headerExcelRow = chosen.headerRowIdx + 1;
+  const rows = dataRows.map((row, idx) => {
+    const obj: Record<string, string> = { __row_no: String(headerExcelRow + 1 + idx) };
+    mappedHeaders.forEach((h, i) => {
+      obj[h] = row[i] != null ? String(row[i]) : '';
     });
+    return obj;
+  });
 
-  return { rows, rawHeaders, mappedHeaders, unmappedHeaders };
+  return {
+    rows,
+    rawHeaders,
+    mappedHeaders,
+    unmappedHeaders,
+    resolvedSheetName: chosen.name,
+    headerRowIdx: chosen.headerRowIdx,
+    headerAutodetected: autodetected,
+  };
 }
 
 /** Return the list of sheet names present in an Excel buffer. */
