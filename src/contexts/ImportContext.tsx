@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { detectImportType, getExcelSheetNames, parseExcelFile, parseLegacy, parseStandard, resolveValue, type DetectedImportType, type ParsedSubtest } from '@/lib/import-parser';
+import { detectImportType, getExcelSheetNames, normalizeHeader, parseExcelFile, parseLegacy, parseStandard, resolveValue, type DetectedImportType, type ParsedSubtest } from '@/lib/import-parser';
 import { useToast } from '@/hooks/use-toast';
 import { buildScheduleChangeImpact, hasScheduleChangeImpact } from '@/lib/schedule-change-utils';
 import { derivePlanFromT2 } from '@/lib/business-days';
@@ -32,6 +32,15 @@ export interface ImportFileItem {
   selectedSheet?: string;
   /** Cached buffer for re-parsing on sheet change. */
   buffer?: ArrayBuffer;
+  /** All raw header strings present in the chosen sheet (for column-select dialog). */
+  availableHeaders?: string[];
+  /** First data row (header → value) used as preview in column-select dialog. */
+  headerSamples?: Record<string, unknown>;
+  /** User-excluded raw headers. Default: []. */
+  excludedHeaders?: string[];
+  /** Canonical field names excluded from this import (derived from excludedHeaders).
+   *  Importer skips writes / change detection / field-logs for these fields. */
+  excludedFields?: Set<string>;
 }
 
 interface ImportContextValue {
@@ -45,6 +54,7 @@ interface ImportContextValue {
   setFileDataDate: (id: string, date: string) => void;
   setFileTeam: (id: string, team: string) => void;
   setFileSheet: (id: string, sheetName: string) => Promise<void>;
+  setFileExcludedHeaders: (id: string, excluded: string[]) => void;
 }
 
 const ImportContext = createContext<ImportContextValue | null>(null);
