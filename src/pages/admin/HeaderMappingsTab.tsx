@@ -17,9 +17,16 @@ import { Lock, Plus, Trash2, Pencil } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCustomFields } from '@/hooks/useCustomFields';
 
-type ModuleKey = 'tnc' | 'defect';
+type TopModuleKey = 'tnc' | 'defect' | 'docs';
+type DocsSubKey = 'as_built' | 'warranty';
 
-// System field whitelists (target_field column) — keep in sync with parsers.
+/** Internal module context: (module, sub_module). sub_module is '' for tnc/defect. */
+interface ModuleContext {
+  module: TopModuleKey;
+  sub_module: string; // '' | 'as_built' | 'warranty'
+}
+
+// System field whitelists per (module, sub_module) — keep in sync with parsers.
 const TNC_FIELDS = [
   'system','item_no','team','level','equipment','description',
   'mos_1','mos_2','mos_3','mos_4','mos_5','mos_code','subtest_id',
@@ -43,13 +50,64 @@ const DEFECT_FIELDS = [
   'work_type','subcontractor_issue_no','subcontractor_issue_source',
 ] as const;
 
-function normalizeAlias(mod: ModuleKey, raw: string): string {
-  if (mod === 'tnc') {
+// Docs / As-Built (drawings via Aconex)
+const DOCS_AS_BUILT_FIELDS = [
+  'document_no','title','revision','discipline','document_type',
+  'organisation_raw','aconex_status','submitted_date','approved_date',
+  'is_submitted','remarks',
+] as const;
+
+// Docs / Warranty (warranty deed workflow)
+const DOCS_WARRANTY_FIELDS = [
+  'item_no','category','sub_category','warranted_item','subcontractor_name_raw',
+  'sc_target_date','internal_target_date',
+  'stage1_date','stage2_date','stage3_date','stage4_date','stage5_date',
+  'stage6_date','stage7_date','stage8_date','stage9_date',
+  'witness_director','witness_secretary',
+  'validation_acra','validation_signature','validation_witness','validation_seal',
+  'validation_date','validation_pass','remarks',
+] as const;
+
+// Docs sub-modules registry — add new sub-modules here to auto-register a tab.
+const DOCS_SUBMODULES: Array<{
+  key: DocsSubKey;
+  label: string;
+  fields: readonly string[];
+}> = [
+  { key: 'as_built', label: 'As-Built', fields: DOCS_AS_BUILT_FIELDS },
+  { key: 'warranty', label: 'Warranty', fields: DOCS_WARRANTY_FIELDS },
+];
+
+function getFieldList(ctx: ModuleContext): readonly string[] {
+  if (ctx.module === 'tnc') return TNC_FIELDS;
+  if (ctx.module === 'defect') return DEFECT_FIELDS;
+  const sub = DOCS_SUBMODULES.find((s) => s.key === ctx.sub_module);
+  return sub?.fields ?? [];
+}
+
+function normalizeAlias(ctx: ModuleContext, raw: string): string {
+  if (ctx.module === 'tnc') {
     return raw.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
   }
-  // defect: cleanHeader strips trailing "(H)" (kept for parity), then collapse separators
-  return raw.replace(/\s*\(H\)\s*$/i, '').trim()
-    .toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (ctx.module === 'defect') {
+    return raw.replace(/\s*\(H\)\s*$/i, '').trim()
+      .toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  // docs (both as_built & warranty): collapse whitespace + lowercase, strip trailing periods.
+  return raw.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim()
+    .toLowerCase().replace(/\.$/, '').trim();
+}
+
+function ctxMatches(row: HeaderMappingRow, ctx: ModuleContext): boolean {
+  if (row.module !== ctx.module) return false;
+  if (ctx.module === 'docs') return (row.sub_module ?? '') === ctx.sub_module;
+  return !row.sub_module;
+}
+
+function ctxLabel(ctx: ModuleContext): string {
+  if (ctx.module === 'tnc') return 'T&C';
+  if (ctx.module === 'defect') return 'DEFECT';
+  return `DOCS / ${DOCS_SUBMODULES.find((s) => s.key === ctx.sub_module)?.label ?? ctx.sub_module}`;
 }
 
 interface AddDialogState {
@@ -63,7 +121,17 @@ export default function HeaderMappingsTab() {
   const { toast } = useToast();
   const { data: mappings = [], isLoading, refetch } = useHeaderMappings();
   const { data: customFields = [] } = useCustomFields();
-  const [active, setActive] = useState<ModuleKey>('tnc');
+
+  const [topModule, setTopModule] = useState<TopModuleKey>('tnc');
+  const [docsSub, setDocsSub] = useState<DocsSubKey>('as_built');
+
+  const ctx: ModuleContext = useMemo(
+    () => topModule === 'docs'
+      ? { module: 'docs', sub_module: docsSub }
+      : { module: topModule, sub_module: '' },
+    [topModule, docsSub],
+  );
+
   const [search, setSearch] = useState('');
   const [showEmpty, setShowEmpty] = useState(false);
   const [editTarget, setEditTarget] = useState<HeaderMappingRow | null>(null);
@@ -71,20 +139,22 @@ export default function HeaderMappingsTab() {
   const [testHeader, setTestHeader] = useState('');
 
   const customForActive = useMemo(
-    () => customFields.filter((f) => f.module === active && f.is_active)
+    () => customFields
+      .filter((f) => {
+        if (f.module !== ctx.module) return false;
+        if (ctx.module === 'docs') return (f.sub_module ?? '') === ctx.sub_module;
+        return !f.sub_module;
+      })
+      .filter((f) => f.is_active)
       .map((f) => ({ value: `custom:${f.field_name}`, label: `[Custom] ${f.display_name} (${f.data_type})` })),
-    [customFields, active],
+    [customFields, ctx],
   );
-  const fieldList = active === 'tnc' ? TNC_FIELDS : DEFECT_FIELDS;
-  const customTargetValues = useMemo(
-    () => new Set(customForActive.map((c) => c.value)),
-    [customForActive],
-  );
+  const fieldList = getFieldList(ctx);
 
-  // Mappings filtered to active module + search
+  // Mappings filtered to active context + search
   const moduleRows = useMemo(
-    () => mappings.filter((m) => m.module === active),
-    [mappings, active],
+    () => mappings.filter((m) => ctxMatches(m, ctx)),
+    [mappings, ctx],
   );
 
   const lowerSearch = search.trim().toLowerCase();
@@ -93,7 +163,6 @@ export default function HeaderMappingsTab() {
     m.header_alias.toLowerCase().includes(lowerSearch) ||
     m.target_field.toLowerCase().includes(lowerSearch);
 
-  // Group by target_field
   const groupedByTarget = useMemo(() => {
     const map = new Map<string, HeaderMappingRow[]>();
     for (const row of moduleRows) {
@@ -101,7 +170,6 @@ export default function HeaderMappingsTab() {
       arr.push(row);
       map.set(row.target_field, arr);
     }
-    // Sort aliases inside each group: system first, then alphabetical
     for (const arr of map.values()) {
       arr.sort((a, b) => {
         if (a.is_system !== b.is_system) return a.is_system ? -1 : 1;
@@ -111,7 +179,6 @@ export default function HeaderMappingsTab() {
     return map;
   }, [moduleRows]);
 
-  // Build ordered group sections: system fields (in declared order) → custom fields → unmapped
   interface GroupSection {
     target: string;
     label: string;
@@ -123,15 +190,12 @@ export default function HeaderMappingsTab() {
     const out: GroupSection[] = [];
     const seen = new Set<string>();
 
-    // System fields
     for (const f of fieldList) {
       const rows = groupedByTarget.get(f) ?? [];
       seen.add(f);
       if (rows.length === 0 && !showEmpty) continue;
       out.push({ target: f, label: f, kind: 'system', rows });
     }
-
-    // Custom fields
     for (const c of customForActive) {
       const rows = groupedByTarget.get(c.value) ?? [];
       seen.add(c.value);
@@ -139,7 +203,6 @@ export default function HeaderMappingsTab() {
       out.push({ target: c.value, label: c.label, kind: 'custom', rows });
     }
 
-    // Unmapped: any target_field not in seen
     const unmappedRows: HeaderMappingRow[] = [];
     for (const [target, rows] of groupedByTarget.entries()) {
       if (seen.has(target)) continue;
@@ -156,7 +219,6 @@ export default function HeaderMappingsTab() {
     return out;
   }, [fieldList, customForActive, groupedByTarget, showEmpty]);
 
-  // Apply search: keep only sections with matching rows (or matching target name)
   const visibleSections = useMemo(() => {
     if (!lowerSearch) return sections;
     return sections
@@ -170,7 +232,6 @@ export default function HeaderMappingsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sections, lowerSearch]);
 
-  // Auto-expand groups when searching
   const openValues = useMemo(() => {
     if (!lowerSearch) return undefined;
     return visibleSections.map((s) => s.target);
@@ -178,10 +239,10 @@ export default function HeaderMappingsTab() {
 
   const testResult = useMemo(() => {
     if (!testHeader.trim()) return null;
-    const norm = normalizeAlias(active, testHeader);
-    const hit = mappings.find((m) => m.module === active && m.header_alias === norm && m.is_active);
+    const norm = normalizeAlias(ctx, testHeader);
+    const hit = mappings.find((m) => ctxMatches(m, ctx) && m.header_alias === norm && m.is_active);
     return { norm, target: hit?.target_field ?? null, isSystem: hit?.is_system ?? false };
-  }, [testHeader, active, mappings]);
+  }, [testHeader, ctx, mappings]);
 
   const toggleActive = async (row: HeaderMappingRow) => {
     const { error } = await supabase
@@ -221,12 +282,23 @@ export default function HeaderMappingsTab() {
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Tabs value={active} onValueChange={(v) => setActive(v as ModuleKey)}>
+        <Tabs value={topModule} onValueChange={(v) => setTopModule(v as TopModuleKey)}>
           <TabsList>
             <TabsTrigger value="tnc">T&amp;C</TabsTrigger>
             <TabsTrigger value="defect">Defect</TabsTrigger>
+            <TabsTrigger value="docs">Docs</TabsTrigger>
           </TabsList>
         </Tabs>
+
+        {topModule === 'docs' && (
+          <Tabs value={docsSub} onValueChange={(v) => setDocsSub(v as DocsSubKey)}>
+            <TabsList>
+              {DOCS_SUBMODULES.map((s) => (
+                <TabsTrigger key={s.key} value={s.key}>{s.label}</TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        )}
 
         {/* Test tool */}
         <div className="rounded border p-3 bg-muted/30 space-y-2">
@@ -401,7 +473,7 @@ export default function HeaderMappingsTab() {
       <MappingDialog
         open={addDialog.open}
         onClose={() => setAddDialog({ open: false })}
-        module={active}
+        ctx={ctx}
         fieldList={fieldList as readonly string[]}
         customOptions={customForActive}
         existing={mappings}
@@ -413,7 +485,7 @@ export default function HeaderMappingsTab() {
       <MappingDialog
         open={!!editTarget}
         onClose={() => setEditTarget(null)}
-        module={active}
+        ctx={ctx}
         fieldList={fieldList as readonly string[]}
         customOptions={customForActive}
         existing={mappings}
@@ -428,7 +500,7 @@ export default function HeaderMappingsTab() {
 interface DialogProps {
   open: boolean;
   onClose: () => void;
-  module: ModuleKey;
+  ctx: ModuleContext;
   fieldList: readonly string[];
   customOptions?: { value: string; label: string }[];
   existing: HeaderMappingRow[];
@@ -439,14 +511,13 @@ interface DialogProps {
   onSaved: () => void;
 }
 
-function MappingDialog({ open, onClose, module, fieldList, customOptions = [], existing, userId, editing, prefilledTarget, lockTarget, onSaved }: DialogProps) {
+function MappingDialog({ open, onClose, ctx, fieldList, customOptions = [], existing, userId, editing, prefilledTarget, lockTarget, onSaved }: DialogProps) {
   const { toast } = useToast();
   const [alias, setAlias] = useState('');
   const [target, setTarget] = useState<string>('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Sync state when dialog opens
   useEffect(() => {
     if (open) {
       setAlias(editing?.header_alias ?? '');
@@ -455,10 +526,10 @@ function MappingDialog({ open, onClose, module, fieldList, customOptions = [], e
     }
   }, [open, editing, prefilledTarget]);
 
-  const normalized = normalizeAlias(module, alias);
+  const normalized = normalizeAlias(ctx, alias);
 
   const conflict = existing.find(
-    (m) => m.module === module && m.header_alias === normalized && m.id !== editing?.id,
+    (m) => ctxMatches(m, ctx) && m.header_alias === normalized && m.id !== editing?.id,
   );
 
   const onSave = async () => {
@@ -484,7 +555,8 @@ function MappingDialog({ open, onClose, module, fieldList, customOptions = [], e
       const { error } = await supabase
         .from('import_header_mappings')
         .insert({
-          module,
+          module: ctx.module,
+          sub_module: ctx.module === 'docs' ? ctx.sub_module : null,
           header_alias: normalized,
           target_field: target,
           note: note || null,
@@ -505,7 +577,7 @@ function MappingDialog({ open, onClose, module, fieldList, customOptions = [], e
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {editing ? 'Edit Mapping' : 'Add Alias'} — {module.toUpperCase()}
+            {editing ? 'Edit Mapping' : 'Add Alias'} — {ctxLabel(ctx)}
             {targetLocked && target && (
               <span className="ml-2 text-xs font-normal text-muted-foreground">
                 → <code className="bg-muted px-1 rounded">{target}</code>
