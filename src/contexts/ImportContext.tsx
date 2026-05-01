@@ -440,12 +440,14 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           ['remarks', row.remarks],
           ['punchlist_comments', row.punchlist_comments],
         ];
+        const excludedFields = item.excludedFields;
         for (const [field, val] of fields) {
+          if (excludedFields?.has(field)) continue;
           const resolved = resolveValue(val, null);
           if (resolved !== undefined) updates[field] = resolved;
         }
         const resolvedTeam = resolveValue(rowTeamValue, null);
-        if (resolvedTeam !== undefined) updates.team = resolvedTeam;
+        if (!excludedFields?.has('team') && resolvedTeam !== undefined) updates.team = resolvedTeam;
 
         // Merge custom_payload (only when there are new custom values)
         if (row.custom_payload && Object.keys(row.custom_payload).length > 0) {
