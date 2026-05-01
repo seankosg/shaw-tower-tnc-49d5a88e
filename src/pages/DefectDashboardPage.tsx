@@ -94,6 +94,8 @@ export default function DefectDashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { value: atRiskDays } = useAtRiskThreshold();
   const { toast } = useToast();
+  const { profile, roles } = useAuth();
+  const scurveChartRef = useRef<HTMLDivElement | null>(null);
   const [items, setItems] = useState<DefectForDashboard[]>([]);
   const [loading, setLoading] = useState(true);
   useMainScrollRestoration(!loading);
