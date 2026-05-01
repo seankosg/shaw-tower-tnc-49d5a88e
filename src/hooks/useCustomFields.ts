@@ -5,7 +5,8 @@ import { loadCustomFieldsCache, type CustomFieldType } from '@/lib/custom-fields
 
 export interface CustomFieldDefRow {
   id: string;
-  module: 'tnc' | 'defect';
+  module: 'tnc' | 'defect' | 'docs';
+  sub_module: string | null;
   field_name: string;
   display_name: string;
   data_type: CustomFieldType;
