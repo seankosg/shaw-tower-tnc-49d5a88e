@@ -68,9 +68,10 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   /** Parse a given sheet from a buffer and update file state accordingly. */
   const parseAndApply = useCallback((id: string, buf: ArrayBuffer, sheetName?: string) => {
     try {
-      const { rows, mappedHeaders, unmappedHeaders } = parseExcelFile(buf, sheetName);
+      const { rows, mappedHeaders, unmappedHeaders, resolvedSheetName } = parseExcelFile(buf, sheetName);
       const detection = detectImportType(mappedHeaders);
       const subtests = detection.type === 'legacy' ? parseLegacy(rows) : detection.type === 'standard' ? parseStandard(rows) : [];
+      const effectiveSheet = resolvedSheetName ?? sheetName;
       if (subtests.length === 0) {
         updateFile(id, {
           status: 'failed',
@@ -78,7 +79,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           unmappedHeaders,
           detectedImportType: detection.type,
           detectionReasons: detection.reasons,
-          selectedSheet: sheetName,
+          selectedSheet: effectiveSheet,
         });
       } else {
         updateFile(id, {
@@ -88,7 +89,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           unmappedHeaders,
           detectedImportType: detection.type,
           detectionReasons: detection.reasons,
-          selectedSheet: sheetName,
+          selectedSheet: effectiveSheet,
           error: undefined,
         });
       }
