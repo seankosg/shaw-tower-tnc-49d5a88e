@@ -1069,20 +1069,29 @@ function MastersTab() {
   );
 }
 
+interface OrgAliasRow { id: string; raw_label: string; subcontractor_id: string | null; is_active: boolean; }
+
 function SubcontractorMasterTable() {
   const { toast } = useToast();
   const [rows, setRows] = useState<MasterRow[]>([]);
+  const [aliases, setAliases] = useState<OrgAliasRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [newSubName, setNewSubName] = useState('');
   const [newSubOwnerCode, setNewSubOwnerCode] = useState('');
   const [newSubSubName, setNewSubSubName] = useState('');
   const [newSubSubParent, setNewSubSubParent] = useState('');
   const [newSubSubOwnerCode, setNewSubSubOwnerCode] = useState('');
+  const [aliasDialogFor, setAliasDialogFor] = useState<MasterRow | null>(null);
+  const [newAliasLabel, setNewAliasLabel] = useState('');
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from('subcontractor_master').select('*').order('name');
+    const [{ data }, aliasRes] = await Promise.all([
+      supabase.from('subcontractor_master').select('*').order('name'),
+      (supabase as any).from('docs_org_alias').select('*').order('raw_label'),
+    ]);
     if (data) setRows(data as MasterRow[]);
+    if (aliasRes.data) setAliases(aliasRes.data as OrgAliasRow[]);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -1220,10 +1229,61 @@ function SubcontractorMasterTable() {
     else { toast({ title: 'Deleted permanently' }); load(); }
   };
 
+  const aliasesByMaster = aliases.filter(a => a.is_active && a.subcontractor_id);
+  const unmappedAliases = aliases.filter(a => a.is_active && !a.subcontractor_id);
+  const aliasesFor = (masterId: string) => aliasesByMaster.filter(a => a.subcontractor_id === masterId);
+
+  const addAlias = async () => {
+    if (!aliasDialogFor || !newAliasLabel.trim()) return;
+    const raw_label = newAliasLabel.trim();
+    const { error } = await (supabase as any)
+      .from('docs_org_alias')
+      .upsert(
+        { raw_label, subcontractor_id: aliasDialogFor.id, is_active: true },
+        { onConflict: 'raw_label' },
+      );
+    if (error) { toast({ title: 'Add alias failed', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: 'Alias added', description: `"${raw_label}" → ${aliasDialogFor.name}` });
+    setNewAliasLabel(''); setAliasDialogFor(null); load();
+  };
+
+  const removeAlias = async (id: string) => {
+    const { error } = await (supabase as any).from('docs_org_alias').delete().eq('id', id);
+    if (error) { toast({ title: 'Remove failed', description: error.message, variant: 'destructive' }); return; }
+    load();
+  };
+
+  const mapUnmapped = async (aliasId: string, subcontractorId: string) => {
+    if (!subcontractorId) return;
+    const { error } = await (supabase as any)
+      .from('docs_org_alias')
+      .update({ subcontractor_id: subcontractorId })
+      .eq('id', aliasId);
+    if (error) { toast({ title: 'Map failed', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: 'Alias mapped' });
+    load();
+  };
+
+  const ignoreUnmapped = async (aliasId: string) => {
+    const { error } = await (supabase as any)
+      .from('docs_org_alias')
+      .update({ is_active: false })
+      .eq('id', aliasId);
+    if (error) { toast({ title: 'Ignore failed', description: error.message, variant: 'destructive' }); return; }
+    load();
+  };
+
   return (
     <>
     <Card>
-      <CardHeader><CardTitle className="text-base">Subcontractor Master</CardTitle></CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">Subcontractor Master</CardTitle>
+        {unmappedAliases.length > 0 && (
+          <Badge variant="outline" className="border-amber-400 bg-amber-50 text-amber-900">
+            {unmappedAliases.length} unmapped alias{unmappedAliases.length === 1 ? '' : 'es'}
+          </Badge>
+        )}
+      </CardHeader>
       <CardContent className="space-y-5">
         {/* Subcontractors */}
         <div className="space-y-2">
@@ -1236,31 +1296,60 @@ function SubcontractorMasterTable() {
           {loading ? (
             <p className="py-2 text-center text-sm text-muted-foreground">Loading...</p>
           ) : (
-            <div className="max-h-[200px] overflow-auto">
+            <div className="max-h-[260px] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead className="w-32">Owner Code</TableHead>
+                    <TableHead>Aconex Aliases</TableHead>
                     <TableHead className="w-20 text-center">Active</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {subs.map(r => (
-                    <TableRow key={r.id}>
-                      <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
-                      <TableCell><InlineNameEdit value={r.owner_code ?? suggestOwnerCode(r.name)} onSave={(v) => updateOwnerCode(r, v)} /></TableCell>
-                      <TableCell className="text-center">
-                        <Switch checked={r.is_active} onCheckedChange={() => startToggleActive(r)} />
-                      </TableCell>
-                      <TableCell>
-                        <Button size="icon" variant="ghost" onClick={() => remove(r)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {subs.map(r => {
+                    const masterAliases = aliasesFor(r.id);
+                    return (
+                      <TableRow key={r.id}>
+                        <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
+                        <TableCell><InlineNameEdit value={r.owner_code ?? suggestOwnerCode(r.name)} onSave={(v) => updateOwnerCode(r, v)} /></TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap items-center gap-1">
+                            {masterAliases.map(a => (
+                              <Badge key={a.id} variant="secondary" className="gap-1 font-mono text-[10px]">
+                                {a.raw_label}
+                                <button
+                                  type="button"
+                                  onClick={() => removeAlias(a.id)}
+                                  className="ml-1 rounded hover:bg-destructive/20"
+                                  aria-label={`Remove alias ${a.raw_label}`}
+                                >
+                                  ×
+                                </button>
+                              </Badge>
+                            ))}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-[10px]"
+                              onClick={() => { setAliasDialogFor(r); setNewAliasLabel(''); }}
+                            >
+                              <Plus className="h-3 w-3" /> Add
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Switch checked={r.is_active} onCheckedChange={() => startToggleActive(r)} />
+                        </TableCell>
+                        <TableCell>
+                          <Button size="icon" variant="ghost" onClick={() => remove(r)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -1320,8 +1409,79 @@ function SubcontractorMasterTable() {
             </div>
           )}
         </div>
+
+        {/* Unmapped Aconex Aliases (from Docs imports) */}
+        <div className="space-y-2 border-t pt-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Unmapped Aconex Aliases ({unmappedAliases.length})
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Organisation labels found in Docs imports that aren't matched to any Subcontractor yet. Map them to absorb the data into the right master.
+          </p>
+          {unmappedAliases.length === 0 ? (
+            <p className="py-2 text-center text-xs text-muted-foreground">All Aconex labels are mapped. </p>
+          ) : (
+            <div className="max-h-[220px] overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Raw Label</TableHead>
+                    <TableHead className="w-[220px]">Map to Subcontractor</TableHead>
+                    <TableHead className="w-20"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {unmappedAliases.map(a => (
+                    <TableRow key={a.id}>
+                      <TableCell className="font-mono text-xs">{a.raw_label}</TableCell>
+                      <TableCell>
+                        <Select onValueChange={(v) => mapUnmapped(a.id, v)}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="— select —" /></SelectTrigger>
+                          <SelectContent>
+                            {subs.filter(s => s.is_active).map(s => (
+                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Button size="sm" variant="ghost" onClick={() => ignoreUnmapped(a.id)}>Ignore</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
+
+    <Dialog open={!!aliasDialogFor} onOpenChange={(open) => { if (!open) { setAliasDialogFor(null); setNewAliasLabel(''); } }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add Aconex Alias</DialogTitle>
+          <DialogDescription>
+            Map a raw Aconex organisation label to <strong>{aliasDialogFor?.name}</strong>.
+            Future Docs imports with this exact label will be linked automatically.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="new-alias">Raw label</Label>
+          <Input
+            id="new-alias"
+            value={newAliasLabel}
+            onChange={(e) => setNewAliasLabel(e.target.value)}
+            placeholder="e.g. HDEC ELEC SUB1"
+            autoFocus
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setAliasDialogFor(null)}>Cancel</Button>
+          <Button onClick={addAlias} disabled={!newAliasLabel.trim()}>Add</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <AlertDialog open={!!pendingToggle} onOpenChange={(open) => !open && setPendingToggle(null)}>
       <AlertDialogContent>
