@@ -338,6 +338,29 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
           })
           .eq('id', batchId);
 
+        // Auto-queue unmatched org labels into docs_org_alias for Admin to resolve
+        if (counters.unmatched.size > 0) {
+          // Re-derive raw labels (preserving original casing) from parsed rows that resolved to no subcontractor
+          const rawByKey = new Map<string, string>();
+          for (const row of f.parsed!) {
+            if (!row.organisation_raw) continue;
+            const key = normalizeOrgKey(row.organisation_raw);
+            if (counters.unmatched.has(key) && !rawByKey.has(key)) {
+              rawByKey.set(key, row.organisation_raw.trim());
+            }
+          }
+          const aliasRows = [...rawByKey.values()].map((raw_label) => ({
+            raw_label,
+            subcontractor_id: null,
+            is_active: true,
+          }));
+          if (aliasRows.length > 0) {
+            await (supabase as any)
+              .from('docs_org_alias')
+              .upsert(aliasRows, { onConflict: 'raw_label', ignoreDuplicates: true });
+          }
+        }
+
         setFiles((cur) => cur.map((x) => x.id === f.id ? {
           ...x,
           status: 'done',
