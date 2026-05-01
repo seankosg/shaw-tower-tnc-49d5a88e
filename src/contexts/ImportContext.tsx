@@ -78,10 +78,23 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   /** Parse a given sheet from a buffer and update file state accordingly. */
   const parseAndApply = useCallback((id: string, buf: ArrayBuffer, sheetName?: string) => {
     try {
-      const { rows, mappedHeaders, unmappedHeaders, resolvedSheetName } = parseExcelFile(buf, sheetName);
+      const { rows, rawHeaders, mappedHeaders, unmappedHeaders, resolvedSheetName } = parseExcelFile(buf, sheetName);
       const detection = detectImportType(mappedHeaders);
       const subtests = detection.type === 'legacy' ? parseLegacy(rows) : detection.type === 'standard' ? parseStandard(rows) : [];
       const effectiveSheet = resolvedSheetName ?? sheetName;
+      // Build header preview: only headers with a non-empty raw label are kept;
+      // sample = first data row's value for each header (best-effort).
+      const availableHeaders = rawHeaders.filter(h => String(h ?? '').trim() !== '');
+      const headerSamples: Record<string, unknown> = {};
+      if (rows.length > 0) {
+        const firstRow = rows[0];
+        for (let i = 0; i < rawHeaders.length; i++) {
+          const raw = rawHeaders[i];
+          if (!raw) continue;
+          const mapped = mappedHeaders[i];
+          headerSamples[raw] = firstRow[mapped] ?? '';
+        }
+      }
       if (subtests.length === 0) {
         updateFile(id, {
           status: 'failed',
@@ -90,6 +103,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           detectedImportType: detection.type,
           detectionReasons: detection.reasons,
           selectedSheet: effectiveSheet,
+          availableHeaders,
+          headerSamples,
         });
       } else {
         updateFile(id, {
@@ -100,6 +115,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           detectedImportType: detection.type,
           detectionReasons: detection.reasons,
           selectedSheet: effectiveSheet,
+          availableHeaders,
+          headerSamples,
           error: undefined,
         });
       }
