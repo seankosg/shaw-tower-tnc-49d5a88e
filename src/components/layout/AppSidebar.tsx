@@ -208,6 +208,7 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
+        {visibleAdmin.length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>Administration</SidebarGroupLabel>
             <SidebarGroupContent>
