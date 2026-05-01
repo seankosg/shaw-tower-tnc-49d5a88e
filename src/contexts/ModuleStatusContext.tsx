@@ -11,18 +11,21 @@ export type ModuleStatus = {
   pausedByName?: string;
 };
 
-type ModuleKey = 'tnc' | 'defect';
+type ModuleKey = 'tnc' | 'defect' | 'docs';
 
 const KEY_MAP: Record<ModuleKey, string> = {
   tnc: 'module_tnc_status',
   defect: 'module_defect_status',
+  docs: 'module_docs_status',
 };
 
 const DEFAULT_STATUS: ModuleStatus = { enabled: true };
+const DEFAULT_DOCS_STATUS: ModuleStatus = { enabled: false, reason: '준비 중' };
 
 interface ModuleStatusContextValue {
   tnc: ModuleStatus;
   defect: ModuleStatus;
+  docs: ModuleStatus;
   loading: boolean;
   refresh: () => Promise<void>;
   setStatus: (module: ModuleKey, status: ModuleStatus) => Promise<{ error: Error | null }>;
