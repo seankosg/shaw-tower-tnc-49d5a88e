@@ -133,8 +133,13 @@ const HEADER_MAP: Record<string, string> = {
   updated_at: 'updated_at',
 };
 
+/** Strip trailing decoration markers like "(H)" used in some templates. */
+function cleanHeader(raw: string): string {
+  return String(raw ?? '').replace(/\s*\(H\)\s*$/i, '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function normalizeHeader(raw: string): string {
-  const cleaned = raw.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  const cleaned = cleanHeader(raw).toLowerCase();
   // DB-managed mapping wins, hardcoded HEADER_MAP is the fallback when DB cache misses or is unloaded.
   return getMappedField('tnc', cleaned) ?? HEADER_MAP[cleaned] ?? cleaned;
 }
