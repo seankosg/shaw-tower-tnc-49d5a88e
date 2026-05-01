@@ -1276,7 +1276,14 @@ function SubcontractorMasterTable() {
   return (
     <>
     <Card>
-      <CardHeader><CardTitle className="text-base">Subcontractor Master</CardTitle></CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">Subcontractor Master</CardTitle>
+        {unmappedAliases.length > 0 && (
+          <Badge variant="outline" className="border-amber-400 bg-amber-50 text-amber-900">
+            {unmappedAliases.length} unmapped alias{unmappedAliases.length === 1 ? '' : 'es'}
+          </Badge>
+        )}
+      </CardHeader>
       <CardContent className="space-y-5">
         {/* Subcontractors */}
         <div className="space-y-2">
@@ -1289,31 +1296,60 @@ function SubcontractorMasterTable() {
           {loading ? (
             <p className="py-2 text-center text-sm text-muted-foreground">Loading...</p>
           ) : (
-            <div className="max-h-[200px] overflow-auto">
+            <div className="max-h-[260px] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead className="w-32">Owner Code</TableHead>
+                    <TableHead>Aconex Aliases</TableHead>
                     <TableHead className="w-20 text-center">Active</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {subs.map(r => (
-                    <TableRow key={r.id}>
-                      <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
-                      <TableCell><InlineNameEdit value={r.owner_code ?? suggestOwnerCode(r.name)} onSave={(v) => updateOwnerCode(r, v)} /></TableCell>
-                      <TableCell className="text-center">
-                        <Switch checked={r.is_active} onCheckedChange={() => startToggleActive(r)} />
-                      </TableCell>
-                      <TableCell>
-                        <Button size="icon" variant="ghost" onClick={() => remove(r)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {subs.map(r => {
+                    const masterAliases = aliasesFor(r.id);
+                    return (
+                      <TableRow key={r.id}>
+                        <TableCell><InlineNameEdit value={r.name} onSave={(v) => renameMaster(r, v)} /></TableCell>
+                        <TableCell><InlineNameEdit value={r.owner_code ?? suggestOwnerCode(r.name)} onSave={(v) => updateOwnerCode(r, v)} /></TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap items-center gap-1">
+                            {masterAliases.map(a => (
+                              <Badge key={a.id} variant="secondary" className="gap-1 font-mono text-[10px]">
+                                {a.raw_label}
+                                <button
+                                  type="button"
+                                  onClick={() => removeAlias(a.id)}
+                                  className="ml-1 rounded hover:bg-destructive/20"
+                                  aria-label={`Remove alias ${a.raw_label}`}
+                                >
+                                  ×
+                                </button>
+                              </Badge>
+                            ))}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-[10px]"
+                              onClick={() => { setAliasDialogFor(r); setNewAliasLabel(''); }}
+                            >
+                              <Plus className="h-3 w-3" /> Add
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Switch checked={r.is_active} onCheckedChange={() => startToggleActive(r)} />
+                        </TableCell>
+                        <TableCell>
+                          <Button size="icon" variant="ghost" onClick={() => remove(r)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
