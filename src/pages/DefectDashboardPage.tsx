@@ -377,6 +377,10 @@ export default function DefectDashboardPage() {
                 <DateButton value={scurveStart} onChange={setScurveStart} />
                 <span className="text-xs text-muted-foreground">~</span>
                 <DateButton value={scurveEnd} onChange={setScurveEnd} />
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handleSCurveExport}>
+                  <Download className="h-3.5 w-3.5" />
+                  Export Excel
+                </Button>
               </div>
             )}
           </div>
