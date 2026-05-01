@@ -1409,8 +1409,79 @@ function SubcontractorMasterTable() {
             </div>
           )}
         </div>
+
+        {/* Unmapped Aconex Aliases (from Docs imports) */}
+        <div className="space-y-2 border-t pt-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Unmapped Aconex Aliases ({unmappedAliases.length})
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Organisation labels found in Docs imports that aren't matched to any Subcontractor yet. Map them to absorb the data into the right master.
+          </p>
+          {unmappedAliases.length === 0 ? (
+            <p className="py-2 text-center text-xs text-muted-foreground">All Aconex labels are mapped. </p>
+          ) : (
+            <div className="max-h-[220px] overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Raw Label</TableHead>
+                    <TableHead className="w-[220px]">Map to Subcontractor</TableHead>
+                    <TableHead className="w-20"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {unmappedAliases.map(a => (
+                    <TableRow key={a.id}>
+                      <TableCell className="font-mono text-xs">{a.raw_label}</TableCell>
+                      <TableCell>
+                        <Select onValueChange={(v) => mapUnmapped(a.id, v)}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="— select —" /></SelectTrigger>
+                          <SelectContent>
+                            {subs.filter(s => s.is_active).map(s => (
+                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Button size="sm" variant="ghost" onClick={() => ignoreUnmapped(a.id)}>Ignore</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
+
+    <Dialog open={!!aliasDialogFor} onOpenChange={(open) => { if (!open) { setAliasDialogFor(null); setNewAliasLabel(''); } }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add Aconex Alias</DialogTitle>
+          <DialogDescription>
+            Map a raw Aconex organisation label to <strong>{aliasDialogFor?.name}</strong>.
+            Future Docs imports with this exact label will be linked automatically.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="new-alias">Raw label</Label>
+          <Input
+            id="new-alias"
+            value={newAliasLabel}
+            onChange={(e) => setNewAliasLabel(e.target.value)}
+            placeholder="e.g. HDEC ELEC SUB1"
+            autoFocus
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setAliasDialogFor(null)}>Cancel</Button>
+          <Button onClick={addAlias} disabled={!newAliasLabel.trim()}>Add</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <AlertDialog open={!!pendingToggle} onOpenChange={(open) => !open && setPendingToggle(null)}>
       <AlertDialogContent>
