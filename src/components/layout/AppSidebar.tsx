@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut, ClipboardList, Tags,
+  FileText, FolderKanban, Wrench, ShieldCheck, Package,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -35,6 +36,20 @@ const defectNav = [
   { label: 'Quick Update', icon: ClipboardList, path: '/defects/quick-update' },
 ];
 
+const docsNav = [
+  { label: 'Dashboard', icon: BarChart3, path: '/docs/dashboard' },
+  { label: 'As-Built Drawings', icon: FileText, path: '/docs/raw-data' },
+  { label: 'Import', icon: Upload, path: '/docs/import' },
+  { label: 'Export', icon: Download, path: '/docs/export' },
+  { label: 'Org Mapping', icon: Tags, path: '/docs/org-mapping' },
+];
+
+const docsComingSoon = [
+  { label: 'OMM Manuals', icon: FolderKanban },
+  { label: 'Warranty Docs', icon: ShieldCheck },
+  { label: 'Spare Parts', icon: Package },
+];
+
 const adminNav = [
   { label: 'Admin', icon: Shield, path: '/admin' },
 ];
@@ -43,16 +58,18 @@ export function AppSidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { profile, roles, signOut, isAdmin } = useAuth();
-  const { tnc, defect } = useModuleStatus();
+  const { tnc, defect, docs } = useModuleStatus();
   const userName = profile?.name || profile?.login_id || 'User';
 
   const visibleMain = filterNavItems(mainNav, roles);
   const visibleDefects = filterNavItems(defectNav, roles);
+  const visibleDocs = filterNavItems(docsNav, roles);
   const visibleAdmin = filterNavItems(adminNav, roles);
 
   // Non-admins lose the entire group when the module is paused
   const showTncGroup = isAdmin || tnc.enabled;
   const showDefectGroup = isAdmin || defect.enabled;
+  const showDocsGroup = isAdmin || docs.enabled;
 
   return (
     <Sidebar>
