@@ -796,7 +796,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         const insertR1Status = row.r1_status ?? (insertR1Target ? 'Planned' : null);
         const insertR2Status = row.r2_status ?? (insertR2SubTarget ? 'Planned' : null);
 
-        const { error } = await supabase.from('subtests').insert({
+        const insertPayload: Record<string, any> = {
           project_id: projectId!, system_id: systemId,
           item_no: row.item_no, mos_code: row.mos_code, subtest_id: row.subtest_id,
           level: row.level, equipment: row.equipment, description: row.description,
@@ -826,8 +826,11 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           data_source_type: dataSourceType as any, source_upload_id: uploadId,
           team: (resolvedTeam === undefined ? null : resolvedTeam) as any,
           custom_payload: row.custom_payload ?? {},
-        } as any);
-        if (error) {
+        };
+        writeTasks.push({
+          kind: 'insert',
+          payload: insertPayload,
+          onFail: (error: any) => {
           res.rejected++;
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
