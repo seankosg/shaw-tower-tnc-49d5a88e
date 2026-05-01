@@ -3,9 +3,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { loadHeaderMappingsCache } from '@/lib/header-mappings-cache';
 
+export type HeaderMappingModule = 'tnc' | 'defect' | 'docs';
+export type DocsSubModule = 'as_built' | 'warranty';
+
 export interface HeaderMappingRow {
   id: string;
-  module: 'tnc' | 'defect';
+  module: HeaderMappingModule;
+  sub_module: string | null;
   header_alias: string;
   target_field: string;
   is_system: boolean;
