@@ -456,11 +456,26 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     // Throttled progress: only re-render every PROGRESS_STEP rows.
     const PROGRESS_STEP = Math.max(1, Math.floor(parsed.length / 50));
 
+    // -------- PRE-RESOLVE ALL SYSTEMS (sequential, before concurrent pool) --------
+    // resolveSystem may insert new system_master rows; running it concurrently
+    // could create duplicates for the same raw name. Pre-resolve all unique
+    // raw system names here so the parallel pool only does subtests writes.
+    const uniqueRawSystems = Array.from(new Set(parsed.map(r => r.raw_system_name).filter(Boolean) as string[]));
+    for (const rawName of uniqueRawSystems) {
+      await resolveSystem(rawName);
+    }
+
+    // -------- BUILD WRITE TASKS (sequential, memory-only) --------
+    // Phase 1: walk every row, do all in-memory work (validation, autofill, schedule
+    // impact, field-log classification) and produce a list of update/insert "tasks".
+    // Rejected/skipped rows are handled inline (no DB write needed).
+    type WriteTask =
+      | { kind: 'update'; existingId: string; updates: Record<string, any>; onSuccess: () => void; onFail: (err: any) => void }
+      | { kind: 'insert'; payload: Record<string, any>; onSuccess: () => void; onFail: (err: any) => void };
+    const writeTasks: WriteTask[] = [];
+
     for (let i = 0; i < parsed.length; i++) {
       const row = parsed[i];
-      if (i % PROGRESS_STEP === 0 || i === parsed.length - 1) {
-        updateFile(item.id, { progress: Math.round(((i + 1) / parsed.length) * 100) });
-      }
 
       const systemId = await resolveSystem(row.raw_system_name);
       if (!systemId) {
