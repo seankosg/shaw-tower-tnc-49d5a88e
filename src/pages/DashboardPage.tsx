@@ -527,6 +527,11 @@ export default function DashboardPage() {
                   Weekly
                 </button>
               </div>
+              {/* Export Excel */}
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handleSCurveExport}>
+                <Download className="h-3.5 w-3.5" />
+                Export Excel
+              </Button>
             </div>
           )}
         </CardHeader>
@@ -535,7 +540,7 @@ export default function DashboardPage() {
             {scurve.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">No data in range.</p>
           ) : (
-            <ChartContainer config={chartConfig} className="h-[360px] w-full">
+            <ChartContainer ref={scurveChartRef} config={chartConfig} className="h-[360px] w-full">
               <ComposedChart data={scurve} margin={{ left: 12, right: 16, top: 8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="bucketLabel" tick={{ fontSize: 10 }} minTickGap={20} />
