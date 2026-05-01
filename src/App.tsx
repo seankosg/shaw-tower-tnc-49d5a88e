@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ImportProvider } from "@/contexts/ImportContext";
 import { DefectImportProvider } from "@/contexts/DefectImportContext";
+import { DocsImportProvider } from "@/contexts/DocsImportContext";
 import { ModuleStatusProvider } from "@/contexts/ModuleStatusContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
@@ -69,6 +70,7 @@ const App = () => (
       <ModuleStatusProvider>
       <ImportProvider>
         <DefectImportProvider>
+        <DocsImportProvider>
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -126,6 +128,7 @@ const App = () => (
             </Routes>
           </BrowserRouter>
         </TooltipProvider>
+        </DocsImportProvider>
         </DefectImportProvider>
       </ImportProvider>
       </ModuleStatusProvider>
