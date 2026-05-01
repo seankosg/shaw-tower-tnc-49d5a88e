@@ -32,6 +32,8 @@ import EventLogTab from './admin/EventLogTab';
 import { ModuleControlTab } from './admin/ModuleControlTab';
 import HeaderMappingsTab from './admin/HeaderMappingsTab';
 import CustomFieldsTab from './admin/CustomFieldsTab';
+import { UnmappedAliasQueue } from '@/components/admin/UnmappedAliasQueue';
+import { ChevronDown, ChevronRight, Search, AlertTriangle } from 'lucide-react';
 
 /* ───── Types ───── */
 interface Profile {
@@ -1060,10 +1062,14 @@ function MastersTab() {
           {syncing ? 'Syncing...' : 'Sync Missing Users'}
         </Button>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <SubcontractorMasterTable />
-        <MasterTable table="hdec_pic_master" title="HDEC PIC Master" />
-        <MasterTable table="hdec_eng_master" title="HDEC ENG Master" />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <SubcontractorMasterTable />
+        </div>
+        <div className="space-y-4">
+          <MasterTable table="hdec_pic_master" title="HDEC PIC Master" />
+          <MasterTable table="hdec_eng_master" title="HDEC ENG Master" />
+        </div>
       </div>
     </div>
   );
