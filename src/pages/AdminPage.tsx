@@ -1245,43 +1245,24 @@ function SubcontractorMasterTable() {
   const unmappedAliases = aliases.filter(a => a.is_active && !a.subcontractor_id);
   const aliasesFor = (masterId: string) => aliasesByMaster.filter(a => a.subcontractor_id === masterId);
 
-  const addAlias = async () => {
-    if (!aliasDialogFor || !newAliasLabel.trim()) return;
-    const raw_label = newAliasLabel.trim();
+  const addAliasInline = async (master: MasterRow) => {
+    const raw = (aliasDraft[master.id] ?? '').trim();
+    if (!raw) return;
     const { error } = await (supabase as any)
       .from('docs_org_alias')
       .upsert(
-        { raw_label, subcontractor_id: aliasDialogFor.id, is_active: true },
+        { raw_label: raw, subcontractor_id: master.id, is_active: true },
         { onConflict: 'raw_label' },
       );
     if (error) { toast({ title: 'Add alias failed', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Alias added', description: `"${raw_label}" → ${aliasDialogFor.name}` });
-    setNewAliasLabel(''); setAliasDialogFor(null); load();
+    toast({ title: 'Alias added', description: `"${raw}" → ${master.name}` });
+    setAliasDraft(prev => ({ ...prev, [master.id]: '' }));
+    load();
   };
 
   const removeAlias = async (id: string) => {
     const { error } = await (supabase as any).from('docs_org_alias').delete().eq('id', id);
     if (error) { toast({ title: 'Remove failed', description: error.message, variant: 'destructive' }); return; }
-    load();
-  };
-
-  const mapUnmapped = async (aliasId: string, subcontractorId: string) => {
-    if (!subcontractorId) return;
-    const { error } = await (supabase as any)
-      .from('docs_org_alias')
-      .update({ subcontractor_id: subcontractorId })
-      .eq('id', aliasId);
-    if (error) { toast({ title: 'Map failed', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Alias mapped' });
-    load();
-  };
-
-  const ignoreUnmapped = async (aliasId: string) => {
-    const { error } = await (supabase as any)
-      .from('docs_org_alias')
-      .update({ is_active: false })
-      .eq('id', aliasId);
-    if (error) { toast({ title: 'Ignore failed', description: error.message, variant: 'destructive' }); return; }
     load();
   };
 
