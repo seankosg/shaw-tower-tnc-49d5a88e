@@ -5,8 +5,29 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Star } from 'lucide-react';
-import { toFieldName } from '@/lib/defect-parser';
-import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
+
+export type ColumnRequirementReason = 'system' | 'reimport' | 'config';
+
+export interface ColumnRequirement {
+  required: boolean;
+  reason?: ColumnRequirementReason;
+  message?: string;
+}
+
+export interface ColumnSelectHelpers {
+  /** Map a raw header string to its canonical field name. */
+  toFieldName: (header: string) => string;
+  /** Decide whether a given header is required (and why). */
+  getRequirement: (header: string) => ColumnRequirement;
+  /** Optional — used for showing an origin badge next to mapped fields. */
+  getSourceLabel?: (field: string) => string;
+  /** Optional — used to colour the origin badge and power "X only" quick filters. */
+  getSourceOrigin?: (field: string) => 'hdec' | 'aconex' | 'system';
+  /** Optional — heuristic to mark a field as "unmapped" in the dialog. */
+  isKnownField?: (field: string) => boolean;
+  /** Optional — extra warning lines shown in the warning box below the list. */
+  extraWarnings?: (excluded: Set<string>) => string[];
+}
 
 interface ColumnSelectDialogProps {
   open: boolean;
@@ -15,16 +36,10 @@ interface ColumnSelectDialogProps {
   headers: string[];
   samples: Record<string, unknown>;
   defaultExcluded: string[];
-  isReimport: boolean;
   onApply: (excluded: string[]) => void;
-}
-
-type RequirementReason = 'system' | 'reimport' | 'config';
-
-interface Requirement {
-  required: boolean;
-  reason?: RequirementReason;
-  message?: string;
+  helpers: ColumnSelectHelpers;
+  /** Whether to show "Aconex only" / "HDEC only" quick-filter buttons (Defect-only). */
+  showOriginQuickFilters?: boolean;
 }
 
 function previewValue(v: unknown): string {
@@ -41,44 +56,17 @@ export function ColumnSelectDialog({
   headers,
   samples,
   defaultExcluded,
-  isReimport,
   onApply,
+  helpers,
+  showOriginQuickFilters = false,
 }: ColumnSelectDialogProps) {
-  const { isFieldRequired, getLabel, getSourceLabel, getSourceOrigin } = useDefectFieldConfig();
+  const { toFieldName, getRequirement, getSourceLabel, getSourceOrigin, isKnownField, extraWarnings } = helpers;
   const [excluded, setExcluded] = useState<Set<string>>(new Set(defaultExcluded));
 
   // Reset internal state when dialog re-opens with possibly different defaults.
   useEffect(() => {
     if (open) setExcluded(new Set(defaultExcluded));
   }, [open, defaultExcluded]);
-
-  const getRequirement = useMemo(() => {
-    return (header: string): Requirement => {
-      const field = toFieldName(header);
-      if (field === 'issue_no') {
-        return {
-          required: true,
-          reason: 'system',
-          message: `⚠ "${header}" maps to Issue No, which is required for header detection. Excluding it will likely cause the import to fail.`,
-        };
-      }
-      if (isReimport && field === 'id') {
-        return {
-          required: true,
-          reason: 'reimport',
-          message: `⚠ Excluding "${header}" on a Re-import file will create new rows instead of updating existing ones.`,
-        };
-      }
-      if (isFieldRequired(field)) {
-        return {
-          required: true,
-          reason: 'config',
-          message: `⚠ "${getLabel(field)}" is marked as required in Field Config. Excluding it may leave required fields empty.`,
-        };
-      }
-      return { required: false };
-    };
-  }, [isReimport, isFieldRequired, getLabel]);
 
   const requiredHeaders = useMemo(
     () => headers.filter((h) => getRequirement(h).required),
@@ -88,7 +76,7 @@ export function ColumnSelectDialog({
     () =>
       requiredHeaders
         .filter((h) => excluded.has(h))
-        .map((h) => ({ header: h, message: getRequirement(h).message! })),
+        .map((h) => ({ header: h, message: getRequirement(h).message ?? `"${h}" is required.` })),
     [requiredHeaders, excluded, getRequirement],
   );
 
@@ -111,6 +99,7 @@ export function ColumnSelectDialog({
   const selectAll = () => setExcluded(new Set());
   const deselectAll = () => setExcluded(new Set(headers));
   const selectByOrigin = (origin: 'hdec' | 'aconex') => {
+    if (!getSourceOrigin) return;
     const next = new Set<string>();
     for (const h of headers) {
       const field = toFieldName(h);
@@ -125,10 +114,9 @@ export function ColumnSelectDialog({
     onOpenChange(false);
   };
 
-  // Has area_raw been excluded? (warn user about derived fields)
-  const areaRawExcluded = useMemo(
-    () => Array.from(excluded).some((h) => toFieldName(h) === 'area_raw'),
-    [excluded],
+  const extraWarningLines = useMemo(
+    () => (extraWarnings ? extraWarnings(excluded) : []),
+    [extraWarnings, excluded],
   );
 
   return (
@@ -153,24 +141,28 @@ export function ColumnSelectDialog({
             <Button type="button" size="sm" variant="outline" onClick={deselectAll}>
               Deselect all
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => selectByOrigin('aconex')}
-              className="border-emerald-300 text-emerald-900 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-100 dark:hover:bg-emerald-950"
-            >
-              Aconex only
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => selectByOrigin('hdec')}
-              className="border-blue-300 text-blue-900 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-100 dark:hover:bg-blue-950"
-            >
-              HDEC only
-            </Button>
+            {showOriginQuickFilters && getSourceOrigin && (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => selectByOrigin('aconex')}
+                  className="border-emerald-300 text-emerald-900 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-100 dark:hover:bg-emerald-950"
+                >
+                  Aconex only
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => selectByOrigin('hdec')}
+                  className="border-blue-300 text-blue-900 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-100 dark:hover:bg-blue-950"
+                >
+                  HDEC only
+                </Button>
+              </>
+            )}
             <Button type="button" size="sm" variant="ghost" onClick={reset}>
               Reset
             </Button>
@@ -205,11 +197,10 @@ export function ColumnSelectDialog({
             const field = toFieldName(header);
             const req = getRequirement(header);
             const sample = previewValue(samples[header]);
-            const isUnmapped = !field || field === header.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-            // Heuristic: if field equals the slugified header verbatim AND not a known
-            // field config entry, treat as unmapped for display purposes.
-            const knownField = isFieldRequired(field) || ['issue_no', 'id', 'area_raw', 'main_trade', 'sub_trade'].includes(field);
-            const showAsUnmapped = isUnmapped && !knownField;
+            const slug = header.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+            const showAsUnmapped = isKnownField
+              ? !isKnownField(field)
+              : (!field || field === slug);
 
             return (
               <div
@@ -240,7 +231,7 @@ export function ColumnSelectDialog({
                   ) : (
                     <code className="text-foreground truncate">{field}</code>
                   )}
-                  {!showAsUnmapped && (() => {
+                  {!showAsUnmapped && getSourceLabel && getSourceOrigin && (() => {
                     const origin = getSourceOrigin(field);
                     const cls =
                       origin === 'hdec'
@@ -261,7 +252,7 @@ export function ColumnSelectDialog({
           })}
         </div>
 
-        {(excludedRequiredMessages.length > 0 || areaRawExcluded) && (
+        {(excludedRequiredMessages.length > 0 || extraWarningLines.length > 0) && (
           <div className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 p-3 space-y-1.5">
             <div className="flex items-center gap-1.5 text-xs font-medium text-amber-900 dark:text-amber-200">
               <AlertTriangle className="h-3.5 w-3.5" />
@@ -271,9 +262,9 @@ export function ColumnSelectDialog({
               {excludedRequiredMessages.map(({ header, message }) => (
                 <li key={header}>{message}</li>
               ))}
-              {areaRawExcluded && (
-                <li>Excluding "Area" will also clear the derived Type / Level / Location fields for this import.</li>
-              )}
+              {extraWarningLines.map((line, i) => (
+                <li key={`x${i}`}>{line}</li>
+              ))}
             </ul>
           </div>
         )}
