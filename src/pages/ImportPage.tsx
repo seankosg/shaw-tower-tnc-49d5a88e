@@ -282,6 +282,20 @@ export default function ImportPage() {
           </CardContent>
         </Card>
       )}
+
+      {columnDialogFile && columnDialogFile.availableHeaders && (
+        <TncColumnSelect
+          fileId={columnDialogFile.id}
+          fileName={columnDialogFile.name}
+          headers={columnDialogFile.availableHeaders}
+          samples={columnDialogFile.headerSamples ?? {}}
+          defaultExcluded={columnDialogFile.excludedHeaders ?? []}
+          detectedImportType={columnDialogFile.detectedImportType}
+          open={!!columnDialogFileId}
+          onClose={() => setColumnDialogFileId(null)}
+          onApply={(excluded) => setFileExcludedHeaders(columnDialogFile.id, excluded)}
+        />
+      )}
     </div>
   );
 }
