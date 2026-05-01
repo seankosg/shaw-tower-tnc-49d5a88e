@@ -239,8 +239,19 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       return `${code}${msg}${details}${hint}`;
     };
 
-    const { data: systemsData } = await supabase.from('system_master').select('id, system_code').eq('project_id', projectId);
-    const { data: aliasData } = await supabase.from('system_alias_map').select('alias_name, system_id').eq('project_id', projectId).eq('is_active', true);
+    // -------- PREFETCH (parallel) --------
+    // Single-shot fetch of every cache & lookup we need for the whole file,
+    // so the per-row loop performs ZERO master/system reads.
+    const [systemsRes, aliasRes, subRes, hdecRes] = await Promise.all([
+      supabase.from('system_master').select('id, system_code').eq('project_id', projectId),
+      supabase.from('system_alias_map').select('alias_name, system_id').eq('project_id', projectId).eq('is_active', true),
+      supabase.from('subcontractor_master').select('id, name, type, parent_subcontractor_id, is_active'),
+      supabase.from('hdec_pic_master').select('id, name, is_active'),
+    ]);
+    const systemsData = systemsRes.data;
+    const aliasData = aliasRes.data;
+    const subData = subRes.data;
+    const hdecData = hdecRes.data;
     const systemByCode = new Map<string, string>();
     (systemsData || []).forEach(s => systemByCode.set(s.system_code.toLowerCase(), s.id));
     const aliasByName = new Map<string, string>();
