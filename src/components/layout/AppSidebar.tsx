@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut, ClipboardList, Tags,
+  FileText, FolderKanban, Wrench, ShieldCheck, Package,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -35,6 +36,20 @@ const defectNav = [
   { label: 'Quick Update', icon: ClipboardList, path: '/defects/quick-update' },
 ];
 
+const docsNav = [
+  { label: 'Dashboard', icon: BarChart3, path: '/docs/dashboard' },
+  { label: 'As-Built Drawings', icon: FileText, path: '/docs/raw-data' },
+  { label: 'Import', icon: Upload, path: '/docs/import' },
+  { label: 'Export', icon: Download, path: '/docs/export' },
+  { label: 'Org Mapping', icon: Tags, path: '/docs/org-mapping' },
+];
+
+const docsComingSoon = [
+  { label: 'OMM Manuals', icon: FolderKanban },
+  { label: 'Warranty Docs', icon: ShieldCheck },
+  { label: 'Spare Parts', icon: Package },
+];
+
 const adminNav = [
   { label: 'Admin', icon: Shield, path: '/admin' },
 ];
@@ -43,16 +58,18 @@ export function AppSidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { profile, roles, signOut, isAdmin } = useAuth();
-  const { tnc, defect } = useModuleStatus();
+  const { tnc, defect, docs } = useModuleStatus();
   const userName = profile?.name || profile?.login_id || 'User';
 
   const visibleMain = filterNavItems(mainNav, roles);
   const visibleDefects = filterNavItems(defectNav, roles);
+  const visibleDocs = filterNavItems(docsNav, roles);
   const visibleAdmin = filterNavItems(adminNav, roles);
 
   // Non-admins lose the entire group when the module is paused
   const showTncGroup = isAdmin || tnc.enabled;
   const showDefectGroup = isAdmin || defect.enabled;
+  const showDocsGroup = isAdmin || docs.enabled;
 
   return (
     <Sidebar>
@@ -139,6 +156,50 @@ export function AppSidebar() {
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {showDocsGroup && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="flex items-center gap-2">
+              <span>Docs Management</span>
+              {!docs.enabled && (
+                <Badge variant="outline" className="border-amber-400 bg-amber-100/60 text-[10px] text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                  Paused
+                </Badge>
+              )}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleDocs.map((item) => (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={pathname === item.path || (item.path === '/docs/raw-data' && /^\/docs\/[^/]+$/.test(pathname))}
+                      onClick={() => navigate(getRememberedRoute(item.path))}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+                {docsComingSoon.map((item) => (
+                  <SidebarMenuItem key={item.label}>
+                    <SidebarMenuButton
+                      disabled
+                      tooltip={`${item.label} (Coming soon)`}
+                      className="cursor-not-allowed opacity-50"
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                      <Badge variant="outline" className="ml-auto h-4 border-muted-foreground/30 px-1 text-[9px] font-normal">
+                        Soon
+                      </Badge>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}

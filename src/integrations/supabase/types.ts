@@ -856,6 +856,243 @@ export type Database = {
         }
         Relationships: []
       }
+      docs_change_log: {
+        Row: {
+          change_source: string | null
+          changed_at: string
+          changed_by: string | null
+          changed_field: string
+          drawing_id: string
+          id: string
+          new_value: string | null
+          old_value: string | null
+          upload_id: string | null
+        }
+        Insert: {
+          change_source?: string | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_field: string
+          drawing_id: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          upload_id?: string | null
+        }
+        Update: {
+          change_source?: string | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_field?: string
+          drawing_id?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          upload_id?: string | null
+        }
+        Relationships: []
+      }
+      docs_drawings: {
+        Row: {
+          aconex_status: string | null
+          approved_date: string | null
+          created_at: string
+          custom_payload: Json
+          data_source_type: string | null
+          discipline: string | null
+          document_no: string
+          document_type: string | null
+          id: string
+          is_active: boolean
+          is_submitted: boolean
+          organisation_raw: string | null
+          project_id: string
+          raw_payload: Json
+          remarks: string | null
+          revision: string | null
+          row_version: number
+          source_upload_id: string | null
+          sub_module: string
+          subcontractor_id: string | null
+          submitted_date: string | null
+          title: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          aconex_status?: string | null
+          approved_date?: string | null
+          created_at?: string
+          custom_payload?: Json
+          data_source_type?: string | null
+          discipline?: string | null
+          document_no: string
+          document_type?: string | null
+          id?: string
+          is_active?: boolean
+          is_submitted?: boolean
+          organisation_raw?: string | null
+          project_id: string
+          raw_payload?: Json
+          remarks?: string | null
+          revision?: string | null
+          row_version?: number
+          source_upload_id?: string | null
+          sub_module?: string
+          subcontractor_id?: string | null
+          submitted_date?: string | null
+          title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          aconex_status?: string | null
+          approved_date?: string | null
+          created_at?: string
+          custom_payload?: Json
+          data_source_type?: string | null
+          discipline?: string | null
+          document_no?: string
+          document_type?: string | null
+          id?: string
+          is_active?: boolean
+          is_submitted?: boolean
+          organisation_raw?: string | null
+          project_id?: string
+          raw_payload?: Json
+          remarks?: string | null
+          revision?: string | null
+          row_version?: number
+          source_upload_id?: string | null
+          sub_module?: string
+          subcontractor_id?: string | null
+          submitted_date?: string | null
+          title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      docs_org_alias: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          raw_label: string
+          subcontractor_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          raw_label: string
+          subcontractor_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          raw_label?: string
+          subcontractor_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      docs_upload_batches: {
+        Row: {
+          data_date: string | null
+          id: string
+          note: string | null
+          processed_rows: number | null
+          project_id: string | null
+          rejected_rows: number | null
+          rollback_force: boolean | null
+          rolled_back_at: string | null
+          rolled_back_by: string | null
+          skipped_rows: number | null
+          status: Database["public"]["Enums"]["upload_status"]
+          sub_module: string
+          success_rows: number | null
+          total_rows: number | null
+          uploaded_at: string
+          uploaded_by: string | null
+          uploaded_file_name: string
+        }
+        Insert: {
+          data_date?: string | null
+          id?: string
+          note?: string | null
+          processed_rows?: number | null
+          project_id?: string | null
+          rejected_rows?: number | null
+          rollback_force?: boolean | null
+          rolled_back_at?: string | null
+          rolled_back_by?: string | null
+          skipped_rows?: number | null
+          status?: Database["public"]["Enums"]["upload_status"]
+          sub_module?: string
+          success_rows?: number | null
+          total_rows?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+          uploaded_file_name: string
+        }
+        Update: {
+          data_date?: string | null
+          id?: string
+          note?: string | null
+          processed_rows?: number | null
+          project_id?: string | null
+          rejected_rows?: number | null
+          rollback_force?: boolean | null
+          rolled_back_at?: string | null
+          rolled_back_by?: string | null
+          skipped_rows?: number | null
+          status?: Database["public"]["Enums"]["upload_status"]
+          sub_module?: string
+          success_rows?: number | null
+          total_rows?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+          uploaded_file_name?: string
+        }
+        Relationships: []
+      }
+      docs_upload_row_logs: {
+        Row: {
+          action_taken: Database["public"]["Enums"]["action_taken"] | null
+          document_no: string | null
+          id: string
+          processed_at: string
+          raw_row_no: number | null
+          reason_code: string | null
+          reason_detail: string | null
+          upload_id: string
+        }
+        Insert: {
+          action_taken?: Database["public"]["Enums"]["action_taken"] | null
+          document_no?: string | null
+          id?: string
+          processed_at?: string
+          raw_row_no?: number | null
+          reason_code?: string | null
+          reason_detail?: string | null
+          upload_id: string
+        }
+        Update: {
+          action_taken?: Database["public"]["Enums"]["action_taken"] | null
+          document_no?: string | null
+          id?: string
+          processed_at?: string
+          raw_row_no?: number | null
+          reason_code?: string | null
+          reason_detail?: string | null
+          upload_id?: string
+        }
+        Relationships: []
+      }
       event_log: {
         Row: {
           action: string

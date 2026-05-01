@@ -6,13 +6,14 @@ import type { ModuleStatus } from '@/contexts/ModuleStatusContext';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 
 interface Props {
-  module: 'tnc' | 'defect';
+  module: 'tnc' | 'defect' | 'docs';
   status: ModuleStatus;
 }
 
-const MODULE_LABEL: Record<'tnc' | 'defect', string> = {
+const MODULE_LABEL: Record<'tnc' | 'defect' | 'docs', string> = {
   tnc: 'T&C',
   defect: 'Defect',
+  docs: 'Docs',
 };
 
 function formatDateTime(iso?: string) {

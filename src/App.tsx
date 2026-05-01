@@ -34,6 +34,12 @@ import DefectQuickUpdatePage from "./pages/DefectQuickUpdatePage";
 import DefectScheduleRevisionPage from "./pages/DefectScheduleRevisionPage";
 import AllSubtestCommentsPage from "./pages/AllSubtestCommentsPage";
 import AllDefectCommentsPage from "./pages/AllDefectCommentsPage";
+import DocsDashboardPage from "./pages/docs/DocsDashboardPage";
+import DocsRawDataPage from "./pages/docs/DocsRawDataPage";
+import DocsImportPage from "./pages/docs/DocsImportPage";
+import DocsExportPage from "./pages/docs/DocsExportPage";
+import DocsOrgMappingPage from "./pages/docs/DocsOrgMappingPage";
+import DocsDrawingDetailPage from "./pages/docs/DocsDrawingDetailPage";
 import { useHeaderMappingsSync } from "@/hooks/useHeaderMappings";
 import { loadHeaderMappingsCache } from "@/lib/header-mappings-cache";
 import { useCustomFieldsSync } from "@/hooks/useCustomFields";
@@ -106,6 +112,12 @@ const App = () => (
                 <Route path="/defect/export" element={<RedirectPreserveSearch to="/defects/export" />} />
                 <Route path="/defect/quick-update" element={<RedirectPreserveSearch to="/defects/quick-update" />} />
                 <Route path="/defects/:id" element={<DefectDetailPage />} />
+                <Route path="/docs/dashboard" element={<DocsDashboardPage />} />
+                <Route path="/docs/raw-data" element={<DocsRawDataPage />} />
+                <Route path="/docs/import" element={<DocsImportPage />} />
+                <Route path="/docs/export" element={<DocsExportPage />} />
+                <Route path="/docs/org-mapping" element={<DocsOrgMappingPage />} />
+                <Route path="/docs/:id" element={<DocsDrawingDetailPage />} />
                 <Route path="/comments/subtest" element={<AllSubtestCommentsPage />} />
                 <Route path="/comments/defect" element={<AllDefectCommentsPage />} />
                 <Route path="/admin" element={<AdminPage />} />

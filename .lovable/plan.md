@@ -1,112 +1,178 @@
-## 목적
+# Docs Management 모듈 — Phase 1 구현 계획
 
-이전 단계에서 prefetch + 메모리 lookup + 병렬 로그 insert 까지 적용했습니다. 이제 남은 직렬 await인 **행별 `subtests.update` / `subtests.insert` 호출**(`processFile` 루프 내 line 660 / 779)을 **concurrency pool (8~10)** 로 병렬 실행해 추가 5~10배 가속합니다.
+## 사용자 결정 반영 요약
+1. **Aconex Status**: `A`, `B`만 "Approved"로 처리 (A안 채택)
+2. **SC Date 기본값**: SHAW 프로젝트 = **2026-06-15** seed
+3. **Subcontractor 매칭 실패**: 자동생성 안 함. Import 결과에 unmatched 리스트 표시 + `/docs/config`에 raw label → subcontractor 매핑 admin 페이지 추가 (A안)
+4. **사이드바 표시**: `Module Control`에 **Docs 토글** 신설 → 기본 **비활성화**. 일반 사용자는 사이드바 미표시. **Admin은 항상 정상 사용 가능** (T&C/Defect와 동일 패턴)
+5. **공통 설정 공유**: 별도 Setting 페이지를 만들지 않고, **기존 Admin 탭의 Setting을 그대로 공유**
+   - Header Mappings, Custom Fields, Field Config, Event Log, Module Control 모두 기존 인프라 재사용
+   - Docs 모듈 전용 데이터는 `module = 'docs_drawings'` 디스크리미네이터로 같은 테이블에 저장
 
-## 현재 병목
+---
 
-`for (let i = 0; i < parsed.length; i++)` 루프가 **각 행마다 await update/insert**합니다.
-- 1,000행이면 1,000회 직렬 RTT.
-- 50ms RTT 가정 시 update/insert만 ~50초 소요.
-- 모든 사전 준비(prefetch, master, system resolve)는 이미 메모리에서 끝났으므로 **DB 쓰기만 남음** → 동시 실행해도 안전.
+## Phase 1 범위
 
-## 전략: Concurrency Pool
+**포함**
+- 사이드바 `Docs Management` 그룹 신설 (As-Built 메뉴 + OMM/Warranty/Spare는 비활성 placeholder)
+- Module Control에 `Docs` 토글 추가 (기본 disabled)
+- DB: `docs_drawings`, `docs_upload_batches`, `docs_upload_row_logs`, `docs_change_log`, `docs_org_alias`
+- 프로젝트별 SC Date + sub-module별 lead time 설정 (`app_settings`에 저장, 기존 `useAppSetting` 재사용)
+- Import 엔진 (멀티시트 + ELEC 파서 + 8-worker 동시성)
+- Risk 계산 (실시간, 순수 TS)
+- Dashboard, Raw Data, Import, Detail 페이지
 
-### 1. 루프를 **task 생성 단계** + **task 실행 단계**로 분리
+**제외 (후속 Phase)**
+- OMM / Warranty / Spare sub-module 구현
+- Aconex API 직접 연동 (Phase 1은 엑셀 업로드만)
 
-현재 루프는 다음 두 가지를 섞어 합니다:
-1. **준비**: system resolve, validation, existing lookup, updates 객체 빌드, autofill, scheduleImpact 계산
-2. **실행**: `await update/insert` + 결과를 res / rowLogs / changeLogs / scheduleChangeAudits / fieldLogs 에 push
+---
 
-**1단계는 메모리 연산이라 매우 빠름**. 이를 먼저 **순차로** 돌면서 다음 둘 중 하나의 task 객체를 만듭니다:
+## 기술 상세
 
-```ts
-type WriteTask =
-  | { kind: 'update'; id: string; updates: Record<string, any>;
-      // 성공 시 push할 후속 데이터
-      successRowLog: any; scheduleAudit?: any; scheduleChangeLogs?: any[]; fieldLogsOnSuccess: PendingFieldLog[];
-      // 실패 시 push할 데이터
-      failRowLog: (err: string) => any; failFieldLog: (err: string) => PendingFieldLog;
-      counter: 'updated'; }
-  | { kind: 'insert'; payload: Record<string, any>;
-      successRowLog: any; fieldLogsOnSuccess: PendingFieldLog[];
-      failRowLog: (err: string) => any; failFieldLog: (err: string) => PendingFieldLog;
-      counter: 'inserted'; };
-```
-
-이미 **rejected**, **skipped** 분기는 await가 없으므로 기존처럼 즉시 처리하고 task에 넣지 않습니다.
-
-### 2. Concurrency pool 로 task 실행
-
-```ts
-const CONCURRENCY = 8;
-async function runPool<T>(tasks: T[], worker: (t: T) => Promise<void>) {
-  let idx = 0;
-  const workers = Array.from({ length: Math.min(CONCURRENCY, tasks.length) }, async () => {
-    while (true) {
-      const i = idx++;
-      if (i >= tasks.length) return;
-      await worker(tasks[i]);
-    }
-  });
-  await Promise.all(workers);
-}
-```
-
-worker 안에서:
-- `update` → `supabase.from('subtests').update(t.updates).eq('id', t.id)`
-- `insert` → `supabase.from('subtests').insert(t.payload)`
-- 성공: `res[t.counter]++`, `rowLogs.push(t.successRowLog)`, scheduleAudit/changeLogs/fieldLogs 누적
-- 실패: `res.rejected++`, `rowLogs.push(t.failRowLog(err))`, `fieldLogs.push(t.failFieldLog(err))`
-
-**카운터/배열 push는 단일 JS 스레드라 race 안전**. 단, push 순서는 비결정적 → 후속 정렬이 필요한 곳이 있는지 확인 필요. (현재 코드는 `rowLogs`/`changeLogs` 모두 chunk insert만 하고 별도 정렬·인덱스 의존성 없음 → 안전.)
-
-### 3. 동시성 한도 선택
-
-- **CONCURRENCY = 8** 권장. PostgREST/PgBouncer 풀이 일반적으로 15~25 사이라 여유 있음.
-- 환경변수/상수로 두어 추후 조정 가능.
-
-### 4. Progress 갱신
-
-각 task 완료 시 `completed++` 후 `PROGRESS_STEP` 단위로 `updateFile(item.id, { progress })`. 현재처럼 throttle 유지.
-
-### 5. 에러 표면
-
-- 한 행의 update/insert 실패는 다른 행을 막지 않음 (현재와 동일 의미).
-- Pool 내부에서 throw 하지 않고 항상 catch → 카운터에만 반영.
-
-## 변경 파일
-
-| 파일 | 변경 |
-|---|---|
-| `src/contexts/ImportContext.tsx` | `processFile` 루프를 (a) 동기 task 빌드, (b) `runPool` 로 8-병렬 실행, (c) 기존 병렬 로그 insert 단계로 재구성. 비즈니스 로직(autofill, schedule impact, field log 분류 등)은 그대로 함수로 추출하거나 task closure 안에 보존. |
-
-## 동작 동등성 보장
-
-다음은 **변경되지 않습니다**:
-- system resolve, dataDate validation, master autocreate, autofill (T1/T2/Pred status·actual, R1/R2 derive), schedule impact 계산 규칙.
-- rowLogs / scheduleChangeAudits / changeLogs / fieldLogs 의 **내용**.
-- res 카운터 (inserted / updated / skipped / rejected) 의 최종 값.
-- upload_batches 상태 업데이트.
-
-**바뀌는 것**: 1) update/insert 가 8개씩 동시에 발사됨. 2) 로그 배열의 순서가 입력 행 순서와 일치하지 않을 수 있음 (정렬에 의존하는 코드 없음 — 확인됨).
-
-## 예상 성능 (1,000행, 50ms RTT)
+### 1. DB 스키마 (마이그레이션)
 
 ```text
-                       이전(현재)    이번 단계 후
-update/insert 직렬     ~50s          ~50s / 8 ≈ 6~7s
-prefetch + 로그        ~3s           ~3s
-─────────────────────────────────
-총                     ~55s          ~10s   (5~7배)
+docs_drawings
+  id uuid pk, project_id uuid, sub_module text default 'as_built'
+  document_no text, revision text, title text
+  organisation_raw text, subcontractor_id uuid null
+  discipline text, document_type text
+  aconex_status text, is_submitted boolean
+  submitted_date date, approved_date date
+  raw_payload jsonb, source_upload_id uuid
+  created_at, updated_at, updated_by, row_version
+  unique(project_id, document_no)
+
+docs_upload_batches  -- defect_upload_batches와 동형
+docs_upload_row_logs -- defect_upload_row_logs와 동형
+docs_change_log      -- defect_change_log와 동형
+docs_org_alias       -- raw_label → subcontractor_id 매핑
 ```
 
-## 리스크 & 검증
+RLS: 기존 Defect 모듈 패턴 그대로 (read=authenticated, write=user+, delete=admin).
+`module_docs_status` 키를 `app_settings`에 추가하고 RLS의 module key 화이트리스트에 포함.
 
-- **DB 부하**: 동시 8 connection 정도는 Supabase 기본 풀에 안전. 더 큰 동시성은 풀 고갈 위험.
-- **Trigger 경합**: subtests 테이블에 actual_date validation / responsibility validation trigger 가 있으나 row-level 이라 동시 update 안전.
-- **검증 시나리오** (이전과 동일):
-  (a) 첫 import → inserted 카운트와 row_logs 동일,
-  (b) 변경 없이 재import → skipped 카운트 동일,
-  (c) 일부 셀 변경 후 재import → updated 카운트, change_log/field_log 내용 동일 (행 순서는 무관 비교).
+### 2. Module Control 토글
 
-승인하시면 바로 구현합니다.
+`src/contexts/ModuleStatusContext.tsx`:
+- `KEY_MAP`에 `docs: 'module_docs_status'` 추가
+- `docs: ModuleStatus` state 추가, refresh/setStatus 확장
+- 기본값은 `enabled: false` (DB seed로 `{enabled: false, reason: 'not_ready'}` 삽입)
+
+`src/pages/admin/ModuleControlTab.tsx`:
+- T&C, Defect 카드 아래에 `Docs` 카드 추가 (동일 UI)
+
+`src/components/layout/RoleGuard.tsx`:
+- `detectModule`에 `/docs/...` → `'docs'` 매핑 추가
+- admin은 통과하는 기존 분기 그대로 → admin은 비활성 상태에서도 사용 가능
+
+### 3. 사이드바
+
+`src/components/layout/AppSidebar.tsx`:
+- `useModuleStatus()`에서 `docs` 추출
+- `docsNav` 배열 추가 (Dashboard / Raw Data / Import / Export / Org Mapping)
+- `showDocsGroup = isAdmin || docs.enabled`
+- 그룹 라벨에 Paused 뱃지 (T&C/Defect와 동일)
+- OMM/Warranty/Spare는 `disabled` prop으로 grayed out + "Coming soon" tooltip
+
+### 4. 라우팅
+
+`src/App.tsx`에 추가:
+```text
+/docs/dashboard      → DocsDashboardPage
+/docs/raw-data       → DocsRawDataPage
+/docs/import         → DocsImportPage
+/docs/import/logs    → DocsImportLogsPage
+/docs/export         → DocsExportPage
+/docs/org-mapping    → DocsOrgMappingPage  (admin only)
+/docs/:id            → DocsDrawingDetailPage
+```
+
+`<DocsImportProvider>`로 감싸기 (DefectImportProvider 패턴 그대로).
+
+### 5. 권한
+
+`src/lib/role-permissions.ts`:
+- `/docs/dashboard` → 0 (everyone)
+- `/docs/raw-data`, `/docs/:id` → 1 (super_guest+)
+- `/docs/import`, `/docs/export` → 2 (user+)
+- `/docs/org-mapping` → 4 (superuser/admin)
+
+### 6. Import 파서
+
+`src/lib/docs-import-parser.ts`:
+- 멀티시트 sweeper: 시트별로 헤더 행 자동 탐지
+- 헤더 fuzzy match: `DOCUMENT NUMBER`, `REVISION`, `TITLE`, `STATUS`, `DATE` 변형 인식
+- ELEC 파서: doc no에서 organisation/discipline 추출 (예: `SHAW-ELEC-XXX-001`)
+- Aconex Status: `A`/`B` → `is_submitted = true` (approved), 그 외 → false
+- Organisation 매칭:
+  1. `docs_org_alias` 룩업
+  2. 실패 시 `subcontractor_master` fuzzy
+  3. 둘 다 실패 → `subcontractor_id = null` + unmatched 리스트에 추가
+- 8-worker 동시성 (ImportContext 패턴 재사용), throttled progress (200ms)
+
+### 7. Risk 엔진
+
+`src/lib/docs-risk.ts` (순수 함수):
+```text
+computeRisk(drawing, scDate, leadDays):
+  if drawing.is_submitted → 'green'
+  target = scDate - leadDays (working days)
+  diff = target - today
+  diff < 0 → 'red'
+  diff < 7 → 'amber'
+  else     → 'green'
+```
+설정값(SC date, lead time)은 `useAppSetting`로 실시간 구독 → 변경 즉시 UI 반영.
+
+### 8. 설정 저장 위치 (기존 Admin Setting 공유)
+
+신규 키를 `app_settings`에 추가:
+- `docs_sc_date_<project_id>` → `'2026-06-15'` (SHAW seed)
+- `docs_lead_days_as_built` → `30` (기본값, 추후 조정)
+- `docs_lead_days_omm` / `_warranty` / `_spare` → 각 기본값
+- `module_docs_status` → `{enabled: false}`
+
+기존 Admin 탭에서 별도 UI 추가 없이, Module Control 카드 안에 "Docs Settings" expandable 섹션으로 SC Date / lead times 입력 필드 노출.
+
+### 9. UI 페이지
+
+- **DocsDashboardPage**: KPI (총 도면 수 / Approved / Pending / Red Risk), Risk 분포 차트, Critical bottleneck 패널 (Red 항목 top 20)
+- **DocsRawDataPage**: 테이블 (defect raw data 패턴), Risk 컬럼, 필터 (status/discipline/organisation/risk), Frozen column 지원
+- **DocsImportPage**: 업로드 → 시트 선택 → 컬럼 매핑 확인 → Dry-run 미리보기 → Commit. 결과 화면에 unmatched organisation 리스트 표시 (admin은 거기서 바로 매핑 가능)
+- **DocsDrawingDetailPage**: 단일 도면 상세 + change log + raw payload viewer
+- **DocsOrgMappingPage** (admin): `docs_org_alias` CRUD
+
+---
+
+## 파일 변경 목록
+
+**신규**
+- `supabase/migrations/<timestamp>_docs_module.sql`
+- `src/contexts/DocsImportContext.tsx`
+- `src/lib/docs-import-parser.ts`, `src/lib/docs-risk.ts`, `src/lib/docs-utils.ts`
+- `src/pages/docs/DocsDashboardPage.tsx`, `DocsRawDataPage.tsx`, `DocsImportPage.tsx`, `DocsImportLogsPage.tsx`, `DocsExportPage.tsx`, `DocsDrawingDetailPage.tsx`, `DocsOrgMappingPage.tsx`
+- `src/components/docs/` (KpiCard, RiskBadge, OrgMappingDialog 등)
+
+**수정**
+- `src/App.tsx` — 라우트 + Provider
+- `src/components/layout/AppSidebar.tsx` — Docs 그룹
+- `src/components/layout/RoleGuard.tsx` — `/docs` 모듈 감지
+- `src/contexts/ModuleStatusContext.tsx` — `docs` 상태 추가
+- `src/pages/admin/ModuleControlTab.tsx` — Docs 토글 + Docs Settings 섹션
+- `src/lib/role-permissions.ts` — `/docs/*` 라우트 권한
+
+---
+
+## 구현 순서 (실제 작업)
+1. DB 마이그레이션 + `module_docs_status` seed (disabled)
+2. ModuleStatusContext + RoleGuard + role-permissions 확장
+3. ModuleControlTab에 Docs 토글 + Settings 섹션 (SHAW SC date 2026-06-15 seed 포함)
+4. AppSidebar에 Docs 그룹 + 라우팅
+5. Import 파서 + DocsImportContext
+6. Raw Data / Detail / Dashboard / Org Mapping 페이지
+7. Risk 엔진 + Dashboard 시각화
+8. QA: SHAW 샘플 엑셀로 end-to-end 검증
+
+승인하시면 위 순서대로 구현 들어가겠습니다.
