@@ -1069,20 +1069,29 @@ function MastersTab() {
   );
 }
 
+interface OrgAliasRow { id: string; raw_label: string; subcontractor_id: string | null; is_active: boolean; }
+
 function SubcontractorMasterTable() {
   const { toast } = useToast();
   const [rows, setRows] = useState<MasterRow[]>([]);
+  const [aliases, setAliases] = useState<OrgAliasRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [newSubName, setNewSubName] = useState('');
   const [newSubOwnerCode, setNewSubOwnerCode] = useState('');
   const [newSubSubName, setNewSubSubName] = useState('');
   const [newSubSubParent, setNewSubSubParent] = useState('');
   const [newSubSubOwnerCode, setNewSubSubOwnerCode] = useState('');
+  const [aliasDialogFor, setAliasDialogFor] = useState<MasterRow | null>(null);
+  const [newAliasLabel, setNewAliasLabel] = useState('');
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from('subcontractor_master').select('*').order('name');
+    const [{ data }, aliasRes] = await Promise.all([
+      supabase.from('subcontractor_master').select('*').order('name'),
+      (supabase as any).from('docs_org_alias').select('*').order('raw_label'),
+    ]);
     if (data) setRows(data as MasterRow[]);
+    if (aliasRes.data) setAliases(aliasRes.data as OrgAliasRow[]);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
