@@ -1,59 +1,89 @@
-## T&C Import — Header Row Auto-Detection (Defect와 동일 로직 이식)
+## T&C Import — Column Select Dialog 추가
 
-현재 `parseExcelFile()`은 **첫 시트의 1행을 무조건 헤더로 가정**합니다. 헤더 위에 타이틀/메타 행이 있거나 헤더가 다른 시트에 있으면 import가 실패합니다. Defect 모듈이 사용하는 자동탐지 방식을 이식해 동일한 유연성을 제공합니다.
+Defect Import의 "Select Columns" 다이얼로그(체크박스로 import 컬럼 선택)를 T&C Import 페이지에도 동일한 UX로 붙입니다.
 
-### 동작 변경 요약
+### Defect 쪽 동작 (참고)
 
-| 항목 | Before | After |
-|---|---|---|
-| 헤더 행 위치 | 1행 고정 | 위에서부터 최대 20행 스캔, 키 컬럼이 있는 행 자동 인식 |
-| 시트 선택 | 첫 시트 또는 사용자 선택 시트만 | 헤더 미발견 시 다른 시트 자동 시도 (사용자 미지정 시) |
-| 헤더 위 메타 행 | 매핑 깨짐 | 무시하고 진행 |
-| `(H)` 등 마커 | 정규화 영향 받음 | `cleanHeader` 적용으로 흡수 |
+- `addFiles` 시 `getDefectExcelHeaders()`로 헤더만 먼저 빠르게 읽어 `availableHeaders` + `headerSamples` 보관
+- 파일 카드에 "Select Columns (N/M)" 버튼 → 모달 오픈
+- 모달에서 컬럼별 checkbox, "Select all / Deselect all / Reset" 등 액션, sample 미리보기, "Required" 뱃지(필수 필드 제외 시 경고)
+- Apply 시 `excludedHeaders` 갱신 → 재파싱(`parseDefectExcel(file, sheet, excluded)`) → `excludedFields`(canonical 필드명) 도출 → import 단계에서 해당 필드의 변경 감지/감사/payload 작성을 스킵 → import 속도 향상
 
-### 키 컬럼 (헤더 행 판별 기준)
+### T&C에 이식할 때의 차이점
 
-T&C는 Defect의 `issue_no`와 달리 단일 필수 컬럼이 없습니다. 구조 신호 중 하나라도 매핑되는 행을 헤더로 판정:
+1. **헤더 detection anchor가 다르다**
+   - Defect: `issue_no` 1개로 헤더 행 식별
+   - T&C: `item_no | subtest_id | mos_code | mos_1..mos_5` 중 하나
+   - → 헤더 미리보기 함수도 T&C용으로 별도 구현 필요
 
-- `item_no` — 필수에 가까움 (모든 import 형식 공통)
-- `subtest_id` — standard 형식
-- `mos_code` — standard 형식
-- `mos_1` ~ `mos_5` — legacy 형식
+2. **field config hook이 다르다**
+   - Defect: `useDefectFieldConfig` (`isFieldRequired`, `getLabel`, `getSourceOrigin`, `getSourceLabel`)
+   - T&C: `useFieldConfig` (`isFieldRequired`만 있음, label/origin 없음)
+   - → ColumnSelectDialog는 **module-agnostic하게 일반화**하거나, T&C용 별도 dialog를 만들거나 둘 중 하나
+   - 채택안: `ColumnSelectDialog` 시그니처를 props로 받도록 일반화 (parser-specific 로직 주입)
 
-→ 위 중 하나라도 normalize 결과가 일치하는 셀이 행에 있으면 헤더로 채택.
+3. **필수 컬럼 정의가 다르다**
+   - Defect: `issue_no`(시스템), Re-import 시 `id`, field config의 required
+   - T&C: `item_no` + `mos_code`(또는 `subtest_id`)가 system, field config의 required 필드들. 또한 standard/legacy 판정에 필요한 키 컬럼들(`subtest_id`, `t1_planned_date`, `team` 등)을 빼면 import가 unknown으로 떨어질 수 있음 → 이런 컬럼은 "system required"로 잠금
+
+4. **excludedFields 적용 지점**
+   - 현재 T&C `processFile`은 `fields: [string, string|null][]` 배열로 일괄 update 빌드 → `excludedFields` set이 있으면 `fields.filter(([f]) => !excluded.has(f))` 한 줄로 적용 가능
+   - 변경 감지/필드 로그/audit도 동일한 set을 참조해 스킵
 
 ### 변경 파일
 
-**`src/lib/import-parser.ts`**
-- `cleanHeader(raw)` 추가: `(H)` 등 트레일링 마커 제거 (Defect 패턴 차용, 정규화 전 전처리)
-- `HEADER_SCAN_LIMIT = 20` 상수
-- `detectTncHeaderRow(ws)`: Defect와 동일하게 `sheet_to_json({ header:1, blankrows:true })`로 매트릭스 받아 위에서부터 스캔. 각 행의 셀들을 `normalizeHeader`로 매핑한 결과에 `item_no | subtest_id | mos_code | mos_1..mos_5` 중 하나라도 있으면 그 행을 헤더로 채택.
-- `parseExcelFile(buf, sheetName?)` 재작성:
-  1. 사용자가 `sheetName` 지정 → 그 시트만 스캔, 미지정 → 모든 시트 순회
-  2. 시트마다 `detectTncHeaderRow` 시도, 성공한 첫 시트 채택
-  3. 채택된 시트에서 `headerRowIdx` 부터 `sheet_to_json`으로 데이터 읽어 기존 `rows / mappedHeaders / unmappedHeaders` 형태로 반환
-  4. 헤더만 있고 데이터 0행인 시트는 fallback 후보로 보관 → 다 실패하면 명확한 에러("헤더는 찾았으나 데이터 행 없음")
-  5. 어떤 시트에도 키 컬럼이 없으면 **기존처럼 1행을 헤더로 사용하는 폴백** 유지 (하위호환). 단 `unmappedHeaders`가 모두 비어있으면 사용자에게 "헤더 행을 자동 탐지하지 못했습니다" 경고가 뜨도록 결과 메타에 포함.
-- `ParseExcelResult`에 선택적 필드 추가:
-  - `resolvedSheetName?: string` — 실제로 채택된 시트 이름
-  - `headerRowIdx?: number` — 0-based 채택 행 (UI 표시용)
-- 기존 export 시그니처(`rows`, `rawHeaders`, `mappedHeaders`, `unmappedHeaders`)는 **유지** → 호출자 무중단.
+**`src/lib/import-parser.ts`** — 헤더 미리보기 함수 추가
+- `getTncExcelHeaders(file: File, sheetName?: string): Promise<{ headers: string[]; sample: Record<string, unknown>; sheetName: string; headerRowIdx: number } | null>`
+  - 이미 있는 `detectTncHeaderRow` + `parseExcelFile`을 활용
+  - `parseExcelFile` 결과의 `rawHeaders`와 첫 데이터 행을 묶어서 반환
+- `parseExcelFile`에 `excludedHeaders?: string[]` 옵션 추가
+  - 추가 처리 없이 그대로 두고, **excludedFields 적용은 ImportContext에서 한다** (parseExcelFile 출력은 그대로 두고 ImportContext가 excluded set을 참조)
+  - 이유: 헤더 매핑 결과(`mappedHeaders`, `unmappedHeaders`)는 그대로 두는 게 detector(`detectImportType`)에 유리하므로
+
+**`src/components/import/ColumnSelectDialog.tsx`** — 일반화
+- 현재 hard-coded인 `toFieldName`(defect-parser) / `useDefectFieldConfig` 의존성을 props로 분리:
+  - `toFieldName: (header: string) => string` — parser별로 주입
+  - `getRequirement: (header: string) => Requirement` — module별 정책 주입 (or 전체 logic을 호출자에서 만들어 props로 전달)
+  - `getSourceLabel?(field): string` / `getSourceOrigin?(field): 'hdec'|'aconex'|'system'` — optional, T&C에서는 미사용
+  - "Aconex only / HDEC only" 빠른 액션 버튼 → optional 노출 (T&C는 숨김)
+- 기존 Defect 호출부는 helper 객체를 만들어 `{ toFieldName, getRequirement, getSourceLabel, getSourceOrigin }`을 넘기는 방식으로 1줄 수정
 
 **`src/contexts/ImportContext.tsx`**
-- `parseAndApply`에서 `resolvedSheetName`을 받아 `selectedSheet`에 반영 (사용자가 시트 미지정이었어도 어떤 시트가 채택됐는지 노출)
-- 다중 시트일 때 기존처럼 사용자 선택 UI는 유지하되, **자동탐지로 헤더가 있는 시트가 1개뿐이면 자동 선택**하도록 `addFiles` 흐름 보강 (Defect 동작과 일치)
+- `ImportFileItem`에 추가:
+  - `availableHeaders?: string[]`
+  - `headerSamples?: Record<string, unknown>`
+  - `excludedHeaders?: string[]` (default `[]`)
+  - `excludedFields?: Set<string>` (canonical 필드명 set, derive)
+- `addFiles` 흐름:
+  - 시트 1개일 때: `parseAndApply` 직후 `availableHeaders`/`headerSamples` 같이 채우기 (parseExcelFile 결과 활용)
+  - 시트 여러 개일 때: 시트 선택 후 동일하게 채우기 (`setFileSheet` 안에서)
+- 새 메서드 `setFileExcludedHeaders(id, excluded)`:
+  - 파일의 `excludedHeaders` 갱신 → `excludedFields` 재계산(`new Set(excluded.map(normalizeHeader))`) → 상태 patch
+  - 재파싱은 불필요 (파싱 결과는 그대로, import 단계에서 필터링)
+- `processFile` 내 `fields: [string, string|null][]` 빌드 직후 `excludedFields` 있으면 `fields = fields.filter(([f]) => !excludedFields.has(f))` 적용
+  - 필드 로그(`fl(...)`)도 같은 set으로 스킵
+  - changeLogs/audit 작성 부분도 `excludedFields.has(field)` 체크 추가
 
-### 비목표 / 변경 없음
+**`src/pages/ImportPage.tsx`**
+- import 추가: `Settings2` 아이콘, `ColumnSelectDialog`, `useState` for `columnDialogFileId`
+- 파일 카드의 컨트롤 줄(Sheet/Date/Team 옆)에 "Select Columns (N/M)" 버튼 추가 (`availableHeaders`가 있을 때만 노출)
+- 모달 렌더 (DefectImportPage와 동일한 패턴)
+- Required helper 정의 (T&C 정책):
+  - `item_no`, `mos_code` 또는 `subtest_id` → system required
+  - `useFieldConfig.isFieldRequired(field)` → config required
+  - 메시지 한글 톤은 Defect와 일관되게 영어 유지(코어 룰: UI labels in English)
 
-- DB 스키마, RLS, 헤더 매핑 테이블 변경 없음
-- Defect 로직 자체는 손대지 않음
-- legacy/standard 분기(`detectImportType`), 행→subtest 변환(`parseLegacy/parseStandard`) 변경 없음
-- Excel export 로직 변경 없음
+### 비목표
+
+- DB 스키마/RLS 변경 없음
+- Header Mappings(별칭) 관리 UI 변경 없음
+- excludedHeaders는 파일별 1회성 — 영구 저장 없음 (Defect와 동일)
 
 ### 테스트 시나리오
 
-1. 기존 정상 파일(1행 헤더, 단일 시트) → 결과 동일
-2. 1행이 "Project: SHAW Tower" 같은 타이틀, 2~3행이 메타, 4행이 헤더 → 4행 헤더로 자동 인식되어 정상 import
-3. 시트 2개 중 첫 시트는 cover, 두 번째 시트가 데이터 → 두 번째 시트 자동 채택
-4. 어떤 행에도 키 컬럼이 없는 파일 → 기존처럼 1행 헤더 폴백, unmapped 다수 표시
-5. legacy(MOS-1~5) 파일 → `mos_1` 키로 헤더 인식되어 동작
+1. SHAW_Subtests export 파일 업로드 → 25개 헤더 인식 → "Select Columns (25/25)" 버튼 노출
+2. 모달에서 `__select`, `Progress` 체크 해제 → Apply → 버튼 라벨 "23/25"로 갱신, unmapped 경고 영향 없음
+3. `item_no` 체크 해제 시도 → toast 경고 "required" + 적용은 가능하지만 모달 하단 경고 박스 표시
+4. Execute Import → 제외된 필드는 update payload, 필드 로그, audit에서 빠짐 (DB query로 확인)
+5. legacy(MOS-1~5) 파일 → 동일하게 동작, `mos_1` 등은 system required로 표시
+6. 시트 변경 → `availableHeaders`/`headerSamples`도 새 시트 기준으로 갱신, `excludedHeaders` 초기화
