@@ -257,9 +257,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     const aliasByName = new Map<string, string>();
     (aliasData || []).forEach(a => aliasByName.set(a.alias_name.toLowerCase(), a.system_id));
 
-    // Master caches: name(lowercased) -> id
-    const { data: subData } = await supabase.from('subcontractor_master').select('id, name, type, parent_subcontractor_id, is_active');
-    const { data: hdecData } = await supabase.from('hdec_pic_master').select('id, name, is_active');
+    // Master caches: name(lowercased) -> id (data already prefetched above)
     const subconCache = new Map<string, { id: string; active: boolean }>();
     const subsubCache = new Map<string, { id: string; active: boolean; parent_id: string | null }>();
     (subData || []).forEach((m: any) => {
