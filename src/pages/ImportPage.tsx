@@ -1,16 +1,17 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle, Lock } from 'lucide-react';
+import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle, Lock, Settings2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useImport, type FileStatus } from '@/contexts/ImportContext';
 import { Input } from '@/components/ui/input';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { TncColumnSelect } from '@/components/import/TncColumnSelect';
 
 const statusBadge: Record<FileStatus, { label: string; cls: string }> = {
   pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
@@ -31,9 +32,11 @@ function formatSize(bytes: number) {
 export default function ImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet } = useImport();
+  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet, setFileExcludedHeaders } = useImport();
   const { tnc } = useModuleStatus();
   const { isAdmin } = useAuth();
+  const [columnDialogFileId, setColumnDialogFileId] = useState<string | null>(null);
+  const columnDialogFile = files.find(f => f.id === columnDialogFileId) ?? null;
   const moduleActuallyPaused = !tnc.enabled;
   // Administrator bypass: paused module does not lock admin
   const modulePaused = moduleActuallyPaused && !isAdmin;
@@ -205,6 +208,19 @@ export default function ImportPage() {
                           </Select>
                         </>
                       )}
+                      {f.availableHeaders && f.availableHeaders.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1.5 text-xs"
+                          onClick={() => setColumnDialogFileId(f.id)}
+                          disabled={isRunning || f.status === 'done' || f.status === 'parsing'}
+                        >
+                          <Settings2 className="h-3.5 w-3.5" />
+                          Select Columns ({f.availableHeaders.length - (f.excludedHeaders?.length ?? 0)}/{f.availableHeaders.length})
+                        </Button>
+                      )}
                     </div>
                     {f.unmappedHeaders && f.unmappedHeaders.length > 0 && (
                       <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950 px-2 py-1.5">
@@ -265,6 +281,20 @@ export default function ImportPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {columnDialogFile && columnDialogFile.availableHeaders && (
+        <TncColumnSelect
+          fileId={columnDialogFile.id}
+          fileName={columnDialogFile.name}
+          headers={columnDialogFile.availableHeaders}
+          samples={columnDialogFile.headerSamples ?? {}}
+          defaultExcluded={columnDialogFile.excludedHeaders ?? []}
+          detectedImportType={columnDialogFile.detectedImportType}
+          open={!!columnDialogFileId}
+          onClose={() => setColumnDialogFileId(null)}
+          onApply={(excluded) => setFileExcludedHeaders(columnDialogFile.id, excluded)}
+        />
       )}
     </div>
   );

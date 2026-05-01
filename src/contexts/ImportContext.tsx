@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { detectImportType, getExcelSheetNames, parseExcelFile, parseLegacy, parseStandard, resolveValue, type DetectedImportType, type ParsedSubtest } from '@/lib/import-parser';
+import { detectImportType, getExcelSheetNames, normalizeHeader, parseExcelFile, parseLegacy, parseStandard, resolveValue, type DetectedImportType, type ParsedSubtest } from '@/lib/import-parser';
 import { useToast } from '@/hooks/use-toast';
 import { buildScheduleChangeImpact, hasScheduleChangeImpact } from '@/lib/schedule-change-utils';
 import { derivePlanFromT2 } from '@/lib/business-days';
@@ -32,6 +32,15 @@ export interface ImportFileItem {
   selectedSheet?: string;
   /** Cached buffer for re-parsing on sheet change. */
   buffer?: ArrayBuffer;
+  /** All raw header strings present in the chosen sheet (for column-select dialog). */
+  availableHeaders?: string[];
+  /** First data row (header → value) used as preview in column-select dialog. */
+  headerSamples?: Record<string, unknown>;
+  /** User-excluded raw headers. Default: []. */
+  excludedHeaders?: string[];
+  /** Canonical field names excluded from this import (derived from excludedHeaders).
+   *  Importer skips writes / change detection / field-logs for these fields. */
+  excludedFields?: Set<string>;
 }
 
 interface ImportContextValue {
@@ -45,6 +54,7 @@ interface ImportContextValue {
   setFileDataDate: (id: string, date: string) => void;
   setFileTeam: (id: string, team: string) => void;
   setFileSheet: (id: string, sheetName: string) => Promise<void>;
+  setFileExcludedHeaders: (id: string, excluded: string[]) => void;
 }
 
 const ImportContext = createContext<ImportContextValue | null>(null);
@@ -68,10 +78,23 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   /** Parse a given sheet from a buffer and update file state accordingly. */
   const parseAndApply = useCallback((id: string, buf: ArrayBuffer, sheetName?: string) => {
     try {
-      const { rows, mappedHeaders, unmappedHeaders, resolvedSheetName } = parseExcelFile(buf, sheetName);
+      const { rows, rawHeaders, mappedHeaders, unmappedHeaders, resolvedSheetName } = parseExcelFile(buf, sheetName);
       const detection = detectImportType(mappedHeaders);
       const subtests = detection.type === 'legacy' ? parseLegacy(rows) : detection.type === 'standard' ? parseStandard(rows) : [];
       const effectiveSheet = resolvedSheetName ?? sheetName;
+      // Build header preview: only headers with a non-empty raw label are kept;
+      // sample = first data row's value for each header (best-effort).
+      const availableHeaders = rawHeaders.filter(h => String(h ?? '').trim() !== '');
+      const headerSamples: Record<string, unknown> = {};
+      if (rows.length > 0) {
+        const firstRow = rows[0];
+        for (let i = 0; i < rawHeaders.length; i++) {
+          const raw = rawHeaders[i];
+          if (!raw) continue;
+          const mapped = mappedHeaders[i];
+          headerSamples[raw] = firstRow[mapped] ?? '';
+        }
+      }
       if (subtests.length === 0) {
         updateFile(id, {
           status: 'failed',
@@ -80,6 +103,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           detectedImportType: detection.type,
           detectionReasons: detection.reasons,
           selectedSheet: effectiveSheet,
+          availableHeaders,
+          headerSamples,
         });
       } else {
         updateFile(id, {
@@ -90,6 +115,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           detectedImportType: detection.type,
           detectionReasons: detection.reasons,
           selectedSheet: effectiveSheet,
+          availableHeaders,
+          headerSamples,
           error: undefined,
         });
       }
@@ -162,9 +189,19 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         return;
       }
     }
-    updateFile(id, { status: 'parsing', selectedSheet: sheetName });
+    // Sheet change → headers may differ → reset excludedHeaders.
+    updateFile(id, { status: 'parsing', selectedSheet: sheetName, excludedHeaders: [], excludedFields: undefined });
     parseAndApply(id, buf, sheetName);
   }, [files, parseAndApply]);
+
+  const setFileExcludedHeaders = useCallback((id: string, excluded: string[]) => {
+    const fields = new Set<string>();
+    for (const h of excluded) {
+      const f = normalizeHeader(h);
+      if (f) fields.add(f);
+    }
+    updateFile(id, { excludedHeaders: excluded, excludedFields: fields });
+  }, []);
 
   const processFile = async (item: ImportFileItem): Promise<{ inserted: number; updated: number; skipped: number; rejected: number } | null> => {
     if (!item.parsed) return null;
@@ -403,12 +440,14 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           ['remarks', row.remarks],
           ['punchlist_comments', row.punchlist_comments],
         ];
+        const excludedFields = item.excludedFields;
         for (const [field, val] of fields) {
+          if (excludedFields?.has(field)) continue;
           const resolved = resolveValue(val, null);
           if (resolved !== undefined) updates[field] = resolved;
         }
         const resolvedTeam = resolveValue(rowTeamValue, null);
-        if (resolvedTeam !== undefined) updates.team = resolvedTeam;
+        if (!excludedFields?.has('team') && resolvedTeam !== undefined) updates.team = resolvedTeam;
 
         // Merge custom_payload (only when there are new custom values)
         if (row.custom_payload && Object.keys(row.custom_payload).length > 0) {
@@ -796,7 +835,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
   return (
     <ImportContext.Provider value={{
       files, isRunning, currentIndex,
-      addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet,
+      addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet, setFileExcludedHeaders,
     }}>
       {children}
     </ImportContext.Provider>
