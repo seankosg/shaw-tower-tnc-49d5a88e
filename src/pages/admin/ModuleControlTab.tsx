@@ -39,7 +39,7 @@ type PauseFormData = { reason: string; message: string; expectedResumeAt: string
 function PauseDialog({
   module, open, onOpenChange, onConfirm,
 }: {
-  module: 'tnc' | 'defect';
+  module: ModKey;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onConfirm: (data: PauseFormData) => void;
@@ -128,11 +128,11 @@ type PendingAction =
   | { type: 'resume' }
   | null;
 
-function ModuleRow({ module }: { module: 'tnc' | 'defect' }) {
-  const { tnc, defect, setStatus } = useModuleStatus();
+function ModuleRow({ module }: { module: ModKey }) {
+  const { tnc, defect, docs, setStatus } = useModuleStatus();
   const { user, profile } = useAuth();
   const { toast } = useToast();
-  const status: ModuleStatus = module === 'tnc' ? tnc : defect;
+  const status: ModuleStatus = module === 'tnc' ? tnc : module === 'defect' ? defect : docs;
 
   const [pauseFormOpen, setPauseFormOpen] = useState(false);
   const [pending, setPending] = useState<PendingAction>(null);
@@ -345,6 +345,7 @@ export function ModuleControlTab() {
       <CardContent className="space-y-3">
         <ModuleRow module="tnc" />
         <ModuleRow module="defect" />
+        <ModuleRow module="docs" />
       </CardContent>
     </Card>
   );
