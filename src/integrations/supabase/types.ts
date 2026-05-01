@@ -47,6 +47,7 @@ export type Database = {
           module: string
           note: string | null
           sort_order: number
+          sub_module: string | null
           updated_at: string
           updated_by: string | null
         }
@@ -61,6 +62,7 @@ export type Database = {
           module: string
           note?: string | null
           sort_order?: number
+          sub_module?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -75,6 +77,7 @@ export type Database = {
           module?: string
           note?: string | null
           sort_order?: number
+          sub_module?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -1276,6 +1279,7 @@ export type Database = {
           is_system: boolean
           module: string
           note: string | null
+          sub_module: string | null
           target_field: string
           updated_at: string
           updated_by: string | null
@@ -1288,6 +1292,7 @@ export type Database = {
           is_system?: boolean
           module: string
           note?: string | null
+          sub_module?: string | null
           target_field: string
           updated_at?: string
           updated_by?: string | null
@@ -1300,6 +1305,7 @@ export type Database = {
           is_system?: boolean
           module?: string
           note?: string | null
+          sub_module?: string | null
           target_field?: string
           updated_at?: string
           updated_by?: string | null
