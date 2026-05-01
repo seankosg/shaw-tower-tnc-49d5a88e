@@ -881,6 +881,40 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // -------- EXECUTE WRITE TASKS WITH CONCURRENCY POOL --------
+    // Run update/insert calls in parallel (8 at a time) to maximize throughput.
+    // Pre-resolution of systems and master pre-creation already eliminated the
+    // race-prone DB writes from this phase, so this is safe.
+    const CONCURRENCY = 8;
+    let completed = 0;
+    let nextTaskIdx = 0;
+    const totalTasks = writeTasks.length;
+    const runWorker = async () => {
+      while (true) {
+        const idx = nextTaskIdx++;
+        if (idx >= totalTasks) return;
+        const t = writeTasks[idx];
+        try {
+          if (t.kind === 'update') {
+            const { error } = await supabase.from('subtests').update(t.updates as any).eq('id', t.existingId);
+            if (error) t.onFail(error); else t.onSuccess();
+          } else {
+            const { error } = await supabase.from('subtests').insert(t.payload as any);
+            if (error) t.onFail(error); else t.onSuccess();
+          }
+        } catch (error: any) {
+          t.onFail(error);
+        }
+        completed++;
+        if (completed % PROGRESS_STEP === 0 || completed === totalTasks) {
+          updateFile(item.id, { progress: Math.round((completed / Math.max(totalTasks, 1)) * 100) });
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, totalTasks) }, () => runWorker())
+    );
+
     // -------- PARALLEL LOG INSERTS --------
     // All four log streams are independent; chunk and fire in parallel.
     const LOG_CHUNK = 500;
