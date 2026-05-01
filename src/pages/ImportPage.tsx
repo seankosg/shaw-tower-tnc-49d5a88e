@@ -32,9 +32,11 @@ function formatSize(bytes: number) {
 export default function ImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet } = useImport();
+  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet, setFileExcludedHeaders } = useImport();
   const { tnc } = useModuleStatus();
   const { isAdmin } = useAuth();
+  const [columnDialogFileId, setColumnDialogFileId] = useState<string | null>(null);
+  const columnDialogFile = files.find(f => f.id === columnDialogFileId) ?? null;
   const moduleActuallyPaused = !tnc.enabled;
   // Administrator bypass: paused module does not lock admin
   const modulePaused = moduleActuallyPaused && !isAdmin;
