@@ -856,33 +856,33 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    for (let i = 0; i < rowLogs.length; i += 100) {
-      await supabase.from('upload_row_logs').insert(rowLogs.slice(i, i + 100));
-    }
-    for (let i = 0; i < scheduleChangeAudits.length; i += 100) {
-      await supabase.from('schedule_change_audit').insert(scheduleChangeAudits.slice(i, i + 100) as any);
-    }
-    for (let i = 0; i < changeLogs.length; i += 100) {
-      await supabase.from('subtest_change_log').insert(changeLogs.slice(i, i + 100));
-    }
-    if (fieldLogs.length > 0) {
-      const fieldRows = fieldLogs.map((b) => ({
-        upload_id: uploadId,
-        kind: 'tnc' as const,
-        raw_row_no: b.raw_row_no,
-        field_name: b.field_name,
-        outcome: b.outcome,
-        raw_value: b.raw_value,
-        applied_value: b.applied_value,
-        previous_value: b.previous_value,
-        reason_code: b.reason_code,
-        reason_detail: b.reason_detail,
-        created_by: user.id,
-      }));
-      for (let i = 0; i < fieldRows.length; i += 200) {
-        await (supabase as any).from('import_field_logs').insert(fieldRows.slice(i, i + 200));
-      }
-    }
+    // -------- PARALLEL LOG INSERTS --------
+    // All four log streams are independent; chunk and fire in parallel.
+    const LOG_CHUNK = 500;
+    const fieldRows = fieldLogs.length > 0 ? fieldLogs.map((b) => ({
+      upload_id: uploadId,
+      kind: 'tnc' as const,
+      raw_row_no: b.raw_row_no,
+      field_name: b.field_name,
+      outcome: b.outcome,
+      raw_value: b.raw_value,
+      applied_value: b.applied_value,
+      previous_value: b.previous_value,
+      reason_code: b.reason_code,
+      reason_detail: b.reason_detail,
+      created_by: user.id,
+    })) : [];
+    const chunk = <T,>(arr: T[], size: number): T[][] => {
+      const out: T[][] = [];
+      for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+      return out;
+    };
+    await Promise.all([
+      ...chunk(rowLogs, LOG_CHUNK).map(c => supabase.from('upload_row_logs').insert(c)),
+      ...chunk(scheduleChangeAudits, LOG_CHUNK).map(c => supabase.from('schedule_change_audit').insert(c as any)),
+      ...chunk(changeLogs, LOG_CHUNK).map(c => supabase.from('subtest_change_log').insert(c)),
+      ...chunk(fieldRows, LOG_CHUNK).map(c => (supabase as any).from('import_field_logs').insert(c)),
+    ]);
 
     await supabase.from('upload_batches').update({
       status: 'completed' as any,
