@@ -7,9 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Lock, Plus, Trash2, Pencil } from 'lucide-react';
@@ -51,6 +52,12 @@ function normalizeAlias(mod: ModuleKey, raw: string): string {
     .toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+interface AddDialogState {
+  open: boolean;
+  prefilledTarget?: string;
+  lockTarget?: boolean;
+}
+
 export default function HeaderMappingsTab() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -58,8 +65,9 @@ export default function HeaderMappingsTab() {
   const { data: customFields = [] } = useCustomFields();
   const [active, setActive] = useState<ModuleKey>('tnc');
   const [search, setSearch] = useState('');
+  const [showEmpty, setShowEmpty] = useState(false);
   const [editTarget, setEditTarget] = useState<HeaderMappingRow | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [addDialog, setAddDialog] = useState<AddDialogState>({ open: false });
   const [testHeader, setTestHeader] = useState('');
 
   const customForActive = useMemo(
@@ -68,13 +76,105 @@ export default function HeaderMappingsTab() {
     [customFields, active],
   );
   const fieldList = active === 'tnc' ? TNC_FIELDS : DEFECT_FIELDS;
+  const customTargetValues = useMemo(
+    () => new Set(customForActive.map((c) => c.value)),
+    [customForActive],
+  );
 
-  const filtered = useMemo(() => {
-    const s = search.trim().toLowerCase();
-    return mappings
-      .filter((m) => m.module === active)
-      .filter((m) => !s || m.header_alias.toLowerCase().includes(s) || m.target_field.toLowerCase().includes(s));
-  }, [mappings, active, search]);
+  // Mappings filtered to active module + search
+  const moduleRows = useMemo(
+    () => mappings.filter((m) => m.module === active),
+    [mappings, active],
+  );
+
+  const lowerSearch = search.trim().toLowerCase();
+  const matchesSearch = (m: HeaderMappingRow) =>
+    !lowerSearch ||
+    m.header_alias.toLowerCase().includes(lowerSearch) ||
+    m.target_field.toLowerCase().includes(lowerSearch);
+
+  // Group by target_field
+  const groupedByTarget = useMemo(() => {
+    const map = new Map<string, HeaderMappingRow[]>();
+    for (const row of moduleRows) {
+      const arr = map.get(row.target_field) ?? [];
+      arr.push(row);
+      map.set(row.target_field, arr);
+    }
+    // Sort aliases inside each group: system first, then alphabetical
+    for (const arr of map.values()) {
+      arr.sort((a, b) => {
+        if (a.is_system !== b.is_system) return a.is_system ? -1 : 1;
+        return a.header_alias.localeCompare(b.header_alias);
+      });
+    }
+    return map;
+  }, [moduleRows]);
+
+  // Build ordered group sections: system fields (in declared order) → custom fields → unmapped
+  interface GroupSection {
+    target: string;
+    label: string;
+    kind: 'system' | 'custom' | 'unmapped';
+    rows: HeaderMappingRow[];
+  }
+
+  const sections = useMemo((): GroupSection[] => {
+    const out: GroupSection[] = [];
+    const seen = new Set<string>();
+
+    // System fields
+    for (const f of fieldList) {
+      const rows = groupedByTarget.get(f) ?? [];
+      seen.add(f);
+      if (rows.length === 0 && !showEmpty) continue;
+      out.push({ target: f, label: f, kind: 'system', rows });
+    }
+
+    // Custom fields
+    for (const c of customForActive) {
+      const rows = groupedByTarget.get(c.value) ?? [];
+      seen.add(c.value);
+      if (rows.length === 0 && !showEmpty) continue;
+      out.push({ target: c.value, label: c.label, kind: 'custom', rows });
+    }
+
+    // Unmapped: any target_field not in seen
+    const unmappedRows: HeaderMappingRow[] = [];
+    for (const [target, rows] of groupedByTarget.entries()) {
+      if (seen.has(target)) continue;
+      unmappedRows.push(...rows);
+    }
+    if (unmappedRows.length > 0) {
+      out.push({
+        target: '__unmapped__',
+        label: `(unmapped — ${unmappedRows.length} alias${unmappedRows.length === 1 ? '' : 'es'})`,
+        kind: 'unmapped',
+        rows: unmappedRows,
+      });
+    }
+    return out;
+  }, [fieldList, customForActive, groupedByTarget, showEmpty]);
+
+  // Apply search: keep only sections with matching rows (or matching target name)
+  const visibleSections = useMemo(() => {
+    if (!lowerSearch) return sections;
+    return sections
+      .map((s) => {
+        const targetMatches = s.label.toLowerCase().includes(lowerSearch);
+        const rows = targetMatches ? s.rows : s.rows.filter(matchesSearch);
+        if (rows.length === 0 && !targetMatches) return null;
+        return { ...s, rows };
+      })
+      .filter((s): s is GroupSection => s !== null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections, lowerSearch]);
+
+  // Auto-expand groups when searching
+  const openValues = useMemo(() => {
+    if (!lowerSearch) return undefined;
+    return visibleSections.map((s) => s.target);
+  }, [lowerSearch, visibleSections]);
 
   const testResult = useMemo(() => {
     if (!testHeader.trim()) return null;
@@ -113,10 +213,10 @@ export default function HeaderMappingsTab() {
         <div>
           <CardTitle className="text-base">Excel Header Mappings</CardTitle>
           <p className="text-xs text-muted-foreground mt-1">
-            Map raw Excel column headers to system fields. System mappings are locked to prevent breaking imports.
+            Map raw Excel column headers to system fields, grouped by target field. System mappings are locked to prevent breaking imports.
           </p>
         </div>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
+        <Button size="sm" onClick={() => setAddDialog({ open: true })}>
           <Plus className="h-4 w-4 mr-1" /> Add Mapping
         </Button>
       </CardHeader>
@@ -131,7 +231,7 @@ export default function HeaderMappingsTab() {
         {/* Test tool */}
         <div className="rounded border p-3 bg-muted/30 space-y-2">
           <Label className="text-xs font-semibold">Mapping Test</Label>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Input
               placeholder="Paste an Excel header to preview the mapping…"
               value={testHeader}
@@ -155,64 +255,159 @@ export default function HeaderMappingsTab() {
           </div>
         </div>
 
-        <Input
-          placeholder="Search alias or target field…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-md"
-        />
-
-        <div className="rounded border overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[10px]"></TableHead>
-                <TableHead>Header Alias (normalized)</TableHead>
-                <TableHead>Target Field</TableHead>
-                <TableHead className="w-[80px]">Active</TableHead>
-                <TableHead>Note</TableHead>
-                <TableHead className="w-[100px] text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Loading…</TableCell></TableRow>
-              )}
-              {!isLoading && filtered.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">No mappings.</TableCell></TableRow>
-              )}
-              {filtered.map((row) => (
-                <TableRow key={row.id} className={row.is_active ? '' : 'opacity-50'}>
-                  <TableCell>{row.is_system && <Lock className="h-3 w-3 text-muted-foreground" />}</TableCell>
-                  <TableCell className="font-mono text-xs">{row.header_alias}</TableCell>
-                  <TableCell><Badge variant="secondary">{row.target_field}</Badge></TableCell>
-                  <TableCell>
-                    <Switch checked={row.is_active} onCheckedChange={() => toggleActive(row)} />
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{row.note ?? ''}</TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button size="icon" variant="ghost" disabled={row.is_system} onClick={() => setEditTarget(row)} title={row.is_system ? 'System (locked)' : 'Edit'}>
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                    <Button size="icon" variant="ghost" disabled={row.is_system} onClick={() => removeRow(row)} title={row.is_system ? 'System (locked)' : 'Delete'}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <div className="flex items-center gap-4 flex-wrap">
+          <Input
+            placeholder="Search alias or target field…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-md"
+          />
+          <label className="flex items-center gap-2 text-xs cursor-pointer">
+            <Checkbox checked={showEmpty} onCheckedChange={(v) => setShowEmpty(v === true)} />
+            Show empty fields
+          </label>
+          <div className="text-xs text-muted-foreground ml-auto">
+            {moduleRows.length} alias{moduleRows.length === 1 ? '' : 'es'} · {visibleSections.length} group{visibleSections.length === 1 ? '' : 's'}
+          </div>
         </div>
+
+        {isLoading && (
+          <div className="text-center text-sm text-muted-foreground py-8">Loading…</div>
+        )}
+
+        {!isLoading && visibleSections.length === 0 && (
+          <div className="text-center text-sm text-muted-foreground py-8 border rounded">
+            No mappings to display.
+          </div>
+        )}
+
+        {!isLoading && visibleSections.length > 0 && (
+          <Accordion
+            type="multiple"
+            value={openValues}
+            className="space-y-2"
+          >
+            {visibleSections.map((section) => {
+              const aliasCount = section.rows.length;
+              const systemCount = section.rows.filter((r) => r.is_system).length;
+              const inactiveCount = section.rows.filter((r) => !r.is_active).length;
+              return (
+                <AccordionItem
+                  key={section.target}
+                  value={section.target}
+                  className="border rounded-md bg-card"
+                >
+                  <div className="flex items-center px-3">
+                    <AccordionTrigger className="flex-1 py-2 hover:no-underline">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`font-mono text-sm ${section.kind === 'unmapped' ? 'text-amber-700 dark:text-amber-300 italic' : 'font-medium'}`}>
+                          {section.label}
+                        </span>
+                        {section.kind !== 'unmapped' && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            {aliasCount} alias{aliasCount === 1 ? '' : 'es'}
+                          </Badge>
+                        )}
+                        {systemCount > 0 && (
+                          <Badge variant="outline" className="text-[10px] gap-1">
+                            <Lock className="h-2.5 w-2.5" />
+                            {systemCount} system
+                          </Badge>
+                        )}
+                        {inactiveCount > 0 && (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                            {inactiveCount} off
+                          </Badge>
+                        )}
+                        {aliasCount === 0 && (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground italic">
+                            empty
+                          </Badge>
+                        )}
+                      </div>
+                    </AccordionTrigger>
+                    {section.kind !== 'unmapped' && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="ml-2 h-7"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAddDialog({ open: true, prefilledTarget: section.target, lockTarget: true });
+                        }}
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" /> Alias
+                      </Button>
+                    )}
+                  </div>
+                  <AccordionContent className="pt-0 pb-2 px-3">
+                    {section.rows.length === 0 ? (
+                      <div className="text-xs text-muted-foreground italic py-2 pl-2">
+                        No aliases yet. Click "+ Alias" to add one.
+                      </div>
+                    ) : (
+                      <div className="divide-y border-t">
+                        {section.rows.map((row) => (
+                          <div
+                            key={row.id}
+                            className={`grid grid-cols-[20px_1fr_auto_auto_auto] items-center gap-3 py-1.5 px-1 ${row.is_active ? '' : 'opacity-50'}`}
+                          >
+                            <div>
+                              {row.is_system && <Lock className="h-3 w-3 text-muted-foreground" />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-mono text-xs truncate">{row.header_alias}</div>
+                              {row.note && (
+                                <div className="text-[11px] text-muted-foreground truncate">{row.note}</div>
+                              )}
+                            </div>
+                            <Switch
+                              checked={row.is_active}
+                              onCheckedChange={() => toggleActive(row)}
+                              aria-label="Toggle active"
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              disabled={row.is_system}
+                              onClick={() => setEditTarget(row)}
+                              title={row.is_system ? 'System (locked)' : 'Edit'}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              disabled={row.is_system}
+                              onClick={() => removeRow(row)}
+                              title={row.is_system ? 'System (locked)' : 'Delete'}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              );
+            })}
+          </Accordion>
+        )}
       </CardContent>
 
       <MappingDialog
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        open={addDialog.open}
+        onClose={() => setAddDialog({ open: false })}
         module={active}
         fieldList={fieldList as readonly string[]}
         customOptions={customForActive}
         existing={mappings}
         userId={user?.id ?? null}
+        prefilledTarget={addDialog.prefilledTarget}
+        lockTarget={addDialog.lockTarget}
         onSaved={refetch}
       />
       <MappingDialog
@@ -239,10 +434,12 @@ interface DialogProps {
   existing: HeaderMappingRow[];
   userId: string | null;
   editing?: HeaderMappingRow | null;
+  prefilledTarget?: string;
+  lockTarget?: boolean;
   onSaved: () => void;
 }
 
-function MappingDialog({ open, onClose, module, fieldList, customOptions = [], existing, userId, editing, onSaved }: DialogProps) {
+function MappingDialog({ open, onClose, module, fieldList, customOptions = [], existing, userId, editing, prefilledTarget, lockTarget, onSaved }: DialogProps) {
   const { toast } = useToast();
   const [alias, setAlias] = useState('');
   const [target, setTarget] = useState<string>('');
@@ -253,10 +450,10 @@ function MappingDialog({ open, onClose, module, fieldList, customOptions = [], e
   useEffect(() => {
     if (open) {
       setAlias(editing?.header_alias ?? '');
-      setTarget(editing?.target_field ?? '');
+      setTarget(editing?.target_field ?? prefilledTarget ?? '');
       setNote(editing?.note ?? '');
     }
-  }, [open, editing]);
+  }, [open, editing, prefilledTarget]);
 
   const normalized = normalizeAlias(module, alias);
 
@@ -301,16 +498,30 @@ function MappingDialog({ open, onClose, module, fieldList, customOptions = [], e
     onClose();
   };
 
+  const targetLocked = !!lockTarget && !editing;
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{editing ? 'Edit Mapping' : 'Add Mapping'} — {module.toUpperCase()}</DialogTitle>
+          <DialogTitle>
+            {editing ? 'Edit Mapping' : 'Add Alias'} — {module.toUpperCase()}
+            {targetLocked && target && (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                → <code className="bg-muted px-1 rounded">{target}</code>
+              </span>
+            )}
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
             <Label>Header Alias (raw — will be normalized)</Label>
-            <Input value={alias} onChange={(e) => setAlias(e.target.value)} placeholder="e.g. HDEC PIC" />
+            <Input
+              value={alias}
+              onChange={(e) => setAlias(e.target.value)}
+              placeholder="e.g. HDEC PIC"
+              autoFocus
+            />
             {alias && (
               <p className="text-xs text-muted-foreground">
                 Stored as: <code className="bg-muted px-1 rounded">{normalized}</code>
@@ -324,7 +535,7 @@ function MappingDialog({ open, onClose, module, fieldList, customOptions = [], e
           </div>
           <div className="space-y-1">
             <Label>Target Field</Label>
-            <Select value={target} onValueChange={setTarget}>
+            <Select value={target} onValueChange={setTarget} disabled={targetLocked}>
               <SelectTrigger><SelectValue placeholder="Select system field…" /></SelectTrigger>
               <SelectContent>
                 {fieldList.map((f) => (
@@ -340,6 +551,11 @@ function MappingDialog({ open, onClose, module, fieldList, customOptions = [], e
                 )}
               </SelectContent>
             </Select>
+            {targetLocked && (
+              <p className="text-[11px] text-muted-foreground">
+                Target field is locked. Adding a new alias for this field.
+              </p>
+            )}
           </div>
           <div className="space-y-1">
             <Label>Note (optional)</Label>
@@ -354,4 +570,3 @@ function MappingDialog({ open, onClose, module, fieldList, customOptions = [], e
     </Dialog>
   );
 }
-
