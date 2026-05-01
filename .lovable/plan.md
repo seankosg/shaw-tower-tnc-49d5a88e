@@ -1,114 +1,84 @@
-## 목표
 
-Admin → **Masters** 탭의 Subcontractor Master를 "협력사 + Aconex Aliases + Sub-Subs + 미매핑 큐"를 한 화면에서 직관적으로 다룰 수 있는 통합 UI로 재구성합니다. 좁은 1/3 컬럼 안에 모든 걸 욱여넣은 현재 구조를 풀고, **마스터 데이터(46개 협력사)** 와 **운영 워크플로우(매핑 큐)** 를 한 시야에 두 영역으로 분리합니다.
+# 필드 매핑 관리: Docs 모듈 (sub-module 차원 도입)
 
-## 현재 문제
+## 배경 / 구조 정정
 
-- Subcontractor Master 카드가 `md:grid-cols-3` 안의 1/3 폭에 갇혀 Aliases chip / Owner Code / Sub-Sub / Unmapped 큐가 겹쳐 보임
-- 협력사 46개를 200px 스크롤 박스에서 봐야 하고 검색/필터 없음
-- Unmapped 큐가 카드 끝에 매번 깔려 있어 "처리할 게 없는 평상시"에도 시야를 차지
-- Aliases chip 추가 다이얼로그가 행마다 트리거되지만 어떤 협력사인지 한눈에 안 들어옴
+Docs는 단일 상위 모듈이며, 그 안에 여러 sub-module이 존재합니다:
+- `as_built` (도면)
+- `warranty` (보증서)
+- 향후 추가될 sub-module들 (예: O&M, shop drawing 등)
 
-## 새 레이아웃
+이미 DB에는 이 구조가 반영되어 있습니다 — `docs_drawings.sub_module`, `docs_upload_batches.sub_module` 컬럼 존재.
 
-```text
-Masters Tab
-┌─────────────────────────────────────────────────────────────────────┐
-│ Toolbar:  [🔍 search]  [Type: All ▾]  [☐ Show inactive]            │
-│           [Sync Missing Users]   ⚠ 3 unmapped aliases [Resolve →]   │
-├──────────────────────────────────┬──────────────────────────────────┤
-│  Subcontractors (46) [+ Add]     │  HDEC PIC (12)        [+ Add]    │
-│  ┌────────────────────────────┐  │  ┌───────────────────────────┐  │
-│  │ Master row (expandable)    │  │  │ name │ active │ delete    │  │
-│  │  ▸ Samsung C&T  SCT  [3]   │  │  └───────────────────────────┘  │
-│  │  ▸ HDEC Electric HDE [1]   │  │  HDEC ENG (8)         [+ Add]    │
-│  │  ▾ POSCO E&C     PEC [0]   │  │  ┌───────────────────────────┐  │
-│  │     ── Sub-Subs ──────     │  │  │ ...                        │  │
-│  │     • PEC Mech (재하도)    │  │  └───────────────────────────┘  │
-│  │     ── Aconex Aliases ─    │  │                                  │
-│  │     [POSCO×][P-ENC×][+Add] │  │                                  │
-│  └────────────────────────────┘  │                                  │
-└──────────────────────────────────┴──────────────────────────────────┘
-                ▼ (collapsible, opens when count > 0)
-┌─────────────────────────────────────────────────────────────────────┐
-│ Unmapped Aconex Aliases (3)             [Bulk: ignore selected]     │
-│ ┌─────────────────────────────────────────────────────────────────┐ │
-│ │ ☐ │ raw_label          │ Suggested            │ Map to    │ × │ │
-│ │ ☐ │ HDEC ELEC SUB1     │ HDEC Electric (92%)  │ [select▾] │ × │ │
-│ │ ☐ │ Samsung C&T Corp.  │ Samsung C&T  (88%)   │ [select▾] │ × │ │
-│ │ ☐ │ Random Vendor Pty  │ —                    │ [select▾] │ × │ │
-│ └─────────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────┘
+따라서 Header Mappings도 **`module='docs'` 단일 값 + `sub_module` 차원**으로 관리해야 하며, T&C / Defect와 같은 평면 enum이 아닙니다.
+
+## 변경 범위
+
+### 1. DB 스키마 — `import_header_mappings`에 `sub_module` 컬럼 추가 (마이그레이션)
+```sql
+ALTER TABLE import_header_mappings
+  ADD COLUMN sub_module text;  -- nullable; tnc/defect는 NULL, docs는 'as_built'|'warranty'|...
+
+-- 기존 unique 제약(있다면) 재정의: (module, COALESCE(sub_module,''), header_alias)
 ```
+- `tnc`, `defect`는 sub_module이 NULL로 유지 — 기존 데이터 영향 없음.
+- `custom_field_definitions`도 동일 패턴으로 `sub_module` 컬럼 추가 (Docs sub-module별로 custom field가 분리되어야 하므로).
 
-## 변경 사항
+### 2. DB 시드 데이터 — Docs sub-module 매핑 (insert)
+- **`docs` / `as_built`** system seeds:
+  - target_field 화이트리스트: `document_no, title, revision, discipline, document_type, organisation_raw, aconex_status, submitted_date, approved_date, is_submitted, remarks`
+  - Aconex 표준 헤더 alias seed (Document No, Title, Rev, Discipline, Doc Type, Originating Organisation, Status, Submitted Date, Approved Date 등)
+- **`docs` / `warranty`** system seeds:
+  - target_field 화이트리스트: `item_no, category, sub_category, warranted_item, subcontractor_name_raw, sc_target_date, internal_target_date, stage1_date ~ stage9_date, witness_director, witness_secretary, validation_acra, validation_signature, validation_witness, validation_seal, validation_date, validation_pass, remarks`
+  - 신규 모듈이므로 핵심 alias만 seed, 나머지는 Admin이 UI에서 추가
 
-### 1. 그리드 재배치 (`MastersTab`)
+### 3. UI — `src/pages/admin/HeaderMappingsTab.tsx`
+- `ModuleKey` 타입 확장:
+  ```ts
+  type ModuleKey =
+    | { module: 'tnc' }
+    | { module: 'defect' }
+    | { module: 'docs', sub_module: 'as_built' | 'warranty' };
+  ```
+  실제 구현은 `module + sub_module` 튜플 키로 단순 처리.
+- Tabs 구조 2단계:
+  - 상위: `T&C` / `Defect` / `Docs`
+  - `Docs` 선택 시 하위 sub-tabs: `As-Built` / `Warranty` (+ 향후 sub-module 추가 시 자동 확장 가능한 배열로 관리)
+- `DOCS_SUBMODULES` 상수로 sub-module 메타(label, fieldList, normalize 규칙) 등록 — 신규 sub-module 추가 시 이 배열에 한 줄만 추가하면 UI 자동 노출되도록 설계
+- `normalizeAlias(module, sub_module, raw)` — sub-module별 정규화 규칙 분기
+- `useHeaderMappings` hook 및 mapping CRUD에 `sub_module` 파라미터 전달
+- MappingDialog는 `module + sub_module` 둘 다 prop으로 받아 insert 시 함께 저장
 
-- 기존 `md:grid-cols-3`(셋 다 1/3) → `lg:grid-cols-3`에서 **Subcontractor 카드가 2칸 차지**, HDEC PIC/ENG는 우측에 세로 스택
-- 모바일에서는 1열 스택 유지
+### 4. Hook 업데이트 — `src/hooks/useHeaderMappings.ts`
+- 반환 row에 `sub_module` 포함
+- `useCustomFields` 도 동일하게 `sub_module` 필터 지원
 
-### 2. 통합 툴바 (Subcontractor 카드 헤더)
+### 5. 파서 적용은 별도 단계 (이번 plan 범위 밖)
+- Docs/Warranty 파서가 실제로 `import_header_mappings`를 lookup 하도록 바꾸는 작업은 Warranty 본 구현 시 일괄 처리.
+- 이번 plan은 **Admin 관리 화면 + DB 스키마 + seed**까지.
 
-- **검색 입력** (이름 / Owner Code / Alias 라벨 모두에 매칭)
-- **Type 필터**: All / Subcontractors only / Sub-Subs only
-- **Show inactive** 토글 (기본 off)
-- **Unmapped 카운터 Badge** + "Resolve" 버튼 (클릭 시 페이지 하단 큐로 스크롤 + 펼침)
-
-### 3. Master 행 = 확장 가능한 단일 행
-
-각 협력사를 한 줄로 압축하고 펼치면 상세가 나오는 패턴:
-
-- **접힌 행 (한 줄)**: `▸  이름  |  Owner Code  |  alias 개수 Badge  |  sub-sub 개수 Badge  |  Active 토글  |  ⋯ (rename/delete)`
-- **펼친 패널**:
-  - **Sub-Subs (재하도)** 인라인 리스트 + "+ Add Sub-Sub" 버튼 (현재 별도 폼이던 Sub-Sub 추가 UI를 이쪽으로 이동 → 부모 컨텍스트가 항상 명확)
-  - **Aconex Aliases** chip 영역 + 인라인 입력창 (별도 다이얼로그 제거 → 클릭→입력→Enter 한 번으로 완료, "어떤 협력사에 추가하는지" 항상 보임)
-- 펼침 상태는 컴포넌트 로컬 state로 관리. 검색 결과는 자동 펼침.
-
-### 4. Sub-Sub 추가 UX 통합
-
-- 카드 바깥의 별도 "Sub-Sub 추가 폼"(parent 선택 필요)을 **삭제**
-- Sub-Sub은 "부모 협력사 행 펼침 → Add Sub-Sub" 으로만 추가 → parent 선택 실수 가능성 0
-
-### 5. Unmapped Aliases 큐 (별도 카드, 조건부)
-
-- `unmappedAliases.length === 0` 일 때는 **렌더 안 함** (평상시 시야에서 사라짐)
-- 0보다 크면 **Subcontractor 카드 아래 collapsible 카드**로 항상 펼친 상태 표시
-- 컬럼:
-  - **Suggested**: 기존 `master-name-match.ts` 의 `findSimilarMasterName()` 로 raw_label과 가장 유사한 활성 협력사 + 점수. 점수 ≥ 0.85면 한 클릭 "Accept"
-  - **Map to**: SearchableSelect (활성 협력사 목록)
-  - **Ignore (×)**: `is_active=false`
-- **Bulk actions**: 체크박스 → 선택 항목 일괄 Ignore / 일괄 Accept suggested
-- 헤더에 새로고침 버튼 (다른 사용자가 import 후 큐 갱신)
-
-### 6. 마이크로 인터랙션
-
-- Alias chip × hover → destructive 색
-- 행 추가/삭제 시 row 단위 fade (동일 패턴 다른 화면과 일관)
-- Sticky 헤더(스크롤 시 Toolbar/컬럼 헤더 고정)
-- Empty state: "No subcontractors yet — add your first one above."
-
-## 기술적 노트
-
-- 검색은 normalize(NFKD + lowercase + 공백 trim)로 name / owner_code / 매핑된 alias.raw_label 모두에서 매칭
-- Suggested 매칭: 이미 있는 `findSimilarMasterName` 재사용 (threshold 0.72)
-- Sub-Sub 행은 펼침 패널 안에서만 노출 → 별도 "Sub-Subs" 섹션 완전 제거
-- 데이터 fetch는 단일 `load()` 유지 (subcontractor_master + docs_org_alias 동시)
-- 펼침 상태: `useState<Set<string>>`
-- 컴포넌트 분할: `MasterRow`, `AliasChips`, `SubSubList`, `UnmappedQueue` 로 분리해 가독성 확보
-
-## 변경되는 파일
+## 영향 받는 파일
 
 | 파일 | 변경 |
 |---|---|
-| `src/pages/AdminPage.tsx` | `MastersTab` 그리드 재배치, `SubcontractorMasterTable` 전면 재작성 (Toolbar + 확장 행 + 인라인 alias/sub-sub) |
-| `src/components/admin/UnmappedAliasQueue.tsx` (신규) | 미매핑 큐 컴포넌트 분리 (suggested matching, bulk actions) |
-| `src/components/admin/SubcontractorRow.tsx` (신규) | 확장 행 컴포넌트 분리 |
+| `supabase/migrations/<ts>_add_submodule_to_header_mappings.sql` | 신규 — `sub_module` 컬럼, unique 인덱스 재정의 |
+| (insert tool) Docs/As-Built + Docs/Warranty system alias seed | 신규 데이터 |
+| `src/pages/admin/HeaderMappingsTab.tsx` | 모듈 enum + sub-tab UI, sub_module 인지 |
+| `src/hooks/useHeaderMappings.ts` | sub_module 컬럼 반환 |
+| `src/hooks/useCustomFields.ts` | sub_module 필터 지원 (영향 시) |
 
-## 범위 외 (다음 단계)
+## 가정
 
-- 협력사 ↔ Defect/Subtest 통계 표시 (예: 행에 "12 active defects" tooltip)
-- Aconex sub-module 별 alias 분리 (현재는 단일 풀)
-- 다음 단계 후보: Dashboard 위젯 또는 Drawing Detail
+- (A) `import_header_mappings.module`은 text — 그대로 유지, sub_module만 새로 추가.
+- (B) 기존 tnc/defect mapping은 sub_module = NULL이며 unique 키 변경 후에도 무결성 유지.
+- (C) 향후 Docs 하위 sub-module 추가는 `DOCS_SUBMODULES` 배열에 항목 추가 + seed insert만으로 완결.
+- (D) Warranty seed의 target_field 명칭은 03_WARRANTY_deed.md 스펙 기준 (실제 테이블 생성은 Warranty 본 구현 시).
 
-승인하시면 위 구조로 구현하겠습니다.
+## 검증 방법
+
+1. Admin → Header Mappings 탭에 상위 탭 `T&C` / `Defect` / `Docs` 노출
+2. `Docs` 선택 시 하위 탭 `As-Built` / `Warranty` 노출
+3. As-Built 탭에서 `Document No`, `Originating Organisation` 등 system alias 표시 (lock 아이콘)
+4. Warranty 탭에서 신규 alias 추가 → 새로고침 후 유지
+5. T&C / Defect 탭은 기존과 동일하게 동작 (regression 없음)
+6. Mapping Test 입력 시 현재 선택된 module+sub_module 컨텍스트로 정확히 매칭되는지 확인
