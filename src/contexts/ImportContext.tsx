@@ -456,11 +456,26 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     // Throttled progress: only re-render every PROGRESS_STEP rows.
     const PROGRESS_STEP = Math.max(1, Math.floor(parsed.length / 50));
 
+    // -------- PRE-RESOLVE ALL SYSTEMS (sequential, before concurrent pool) --------
+    // resolveSystem may insert new system_master rows; running it concurrently
+    // could create duplicates for the same raw name. Pre-resolve all unique
+    // raw system names here so the parallel pool only does subtests writes.
+    const uniqueRawSystems = Array.from(new Set(parsed.map(r => r.raw_system_name).filter(Boolean) as string[]));
+    for (const rawName of uniqueRawSystems) {
+      await resolveSystem(rawName);
+    }
+
+    // -------- BUILD WRITE TASKS (sequential, memory-only) --------
+    // Phase 1: walk every row, do all in-memory work (validation, autofill, schedule
+    // impact, field-log classification) and produce a list of update/insert "tasks".
+    // Rejected/skipped rows are handled inline (no DB write needed).
+    type WriteTask =
+      | { kind: 'update'; existingId: string; updates: Record<string, any>; onSuccess: () => void; onFail: (err: any) => void }
+      | { kind: 'insert'; payload: Record<string, any>; onSuccess: () => void; onFail: (err: any) => void };
+    const writeTasks: WriteTask[] = [];
+
     for (let i = 0; i < parsed.length; i++) {
       const row = parsed[i];
-      if (i % PROGRESS_STEP === 0 || i === parsed.length - 1) {
-        updateFile(item.id, { progress: Math.round(((i + 1) / parsed.length) * 100) });
-      }
 
       const systemId = await resolveSystem(row.raw_system_name);
       if (!systemId) {
@@ -657,8 +672,11 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           r2_target_submission_date: updates.r2_target_submission_date,
         });
 
-        const { error } = await supabase.from('subtests').update(updates as any).eq('id', existing.id);
-        if (error) {
+        writeTasks.push({
+          kind: 'update',
+          existingId: existing.id,
+          updates,
+          onFail: (error: any) => {
           res.rejected++;
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
@@ -666,7 +684,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
             reason_code: 'update_failed', reason_detail: formatPgError(error), mapped_system_id: systemId,
           });
           fl(row.raw_row_no, '__row__', 'rejected_invalid', { code: 'update_failed', detail: formatPgError(error) });
-        } else {
+          },
+          onSuccess: () => {
           res.updated++;
           if (hasScheduleChangeImpact(scheduleImpact)) {
             scheduleChangeAudits.push({
@@ -754,7 +773,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
               fl(row.raw_row_no, k, 'applied', { applied: v });
             }
           }
-        }
+          },
+        });
       } else {
         // Auto-fill status to 'Planned' when planned_date exists but status is null (new inserts)
         const insertT1Status = (!row.t1_status && row.t1_planned_date) ? 'Planned' : row.t1_status;
@@ -776,7 +796,7 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         const insertR1Status = row.r1_status ?? (insertR1Target ? 'Planned' : null);
         const insertR2Status = row.r2_status ?? (insertR2SubTarget ? 'Planned' : null);
 
-        const { error } = await supabase.from('subtests').insert({
+        const insertPayload: Record<string, any> = {
           project_id: projectId!, system_id: systemId,
           item_no: row.item_no, mos_code: row.mos_code, subtest_id: row.subtest_id,
           level: row.level, equipment: row.equipment, description: row.description,
@@ -806,8 +826,11 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           data_source_type: dataSourceType as any, source_upload_id: uploadId,
           team: (resolvedTeam === undefined ? null : resolvedTeam) as any,
           custom_payload: row.custom_payload ?? {},
-        } as any);
-        if (error) {
+        };
+        writeTasks.push({
+          kind: 'insert',
+          payload: insertPayload,
+          onFail: (error: any) => {
           res.rejected++;
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
@@ -815,7 +838,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
             reason_code: 'insert_failed', reason_detail: formatPgError(error), mapped_system_id: systemId,
           });
           fl(row.raw_row_no, '__row__', 'rejected_invalid', { code: 'insert_failed', detail: formatPgError(error) });
-        } else {
+          },
+          onSuccess: () => {
           res.inserted++;
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
@@ -852,9 +876,44 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
               fl(row.raw_row_no, k, 'applied', { applied: v });
             }
           }
-        }
+          },
+        });
       }
     }
+
+    // -------- EXECUTE WRITE TASKS WITH CONCURRENCY POOL --------
+    // Run update/insert calls in parallel (8 at a time) to maximize throughput.
+    // Pre-resolution of systems and master pre-creation already eliminated the
+    // race-prone DB writes from this phase, so this is safe.
+    const CONCURRENCY = 8;
+    let completed = 0;
+    let nextTaskIdx = 0;
+    const totalTasks = writeTasks.length;
+    const runWorker = async () => {
+      while (true) {
+        const idx = nextTaskIdx++;
+        if (idx >= totalTasks) return;
+        const t = writeTasks[idx];
+        try {
+          if (t.kind === 'update') {
+            const { error } = await supabase.from('subtests').update(t.updates as any).eq('id', t.existingId);
+            if (error) t.onFail(error); else t.onSuccess();
+          } else {
+            const { error } = await supabase.from('subtests').insert(t.payload as any);
+            if (error) t.onFail(error); else t.onSuccess();
+          }
+        } catch (error: any) {
+          t.onFail(error);
+        }
+        completed++;
+        if (completed % PROGRESS_STEP === 0 || completed === totalTasks) {
+          updateFile(item.id, { progress: Math.round((completed / Math.max(totalTasks, 1)) * 100) });
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, totalTasks) }, () => runWorker())
+    );
 
     // -------- PARALLEL LOG INSERTS --------
     // All four log streams are independent; chunk and fire in parallel.
