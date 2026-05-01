@@ -138,7 +138,7 @@ function cleanHeader(raw: string): string {
   return String(raw ?? '').replace(/\s*\(H\)\s*$/i, '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function normalizeHeader(raw: string): string {
+export function normalizeHeader(raw: string): string {
   const cleaned = cleanHeader(raw).toLowerCase();
   // DB-managed mapping wins, hardcoded HEADER_MAP is the fallback when DB cache misses or is unloaded.
   return getMappedField('tnc', cleaned) ?? HEADER_MAP[cleaned] ?? cleaned;
