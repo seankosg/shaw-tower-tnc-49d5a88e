@@ -672,8 +672,11 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
           r2_target_submission_date: updates.r2_target_submission_date,
         });
 
-        const { error } = await supabase.from('subtests').update(updates as any).eq('id', existing.id);
-        if (error) {
+        writeTasks.push({
+          kind: 'update',
+          existingId: existing.id,
+          updates,
+          onFail: (error: any) => {
           res.rejected++;
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
