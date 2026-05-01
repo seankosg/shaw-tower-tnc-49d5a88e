@@ -41,7 +41,6 @@ const docsNav = [
   { label: 'As-Built Drawings', icon: FileText, path: '/docs/raw-data' },
   { label: 'Import', icon: Upload, path: '/docs/import' },
   { label: 'Export', icon: Download, path: '/docs/export' },
-  { label: 'Org Mapping', icon: Tags, path: '/docs/org-mapping' },
 ];
 
 const docsComingSoon = [

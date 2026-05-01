@@ -224,8 +224,8 @@ export default function DocsImportPage() {
               <Button variant="outline" size="sm" onClick={() => navigate('/docs/raw-data')}>
                 View Raw Data
               </Button>
-              <Button variant="outline" size="sm" onClick={() => navigate('/docs/org-mapping')}>
-                Resolve Org Mapping
+              <Button variant="outline" size="sm" onClick={() => navigate('/admin')}>
+                Manage in Admin
               </Button>
             </div>
           </CardContent>
