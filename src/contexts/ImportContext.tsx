@@ -684,7 +684,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
             reason_code: 'update_failed', reason_detail: formatPgError(error), mapped_system_id: systemId,
           });
           fl(row.raw_row_no, '__row__', 'rejected_invalid', { code: 'update_failed', detail: formatPgError(error) });
-        } else {
+          },
+          onSuccess: () => {
           res.updated++;
           if (hasScheduleChangeImpact(scheduleImpact)) {
             scheduleChangeAudits.push({
