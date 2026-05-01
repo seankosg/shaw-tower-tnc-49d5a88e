@@ -208,6 +208,19 @@ export default function ImportPage() {
                           </Select>
                         </>
                       )}
+                      {f.availableHeaders && f.availableHeaders.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1.5 text-xs"
+                          onClick={() => setColumnDialogFileId(f.id)}
+                          disabled={isRunning || f.status === 'done' || f.status === 'parsing'}
+                        >
+                          <Settings2 className="h-3.5 w-3.5" />
+                          Select Columns ({f.availableHeaders.length - (f.excludedHeaders?.length ?? 0)}/{f.availableHeaders.length})
+                        </Button>
+                      )}
                     </div>
                     {f.unmappedHeaders && f.unmappedHeaders.length > 0 && (
                       <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950 px-2 py-1.5">
