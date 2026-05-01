@@ -40,7 +40,7 @@ export function RoleGuard({ children }: { children: React.ReactNode }) {
       return <ModulePausedScreen module="defect" status={defect} />;
     }
     if (mod === 'docs' && !docs.enabled) {
-      return <ModulePausedScreen module="defect" status={docs} />;
+      return <ModulePausedScreen module="docs" status={docs} />;
     }
   }
 

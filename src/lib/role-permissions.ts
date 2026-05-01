@@ -40,6 +40,12 @@ const ROUTE_MIN_RANK: [RegExp, number][] = [
   [/^\/defects\/dashboard/, 0], // everyone
   [/^\/defects\/progress/, 0], // everyone
   [/^\/defects\/schedule-revision/, 2], // user+
+  [/^\/docs\/import/, 2],    // user+
+  [/^\/docs\/export/, 2],    // user+
+  [/^\/docs\/org-mapping/, 4], // superuser/admin
+  [/^\/docs\/raw-data/, 1],  // super_guest+
+  [/^\/docs\/[^/]+$/, 1],    // docs detail
+  [/^\/docs\/dashboard/, 0], // everyone
   [/^\/import/, 2],          // user+
   [/^\/export/, 2],          // user+
   [/^\/mobile/, 2],          // user+
