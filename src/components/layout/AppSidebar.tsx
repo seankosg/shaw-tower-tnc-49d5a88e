@@ -164,7 +164,50 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {visibleAdmin.length > 0 && (
+        {showDocsGroup && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="flex items-center gap-2">
+              <span>Docs Management</span>
+              {!docs.enabled && (
+                <Badge variant="outline" className="border-amber-400 bg-amber-100/60 text-[10px] text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                  Paused
+                </Badge>
+              )}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleDocs.map((item) => (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={pathname === item.path || (item.path === '/docs/raw-data' && /^\/docs\/[^/]+$/.test(pathname))}
+                      onClick={() => navigate(getRememberedRoute(item.path))}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+                {docsComingSoon.map((item) => (
+                  <SidebarMenuItem key={item.label}>
+                    <SidebarMenuButton
+                      disabled
+                      tooltip={`${item.label} (Coming soon)`}
+                      className="cursor-not-allowed opacity-50"
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                      <Badge variant="outline" className="ml-auto h-4 border-muted-foreground/30 px-1 text-[9px] font-normal">
+                        Soon
+                      </Badge>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
           <SidebarGroup>
             <SidebarGroupLabel>Administration</SidebarGroupLabel>
             <SidebarGroupContent>
