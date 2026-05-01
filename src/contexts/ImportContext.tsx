@@ -773,7 +773,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
               fl(row.raw_row_no, k, 'applied', { applied: v });
             }
           }
-        }
+          },
+        });
       } else {
         // Auto-fill status to 'Planned' when planned_date exists but status is null (new inserts)
         const insertT1Status = (!row.t1_status && row.t1_planned_date) ? 'Planned' : row.t1_status;
