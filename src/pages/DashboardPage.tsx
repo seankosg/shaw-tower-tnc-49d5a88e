@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { exportTncSCurveToExcel } from '@/lib/scurve-excel-export';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
