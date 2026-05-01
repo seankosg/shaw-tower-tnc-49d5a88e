@@ -1,17 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  ModuleStatusContext,
+  type ModuleKey,
+  type ModuleStatus,
+} from './module-status-context';
 
-export type ModuleStatus = {
-  enabled: boolean;
-  reason?: string;
-  message?: string;
-  expectedResumeAt?: string;
-  pausedAt?: string;
-  pausedByUserId?: string;
-  pausedByName?: string;
-};
-
-type ModuleKey = 'tnc' | 'defect' | 'docs';
+export type { ModuleStatus, ModuleKey } from './module-status-context';
 
 const KEY_MAP: Record<ModuleKey, string> = {
   tnc: 'module_tnc_status',
@@ -21,17 +16,6 @@ const KEY_MAP: Record<ModuleKey, string> = {
 
 const DEFAULT_STATUS: ModuleStatus = { enabled: true };
 const DEFAULT_DOCS_STATUS: ModuleStatus = { enabled: false, reason: '준비 중' };
-
-interface ModuleStatusContextValue {
-  tnc: ModuleStatus;
-  defect: ModuleStatus;
-  docs: ModuleStatus;
-  loading: boolean;
-  refresh: () => Promise<void>;
-  setStatus: (module: ModuleKey, status: ModuleStatus) => Promise<{ error: Error | null }>;
-}
-
-const ModuleStatusContext = createContext<ModuleStatusContextValue | null>(null);
 
 function parseValue(v: unknown): ModuleStatus {
   if (!v || typeof v !== 'object') return DEFAULT_STATUS;
