@@ -838,7 +838,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
             reason_code: 'insert_failed', reason_detail: formatPgError(error), mapped_system_id: systemId,
           });
           fl(row.raw_row_no, '__row__', 'rejected_invalid', { code: 'insert_failed', detail: formatPgError(error) });
-        } else {
+          },
+          onSuccess: () => {
           res.inserted++;
           rowLogs.push({
             upload_id: uploadId, raw_row_no: row.raw_row_no, raw_system_name: row.raw_system_name,
@@ -875,7 +876,8 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
               fl(row.raw_row_no, k, 'applied', { applied: v });
             }
           }
-        }
+          },
+        });
       }
     }
 
