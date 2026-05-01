@@ -1,69 +1,114 @@
 ## 목표
 
-별도의 `/docs/org-mapping` 페이지를 제거하고, **Admin → Subcontractor Master** 안에서 Aconex Organisation Alias를 인라인으로 관리합니다. Docs Import는 미매칭 라벨을 자동으로 `docs_org_alias` 큐에 적재해 Admin에서 한 곳에서 처리하도록 합니다.
+Admin → **Masters** 탭의 Subcontractor Master를 "협력사 + Aconex Aliases + Sub-Subs + 미매핑 큐"를 한 화면에서 직관적으로 다룰 수 있는 통합 UI로 재구성합니다. 좁은 1/3 컬럼 안에 모든 걸 욱여넣은 현재 구조를 풀고, **마스터 데이터(46개 협력사)** 와 **운영 워크플로우(매핑 큐)** 를 한 시야에 두 영역으로 분리합니다.
+
+## 현재 문제
+
+- Subcontractor Master 카드가 `md:grid-cols-3` 안의 1/3 폭에 갇혀 Aliases chip / Owner Code / Sub-Sub / Unmapped 큐가 겹쳐 보임
+- 협력사 46개를 200px 스크롤 박스에서 봐야 하고 검색/필터 없음
+- Unmapped 큐가 카드 끝에 매번 깔려 있어 "처리할 게 없는 평상시"에도 시야를 차지
+- Aliases chip 추가 다이얼로그가 행마다 트리거되지만 어떤 협력사인지 한눈에 안 들어옴
+
+## 새 레이아웃
+
+```text
+Masters Tab
+┌─────────────────────────────────────────────────────────────────────┐
+│ Toolbar:  [🔍 search]  [Type: All ▾]  [☐ Show inactive]            │
+│           [Sync Missing Users]   ⚠ 3 unmapped aliases [Resolve →]   │
+├──────────────────────────────────┬──────────────────────────────────┤
+│  Subcontractors (46) [+ Add]     │  HDEC PIC (12)        [+ Add]    │
+│  ┌────────────────────────────┐  │  ┌───────────────────────────┐  │
+│  │ Master row (expandable)    │  │  │ name │ active │ delete    │  │
+│  │  ▸ Samsung C&T  SCT  [3]   │  │  └───────────────────────────┘  │
+│  │  ▸ HDEC Electric HDE [1]   │  │  HDEC ENG (8)         [+ Add]    │
+│  │  ▾ POSCO E&C     PEC [0]   │  │  ┌───────────────────────────┐  │
+│  │     ── Sub-Subs ──────     │  │  │ ...                        │  │
+│  │     • PEC Mech (재하도)    │  │  └───────────────────────────┘  │
+│  │     ── Aconex Aliases ─    │  │                                  │
+│  │     [POSCO×][P-ENC×][+Add] │  │                                  │
+│  └────────────────────────────┘  │                                  │
+└──────────────────────────────────┴──────────────────────────────────┘
+                ▼ (collapsible, opens when count > 0)
+┌─────────────────────────────────────────────────────────────────────┐
+│ Unmapped Aconex Aliases (3)             [Bulk: ignore selected]     │
+│ ┌─────────────────────────────────────────────────────────────────┐ │
+│ │ ☐ │ raw_label          │ Suggested            │ Map to    │ × │ │
+│ │ ☐ │ HDEC ELEC SUB1     │ HDEC Electric (92%)  │ [select▾] │ × │ │
+│ │ ☐ │ Samsung C&T Corp.  │ Samsung C&T  (88%)   │ [select▾] │ × │ │
+│ │ ☐ │ Random Vendor Pty  │ —                    │ [select▾] │ × │ │
+│ └─────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
 ## 변경 사항
 
-### 1. Admin → Subcontractor Master 확장
+### 1. 그리드 재배치 (`MastersTab`)
 
-`src/pages/AdminPage.tsx` 안의 Subcontractor Master 카드/테이블을 확장합니다.
+- 기존 `md:grid-cols-3`(셋 다 1/3) → `lg:grid-cols-3`에서 **Subcontractor 카드가 2칸 차지**, HDEC PIC/ENG는 우측에 세로 스택
+- 모바일에서는 1열 스택 유지
 
-- 각 협력사 행에 **Aconex Aliases** 컬럼 추가
-  - 매핑된 `docs_org_alias.raw_label` 들을 제거 가능한 Badge(chip)로 표시
-  - "+ Add alias" 버튼 → 작은 다이얼로그로 raw label 직접 입력 추가
-  - chip의 X 클릭 → 해당 alias soft delete (`is_active=false`) 또는 hard delete
-- 카드 하단에 **Unmapped Aliases** 섹션
-  - `docs_org_alias` 중 `subcontractor_id IS NULL` 인 항목 목록
-  - 각 행에 "Map to ..." Select(활성 협력사 목록) + Save 버튼
-  - "Ignore" 버튼 → `is_active=false` 로 큐에서 숨김
-  - 카운트 Badge를 카드 헤더에도 표시
+### 2. 통합 툴바 (Subcontractor 카드 헤더)
 
-### 2. Docs Import의 자동 큐잉
+- **검색 입력** (이름 / Owner Code / Alias 라벨 모두에 매칭)
+- **Type 필터**: All / Subcontractors only / Sub-Subs only
+- **Show inactive** 토글 (기본 off)
+- **Unmapped 카운터 Badge** + "Resolve" 버튼 (클릭 시 페이지 하단 큐로 스크롤 + 펼침)
 
-`src/contexts/DocsImportContext.tsx` 의 import 종료 시점에:
+### 3. Master 행 = 확장 가능한 단일 행
 
-- `counters.unmatched` 의 라벨들을 `docs_org_alias` 에 `subcontractor_id=null, is_active=true` 로 **upsert** (`onConflict: raw_label`)
-- import 완료 토스트에 미매칭 카운트 + "Resolve in Admin →" 액션 링크
-- `DocsImportPage.tsx` 의 Unmatched Orgs 알림에 **"Manage in Admin"** 버튼 (Admin 탭으로 이동)
+각 협력사를 한 줄로 압축하고 펼치면 상세가 나오는 패턴:
 
-### 3. 라우트 / 사이드바 정리
+- **접힌 행 (한 줄)**: `▸  이름  |  Owner Code  |  alias 개수 Badge  |  sub-sub 개수 Badge  |  Active 토글  |  ⋯ (rename/delete)`
+- **펼친 패널**:
+  - **Sub-Subs (재하도)** 인라인 리스트 + "+ Add Sub-Sub" 버튼 (현재 별도 폼이던 Sub-Sub 추가 UI를 이쪽으로 이동 → 부모 컨텍스트가 항상 명확)
+  - **Aconex Aliases** chip 영역 + 인라인 입력창 (별도 다이얼로그 제거 → 클릭→입력→Enter 한 번으로 완료, "어떤 협력사에 추가하는지" 항상 보임)
+- 펼침 상태는 컴포넌트 로컬 state로 관리. 검색 결과는 자동 펼침.
 
-- `src/App.tsx` 에서 `/docs/org-mapping` 라우트 제거
-- `src/components/layout/AppSidebar.tsx` Docs 섹션의 "Org Mapping" 항목 제거
-- `src/pages/docs/DocsOrgMappingPage.tsx` 삭제
+### 4. Sub-Sub 추가 UX 통합
 
-### 4. DB 변경
+- 카드 바깥의 별도 "Sub-Sub 추가 폼"(parent 선택 필요)을 **삭제**
+- Sub-Sub은 "부모 협력사 행 펼침 → Add Sub-Sub" 으로만 추가 → parent 선택 실수 가능성 0
 
-`docs_org_alias.raw_label` 에 UNIQUE 제약이 있어야 자동 upsert가 안전합니다. 마이그레이션:
+### 5. Unmapped Aliases 큐 (별도 카드, 조건부)
 
-```sql
--- 중복 정리 후
-ALTER TABLE public.docs_org_alias
-  ADD CONSTRAINT docs_org_alias_raw_label_key UNIQUE (raw_label);
-```
+- `unmappedAliases.length === 0` 일 때는 **렌더 안 함** (평상시 시야에서 사라짐)
+- 0보다 크면 **Subcontractor 카드 아래 collapsible 카드**로 항상 펼친 상태 표시
+- 컬럼:
+  - **Suggested**: 기존 `master-name-match.ts` 의 `findSimilarMasterName()` 로 raw_label과 가장 유사한 활성 협력사 + 점수. 점수 ≥ 0.85면 한 클릭 "Accept"
+  - **Map to**: SearchableSelect (활성 협력사 목록)
+  - **Ignore (×)**: `is_active=false`
+- **Bulk actions**: 체크박스 → 선택 항목 일괄 Ignore / 일괄 Accept suggested
+- 헤더에 새로고침 버튼 (다른 사용자가 import 후 큐 갱신)
 
-(이미 존재한다면 no-op 처리)
+### 6. 마이크로 인터랙션
 
-## 파일 변경 요약
+- Alias chip × hover → destructive 색
+- 행 추가/삭제 시 row 단위 fade (동일 패턴 다른 화면과 일관)
+- Sticky 헤더(스크롤 시 Toolbar/컬럼 헤더 고정)
+- Empty state: "No subcontractors yet — add your first one above."
+
+## 기술적 노트
+
+- 검색은 normalize(NFKD + lowercase + 공백 trim)로 name / owner_code / 매핑된 alias.raw_label 모두에서 매칭
+- Suggested 매칭: 이미 있는 `findSimilarMasterName` 재사용 (threshold 0.72)
+- Sub-Sub 행은 펼침 패널 안에서만 노출 → 별도 "Sub-Subs" 섹션 완전 제거
+- 데이터 fetch는 단일 `load()` 유지 (subcontractor_master + docs_org_alias 동시)
+- 펼침 상태: `useState<Set<string>>`
+- 컴포넌트 분할: `MasterRow`, `AliasChips`, `SubSubList`, `UnmappedQueue` 로 분리해 가독성 확보
+
+## 변경되는 파일
 
 | 파일 | 변경 |
 |---|---|
-| `src/pages/AdminPage.tsx` | Subcontractor Master에 Alias chip / Unmapped 섹션 추가 |
-| `src/contexts/DocsImportContext.tsx` | import 종료 시 미매칭 라벨 자동 upsert |
-| `src/pages/docs/DocsImportPage.tsx` | Unmatched Orgs 알림에 Admin 이동 링크 |
-| `src/App.tsx` | `/docs/org-mapping` 라우트 제거 |
-| `src/components/layout/AppSidebar.tsx` | Docs 섹션 Org Mapping 메뉴 제거 |
-| `src/pages/docs/DocsOrgMappingPage.tsx` | 삭제 |
-| 신규 마이그레이션 | `docs_org_alias.raw_label` UNIQUE 제약 |
+| `src/pages/AdminPage.tsx` | `MastersTab` 그리드 재배치, `SubcontractorMasterTable` 전면 재작성 (Toolbar + 확장 행 + 인라인 alias/sub-sub) |
+| `src/components/admin/UnmappedAliasQueue.tsx` (신규) | 미매핑 큐 컴포넌트 분리 (suggested matching, bulk actions) |
+| `src/components/admin/SubcontractorRow.tsx` (신규) | 확장 행 컴포넌트 분리 |
 
-## 권한
+## 범위 외 (다음 단계)
 
-- `docs_org_alias` 의 기존 RLS (admin/superuser만 변경) 그대로 사용
-- Admin 페이지는 이미 admin/superuser 가드가 있으므로 추가 가드 불필요
+- 협력사 ↔ Defect/Subtest 통계 표시 (예: 행에 "12 active defects" tooltip)
+- Aconex sub-module 별 alias 분리 (현재는 단일 풀)
+- 다음 단계 후보: Dashboard 위젯 또는 Drawing Detail
 
-## 범위 외 (다음 단계 후보)
-
-- Dashboard 위젯 (RAG 카운터 / discipline 차트)
-- Drawing Detail 본격 구현 (편집 + 변경 이력 패널)
-
-승인하시면 이 통합안으로 바로 구현하겠습니다.
+승인하시면 위 구조로 구현하겠습니다.
