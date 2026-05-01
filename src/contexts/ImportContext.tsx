@@ -625,11 +625,9 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
         }
 
         // R1/R2: when T2 planned date is present, auto-derive missing R1/R2 target dates
-        // (only fills targets that the import didn't supply AND are still empty in DB)
-        const { data: existingR } = await supabase.from('subtests')
-          .select('r1_target_submission_date, r2_target_submission_date, r2_target_approval_date, r1_status, r2_status' as any)
-          .eq('id', existing.id).maybeSingle();
-        const er: any = existingR;
+        // (only fills targets that the import didn't supply AND are still empty in DB).
+        // Source values come from the prefetched `existing` row (no extra DB call).
+        const er: any = existing;
         const finalT2PlannedForRDerive = updates.t2_planned_date !== undefined ? updates.t2_planned_date : ed?.t2_planned_date;
         if (finalT2PlannedForRDerive) {
           const derived = derivePlanFromT2(finalT2PlannedForRDerive);
