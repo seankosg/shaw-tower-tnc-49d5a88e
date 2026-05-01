@@ -1084,11 +1084,16 @@ function SubcontractorMasterTable() {
   const [loading, setLoading] = useState(true);
   const [newSubName, setNewSubName] = useState('');
   const [newSubOwnerCode, setNewSubOwnerCode] = useState('');
-  const [newSubSubName, setNewSubSubName] = useState('');
-  const [newSubSubParent, setNewSubSubParent] = useState('');
-  const [newSubSubOwnerCode, setNewSubSubOwnerCode] = useState('');
-  const [aliasDialogFor, setAliasDialogFor] = useState<MasterRow | null>(null);
-  const [newAliasLabel, setNewAliasLabel] = useState('');
+  // Inline Sub-Sub creation under expanded parent row
+  const [subSubDraft, setSubSubDraft] = useState<Record<string, { name: string; owner: string }>>({});
+  // Inline alias add per row
+  const [aliasDraft, setAliasDraft] = useState<Record<string, string>>({});
+  // Toolbar
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'sub' | 'subsub'>('all');
+  const [showInactive, setShowInactive] = useState(false);
+  // Expanded row ids
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const load = async () => {
     setLoading(true);
