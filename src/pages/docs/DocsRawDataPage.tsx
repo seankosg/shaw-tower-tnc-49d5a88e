@@ -103,6 +103,8 @@ const DOCS_RAW_FIELDS = [
   'level_location',
   'document_type',
   'organisation_raw',
+  'hdec_pic_name',
+  'hdec_eng_name',
   'aconex_status',
   'current_status',
   'is_submitted',
