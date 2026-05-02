@@ -899,7 +899,20 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
             const { error } = await supabase.from('subtests').update(t.updates as any).eq('id', t.existingId);
             if (error) t.onFail(error); else t.onSuccess();
           } else {
-            const { error } = await supabase.from('subtests').insert(t.payload as any);
+            let { error } = await supabase.from('subtests').insert(t.payload as any);
+            // Recover from subtest_id uniqueness collisions within the same project
+            // (different system but same item_no/mos_code → same generated subtest_id).
+            // Append a numeric suffix and retry up to 5 times.
+            if (error && (error as any).code === '23505' && /subtest_id/i.test((error as any).message ?? '')) {
+              const baseId = String((t.payload as any).subtest_id ?? '');
+              for (let attempt = 2; attempt <= 6 && error; attempt++) {
+                const retryPayload = { ...(t.payload as any), subtest_id: `${baseId}-${attempt}` };
+                const r = await supabase.from('subtests').insert(retryPayload as any);
+                error = r.error as any;
+                if (!error) break;
+                if ((error as any).code !== '23505' || !/subtest_id/i.test((error as any).message ?? '')) break;
+              }
+            }
             if (error) t.onFail(error); else t.onSuccess();
           }
         } catch (error: any) {
