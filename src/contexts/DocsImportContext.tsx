@@ -119,6 +119,19 @@ interface ProjectInfo {
 }
 
 async function getDefaultProject(): Promise<ProjectInfo> {
+  // Verify the Supabase client actually has an authenticated session.
+  // RLS policies on `projects` (and other tables used by the import) require
+  // role = authenticated. Without a session, queries silently return 0 rows,
+  // which previously surfaced as a misleading "No active project found" error.
+  const { data: sessionData } = await supabase.auth.getSession();
+  const session = sessionData?.session;
+  if (!session) {
+    throw new Error(
+      'Not signed in. Please log in (admin/superuser) and retry the import. ' +
+      'Background queries to projects/docs tables are blocked by RLS without a session.',
+    );
+  }
+
   const { data, error } = await (supabase as any)
     .from('projects')
     .select('id, project_code, project_name')
@@ -126,7 +139,10 @@ async function getDefaultProject(): Promise<ProjectInfo> {
     .order('created_at', { ascending: true });
   if (error) throw new Error(`Project lookup failed: ${error.message}`);
   if (!data || data.length === 0) {
-    throw new Error('No active project found. Ask an admin to create/activate a project.');
+    throw new Error(
+      'No active project found. Ask an admin to create/activate a project ' +
+      `(signed in as ${session.user?.email ?? 'unknown'}).`,
+    );
   }
   if (data.length > 1) {
     throw new Error(`Multiple active projects found (${data.length}). Please configure a default project.`);
