@@ -147,6 +147,15 @@ const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
   'transmittal no': 'transmittal_number',
   'transmittal due date': 'transmittal_due_date',
   'days due': 'days_due',
+  // HDEC personnel (future Excel columns)
+  'hdec pic': 'hdec_pic_name',
+  'hdec p.i.c': 'hdec_pic_name',
+  'hdec p.i.c.': 'hdec_pic_name',
+  'hdec person in charge': 'hdec_pic_name',
+  'pic': 'hdec_pic_name',
+  'hdec eng': 'hdec_eng_name',
+  'hdec engineer': 'hdec_eng_name',
+  'hdec engineering': 'hdec_eng_name',
   // skip pure index column
   's. no.': 'skip',
   's. no': 'skip',
