@@ -548,6 +548,8 @@ export default function DocsRawDataPage() {
       level_location: 130,
       document_type: 130,
       organisation_raw: 160,
+      hdec_pic_name: 130,
+      hdec_eng_name: 130,
       aconex_status: 120,
       current_status: 120,
       is_submitted: 90,
