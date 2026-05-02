@@ -76,7 +76,8 @@ type FieldKey =
   | 'sub1_planned_date' | 'sub1_submission_date' | 'sub1_approval_date' | 'sub1_approval_status'
   | 'sub2_planned_date' | 'sub2_submission_date' | 'sub2_approval_date' | 'sub2_approval_status'
   | 'sub3_planned_date' | 'sub3_submission_date' | 'sub3_approval_date' | 'sub3_approval_status'
-  | 'transmittal_number' | 'transmittal_due_date' | 'days_due';
+  | 'transmittal_number' | 'transmittal_due_date' | 'days_due'
+  | 'hdec_pic_name' | 'hdec_eng_name';
 
 /** Canonical alias map for single-row headers (no submission-group context). */
 const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
