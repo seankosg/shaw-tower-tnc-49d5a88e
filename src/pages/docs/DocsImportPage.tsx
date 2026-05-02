@@ -62,7 +62,7 @@ export default function DocsImportPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Docs Import — As-Built Drawings</h1>
         <p className="text-sm text-muted-foreground">
-          Upload Aconex / register Excel files. All sheets are swept automatically; documents are upserted by Document No.
+          Upload Aconex / register Excel files. Only sheets whose name contains <span className="font-mono">"register"</span> are imported; every column header (including 2-row banded Submission 1/2/3 headers) is mapped automatically.
         </p>
       </div>
 
