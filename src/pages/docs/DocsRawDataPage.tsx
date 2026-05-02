@@ -83,6 +83,8 @@ interface DocsRawRow {
   sub3_approval_date: string | null;
   sub3_approval_status: string | null;
   remarks: string | null;
+  hdec_pic_name: string | null;
+  hdec_eng_name: string | null;
   updated_at: string | null;
   created_at: string | null;
   // derived (client-side)
