@@ -16,16 +16,16 @@ export interface BulkEditableField {
 }
 
 export interface BulkUpdateRequest {
-  /** Postgres table name e.g. 'defect_items' or 'subtests' */
-  table: 'defect_items' | 'subtests';
+  /** Postgres table name */
+  table: 'defect_items' | 'subtests' | 'docs_drawings';
   /** Primary key column (always 'id' here) */
   idField?: string;
   /** Row ids to update */
   ids: string[];
   /** Column to set */
   field: string;
-  /** New value (string, number, or null to clear) */
-  value: string | number | null;
+  /** New value (string, number, boolean, or null to clear) */
+  value: string | number | boolean | null;
   /** Auth uid of the user performing the change */
   userId: string;
   /** Free-form source tag stored on the change log */
@@ -49,13 +49,21 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 /** Map source table -> change log table */
-function logTableFor(table: BulkUpdateRequest['table']): 'defect_change_log' | 'subtest_change_log' {
-  return table === 'defect_items' ? 'defect_change_log' : 'subtest_change_log';
+function logTableFor(
+  table: BulkUpdateRequest['table'],
+): 'defect_change_log' | 'subtest_change_log' | 'docs_change_log' {
+  if (table === 'defect_items') return 'defect_change_log';
+  if (table === 'docs_drawings') return 'docs_change_log';
+  return 'subtest_change_log';
 }
 
-/** Map source table -> defect/subtest id column on the log table */
-function logIdField(table: BulkUpdateRequest['table']): 'defect_id' | 'subtest_id' {
-  return table === 'defect_items' ? 'defect_id' : 'subtest_id';
+/** Map source table -> entity id column on the log table */
+function logIdField(
+  table: BulkUpdateRequest['table'],
+): 'defect_id' | 'subtest_id' | 'drawing_id' {
+  if (table === 'defect_items') return 'defect_id';
+  if (table === 'docs_drawings') return 'drawing_id';
+  return 'subtest_id';
 }
 
 export async function applyBulkUpdate(req: BulkUpdateRequest): Promise<BulkUpdateResult> {
