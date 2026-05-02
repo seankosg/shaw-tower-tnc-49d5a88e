@@ -2031,13 +2031,18 @@ function PermissionsTab() {
 
 /* ═══════ Tab 4: Field Config ═══════ */
 function FieldConfigTab() {
-  const [scope, setScope] = useState<'tc' | 'defect'>('tc');
+  const [scope, setScope] = useState<'tc' | 'defect' | 'docs'>('tc');
 
   return (
-    <Tabs value={scope} onValueChange={(value) => setScope(value as 'tc' | 'defect')}>
-      <TabsList><TabsTrigger value="tc">T&C Fields</TabsTrigger><TabsTrigger value="defect">Defect Fields</TabsTrigger></TabsList>
+    <Tabs value={scope} onValueChange={(value) => setScope(value as 'tc' | 'defect' | 'docs')}>
+      <TabsList>
+        <TabsTrigger value="tc">T&C Fields</TabsTrigger>
+        <TabsTrigger value="defect">Defect Fields</TabsTrigger>
+        <TabsTrigger value="docs">Drawing Fields</TabsTrigger>
+      </TabsList>
       <TabsContent value="tc"><FieldConfigTable table="field_config" title="T&C Field Configuration" /></TabsContent>
       <TabsContent value="defect"><FieldConfigTable table="defect_field_config" title="Defect Field Configuration" showOrigin /></TabsContent>
+      <TabsContent value="docs"><FieldConfigTable table="docs_field_config" title="Drawing (ABD) Field Configuration" showOrigin /></TabsContent>
     </Tabs>
   );
 }
@@ -2050,7 +2055,7 @@ function normalizeOriginValue(value: string | null | undefined): 'hdec' | 'acone
   return 'system'; // covers 'system', 'derived', and unknown
 }
 
-function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_config' | 'defect_field_config'; title: string; showOrigin?: boolean }) {
+function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_config' | 'defect_field_config' | 'docs_field_config'; title: string; showOrigin?: boolean }) {
   const { toast } = useToast();
   const [fields, setFields] = useState<FieldCfg[]>([]);
   const [loading, setLoading] = useState(true);
