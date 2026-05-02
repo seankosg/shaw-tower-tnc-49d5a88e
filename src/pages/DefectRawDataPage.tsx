@@ -411,37 +411,39 @@ export default function DefectRawDataPage() {
     setColumnSizing((prev) => ({ ...prev, [columnId]: Math.min(Math.ceil(max) + 18, 640) }));
   };
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      let allRows: DefectRawRow[] = [];
-      const pageSize = 1000;
-      let from = 0;
-      let hasMore = true;
-      while (hasMore) {
-        const { data } = await (supabase as any)
-          .from('defect_items')
-          .select('*')
-          .eq('is_active', true)
-          .order('issue_no', { ascending: true })
-          .range(from, from + pageSize - 1);
-        if (data?.length) {
-          allRows = allRows.concat(data as DefectRawRow[]);
-          from += pageSize;
-          hasMore = data.length === pageSize;
-        } else {
-          hasMore = false;
-        }
-      }
-      if (!cancelled) {
-        setItems(allRows);
-        setLoading(false);
+  const reload = useCallback(async () => {
+    setLoading(true);
+    let allRows: DefectRawRow[] = [];
+    const pageSize = 1000;
+    let from = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data } = await (supabase as any)
+        .from('defect_items')
+        .select('*')
+        .eq('is_active', true)
+        .order('issue_no', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (data?.length) {
+        allRows = allRows.concat(data as DefectRawRow[]);
+        from += pageSize;
+        hasMore = data.length === pageSize;
+      } else {
+        hasMore = false;
       }
     }
-    load();
-    return () => { cancelled = true; };
+    setItems(allRows);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await reload();
+      if (cancelled) return;
+    })();
+    return () => { cancelled = true; };
+  }, [reload]);
 
   // Load comment summary (count + unread) for visible defects, and refresh on realtime changes
   useEffect(() => {
@@ -1144,7 +1146,39 @@ export default function DefectRawDataPage() {
         selectedRows={selectedRows}
         fields={bulkFields}
         table="defect_items"
+        entity="defect"
+        exportColumns={[
+          { id: 'issue_no', label: 'Issue No' },
+          { id: 'subcontractor_issue_no', label: 'Sub Issue No' },
+          { id: 'description', label: 'Description' },
+          { id: 'area_level', label: 'Level' },
+          { id: 'area_location', label: 'Location' },
+          { id: 'main_trade', label: 'Main Trade' },
+          { id: 'sub_trade', label: 'Sub Trade' },
+          { id: 'work_type', label: 'Work Type' },
+          { id: 'subcontractor_name', label: 'Subcontractor' },
+          { id: 'subsub_name', label: 'Sub-Sub' },
+          { id: 'hdec_pic_name', label: 'HDEC PIC' },
+          { id: 'team', label: 'Team' },
+          { id: 'status', label: 'Status' },
+          { id: 'completion_status', label: 'Completion' },
+          { id: 'closure_status', label: 'Closure' },
+          { id: 'planned_start_date', label: 'Planned Start' },
+          { id: 'planned_completion_date', label: 'Planned Completion' },
+          { id: 'planned_closure_date', label: 'Planned Closure' },
+          { id: 'actual_start_date', label: 'Actual Start' },
+          { id: 'actual_completion_date', label: 'Actual Completion' },
+          { id: 'actual_closure_date', label: 'Actual Closure' },
+          { id: 'remarks', label: 'Remarks' },
+        ]}
+        reassignFields={[
+          { field: 'subcontractor_name', label: getLabel('subcontractor_name'), options: optionFields.subcontractor_name ?? [] },
+          { field: 'subsub_name', label: getLabel('subsub_name'), options: optionFields.subsub_name ?? [] },
+          { field: 'hdec_pic_name', label: getLabel('hdec_pic_name'), options: optionFields.hdec_pic_name ?? [] },
+          { field: 'team', label: getLabel('team'), options: optionFields.team ?? [] },
+        ]}
         onApplied={handleBulkApplied}
+        onMutated={() => reload()}
         onClearSelection={() => setRowSelection({})}
       />
 

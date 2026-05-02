@@ -1454,7 +1454,38 @@ export default function SubtestList() {
         selectedRows={selectedRows}
         fields={bulkFields}
         table="subtests"
+        entity="subtest"
+        exportColumns={[
+          { id: 'subtest_id', label: 'Subtest ID' },
+          { id: 'item_no', label: 'Item No' },
+          { id: 'mos_code', label: 'MOS Code' },
+          { id: 'system_code', label: 'System' },
+          { id: 'description', label: 'Description' },
+          { id: 'level', label: 'Level' },
+          { id: 'equipment', label: 'Equipment' },
+          { id: 'subcontractor_name', label: 'Subcontractor' },
+          { id: 'subsub_name', label: 'Sub-Sub' },
+          { id: 'hdec_pic_name', label: 'HDEC PIC' },
+          { id: 'team', label: 'Team' },
+          { id: 'pred_status', label: 'Pred Status' },
+          { id: 't1_status', label: 'T1 Status' },
+          { id: 't2_status', label: 'T2 Status' },
+          { id: 'pred_planned_date', label: 'Pred Planned' },
+          { id: 'pred_actual_date', label: 'Pred Actual' },
+          { id: 't1_planned_date', label: 'T1 Planned' },
+          { id: 't1_actual_date', label: 'T1 Actual' },
+          { id: 't2_planned_date', label: 'T2 Planned' },
+          { id: 't2_actual_date', label: 'T2 Actual' },
+          { id: 'remarks', label: 'Remarks' },
+        ]}
+        reassignFields={[
+          { field: 'subcontractor_name', label: 'Subcontractor', options: subcontractorOptions },
+          { field: 'subsub_name', label: 'Sub-Sub', options: subsubOptions },
+          { field: 'hdec_pic_name', label: 'HDEC PIC', options: hdecPicOptions },
+          { field: 'team', label: 'Team', options: teamOptions },
+        ]}
         onApplied={handleBulkApplied}
+        onMutated={() => fetchData()}
         onClearSelection={() => setRowSelection({})}
       />
 
