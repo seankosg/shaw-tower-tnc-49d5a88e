@@ -476,6 +476,8 @@ export async function parseDocsExcel(
         transmittal_due_date: struct.transmittal_due_date ?? null,
         days_due: struct.days_due ?? null,
         remarks: struct.remarks ?? null,
+        hdec_pic_name: struct.hdec_pic_name ?? null,
+        hdec_eng_name: struct.hdec_eng_name ?? null,
         raw_payload: payload,
       });
       sheetRowCount++;
