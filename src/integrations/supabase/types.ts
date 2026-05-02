@@ -907,6 +907,8 @@ export type Database = {
           discipline: string | null
           document_no: string
           document_type: string | null
+          hdec_eng_name: string | null
+          hdec_pic_name: string | null
           id: string
           is_active: boolean
           is_submitted: boolean
@@ -954,6 +956,8 @@ export type Database = {
           discipline?: string | null
           document_no: string
           document_type?: string | null
+          hdec_eng_name?: string | null
+          hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
           is_submitted?: boolean
@@ -1001,6 +1005,8 @@ export type Database = {
           discipline?: string | null
           document_no?: string
           document_type?: string | null
+          hdec_eng_name?: string | null
+          hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
           is_submitted?: boolean
