@@ -12,6 +12,13 @@ const CONCURRENCY = 8;
 
 export type DocsFileStatus = 'pending' | 'parsing' | 'ready' | 'processing' | 'done' | 'failed';
 
+export interface DocsRejectSample {
+  rawRowNo?: number;
+  documentNo?: string;
+  reasonCode?: string;
+  reasonDetail?: string;
+}
+
 export interface DocsImportFile {
   id: string;
   file: File;
@@ -20,6 +27,9 @@ export interface DocsImportFile {
   status: DocsFileStatus;
   progress: number;
   error?: string;
+  errorCode?: string;
+  errorDetails?: string;
+  errorHint?: string;
   parsed?: ParsedDocsRow[];
   parsedCount: number;
   sheetNames?: string[];
@@ -27,12 +37,26 @@ export interface DocsImportFile {
   selectedSheets?: string[];
   unknownHeaders?: string[];
   unmatchedOrgs?: string[];
+  rejectSamples?: DocsRejectSample[];
+  emptyDocNoCount?: number;
+  duplicateDocNoCount?: number;
   result?: {
     inserted: number;
     updated: number;
     skipped: number;
     rejected: number;
     unmatchedOrgs: number;
+  };
+}
+
+function fmtSupabaseError(err: any): { message: string; code?: string; details?: string; hint?: string } {
+  if (!err) return { message: 'Unknown error' };
+  if (err instanceof Error) return { message: err.message };
+  return {
+    message: err.message ?? String(err),
+    code: err.code,
+    details: err.details,
+    hint: err.hint,
   };
 }
 
