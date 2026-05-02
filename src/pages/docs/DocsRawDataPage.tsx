@@ -83,6 +83,8 @@ interface DocsRawRow {
   sub3_approval_date: string | null;
   sub3_approval_status: string | null;
   remarks: string | null;
+  hdec_pic_name: string | null;
+  hdec_eng_name: string | null;
   updated_at: string | null;
   created_at: string | null;
   // derived (client-side)
@@ -101,6 +103,8 @@ const DOCS_RAW_FIELDS = [
   'level_location',
   'document_type',
   'organisation_raw',
+  'hdec_pic_name',
+  'hdec_eng_name',
   'aconex_status',
   'current_status',
   'is_submitted',
@@ -162,6 +166,7 @@ const RAW_SEARCH_FIELDS: (keyof DocsRawRow)[] = [
   'document_no', 'revision', 'title', 'discipline', 'sheet_name', 'series',
   'level_location', 'document_type', 'organisation_raw', 'aconex_status',
   'current_status', 'transmittal_number', 'remarks',
+  'hdec_pic_name', 'hdec_eng_name',
   'sub1_approval_status', 'sub2_approval_status', 'sub3_approval_status',
 ];
 
@@ -543,6 +548,8 @@ export default function DocsRawDataPage() {
       level_location: 130,
       document_type: 130,
       organisation_raw: 160,
+      hdec_pic_name: 130,
+      hdec_eng_name: 130,
       aconex_status: 120,
       current_status: 120,
       is_submitted: 90,
@@ -686,6 +693,8 @@ export default function DocsRawDataPage() {
     { field: 'title', label: getLabel('title'), inputType: 'text', group: 'Notes' },
     { field: 'remarks', label: getLabel('remarks'), inputType: 'text', group: 'Notes' },
     { field: 'transmittal_number', label: getLabel('transmittal_number'), inputType: 'text', group: 'Notes' },
+    { field: 'hdec_pic_name', label: getLabel('hdec_pic_name'), inputType: 'text', group: 'Personnel' },
+    { field: 'hdec_eng_name', label: getLabel('hdec_eng_name'), inputType: 'text', group: 'Personnel' },
   ], [getLabel, optionFields]);
 
   const handleBulkApplied = useCallback(({ field, value, ids }: { field: string; value: string | number | boolean | null; ids: string[] }) => {

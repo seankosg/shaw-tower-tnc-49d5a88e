@@ -54,6 +54,9 @@ export interface ParsedDocsRow {
   transmittal_number: string | null;
   transmittal_due_date: string | null;
   days_due: number | null;
+  // HDEC personnel (planned for future Excel column; nullable today)
+  hdec_pic_name: string | null;
+  hdec_eng_name: string | null;
   // Misc
   remarks: string | null;
   raw_payload: Record<string, unknown>;
@@ -73,7 +76,8 @@ type FieldKey =
   | 'sub1_planned_date' | 'sub1_submission_date' | 'sub1_approval_date' | 'sub1_approval_status'
   | 'sub2_planned_date' | 'sub2_submission_date' | 'sub2_approval_date' | 'sub2_approval_status'
   | 'sub3_planned_date' | 'sub3_submission_date' | 'sub3_approval_date' | 'sub3_approval_status'
-  | 'transmittal_number' | 'transmittal_due_date' | 'days_due';
+  | 'transmittal_number' | 'transmittal_due_date' | 'days_due'
+  | 'hdec_pic_name' | 'hdec_eng_name';
 
 /** Canonical alias map for single-row headers (no submission-group context). */
 const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
@@ -143,6 +147,15 @@ const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
   'transmittal no': 'transmittal_number',
   'transmittal due date': 'transmittal_due_date',
   'days due': 'days_due',
+  // HDEC personnel (future Excel columns)
+  'hdec pic': 'hdec_pic_name',
+  'hdec p.i.c': 'hdec_pic_name',
+  'hdec p.i.c.': 'hdec_pic_name',
+  'hdec person in charge': 'hdec_pic_name',
+  'pic': 'hdec_pic_name',
+  'hdec eng': 'hdec_eng_name',
+  'hdec engineer': 'hdec_eng_name',
+  'hdec engineering': 'hdec_eng_name',
   // skip pure index column
   's. no.': 'skip',
   's. no': 'skip',
@@ -200,6 +213,8 @@ function mapHeader(header: string): FieldKey | 'skip' | null {
   if (norm.includes('series')) return 'series';
   if (norm.includes('level') || norm.includes('location')) return 'level_location';
   if (norm.includes('sequential')) return 'sequential_no';
+  if (norm.includes('hdec') && (norm.includes('pic') || norm.includes('person'))) return 'hdec_pic_name';
+  if (norm.includes('hdec') && norm.includes('eng')) return 'hdec_eng_name';
   return null;
 }
 
@@ -461,6 +476,8 @@ export async function parseDocsExcel(
         transmittal_due_date: struct.transmittal_due_date ?? null,
         days_due: struct.days_due ?? null,
         remarks: struct.remarks ?? null,
+        hdec_pic_name: struct.hdec_pic_name ?? null,
+        hdec_eng_name: struct.hdec_eng_name ?? null,
         raw_payload: payload,
       });
       sheetRowCount++;
