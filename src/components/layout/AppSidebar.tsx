@@ -38,7 +38,7 @@ const defectNav = [
 
 const docsNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/docs/dashboard' },
-  { label: 'As-Built Drawings', icon: FileText, path: '/docs/raw-data' },
+  { label: 'Raw Data - ABD', icon: FileText, path: '/docs/raw-data' },
   { label: 'Import', icon: Upload, path: '/docs/import' },
   { label: 'Export', icon: Download, path: '/docs/export' },
 ];
