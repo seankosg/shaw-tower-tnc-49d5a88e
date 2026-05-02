@@ -251,9 +251,32 @@ export async function applyBulkDuplicate(args: {
       .from('subtests')
       .insert(inserts)
       .select('id');
-    if (insErr) throw insErr;
-    out.succeeded = (ins ?? []).length;
-    out.failed = inserts.length - out.succeeded;
+    if (!insErr) {
+      out.succeeded = (ins ?? []).length;
+      out.failed = inserts.length - out.succeeded;
+      return out;
+    }
+    // Batch insert failed — likely a per-project subtest_id collision. Retry one row at a time
+    // and append a numeric suffix to subtest_id when 23505 occurs (per-project unique).
+    let succeeded = 0;
+    let failed = 0;
+    for (const payload of inserts) {
+      let attempt = 1;
+      const baseId = String((payload as any).subtest_id ?? '');
+      let lastErr: any = null;
+      while (attempt <= 6) {
+        const tryPayload = attempt === 1 ? payload : { ...payload, subtest_id: `${baseId}-${attempt}` };
+        // eslint-disable-next-line no-await-in-loop
+        const { error } = await (supabase as any).from('subtests').insert(tryPayload);
+        if (!error) { succeeded++; lastErr = null; break; }
+        lastErr = error;
+        if (error.code !== '23505') break;
+        attempt++;
+      }
+      if (lastErr) failed++;
+    }
+    out.succeeded = succeeded;
+    out.failed = failed;
     return out;
   }
 
