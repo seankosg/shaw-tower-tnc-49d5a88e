@@ -1146,7 +1146,39 @@ export default function DefectRawDataPage() {
         selectedRows={selectedRows}
         fields={bulkFields}
         table="defect_items"
+        entity="defect"
+        exportColumns={[
+          { id: 'issue_no', label: 'Issue No' },
+          { id: 'subcontractor_issue_no', label: 'Sub Issue No' },
+          { id: 'description', label: 'Description' },
+          { id: 'area_level', label: 'Level' },
+          { id: 'area_location', label: 'Location' },
+          { id: 'main_trade', label: 'Main Trade' },
+          { id: 'sub_trade', label: 'Sub Trade' },
+          { id: 'work_type', label: 'Work Type' },
+          { id: 'subcontractor_name', label: 'Subcontractor' },
+          { id: 'subsub_name', label: 'Sub-Sub' },
+          { id: 'hdec_pic_name', label: 'HDEC PIC' },
+          { id: 'team', label: 'Team' },
+          { id: 'status', label: 'Status' },
+          { id: 'completion_status', label: 'Completion' },
+          { id: 'closure_status', label: 'Closure' },
+          { id: 'planned_start_date', label: 'Planned Start' },
+          { id: 'planned_completion_date', label: 'Planned Completion' },
+          { id: 'planned_closure_date', label: 'Planned Closure' },
+          { id: 'actual_start_date', label: 'Actual Start' },
+          { id: 'actual_completion_date', label: 'Actual Completion' },
+          { id: 'actual_closure_date', label: 'Actual Closure' },
+          { id: 'remarks', label: 'Remarks' },
+        ]}
+        reassignFields={[
+          { field: 'subcontractor_name', label: getLabel('subcontractor_name'), options: optionFields.subcontractor_name ?? [] },
+          { field: 'subsub_name', label: getLabel('subsub_name'), options: optionFields.subsub_name ?? [] },
+          { field: 'hdec_pic_name', label: getLabel('hdec_pic_name'), options: optionFields.hdec_pic_name ?? [] },
+          { field: 'team', label: getLabel('team'), options: optionFields.team ?? [] },
+        ]}
         onApplied={handleBulkApplied}
+        onMutated={() => reload()}
         onClearSelection={() => setRowSelection({})}
       />
 
