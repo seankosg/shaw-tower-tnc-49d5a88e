@@ -141,11 +141,40 @@ export default function DocsImportPage() {
                           {f.sheetNames && ` · ${f.sheetNames.length} sheet(s): ${f.sheetNames.join(', ')}`}
                           {f.parsedCount > 0 && ` · ${f.parsedCount} rows parsed`}
                         </p>
-                        {f.error && <p className="mt-1 text-xs text-destructive">⚠ {f.error}</p>}
+                        {f.error && (
+                          <div className="mt-1 rounded border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                            <p className="font-medium">⚠ {f.error}</p>
+                            {(f.errorCode || f.errorDetails || f.errorHint) && (
+                              <p className="mt-1 font-mono text-[11px] opacity-80">
+                                {f.errorCode && <>code: {f.errorCode}<br /></>}
+                                {f.errorDetails && <>details: {f.errorDetails}<br /></>}
+                                {f.errorHint && <>hint: {f.errorHint}</>}
+                              </p>
+                            )}
+                          </div>
+                        )}
                         {f.unknownHeaders && f.unknownHeaders.length > 0 && (
                           <p className="mt-1 text-xs text-amber-600">
                             Unmapped headers: {f.unknownHeaders.slice(0, 5).join(', ')}{f.unknownHeaders.length > 5 ? ` (+${f.unknownHeaders.length - 5})` : ''}
                           </p>
+                        )}
+                        {(f.emptyDocNoCount || f.duplicateDocNoCount) ? (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {f.emptyDocNoCount ? `Empty Document No: ${f.emptyDocNoCount} · ` : ''}
+                            {f.duplicateDocNoCount ? `In-file duplicates: ${f.duplicateDocNoCount}` : ''}
+                          </p>
+                        ) : null}
+                        {f.rejectSamples && f.rejectSamples.length > 0 && (
+                          <details className="mt-1 text-xs">
+                            <summary className="cursor-pointer text-destructive">Show first {f.rejectSamples.length} rejected row(s)</summary>
+                            <ul className="mt-1 space-y-1 pl-4">
+                              {f.rejectSamples.map((s, i) => (
+                                <li key={i} className="font-mono text-[11px]">
+                                  row {s.rawRowNo} ({s.documentNo ?? '—'}): {s.reasonDetail}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
                         )}
                       </div>
                     </div>
