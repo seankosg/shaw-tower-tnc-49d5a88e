@@ -134,16 +134,6 @@ export async function applyBulkDelete(args: {
   if (args.mode === 'soft') {
     // Soft delete = is_active = false via RLS-protected UPDATE.
     const table = args.entity === 'subtest' ? 'subtests' : 'defect_items';
-    const r = await applyBulkUpdate({
-      table: table as BulkUpdateRequest['table'],
-      ids: args.ids,
-      field: 'is_active',
-      value: 'false', // applyBulkUpdate stringifies for change-log; the actual update sends boolean false via the value below
-      userId: args.userId,
-      changeSource: 'bulk_soft_delete',
-    });
-    // applyBulkUpdate sends {is_active: 'false'} as text — Postgres won't coerce. Override with direct call:
-    // Re-run as a real boolean update:
     const CHUNK = 200;
     let succeeded = 0;
     let failed = 0;
@@ -161,8 +151,6 @@ export async function applyBulkDelete(args: {
     }
     out.succeeded = succeeded;
     out.failed = failed;
-    // Discard the dummy applyBulkUpdate result intentionally
-    void r;
     return out;
   }
 
