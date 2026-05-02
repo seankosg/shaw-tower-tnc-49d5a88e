@@ -1039,6 +1039,45 @@ export type Database = {
         }
         Relationships: []
       }
+      docs_field_config: {
+        Row: {
+          display_name: string
+          editable_to_roles: Database["public"]["Enums"]["app_role"][] | null
+          field_name: string
+          id: string
+          is_enabled: boolean
+          is_required: boolean
+          original_header: string | null
+          sort_order: number
+          source_origin: string
+          visible_to_roles: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Insert: {
+          display_name: string
+          editable_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+          field_name: string
+          id?: string
+          is_enabled?: boolean
+          is_required?: boolean
+          original_header?: string | null
+          sort_order?: number
+          source_origin?: string
+          visible_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Update: {
+          display_name?: string
+          editable_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+          field_name?: string
+          id?: string
+          is_enabled?: boolean
+          is_required?: boolean
+          original_header?: string | null
+          sort_order?: number
+          source_origin?: string
+          visible_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Relationships: []
+      }
       docs_org_alias: {
         Row: {
           created_at: string
