@@ -54,6 +54,9 @@ export interface ParsedDocsRow {
   transmittal_number: string | null;
   transmittal_due_date: string | null;
   days_due: number | null;
+  // HDEC personnel (planned for future Excel column; nullable today)
+  hdec_pic_name: string | null;
+  hdec_eng_name: string | null;
   // Misc
   remarks: string | null;
   raw_payload: Record<string, unknown>;
