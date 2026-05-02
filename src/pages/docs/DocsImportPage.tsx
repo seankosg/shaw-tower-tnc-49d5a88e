@@ -85,7 +85,7 @@ export default function DocsImportPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">1. Upload Files</CardTitle>
-          <CardDescription>Drag and drop xlsx / xls files, or click to browse. All sheets in each workbook will be parsed.</CardDescription>
+          <CardDescription>Drag and drop xlsx / xls files, or click to browse. Only "*register*" sheets are parsed.</CardDescription>
         </CardHeader>
         <CardContent>
           <div
