@@ -2708,6 +2708,8 @@ export type Database = {
         Args: { _batch_id: string }
         Returns: undefined
       }
+      delete_defects_cascade: { Args: { _ids: string[] }; Returns: Json }
+      delete_subtests_cascade: { Args: { _ids: string[] }; Returns: Json }
       get_defect_comment_summary: {
         Args: { _defect_ids: string[] }
         Returns: {
@@ -2773,6 +2775,14 @@ export type Database = {
         Returns: boolean
       }
       normalize_owner_code: { Args: { _value: string }; Returns: string }
+      preview_delete_defects_cascade: {
+        Args: { _ids: string[] }
+        Returns: Json
+      }
+      preview_delete_subtests_cascade: {
+        Args: { _ids: string[] }
+        Returns: Json
+      }
       preview_rollback_defect_import_batch: {
         Args: { _batch_id: string }
         Returns: Json
