@@ -213,6 +213,8 @@ function mapHeader(header: string): FieldKey | 'skip' | null {
   if (norm.includes('series')) return 'series';
   if (norm.includes('level') || norm.includes('location')) return 'level_location';
   if (norm.includes('sequential')) return 'sequential_no';
+  if (norm.includes('hdec') && (norm.includes('pic') || norm.includes('person'))) return 'hdec_pic_name';
+  if (norm.includes('hdec') && norm.includes('eng')) return 'hdec_eng_name';
   return null;
 }
 
