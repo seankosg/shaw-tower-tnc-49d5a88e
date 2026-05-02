@@ -254,9 +254,13 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
     }
     setIsRunning(true);
 
-    const project = await getDefaultProject();
-    if (!project) {
-      toast({ title: 'Project required', description: 'No single active project found. Configure a project first.', variant: 'destructive' });
+    let project: ProjectInfo;
+    try {
+      project = await getDefaultProject();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Project lookup failed';
+      toast({ title: 'Project required', description: msg, variant: 'destructive' });
+      setFiles((cur) => cur.map((x) => ready.find((r) => r.id === x.id) ? { ...x, status: 'failed', error: msg } : x));
       setIsRunning(false);
       return;
     }
@@ -264,12 +268,24 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
     const orgMaps = await buildOrgResolver();
 
     for (const f of ready) {
-      setFiles((cur) => cur.map((x) => x.id === f.id ? { ...x, status: 'processing', progress: 0 } : x));
+      const emptyDocNo = f.parsed!.filter((r) => !r.document_no || !String(r.document_no).trim()).length;
+      const seen = new Set<string>();
+      let dupCount = 0;
+      for (const r of f.parsed!) {
+        const k = String(r.document_no ?? '').trim();
+        if (!k) continue;
+        if (seen.has(k)) dupCount++;
+        else seen.add(k);
+      }
+      setFiles((cur) => cur.map((x) => x.id === f.id ? {
+        ...x, status: 'processing', progress: 0,
+        emptyDocNoCount: emptyDocNo, duplicateDocNoCount: dupCount,
+        rejectSamples: [], errorCode: undefined, errorDetails: undefined, errorHint: undefined, error: undefined,
+      } : x));
 
       try {
         const existingByDocNo = await loadExistingDrawings(project.id);
 
-        // 1. Create batch row
         const { data: batchData, error: batchErr } = await (supabase as any)
           .from('docs_upload_batches')
           .insert({
@@ -283,16 +299,31 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
           })
           .select('id')
           .single();
-        if (batchErr || !batchData) throw new Error(batchErr?.message ?? 'Failed to create batch');
+        if (batchErr || !batchData) {
+          const e = fmtSupabaseError(batchErr);
+          throw Object.assign(new Error(`Failed to create upload batch: ${e.message}`), e);
+        }
         const batchId = batchData.id as string;
 
         const counters = { inserted: 0, updated: 0, skipped: 0, rejected: 0, unmatched: new Set<string>() };
         const rowLogs: any[] = [];
+        const rejectSamples: DocsRejectSample[] = [];
         let processed = 0;
 
         await runWithConcurrency(f.parsed!, async (row) => {
           const subId = resolveSubcontractorId(row.organisation_raw, orgMaps);
           if (row.organisation_raw && !subId) counters.unmatched.add(normalizeOrgKey(row.organisation_raw));
+
+          if (!row.document_no || !String(row.document_no).trim()) {
+            counters.skipped++;
+            rowLogs.push({
+              upload_id: batchId, raw_row_no: row.rawRowNo, document_no: null,
+              action_taken: 'skipped', reason_code: 'empty_document_no',
+              reason_detail: 'Document No is empty',
+            });
+            processed++;
+            return;
+          }
 
           const existing = existingByDocNo.get(row.document_no);
           const payload: Record<string, unknown> = {
@@ -333,16 +364,17 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
               counters.inserted++;
               rowLogs.push({ upload_id: batchId, raw_row_no: row.rawRowNo, document_no: row.document_no, action_taken: 'inserted' });
             }
-          } catch (err) {
+          } catch (err: any) {
             counters.rejected++;
+            const e = fmtSupabaseError(err);
+            const detail = [e.code, e.message, e.details, e.hint].filter(Boolean).join(' | ');
             rowLogs.push({
-              upload_id: batchId,
-              raw_row_no: row.rawRowNo,
-              document_no: row.document_no,
-              action_taken: 'rejected',
-              reason_code: 'db_error',
-              reason_detail: err instanceof Error ? err.message : String(err),
+              upload_id: batchId, raw_row_no: row.rawRowNo, document_no: row.document_no,
+              action_taken: 'rejected', reason_code: e.code ?? 'db_error', reason_detail: detail,
             });
+            if (rejectSamples.length < 5) {
+              rejectSamples.push({ rawRowNo: row.rawRowNo, documentNo: row.document_no, reasonCode: e.code, reasonDetail: detail });
+            }
           }
           processed++;
           if (processed % 25 === 0 || processed === f.parsed!.length) {
@@ -351,9 +383,11 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
           }
         }, CONCURRENCY);
 
-        // Persist row logs in chunks
         for (let i = 0; i < rowLogs.length; i += 500) {
-          await (supabase as any).from('docs_upload_row_logs').insert(rowLogs.slice(i, i + 500));
+          const { error: logErr } = await (supabase as any)
+            .from('docs_upload_row_logs')
+            .insert(rowLogs.slice(i, i + 500));
+          if (logErr) console.warn('docs_upload_row_logs insert failed:', logErr);
         }
 
         await (supabase as any)
@@ -367,9 +401,7 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
           })
           .eq('id', batchId);
 
-        // Auto-queue unmatched org labels into docs_org_alias for Admin to resolve
         if (counters.unmatched.size > 0) {
-          // Re-derive raw labels (preserving original casing) from parsed rows that resolved to no subcontractor
           const rawByKey = new Map<string, string>();
           for (const row of f.parsed!) {
             if (!row.organisation_raw) continue;
@@ -379,9 +411,7 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
             }
           }
           const aliasRows = [...rawByKey.values()].map((raw_label) => ({
-            raw_label,
-            subcontractor_id: null,
-            is_active: true,
+            raw_label, subcontractor_id: null, is_active: true,
           }));
           if (aliasRows.length > 0) {
             await (supabase as any)
@@ -391,23 +421,20 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
         }
 
         setFiles((cur) => cur.map((x) => x.id === f.id ? {
-          ...x,
-          status: 'done',
-          progress: 100,
+          ...x, status: 'done', progress: 100,
           unmatchedOrgs: [...counters.unmatched],
+          rejectSamples,
           result: {
-            inserted: counters.inserted,
-            updated: counters.updated,
-            skipped: counters.skipped,
-            rejected: counters.rejected,
+            inserted: counters.inserted, updated: counters.updated,
+            skipped: counters.skipped, rejected: counters.rejected,
             unmatchedOrgs: counters.unmatched.size,
           },
         } : x));
-      } catch (error) {
+      } catch (error: any) {
+        const e = fmtSupabaseError(error);
         setFiles((cur) => cur.map((x) => x.id === f.id ? {
-          ...x,
-          status: 'failed',
-          error: error instanceof Error ? error.message : 'Import failed',
+          ...x, status: 'failed',
+          error: e.message, errorCode: e.code, errorDetails: e.details, errorHint: e.hint,
         } : x));
       }
     }
