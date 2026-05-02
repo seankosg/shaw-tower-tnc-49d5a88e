@@ -118,15 +118,20 @@ interface ProjectInfo {
   id: string;
 }
 
-async function getDefaultProject(): Promise<ProjectInfo | null> {
-  const { data } = await (supabase as any)
+async function getDefaultProject(): Promise<ProjectInfo> {
+  const { data, error } = await (supabase as any)
     .from('projects')
-    .select('id')
+    .select('id, project_code, project_name')
     .eq('is_active', true)
-    .order('created_at', { ascending: true })
-    .limit(1);
-  if (data && data.length === 1) return { id: data[0].id };
-  return null;
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`Project lookup failed: ${error.message}`);
+  if (!data || data.length === 0) {
+    throw new Error('No active project found. Ask an admin to create/activate a project.');
+  }
+  if (data.length > 1) {
+    throw new Error(`Multiple active projects found (${data.length}). Please configure a default project.`);
+  }
+  return { id: data[0].id };
 }
 
 async function loadExistingDrawings(projectId: string): Promise<Map<string, { id: string; raw_payload: any }>> {
