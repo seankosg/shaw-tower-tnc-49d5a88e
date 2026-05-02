@@ -166,6 +166,7 @@ const RAW_SEARCH_FIELDS: (keyof DocsRawRow)[] = [
   'document_no', 'revision', 'title', 'discipline', 'sheet_name', 'series',
   'level_location', 'document_type', 'organisation_raw', 'aconex_status',
   'current_status', 'transmittal_number', 'remarks',
+  'hdec_pic_name', 'hdec_eng_name',
   'sub1_approval_status', 'sub2_approval_status', 'sub3_approval_status',
 ];
 
