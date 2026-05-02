@@ -1,0 +1,23 @@
+
+ALTER TABLE public.docs_drawings
+  ADD COLUMN IF NOT EXISTS series text,
+  ADD COLUMN IF NOT EXISTS level_location text,
+  ADD COLUMN IF NOT EXISTS sequential_no text,
+  ADD COLUMN IF NOT EXISTS current_status text,
+  ADD COLUMN IF NOT EXISTS sub1_planned_date date,
+  ADD COLUMN IF NOT EXISTS sub1_submission_date date,
+  ADD COLUMN IF NOT EXISTS sub1_approval_date date,
+  ADD COLUMN IF NOT EXISTS sub1_approval_status text,
+  ADD COLUMN IF NOT EXISTS sub2_planned_date date,
+  ADD COLUMN IF NOT EXISTS sub2_submission_date date,
+  ADD COLUMN IF NOT EXISTS sub2_approval_date date,
+  ADD COLUMN IF NOT EXISTS sub2_approval_status text,
+  ADD COLUMN IF NOT EXISTS sub3_planned_date date,
+  ADD COLUMN IF NOT EXISTS sub3_submission_date date,
+  ADD COLUMN IF NOT EXISTS sub3_approval_date date,
+  ADD COLUMN IF NOT EXISTS sub3_approval_status text,
+  ADD COLUMN IF NOT EXISTS transmittal_number text,
+  ADD COLUMN IF NOT EXISTS transmittal_due_date date,
+  ADD COLUMN IF NOT EXISTS days_due integer,
+  ADD COLUMN IF NOT EXISTS sheet_name text,
+  ADD COLUMN IF NOT EXISTS row_no integer;

@@ -4,31 +4,57 @@ import { normalizeDate } from '@/lib/defect-parser';
 /**
  * Docs (As-Built Drawings) Excel parser.
  *
- * Strategy:
- *  - Sweep ALL sheets in the workbook (one xlsx may contain Architecture/Civil/
- *    Mechanical/Electrical sheets each with their own register).
- *  - Detect a header row in the first 25 rows of each sheet.
- *  - Map flexible header labels via FIELD_ALIASES + heuristic substring match.
- *  - Specialised ELEC parser: when a sheet's discipline = ELEC, derive the
- *    discipline sub-code from the document number itself (e.g. SHAW-ELE-001 →
- *    "ELE", SHAW-ELC-001 → "ELC"), since one sheet often mixes them.
- *  - Aconex status codes 'A' / 'B' are treated as Approved → is_submitted=true,
- *    plus 'Approved' / 'Submitted' literal strings.
+ * Behaviour:
+ *  - Default: ONLY parse sheets whose name contains "register" (case-insensitive,
+ *    whitespace-trimmed). Summary / dashboard sheets are skipped automatically.
+ *  - Two-row banded headers (row N = group like "SUBMISSION 1", row N+1 = sub
+ *    like "PLANNED DATE") are detected and combined into composite header keys
+ *    such as "submission 1 | planned date".
+ *  - Group headers are forward-filled across the columns covered by their
+ *    merged cell (typical Aconex export pattern).
+ *  - Every column with a non-empty header is captured into raw_payload, even
+ *    if it does not map to a structured field.
  */
 
 export interface ParsedDocsRow {
   rawRowNo: number;
   sheetName: string;
+  // Identity
   document_no: string;
   revision: string | null;
   title: string | null;
+  // Org / classification
   organisation_raw: string | null;
   discipline: string | null;
   document_type: string | null;
-  aconex_status: string | null;
+  series: string | null;
+  level_location: string | null;
+  sequential_no: string | null;
+  // Status
+  current_status: string | null;       // "Status" column on row
+  aconex_status: string | null;        // back-compat (last known approval status)
   is_submitted: boolean;
+  // Submission tracking (1/2/3)
+  sub1_planned_date: string | null;
+  sub1_submission_date: string | null;
+  sub1_approval_date: string | null;
+  sub1_approval_status: string | null;
+  sub2_planned_date: string | null;
+  sub2_submission_date: string | null;
+  sub2_approval_date: string | null;
+  sub2_approval_status: string | null;
+  sub3_planned_date: string | null;
+  sub3_submission_date: string | null;
+  sub3_approval_date: string | null;
+  sub3_approval_status: string | null;
+  // Legacy aliases (filled from sub1.*) so existing dashboards keep working
   submitted_date: string | null;
   approved_date: string | null;
+  // Transmittal
+  transmittal_number: string | null;
+  transmittal_due_date: string | null;
+  days_due: number | null;
+  // Misc
   remarks: string | null;
   raw_payload: Record<string, unknown>;
 }
@@ -36,14 +62,22 @@ export interface ParsedDocsRow {
 export interface ParseDocsResult {
   rows: ParsedDocsRow[];
   sheetCount: number;
-  /** sheetName → { headerCount, rowCount, discipline } summary for the UI. */
   sheets: Array<{ name: string; headerCount: number; rowCount: number; discipline: string | null }>;
-  /** Headers we encountered but could not map to a known field. */
   unknownHeaders: string[];
 }
 
-const FIELD_ALIASES: Record<string, keyof ParsedDocsRow | 'skip'> = {
-  // doc number
+type FieldKey =
+  | 'document_no' | 'revision' | 'title' | 'organisation_raw'
+  | 'discipline' | 'document_type' | 'series' | 'level_location' | 'sequential_no'
+  | 'current_status' | 'remarks'
+  | 'sub1_planned_date' | 'sub1_submission_date' | 'sub1_approval_date' | 'sub1_approval_status'
+  | 'sub2_planned_date' | 'sub2_submission_date' | 'sub2_approval_date' | 'sub2_approval_status'
+  | 'sub3_planned_date' | 'sub3_submission_date' | 'sub3_approval_date' | 'sub3_approval_status'
+  | 'transmittal_number' | 'transmittal_due_date' | 'days_due';
+
+/** Canonical alias map for single-row headers (no submission-group context). */
+const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
+  // identity
   'document no': 'document_no',
   'document number': 'document_no',
   'doc no': 'document_no',
@@ -51,84 +85,121 @@ const FIELD_ALIASES: Record<string, keyof ParsedDocsRow | 'skip'> = {
   'drawing no': 'document_no',
   'drawing number': 'document_no',
   'dwg no': 'document_no',
-  'dwg number': 'document_no',
-  'no': 'document_no',
+  'as-built dwg number': 'document_no',
+  'as built dwg number': 'document_no',
   'document id': 'document_no',
   // revision
   'rev': 'revision',
   'revision': 'revision',
   'rev no': 'revision',
-  'revision no': 'revision',
   // title
   'title': 'title',
   'document title': 'title',
   'drawing title': 'title',
+  'as-built dwg title': 'title',
+  'as built dwg title': 'title',
   'description': 'title',
-  // organisation
+  // org
   'organisation': 'organisation_raw',
   'organization': 'organisation_raw',
   'org': 'organisation_raw',
   'company': 'organisation_raw',
   'subcontractor': 'organisation_raw',
-  'sub contractor': 'organisation_raw',
   'vendor': 'organisation_raw',
   'originator': 'organisation_raw',
-  // discipline (per-row override)
+  // discipline
   'discipline': 'discipline',
+  'discipline/role': 'discipline',
+  'discipline / role': 'discipline',
   'trade': 'discipline',
-  // document type / package
+  // type / series / level
   'document type': 'document_type',
+  'document/ drawing type': 'document_type',
+  'document / drawing type': 'document_type',
   'doc type': 'document_type',
   'type': 'document_type',
   'package': 'document_type',
-  // aconex status
-  'aconex status': 'aconex_status',
-  'status': 'aconex_status',
-  'review status': 'aconex_status',
-  'approval status': 'aconex_status',
-  'workflow status': 'aconex_status',
-  // dates
-  'submitted date': 'submitted_date',
-  'submission date': 'submitted_date',
-  'date submitted': 'submitted_date',
-  'submitted on': 'submitted_date',
-  'approved date': 'approved_date',
-  'approval date': 'approved_date',
-  'date approved': 'approved_date',
-  'approved on': 'approved_date',
+  'series': 'series',
+  'level/ location': 'level_location',
+  'level / location': 'level_location',
+  'level location': 'level_location',
+  'level': 'level_location',
+  'location': 'level_location',
+  'sequential no.': 'sequential_no',
+  'sequential no': 'sequential_no',
+  'seq no': 'sequential_no',
+  'sequence no': 'sequential_no',
+  // status (row-level)
+  'status': 'current_status',
+  'aconex status': 'current_status',
   // remarks
   'remarks': 'remarks',
+  'remark': 'remarks',
   'comments': 'remarks',
   'note': 'remarks',
   'notes': 'remarks',
+  // transmittal
+  'transmittal number': 'transmittal_number',
+  'transmittal no': 'transmittal_number',
+  'transmittal due date': 'transmittal_due_date',
+  'days due': 'days_due',
+  // skip pure index column
+  's. no.': 'skip',
+  's. no': 'skip',
+  's/no.': 'skip',
+  's/no': 'skip',
+  'no.': 'skip',
+  'sno': 'skip',
+  'drawing register': 'skip',
+};
+
+/** Sub-column alias inside Submission group → suffix used to compose field key. */
+const SUB_ALIAS: Record<string, 'planned_date' | 'submission_date' | 'approval_date' | 'approval_status'> = {
+  'planned date': 'planned_date',
+  'submission date': 'submission_date',
+  'approval date': 'approval_date',
+  'approval status': 'approval_status',
 };
 
 function normalizeHeader(value: unknown): string {
   return String(value ?? '')
     .replace(/\s*\(H\)\s*$/i, '')
+    .replace(/[\t\n\r]+/g, ' ')
     .replace(/[_\-]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
 }
 
-function mapHeader(header: string): keyof ParsedDocsRow | 'skip' | null {
+/** Parse "Submission 1" / "Aconex Submission 2" group header → 1|2|3 or null. */
+function parseSubmissionGroup(label: string | null | undefined): 1 | 2 | 3 | null {
+  if (!label) return null;
+  const m = String(label).toLowerCase().match(/submission\s*([123])/);
+  if (!m) return null;
+  return Number(m[1]) as 1 | 2 | 3;
+}
+
+function mapHeader(header: string): FieldKey | 'skip' | null {
   const norm = normalizeHeader(header);
   if (!norm) return 'skip';
   const exact = FIELD_ALIASES[norm];
   if (exact) return exact;
-  // Heuristic substring fallbacks (do not promote weak matches blindly).
+  // Heuristics
   if (norm.includes('document') && norm.includes('no')) return 'document_no';
   if (norm.includes('drawing') && norm.includes('no')) return 'document_no';
-  if (norm === 'no.') return 'document_no';
-  if (norm.includes('rev')) return 'revision';
+  if (norm.includes('dwg') && norm.includes('number')) return 'document_no';
+  if (norm.includes('rev') && norm.length <= 12) return 'revision';
   if (norm.includes('title')) return 'title';
   if (norm.includes('discipline')) return 'discipline';
-  if (norm.includes('status')) return 'aconex_status';
-  if (norm.includes('submit') && norm.includes('date')) return 'submitted_date';
-  if (norm.includes('approv') && norm.includes('date')) return 'approved_date';
+  if (norm === 'status') return 'current_status';
+  if (norm.includes('transmittal') && norm.includes('due')) return 'transmittal_due_date';
+  if (norm.includes('transmittal')) return 'transmittal_number';
+  if (norm.includes('days due')) return 'days_due';
   if (norm.includes('remark') || norm.includes('comment')) return 'remarks';
   if (norm.includes('organisation') || norm.includes('organization') || norm.includes('vendor')) return 'organisation_raw';
+  if (norm.includes('series')) return 'series';
+  if (norm.includes('level') || norm.includes('location')) return 'level_location';
+  if (norm.includes('sequential')) return 'sequential_no';
   return null;
 }
 
@@ -138,7 +209,12 @@ function toText(value: unknown): string | null {
   return text === '' ? null : text;
 }
 
-/** Aconex codes A/B = Approved.  Also accept literal Approved/Submitted strings. */
+function toNumber(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function isApprovedStatus(status: string | null): boolean {
   if (!status) return false;
   const v = status.trim().toUpperCase();
@@ -149,77 +225,141 @@ function isApprovedStatus(status: string | null): boolean {
   return false;
 }
 
-/** Try to derive a discipline code from a sheet name (e.g. "Electrical Drawings" → "ELEC"). */
 function disciplineFromSheetName(name: string): string | null {
   const v = name.toLowerCase();
-  if (/\barch/.test(v)) return 'ARCH';
-  if (/\bcivil|\bstruct/.test(v)) return 'CIVIL';
-  if (/\bmech|\bhvac/.test(v)) return 'MECH';
-  if (/\belec|\belv|\bele\b/.test(v)) return 'ELEC';
-  if (/\bplumb/.test(v)) return 'PLUMB';
-  if (/\bfire/.test(v)) return 'FIRE';
-  if (/\bicta|\bict\b|\btelecom|\bcomms/.test(v)) return 'ICT';
-  if (/\blandscape/.test(v)) return 'LAND';
+  if (/\barc\b|\barchi/.test(v)) return 'ARCH';
+  if (/\bid\b|interior/.test(v)) return 'ID';
+  if (/\bsg\b|signage/.test(v)) return 'SG';
+  if (/\bstr\b|struct/.test(v)) return 'STR';
+  if (/\bfc\b|facade/.test(v)) return 'FC';
+  if (/\bla\b|landscape/.test(v)) return 'LA';
+  if (/\bmech|hvac/.test(v)) return 'MECH';
+  if (/\belec|\belv/.test(v)) return 'ELEC';
   return null;
 }
 
-/** Extract a discipline sub-code from a document number's middle segment.
- *  Examples:  "SHAW-ELE-001" → "ELE"   "AB-ELC-FL01-001" → "ELC"  */
-function extractDocDiscipline(docNo: string): string | null {
-  const parts = docNo.split(/[-_/.]/).map((p) => p.trim()).filter(Boolean);
-  // Look for an all-caps alpha token of length 2-5 that isn't obviously numeric / project code.
-  for (let i = 1; i < parts.length; i++) {
-    const tok = parts[i];
-    if (/^[A-Z]{2,5}$/.test(tok)) return tok;
-  }
-  return null;
+/**
+ * Detect the 1- or 2-row banded header.
+ * Returns: header row indices + per-column composite header info.
+ */
+interface DetectedHeader {
+  groupRowIdx: number | null;
+  subRowIdx: number;
+  /** Per-column: { group, sub, composite, mapped } */
+  cols: Array<{
+    group: string | null;
+    sub: string;
+    composite: string;
+    field: FieldKey | null;
+    submissionN: 1 | 2 | 3 | null;
+  }>;
 }
 
-/** Detect the header row in a worksheet (first row whose cells map to ≥2 known fields). */
-function detectHeaderRow(matrix: unknown[][]): { headerRowIdx: number; headers: string[] } | null {
+function detectHeader(matrix: unknown[][]): DetectedHeader | null {
   const limit = Math.min(matrix.length, 25);
-  let bestIdx = -1;
-  let bestScore = 0;
-  let bestHeaders: string[] = [];
+  // Find best-scoring 2-row pair: score = mapped fields when combining row r (group) + row r+1 (sub).
+  let best: { score: number; groupIdx: number | null; subIdx: number } | null = null;
+
+  const tryScore = (groupIdx: number | null, subIdx: number) => {
+    const subRow = matrix[subIdx] ?? [];
+    const groupRow = groupIdx != null ? (matrix[groupIdx] ?? []) : [];
+    // Forward-fill group across columns where it's blank (covers merged cells)
+    const filledGroup: (string | null)[] = [];
+    let last: string | null = null;
+    for (let c = 0; c < Math.max(subRow.length, groupRow.length); c++) {
+      const v = String(groupRow[c] ?? '').trim();
+      if (v) last = v;
+      filledGroup.push(last);
+    }
+    let score = 0;
+    for (let c = 0; c < subRow.length; c++) {
+      const sub = String(subRow[c] ?? '').trim();
+      const grp = filledGroup[c];
+      const subNorm = normalizeHeader(sub);
+      const grpN = parseSubmissionGroup(grp);
+      if (grpN && SUB_ALIAS[subNorm]) { score += 2; continue; }
+      const m = mapHeader(sub);
+      if (m && m !== 'skip') score++;
+    }
+    if (!best || score > best.score) best = { score, groupIdx, subIdx };
+  };
+
   for (let r = 0; r < limit; r++) {
-    const row = matrix[r] ?? [];
-    let mapped = 0;
-    for (const cell of row) {
-      const text = String(cell ?? '').trim();
-      if (!text) continue;
-      const result = mapHeader(text);
-      if (result && result !== 'skip') mapped++;
-    }
-    if (mapped > bestScore) {
-      bestScore = mapped;
-      bestIdx = r;
-      bestHeaders = row.map((c) => String(c ?? '').trim());
-    }
+    tryScore(null, r);              // single-row header at r
+    if (r + 1 < limit) tryScore(r, r + 1);  // group=r, sub=r+1
   }
-  if (bestScore >= 2 && bestIdx >= 0) {
-    return { headerRowIdx: bestIdx, headers: bestHeaders };
+  if (!best || best.score < 3) return null;
+
+  const subRow = matrix[best.subIdx] ?? [];
+  const groupRow = best.groupIdx != null ? (matrix[best.groupIdx] ?? []) : [];
+  const filledGroup: (string | null)[] = [];
+  let last: string | null = null;
+  for (let c = 0; c < Math.max(subRow.length, groupRow.length); c++) {
+    const v = String(groupRow[c] ?? '').trim();
+    if (v) last = v;
+    filledGroup.push(last);
   }
-  return null;
+
+  const cols: DetectedHeader['cols'] = [];
+  for (let c = 0; c < subRow.length; c++) {
+    const sub = String(subRow[c] ?? '').trim();
+    const grp = filledGroup[c];
+    const subNorm = normalizeHeader(sub);
+    const grpNorm = normalizeHeader(grp);
+    const submissionN = parseSubmissionGroup(grp);
+    let field: FieldKey | null = null;
+    let composite = sub || grp || '';
+
+    if (submissionN && SUB_ALIAS[subNorm]) {
+      const suffix = SUB_ALIAS[subNorm];
+      field = `sub${submissionN}_${suffix}` as FieldKey;
+      composite = `${grp} | ${sub}`;
+    } else if (sub) {
+      const m = mapHeader(sub);
+      if (m && m !== 'skip') field = m;
+      composite = sub;
+    } else if (grp) {
+      const m = mapHeader(grp);
+      if (m && m !== 'skip') field = m;
+      composite = grp;
+    }
+    cols.push({
+      group: grp,
+      sub,
+      composite: composite.trim(),
+      field,
+      submissionN,
+    });
+  }
+
+  return { groupRowIdx: best.groupIdx, subRowIdx: best.subIdx, cols };
 }
 
 async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
   return await file.arrayBuffer();
 }
 
+function isRegisterSheet(name: string): boolean {
+  return name.toLowerCase().includes('register');
+}
+
 export async function getDocsExcelSheetNames(file: File): Promise<string[]> {
   const buffer = await readFileAsArrayBuffer(file);
   const workbook = XLSX.read(buffer, { type: 'array' });
-  return workbook.SheetNames;
+  // Default behaviour: only "register" sheets are surfaced for import.
+  return workbook.SheetNames.filter(isRegisterSheet);
 }
 
 export async function parseDocsExcel(
   file: File,
-  /** When provided, only these sheet names are parsed. Default = all sheets. */
+  /** When provided, overrides the default register-only filter. */
   selectedSheets?: string[],
 ): Promise<ParseDocsResult> {
   const buffer = await readFileAsArrayBuffer(file);
   const workbook = XLSX.read(buffer, { type: 'array' });
-  const targetSheets = selectedSheets?.length ? selectedSheets : workbook.SheetNames;
+  const targetSheets = (selectedSheets?.length
+    ? selectedSheets
+    : workbook.SheetNames.filter(isRegisterSheet));
 
   const rows: ParsedDocsRow[] = [];
   const sheetSummary: ParseDocsResult['sheets'] = [];
@@ -229,59 +369,64 @@ export async function parseDocsExcel(
     const ws = workbook.Sheets[sheetName];
     if (!ws) continue;
     const matrix: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null }) as unknown[][];
-    const detected = detectHeaderRow(matrix);
+    const detected = detectHeader(matrix);
     const sheetDiscipline = disciplineFromSheetName(sheetName);
     if (!detected) {
       sheetSummary.push({ name: sheetName, headerCount: 0, rowCount: 0, discipline: sheetDiscipline });
       continue;
     }
-    const { headerRowIdx, headers } = detected;
-    const headerMap: Array<{ col: number; field: keyof ParsedDocsRow | null; raw: string }> = [];
-    headers.forEach((h, col) => {
-      const mapped = mapHeader(h);
-      if (mapped === 'skip') {
-        headerMap.push({ col, field: null, raw: h });
-      } else if (mapped == null) {
-        if (h && h.trim()) unknownHeaderSet.add(h.trim());
-        headerMap.push({ col, field: null, raw: h });
-      } else {
-        headerMap.push({ col, field: mapped, raw: h });
+    // Track unknown headers (have content but no field mapping).
+    for (const col of detected.cols) {
+      if (!col.field && col.composite) {
+        unknownHeaderSet.add(col.composite);
       }
-    });
+    }
 
+    const startRow = detected.subRowIdx + 1;
     let sheetRowCount = 0;
-    for (let r = headerRowIdx + 1; r < matrix.length; r++) {
+    for (let r = startRow; r < matrix.length; r++) {
       const dataRow = matrix[r] ?? [];
-      // Build raw_payload + structured fields
       const payload: Record<string, unknown> = {};
-      const struct: Partial<ParsedDocsRow> = {};
-      for (const { col, field, raw } of headerMap) {
-        const value = dataRow[col];
-        if (raw && raw.trim()) payload[raw.trim()] = value;
-        if (!field) continue;
-        if (field === 'submitted_date' || field === 'approved_date') {
-          (struct as any)[field] = normalizeDate(value);
-        } else if (field === 'is_submitted') {
-          // ignored — derived below
+      const struct: Partial<Record<FieldKey, any>> = {};
+
+      for (let c = 0; c < detected.cols.length; c++) {
+        const col = detected.cols[c];
+        const value = dataRow[c];
+        if (col.composite) payload[col.composite] = value;
+        if (!col.field) continue;
+        if (col.field.endsWith('_date') || col.field === 'transmittal_due_date') {
+          struct[col.field] = normalizeDate(value);
+        } else if (col.field === 'days_due') {
+          struct[col.field] = toNumber(value);
         } else {
-          (struct as any)[field] = toText(value);
+          struct[col.field] = toText(value);
         }
       }
-      const docNo = struct.document_no?.trim();
-      if (!docNo) continue; // skip blank rows / sub-headers
 
-      // Derive discipline: row-level value > doc-no extraction (when sheet=ELEC) > sheet name
+      const docNoRaw = struct.document_no ? String(struct.document_no).trim() : '';
+      // Skip rows with no doc number AND no submission/title content (sub-headers, totals)
+      if (!docNoRaw) continue;
+      // Strip leading whitespace/control chars often present in source ("\t\nHDEC-...")
+      const docNo = docNoRaw.replace(/^[\s\t\n\r]+/, '').replace(/\s+$/, '');
+
+      // Discipline fallback chain
       let discipline = struct.discipline ?? null;
-      if (!discipline) {
-        if (sheetDiscipline === 'ELEC') {
-          discipline = extractDocDiscipline(docNo) ?? sheetDiscipline;
-        } else {
-          discipline = sheetDiscipline;
-        }
-      }
+      if (!discipline) discipline = sheetDiscipline;
 
-      const aconexStatus = struct.aconex_status ?? null;
-      const isSubmitted = isApprovedStatus(aconexStatus) || !!struct.submitted_date || !!struct.approved_date;
+      // Aconex status fallback (back-compat field): prefer current_status, then sub1/2/3 approval status.
+      const aconexStatus = struct.current_status
+        ?? struct.sub1_approval_status
+        ?? struct.sub2_approval_status
+        ?? struct.sub3_approval_status
+        ?? null;
+
+      const isSubmitted =
+        isApprovedStatus(struct.current_status ?? null)
+        || isApprovedStatus(struct.sub1_approval_status ?? null)
+        || isApprovedStatus(struct.sub2_approval_status ?? null)
+        || isApprovedStatus(struct.sub3_approval_status ?? null)
+        || !!struct.sub1_submission_date
+        || !!struct.sub1_approval_date;
 
       rows.push({
         rawRowNo: r + 1,
@@ -292,10 +437,29 @@ export async function parseDocsExcel(
         organisation_raw: struct.organisation_raw ?? null,
         discipline,
         document_type: struct.document_type ?? null,
+        series: struct.series ?? null,
+        level_location: struct.level_location ?? null,
+        sequential_no: struct.sequential_no ?? null,
+        current_status: struct.current_status ?? null,
         aconex_status: aconexStatus,
         is_submitted: isSubmitted,
-        submitted_date: struct.submitted_date ?? null,
-        approved_date: struct.approved_date ?? null,
+        sub1_planned_date: struct.sub1_planned_date ?? null,
+        sub1_submission_date: struct.sub1_submission_date ?? null,
+        sub1_approval_date: struct.sub1_approval_date ?? null,
+        sub1_approval_status: struct.sub1_approval_status ?? null,
+        sub2_planned_date: struct.sub2_planned_date ?? null,
+        sub2_submission_date: struct.sub2_submission_date ?? null,
+        sub2_approval_date: struct.sub2_approval_date ?? null,
+        sub2_approval_status: struct.sub2_approval_status ?? null,
+        sub3_planned_date: struct.sub3_planned_date ?? null,
+        sub3_submission_date: struct.sub3_submission_date ?? null,
+        sub3_approval_date: struct.sub3_approval_date ?? null,
+        sub3_approval_status: struct.sub3_approval_status ?? null,
+        submitted_date: struct.sub1_submission_date ?? null,
+        approved_date: struct.sub1_approval_date ?? null,
+        transmittal_number: struct.transmittal_number ?? null,
+        transmittal_due_date: struct.transmittal_due_date ?? null,
+        days_due: struct.days_due ?? null,
         remarks: struct.remarks ?? null,
         raw_payload: payload,
       });
@@ -304,7 +468,7 @@ export async function parseDocsExcel(
 
     sheetSummary.push({
       name: sheetName,
-      headerCount: headers.filter((h) => h && String(h).trim()).length,
+      headerCount: detected.cols.filter((c) => c.composite).length,
       rowCount: sheetRowCount,
       discipline: sheetDiscipline,
     });

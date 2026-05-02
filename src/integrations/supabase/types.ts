@@ -900,25 +900,46 @@ export type Database = {
           aconex_status: string | null
           approved_date: string | null
           created_at: string
+          current_status: string | null
           custom_payload: Json
           data_source_type: string | null
+          days_due: number | null
           discipline: string | null
           document_no: string
           document_type: string | null
           id: string
           is_active: boolean
           is_submitted: boolean
+          level_location: string | null
           organisation_raw: string | null
           project_id: string
           raw_payload: Json
           remarks: string | null
           revision: string | null
+          row_no: number | null
           row_version: number
+          sequential_no: string | null
+          series: string | null
+          sheet_name: string | null
           source_upload_id: string | null
           sub_module: string
+          sub1_approval_date: string | null
+          sub1_approval_status: string | null
+          sub1_planned_date: string | null
+          sub1_submission_date: string | null
+          sub2_approval_date: string | null
+          sub2_approval_status: string | null
+          sub2_planned_date: string | null
+          sub2_submission_date: string | null
+          sub3_approval_date: string | null
+          sub3_approval_status: string | null
+          sub3_planned_date: string | null
+          sub3_submission_date: string | null
           subcontractor_id: string | null
           submitted_date: string | null
           title: string | null
+          transmittal_due_date: string | null
+          transmittal_number: string | null
           updated_at: string
           updated_by: string | null
         }
@@ -926,25 +947,46 @@ export type Database = {
           aconex_status?: string | null
           approved_date?: string | null
           created_at?: string
+          current_status?: string | null
           custom_payload?: Json
           data_source_type?: string | null
+          days_due?: number | null
           discipline?: string | null
           document_no: string
           document_type?: string | null
           id?: string
           is_active?: boolean
           is_submitted?: boolean
+          level_location?: string | null
           organisation_raw?: string | null
           project_id: string
           raw_payload?: Json
           remarks?: string | null
           revision?: string | null
+          row_no?: number | null
           row_version?: number
+          sequential_no?: string | null
+          series?: string | null
+          sheet_name?: string | null
           source_upload_id?: string | null
           sub_module?: string
+          sub1_approval_date?: string | null
+          sub1_approval_status?: string | null
+          sub1_planned_date?: string | null
+          sub1_submission_date?: string | null
+          sub2_approval_date?: string | null
+          sub2_approval_status?: string | null
+          sub2_planned_date?: string | null
+          sub2_submission_date?: string | null
+          sub3_approval_date?: string | null
+          sub3_approval_status?: string | null
+          sub3_planned_date?: string | null
+          sub3_submission_date?: string | null
           subcontractor_id?: string | null
           submitted_date?: string | null
           title?: string | null
+          transmittal_due_date?: string | null
+          transmittal_number?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -952,25 +994,46 @@ export type Database = {
           aconex_status?: string | null
           approved_date?: string | null
           created_at?: string
+          current_status?: string | null
           custom_payload?: Json
           data_source_type?: string | null
+          days_due?: number | null
           discipline?: string | null
           document_no?: string
           document_type?: string | null
           id?: string
           is_active?: boolean
           is_submitted?: boolean
+          level_location?: string | null
           organisation_raw?: string | null
           project_id?: string
           raw_payload?: Json
           remarks?: string | null
           revision?: string | null
+          row_no?: number | null
           row_version?: number
+          sequential_no?: string | null
+          series?: string | null
+          sheet_name?: string | null
           source_upload_id?: string | null
           sub_module?: string
+          sub1_approval_date?: string | null
+          sub1_approval_status?: string | null
+          sub1_planned_date?: string | null
+          sub1_submission_date?: string | null
+          sub2_approval_date?: string | null
+          sub2_approval_status?: string | null
+          sub2_planned_date?: string | null
+          sub2_submission_date?: string | null
+          sub3_approval_date?: string | null
+          sub3_approval_status?: string | null
+          sub3_planned_date?: string | null
+          sub3_submission_date?: string | null
           subcontractor_id?: string | null
           submitted_date?: string | null
           title?: string | null
+          transmittal_due_date?: string | null
+          transmittal_number?: string | null
           updated_at?: string
           updated_by?: string | null
         }
