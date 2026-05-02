@@ -693,6 +693,8 @@ export default function DocsRawDataPage() {
     { field: 'title', label: getLabel('title'), inputType: 'text', group: 'Notes' },
     { field: 'remarks', label: getLabel('remarks'), inputType: 'text', group: 'Notes' },
     { field: 'transmittal_number', label: getLabel('transmittal_number'), inputType: 'text', group: 'Notes' },
+    { field: 'hdec_pic_name', label: getLabel('hdec_pic_name'), inputType: 'text', group: 'Personnel' },
+    { field: 'hdec_eng_name', label: getLabel('hdec_eng_name'), inputType: 'text', group: 'Personnel' },
   ], [getLabel, optionFields]);
 
   const handleBulkApplied = useCallback(({ field, value, ids }: { field: string; value: string | number | boolean | null; ids: string[] }) => {
