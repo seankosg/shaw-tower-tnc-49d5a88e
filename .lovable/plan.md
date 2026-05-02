@@ -1,73 +1,110 @@
-## 문제 진단
 
-업로드 중 18건이 다음 에러로 거부되었습니다:
-```
-[23505] duplicate key value violates unique constraint "subtests_subtest_id_key"
-```
+# Docs 모듈 Raw Data 구축 계획
 
-### 근본 원인
+Docs 모듈은 4개 sub-module로 구성됩니다:
+1. **As-Built** (준공도면)
+2. **OMM** (O&M Manual)
+3. **Warranty** (보증서)
+4. **Spare Part** (예비품 리스트)
 
-`subtests` 테이블에는 두 개의 UNIQUE 제약이 있습니다:
+사용자 결정 사항:
+- 데이터 구조: **B. 분리 테이블** (sub_module별 신규 raw 테이블)
+- 우선순위: **As-Built 먼저 → 검증 → OMM → Warranty → Spare Part**
+- Spare Part 컬럼: 사용자가 **샘플 엑셀 제공 예정** → 수령 후 확정
 
-1. `subtests_project_id_system_id_item_no_mos_code_key` — **(project_id, system_id, item_no, mos_code)** 조합 (의도된 비즈니스 키)
-2. `subtests_subtest_id_key` — **(subtest_id)** 컬럼 단독 (전역 unique) ← **문제의 원인**
+---
 
-`subtest_id`는 import-parser에서 `${item_no}-${mos_code}` 형태로 생성됩니다 (예: `M-001-T1`). 그런데 이 값이 **전역(global) 단일값**으로 강제되어 있어서:
+## Phase A. As-Built Import 정상화 (이번 단계)
 
-- **같은 item_no + mos_code 조합이 다른 system_id 또는 다른 project**에 존재하면 충돌
-- import-parser의 prefetch는 `(system_id, item_no, mos_code)` 키로만 기존 행을 찾기 때문에, **같은 item_no/mos_code가 다른 system 아래에 이미 있는 경우** 새 INSERT로 시도되고 → 23505 발생
-- bulk-actions의 Duplicate 기능에서 만드는 `${item_no}-${mos_code}-${seq}` 형식과의 잠재적 충돌도 가능
+현재 Docs Import가 동작하지 않는 원인을 제거하고 As-Built Raw Data가 채워지도록 합니다.
 
-현재 DB 상태(중복 row 0건)를 확인했으므로, 제약을 변경해도 즉시 안전합니다.
-
-### 해결 방향
-
-`subtest_id`의 의미는 "프로젝트 내에서 사람이 알아보는 식별자"이지, **전역 유일 키일 필요가 없습니다.** 비즈니스 키는 이미 `(project_id, system_id, item_no, mos_code)`가 담당합니다.
-
-## 수정 계획
-
-### 1. DB 마이그레이션 — `subtest_id` 유니크 범위 축소
+### A1. RLS 정책 수정 (DB Migration)
+`docs_drawings` / `docs_upload_batches` / `docs_upload_row_logs` / `docs_change_log`의 INSERT·UPDATE 정책이 존재하지 않는 역할(`senior_user`, `user`)을 참조하고 있어 모든 일반 사용자의 import가 차단됨. 실제 프로젝트 역할 체계(`admin`, `superuser`, `manager`, `hdec_engineer`, `subcontractor`)에 맞춰 갱신.
 
 ```sql
--- 전역 unique 제거
-ALTER TABLE public.subtests DROP CONSTRAINT IF EXISTS subtests_subtest_id_key;
-
--- project 범위 unique로 대체 (활성 행에 한해)
-CREATE UNIQUE INDEX IF NOT EXISTS subtests_project_subtest_id_key
-  ON public.subtests (project_id, subtest_id)
-  WHERE is_active = true;
+-- 예시
+DROP POLICY "Users can insert docs drawings" ON public.docs_drawings;
+CREATE POLICY "Users can insert docs drawings"
+  ON public.docs_drawings FOR INSERT TO authenticated
+  WITH CHECK (
+    public.has_any_role(auth.uid(),
+      ARRAY['admin','superuser','manager','hdec_engineer']::app_role[])
+  );
+-- UPDATE 정책도 동일하게 갱신
 ```
 
-이유:
-- 동일 프로젝트 내에서는 `subtest_id`가 사람이 식별하는 코드이므로 unique 유지가 맞음
-- 다른 프로젝트끼리는 같은 코드(예: `M-001-T1`)를 써도 무방
-- `is_active = true` 부분 인덱스로 soft-delete된 행과 충돌 없음
+### A2. DocsImportContext 개선
+- `getDefaultProject()`가 활성 프로젝트 0개·2개 이상일 때 조용히 실패 → 명시적 에러 throw + UI 노출
+- Supabase 응답의 `error.code` / `error.message` / `details` / `hint`를 swallow하지 않고 그대로 상태에 보관
+- Import 시작 전 pre-flight 권한 체크(현재 사용자 role 조회) → 권한 없으면 업로드 단계 진입 자체 차단
 
-### 2. Import 로직 보강 (`src/contexts/ImportContext.tsx`)
+### A3. DocsImportPage 진단 UI
+- Pre-import 검증 카드: 빈 Document No 행 수, 매핑 안 된 Organisation 수, 중복 행 수 표시
+- Import 실패 시 결과 카드에 `error.code` + `reason_detail` + 첫 5행 원인을 노출
+- `docs_upload_row_logs`로 들어간 거절·스킵 사유를 모달에서 즉시 확인 가능
 
-INSERT 시 만에 하나 동일 (project, system, item, mos) 행이 prefetch 이후에 다른 동시 import로 생긴 경우를 대비해 `.upsert(..., { onConflict: 'project_id,system_id,item_no,mos_code', ignoreDuplicates: true })` 또는 명시적 재조회 후 update fallback 처리. 이번 fix에선 단순화를 위해 INSERT를 `upsert(..., { onConflict: 'project_id,system_id,item_no,mos_code' })`로 변경.
+### A4. 검증
+- 샘플 As-Built 엑셀로 import 실행 → `docs_drawings` 행 생성 확인
+- Raw Data 페이지(`/docs/raw-data` 등)에서 즉시 노출되는지 확인
+- `docs_upload_batches.status='completed'` 및 `success_rows` 정합성 확인
 
-### 3. Bulk Duplicate 보강 (`src/lib/bulk-actions.ts`)
+---
 
-`subtest_id` 생성 시 동일 project 내에 이미 같은 코드가 있으면 `-{seq}`를 추가하여 충돌 회피. 현재는 `${item_no}-${mos_code}-${seq}` 포맷이라 새 unique(project_id, subtest_id) 제약과 잘 맞지만, 안전망으로 INSERT를 chunk별로 시도하고 23505 발생 시 seq를 1 증가시켜 재시도하는 retry 1회 추가.
+## Phase B. OMM Raw Data (As-Built 검증 후)
 
-### 4. 사용자 안내 (Import 결과 패널)
+### B1. 신규 테이블 `docs_omm_items`
+공통 필드 + OMM 고유 필드 분리.
+- 공통: `id`, `project_id`, `document_no`, `revision`, `title`, `subcontractor_id`, `organisation_raw`, `discipline`, `aconex_status`, `submitted_date`, `approved_date`, `is_submitted`, `remarks`, `raw_payload`, `custom_payload`, `source_upload_id`, `row_version`, `is_active`, audit
+- OMM 고유: `manual_type` (Operation / Maintenance / Both), `equipment_tag`, `system_code`, `volume_no`, `language`, `final_submission_date`
 
-기존 "Rejected (invalid)" 카드에서 23505 에러는 별도 그룹("Conflict — please re-import after fix")으로 표시하도록 reason_detail을 가공 (UI 변경은 최소).
+### B2. 공유 인프라 재사용
+`docs_upload_batches` / `docs_upload_row_logs` / `docs_change_log`에 이미 있는 `sub_module` 컬럼을 discriminator로 사용. 별도 batch 테이블 추가하지 않음.
 
-## 테스트 절차 (구현 후)
+### B3. UI
+- Import 페이지에 sub-module 탭(As-Built / OMM / Warranty / Spare Part) 추가
+- Raw Data 페이지에 OMM 탭 + 컬럼 프리셋
+- `import_header_mappings`에 `sub_module='omm'` 행 시드
 
-1. 동일 엑셀을 재업로드 → 0 rejected (insert_failed) 기대
-2. 다른 시스템에 동일 item_no/mos_code 존재하는 케이스 → 정상 INSERT
-3. 같은 project 내 (system, item, mos)는 동일하지만 row가 이미 있는 경우 → UPDATE 경로 적중
-4. Duplicate 기능 → 새 mos_sequence로 정상 생성
+---
 
-## 변경 파일
+## Phase C. Warranty Raw Data
 
-- `supabase/migrations/<new>.sql` (제약 변경)
-- `src/contexts/ImportContext.tsx` (INSERT → upsert with onConflict)
-- `src/lib/bulk-actions.ts` (Duplicate 23505 retry)
+### C1. 신규 테이블 `docs_warranty_items`
+- 공통 필드(B1과 동일 구조)
+- Warranty 고유: `warranty_start_date`, `warranty_expiry_date`, `warranty_period_months`, `warranty_type` (Material / Workmanship / System), `vendor_name`, `equipment_tag`, `claim_contact`, `coverage_scope`
 
-## 사용자 결정 필요
+### C2. UI / 매핑 / 검증
+- Phase B와 동일한 패턴으로 탭, 헤더 매핑, Raw Data 뷰 추가
+- `warranty_expiry_date` 기준 만료 임박 카운트 등 간단 KPI는 후속 단계에서 검토
 
-이번 fix는 **`subtest_id`를 프로젝트 내에서만 unique**로 바꿉니다. 만약 회사 표준상 `subtest_id`가 **모든 프로젝트를 통틀어 전역 unique**여야 한다면 알려주세요. 그 경우 대신 import-parser에서 충돌 시 자동 suffix(`-2`, `-3`)를 붙이는 방향으로 변경하겠습니다.
+---
+
+## Phase D. Spare Part Raw Data (샘플 엑셀 수령 후)
+
+사용자가 제공할 샘플 엑셀을 수령한 뒤:
+1. 헤더 분석 → 정식 컬럼과 `custom_payload` 잔여 필드 분류
+2. `docs_spare_part_items` 테이블 마이그레이션 생성
+3. `import_header_mappings` 시드 자동 생성
+4. Phase B/C와 동일 UI 패턴 적용
+
+샘플 수령 전까지 D는 착수하지 않습니다.
+
+---
+
+## 영향 받는 파일 (Phase A 한정)
+
+- `supabase/migrations/<new>.sql` — RLS 4개 테이블 정책 교체
+- `src/contexts/DocsImportContext.tsx` — 에러 전파, 프로젝트 가드, pre-flight
+- `src/pages/docs/DocsImportPage.tsx` — 진단 UI, 결과 카드 details
+- (필요 시) `src/lib/docs/import/*` — 에러 객체 형태 통일
+
+---
+
+## 진행 순서 제안
+
+1. **지금**: Phase A 전체 실행 → As-Built import 정상화·검증
+2. **검증 OK 후**: Phase B(OMM) 착수
+3. **B 완료 후**: Phase C(Warranty)
+4. **샘플 엑셀 수령 후**: Phase D(Spare Part)
+
+이 plan으로 진행하면 default mode로 전환해 Phase A부터 바로 구현하겠습니다.
