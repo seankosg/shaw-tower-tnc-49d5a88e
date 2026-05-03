@@ -42,3 +42,8 @@ export function useAtRiskThreshold() {
 export function useFrozenColumnCount() {
   return useAppSetting<number>('raw_data_frozen_columns', 1);
 }
+
+/** Standard response lead days for As-Built drawings (Planned Response = Submission + lead). */
+export function useDocsStandardResponseLeadDays() {
+  return useAppSetting<number>('docs_standard_response_lead_days', 7);
+}

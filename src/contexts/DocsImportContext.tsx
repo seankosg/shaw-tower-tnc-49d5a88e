@@ -380,6 +380,7 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
             remarks: row.remarks,
             hdec_pic_name: row.hdec_pic_name,
             hdec_eng_name: row.hdec_eng_name,
+            subcontractor_name: row.subcontractor_name,
             raw_payload: row.raw_payload,
             source_upload_id: batchId,
             data_source_type: 'excel_import',
