@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, Lock, AlertTriangle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { useDocsImport, type DocsFileStatus } from '@/contexts/DocsImportContext';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { useAuth } from '@/contexts/AuthContext';
