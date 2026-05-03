@@ -73,6 +73,7 @@ interface DocsImportContextValue {
   removeFile: (id: string) => void;
   clearAll: () => void;
   setFileSheets: (id: string, sheets: string[]) => Promise<void>;
+  setFileDataDate: (id: string, dataDate: string) => void;
   startImport: () => Promise<void>;
 }
 
