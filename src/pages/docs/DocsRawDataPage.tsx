@@ -85,11 +85,16 @@ interface DocsRawRow {
   remarks: string | null;
   hdec_pic_name: string | null;
   hdec_eng_name: string | null;
+  subcontractor_name: string | null;
+  sub1_actual_response_date: string | null;
+  sub2_actual_response_date: string | null;
+  sub3_actual_response_date: string | null;
   updated_at: string | null;
   created_at: string | null;
   // derived (client-side)
   trade?: string;
   risk?: 'red' | 'amber' | 'green';
+  overall_status?: string;
 }
 
 const DOCS_RAW_FIELDS = [
@@ -103,8 +108,10 @@ const DOCS_RAW_FIELDS = [
   'level_location',
   'document_type',
   'organisation_raw',
+  'subcontractor_name',
   'hdec_pic_name',
   'hdec_eng_name',
+  'cycle_progress',
   'aconex_status',
   'current_status',
   'is_submitted',
@@ -116,14 +123,17 @@ const DOCS_RAW_FIELDS = [
   'sub1_planned_date',
   'sub1_submission_date',
   'sub1_approval_date',
+  'sub1_actual_response_date',
   'sub1_approval_status',
   'sub2_planned_date',
   'sub2_submission_date',
   'sub2_approval_date',
+  'sub2_actual_response_date',
   'sub2_approval_status',
   'sub3_planned_date',
   'sub3_submission_date',
   'sub3_approval_date',
+  'sub3_actual_response_date',
   'sub3_approval_status',
   'remarks',
   'risk',
@@ -140,6 +150,7 @@ const TEXT_FILTER_FIELDS = new Set([
   'level_location',
   'transmittal_number',
   'organisation_raw',
+  'subcontractor_name',
   'remarks',
 ]);
 
@@ -150,12 +161,15 @@ const DATE_FILTER_FIELDS = new Set([
   'sub1_planned_date',
   'sub1_submission_date',
   'sub1_approval_date',
+  'sub1_actual_response_date',
   'sub2_planned_date',
   'sub2_submission_date',
   'sub2_approval_date',
+  'sub2_actual_response_date',
   'sub3_planned_date',
   'sub3_submission_date',
   'sub3_approval_date',
+  'sub3_actual_response_date',
   'updated_at',
   'created_at',
 ]);
@@ -164,8 +178,8 @@ const NUMERIC_FIELDS = new Set(['days_due']);
 
 const RAW_SEARCH_FIELDS: (keyof DocsRawRow)[] = [
   'document_no', 'revision', 'title', 'discipline', 'sheet_name', 'series',
-  'level_location', 'document_type', 'organisation_raw', 'aconex_status',
-  'current_status', 'transmittal_number', 'remarks',
+  'level_location', 'document_type', 'organisation_raw', 'subcontractor_name',
+  'aconex_status', 'current_status', 'transmittal_number', 'remarks',
   'hdec_pic_name', 'hdec_eng_name',
   'sub1_approval_status', 'sub2_approval_status', 'sub3_approval_status',
 ];
