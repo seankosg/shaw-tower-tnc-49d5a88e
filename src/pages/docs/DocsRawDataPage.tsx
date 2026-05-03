@@ -37,11 +37,14 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useAppSetting, useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
+import { useLatestDocsDataDate } from '@/hooks/useLatestDocsDataDate';
 import { computeRisk } from '@/lib/docs-risk';
 import { getTradeFromSheetName, TRADE_OPTIONS } from '@/lib/docs-trade';
 import { exportDocsRawToExcel } from '@/lib/docs-excel-export';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import { DocsBulkEditBar } from '@/components/raw-data/DocsBulkEditBar';
+import { DocsCycleProgress } from '@/components/docs/DocsCycleProgress';
+import { computeOverallStatus } from '@/lib/docs-status';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
@@ -434,12 +437,15 @@ export default function DocsRawDataPage() {
     })();
   }, []);
 
-  // Augment rows with derived trade + risk
+  const { dataDate } = useLatestDocsDataDate('as_built');
+
+  // Augment rows with derived trade + risk + overall status (v2)
   const augmentedItems = useMemo<DocsRawRow[]>(() => items.map((r) => ({
     ...r,
     trade: getTradeFromSheetName(r.sheet_name) === '—' ? '' : getTradeFromSheetName(r.sheet_name) as string,
     risk: computeRisk(r.is_submitted, scDateMap[r.project_id], leadDays),
-  })), [items, scDateMap, leadDays]);
+    overall_status: computeOverallStatus(r as any, dataDate),
+  })), [items, scDateMap, leadDays, dataDate]);
 
   // ─── State persistence (localStorage) ───
   useEffect(() => {
@@ -620,6 +626,9 @@ export default function DocsRawDataPage() {
               : 'bg-green-100 text-green-800 hover:bg-green-100';
             return <Badge className={cn(cls, 'text-[10px]')}>{r.toUpperCase()}</Badge>;
           }
+          if (field === 'cycle_progress') {
+            return <DocsCycleProgress drawing={row.original as any} dataDate={dataDate} />;
+          }
           if (DATE_FILTER_FIELDS.has(field)) {
             return formatDdMmm(value ? String(value).slice(0, 10) : null);
           }
@@ -632,7 +641,7 @@ export default function DocsRawDataPage() {
     });
 
     return [selectColumn, ...dataColumns];
-  }, [getLabel, optionFields]);
+  }, [getLabel, optionFields, dataDate]);
 
   const columnVisibility = useMemo<VisibilityState>(() => {
     const v: VisibilityState = { __select: true };
