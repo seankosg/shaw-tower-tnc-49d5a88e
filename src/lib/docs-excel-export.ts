@@ -21,12 +21,15 @@ const DATE_FIELDS = new Set([
   'sub1_planned_date',
   'sub1_submission_date',
   'sub1_approval_date',
+  'sub1_actual_response_date',
   'sub2_planned_date',
   'sub2_submission_date',
   'sub2_approval_date',
+  'sub2_actual_response_date',
   'sub3_planned_date',
   'sub3_submission_date',
   'sub3_approval_date',
+  'sub3_actual_response_date',
 ]);
 
 const TIMESTAMP_FIELDS = new Set(['updated_at', 'created_at']);
