@@ -269,6 +269,10 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
     await parseAndApply(id, target.file, sheets);
   }, [parseAndApply]);
 
+  const setFileDataDate = useCallback((id: string, dataDate: string) => {
+    setFiles((cur) => cur.map((f) => f.id === id ? { ...f, dataDate } : f));
+  }, []);
+
   const startImport = useCallback(async () => {
     if (isRunning) return;
     const ready = files.filter((f) => f.status === 'ready' && f.parsed && f.parsed.length > 0);
