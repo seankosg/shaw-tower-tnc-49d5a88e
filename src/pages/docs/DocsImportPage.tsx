@@ -28,7 +28,7 @@ function formatSize(bytes: number) {
 export default function DocsImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { files, isRunning, addFiles, removeFile, clearAll, startImport } = useDocsImport();
+  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate } = useDocsImport();
   const { docs } = useModuleStatus();
   const { isAdmin } = useAuth();
   const moduleActuallyPaused = !docs.enabled;
