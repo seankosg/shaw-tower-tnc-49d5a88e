@@ -50,11 +50,16 @@ const DEFECT_FIELDS = [
   'work_type','subcontractor_issue_no','subcontractor_issue_source',
 ] as const;
 
-// Docs / As-Built (drawings via Aconex)
+// Docs / As-Built (drawings via Aconex) — v2 schema (3 cycles + actual response + subcontractor)
 const DOCS_AS_BUILT_FIELDS = [
   'document_no','title','revision','discipline','document_type',
-  'organisation_raw','aconex_status','submitted_date','approved_date',
-  'is_submitted','remarks',
+  'series','level_location','sequential_no',
+  'organisation_raw','subcontractor_name','current_status',
+  'sub1_planned_date','sub1_submission_date','sub1_approval_date','sub1_actual_response_date','sub1_approval_status',
+  'sub2_planned_date','sub2_submission_date','sub2_approval_date','sub2_actual_response_date','sub2_approval_status',
+  'sub3_planned_date','sub3_submission_date','sub3_approval_date','sub3_actual_response_date','sub3_approval_status',
+  'transmittal_number','transmittal_due_date','days_due',
+  'hdec_pic_name','hdec_eng_name','remarks',
 ] as const;
 
 // Docs / Warranty (warranty deed workflow)
