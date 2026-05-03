@@ -233,6 +233,7 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
       status: 'parsing',
       progress: 0,
       parsedCount: 0,
+      dataDate: todayIso(),
     }));
     setFiles((cur) => [...cur, ...next]);
 
