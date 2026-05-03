@@ -496,7 +496,7 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
   }, [files, isRunning, toast, user]);
 
   return (
-    <DocsImportContext.Provider value={{ files, isRunning, addFiles, removeFile, clearAll, setFileSheets, startImport }}>
+    <DocsImportContext.Provider value={{ files, isRunning, addFiles, removeFile, clearAll, setFileSheets, setFileDataDate, startImport }}>
       {children}
     </DocsImportContext.Provider>
   );
