@@ -40,6 +40,7 @@ import DocsRawDataPage from "./pages/docs/DocsRawDataPage";
 import DocsImportPage from "./pages/docs/DocsImportPage";
 import DocsExportPage from "./pages/docs/DocsExportPage";
 import DocsDrawingDetailPage from "./pages/docs/DocsDrawingDetailPage";
+import DocsImportLogsPage from "./pages/docs/DocsImportLogsPage";
 import { useHeaderMappingsSync } from "@/hooks/useHeaderMappings";
 import { loadHeaderMappingsCache } from "@/lib/header-mappings-cache";
 import { useCustomFieldsSync } from "@/hooks/useCustomFields";
@@ -116,6 +117,7 @@ const App = () => (
                 <Route path="/docs/dashboard" element={<DocsDashboardPage />} />
                 <Route path="/docs/raw-data" element={<DocsRawDataPage />} />
                 <Route path="/docs/import" element={<DocsImportPage />} />
+                <Route path="/docs/import/logs" element={<DocsImportLogsPage />} />
                 <Route path="/docs/export" element={<DocsExportPage />} />
                 <Route path="/docs/org-mapping" element={<Navigate to="/admin" replace />} />
                 <Route path="/docs/:id" element={<DocsDrawingDetailPage />} />

@@ -7,6 +7,7 @@ import {
   parseDocsExcel,
   type ParsedDocsRow,
 } from '@/lib/docs-import-parser';
+import { buildFieldLog, classifyChange, type PendingFieldLog } from '@/lib/import-field-log';
 
 const CONCURRENCY = 8;
 
@@ -335,12 +336,31 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
 
         const counters = { inserted: 0, updated: 0, skipped: 0, rejected: 0, unmatched: new Set<string>() };
         const rowLogs: any[] = [];
+        const fieldLogsByRow = new Map<number | null, PendingFieldLog[]>();
         const rejectSamples: DocsRejectSample[] = [];
         let processed = 0;
+
+        // Fields that participate in field-level diff logging.
+        // We log raw_payload separately as 'info' only on insert (too noisy on update).
+        const TRACKED_FIELDS = [
+          'revision', 'title', 'organisation_raw', 'subcontractor_id', 'subcontractor_name',
+          'discipline', 'document_type', 'series', 'level_location', 'sequential_no',
+          'current_status', 'aconex_status', 'is_submitted',
+          'submitted_date', 'approved_date',
+          'sub1_planned_date', 'sub1_submission_date', 'sub1_approval_date', 'sub1_approval_status', 'sub1_actual_response_date',
+          'sub2_planned_date', 'sub2_submission_date', 'sub2_approval_date', 'sub2_approval_status', 'sub2_actual_response_date',
+          'sub3_planned_date', 'sub3_submission_date', 'sub3_approval_date', 'sub3_approval_status', 'sub3_actual_response_date',
+          'transmittal_number', 'transmittal_due_date', 'days_due',
+          'remarks', 'hdec_pic_name', 'hdec_eng_name',
+        ];
 
         await runWithConcurrency(f.parsed!, async (row) => {
           const subId = resolveSubcontractorId(row.organisation_raw, orgMaps);
           if (row.organisation_raw && !subId) counters.unmatched.add(normalizeOrgKey(row.organisation_raw));
+
+          const pendingFields: PendingFieldLog[] = [];
+          const pushLog = (args: Parameters<typeof buildFieldLog>[1]) =>
+            pendingFields.push(buildFieldLog('docs', args));
 
           if (!row.document_no || !String(row.document_no).trim()) {
             counters.skipped++;
@@ -349,6 +369,9 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
               action_taken: 'skipped', reason_code: 'empty_document_no',
               reason_detail: 'Document No is empty',
             });
+            pushLog({ rawRowNo: row.rawRowNo, field: 'document_no', outcome: 'skipped_empty',
+              raw: null, code: 'empty_document_no', detail: 'Document No is empty' });
+            fieldLogsByRow.set(row.rawRowNo, pendingFields);
             processed++;
             return;
           }
@@ -408,6 +431,28 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
               if (error) throw error;
               counters.updated++;
               rowLogs.push({ upload_id: batchId, raw_row_no: row.rawRowNo, document_no: row.document_no, action_taken: 'updated' });
+
+              // Diff vs existing.raw_payload (best effort — raw row payload from prior import).
+              const prev: any = existing.raw_payload || {};
+              for (const fname of TRACKED_FIELDS) {
+                const incoming = (payload as any)[fname];
+                const previous = prev[fname] ?? null;
+                const cls = classifyChange(incoming, previous);
+                if (cls === 'empty') continue;
+                if (cls === 'unchanged') {
+                  pushLog({ rawRowNo: row.rawRowNo, field: fname, outcome: 'unchanged', raw: incoming, applied: incoming, previous });
+                } else {
+                  // Auto-fill default for subcontractor_name when 'TBA' came from parser default.
+                  const isTbaDefault = fname === 'subcontractor_name' && incoming === 'TBA';
+                  pushLog({
+                    rawRowNo: row.rawRowNo, field: fname,
+                    outcome: isTbaDefault ? 'auto_filled' : 'applied',
+                    raw: incoming, applied: incoming, previous,
+                    code: isTbaDefault ? 'default_tba' : null,
+                    detail: isTbaDefault ? 'Subcontractor not provided — defaulted to TBA' : null,
+                  });
+                }
+              }
             } else {
               const { error } = await (supabase as any)
                 .from('docs_drawings')
@@ -415,6 +460,19 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
               if (error) throw error;
               counters.inserted++;
               rowLogs.push({ upload_id: batchId, raw_row_no: row.rawRowNo, document_no: row.document_no, action_taken: 'inserted' });
+
+              for (const fname of TRACKED_FIELDS) {
+                const incoming = (payload as any)[fname];
+                if (incoming === null || incoming === undefined || incoming === '') continue;
+                const isTbaDefault = fname === 'subcontractor_name' && incoming === 'TBA';
+                pushLog({
+                  rawRowNo: row.rawRowNo, field: fname,
+                  outcome: isTbaDefault ? 'auto_filled' : 'applied',
+                  raw: incoming, applied: incoming,
+                  code: isTbaDefault ? 'default_tba' : null,
+                  detail: isTbaDefault ? 'Subcontractor not provided — defaulted to TBA' : null,
+                });
+              }
             }
           } catch (err: any) {
             counters.rejected++;
@@ -424,10 +482,13 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
               upload_id: batchId, raw_row_no: row.rawRowNo, document_no: row.document_no,
               action_taken: 'rejected', reason_code: e.code ?? 'db_error', reason_detail: detail,
             });
+            pushLog({ rawRowNo: row.rawRowNo, field: '__row__', outcome: 'rejected_invalid',
+              raw: row.document_no, code: e.code ?? 'db_error', detail });
             if (rejectSamples.length < 5) {
               rejectSamples.push({ rawRowNo: row.rawRowNo, documentNo: row.document_no, reasonCode: e.code, reasonDetail: detail });
             }
           }
+          fieldLogsByRow.set(row.rawRowNo, pendingFields);
           processed++;
           if (processed % 25 === 0 || processed === f.parsed!.length) {
             const pct = Math.round((processed / f.parsed!.length) * 100);
@@ -440,6 +501,32 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
             .from('docs_upload_row_logs')
             .insert(rowLogs.slice(i, i + 500));
           if (logErr) console.warn('docs_upload_row_logs insert failed:', logErr);
+        }
+
+        // Flatten field logs and bulk insert into shared import_field_logs (kind=docs).
+        const allFieldLogs: any[] = [];
+        for (const arr of fieldLogsByRow.values()) {
+          for (const fl of arr) {
+            allFieldLogs.push({
+              upload_id: batchId,
+              kind: 'docs',
+              raw_row_no: fl.raw_row_no,
+              field_name: fl.field_name,
+              outcome: fl.outcome,
+              raw_value: fl.raw_value,
+              applied_value: fl.applied_value,
+              previous_value: fl.previous_value,
+              reason_code: fl.reason_code,
+              reason_detail: fl.reason_detail,
+              created_by: user?.id ?? null,
+            });
+          }
+        }
+        for (let i = 0; i < allFieldLogs.length; i += 500) {
+          const { error: flErr } = await (supabase as any)
+            .from('import_field_logs')
+            .insert(allFieldLogs.slice(i, i + 500));
+          if (flErr) console.warn('import_field_logs (docs) insert failed:', flErr);
         }
 
         await (supabase as any)
