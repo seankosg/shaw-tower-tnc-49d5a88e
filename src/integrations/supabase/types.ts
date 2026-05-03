@@ -925,19 +925,23 @@ export type Database = {
           sheet_name: string | null
           source_upload_id: string | null
           sub_module: string
+          sub1_actual_response_date: string | null
           sub1_approval_date: string | null
           sub1_approval_status: string | null
           sub1_planned_date: string | null
           sub1_submission_date: string | null
+          sub2_actual_response_date: string | null
           sub2_approval_date: string | null
           sub2_approval_status: string | null
           sub2_planned_date: string | null
           sub2_submission_date: string | null
+          sub3_actual_response_date: string | null
           sub3_approval_date: string | null
           sub3_approval_status: string | null
           sub3_planned_date: string | null
           sub3_submission_date: string | null
           subcontractor_id: string | null
+          subcontractor_name: string | null
           submitted_date: string | null
           title: string | null
           transmittal_due_date: string | null
@@ -974,19 +978,23 @@ export type Database = {
           sheet_name?: string | null
           source_upload_id?: string | null
           sub_module?: string
+          sub1_actual_response_date?: string | null
           sub1_approval_date?: string | null
           sub1_approval_status?: string | null
           sub1_planned_date?: string | null
           sub1_submission_date?: string | null
+          sub2_actual_response_date?: string | null
           sub2_approval_date?: string | null
           sub2_approval_status?: string | null
           sub2_planned_date?: string | null
           sub2_submission_date?: string | null
+          sub3_actual_response_date?: string | null
           sub3_approval_date?: string | null
           sub3_approval_status?: string | null
           sub3_planned_date?: string | null
           sub3_submission_date?: string | null
           subcontractor_id?: string | null
+          subcontractor_name?: string | null
           submitted_date?: string | null
           title?: string | null
           transmittal_due_date?: string | null
@@ -1023,19 +1031,23 @@ export type Database = {
           sheet_name?: string | null
           source_upload_id?: string | null
           sub_module?: string
+          sub1_actual_response_date?: string | null
           sub1_approval_date?: string | null
           sub1_approval_status?: string | null
           sub1_planned_date?: string | null
           sub1_submission_date?: string | null
+          sub2_actual_response_date?: string | null
           sub2_approval_date?: string | null
           sub2_approval_status?: string | null
           sub2_planned_date?: string | null
           sub2_submission_date?: string | null
+          sub3_actual_response_date?: string | null
           sub3_approval_date?: string | null
           sub3_approval_status?: string | null
           sub3_planned_date?: string | null
           sub3_submission_date?: string | null
           subcontractor_id?: string | null
+          subcontractor_name?: string | null
           submitted_date?: string | null
           title?: string | null
           transmittal_due_date?: string | null
