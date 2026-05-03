@@ -437,20 +437,32 @@ export async function parseDocsExcel(
       let discipline = struct.discipline ?? null;
       if (!discipline) discipline = sheetDiscipline;
 
-      // Aconex status fallback (back-compat field): prefer current_status, then sub1/2/3 approval status.
+      // v2: normalize cycle approval statuses to A/B/C/null only.
+      const sub1Status = normalizeApprovalStatus(struct.sub1_approval_status ?? null);
+      const sub2Status = normalizeApprovalStatus(struct.sub2_approval_status ?? null);
+      const sub3Status = normalizeApprovalStatus(struct.sub3_approval_status ?? null);
+
+      // Aconex status fallback (back-compat field): prefer current_status, then normalized cycle status.
       const aconexStatus = struct.current_status
-        ?? struct.sub1_approval_status
-        ?? struct.sub2_approval_status
-        ?? struct.sub3_approval_status
+        ?? sub1Status
+        ?? sub2Status
+        ?? sub3Status
         ?? null;
 
+      // Back-compat is_submitted: any cycle reached A/B/C OR any submission date set.
       const isSubmitted =
-        isApprovedStatus(struct.current_status ?? null)
-        || isApprovedStatus(struct.sub1_approval_status ?? null)
-        || isApprovedStatus(struct.sub2_approval_status ?? null)
-        || isApprovedStatus(struct.sub3_approval_status ?? null)
+        sub1Status != null
+        || sub2Status != null
+        || sub3Status != null
         || !!struct.sub1_submission_date
-        || !!struct.sub1_approval_date;
+        || !!struct.sub2_submission_date
+        || !!struct.sub3_submission_date;
+
+      // v2: subcontractor_name defaults to 'TBA' if Excel has no value.
+      const subcontractorName =
+        struct.subcontractor_name && String(struct.subcontractor_name).trim()
+          ? String(struct.subcontractor_name).trim()
+          : 'TBA';
 
       rows.push({
         rawRowNo: r + 1,
@@ -470,15 +482,15 @@ export async function parseDocsExcel(
         sub1_planned_date: struct.sub1_planned_date ?? null,
         sub1_submission_date: struct.sub1_submission_date ?? null,
         sub1_approval_date: struct.sub1_approval_date ?? null,
-        sub1_approval_status: struct.sub1_approval_status ?? null,
+        sub1_approval_status: sub1Status,
         sub2_planned_date: struct.sub2_planned_date ?? null,
         sub2_submission_date: struct.sub2_submission_date ?? null,
         sub2_approval_date: struct.sub2_approval_date ?? null,
-        sub2_approval_status: struct.sub2_approval_status ?? null,
+        sub2_approval_status: sub2Status,
         sub3_planned_date: struct.sub3_planned_date ?? null,
         sub3_submission_date: struct.sub3_submission_date ?? null,
         sub3_approval_date: struct.sub3_approval_date ?? null,
-        sub3_approval_status: struct.sub3_approval_status ?? null,
+        sub3_approval_status: sub3Status,
         submitted_date: struct.sub1_submission_date ?? null,
         approved_date: struct.sub1_approval_date ?? null,
         transmittal_number: struct.transmittal_number ?? null,
@@ -487,6 +499,7 @@ export async function parseDocsExcel(
         remarks: struct.remarks ?? null,
         hdec_pic_name: struct.hdec_pic_name ?? null,
         hdec_eng_name: struct.hdec_eng_name ?? null,
+        subcontractor_name: subcontractorName,
         raw_payload: payload,
       });
       sheetRowCount++;
