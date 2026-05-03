@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { normalizeDate } from '@/lib/defect-parser';
+import { normalizeApprovalStatus } from '@/lib/docs-status';
 
 /**
  * Docs (As-Built Drawings) Excel parser.
@@ -57,6 +58,8 @@ export interface ParsedDocsRow {
   // HDEC personnel (planned for future Excel column; nullable today)
   hdec_pic_name: string | null;
   hdec_eng_name: string | null;
+  // Subcontractor (user-managed; not in Excel — defaults to 'TBA')
+  subcontractor_name: string | null;
   // Misc
   remarks: string | null;
   raw_payload: Record<string, unknown>;
@@ -77,7 +80,8 @@ type FieldKey =
   | 'sub2_planned_date' | 'sub2_submission_date' | 'sub2_approval_date' | 'sub2_approval_status'
   | 'sub3_planned_date' | 'sub3_submission_date' | 'sub3_approval_date' | 'sub3_approval_status'
   | 'transmittal_number' | 'transmittal_due_date' | 'days_due'
-  | 'hdec_pic_name' | 'hdec_eng_name';
+  | 'hdec_pic_name' | 'hdec_eng_name'
+  | 'subcontractor_name';
 
 /** Canonical alias map for single-row headers (no submission-group context). */
 const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
@@ -156,6 +160,10 @@ const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
   'hdec eng': 'hdec_eng_name',
   'hdec engineer': 'hdec_eng_name',
   'hdec engineering': 'hdec_eng_name',
+  // Subcontractor (user-managed)
+  'sub-contractor': 'subcontractor_name',
+  'sub contractor': 'subcontractor_name',
+  'subcontractor name': 'subcontractor_name',
   // skip pure index column
   's. no.': 'skip',
   's. no': 'skip',
@@ -215,6 +223,7 @@ function mapHeader(header: string): FieldKey | 'skip' | null {
   if (norm.includes('sequential')) return 'sequential_no';
   if (norm.includes('hdec') && (norm.includes('pic') || norm.includes('person'))) return 'hdec_pic_name';
   if (norm.includes('hdec') && norm.includes('eng')) return 'hdec_eng_name';
+  if (norm.includes('sub') && norm.includes('contractor')) return 'subcontractor_name';
   return null;
 }
 
