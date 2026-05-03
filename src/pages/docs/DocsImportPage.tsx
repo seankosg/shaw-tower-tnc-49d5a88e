@@ -60,11 +60,16 @@ export default function DocsImportPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Docs Import — As-Built Drawings</h1>
-        <p className="text-sm text-muted-foreground">
-          Upload Aconex / register Excel files. Only sheets whose name contains <span className="font-mono">"register"</span> are imported; every column header (including 2-row banded Submission 1/2/3 headers) is mapped automatically.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Docs Import — As-Built Drawings</h1>
+          <p className="text-sm text-muted-foreground">
+            Upload Aconex / register Excel files. Only sheets whose name contains <span className="font-mono">"register"</span> are imported; every column header (including 2-row banded Submission 1/2/3 headers) is mapped automatically.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => navigate('/docs/import/logs')}>
+          View Import Logs
+        </Button>
       </div>
 
       {moduleActuallyPaused && (
