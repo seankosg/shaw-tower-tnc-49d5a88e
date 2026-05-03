@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, Lock, AlertTriangle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { useDocsImport, type DocsFileStatus } from '@/contexts/DocsImportContext';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,7 +28,7 @@ function formatSize(bytes: number) {
 export default function DocsImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { files, isRunning, addFiles, removeFile, clearAll, startImport } = useDocsImport();
+  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate } = useDocsImport();
   const { docs } = useModuleStatus();
   const { isAdmin } = useAuth();
   const moduleActuallyPaused = !docs.enabled;
@@ -141,6 +142,17 @@ export default function DocsImportPage() {
                           {f.sheetNames && ` · ${f.sheetNames.length} sheet(s): ${f.sheetNames.join(', ')}`}
                           {f.parsedCount > 0 && ` · ${f.parsedCount} rows parsed`}
                         </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="whitespace-nowrap text-xs text-muted-foreground">Data Date:</span>
+                          <Input
+                            type="date"
+                            value={f.dataDate || ''}
+                            onChange={(e) => setFileDataDate(f.id, e.target.value)}
+                            disabled={isRunning || f.status === 'done' || f.status === 'failed'}
+                            className="h-7 w-[150px] text-xs"
+                          />
+                          <span className="text-[11px] text-muted-foreground">Reference "today" for cycle delay calculation.</span>
+                        </div>
                         {f.error && (
                           <div className="mt-1 rounded border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
                             <p className="font-medium">⚠ {f.error}</p>

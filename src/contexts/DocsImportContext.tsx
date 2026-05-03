@@ -26,6 +26,8 @@ export interface DocsImportFile {
   size: number;
   status: DocsFileStatus;
   progress: number;
+  /** Reference "today" used for cycle delay calculations. Defaults to today; user-editable. */
+  dataDate?: string;
   error?: string;
   errorCode?: string;
   errorDetails?: string;
@@ -49,6 +51,10 @@ export interface DocsImportFile {
   };
 }
 
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function fmtSupabaseError(err: any): { message: string; code?: string; details?: string; hint?: string } {
   if (!err) return { message: 'Unknown error' };
   if (err instanceof Error) return { message: err.message };
@@ -67,6 +73,7 @@ interface DocsImportContextValue {
   removeFile: (id: string) => void;
   clearAll: () => void;
   setFileSheets: (id: string, sheets: string[]) => Promise<void>;
+  setFileDataDate: (id: string, dataDate: string) => void;
   startImport: () => Promise<void>;
 }
 
@@ -226,6 +233,7 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
       status: 'parsing',
       progress: 0,
       parsedCount: 0,
+      dataDate: todayIso(),
     }));
     setFiles((cur) => [...cur, ...next]);
 
@@ -260,6 +268,10 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
     if (!target) return;
     await parseAndApply(id, target.file, sheets);
   }, [parseAndApply]);
+
+  const setFileDataDate = useCallback((id: string, dataDate: string) => {
+    setFiles((cur) => cur.map((f) => f.id === id ? { ...f, dataDate } : f));
+  }, []);
 
   const startImport = useCallback(async () => {
     if (isRunning) return;
@@ -309,7 +321,7 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
             sub_module: 'as_built',
             uploaded_file_name: f.name,
             uploaded_by: user?.id ?? null,
-            data_date: new Date().toISOString().slice(0, 10),
+            data_date: f.dataDate || todayIso(),
             total_rows: f.parsed!.length,
             status: 'processing',
           })
@@ -484,7 +496,7 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
   }, [files, isRunning, toast, user]);
 
   return (
-    <DocsImportContext.Provider value={{ files, isRunning, addFiles, removeFile, clearAll, setFileSheets, startImport }}>
+    <DocsImportContext.Provider value={{ files, isRunning, addFiles, removeFile, clearAll, setFileSheets, setFileDataDate, startImport }}>
       {children}
     </DocsImportContext.Provider>
   );
