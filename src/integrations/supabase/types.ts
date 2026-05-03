@@ -2829,6 +2829,7 @@ export type Database = {
         Returns: undefined
       }
       delete_defects_cascade: { Args: { _ids: string[] }; Returns: Json }
+      delete_docs_import_batch: { Args: { _batch_id: string }; Returns: Json }
       delete_subtests_cascade: { Args: { _ids: string[] }; Returns: Json }
       get_defect_comment_summary: {
         Args: { _defect_ids: string[] }
