@@ -142,6 +142,17 @@ export default function DocsImportPage() {
                           {f.sheetNames && ` · ${f.sheetNames.length} sheet(s): ${f.sheetNames.join(', ')}`}
                           {f.parsedCount > 0 && ` · ${f.parsedCount} rows parsed`}
                         </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="whitespace-nowrap text-xs text-muted-foreground">Data Date:</span>
+                          <Input
+                            type="date"
+                            value={f.dataDate || ''}
+                            onChange={(e) => setFileDataDate(f.id, e.target.value)}
+                            disabled={isRunning || f.status === 'done' || f.status === 'failed'}
+                            className="h-7 w-[150px] text-xs"
+                          />
+                          <span className="text-[11px] text-muted-foreground">Reference "today" for cycle delay calculation.</span>
+                        </div>
                         {f.error && (
                           <div className="mt-1 rounded border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
                             <p className="font-medium">⚠ {f.error}</p>
