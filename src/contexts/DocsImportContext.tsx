@@ -321,7 +321,7 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
             sub_module: 'as_built',
             uploaded_file_name: f.name,
             uploaded_by: user?.id ?? null,
-            data_date: new Date().toISOString().slice(0, 10),
+            data_date: f.dataDate || todayIso(),
             total_rows: f.parsed!.length,
             status: 'processing',
           })
