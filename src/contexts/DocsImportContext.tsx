@@ -26,6 +26,8 @@ export interface DocsImportFile {
   size: number;
   status: DocsFileStatus;
   progress: number;
+  /** Reference "today" used for cycle delay calculations. Defaults to today; user-editable. */
+  dataDate?: string;
   error?: string;
   errorCode?: string;
   errorDetails?: string;
@@ -47,6 +49,10 @@ export interface DocsImportFile {
     rejected: number;
     unmatchedOrgs: number;
   };
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function fmtSupabaseError(err: any): { message: string; code?: string; details?: string; hint?: string } {
