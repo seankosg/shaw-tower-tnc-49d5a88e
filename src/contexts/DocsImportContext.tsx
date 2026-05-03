@@ -7,6 +7,7 @@ import {
   parseDocsExcel,
   type ParsedDocsRow,
 } from '@/lib/docs-import-parser';
+import { buildFieldLog, classifyChange, valuesEqual, type PendingFieldLog } from '@/lib/import-field-log';
 
 const CONCURRENCY = 8;
 
