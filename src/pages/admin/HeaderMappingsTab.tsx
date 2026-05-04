@@ -349,6 +349,14 @@ export default function HeaderMappingsTab() {
             <Checkbox checked={showEmpty} onCheckedChange={(v) => setShowEmpty(v === true)} />
             Show empty fields
           </label>
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="outline" className="h-8" onClick={expandAll} title="Expand all">
+              <ChevronsUpDown className="h-3.5 w-3.5 mr-1" /> Expand all
+            </Button>
+            <Button size="sm" variant="outline" className="h-8" onClick={collapseAll} title="Collapse all">
+              <ChevronsDownUp className="h-3.5 w-3.5 mr-1" /> Collapse all
+            </Button>
+          </div>
           <div className="text-xs text-muted-foreground ml-auto">
             {moduleRows.length} alias{moduleRows.length === 1 ? '' : 'es'} · {visibleSections.length} group{visibleSections.length === 1 ? '' : 's'}
           </div>
