@@ -61,6 +61,8 @@ export interface ParsedDocsRow {
   hdec_eng_name: string | null;
   // Subcontractor (user-managed; not in Excel — defaults to 'TBA')
   subcontractor_name: string | null;
+  // Team (enum: Mech / Elec / Arch / Supp / Design)
+  team: string | null;
   // Misc
   remarks: string | null;
   raw_payload: Record<string, unknown>;
@@ -77,6 +79,7 @@ type FieldKey =
   | 'document_no' | 'revision' | 'title' | 'organisation_raw'
   | 'discipline' | 'document_type' | 'series' | 'level_location' | 'sequential_no'
   | 'trade'
+  | 'team'
   | 'current_status' | 'remarks'
   | 'sub1_planned_date' | 'sub1_submission_date' | 'sub1_approval_date' | 'sub1_approval_status'
   | 'sub2_planned_date' | 'sub2_submission_date' | 'sub2_approval_date' | 'sub2_approval_status'
@@ -126,6 +129,10 @@ const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
   'category': 'trade',
   'discipline category': 'trade',
   'trade category': 'trade',
+  // team
+  'team': 'team',
+  'team name': 'team',
+  'discipline team': 'team',
   // type / series / level
   'document type': 'document_type',
   'document/ drawing type': 'document_type',
@@ -244,6 +251,7 @@ function mapHeader(header: string): FieldKey | 'skip' | null {
   if (norm.includes('hdec') && (norm.includes('pic') || norm.includes('person'))) return 'hdec_pic_name';
   if (norm.includes('hdec') && norm.includes('eng')) return 'hdec_eng_name';
   if (norm.includes('sub') && norm.includes('contractor')) return 'subcontractor_name';
+  if (norm === 'team' || norm.endsWith(' team') || norm.startsWith('team ')) return 'team';
   // DB-driven mapping fallback (Admin-managed aliases)
   const dbMapped = getMappedField('docs', norm, 'as_built');
   if (dbMapped && dbMapped !== 'skip') return dbMapped as FieldKey;
