@@ -32,6 +32,7 @@ import EventLogTab from './admin/EventLogTab';
 import { ModuleControlTab } from './admin/ModuleControlTab';
 import HeaderMappingsTab from './admin/HeaderMappingsTab';
 import CustomFieldsTab from './admin/CustomFieldsTab';
+import { loadHeaderMappingsCache } from '@/lib/header-mappings-cache';
 import { UnmappedAliasQueue } from '@/components/admin/UnmappedAliasQueue';
 import { ChevronDown, ChevronRight, Search, AlertTriangle } from 'lucide-react';
 
@@ -2059,6 +2060,27 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
   const { toast } = useToast();
   const [fields, setFields] = useState<FieldCfg[]>([]);
   const [loading, setLoading] = useState(true);
+  const [aliasCounts, setAliasCounts] = useState<Record<string, { total: number; active: number }>>({});
+  const [pendingDisable, setPendingDisable] = useState<FieldCfg | null>(null);
+
+  // Map field_config table -> Header Mappings module key.
+  const moduleKey: 'tnc' | 'defect' | 'docs' =
+    table === 'field_config' ? 'tnc' : table === 'defect_field_config' ? 'defect' : 'docs';
+
+  const loadAliasCounts = async () => {
+    const { data } = await (supabase as any)
+      .from('import_header_mappings')
+      .select('target_field, is_active')
+      .eq('module', moduleKey);
+    const counts: Record<string, { total: number; active: number }> = {};
+    for (const r of (data ?? []) as Array<{ target_field: string; is_active: boolean }>) {
+      const c = counts[r.target_field] ?? { total: 0, active: 0 };
+      c.total += 1;
+      if (r.is_active) c.active += 1;
+      counts[r.target_field] = c;
+    }
+    setAliasCounts(counts);
+  };
 
   const load = async () => {
     setLoading(true);
@@ -2077,17 +2099,95 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
       }
       setFields(rows);
     }
+    await loadAliasCounts();
     setLoading(false);
   };
   useEffect(() => { load(); }, [table]);
 
-  const toggle = async (f: FieldCfg, key: 'is_enabled' | 'is_required') => {
+  /** Bump app_settings.header_mappings_version so other tabs/sessions reload parser cache. */
+  const bumpHeaderMappingsVersion = async () => {
+    const { data } = await (supabase as any)
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'header_mappings_version')
+      .maybeSingle();
+    const next = ((data?.value as number | null) ?? 0) + 1;
+    await (supabase as any)
+      .from('app_settings')
+      .upsert({ key: 'header_mappings_version', value: next }, { onConflict: 'key' });
+  };
+
+  /** Disable all aliases pointing at `target_field` for this module. */
+  const disableAliasesFor = async (fieldName: string): Promise<{ ok: boolean; affected: number; error?: string }> => {
+    const { data: rows, error: selErr } = await (supabase as any)
+      .from('import_header_mappings')
+      .select('id')
+      .eq('module', moduleKey)
+      .eq('target_field', fieldName)
+      .eq('is_active', true);
+    if (selErr) return { ok: false, affected: 0, error: selErr.message };
+    const ids = (rows ?? []).map((r: { id: string }) => r.id);
+    if (ids.length === 0) return { ok: true, affected: 0 };
+    const { error: updErr } = await (supabase as any)
+      .from('import_header_mappings')
+      .update({ is_active: false })
+      .in('id', ids);
+    if (updErr) return { ok: false, affected: 0, error: updErr.message };
+    return { ok: true, affected: ids.length };
+  };
+
+  const performToggle = async (f: FieldCfg, key: 'is_enabled' | 'is_required', cascade: boolean) => {
     const update = { is_enabled: f.is_enabled, is_required: f.is_required };
     update[key] = !f[key];
-    await (supabase as any).from(table).update(update).eq('id', f.id);
-    toast({ title: 'Field updated' });
+    const { error } = await (supabase as any).from(table).update(update).eq('id', f.id);
+    if (error) {
+      toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
+      load();
+      return;
+    }
+
+    if (cascade && key === 'is_enabled' && !update.is_enabled) {
+      // Cascade: disable all aliases pointing at this field.
+      const result = await disableAliasesFor(f.field_name);
+      if (!result.ok) {
+        toast({
+          title: 'Field disabled, but alias sync failed',
+          description: result.error,
+          variant: 'destructive',
+        });
+      } else {
+        await bumpHeaderMappingsVersion();
+        await loadHeaderMappingsCache(true).catch(() => {});
+        toast({
+          title: 'Field disabled',
+          description: result.affected > 0
+            ? `${result.affected} alias${result.affected === 1 ? '' : 'es'} also disabled in Header Mappings.`
+            : 'No active aliases needed updating.',
+        });
+      }
+    } else if (key === 'is_enabled' && update.is_enabled) {
+      toast({
+        title: 'Field enabled',
+        description: 'Aliases were not auto-enabled. Re-enable them in Header Mappings if needed.',
+      });
+    } else {
+      toast({ title: 'Field updated' });
+    }
     load();
   };
+
+  const toggle = async (f: FieldCfg, key: 'is_enabled' | 'is_required') => {
+    // If turning Visible OFF and there are aliases, prompt confirmation.
+    if (key === 'is_enabled' && f.is_enabled) {
+      const c = aliasCounts[f.field_name];
+      if (c && c.active > 0) {
+        setPendingDisable(f);
+        return;
+      }
+    }
+    performToggle(f, key, false);
+  };
+
 
   const updateName = async (f: FieldCfg, displayName: string) => {
     const value = displayName.trim();
@@ -2195,11 +2295,23 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">
-                    <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1.5 flex-wrap">
                       {f.field_name}
                       {f.field_name.startsWith('_meta_') && (
                         <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">Virtual</span>
                       )}
+                      {(() => {
+                        const c = aliasCounts[f.field_name];
+                        if (!c || c.total === 0) return null;
+                        return (
+                          <span
+                            className="rounded border px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-muted-foreground"
+                            title={`${c.active} active / ${c.total} total alias${c.total === 1 ? '' : 'es'} in Header Mappings`}
+                          >
+                            {c.active}/{c.total} alias{c.total === 1 ? '' : 'es'}
+                          </span>
+                        );
+                      })()}
                     </span>
                   </TableCell>
                   <TableCell><Input className="h-8 min-w-[180px]" defaultValue={f.display_name} onBlur={(e) => updateName(f, e.target.value)} /></TableCell>
@@ -2243,6 +2355,41 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
           </Table>
         </div>
       </CardContent>
+
+      <AlertDialog open={!!pendingDisable} onOpenChange={(v) => !v && setPendingDisable(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disable field and its aliases?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDisable && (() => {
+                const c = aliasCounts[pendingDisable.field_name];
+                const n = c?.active ?? 0;
+                return (
+                  <>
+                    Disabling <span className="font-mono">{pendingDisable.field_name}</span> will hide its column in Raw Data / List / Detail UI.
+                    {' '}It will also disable <strong>{n} active alias{n === 1 ? '' : 'es'}</strong> in Header Mappings,
+                    so those headers will be ignored on future imports. Continue?
+                  </>
+                );
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingDisable) {
+                  const target = pendingDisable;
+                  setPendingDisable(null);
+                  performToggle(target, 'is_enabled', true);
+                }
+              }}
+            >
+              Disable both
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
