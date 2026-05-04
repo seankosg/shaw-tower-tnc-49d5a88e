@@ -380,7 +380,8 @@ export default function HeaderMappingsTab() {
           >
             {visibleSections.map((section) => {
               const aliasCount = section.rows.length;
-              const systemCount = section.rows.filter((r) => r.is_system).length;
+              const sourceCount = section.rows.filter((r) => r.is_system).length;
+              const extraCount = aliasCount - sourceCount;
               const inactiveCount = section.rows.filter((r) => !r.is_active).length;
               return (
                 <AccordionItem
@@ -394,20 +395,10 @@ export default function HeaderMappingsTab() {
                         <span className={`font-mono text-sm ${section.kind === 'unmapped' ? 'text-amber-700 dark:text-amber-300 italic' : 'font-medium'}`}>
                           {section.label}
                         </span>
-                        {section.kind !== 'unmapped' && (
+                        {section.kind !== 'unmapped' && aliasCount > 0 && (
                           <Badge variant="secondary" className="text-[10px]">
-                            {aliasCount} alias{aliasCount === 1 ? '' : 'es'}
-                          </Badge>
-                        )}
-                        {systemCount > 0 && (
-                          <Badge variant="outline" className="text-[10px] gap-1">
-                            <Lock className="h-2.5 w-2.5" />
-                            {systemCount} system
-                          </Badge>
-                        )}
-                        {inactiveCount > 0 && (
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                            {inactiveCount} off
+                            {sourceCount} source · {extraCount} extra
+                            {inactiveCount > 0 ? ` · ${inactiveCount} off` : ''}
                           </Badge>
                         )}
                         {aliasCount === 0 && (
@@ -437,48 +428,70 @@ export default function HeaderMappingsTab() {
                         No aliases yet. Click "+ Alias" to add one.
                       </div>
                     ) : (
-                      <div className="divide-y border-t">
-                        {section.rows.map((row) => (
-                          <div
-                            key={row.id}
-                            className={`grid grid-cols-[20px_1fr_auto_auto_auto] items-center gap-3 py-1.5 px-1 ${row.is_active ? '' : 'opacity-50'}`}
-                          >
-                            <div>
-                              {row.is_system && <Lock className="h-3 w-3 text-muted-foreground" />}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="font-mono text-xs truncate">{row.header_alias}</div>
-                              {row.note && (
-                                <div className="text-[11px] text-muted-foreground truncate">{row.note}</div>
-                              )}
-                            </div>
-                            <Switch
-                              checked={row.is_active}
-                              onCheckedChange={() => toggleActive(row)}
-                              aria-label="Toggle active"
-                            />
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7"
-                              disabled={row.is_system}
-                              onClick={() => setEditTarget(row)}
-                              title={row.is_system ? 'System (locked)' : 'Edit'}
+                      <div className="border-t">
+                        {/* Column header */}
+                        <div className="grid grid-cols-[1.2fr_90px_1.8fr_auto_auto_auto] items-center gap-3 py-1.5 px-1 text-[10px] uppercase tracking-wide text-muted-foreground border-b">
+                          <div>System Field</div>
+                          <div>Kind</div>
+                          <div>Alias</div>
+                          <div className="text-center">On</div>
+                          <div></div>
+                          <div></div>
+                        </div>
+                        <div className="divide-y">
+                          {section.rows.map((row) => (
+                            <div
+                              key={row.id}
+                              className={`grid grid-cols-[1.2fr_90px_1.8fr_auto_auto_auto] items-center gap-3 py-1.5 px-1 ${row.is_active ? '' : 'opacity-50'}`}
                             >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7"
-                              disabled={row.is_system}
-                              onClick={() => removeRow(row)}
-                              title={row.is_system ? 'System (locked)' : 'Delete'}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ))}
+                              <div className="min-w-0 font-mono text-xs truncate" title={row.target_field}>
+                                {row.target_field}
+                              </div>
+                              <div>
+                                {row.is_system ? (
+                                  <Badge variant="outline" className="text-[10px] gap-1">
+                                    <Lock className="h-2.5 w-2.5" /> Source
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="secondary" className="text-[10px]">
+                                    Extra
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-mono text-xs truncate">{row.header_alias}</div>
+                                {row.note && (
+                                  <div className="text-[11px] text-muted-foreground truncate">{row.note}</div>
+                                )}
+                              </div>
+                              <Switch
+                                checked={row.is_active}
+                                onCheckedChange={() => toggleActive(row)}
+                                aria-label="Toggle active"
+                              />
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7"
+                                disabled={row.is_system}
+                                onClick={() => setEditTarget(row)}
+                                title={row.is_system ? 'System (locked)' : 'Edit'}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7"
+                                disabled={row.is_system}
+                                onClick={() => removeRow(row)}
+                                title={row.is_system ? 'System (locked)' : 'Delete'}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </AccordionContent>
