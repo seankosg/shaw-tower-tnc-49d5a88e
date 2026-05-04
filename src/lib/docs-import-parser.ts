@@ -145,6 +145,8 @@ const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
   // status (row-level)
   'status': 'current_status',
   'aconex status': 'current_status',
+  'overall status': 'current_status',
+  'overall': 'current_status',
   // remarks
   'remarks': 'remarks',
   'remark': 'remarks',
