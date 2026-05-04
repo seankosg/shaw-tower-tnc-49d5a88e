@@ -133,22 +133,33 @@ export function DocsBulkEditBar<TRow extends { id: string }>({
             </SelectContent>
           </Select>
 
-          {selectedField && selectedField.inputType === 'select' && (
+          {selectedField && (selectedField.inputType === 'select' || selectedField.inputType === 'boolean') && (
             <Select value={value} onValueChange={setValue}>
-              <SelectTrigger className="h-8 w-[200px] text-xs">
+              <SelectTrigger className="h-8 w-[220px] text-xs">
                 <SelectValue placeholder="Pick a value..." />
               </SelectTrigger>
               <SelectContent className="max-h-72">
                 <SelectItem value="__CLEAR__" className="text-xs italic text-muted-foreground">— Clear —</SelectItem>
-                {(selectedField.options ?? []).map((o) => (
-                  <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
-                ))}
+                {selectedField.inputType === 'boolean' ? (
+                  <>
+                    <SelectItem value="true" className="text-xs">Yes</SelectItem>
+                    <SelectItem value="false" className="text-xs">No</SelectItem>
+                  </>
+                ) : (
+                  (selectedField.options ?? []).map((o) => (
+                    <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           )}
 
           {selectedField && (selectedField.inputType === 'text' || selectedField.inputType === 'textarea') && (
             <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="New value (empty = clear)" className="h-8 w-[220px] text-xs" />
+          )}
+
+          {selectedField && selectedField.inputType === 'number' && (
+            <Input type="number" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Number (empty = clear)" className="h-8 w-[160px] text-xs" />
           )}
 
           {selectedField && selectedField.inputType === 'date' && (
