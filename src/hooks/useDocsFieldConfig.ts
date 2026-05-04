@@ -74,7 +74,7 @@ export function normalizeDocsSourceOrigin(value: string | null | undefined): 'hd
   return 'system';
 }
 
-export function useDocsFieldConfig() {
+export function useDocsFieldConfig(subModule: DocsSubModule = 'as_built') {
   const [fields, setFields] = useState<DocsFieldConfigRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -84,6 +84,7 @@ export function useDocsFieldConfig() {
       const { data } = await (supabase as any)
         .from('docs_field_config')
         .select('*')
+        .eq('sub_module', subModule)
         .order('sort_order', { ascending: true });
       if (!cancelled) {
         setFields((data ?? []) as DocsFieldConfigRow[]);
@@ -91,7 +92,7 @@ export function useDocsFieldConfig() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [subModule]);
 
   const fieldMap = useMemo(() => new Map(fields.map((field) => [field.field_name, field])), [fields]);
 
