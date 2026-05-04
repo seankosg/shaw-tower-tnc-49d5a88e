@@ -865,10 +865,12 @@ export type Database = {
           changed_at: string
           changed_by: string | null
           changed_field: string
-          drawing_id: string
+          drawing_id: string | null
           id: string
           new_value: string | null
           old_value: string | null
+          record_id: string | null
+          sub_module: string
           upload_id: string | null
         }
         Insert: {
@@ -876,10 +878,12 @@ export type Database = {
           changed_at?: string
           changed_by?: string | null
           changed_field: string
-          drawing_id: string
+          drawing_id?: string | null
           id?: string
           new_value?: string | null
           old_value?: string | null
+          record_id?: string | null
+          sub_module?: string
           upload_id?: string | null
         }
         Update: {
@@ -887,10 +891,12 @@ export type Database = {
           changed_at?: string
           changed_by?: string | null
           changed_field?: string
-          drawing_id?: string
+          drawing_id?: string | null
           id?: string
           new_value?: string | null
           old_value?: string | null
+          record_id?: string | null
+          sub_module?: string
           upload_id?: string | null
         }
         Relationships: []
@@ -1074,6 +1080,7 @@ export type Database = {
           original_header: string | null
           sort_order: number
           source_origin: string
+          sub_module: string
           visible_to_roles: Database["public"]["Enums"]["app_role"][] | null
         }
         Insert: {
@@ -1086,6 +1093,7 @@ export type Database = {
           original_header?: string | null
           sort_order?: number
           source_origin?: string
+          sub_module?: string
           visible_to_roles?: Database["public"]["Enums"]["app_role"][] | null
         }
         Update: {
@@ -1098,7 +1106,113 @@ export type Database = {
           original_header?: string | null
           sort_order?: number
           source_origin?: string
+          sub_module?: string
           visible_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Relationships: []
+      }
+      docs_omm: {
+        Row: {
+          approved_date: string | null
+          category: string | null
+          contract_doc: string | null
+          contractor_supplier: string | null
+          created_at: string
+          custom_payload: Json
+          data_source_type: string | null
+          draft_actual_date: string | null
+          draft_section: string | null
+          draft_target_date: string | null
+          hardcopy_required: string | null
+          hdec_eng_name: string | null
+          hdec_pic_name: string | null
+          id: string
+          is_active: boolean
+          project_id: string
+          raw_payload: Json
+          remarks: string | null
+          row_no: number | null
+          row_version: number
+          sheet_name: string | null
+          sn: string | null
+          softcopy_required: string | null
+          source_upload_id: string | null
+          subcontractor_name: string | null
+          submission_actual_date: string | null
+          submission_target_date: string | null
+          team: Database["public"]["Enums"]["team_type"] | null
+          trade: string | null
+          updated_at: string
+          updated_by: string | null
+          work_trade_material: string | null
+        }
+        Insert: {
+          approved_date?: string | null
+          category?: string | null
+          contract_doc?: string | null
+          contractor_supplier?: string | null
+          created_at?: string
+          custom_payload?: Json
+          data_source_type?: string | null
+          draft_actual_date?: string | null
+          draft_section?: string | null
+          draft_target_date?: string | null
+          hardcopy_required?: string | null
+          hdec_eng_name?: string | null
+          hdec_pic_name?: string | null
+          id?: string
+          is_active?: boolean
+          project_id: string
+          raw_payload?: Json
+          remarks?: string | null
+          row_no?: number | null
+          row_version?: number
+          sheet_name?: string | null
+          sn?: string | null
+          softcopy_required?: string | null
+          source_upload_id?: string | null
+          subcontractor_name?: string | null
+          submission_actual_date?: string | null
+          submission_target_date?: string | null
+          team?: Database["public"]["Enums"]["team_type"] | null
+          trade?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          work_trade_material?: string | null
+        }
+        Update: {
+          approved_date?: string | null
+          category?: string | null
+          contract_doc?: string | null
+          contractor_supplier?: string | null
+          created_at?: string
+          custom_payload?: Json
+          data_source_type?: string | null
+          draft_actual_date?: string | null
+          draft_section?: string | null
+          draft_target_date?: string | null
+          hardcopy_required?: string | null
+          hdec_eng_name?: string | null
+          hdec_pic_name?: string | null
+          id?: string
+          is_active?: boolean
+          project_id?: string
+          raw_payload?: Json
+          remarks?: string | null
+          row_no?: number | null
+          row_version?: number
+          sheet_name?: string | null
+          sn?: string | null
+          softcopy_required?: string | null
+          source_upload_id?: string | null
+          subcontractor_name?: string | null
+          submission_actual_date?: string | null
+          submission_target_date?: string | null
+          team?: Database["public"]["Enums"]["team_type"] | null
+          trade?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          work_trade_material?: string | null
         }
         Relationships: []
       }
@@ -1126,6 +1240,102 @@ export type Database = {
           raw_label?: string
           subcontractor_id?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      docs_spare_part: {
+        Row: {
+          category: string | null
+          created_at: string
+          custom_payload: Json
+          data_source_type: string | null
+          hdec_eng_name: string | null
+          hdec_pic_name: string | null
+          id: string
+          is_active: boolean
+          material: string | null
+          parent_item: string | null
+          project_id: string
+          raw_payload: Json
+          remarks: string | null
+          row_no: number | null
+          row_version: number
+          sheet_name: string | null
+          sn: string | null
+          source_upload_id: string | null
+          spares_quantity: string | null
+          spares_requirements: string | null
+          spec_ref: string | null
+          status: string | null
+          storage_area_required: string | null
+          subcontractor_name: string | null
+          team: Database["public"]["Enums"]["team_type"] | null
+          trade: string | null
+          unit: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          custom_payload?: Json
+          data_source_type?: string | null
+          hdec_eng_name?: string | null
+          hdec_pic_name?: string | null
+          id?: string
+          is_active?: boolean
+          material?: string | null
+          parent_item?: string | null
+          project_id: string
+          raw_payload?: Json
+          remarks?: string | null
+          row_no?: number | null
+          row_version?: number
+          sheet_name?: string | null
+          sn?: string | null
+          source_upload_id?: string | null
+          spares_quantity?: string | null
+          spares_requirements?: string | null
+          spec_ref?: string | null
+          status?: string | null
+          storage_area_required?: string | null
+          subcontractor_name?: string | null
+          team?: Database["public"]["Enums"]["team_type"] | null
+          trade?: string | null
+          unit?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          custom_payload?: Json
+          data_source_type?: string | null
+          hdec_eng_name?: string | null
+          hdec_pic_name?: string | null
+          id?: string
+          is_active?: boolean
+          material?: string | null
+          parent_item?: string | null
+          project_id?: string
+          raw_payload?: Json
+          remarks?: string | null
+          row_no?: number | null
+          row_version?: number
+          sheet_name?: string | null
+          sn?: string | null
+          source_upload_id?: string | null
+          spares_quantity?: string | null
+          spares_requirements?: string | null
+          spec_ref?: string | null
+          status?: string | null
+          storage_area_required?: string | null
+          subcontractor_name?: string | null
+          team?: Database["public"]["Enums"]["team_type"] | null
+          trade?: string | null
+          unit?: string | null
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }

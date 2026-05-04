@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { AppRole } from '@/types/enums';
 
+export type DocsSubModule = 'as_built' | 'omm' | 'warranty' | 'spare_part';
+
 export interface DocsFieldConfigRow {
   id: string;
   field_name: string;
@@ -11,6 +13,7 @@ export interface DocsFieldConfigRow {
   sort_order: number;
   original_header: string | null;
   source_origin: string;
+  sub_module: DocsSubModule;
   visible_to_roles: AppRole[] | null;
   editable_to_roles: AppRole[] | null;
 }
@@ -71,7 +74,7 @@ export function normalizeDocsSourceOrigin(value: string | null | undefined): 'hd
   return 'system';
 }
 
-export function useDocsFieldConfig() {
+export function useDocsFieldConfig(subModule: DocsSubModule = 'as_built') {
   const [fields, setFields] = useState<DocsFieldConfigRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -81,6 +84,7 @@ export function useDocsFieldConfig() {
       const { data } = await (supabase as any)
         .from('docs_field_config')
         .select('*')
+        .eq('sub_module', subModule)
         .order('sort_order', { ascending: true });
       if (!cancelled) {
         setFields((data ?? []) as DocsFieldConfigRow[]);
@@ -88,7 +92,7 @@ export function useDocsFieldConfig() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [subModule]);
 
   const fieldMap = useMemo(() => new Map(fields.map((field) => [field.field_name, field])), [fields]);
 

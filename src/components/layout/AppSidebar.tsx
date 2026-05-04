@@ -38,15 +38,12 @@ const defectNav = [
 
 const docsNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/docs/dashboard' },
-  { label: 'Raw Data - ABD', icon: FileText, path: '/docs/raw-data' },
+  { label: 'ABD', icon: FileText, path: '/docs/abd' },
+  { label: 'OMM', icon: FolderKanban, path: '/docs/omm' },
+  { label: 'Warranty', icon: ShieldCheck, path: '/docs/warranty' },
+  { label: 'Spare Part', icon: Package, path: '/docs/spare-part' },
   { label: 'Import', icon: Upload, path: '/docs/import' },
   { label: 'Export', icon: Download, path: '/docs/export' },
-];
-
-const docsComingSoon = [
-  { label: 'OMM Manuals', icon: FolderKanban },
-  { label: 'Warranty Docs', icon: ShieldCheck },
-  { label: 'Spare Parts', icon: Package },
 ];
 
 const adminNav = [
@@ -178,27 +175,18 @@ export function AppSidebar() {
                 {visibleDocs.map((item) => (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
-                      isActive={pathname === item.path || (item.path === '/docs/raw-data' && /^\/docs\/[^/]+$/.test(pathname))}
+                      isActive={
+                        pathname === item.path ||
+                        (item.path === '/docs/abd' && (pathname.startsWith('/docs/abd/') || pathname.startsWith('/docs/raw-data') || /^\/docs\/(?!dashboard|abd|omm|warranty|spare-part|import|export|org-mapping)[^/]+$/.test(pathname))) ||
+                        (item.path === '/docs/omm' && pathname.startsWith('/docs/omm/')) ||
+                        (item.path === '/docs/spare-part' && pathname.startsWith('/docs/spare-part/')) ||
+                        (item.path === '/docs/warranty' && pathname.startsWith('/docs/warranty/'))
+                      }
                       onClick={() => navigate(getRememberedRoute(item.path))}
                       tooltip={item.label}
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-                {docsComingSoon.map((item) => (
-                  <SidebarMenuItem key={item.label}>
-                    <SidebarMenuButton
-                      disabled
-                      tooltip={`${item.label} (Coming soon)`}
-                      className="cursor-not-allowed opacity-50"
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.label}</span>
-                      <Badge variant="outline" className="ml-auto h-4 border-muted-foreground/30 px-1 text-[9px] font-normal">
-                        Soon
-                      </Badge>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
