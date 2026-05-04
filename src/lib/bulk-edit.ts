@@ -178,6 +178,50 @@ export async function applyBulkUpdate(req: BulkUpdateRequest): Promise<BulkUpdat
         result.errors.push({ id: '(change-log)', message: logErr.message });
       }
     }
+
+    // 4) Docs-only: when bulk-setting subN_approval_status to 'A',
+    //    clear subsequent cycles' data on the same rows.
+    if (table === 'docs_drawings' && updatedIds.size > 0) {
+      const cycleMatch = /^sub([123])_approval_status$/.exec(field);
+      if (cycleMatch && normalizeApprovalStatus(value as any) === 'A') {
+        const setCycle = parseInt(cycleMatch[1], 10) as 1 | 2 | 3;
+        const targetCycles = setCycle === 1 ? [2, 3] : setCycle === 2 ? [3] : [];
+        if (targetCycles.length > 0) {
+          const cleanupPayload: Record<string, null> = {};
+          for (const n of targetCycles) {
+            for (const f of CYCLE_DATA_FIELDS) cleanupPayload[`sub${n}_${f}`] = null;
+          }
+          const ids = [...updatedIds];
+          // Read current values for diff/log
+          const { data: beforeRows } = await (supabase as any)
+            .from('docs_drawings')
+            .select(['id', ...Object.keys(cleanupPayload)].join(', '))
+            .in('id', ids);
+          await (supabase as any)
+            .from('docs_drawings')
+            .update({ ...cleanupPayload, updated_by: userId })
+            .in('id', ids);
+          const cleanupLogs: any[] = [];
+          for (const row of (beforeRows ?? []) as any[]) {
+            for (const f of Object.keys(cleanupPayload)) {
+              const oldVal = row[f];
+              if (oldVal == null || oldVal === '') continue;
+              cleanupLogs.push({
+                drawing_id: row.id,
+                changed_field: f,
+                old_value: String(oldVal),
+                new_value: null,
+                changed_by: userId,
+                change_source: 'auto_close_cleanup',
+              });
+            }
+          }
+          if (cleanupLogs.length > 0) {
+            await (supabase as any).from('docs_change_log').insert(cleanupLogs);
+          }
+        }
+      }
+    }
   }
 
   return result;
