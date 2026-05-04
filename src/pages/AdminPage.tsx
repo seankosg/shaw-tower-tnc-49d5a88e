@@ -2295,11 +2295,23 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">
-                    <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1.5 flex-wrap">
                       {f.field_name}
                       {f.field_name.startsWith('_meta_') && (
                         <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">Virtual</span>
                       )}
+                      {(() => {
+                        const c = aliasCounts[f.field_name];
+                        if (!c || c.total === 0) return null;
+                        return (
+                          <span
+                            className="rounded border px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-muted-foreground"
+                            title={`${c.active} active / ${c.total} total alias${c.total === 1 ? '' : 'es'} in Header Mappings`}
+                          >
+                            {c.active}/{c.total} alias{c.total === 1 ? '' : 'es'}
+                          </span>
+                        );
+                      })()}
                     </span>
                   </TableCell>
                   <TableCell><Input className="h-8 min-w-[180px]" defaultValue={f.display_name} onBlur={(e) => updateName(f, e.target.value)} /></TableCell>
