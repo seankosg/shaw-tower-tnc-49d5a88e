@@ -38,10 +38,10 @@ const defectNav = [
 
 const docsNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/docs/dashboard' },
-  { label: 'ABD', icon: FileText, path: '/docs/abd' },
-  { label: 'OMM', icon: FolderKanban, path: '/docs/omm' },
-  { label: 'Warranty', icon: ShieldCheck, path: '/docs/warranty' },
-  { label: 'Spare Part', icon: Package, path: '/docs/spare-part' },
+  { label: 'Raw Data ABD', icon: FileText, path: '/docs/abd' },
+  { label: 'Raw Data OMM', icon: FolderKanban, path: '/docs/omm' },
+  { label: 'Raw Data Warranty', icon: ShieldCheck, path: '/docs/warranty' },
+  { label: 'Raw Data Spare Part', icon: Package, path: '/docs/spare-part' },
   { label: 'Import', icon: Upload, path: '/docs/import' },
   { label: 'Export', icon: Download, path: '/docs/export' },
 ];
