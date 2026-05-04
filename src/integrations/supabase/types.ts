@@ -943,6 +943,7 @@ export type Database = {
           subcontractor_id: string | null
           subcontractor_name: string | null
           submitted_date: string | null
+          team: Database["public"]["Enums"]["team_type"] | null
           title: string | null
           trade: string | null
           transmittal_due_date: string | null
@@ -997,6 +998,7 @@ export type Database = {
           subcontractor_id?: string | null
           subcontractor_name?: string | null
           submitted_date?: string | null
+          team?: Database["public"]["Enums"]["team_type"] | null
           title?: string | null
           trade?: string | null
           transmittal_due_date?: string | null
@@ -1051,6 +1053,7 @@ export type Database = {
           subcontractor_id?: string | null
           subcontractor_name?: string | null
           submitted_date?: string | null
+          team?: Database["public"]["Enums"]["team_type"] | null
           title?: string | null
           trade?: string | null
           transmittal_due_date?: string | null
