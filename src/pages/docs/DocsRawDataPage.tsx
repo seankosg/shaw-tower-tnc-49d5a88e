@@ -49,6 +49,7 @@ import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
 import type { BulkEditableField } from '@/lib/bulk-edit';
+import { ALL_TEAMS, TEAM_LABELS, formatTeamLabel } from '@/types/enums';
 
 const EMPTY_TOKEN = '__EMPTY__';
 const DEFAULT_SORTING: SortingState = [{ id: 'document_no', desc: false }];
@@ -89,6 +90,7 @@ interface DocsRawRow {
   hdec_pic_name: string | null;
   hdec_eng_name: string | null;
   subcontractor_name: string | null;
+  team: string | null;
   sub1_actual_response_date: string | null;
   sub2_actual_response_date: string | null;
   sub3_actual_response_date: string | null;
@@ -113,6 +115,7 @@ const DOCS_RAW_FIELDS = [
   'document_type',
   'organisation_raw',
   'subcontractor_name',
+  'team',
   'hdec_pic_name',
   'hdec_eng_name',
   'cycle_progress',
@@ -184,7 +187,7 @@ const RAW_SEARCH_FIELDS: (keyof DocsRawRow)[] = [
   'document_no', 'revision', 'title', 'discipline', 'sheet_name', 'series',
   'level_location', 'document_type', 'organisation_raw', 'subcontractor_name',
   'aconex_status', 'current_status', 'transmittal_number', 'remarks',
-  'hdec_pic_name', 'hdec_eng_name',
+  'hdec_pic_name', 'hdec_eng_name', 'team',
   'sub1_approval_status', 'sub2_approval_status', 'sub3_approval_status',
 ];
 
@@ -550,6 +553,7 @@ export default function DocsRawDataPage() {
     sub3_approval_status: uniqueOptions(augmentedItems, 'sub3_approval_status'),
     is_submitted: [{ value: 'true', label: 'Submitted' }, { value: 'false', label: 'Not submitted' }],
     trade: TRADE_OPTIONS.map((t) => ({ value: t, label: t })),
+    team: ALL_TEAMS.map((t) => ({ value: t, label: TEAM_LABELS[t] })),
     risk: [
       { value: 'red', label: 'Red' },
       { value: 'amber', label: 'Amber' },
@@ -586,6 +590,7 @@ export default function DocsRawDataPage() {
       revision: 70,
       title: 280,
       trade: 110,
+      team: 110,
       discipline: 110,
       sheet_name: 160,
       series: 90,
