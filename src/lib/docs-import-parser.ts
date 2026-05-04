@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { normalizeDate } from '@/lib/defect-parser';
 import { normalizeApprovalStatus } from '@/lib/docs-status';
+import { getMappedField } from '@/lib/header-mappings-cache';
 
 /**
  * Docs (As-Built Drawings) Excel parser.
@@ -145,6 +146,8 @@ const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
   // status (row-level)
   'status': 'current_status',
   'aconex status': 'current_status',
+  'overall status': 'current_status',
+  'overall': 'current_status',
   // remarks
   'remarks': 'remarks',
   'remark': 'remarks',
@@ -229,6 +232,7 @@ function mapHeader(header: string): FieldKey | 'skip' | null {
   if (norm.includes('title')) return 'title';
   if (norm.includes('discipline')) return 'discipline';
   if (norm === 'status') return 'current_status';
+  if (norm.includes('overall') && norm.includes('status')) return 'current_status';
   if (norm.includes('transmittal') && norm.includes('due')) return 'transmittal_due_date';
   if (norm.includes('transmittal')) return 'transmittal_number';
   if (norm.includes('days due')) return 'days_due';
@@ -240,6 +244,10 @@ function mapHeader(header: string): FieldKey | 'skip' | null {
   if (norm.includes('hdec') && (norm.includes('pic') || norm.includes('person'))) return 'hdec_pic_name';
   if (norm.includes('hdec') && norm.includes('eng')) return 'hdec_eng_name';
   if (norm.includes('sub') && norm.includes('contractor')) return 'subcontractor_name';
+  // DB-driven mapping fallback (Admin-managed aliases)
+  const dbMapped = getMappedField('docs', norm, 'as_built');
+  if (dbMapped && dbMapped !== 'skip') return dbMapped as FieldKey;
+  if (dbMapped === 'skip') return 'skip';
   return null;
 }
 
