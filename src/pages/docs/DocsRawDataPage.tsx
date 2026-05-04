@@ -39,7 +39,7 @@ import { useAppSetting, useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
 import { useLatestDocsDataDate } from '@/hooks/useLatestDocsDataDate';
 import { computeRisk } from '@/lib/docs-risk';
-import { getTradeFromSheetName, TRADE_OPTIONS } from '@/lib/docs-trade';
+import { resolveTrade, TRADE_OPTIONS } from '@/lib/docs-trade';
 import { exportDocsRawToExcel } from '@/lib/docs-excel-export';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import { DocsBulkEditBar } from '@/components/raw-data/DocsBulkEditBar';
