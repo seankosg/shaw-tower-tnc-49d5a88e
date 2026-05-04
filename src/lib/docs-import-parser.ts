@@ -182,6 +182,17 @@ const SUB_ALIAS: Record<string, 'planned_date' | 'submission_date' | 'approval_d
   'approval status': 'approval_status',
 };
 
+/**
+ * Strip leading ordinal token (1st, 2nd, 3rd, 4th, first, second, third) from a
+ * normalized sub-header so labels like "1st planned date" match SUB_ALIAS.
+ * Group context (Submission 1/2/3) already encodes the cycle number, so the
+ * ordinal in the sub-cell is redundant and only used by the source spreadsheet
+ * for human readability.
+ */
+function stripOrdinalPrefix(s: string): string {
+  return s.replace(/^\s*(?:1st|2nd|3rd|\d+th|first|second|third|fourth)\s+/i, '').trim();
+}
+
 function normalizeHeader(value: unknown): string {
   return String(value ?? '')
     .replace(/\s*\(H\)\s*$/i, '')
@@ -299,7 +310,7 @@ function detectHeader(matrix: unknown[][]): DetectedHeader | null {
     for (let c = 0; c < subRow.length; c++) {
       const sub = String(subRow[c] ?? '').trim();
       const grp = filledGroup[c];
-      const subNorm = normalizeHeader(sub);
+      const subNorm = stripOrdinalPrefix(normalizeHeader(sub));
       const grpN = parseSubmissionGroup(grp);
       if (grpN && SUB_ALIAS[subNorm]) { score += 2; continue; }
       const m = mapHeader(sub);
@@ -328,7 +339,7 @@ function detectHeader(matrix: unknown[][]): DetectedHeader | null {
   for (let c = 0; c < subRow.length; c++) {
     const sub = String(subRow[c] ?? '').trim();
     const grp = filledGroup[c];
-    const subNorm = normalizeHeader(sub);
+    const subNorm = stripOrdinalPrefix(normalizeHeader(sub));
     const grpNorm = normalizeHeader(grp);
     const submissionN = parseSubmissionGroup(grp);
     let field: FieldKey | null = null;
