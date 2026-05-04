@@ -1,53 +1,82 @@
-## Field Config ↔ Header Mappings 연동
+## 목표
 
-### 배경
-현재 두 화면은 독립적입니다.
-- **Field Config 탭** (`AdminPage.tsx` → `FieldConfigTable`): `field_config` / `defect_field_config` / `docs_field_config`의 `is_enabled` 토글
-- **Header Mappings 탭**: `import_header_mappings`의 alias별 `is_active` 토글 (직전 작업으로 그룹 단위 Hide 시에만 양쪽 동기화)
+ABD Raw Data 페이지의 일괄변경(Bulk Edit) 드롭다운에 docs_drawings의 모든 편집 가능한 필드를 추가합니다. Trade 필드는 현재 sheet_name에서 파생되는 값이라 일괄변경이 불가능했는데, 신규 DB 컬럼으로 도입하여 직접 편집 가능하게 만듭니다.
 
-이번 변경은 **Field Config 탭의 Visible 토글**에서도 동일한 연동이 일어나도록 보강합니다.
+## 변경 사항
 
-### 동작 (Field Config 탭)
-**Visible OFF로 토글할 때**
-1. AlertDialog 확인:
-   > "이 필드를 비활성화하면 Raw Data / List / Detail UI에서 컬럼이 숨겨지고, 동시에 Header Mappings에서 이 필드로 연결된 모든 alias도 비활성화되어 향후 import 시 무시됩니다. 진행하시겠습니까?"
-2. 확인 시 두 작업을 함께 실행:
-   - `*_field_config.is_enabled = false` (현재 행)
-   - `import_header_mappings.is_active = false` (해당 module/sub_module + `target_field = field_name`)
-3. 둘 중 하나라도 실패하면 toast로 실패 안내, UI는 새로고침
-4. 성공 시 `header_mappings_version` 값을 +1 (parser 캐시 즉시 반영)
+### 1) DB 마이그레이션
 
-**Visible ON으로 토글할 때**
-- `*_field_config.is_enabled = true`만 갱신 (확인 다이얼로그 없음)
-- alias의 `is_active`는 자동 복구하지 않음 — 사용자가 Header Mappings 탭에서 필요한 alias만 다시 켜도록 안전 기본값 유지
-- 토스트에 "Aliases were not auto-enabled. Re-enable them in Header Mappings if needed." 안내 추가
+**`docs_drawings`에 `trade` 컬럼 추가** (text, nullable). 기본값은 NULL.
 
-### 모듈 매핑
-| field_config 테이블 | Header Mappings module | sub_module 필터 |
-|---|---|---|
-| `field_config` | `tnc` | (null/빈값) |
-| `defect_field_config` | `defect` | (null/빈값) |
-| `docs_field_config` | `docs` | **필터 없음** (as_built/warranty 양쪽 alias 모두 비활성화) |
+기존 4,803행에 대해 1회 백필: `sheet_name`에서 `getTradeFromSheetName()` 로직으로 trade를 계산해 채워넣습니다(문자열 매칭 SQL).
 
-`docs_field_config`는 sub_module이 없고 필드명이 두 sub_module 간에 의미가 동일하므로 양쪽 모두 끄는 것이 일관됩니다.
+`docs_field_config`에 `trade` 필드를 등록(display_name="Trade", source_origin="system", visible/editable_to_roles 기존 분류 필드 패턴 따름).
 
-### Field Config 탭에 추가되는 시각 표시
-- 행 끝에 **alias 개수 뱃지** (예: `3 aliases`) — 끄기 전에 영향 범위를 사용자에게 알림
-- 뱃지 클릭 시 Header Mappings 탭으로 이동 (선택 사항, 같은 페이지의 다른 탭이므로 단순 안내 텍스트로 대체)
+`import_header_mappings`에 `docs/as_built` 모듈로 Trade alias 몇 개 추가(trade, work category 등) — 이후 import 시에도 컬럼이 있으면 사용되도록.
 
-### 변경 파일
-- `src/pages/AdminPage.tsx`
-  - `FieldConfigTable`에 `table` → module 매핑 헬퍼 추가
-  - alias 개수 fetch (`import_header_mappings` count by `target_field`) 추가
-  - `toggle` 함수에서 `is_enabled`를 끌 때 AlertDialog + alias 일괄 비활성화 + version bump 처리
-  - 끌 때 영향 범위 안내 뱃지 표시
+### 2) Trade 파생 로직 보존
 
-### 변경하지 않는 것
-- DB 스키마
-- Header Mappings 탭의 기존 동작 (그룹 단위 Hide는 그대로 유지, 동일한 패턴을 Field Config 쪽에 적용)
-- Visible ON 시 alias 자동 복구 (의도적으로 안전 기본값)
-- `is_required` 토글 (영향 없음, 기존 동작 유지)
+`src/lib/docs-trade.ts`의 `getTradeFromSheetName()`은 그대로 두되, 컴포넌트들이 표시할 때 우선순위를 다음과 같이 변경:
+- `row.trade`가 있으면 그 값을 표시(수동 override)
+- 없으면 `getTradeFromSheetName(row.sheet_name)`로 파생
 
-### 안전 장치
-- `subtest_id`, `issue_no`, `document_no` 등 anchor 필드는 hook에서 항상 visible로 처리되므로 토글되더라도 UI에는 계속 노출됨 (기존 동작)
-- alias가 0개인 필드는 확인 다이얼로그 없이 바로 토글 (불필요한 마찰 제거)
+영향 받는 호출처 전수 확인 후 헬퍼 함수 `resolveTrade(row)`로 통일.
+
+Import 파서(`src/lib/docs-import-parser.ts`)는 trade 컬럼이 입력에 있으면 그 값을 사용, 없으면 sheet_name에서 파생한 값으로 채워 저장하도록 수정.
+
+### 3) 일괄변경 필드 목록 확장 (`DocsRawDataPage.tsx`의 `bulkFields`)
+
+현재 28개 → 약 35개로 확장. 그룹별 정리:
+
+```text
+Classification:  discipline, document_type, trade(NEW), 
+                 series(NEW), level_location(NEW), sequential_no(NEW)
+Status:          aconex_status, current_status, is_submitted(NEW, Yes/No select)
+Submission:      sub1/2/3_approval_status (기존)
+Dates:           submitted_date, approved_date, transmittal_due_date (기존)
+1st/2nd/3rd:     planned/submission/approval/actual_response_date 12개 (기존)
+Notes:           revision, title, remarks, transmittal_number (기존)
+Personnel:       subcontractor(NEW, master Select), 
+                 organisation_raw(NEW, text), 
+                 hdec_pic_name, hdec_eng_name (기존)
+```
+
+명시적으로 **제외**(일괄변경 부적합):
+- `document_no` (unique key)
+- `sheet_name`, `row_no` (import 메타)
+- `is_active` (별도의 soft delete 액션으로 다룸 — 이 작업 범위 밖)
+- `days_due` (자동 계산 — 추후 별도 논의)
+- `subcontractor_id` 단독 (아래 Subcontractor 처리로 통합)
+
+### 4) Subcontractor 처리 (특별 케이스)
+
+`DocsBulkEditBar`에 새 inputType `'subcontractor_select'` 도입. `subcontractor_master`에서 `is_active=true`인 업체 목록을 옵션으로 로드. 사용자가 선택하면 `subcontractor_id`와 `subcontractor_name`을 한 번의 update로 함께 갱신.
+
+`applyBulkUpdate`(`src/lib/bulk-edit.ts`)는 단일 필드만 받는 구조이므로, 멀티 필드 업데이트 분기를 추가하거나, Subcontractor 케이스 전용 핸들러를 BulkEditBar 내부에서 처리(분기 처리가 영향 최소).
+
+### 5) `is_submitted` 처리
+
+select inputType으로 옵션: `Yes` → true, `No` → false, `— Clear —` → null. `applyBulkUpdate`가 boolean 값을 받을 수 있도록 변환 로직(`'true'`/`'false'` 문자열 → boolean) 추가 필요.
+
+### 6) 변경 추적
+
+기존 `applyBulkUpdate`가 이미 `docs_change_log`에 변경을 기록하는지 확인하고, trade·subcontractor·is_submitted도 동일하게 로그되도록 보강.
+
+## 기술 세부사항
+
+**파일 변경**:
+- 신규 마이그레이션: `docs_drawings.trade` 컬럼 추가 + 백필 + field_config seed + header_mappings seed
+- `src/lib/docs-trade.ts` — `resolveTrade(row)` helper 추가
+- `src/lib/bulk-edit.ts` — boolean 변환, multi-field update 분기
+- `src/components/raw-data/DocsBulkEditBar.tsx` — `subcontractor_select` inputType, boolean select
+- `src/pages/docs/DocsRawDataPage.tsx` — `bulkFields` 확장, subcontractor 옵션 로드
+- `src/lib/docs-import-parser.ts` — trade 컬럼 인식 + sheet_name 파생 fallback
+- Trade를 표시하는 모든 컴포넌트(Dashboard, Export, RawTable 등) — `resolveTrade(row)` 사용으로 교체
+
+**검증 체크리스트**:
+- 백필 후 기존 행에서 Trade 컬럼이 sheet_name 기반과 동일한 값을 가지는지 확인
+- 일괄변경 드롭다운에 모든 신규 필드 노출 확인
+- subcontractor 변경 시 id+name 동시 업데이트 확인
+- is_submitted Yes/No/Clear 정상 동작 확인
+- Import 시 trade 컬럼 없는 파일도 기존처럼 동작(sheet_name에서 파생)
+- `docs_change_log`에 신규 필드 변경이 기록되는지 확인
