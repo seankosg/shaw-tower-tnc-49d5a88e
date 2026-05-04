@@ -119,7 +119,11 @@ const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
   'discipline': 'discipline',
   'discipline/role': 'discipline',
   'discipline / role': 'discipline',
-  'trade': 'discipline',
+  'trade': 'trade',
+  'work category': 'trade',
+  'category': 'trade',
+  'discipline category': 'trade',
+  'trade category': 'trade',
   // type / series / level
   'document type': 'document_type',
   'document/ drawing type': 'document_type',
