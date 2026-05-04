@@ -393,7 +393,11 @@ export default function DefectRawDataPage() {
   const [exportFormat, setExportFormat] = useState<'view' | 'reimport'>('view');
   const [exportBusy, setExportBusy] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number; label: string } | null>(null);
-  const supportsDirPicker = typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker === 'function';
+  // File System Access API is blocked inside cross-origin iframes (e.g. Lovable preview).
+  // Detect iframe so we can disable the option and guide the user to open in a new tab.
+  const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
+  const hasDirPickerApi = typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker === 'function';
+  const supportsDirPicker = hasDirPickerApi && !isInIframe;
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [commentSummary, setCommentSummary] = useState<Record<string, CommentSummary>>({});
@@ -1256,7 +1260,9 @@ export default function DefectRawDataPage() {
                           No download blocking, no zip extraction needed.
                           {!supportsDirPicker && (
                             <span className="mt-1 block text-amber-600 dark:text-amber-400">
-                              Use Chrome or Edge to enable this option (your current browser does not support the File System Access API).
+                              {isInIframe && hasDirPickerApi
+                                ? 'This option is blocked inside the in-app preview. Open the app in a new browser tab (Chrome or Edge) to use it.'
+                                : 'Use Chrome or Edge to enable this option (your current browser does not support the File System Access API).'}
                             </span>
                           )}
                         </p>
@@ -1301,15 +1307,30 @@ export default function DefectRawDataPage() {
                     setExportDialogOpen(false);
                   } else if (exportMode === 'per-subcon-folder') {
                     if (!supportsDirPicker) {
-                      toast({ title: 'Not supported', description: 'Use Chrome or Edge for "Save to folder".', variant: 'destructive' });
+                      toast({
+                        title: 'Not supported here',
+                        description: isInIframe && hasDirPickerApi
+                          ? 'Open the app in a new browser tab (Chrome or Edge) to use "Save to folder".'
+                          : 'Use Chrome or Edge for "Save to folder".',
+                        variant: 'destructive',
+                      });
                       return;
                     }
                     let dirHandle: FileSystemDirectoryHandle;
                     try {
                       dirHandle = await (window as any).showDirectoryPicker({ id: 'defect-raw-export', mode: 'readwrite' });
                     } catch (e) {
-                      if ((e as DOMException)?.name === 'AbortError') {
+                      const err = e as DOMException;
+                      if (err?.name === 'AbortError') {
                         toast({ title: 'Cancelled', description: 'No folder was selected.' });
+                        return;
+                      }
+                      if (err?.name === 'SecurityError') {
+                        toast({
+                          title: 'Blocked by browser',
+                          description: 'Folder picker is blocked inside an embedded preview. Open the app in a new tab and try again.',
+                          variant: 'destructive',
+                        });
                         return;
                       }
                       throw e;
