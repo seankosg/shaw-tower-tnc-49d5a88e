@@ -25,7 +25,12 @@ import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS, ALL_TEAMS, TEAM_LABELS, REPORT_S
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
 import { getSubtestCache, setSubtestCache } from '@/lib/subtest-cache';
-import { exportSubtestsToExcel } from '@/lib/excel-export';
+import { exportSubtestsToExcel, exportSubtestsToExcelBySubcontractor, exportSubtestsToZipBySubcontractor } from '@/lib/excel-export';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+
+const ZIP_THRESHOLD = 7;
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { USER_TYPE_LABELS } from '@/types/enums';
@@ -409,6 +414,9 @@ export default function SubtestList() {
   const [dataDate, setDataDate] = useState<string | null>(null);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [commentSummary, setCommentSummary] = useState<Record<string, CommentSummary>>({});
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<'single' | 'per-subcon'>('single');
+  const [exportBusy, setExportBusy] = useState(false);
   const urlStatusFilter = searchParams.get('status');
   const urlScope = searchParams.get('scope');
   const urlAtRiskDays = Number(searchParams.get('at_risk_days') ?? '2');
