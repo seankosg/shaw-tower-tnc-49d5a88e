@@ -230,6 +230,52 @@ export function clearCyclesAfterClosure<T extends DrawingForStatus>(drawing: T):
   return out as T;
 }
 
+/** Default lead time (calendar days) between submission and planned response, and between B/C response and next cycle's planned submission. */
+export const CYCLE_LEAD_DAYS = 7;
+
+/** Add N calendar days to an ISO date (YYYY-MM-DD). Returns ISO date or null if input invalid. */
+export function addCalendarDays(iso: string | null | undefined, days: number): string | null {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (isNaN(d.getTime())) return null;
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Apply Cycle 1→2→3 auto-fill rules to a drawing-shaped object. Pure / non-mutating.
+ *
+ * Rules (per cycle N = 1, 2, 3):
+ *   - If S_N is set and A_N is empty → A_N := S_N + CYCLE_LEAD_DAYS
+ *   - If R_N is set and K_N ∈ {B, C} and P_(N+1) is empty → P_(N+1) := R_N + CYCLE_LEAD_DAYS
+ *
+ * User-entered values are never overwritten — auto-fill only fills nulls/empties.
+ * Run BEFORE clearCyclesAfterClosure so that K_N='A' cleanup still wins.
+ */
+export function applyCycleAutoFill<T extends DrawingForStatus>(drawing: T): T {
+  const out: any = { ...drawing };
+  const isEmpty = (v: unknown) => v == null || v === '';
+
+  for (const n of [1, 2, 3] as CycleNumber[]) {
+    const S = out[`sub${n}_submission_date`];
+    const A = out[`sub${n}_approval_date`];
+    if (!isEmpty(S) && isEmpty(A)) {
+      out[`sub${n}_approval_date`] = addCalendarDays(S as string, CYCLE_LEAD_DAYS);
+    }
+    if (n < 3) {
+      const R = out[`sub${n}_actual_response_date`];
+      const K = normStatus(out[`sub${n}_approval_status`]);
+      const Pnext = out[`sub${n + 1}_planned_date`];
+      if (!isEmpty(R) && (K === 'B' || K === 'C') && isEmpty(Pnext)) {
+        out[`sub${n + 1}_planned_date`] = addCalendarDays(R as string, CYCLE_LEAD_DAYS);
+      }
+    }
+  }
+  return out as T;
+}
+
 /** Normalize a free-text status to A/B/C/UR/null. Used during import. */
 export function normalizeApprovalStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | 'UR' | null {
   if (!raw) return null;
