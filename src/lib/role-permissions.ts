@@ -43,9 +43,13 @@ const ROUTE_MIN_RANK: [RegExp, number][] = [
   [/^\/docs\/import/, 2],    // user+
   [/^\/docs\/export/, 2],    // user+
   [/^\/docs\/org-mapping/, 4], // superuser/admin
-  [/^\/docs\/raw-data/, 1],  // super_guest+
-  [/^\/docs\/[^/]+$/, 1],    // docs detail
+  [/^\/docs\/raw-data/, 1],  // legacy → super_guest+
+  [/^\/docs\/abd(\/|$)/, 1], // super_guest+ (ABD raw data + detail)
+  [/^\/docs\/omm(\/|$)/, 1], // super_guest+
+  [/^\/docs\/warranty(\/|$)/, 1], // super_guest+
+  [/^\/docs\/spare-part(\/|$)/, 1], // super_guest+
   [/^\/docs\/dashboard/, 0], // everyone
+  [/^\/docs\/[^/]+$/, 1],    // legacy docs detail (/docs/:id)
   [/^\/import/, 2],          // user+
   [/^\/export/, 2],          // user+
   [/^\/mobile/, 2],          // user+

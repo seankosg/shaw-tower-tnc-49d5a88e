@@ -41,6 +41,9 @@ import DocsImportPage from "./pages/docs/DocsImportPage";
 import DocsExportPage from "./pages/docs/DocsExportPage";
 import DocsDrawingDetailPage from "./pages/docs/DocsDrawingDetailPage";
 import DocsImportLogsPage from "./pages/docs/DocsImportLogsPage";
+import DocsOMMRawDataPage from "./pages/docs/DocsOMMRawDataPage";
+import DocsSparePartRawDataPage from "./pages/docs/DocsSparePartRawDataPage";
+import DocsWarrantyRawDataPage from "./pages/docs/DocsWarrantyRawDataPage";
 import { useHeaderMappingsSync } from "@/hooks/useHeaderMappings";
 import { loadHeaderMappingsCache } from "@/lib/header-mappings-cache";
 import { useCustomFieldsSync } from "@/hooks/useCustomFields";
@@ -115,11 +118,17 @@ const App = () => (
                 <Route path="/defect/quick-update" element={<RedirectPreserveSearch to="/defects/quick-update" />} />
                 <Route path="/defects/:id" element={<DefectDetailPage />} />
                 <Route path="/docs/dashboard" element={<DocsDashboardPage />} />
-                <Route path="/docs/raw-data" element={<DocsRawDataPage />} />
+                <Route path="/docs/abd" element={<DocsRawDataPage />} />
+                <Route path="/docs/abd/:id" element={<DocsDrawingDetailPage />} />
+                <Route path="/docs/omm" element={<DocsOMMRawDataPage />} />
+                <Route path="/docs/warranty" element={<DocsWarrantyRawDataPage />} />
+                <Route path="/docs/spare-part" element={<DocsSparePartRawDataPage />} />
                 <Route path="/docs/import" element={<DocsImportPage />} />
                 <Route path="/docs/import/logs" element={<DocsImportLogsPage />} />
                 <Route path="/docs/export" element={<DocsExportPage />} />
                 <Route path="/docs/org-mapping" element={<Navigate to="/admin" replace />} />
+                {/* Legacy redirects (ABD was previously at /docs/raw-data and /docs/:id) */}
+                <Route path="/docs/raw-data" element={<RedirectPreserveSearch to="/docs/abd" />} />
                 <Route path="/docs/:id" element={<DocsDrawingDetailPage />} />
                 <Route path="/comments/subtest" element={<AllSubtestCommentsPage />} />
                 <Route path="/comments/defect" element={<AllDefectCommentsPage />} />
