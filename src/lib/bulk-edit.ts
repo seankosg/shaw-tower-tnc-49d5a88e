@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 
-export type BulkEditableInputType = 'select' | 'date' | 'text' | 'textarea';
+export type BulkEditableInputType = 'select' | 'date' | 'text' | 'textarea' | 'boolean' | 'number';
 
 export interface BulkEditableField {
   /** DB column name */
@@ -13,6 +13,12 @@ export interface BulkEditableField {
   options?: { value: string; label: string }[];
   /** Optional grouping label shown in the field picker */
   group?: string;
+  /**
+   * Optional helper for fields that should also write companion columns
+   * when applied (e.g. picking a subcontractor sets both id + name).
+   * The bar will pass through `extraUpdates` to applyBulkUpdate.
+   */
+  companionFields?: string[];
 }
 
 export interface BulkUpdateRequest {
