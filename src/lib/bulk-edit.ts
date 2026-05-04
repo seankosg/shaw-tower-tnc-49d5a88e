@@ -36,6 +36,11 @@ export interface BulkUpdateRequest {
   userId: string;
   /** Free-form source tag stored on the change log */
   changeSource?: string;
+  /**
+   * Optional companion fields applied to the same rows in the same UPDATE.
+   * Each entry is logged as its own change-log row.
+   */
+  extraUpdates?: Record<string, string | number | boolean | null>;
 }
 
 export interface BulkUpdateResult {
