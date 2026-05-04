@@ -91,6 +91,8 @@ export function computeCycleStatus(
   dataDate: string | null,
 ): CycleStatus {
   const status = normStatus(cycle.approval_status);
+  // Explicit "Under Review" overrides date-based derivation.
+  if (status === 'UR') return 'Under Review';
   if (cycle.actual_response_date) {
     if (status) return status;
     return 'Under Review';
