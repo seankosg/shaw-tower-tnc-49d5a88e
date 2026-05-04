@@ -240,6 +240,7 @@ function normalizeTeam(val: any): string | null {
     elec: 'Elec', electrical: 'Elec',
     arch: 'Arch', architecture: 'Arch', architectural: 'Arch',
     supp: 'Supp', support: 'Supp',
+    design: 'Design', designer: 'Design',
   };
   return map[key] || null;
 }
