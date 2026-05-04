@@ -96,33 +96,58 @@ export async function loadDashboardData(opts: {
   const asOf = startOfDay(opts.asOf ?? new Date());
   const leadDaysFallback = opts.leadDaysFallback ?? 30;
 
-  const [abdRes, ommRes, sparePartRes, settingsRes, leadRes] = await Promise.all([
-    supabase
-      .from('docs_drawings')
-      .select(
-        'id, document_no, title, project_id, is_submitted, submitted_date, approved_date, ' +
-          'sub1_planned_date, sub3_planned_date, sub3_approval_date, ' +
-          'discipline, current_status, raw_payload, custom_payload',
-      )
-      .eq('sub_module', 'as_built')
-      .eq('is_active', true),
-    supabase
-      .from('docs_omm')
-      .select(
-        'id, sn, contract_doc, project_id, draft_actual_date, submission_actual_date, ' +
-          'approved_date, submission_target_date, draft_target_date, hdec_pic_name, ' +
-          'subcontractor_name, trade',
-      )
-      .eq('is_active', true),
-    supabase
-      .from('docs_spare_part')
-      .select(
-        'id, sn, parent_item, project_id, status, hdec_pic_name, subcontractor_name, trade, updated_at',
-      )
-      .eq('is_active', true),
+  const PAGE = 1000;
+  async function fetchAll<T = any>(
+    builder: () => any,
+  ): Promise<T[]> {
+    const out: T[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await builder().range(from, from + PAGE - 1);
+      if (error) throw error;
+      const rows = (data ?? []) as T[];
+      out.push(...rows);
+      if (rows.length < PAGE) break;
+    }
+    return out;
+  }
+
+  const [abdRows, ommRows, sparePartRows, settingsRes, leadRes] = await Promise.all([
+    fetchAll(() =>
+      supabase
+        .from('docs_drawings')
+        .select(
+          'id, document_no, title, project_id, is_submitted, submitted_date, approved_date, ' +
+            'sub1_planned_date, sub3_planned_date, sub3_approval_date, ' +
+            'discipline, current_status, raw_payload, custom_payload',
+        )
+        .eq('sub_module', 'as_built')
+        .eq('is_active', true),
+    ),
+    fetchAll(() =>
+      supabase
+        .from('docs_omm')
+        .select(
+          'id, sn, contract_doc, project_id, draft_actual_date, submission_actual_date, ' +
+            'approved_date, submission_target_date, draft_target_date, hdec_pic_name, ' +
+            'subcontractor_name, trade',
+        )
+        .eq('is_active', true),
+    ),
+    fetchAll(() =>
+      supabase
+        .from('docs_spare_part')
+        .select(
+          'id, sn, parent_item, project_id, status, hdec_pic_name, subcontractor_name, trade, updated_at',
+        )
+        .eq('is_active', true),
+    ),
     supabase.from('app_settings').select('key, value').like('key', 'docs_sc_date_%'),
     supabase.from('app_settings').select('key, value').like('key', 'docs_lead_days_%'),
   ]);
+
+  const abdRes = { data: abdRows };
+  const ommRes = { data: ommRows };
+  const sparePartRes = { data: sparePartRows };
 
   const scDateMap: Record<string, string> = {};
   for (const s of settingsRes.data ?? []) {
