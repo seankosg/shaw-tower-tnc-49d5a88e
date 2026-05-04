@@ -43,6 +43,7 @@ export function DocsCycleProgress({ drawing, dataDate }: DocsCycleProgressProps)
           className={cn(
             'inline-flex items-center gap-0.5 select-none rounded-md px-1 py-0.5',
             exhausted && 'ring-2 ring-rose-500 ring-offset-1 bg-rose-50/40',
+            overall === 'A' && 'opacity-60 grayscale',
           )}
           onClick={(e) => e.stopPropagation()}
         >
