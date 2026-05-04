@@ -366,6 +366,7 @@ export default function DocsRawDataPage() {
   const storageKey = user?.id ? `docs-raw-data-state:${user.id}` : 'docs-raw-data-state:anon';
   const [items, setItems] = useState<DocsRawRow[]>([]);
   const [scDateMap, setScDateMap] = useState<Record<string, string>>({});
+  const [subcontractorOptions, setSubcontractorOptions] = useState<{ value: string; label: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [stateLoaded, setStateLoaded] = useState(false);
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
