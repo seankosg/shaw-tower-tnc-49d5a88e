@@ -533,7 +533,7 @@ export default function HeaderMappingsTab() {
         userId={user?.id ?? null}
         prefilledTarget={addDialog.prefilledTarget}
         lockTarget={addDialog.lockTarget}
-        onSaved={refetch}
+        onSaved={async () => { await reloadHeaderMappings(); refetch(); }}
       />
       <MappingDialog
         open={!!editTarget}
@@ -544,7 +544,7 @@ export default function HeaderMappingsTab() {
         existing={mappings}
         userId={user?.id ?? null}
         editing={editTarget}
-        onSaved={refetch}
+        onSaved={async () => { await reloadHeaderMappings(); refetch(); }}
       />
     </Card>
   );
