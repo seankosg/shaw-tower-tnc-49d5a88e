@@ -1,229 +1,76 @@
+## Goal
 
-# Docs 모듈 4-서브모듈 확장 — Phase 1 구현 계획 (확정)
+ABD Raw Data 엑셀 내보내기에서 헤더/메타/데이터 셀 디자인을 기존 T&C(Subtest) 모듈의 엑셀 내보내기 스타일과 동일한 룩으로 통일합니다. 재임포트(reimport) 포맷의 동작 자체는 유지합니다.
 
-## 0. 확정 사항
+## Current vs Target
 
-| 항목 | 결정 |
-|---|---|
-| 테이블 분리 | **4개 별도 테이블** (필드 구조 완전 상이) |
-| 현재 상태 | ABD만 완료 — `docs_drawings` 테이블명 그대로 유지 |
-| 신규 추가 (이번 라운드) | **OMM, Spare Part** + Dashboard 통합 |
-| 분리 (다음 라운드) | **Warranty** (복잡도 높음 — 9-stage workflow + child table + Admin master 확장) |
-| Dashboard | 1페이지 — 상단 KPI 4분할 + 아래 세로 4섹션 |
-| Import/Export | **단일 페이지 + 서브모듈 선택 드롭다운** |
-| ABD 경로 | `/docs/raw-data` → **`/docs/abd`로 변경** (구 경로는 리다이렉트) |
-| Dashboard 포함 | **Phase 1에 포함** |
+**현재 (`src/lib/docs-excel-export.ts`)**
+- 메타 5줄 + 빈 줄 + 헤더 + 데이터의 단순 AOA
+- 스타일은 헤더 셀 `bold`만 적용
+- 컬럼 너비는 `title=40, remarks=30, 그 외=16`로 고정
+- 병합/프리즈/행 높이/보더/배경색 없음
 
----
+**T&C 패턴 (`src/lib/excel-export.ts` 참고)**
+- 0행: 진한 네이비 배경의 타이틀 밴드 (`STYLE_TITLE`)
+- 1~5행: 회색 배경의 메타 라벨/밸류 (`STYLE_META_LABEL`, `STYLE_META_VALUE`)
+- 6행: 얇은 스페이서
+- 7행: 슬레이트 배경 + 흰색 굵은 글씨 헤더 + 보더 (`STYLE_HEADER`)
+- 8행~: 좌측 정렬, 얇은 회색 보더 데이터 셀 (`STYLE_DATA`)
+- 메타 행은 마지막 컬럼까지 가로 병합, 첫 N개 컬럼 + 헤더 행 프리즈
+- 행 높이(`!rows`), 컬럼 너비(`!cols`), 시트 범위(`!ref`)까지 명시
 
-## 1. 사이드바 재구성 (7개 메뉴)
+## Plan
 
-```text
-Docs
-├─ Dashboard           /docs/dashboard
-├─ ABD Raw Data        /docs/abd               (= 기존 /docs/raw-data)
-├─ OMM Raw Data        /docs/omm               신규
-├─ Warranty Raw Data   /docs/warranty          신규 (Phase 3 placeholder)
-├─ Spare Part Raw Data /docs/spare-part        신규
-├─ Import              /docs/import            서브모듈 선택 추가
-└─ Export              /docs/export            신규 구현
-```
+### 1. `src/lib/docs-excel-export.ts` 재작성
 
-`/docs/raw-data`, `/docs/drawing/:id` → `/docs/abd`, `/docs/abd/:id` 리다이렉트.
+T&C `buildSubtestsWorkbook`과 동일한 레이아웃을 ABD용으로 적용:
 
----
+- **공통 스타일 상수 import** — `excel-export.ts`의 `STYLE_TITLE / STYLE_META_LABEL / STYLE_META_VALUE / STYLE_HEADER / STYLE_DATA`, 그리고 `setCell / setDateCell` 헬퍼를 export 가능하도록 노출하고 docs export에서 그대로 사용 (단일 소스 오브 트루스 유지). 대안으로는 docs-excel-export 안에 로컬 상수로 복제할 수 있지만, 향후 디자인 변경 시 한 곳만 고치도록 export 방식을 권장.
+- **AOA 구성** (T&C와 동일한 8행 구조):
+  ```
+  Row 0: 'SHAW As-Built Drawings — Raw Data Export'
+  Row 1: `Exported: YYYY-MM-DD HH:MM  by  {userName} ({userType})`
+  Row 2: `Source: ABD Raw Data (direct)`  (reimport이면 ' | Reimport Template' 접미어)
+  Row 3: `Search: "{globalFilter}"` 또는 `(none)`
+  Row 4: `Filters: {요약}`  — 컬럼 필터가 있으면 `displayName=value` 조인, 없으면 `(none)`
+  Row 5: `Sort: {요약}`  — 정렬 상태 요약, 없으면 `(default)`
+  Row 6: 빈 행
+  Row 7: 헤더 행 (display label)
+  Row 8+: 데이터 행
+  ```
+- **reimport 마커 유지**: `[Format: SHAW_DOCS_REIMPORT_V1]`는 export 직후 import에서 인식해야 하므로, Source 라인 뒤에 동일 텍스트로 추가하거나 별도 라인으로 유지. 기존 import 파서가 어느 셀을 스캔하는지 확인 후 위치 결정 (현재 파서는 단순히 텍스트 포함 여부 체크 — 문제 없음).
+- **컬럼 너비**: T&C처럼 react-table의 `column.getSize()` 기반 자동 산출 (`Math.max(8, Math.min(60, Math.round(px / 7)))`). 단, ABD에는 `getSize`가 일부 지정되어 있지 않을 수 있어 fallback으로 `title=40`, `remarks=30`, 날짜=12, 그 외=16 유지.
+- **행 높이/병합/프리즈**:
+  - Row 0 hpt 24, Row 1~5 hpt 16, Row 6 hpt 6, Row 7 hpt 28, 데이터 행 hpt 20
+  - Row 0~5는 마지막 컬럼까지 가로 병합 (`!merges`)
+  - 헤더 아래 + 좌측 ID 컬럼 영역 프리즈 (`xSplit = min(2, n)`, `ySplit = 8`) — ABD는 ID 컬럼이 `document_no`이므로 2 컬럼 정도가 적절
+- **셀 적용**:
+  - Row 0: `STYLE_TITLE`
+  - Row 1: `STYLE_META_LABEL`, Row 2~5: `STYLE_META_VALUE`
+  - Row 7: 각 헤더 셀에 `STYLE_HEADER`
+  - 데이터 셀: 기본 `STYLE_DATA`, 날짜/타임스탬프는 `setDateCell` + `DATE_NUMFMT`/`DATETIME_NUMFMT`
+- **`!ref`**를 `A1:{lastCol}{lastRow}`로 명시.
 
-## 2. 데이터베이스 마이그레이션
+### 2. 필터/정렬 요약 헬퍼
 
-### 2.1 신규 테이블 — `docs_omm`
+T&C의 `summarizeFilters` / `summarizeSort` 로직을 docs용으로 작은 헬퍼로 포팅 (필드명 → display_name 매핑은 `fieldConfig` 사용). 코드 분량이 작으므로 `docs-excel-export.ts` 내부에 로컬 정의.
 
-```text
-id, project_id, sub_module='omm' (default)
-sn                       text     -- "1", "2"
-category                 text     -- 'A'|'B'|'C' (Architectural/M&E/Misc)
-contract_doc             text     -- "A1.803", "ME-SPE-02"
-work_trade_material      text
-contractor_supplier      text
-draft_section            text
-draft_target_date        date
-draft_actual_date        date
-submission_target_date   date
-submission_actual_date   date
-approved_date            date
-remarks                  text
-softcopy_required        text
-hardcopy_required        text
+### 3. 호출 측 변경 없음
 
--- 공통 메타
-hdec_pic_name, hdec_eng_name, subcontractor_name, team, trade,
-data_source_type, source_upload_id, raw_payload jsonb,
-custom_payload jsonb, is_active, row_version,
-created_at, updated_at, updated_by
-```
+`DocsRawDataPage.tsx`의 `exportDocsRawToExcel(...)` 호출 시그니처는 유지. 내부적으로만 출력 디자인이 바뀜.
 
-상태 계산 (코드 함수):
-- `draft_actual_date` 없음 → `Pending Draft`
-- `submission_actual_date` 없음 → `Pending Submission`
-- `approved_date` 없음 → `Under Review`
-- `approved_date` 있음 → `Approved`
+### 4. 적용 범위
 
-### 2.2 신규 테이블 — `docs_spare_part`
+이번 라운드는 **ABD (`docs-excel-export.ts`) 한정**. OMM / Spare Part / Warranty의 Raw Data 페이지는 아직 자체 export 함수가 없는 상태이므로 후속 작업에서 동일 빌더를 재사용하도록 합니다 (Phase 2 공통 컴포넌트 추출 시 `buildDocsWorkbook` 함수로 추가 일반화).
 
-```text
-id, project_id
-sn                       text     -- "1","a)","b)" 계층
-category                 text
-parent_item              text     -- "Tiling","Ceiling" 그룹 헤더
-material                 text
-spec_ref                 text
-spares_requirements      text     -- "2% or 3 boxes"
-unit                     text     -- M2, litres
-spares_quantity          text     -- 자유형식 ("49","5 (1 Tin)")
-storage_area_required    text
-status                   text     -- 'Ordered'|'Stock available'|'Pending'|'Short'
-remarks                  text
+## Out of Scope
 
--- 공통 메타 (위와 동일)
-```
+- 컬럼 자동 너비 학습/조정, 인쇄 영역, 머리글/바닥글, 조건부 서식
+- 재임포트 포맷의 컬럼 구성 변경 (ID 컬럼/편집 컬럼 분리 로직은 그대로)
+- OMM / Spare Part / Warranty의 export (다음 라운드)
 
-### 2.3 신규 테이블 — `docs_warranty` (skeleton만, Phase 3에서 본격 구현)
+## Acceptance
 
-이번 라운드에는 빈 placeholder 페이지만 만들고 테이블은 Phase 3에서 생성.
-
-### 2.4 기존 테이블 변경
-
-| 테이블 | 변경 |
-|---|---|
-| `docs_field_config` | `sub_module text NOT NULL DEFAULT 'as_built'` 컬럼 추가. 기존 행 백필 |
-| `docs_change_log` | `sub_module text` 컬럼 추가 (기본 `'as_built'`). `drawing_id`는 그대로 유지하되 OMM/Spare Part는 `record_id` 의미로 사용 (컬럼명만 호환). 또는 신규 nullable `record_id uuid` 추가하고 코드 분기 처리 — **후자 채택** |
-| `docs_upload_batches` | `sub_module` 이미 존재 — 변경 없음 |
-
-### 2.5 RLS 정책 (`docs_omm`, `docs_spare_part`)
-
-`docs_drawings`와 동일 패턴:
-- SELECT: `authenticated` 모두
-- INSERT/UPDATE: `has_any_role(auth.uid(), {admin, superuser, senior_user, user})`
-- DELETE: `is_admin_or_superuser(auth.uid())`
-
-### 2.6 시드 데이터
-
-`docs_field_config`에 OMM/Spare Part 필드 정의 insert (각 서브모듈당 ~15행). Raw Data 테이블 컬럼 정의의 single source of truth.
-
----
-
-## 3. 페이지 구현
-
-### 3.1 신규 페이지
-
-| 파일 | 경로 |
-|---|---|
-| `src/pages/docs/DocsOMMRawDataPage.tsx` | `/docs/omm` |
-| `src/pages/docs/DocsOMMDetailPage.tsx` | `/docs/omm/:id` |
-| `src/pages/docs/DocsSparePartRawDataPage.tsx` | `/docs/spare-part` |
-| `src/pages/docs/DocsSparePartDetailPage.tsx` | `/docs/spare-part/:id` |
-| `src/pages/docs/DocsWarrantyRawDataPage.tsx` | `/docs/warranty` (placeholder) |
-
-### 3.2 변경 페이지
-
-| 파일 | 변경 |
-|---|---|
-| `DocsDashboardPage` | 4섹션 통합 뷰로 전면 개편 |
-| `DocsRawDataPage` → `DocsABDRawDataPage` | 파일명 변경 (내용 동일) |
-| `DocsDrawingDetailPage` → `DocsABDDetailPage` | 파일명 변경 |
-| `DocsImportPage` | 상단에 서브모듈 선택 추가 (ABD/OMM/Spare Part) |
-| `DocsExportPage` | placeholder → 본격 구현 (서브모듈 선택 + 필터 + 시트 3종) |
-| `AppSidebar` | Docs 그룹 7개 메뉴로 재구성 |
-| `App.tsx` | 신규 라우트 + 리다이렉트 추가 |
-
-### 3.3 신규 라이브러리/훅
-
-| 파일 | 역할 |
-|---|---|
-| `src/lib/docs-omm-status.ts` | OMM 상태 계산 로직 |
-| `src/lib/docs-omm-import-parser.ts` | OMM 엑셀 파서 |
-| `src/lib/docs-omm-excel-export.ts` | OMM Export |
-| `src/lib/docs-spare-part-status.ts` | Spare Part 상태 계산 |
-| `src/lib/docs-spare-part-import-parser.ts` | Spare Part 파서 |
-| `src/lib/docs-spare-part-excel-export.ts` | Spare Part Export |
-| `src/hooks/useDocsFieldConfig` | `sub_module` 인자 추가 (default `'as_built'`) |
-
-### 3.4 Dashboard 레이아웃
-
-```text
-┌────────────────────────────────────────────────────────┐
-│ Docs Dashboard           Data Date: 04 May 2026       │
-├────────────────────────────────────────────────────────┤
-│ KPI Row (4 cards): ABD | OMM | Warranty | Spare Part │
-│  approved/total  + risk/overdue count                  │
-├────────────────────────────────────────────────────────┤
-│ § ABD     — Cycle progress, top overdue                │
-│ § OMM     — Status pie, category progress              │
-│ § Warranty — placeholder ("Phase 3에서 활성화")         │
-│ § Spare Part — Status 분포, storage 합계               │
-├────────────────────────────────────────────────────────┤
-│ § Recent Changes (3개 활성 모듈 통합, 최근 20건)       │
-└────────────────────────────────────────────────────────┘
-```
-
-각 섹션 카드 클릭 시 해당 Raw Data 페이지로 이동.
-
----
-
-## 4. Import / Export 통합
-
-### Import (`/docs/import`)
-- 상단 라디오: `ABD | OMM | Spare Part` (Warranty는 비활성)
-- 선택에 따라 expected headers, parser, target table 분기
-- `docs_upload_batches.sub_module` 값으로 기록
-- `docs_field_config` 조회 시 `sub_module` 필터 적용
-
-### Export (`/docs/export`)
-- 상단 서브모듈 선택 (단일)
-- 서브모듈별 필터:
-  - ABD: Cycle/Status/Risk/Trade
-  - OMM: Status/Category/Contractor
-  - Spare Part: Status/Category
-- 시트:
-  - `Records` — 필터된 raw
-  - `Summary` — 상태별 카운트
-  - `Export Info` — 사용자/시간/필터/Data Date
-
----
-
-## 5. 작업 순서 (Phase 1 단일 라운드)
-
-1. **DB 마이그레이션** — `docs_omm`, `docs_spare_part` 테이블 + RLS + 시드 + `docs_field_config.sub_module`/`docs_change_log.sub_module` 컬럼 추가
-2. **사이드바 재구성** — 7개 메뉴
-3. **라우팅 변경** — `/docs/abd` 신규, `/docs/raw-data` 리다이렉트, 신규 4개 경로 추가
-4. **OMM Raw Data + Detail** 구현
-5. **Spare Part Raw Data + Detail** 구현
-6. **Warranty placeholder 페이지** ("Phase 3에서 활성화")
-7. **Import 페이지** 서브모듈 선택 + 파서 2종 신규
-8. **Export 페이지** 본격 구현 (3개 활성 서브모듈)
-9. **Dashboard 개편** — 4섹션 통합
-
----
-
-## 6. 작업 범위 외
-
-- Warranty 본격 구현 (Phase 3)
-- Admin `subcontractor` 마스터 ACRA 컬럼 추가 (Phase 3)
-- 4개 서브모듈 cross-module rule
-- Phase 2 공통 컴포넌트 추출 (`DocsRawDataShell`, `DocsDetailShell`) — 다음 라운드
-
----
-
-## 7. 위험 / 완화
-
-| 위험 | 완화 |
-|---|---|
-| `docs_change_log` 컬럼 변경이 ABD 코드 깨뜨림 | 기존 `drawing_id` 컬럼 nullable 유지 + 신규 `record_id` nullable 추가, 둘 다 사용 |
-| `useDocsFieldConfig` 시그니처 변경 | default `'as_built'`로 기존 호출부 호환 |
-| 사이드바 7개 항목 길이 | Docs 그룹 collapsible (이미 지원) |
-| ABD 경로 변경으로 외부 북마크 깨짐 | `/docs/raw-data*` → `/docs/abd*` 영구 리다이렉트 |
-
----
-
-## 8. 승인 시 즉시 착수
-
-이 계획대로 Phase 1 전체(DB 마이그레이션 + 7개 메뉴 + OMM/Spare Part CRUD + Import 확장 + Export 신규 + Dashboard 개편)를 한 라운드에 구현합니다. **승인 부탁드립니다.**
+- ABD Raw Data 페이지에서 Export → Download 시 다운로드된 xlsx 파일이 T&C Subtest export와 시각적으로 동일한 헤더 밴드/메타 영역/헤더 셀 색상/보더/프리즈를 가짐
+- 날짜 컬럼은 Excel native date로 표시되며 정렬 가능
+- 재임포트 포맷으로 다운로드 후 Import 페이지에서 정상적으로 인식됨
