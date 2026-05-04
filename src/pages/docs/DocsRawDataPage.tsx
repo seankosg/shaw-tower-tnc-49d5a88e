@@ -44,7 +44,7 @@ import { exportDocsRawToExcel } from '@/lib/docs-excel-export';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import { DocsBulkEditBar } from '@/components/raw-data/DocsBulkEditBar';
 import { DocsCycleProgress } from '@/components/docs/DocsCycleProgress';
-import { computeOverallStatus } from '@/lib/docs-status';
+import { computeOverallStatus, computeIsClosed } from '@/lib/docs-status';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
@@ -98,6 +98,7 @@ interface DocsRawRow {
   trade?: string;
   risk?: 'red' | 'amber' | 'green';
   overall_status?: string;
+  is_closed?: boolean;
 }
 
 const DOCS_RAW_FIELDS = [
@@ -466,6 +467,7 @@ export default function DocsRawDataPage() {
       trade: t === '—' ? '' : (t as string),
       risk: computeRisk(r.is_submitted, scDateMap[r.project_id], leadDays),
       overall_status: computeOverallStatus(r as any, dataDate),
+      is_closed: computeIsClosed(r as any),
     };
   }), [items, scDateMap, leadDays, dataDate]);
 
@@ -1023,6 +1025,7 @@ function DocsRawTableView({
     'cursor-pointer',
     row.is_submitted && 'text-foreground',
     !row.is_submitted && row.risk === 'red' && 'bg-destructive/5',
+    row.is_closed && 'text-muted-foreground/70 [&_*]:!text-muted-foreground/70 opacity-70',
     hoveredIndex === index && 'bg-muted/50',
   );
 
@@ -1030,6 +1033,7 @@ function DocsRawTableView({
     const base = 'hsl(var(--background))';
     const opaque = `linear-gradient(${base}, ${base})`;
     if (hoveredIndex === index) return `${opaque}, hsl(var(--muted) / 0.95)`;
+    if (row.is_closed) return `${opaque}, hsl(var(--muted) / 0.5)`;
     if (!row.is_submitted && row.risk === 'red') return `${opaque}, hsl(var(--destructive) / 0.06)`;
     return base;
   };

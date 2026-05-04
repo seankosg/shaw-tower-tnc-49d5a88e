@@ -196,6 +196,37 @@ export function isCycleInputEnabled(
   return next === cycleNumber;
 }
 
+/** Cycle data fields nulled when the cycle is invalidated by an earlier 'A'. */
+export const CYCLE_DATA_FIELDS = [
+  'planned_date',
+  'submission_date',
+  'approval_date',
+  'actual_response_date',
+  'approval_status',
+] as const;
+
+/**
+ * If any earlier cycle has approval_status = 'A', clear all data on subsequent
+ * cycles (planned/submission/approval/actual_response/status). Idempotent.
+ *
+ * Returns a shallow-cloned object — input is not mutated.
+ */
+export function clearCyclesAfterClosure<T extends DrawingForStatus>(drawing: T): T {
+  const out: any = { ...drawing };
+  const s1 = normStatus(out.sub1_approval_status);
+  const s2 = normStatus(out.sub2_approval_status);
+  const clearCycle = (n: CycleNumber) => {
+    for (const f of CYCLE_DATA_FIELDS) out[`sub${n}_${f}`] = null;
+  };
+  if (s1 === 'A') {
+    clearCycle(2);
+    clearCycle(3);
+  } else if (s2 === 'A') {
+    clearCycle(3);
+  }
+  return out as T;
+}
+
 /** Normalize a free-text status to A/B/C/null. Used during import. */
 export function normalizeApprovalStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | null {
   if (!raw) return null;

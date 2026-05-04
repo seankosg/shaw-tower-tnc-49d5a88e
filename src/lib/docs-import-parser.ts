@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { normalizeDate } from '@/lib/defect-parser';
-import { normalizeApprovalStatus } from '@/lib/docs-status';
+import { normalizeApprovalStatus, clearCyclesAfterClosure } from '@/lib/docs-status';
 import { getMappedField } from '@/lib/header-mappings-cache';
 
 /**
@@ -488,6 +488,25 @@ export async function parseDocsExcel(
           ? String(struct.subcontractor_name).trim()
           : 'TBA';
 
+      // Clear later cycles when an earlier cycle is 'A' (closed).
+      const cleaned = clearCyclesAfterClosure({
+        sub1_planned_date: struct.sub1_planned_date ?? null,
+        sub1_submission_date: struct.sub1_submission_date ?? null,
+        sub1_approval_date: struct.sub1_approval_date ?? null,
+        sub1_actual_response_date: null,
+        sub1_approval_status: sub1Status,
+        sub2_planned_date: struct.sub2_planned_date ?? null,
+        sub2_submission_date: struct.sub2_submission_date ?? null,
+        sub2_approval_date: struct.sub2_approval_date ?? null,
+        sub2_actual_response_date: null,
+        sub2_approval_status: sub2Status,
+        sub3_planned_date: struct.sub3_planned_date ?? null,
+        sub3_submission_date: struct.sub3_submission_date ?? null,
+        sub3_approval_date: struct.sub3_approval_date ?? null,
+        sub3_actual_response_date: null,
+        sub3_approval_status: sub3Status,
+      });
+
       rows.push({
         rawRowNo: r + 1,
         sheetName,
@@ -503,20 +522,20 @@ export async function parseDocsExcel(
         current_status: struct.current_status ?? null,
         aconex_status: aconexStatus,
         is_submitted: isSubmitted,
-        sub1_planned_date: struct.sub1_planned_date ?? null,
-        sub1_submission_date: struct.sub1_submission_date ?? null,
-        sub1_approval_date: struct.sub1_approval_date ?? null,
-        sub1_approval_status: sub1Status,
-        sub2_planned_date: struct.sub2_planned_date ?? null,
-        sub2_submission_date: struct.sub2_submission_date ?? null,
-        sub2_approval_date: struct.sub2_approval_date ?? null,
-        sub2_approval_status: sub2Status,
-        sub3_planned_date: struct.sub3_planned_date ?? null,
-        sub3_submission_date: struct.sub3_submission_date ?? null,
-        sub3_approval_date: struct.sub3_approval_date ?? null,
-        sub3_approval_status: sub3Status,
-        submitted_date: struct.sub1_submission_date ?? null,
-        approved_date: struct.sub1_approval_date ?? null,
+        sub1_planned_date: cleaned.sub1_planned_date ?? null,
+        sub1_submission_date: cleaned.sub1_submission_date ?? null,
+        sub1_approval_date: cleaned.sub1_approval_date ?? null,
+        sub1_approval_status: cleaned.sub1_approval_status ?? null,
+        sub2_planned_date: cleaned.sub2_planned_date ?? null,
+        sub2_submission_date: cleaned.sub2_submission_date ?? null,
+        sub2_approval_date: cleaned.sub2_approval_date ?? null,
+        sub2_approval_status: cleaned.sub2_approval_status ?? null,
+        sub3_planned_date: cleaned.sub3_planned_date ?? null,
+        sub3_submission_date: cleaned.sub3_submission_date ?? null,
+        sub3_approval_date: cleaned.sub3_approval_date ?? null,
+        sub3_approval_status: cleaned.sub3_approval_status ?? null,
+        submitted_date: cleaned.sub1_submission_date ?? null,
+        approved_date: cleaned.sub1_approval_date ?? null,
         transmittal_number: struct.transmittal_number ?? null,
         transmittal_due_date: struct.transmittal_due_date ?? null,
         days_due: struct.days_due ?? null,

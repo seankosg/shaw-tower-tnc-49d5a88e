@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { computeRisk } from '@/lib/docs-risk';
-import { computeOverallStatus } from '@/lib/docs-status';
+import { computeOverallStatus, computeIsClosed, clearCyclesAfterClosure, CYCLE_DATA_FIELDS } from '@/lib/docs-status';
 import { TRADE_OPTIONS, resolveTrade } from '@/lib/docs-trade';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -250,19 +250,40 @@ export default function DocsDrawingDetailPage() {
       updated_by: user.id,
       data_source_type: 'app_direct_input',
     };
-    const changes: { field: string; oldValue: any; newValue: any }[] = [];
+    const changes: { field: string; oldValue: any; newValue: any; source: string }[] = [];
 
+    // 1) Collect user-edited values into payload.
     for (const field of EDITABLE_FIELDS) {
       const next = (form as any)[field];
       const normalized = next === '' || next === undefined ? null : next;
-      const prev = (record as any)[field] ?? null;
       payload[field] = normalized;
-      // Compare as strings to avoid bool/null/'' mismatches
-      const prevStr = prev == null ? '' : String(prev);
-      const nextStr = normalized == null ? '' : String(normalized);
-      if (prevStr !== nextStr) {
-        changes.push({ field, oldValue: prev, newValue: normalized });
+    }
+
+    // 2) Auto-clear later cycles when an earlier cycle is 'A'.
+    const cleaned = clearCyclesAfterClosure({ ...record, ...payload });
+    for (const n of [1, 2, 3] as const) {
+      for (const f of CYCLE_DATA_FIELDS) {
+        const key = `sub${n}_${f}`;
+        payload[key] = (cleaned as any)[key] ?? null;
       }
+    }
+
+    // 3) Diff against the original record (so cleanup-driven nullifications log too).
+    for (const field of EDITABLE_FIELDS) {
+      const prev = (record as any)[field] ?? null;
+      const newVal = payload[field] ?? null;
+      const prevStr = prev == null ? '' : String(prev);
+      const nextStr = newVal == null ? '' : String(newVal);
+      if (prevStr === nextStr) continue;
+      const isCycleField = /^sub[123]_/.test(field);
+      // If user did NOT edit this field but cleanup nulled it, mark source.
+      const userVal = (form as any)[field];
+      const userNorm = userVal === '' || userVal === undefined ? null : userVal;
+      const userTouched = String(userNorm ?? '') !== prevStr;
+      const source = !userTouched && isCycleField && newVal == null
+        ? 'auto_close_cleanup'
+        : 'app_direct_input';
+      changes.push({ field, oldValue: prev, newValue: newVal, source });
     }
 
     const { error } = await (supabase as any).from('docs_drawings').update(payload).eq('id', record.id);
@@ -274,12 +295,12 @@ export default function DocsDrawingDetailPage() {
 
     if (changes.length > 0) {
       await (supabase as any).from('docs_change_log').insert(
-        changes.map(({ field, oldValue, newValue }) => ({
+        changes.map(({ field, oldValue, newValue, source }) => ({
           drawing_id: record.id,
           changed_field: field,
           old_value: oldValue == null ? null : String(oldValue),
           new_value: newValue == null ? null : String(newValue),
-          change_source: 'app_direct_input',
+          change_source: source,
           changed_by: user.id,
         })),
       );
@@ -302,6 +323,7 @@ export default function DocsDrawingDetailPage() {
 
   const risk = computeRisk(form.is_submitted ?? record.is_submitted, scDate, leadDays ?? 30);
   const overallStatus = computeOverallStatus(form as any, dataDate);
+  const isClosed = computeIsClosed(form as any);
   const tradeDerived = resolveTrade(form as any);
 
   // Build Subcontractor Select options preserving legacy values
@@ -333,14 +355,18 @@ export default function DocsDrawingDetailPage() {
       </div>
 
       {/* Item Detail Card */}
-      <Card>
+      <Card className={cn(isClosed && 'bg-muted/40 border-muted')}>
         <CardHeader>
-          <CardTitle className="flex flex-wrap items-center gap-x-6 gap-y-2 text-lg">
+          <CardTitle className={cn('flex flex-wrap items-center gap-x-6 gap-y-2 text-lg', isClosed && 'text-muted-foreground')}>
             <span className="font-mono">ITEM DETAIL — {record.document_no}</span>
+            {isClosed && (
+              <Badge className="bg-muted text-muted-foreground hover:bg-muted text-[10px] uppercase tracking-wide">Closed</Badge>
+            )}
             <Badge className={cn('text-[10px]',
               risk === 'red' ? 'bg-red-100 text-red-800 hover:bg-red-100'
               : risk === 'amber' ? 'bg-amber-100 text-amber-800 hover:bg-amber-100'
               : 'bg-green-100 text-green-800 hover:bg-green-100',
+              isClosed && 'opacity-60',
             )}>RISK: {risk.toUpperCase()}</Badge>
             <Badge variant="outline" className="text-[10px]">Overall: {overallStatus}</Badge>
             <Badge variant="outline" className="text-[10px]">Trade (derived): {tradeDerived}</Badge>
