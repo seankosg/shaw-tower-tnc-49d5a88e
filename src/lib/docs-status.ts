@@ -5,9 +5,10 @@
  *   S = submission_date
  *   P = approval_date  (== Planned Response Date = S + lead_days, or Excel value)
  *   R = actual_response_date
- *   K = approval_status ∈ {'A','B','C',null}
+ *   K = approval_status ∈ {'A','B','C','UR',null}
  *
  * Status mapping (per-cycle):
+ *   K=UR         → 'Under Review'   (explicit; cycle stays active)
  *   R + K=A      → 'A'              (closed)
  *   R + K=B      → 'B'              (next cycle activated)
  *   R + K=C      → 'C'              (next cycle activated)
@@ -55,12 +56,12 @@ export interface DrawingForStatus {
 
 export type CycleNumber = 1 | 2 | 3;
 
-const VALID_STATUS = new Set(['A', 'B', 'C']);
+const VALID_STATUS = new Set(['A', 'B', 'C', 'UR']);
 
-function normStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | null {
+function normStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | 'UR' | null {
   if (!raw) return null;
   const v = String(raw).trim().toUpperCase();
-  if (VALID_STATUS.has(v)) return v as 'A' | 'B' | 'C';
+  if (VALID_STATUS.has(v)) return v as 'A' | 'B' | 'C' | 'UR';
   return null;
 }
 
@@ -90,6 +91,8 @@ export function computeCycleStatus(
   dataDate: string | null,
 ): CycleStatus {
   const status = normStatus(cycle.approval_status);
+  // Explicit "Under Review" overrides date-based derivation.
+  if (status === 'UR') return 'Under Review';
   if (cycle.actual_response_date) {
     if (status) return status;
     return 'Under Review';
@@ -227,13 +230,16 @@ export function clearCyclesAfterClosure<T extends DrawingForStatus>(drawing: T):
   return out as T;
 }
 
-/** Normalize a free-text status to A/B/C/null. Used during import. */
-export function normalizeApprovalStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | null {
+/** Normalize a free-text status to A/B/C/UR/null. Used during import. */
+export function normalizeApprovalStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | 'UR' | null {
   if (!raw) return null;
   const v = String(raw).trim().toUpperCase();
   if (v === 'A') return 'A';
   if (v === 'B') return 'B';
   if (v === 'C') return 'C';
+  if (v === 'UR' || v === 'U/R' || v === 'U.R' || v === 'U R') return 'UR';
+  if (v === 'UNDER REVIEW' || v === 'UNDERREVIEW' || v === 'IN REVIEW' || v === 'INREVIEW') return 'UR';
+  if (v === 'PENDING' || v === 'PENDING REVIEW' || v === 'REVIEW') return 'UR';
   if (v === 'APPROVED') return 'A';
   if (v.startsWith('APPROVED WITH COMMENT')) return 'B';
   if (v.startsWith('APPROVED W/COMMENT')) return 'B';

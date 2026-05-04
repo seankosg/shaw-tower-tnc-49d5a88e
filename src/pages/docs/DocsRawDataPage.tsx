@@ -245,6 +245,22 @@ function uniqueOptions(data: DocsRawRow[], field: keyof DocsRawRow) {
     .map((value) => ({ value, label: value }));
 }
 
+/** Merge seed values into an option list, preserving order: seeds first (in given order), then remaining unique data values. */
+function mergeOptionSeeds(
+  options: { value: string; label: string }[],
+  seeds: string[],
+): { value: string; label: string }[] {
+  const present = new Set(options.map((o) => o.value));
+  const seedOpts = seeds.filter((s) => !present.has(s)).map((s) => ({ value: s, label: s }));
+  const seedSet = new Set(seeds);
+  const ordered = [
+    ...seeds.filter((s) => present.has(s)).map((s) => options.find((o) => o.value === s)!),
+    ...seedOpts,
+    ...options.filter((o) => !seedSet.has(o.value)),
+  ];
+  return ordered;
+}
+
 // ─── Filter dropdowns (mirror Defect) ──────────────────────────────────────
 function MultiSelectDropdown({ column, options }: { column: any; options: { value: string; label: string }[] }) {
   const selected: string[] = (column.getFilterValue() as string[]) ?? [];
@@ -548,9 +564,9 @@ export default function DocsRawDataPage() {
     document_type: uniqueOptions(augmentedItems, 'document_type'),
     aconex_status: uniqueOptions(augmentedItems, 'aconex_status'),
     current_status: uniqueOptions(augmentedItems, 'current_status'),
-    sub1_approval_status: uniqueOptions(augmentedItems, 'sub1_approval_status'),
-    sub2_approval_status: uniqueOptions(augmentedItems, 'sub2_approval_status'),
-    sub3_approval_status: uniqueOptions(augmentedItems, 'sub3_approval_status'),
+    sub1_approval_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'sub1_approval_status'), ['A', 'B', 'C', 'UR']),
+    sub2_approval_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'sub2_approval_status'), ['A', 'B', 'C', 'UR']),
+    sub3_approval_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'sub3_approval_status'), ['A', 'B', 'C', 'UR']),
     is_submitted: [{ value: 'true', label: 'Submitted' }, { value: 'false', label: 'Not submitted' }],
     trade: TRADE_OPTIONS.map((t) => ({ value: t, label: t })),
     team: ALL_TEAMS.map((t) => ({ value: t, label: TEAM_LABELS[t] })),
