@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { AppRole } from '@/types/enums';
 
+export type DocsSubModule = 'as_built' | 'omm' | 'warranty' | 'spare_part';
+
 export interface DocsFieldConfigRow {
   id: string;
   field_name: string;
@@ -11,6 +13,7 @@ export interface DocsFieldConfigRow {
   sort_order: number;
   original_header: string | null;
   source_origin: string;
+  sub_module: DocsSubModule;
   visible_to_roles: AppRole[] | null;
   editable_to_roles: AppRole[] | null;
 }
