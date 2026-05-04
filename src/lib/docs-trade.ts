@@ -51,6 +51,20 @@ export function getTradeFromSheetName(sheetName: string | null | undefined): Tra
   return 'Other';
 }
 
+/**
+ * Resolve a row's effective Trade. If a manually-set DB value exists on
+ * `row.trade`, use it. Otherwise fall back to `getTradeFromSheetName(row.sheet_name)`.
+ */
+export function resolveTrade(row: { trade?: string | null; sheet_name?: string | null }): TradeCategory | '—' {
+  const explicit = (row.trade ?? '').trim();
+  if (explicit) {
+    // If it matches a known category, return as TradeCategory; else treat as 'Other'
+    if ((TRADE_OPTIONS as string[]).includes(explicit)) return explicit as TradeCategory;
+    return 'Other';
+  }
+  return getTradeFromSheetName(row.sheet_name);
+}
+
 /** All possible trade values, used to populate the multi-select filter. */
 export const TRADE_OPTIONS: TradeCategory[] = [
   'Architecture',

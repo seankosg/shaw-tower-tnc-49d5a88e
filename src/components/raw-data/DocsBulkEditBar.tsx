@@ -11,7 +11,12 @@ import { cn } from '@/lib/utils';
 interface DocsBulkEditBarProps<TRow extends { id: string }> {
   selectedRows: TRow[];
   fields: BulkEditableField[];
-  onApplied: (result: { field: string; value: string | number | boolean | null; ids: string[] }) => void;
+  onApplied: (result: {
+    field: string;
+    value: string | number | boolean | null;
+    ids: string[];
+    extraUpdates?: Record<string, string | number | boolean | null>;
+  }) => void;
   onClearSelection: () => void;
 }
 
@@ -42,17 +47,37 @@ export function DocsBulkEditBar<TRow extends { id: string }>({
     setBusy(true);
     try {
       const ids = selectedRows.map((r) => r.id);
-      const submitValue: string | number | boolean | null =
-        value === '' ? null
-          : selectedField.inputType === 'select' && value === '__CLEAR__' ? null
-          : value;
+
+      // Coerce string -> typed value depending on inputType
+      let submitValue: string | number | boolean | null;
+      let extraUpdates: Record<string, string | number | boolean | null> | undefined;
+
+      if (value === '' || value === '__CLEAR__') {
+        submitValue = null;
+      } else if (selectedField.inputType === 'boolean') {
+        submitValue = value === 'true';
+      } else if (selectedField.inputType === 'number') {
+        const n = Number(value);
+        submitValue = Number.isFinite(n) ? n : null;
+      } else {
+        submitValue = value;
+      }
+
+      // Subcontractor: when picking from master, also write companion name field
+      if (selectedField.field === 'subcontractor_id' && selectedField.companionFields?.includes('subcontractor_name')) {
+        const opt = (selectedField.options ?? []).find((o) => o.value === value);
+        const name = opt && value !== '' && value !== '__CLEAR__' ? opt.label : null;
+        extraUpdates = { subcontractor_name: name };
+      }
+
       const res = await applyBulkUpdate({
         table: 'docs_drawings',
         ids,
-        field,
+        field: selectedField.field,
         value: submitValue,
         userId: user.id,
         changeSource: 'bulk_edit',
+        extraUpdates,
       });
       if (res.failed > 0) {
         toast({
@@ -63,7 +88,7 @@ export function DocsBulkEditBar<TRow extends { id: string }>({
       } else {
         toast({ title: 'Bulk update applied', description: `${res.succeeded} drawing(s) updated.` });
       }
-      onApplied({ field, value: submitValue, ids });
+      onApplied({ field: selectedField.field, value: submitValue, ids, extraUpdates });
       setOpen(false);
       setField('');
       setValue('');
@@ -108,22 +133,33 @@ export function DocsBulkEditBar<TRow extends { id: string }>({
             </SelectContent>
           </Select>
 
-          {selectedField && selectedField.inputType === 'select' && (
+          {selectedField && (selectedField.inputType === 'select' || selectedField.inputType === 'boolean') && (
             <Select value={value} onValueChange={setValue}>
-              <SelectTrigger className="h-8 w-[200px] text-xs">
+              <SelectTrigger className="h-8 w-[220px] text-xs">
                 <SelectValue placeholder="Pick a value..." />
               </SelectTrigger>
               <SelectContent className="max-h-72">
                 <SelectItem value="__CLEAR__" className="text-xs italic text-muted-foreground">— Clear —</SelectItem>
-                {(selectedField.options ?? []).map((o) => (
-                  <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
-                ))}
+                {selectedField.inputType === 'boolean' ? (
+                  <>
+                    <SelectItem value="true" className="text-xs">Yes</SelectItem>
+                    <SelectItem value="false" className="text-xs">No</SelectItem>
+                  </>
+                ) : (
+                  (selectedField.options ?? []).map((o) => (
+                    <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           )}
 
           {selectedField && (selectedField.inputType === 'text' || selectedField.inputType === 'textarea') && (
             <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="New value (empty = clear)" className="h-8 w-[220px] text-xs" />
+          )}
+
+          {selectedField && selectedField.inputType === 'number' && (
+            <Input type="number" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Number (empty = clear)" className="h-8 w-[160px] text-xs" />
           )}
 
           {selectedField && selectedField.inputType === 'date' && (

@@ -39,7 +39,7 @@ import { useAppSetting, useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
 import { useLatestDocsDataDate } from '@/hooks/useLatestDocsDataDate';
 import { computeRisk } from '@/lib/docs-risk';
-import { getTradeFromSheetName, TRADE_OPTIONS } from '@/lib/docs-trade';
+import { resolveTrade, TRADE_OPTIONS } from '@/lib/docs-trade';
 import { exportDocsRawToExcel } from '@/lib/docs-excel-export';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import { DocsBulkEditBar } from '@/components/raw-data/DocsBulkEditBar';
@@ -366,6 +366,7 @@ export default function DocsRawDataPage() {
   const storageKey = user?.id ? `docs-raw-data-state:${user.id}` : 'docs-raw-data-state:anon';
   const [items, setItems] = useState<DocsRawRow[]>([]);
   const [scDateMap, setScDateMap] = useState<Record<string, string>>({});
+  const [subcontractorOptions, setSubcontractorOptions] = useState<{ value: string; label: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [stateLoaded, setStateLoaded] = useState(false);
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
@@ -437,15 +438,36 @@ export default function DocsRawDataPage() {
     })();
   }, []);
 
+  // Subcontractor master list for bulk-edit Select
+  useEffect(() => {
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('subcontractor_master')
+        .select('id, name, type')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+      if (data) {
+        setSubcontractorOptions(
+          data
+            .filter((r: any) => r.type === 'sub' || r.type === 'subsub')
+            .map((r: any) => ({ value: r.id as string, label: r.name as string })),
+        );
+      }
+    })();
+  }, []);
+
   const { dataDate } = useLatestDocsDataDate('as_built');
 
   // Augment rows with derived trade + risk + overall status (v2)
-  const augmentedItems = useMemo<DocsRawRow[]>(() => items.map((r) => ({
-    ...r,
-    trade: getTradeFromSheetName(r.sheet_name) === '—' ? '' : getTradeFromSheetName(r.sheet_name) as string,
-    risk: computeRisk(r.is_submitted, scDateMap[r.project_id], leadDays),
-    overall_status: computeOverallStatus(r as any, dataDate),
-  })), [items, scDateMap, leadDays, dataDate]);
+  const augmentedItems = useMemo<DocsRawRow[]>(() => items.map((r) => {
+    const t = resolveTrade(r);
+    return {
+      ...r,
+      trade: t === '—' ? '' : (t as string),
+      risk: computeRisk(r.is_submitted, scDateMap[r.project_id], leadDays),
+      overall_status: computeOverallStatus(r as any, dataDate),
+    };
+  }), [items, scDateMap, leadDays, dataDate]);
 
   // ─── State persistence (localStorage) ───
   useEffect(() => {
@@ -693,39 +715,69 @@ export default function DocsRawDataPage() {
   );
 
   const bulkFields = useMemo<BulkEditableField[]>(() => [
+    // Classification
+    { field: 'trade', label: getLabel('trade') || 'Trade', inputType: 'select', group: 'Classification', options: optionFields.trade },
     { field: 'discipline', label: getLabel('discipline'), inputType: 'select', group: 'Classification', options: optionFields.discipline },
     { field: 'document_type', label: getLabel('document_type'), inputType: 'select', group: 'Classification', options: optionFields.document_type },
+    { field: 'series', label: getLabel('series') || 'Series', inputType: 'text', group: 'Classification' },
+    { field: 'level_location', label: getLabel('level_location') || 'Level / Location', inputType: 'text', group: 'Classification' },
+    { field: 'sequential_no', label: getLabel('sequential_no') || 'Sequential No', inputType: 'text', group: 'Classification' },
+    // Status
     { field: 'aconex_status', label: getLabel('aconex_status'), inputType: 'select', group: 'Status', options: optionFields.aconex_status },
     { field: 'current_status', label: getLabel('current_status'), inputType: 'select', group: 'Status', options: optionFields.current_status },
+    { field: 'is_submitted', label: getLabel('is_submitted') || 'Submitted?', inputType: 'boolean', group: 'Status' },
+    // Submission status
     { field: 'sub1_approval_status', label: getLabel('sub1_approval_status'), inputType: 'select', group: 'Submission', options: optionFields.sub1_approval_status },
     { field: 'sub2_approval_status', label: getLabel('sub2_approval_status'), inputType: 'select', group: 'Submission', options: optionFields.sub2_approval_status },
     { field: 'sub3_approval_status', label: getLabel('sub3_approval_status'), inputType: 'select', group: 'Submission', options: optionFields.sub3_approval_status },
+    // Dates
     { field: 'submitted_date', label: getLabel('submitted_date'), inputType: 'date', group: 'Dates' },
     { field: 'approved_date', label: getLabel('approved_date'), inputType: 'date', group: 'Dates' },
     { field: 'transmittal_due_date', label: getLabel('transmittal_due_date'), inputType: 'date', group: 'Dates' },
+    // 1st Submission
     { field: 'sub1_planned_date', label: getLabel('sub1_planned_date'), inputType: 'date', group: '1st Submission' },
     { field: 'sub1_submission_date', label: getLabel('sub1_submission_date'), inputType: 'date', group: '1st Submission' },
     { field: 'sub1_approval_date', label: getLabel('sub1_approval_date'), inputType: 'date', group: '1st Submission' },
     { field: 'sub1_actual_response_date', label: getLabel('sub1_actual_response_date'), inputType: 'date', group: '1st Submission' },
+    // 2nd Submission
     { field: 'sub2_planned_date', label: getLabel('sub2_planned_date'), inputType: 'date', group: '2nd Submission' },
     { field: 'sub2_submission_date', label: getLabel('sub2_submission_date'), inputType: 'date', group: '2nd Submission' },
     { field: 'sub2_approval_date', label: getLabel('sub2_approval_date'), inputType: 'date', group: '2nd Submission' },
     { field: 'sub2_actual_response_date', label: getLabel('sub2_actual_response_date'), inputType: 'date', group: '2nd Submission' },
+    // 3rd Submission
     { field: 'sub3_planned_date', label: getLabel('sub3_planned_date'), inputType: 'date', group: '3rd Submission' },
     { field: 'sub3_submission_date', label: getLabel('sub3_submission_date'), inputType: 'date', group: '3rd Submission' },
     { field: 'sub3_approval_date', label: getLabel('sub3_approval_date'), inputType: 'date', group: '3rd Submission' },
     { field: 'sub3_actual_response_date', label: getLabel('sub3_actual_response_date'), inputType: 'date', group: '3rd Submission' },
+    // Notes
     { field: 'revision', label: getLabel('revision'), inputType: 'text', group: 'Notes' },
     { field: 'title', label: getLabel('title'), inputType: 'text', group: 'Notes' },
     { field: 'remarks', label: getLabel('remarks'), inputType: 'text', group: 'Notes' },
     { field: 'transmittal_number', label: getLabel('transmittal_number'), inputType: 'text', group: 'Notes' },
-    { field: 'subcontractor_name', label: getLabel('subcontractor_name'), inputType: 'text', group: 'Personnel' },
+    // Personnel
+    {
+      field: 'subcontractor_id',
+      label: getLabel('subcontractor_name') || 'Subcontractor (from master)',
+      inputType: 'select',
+      group: 'Personnel',
+      options: subcontractorOptions,
+      companionFields: ['subcontractor_name'],
+    },
+    { field: 'subcontractor_name', label: (getLabel('subcontractor_name') || 'Subcontractor') + ' (free text)', inputType: 'text', group: 'Personnel' },
+    { field: 'organisation_raw', label: getLabel('organisation_raw') || 'Organisation (raw label)', inputType: 'text', group: 'Personnel' },
     { field: 'hdec_pic_name', label: getLabel('hdec_pic_name'), inputType: 'text', group: 'Personnel' },
     { field: 'hdec_eng_name', label: getLabel('hdec_eng_name'), inputType: 'text', group: 'Personnel' },
-  ], [getLabel, optionFields]);
+  ], [getLabel, optionFields, subcontractorOptions]);
 
-  const handleBulkApplied = useCallback(({ field, value, ids }: { field: string; value: string | number | boolean | null; ids: string[] }) => {
-    setItems((prev) => prev.map((r) => (ids.includes(r.id) ? ({ ...r, [field]: value as any }) : r)));
+  const handleBulkApplied = useCallback(({ field, value, ids, extraUpdates }: { field: string; value: string | number | boolean | null; ids: string[]; extraUpdates?: Record<string, string | number | boolean | null> }) => {
+    setItems((prev) => prev.map((r) => {
+      if (!ids.includes(r.id)) return r;
+      const next: any = { ...r, [field]: value };
+      if (extraUpdates) {
+        for (const [k, v] of Object.entries(extraUpdates)) next[k] = v;
+      }
+      return next;
+    }));
     setRowSelection({});
   }, []);
 
