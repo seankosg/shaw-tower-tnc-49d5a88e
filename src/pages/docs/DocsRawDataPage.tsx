@@ -440,12 +440,15 @@ export default function DocsRawDataPage() {
   const { dataDate } = useLatestDocsDataDate('as_built');
 
   // Augment rows with derived trade + risk + overall status (v2)
-  const augmentedItems = useMemo<DocsRawRow[]>(() => items.map((r) => ({
-    ...r,
-    trade: getTradeFromSheetName(r.sheet_name) === '—' ? '' : getTradeFromSheetName(r.sheet_name) as string,
-    risk: computeRisk(r.is_submitted, scDateMap[r.project_id], leadDays),
-    overall_status: computeOverallStatus(r as any, dataDate),
-  })), [items, scDateMap, leadDays, dataDate]);
+  const augmentedItems = useMemo<DocsRawRow[]>(() => items.map((r) => {
+    const t = resolveTrade(r);
+    return {
+      ...r,
+      trade: t === '—' ? '' : (t as string),
+      risk: computeRisk(r.is_submitted, scDateMap[r.project_id], leadDays),
+      overall_status: computeOverallStatus(r as any, dataDate),
+    };
+  }), [items, scDateMap, leadDays, dataDate]);
 
   // ─── State persistence (localStorage) ───
   useEffect(() => {
