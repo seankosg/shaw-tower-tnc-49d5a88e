@@ -438,6 +438,24 @@ export default function DocsRawDataPage() {
     })();
   }, []);
 
+  // Subcontractor master list for bulk-edit Select
+  useEffect(() => {
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('subcontractor_master')
+        .select('id, name, type')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+      if (data) {
+        setSubcontractorOptions(
+          data
+            .filter((r: any) => r.type === 'sub' || r.type === 'subsub')
+            .map((r: any) => ({ value: r.id as string, label: r.name as string })),
+        );
+      }
+    })();
+  }, []);
+
   const { dataDate } = useLatestDocsDataDate('as_built');
 
   // Augment rows with derived trade + risk + overall status (v2)
