@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { computeRisk } from '@/lib/docs-risk';
-import { computeOverallStatus, computeIsClosed, clearCyclesAfterClosure, CYCLE_DATA_FIELDS } from '@/lib/docs-status';
+import { computeOverallStatus, computeIsClosed, clearCyclesAfterClosure, applyCycleAutoFill, CYCLE_DATA_FIELDS } from '@/lib/docs-status';
 import { TRADE_OPTIONS, resolveTrade } from '@/lib/docs-trade';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
@@ -261,8 +261,11 @@ export default function DocsDrawingDetailPage() {
       payload[field] = normalized;
     }
 
-    // 2) Auto-clear later cycles when an earlier cycle is 'A'.
-    const cleaned = clearCyclesAfterClosure({ ...record, ...payload });
+    // 2a) Auto-fill cycle planned/approval dates (S_N+7 → A_N, R_N+7 → P_{N+1} on B/C).
+    //     Fills empty values only — user-entered values are preserved.
+    // 2b) Auto-clear later cycles when an earlier cycle is 'A' (cleanup wins over auto-fill).
+    const filled = applyCycleAutoFill({ ...record, ...payload });
+    const cleaned = clearCyclesAfterClosure(filled);
     for (const n of [1, 2, 3] as const) {
       for (const f of CYCLE_DATA_FIELDS) {
         const key = `sub${n}_${f}`;
@@ -278,13 +281,14 @@ export default function DocsDrawingDetailPage() {
       const nextStr = newVal == null ? '' : String(newVal);
       if (prevStr === nextStr) continue;
       const isCycleField = /^sub[123]_/.test(field);
-      // If user did NOT edit this field but cleanup nulled it, mark source.
+      // If user did NOT edit this field but it changed via cleanup/auto-fill, mark source.
       const userVal = (form as any)[field];
       const userNorm = userVal === '' || userVal === undefined ? null : userVal;
       const userTouched = String(userNorm ?? '') !== prevStr;
-      const source = !userTouched && isCycleField && newVal == null
-        ? 'auto_close_cleanup'
-        : 'app_direct_input';
+      let source = 'app_direct_input';
+      if (!userTouched && isCycleField) {
+        source = newVal == null ? 'auto_close_cleanup' : 'auto_fill';
+      }
       changes.push({ field, oldValue: prev, newValue: newVal, source });
     }
 
