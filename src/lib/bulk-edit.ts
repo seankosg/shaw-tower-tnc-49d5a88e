@@ -78,17 +78,25 @@ function logIdField(
 }
 
 export async function applyBulkUpdate(req: BulkUpdateRequest): Promise<BulkUpdateResult> {
-  const { table, ids, field, value, userId } = req;
+  const { table, ids, field, value, userId, extraUpdates } = req;
   const idField = req.idField ?? 'id';
   const changeSource = req.changeSource ?? 'bulk_edit';
   const result: BulkUpdateResult = { attempted: ids.length, succeeded: 0, failed: 0, errors: [] };
   if (ids.length === 0) return result;
 
+  // All fields involved in this update (primary + companions)
+  const allFields = [field, ...Object.keys(extraUpdates ?? {})];
+  const allValues: Record<string, string | number | boolean | null> = {
+    [field]: value,
+    ...(extraUpdates ?? {}),
+  };
+
   for (const ids_chunk of chunk(ids, CHUNK_SIZE)) {
     // 1) Fetch current values for change-log diff
+    const selectCols = [idField, ...allFields].join(', ');
     const { data: existing, error: selErr } = await (supabase as any)
       .from(table)
-      .select(`${idField}, ${field}`)
+      .select(selectCols)
       .in(idField, ids_chunk);
 
     if (selErr) {
@@ -97,45 +105,55 @@ export async function applyBulkUpdate(req: BulkUpdateRequest): Promise<BulkUpdat
       continue;
     }
 
-    const existingMap = new Map<string, unknown>();
-    for (const row of (existing ?? []) as any[]) existingMap.set(row[idField], row[field]);
+    const existingMap = new Map<string, Record<string, unknown>>();
+    for (const row of (existing ?? []) as any[]) existingMap.set(row[idField], row);
 
-    // Only update rows where the value actually differs
+    // Determine which rows actually need updating (any field differs)
     const changingIds: string[] = [];
     const logRows: any[] = [];
     for (const id of ids_chunk) {
-      const oldVal = existingMap.get(id);
-      const normalizedOld = oldVal == null ? null : String(oldVal);
-      const normalizedNew = value == null ? null : String(value);
-      if (normalizedOld === normalizedNew) continue;
+      const row = existingMap.get(id) ?? {};
+      const perFieldDiffs: { f: string; oldNorm: string | null; newNorm: string | null }[] = [];
+      let anyDiff = false;
+      for (const f of allFields) {
+        const oldVal = row[f];
+        const newVal = allValues[f];
+        const oldNorm = oldVal == null ? null : String(oldVal);
+        const newNorm = newVal == null ? null : String(newVal);
+        if (oldNorm !== newNorm) anyDiff = true;
+        perFieldDiffs.push({ f, oldNorm, newNorm });
+      }
+      if (!anyDiff) continue;
       changingIds.push(id);
-      logRows.push({
-        [logIdField(table)]: id,
-        changed_field: field,
-        old_value: normalizedOld,
-        new_value: normalizedNew,
-        changed_by: userId,
-        change_source: changeSource,
-      });
+      for (const d of perFieldDiffs) {
+        if (d.oldNorm === d.newNorm) continue;
+        logRows.push({
+          [logIdField(table)]: id,
+          changed_field: d.f,
+          old_value: d.oldNorm,
+          new_value: d.newNorm,
+          changed_by: userId,
+          change_source: changeSource,
+        });
+      }
     }
 
     if (changingIds.length === 0) {
-      // counted as "succeeded" no-op
       result.succeeded += ids_chunk.length;
       continue;
     }
 
     // 2) Apply update
+    const updatePayload: Record<string, unknown> = { ...allValues, updated_by: userId };
     const { error: updErr, data: updated } = await (supabase as any)
       .from(table)
-      .update({ [field]: value, updated_by: userId })
+      .update(updatePayload)
       .in(idField, changingIds)
       .select(idField);
 
     if (updErr) {
       result.failed += changingIds.length;
       changingIds.forEach((id) => result.errors.push({ id, message: updErr.message }));
-      // unchanged rows (no-op) still counted as success
       result.succeeded += ids_chunk.length - changingIds.length;
       continue;
     }
@@ -143,7 +161,7 @@ export async function applyBulkUpdate(req: BulkUpdateRequest): Promise<BulkUpdat
     const updatedIds = new Set<string>((updated ?? []).map((r: any) => r[idField]));
     const succeededInChunk = updatedIds.size;
     const blockedInChunk = changingIds.length - succeededInChunk;
-    result.succeeded += succeededInChunk + (ids_chunk.length - changingIds.length); // include no-ops
+    result.succeeded += succeededInChunk + (ids_chunk.length - changingIds.length);
     result.failed += blockedInChunk;
     if (blockedInChunk > 0) {
       changingIds
@@ -156,7 +174,6 @@ export async function applyBulkUpdate(req: BulkUpdateRequest): Promise<BulkUpdat
     if (successfulLogs.length > 0) {
       const { error: logErr } = await (supabase as any).from(logTableFor(table)).insert(successfulLogs);
       if (logErr) {
-        // Log insert errors are non-fatal but recorded in errors[]
         result.errors.push({ id: '(change-log)', message: logErr.message });
       }
     }
