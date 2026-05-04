@@ -198,48 +198,41 @@ const STYLE_DATA = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Main export function
+// Workbook builder (shared by single + per-Subcontractor exports)
 // ---------------------------------------------------------------------------
 
-export function exportSubtestsToExcel<TRow>(opts: ExportSubtestsOptions<TRow>): {
-  rowCount: number;
-  fileName: string;
-} {
-  const { table, fieldConfig, globalFilter, searchParams, meta } = opts;
+interface BuildSubtestsWorkbookParams<TRow> {
+  rows: Row<TRow>[];
+  visibleCols: Column<TRow, unknown>[];
+  fieldConfig: FieldConfigRow[];
+  globalFilter: string;
+  searchParams: URLSearchParams;
+  meta: { userName: string; userType: string };
+  sourceSuffix?: string;
+  filterSummary: string;
+  sortSummary: string;
+}
 
-  const visibleCols = table.getVisibleLeafColumns().filter((c) => !isMetaField(c.id));
-  const sortedRows = table.getSortedRowModel().rows;
+function buildSubtestsWorkbook<TRow>(params: BuildSubtestsWorkbookParams<TRow>): {
+  wb: XLSX.WorkBook;
+  rowCount: number;
+} {
+  const { rows: sortedRows, visibleCols, fieldConfig, globalFilter, searchParams, meta, sourceSuffix, filterSummary, sortSummary } = params;
 
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const exportedTs = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  const fileTs = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
 
-  const sourceLabel = inferSourceLabel(searchParams);
-  const filterSummary = summarizeFilters(table, fieldConfig);
-  const sortSummary = summarizeSort(table, fieldConfig);
+  const baseSourceLabel = inferSourceLabel(searchParams);
+  const sourceLabel = sourceSuffix ? `${baseSourceLabel} | ${sourceSuffix}` : baseSourceLabel;
   const searchLabel = globalFilter?.trim() ? `"${globalFilter.trim()}"` : '(none)';
 
   const colCount = Math.max(visibleCols.length, 2);
   const lastColLetter = XLSX.utils.encode_col(colCount - 1);
 
-  // Build headers
   const headerRow = visibleCols.map((c) => getColumnDisplayName(c, fieldConfig));
-
-  // Build data rows
   const dataRows = sortedRows.map((r) => visibleCols.map((c) => formatCellValue(r, c)));
 
-  // Compose AOA
-  // Rows (1-indexed in spec):
-  // 1: Title
-  // 2: Exported / by
-  // 3: Source
-  // 4: Search
-  // 5: Filters
-  // 6: Sort
-  // 7: (blank)
-  // 8: Headers
-  // 9+: Data
   const aoa: any[][] = [
     ['SHAW T&C — Subtest Master DB Export'],
     [`Exported: ${exportedTs}  by  ${meta.userName}${meta.userType ? ` (${meta.userType})` : ''}`],
@@ -254,14 +247,12 @@ export function exportSubtestsToExcel<TRow>(opts: ExportSubtestsOptions<TRow>): 
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
 
-  // Merges for meta block (each meta row spans all columns)
   const merges: XLSX.Range[] = [];
   for (let r = 0; r < 6; r++) {
     merges.push({ s: { r, c: 0 }, e: { r, c: colCount - 1 } });
   }
   ws['!merges'] = merges;
 
-  // Column widths from react-table sizes
   const cols: XLSX.ColInfo[] = visibleCols.map((c) => {
     const px = c.getSize();
     const wch = Math.max(8, Math.min(60, Math.round(px / 7)));
@@ -269,21 +260,18 @@ export function exportSubtestsToExcel<TRow>(opts: ExportSubtestsOptions<TRow>): 
   });
   ws['!cols'] = cols;
 
-  // Row heights
-  const rows: XLSX.RowInfo[] = [];
-  rows[0] = { hpt: 24 };       // title
-  for (let i = 1; i <= 5; i++) rows[i] = { hpt: 16 }; // meta lines
-  rows[6] = { hpt: 6 };        // spacer
-  rows[7] = { hpt: 28 };       // header
+  const rowsInfo: XLSX.RowInfo[] = [];
+  rowsInfo[0] = { hpt: 24 };
+  for (let i = 1; i <= 5; i++) rowsInfo[i] = { hpt: 16 };
+  rowsInfo[6] = { hpt: 6 };
+  rowsInfo[7] = { hpt: 28 };
   for (let i = 0; i < dataRows.length; i++) {
-    rows[8 + i] = { hpt: 20 };
+    rowsInfo[8 + i] = { hpt: 20 };
   }
-  ws['!rows'] = rows;
+  ws['!rows'] = rowsInfo;
 
-  // Freeze panes: header row (row index 8 in 1-based -> ySplit 8) + first 3 visible columns
   const xSplit = Math.min(3, visibleCols.length);
   ws['!freeze'] = { xSplit, ySplit: 8 };
-  // Also set the standard SheetJS view for freeze panes
   (ws as any)['!views'] = [
     {
       state: 'frozen',
@@ -294,24 +282,18 @@ export function exportSubtestsToExcel<TRow>(opts: ExportSubtestsOptions<TRow>): 
     },
   ];
 
-  // Apply styles cell-by-cell
-  // Title (row 0)
   setCell(ws, 0, 0, aoa[0][0], STYLE_TITLE);
-  // Meta rows (1..5) — single styled cell, others blank
   for (let r = 1; r <= 5; r++) {
     setCell(ws, r, 0, aoa[r][0], r === 1 ? STYLE_META_LABEL : STYLE_META_VALUE);
   }
-  // Header row (index 7)
   for (let c = 0; c < headerRow.length; c++) {
     setCell(ws, 7, c, headerRow[c], STYLE_HEADER);
   }
-  // Data rows
   for (let r = 0; r < dataRows.length; r++) {
     for (let c = 0; c < dataRows[r].length; c++) {
       const col = visibleCols[c];
       const colId = col?.id;
       if (colId && DATE_COLUMN_IDS.has(colId)) {
-        // Write a real Excel date cell so sorting/filtering treats it as a date
         const original = sortedRows[r].original as any;
         const rawIso = original?.[colId];
         const serial = isoToExcelSerial(rawIso);
@@ -333,17 +315,176 @@ export function exportSubtestsToExcel<TRow>(opts: ExportSubtestsOptions<TRow>): 
     }
   }
 
-  // Update sheet ref to include any new cells
   const lastRow = 8 + dataRows.length - 1;
   ws['!ref'] = `A1:${lastColLetter}${Math.max(lastRow + 1, 8)}`;
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Subtests');
+  return { wb, rowCount: dataRows.length };
+}
 
-  const fileName = `SHAW_Subtests_${fileTs}.xlsx`;
+function timestampForFilename(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+}
+
+function sanitizeForFilename(s: string): string {
+  return s.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_').slice(0, 80) || 'Unnamed';
+}
+
+// ---------------------------------------------------------------------------
+// Main export function (single file)
+// ---------------------------------------------------------------------------
+
+export function exportSubtestsToExcel<TRow>(opts: ExportSubtestsOptions<TRow>): {
+  rowCount: number;
+  fileName: string;
+} {
+  const { table, fieldConfig, globalFilter, searchParams, meta } = opts;
+  const visibleCols = table.getVisibleLeafColumns().filter((c) => !isMetaField(c.id));
+  const sortedRows = table.getSortedRowModel().rows;
+
+  const filterSummary = summarizeFilters(table, fieldConfig);
+  const sortSummary = summarizeSort(table, fieldConfig);
+
+  const { wb, rowCount } = buildSubtestsWorkbook({
+    rows: sortedRows,
+    visibleCols,
+    fieldConfig,
+    globalFilter,
+    searchParams,
+    meta,
+    filterSummary,
+    sortSummary,
+  });
+
+  const fileName = `SHAW_Subtests_${timestampForFilename()}.xlsx`;
   XLSX.writeFile(wb, fileName);
+  return { rowCount, fileName };
+}
 
-  return { rowCount: dataRows.length, fileName };
+// ---------------------------------------------------------------------------
+// Per-Subcontractor split exports (individual downloads + ZIP bundle)
+// ---------------------------------------------------------------------------
+
+function groupSubtestRowsBySubcontractor<TRow>(rows: Row<TRow>[]): Map<string, Row<TRow>[]> {
+  const groups = new Map<string, Row<TRow>[]>();
+  for (const r of rows) {
+    const original = r.original as any;
+    const raw = original?.subcontractor_name;
+    const key = raw && String(raw).trim() ? String(raw).trim() : 'Unassigned';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(r);
+  }
+  return groups;
+}
+
+function sortGroupKeys(keys: string[]): string[] {
+  return [...keys].sort((a, b) => {
+    if (a === 'Unassigned') return 1;
+    if (b === 'Unassigned') return -1;
+    return a.localeCompare(b);
+  });
+}
+
+export function exportSubtestsToExcelBySubcontractor<TRow>(opts: ExportSubtestsOptions<TRow>): {
+  fileCount: number;
+  rowCount: number;
+  fileNames: string[];
+} {
+  const { table, fieldConfig, globalFilter, searchParams, meta } = opts;
+  const visibleCols = table.getVisibleLeafColumns().filter((c) => !isMetaField(c.id));
+  const sortedRows = table.getSortedRowModel().rows;
+
+  const groups = groupSubtestRowsBySubcontractor(sortedRows);
+  const filterSummary = summarizeFilters(table, fieldConfig);
+  const sortSummary = summarizeSort(table, fieldConfig);
+  const ts = timestampForFilename();
+  const fileNames: string[] = [];
+
+  for (const subconName of sortGroupKeys(Array.from(groups.keys()))) {
+    const groupRows = groups.get(subconName)!;
+    const { wb } = buildSubtestsWorkbook({
+      rows: groupRows,
+      visibleCols,
+      fieldConfig,
+      globalFilter,
+      searchParams,
+      meta,
+      sourceSuffix: `Subcontractor: ${subconName}`,
+      filterSummary,
+      sortSummary,
+    });
+    const fileName = `SHAW_Subtests_${sanitizeForFilename(subconName)}_${ts}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    fileNames.push(fileName);
+  }
+
+  return { fileCount: fileNames.length, rowCount: sortedRows.length, fileNames };
+}
+
+export async function exportSubtestsToZipBySubcontractor<TRow>(
+  opts: ExportSubtestsOptions<TRow>,
+): Promise<{ fileCount: number; rowCount: number; zipFileName: string; fileNames: string[] }> {
+  const { default: JSZip } = await import('jszip');
+  const { table, fieldConfig, globalFilter, searchParams, meta } = opts;
+  const visibleCols = table.getVisibleLeafColumns().filter((c) => !isMetaField(c.id));
+  const sortedRows = table.getSortedRowModel().rows;
+
+  const groups = groupSubtestRowsBySubcontractor(sortedRows);
+  const filterSummary = summarizeFilters(table, fieldConfig);
+  const sortSummary = summarizeSort(table, fieldConfig);
+  const ts = timestampForFilename();
+
+  const zip = new JSZip();
+  const usedNames = new Set<string>();
+  const fileNames: string[] = [];
+
+  for (const subconName of sortGroupKeys(Array.from(groups.keys()))) {
+    const groupRows = groups.get(subconName)!;
+    const { wb } = buildSubtestsWorkbook({
+      rows: groupRows,
+      visibleCols,
+      fieldConfig,
+      globalFilter,
+      searchParams,
+      meta,
+      sourceSuffix: `Subcontractor: ${subconName}`,
+      filterSummary,
+      sortSummary,
+    });
+
+    const baseName = `SHAW_Subtests_${sanitizeForFilename(subconName)}_${ts}`;
+    let candidate = `${baseName}.xlsx`;
+    let n = 2;
+    while (usedNames.has(candidate)) {
+      candidate = `${baseName} (${n}).xlsx`;
+      n += 1;
+    }
+    usedNames.add(candidate);
+
+    const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
+    zip.file(candidate, buffer);
+    fileNames.push(candidate);
+  }
+
+  const zipFileName = `SHAW_Subtests_BySubcontractor_${ts}.zip`;
+  const blob = await zip.generateAsync({
+    type: 'blob',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = zipFileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  return { fileCount: fileNames.length, rowCount: sortedRows.length, zipFileName, fileNames };
 }
 
 // ---------------------------------------------------------------------------
