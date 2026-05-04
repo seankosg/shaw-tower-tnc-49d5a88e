@@ -154,27 +154,27 @@ function formatCellValue<TRow>(row: Row<TRow>, col: Column<TRow, unknown>): stri
 // Style helpers
 // ---------------------------------------------------------------------------
 
-const FONT_NAME = 'Calibri';
+export const FONT_NAME = 'Calibri';
 
-const STYLE_TITLE = {
+export const STYLE_TITLE = {
   font: { name: FONT_NAME, sz: 14, bold: true, color: { rgb: 'FFFFFFFF' } },
   fill: { fgColor: { rgb: 'FF1E3A5F' } },
   alignment: { vertical: 'center', horizontal: 'left' },
 } as const;
 
-const STYLE_META_LABEL = {
+export const STYLE_META_LABEL = {
   font: { name: FONT_NAME, sz: 10, bold: true, color: { rgb: 'FF374151' } },
   fill: { fgColor: { rgb: 'FFF3F4F6' } },
   alignment: { vertical: 'center', horizontal: 'left' },
 } as const;
 
-const STYLE_META_VALUE = {
+export const STYLE_META_VALUE = {
   font: { name: FONT_NAME, sz: 10, color: { rgb: 'FF111827' } },
   fill: { fgColor: { rgb: 'FFF3F4F6' } },
   alignment: { vertical: 'center', horizontal: 'left', wrapText: true },
 } as const;
 
-const STYLE_HEADER = {
+export const STYLE_HEADER = {
   font: { name: FONT_NAME, sz: 11, bold: true, color: { rgb: 'FFFFFFFF' } },
   fill: { fgColor: { rgb: 'FF334155' } },
   alignment: { vertical: 'center', horizontal: 'center', wrapText: true },
@@ -186,7 +186,7 @@ const STYLE_HEADER = {
   },
 } as const;
 
-const STYLE_DATA = {
+export const STYLE_DATA = {
   font: { name: FONT_NAME, sz: 10, color: { rgb: 'FF111827' } },
   alignment: { vertical: 'center', horizontal: 'left' },
   border: {
