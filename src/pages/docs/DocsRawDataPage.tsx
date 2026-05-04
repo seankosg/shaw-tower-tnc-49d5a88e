@@ -703,7 +703,7 @@ export default function DocsRawDataPage() {
   }, [isFieldVisible]);
 
   const columnOrder = useMemo(() => {
-    const PINNED = ['__select', 'document_no'];
+    const PINNED = ['__select', 'cycle_progress', 'document_no'];
     const remaining = (DOCS_RAW_FIELDS as readonly string[]).filter((id) => !PINNED.includes(id));
     return [...PINNED, ...sortFieldNames(remaining)];
   }, [sortFieldNames]);
