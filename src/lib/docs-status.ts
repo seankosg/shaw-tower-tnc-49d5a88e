@@ -230,13 +230,16 @@ export function clearCyclesAfterClosure<T extends DrawingForStatus>(drawing: T):
   return out as T;
 }
 
-/** Normalize a free-text status to A/B/C/null. Used during import. */
-export function normalizeApprovalStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | null {
+/** Normalize a free-text status to A/B/C/UR/null. Used during import. */
+export function normalizeApprovalStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | 'UR' | null {
   if (!raw) return null;
   const v = String(raw).trim().toUpperCase();
   if (v === 'A') return 'A';
   if (v === 'B') return 'B';
   if (v === 'C') return 'C';
+  if (v === 'UR' || v === 'U/R' || v === 'U.R' || v === 'U R') return 'UR';
+  if (v === 'UNDER REVIEW' || v === 'UNDERREVIEW' || v === 'IN REVIEW' || v === 'INREVIEW') return 'UR';
+  if (v === 'PENDING' || v === 'PENDING REVIEW' || v === 'REVIEW') return 'UR';
   if (v === 'APPROVED') return 'A';
   if (v.startsWith('APPROVED WITH COMMENT')) return 'B';
   if (v.startsWith('APPROVED W/COMMENT')) return 'B';
