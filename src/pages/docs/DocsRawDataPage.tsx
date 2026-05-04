@@ -647,6 +647,10 @@ export default function DocsRawDataPage() {
             if (!value) return <span className="text-muted-foreground">—</span>;
             return <Badge variant="outline" className="text-[10px]">{String(value)}</Badge>;
           }
+          if (field === 'team') {
+            if (!value) return <span className="text-muted-foreground">—</span>;
+            return <Badge variant="outline" className="text-[10px]">{formatTeamLabel(String(value))}</Badge>;
+          }
           if (field === 'risk') {
             const r = row.original.risk;
             if (!r) return '—';
@@ -725,6 +729,7 @@ export default function DocsRawDataPage() {
     // Classification
     { field: 'trade', label: getLabel('trade') || 'Trade', inputType: 'select', group: 'Classification', options: optionFields.trade },
     { field: 'discipline', label: getLabel('discipline'), inputType: 'select', group: 'Classification', options: optionFields.discipline },
+    { field: 'team', label: getLabel('team') || 'Team', inputType: 'select', group: 'Classification', options: optionFields.team },
     { field: 'document_type', label: getLabel('document_type'), inputType: 'select', group: 'Classification', options: optionFields.document_type },
     { field: 'series', label: getLabel('series') || 'Series', inputType: 'text', group: 'Classification' },
     { field: 'level_location', label: getLabel('level_location') || 'Level / Location', inputType: 'text', group: 'Classification' },
