@@ -1190,10 +1190,9 @@ export default function DefectRawDataPage() {
       <Dialog
         open={exportDialogOpen}
         onOpenChange={(open) => {
-          // Prevent closing while a folder export is in progress.
+          // Prevent closing while a ZIP export is in progress.
           if (!open && exportBusy) return;
           setExportDialogOpen(open);
-          if (!open) setExportProgress(null);
         }}
       >
         <DialogContent>
