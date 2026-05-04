@@ -13,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, Plus, Trash2, Pencil } from 'lucide-react';
+import { Lock, Plus, Trash2, Pencil, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCustomFields } from '@/hooks/useCustomFields';
 
