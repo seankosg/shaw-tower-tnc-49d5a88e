@@ -501,6 +501,118 @@ export function exportDefectRawToExcelBySubcontractor<TRow>(opts: ExportDefectRa
   return { fileCount: fileNames.length, rowCount: sortedRows.length, fileNames };
 }
 
+// ---------------------------------------------------------------------------
+// Per-subcontractor "Save to folder" export (File System Access API)
+//
+// Avoids browser multi-download blocking. The caller obtains a directory
+// handle via `window.showDirectoryPicker()` and we write each .xlsx
+// directly into the chosen folder using `createWritable()`.
+// ---------------------------------------------------------------------------
+
+export interface ExportDefectRawToFolderOptions<TRow> extends ExportDefectRawOptions<TRow> {
+  dirHandle: FileSystemDirectoryHandle;
+  onProgress?: (done: number, total: number, label: string) => void;
+}
+
+export async function exportDefectRawToFolderBySubcontractor<TRow>(
+  opts: ExportDefectRawToFolderOptions<TRow>,
+): Promise<{ fileCount: number; rowCount: number; fileNames: string[]; folderName: string }> {
+  const { table, fieldConfig, globalFilter, searchParams, meta, format = 'view', dirHandle, onProgress } = opts;
+  const visibleCols = table.getVisibleLeafColumns().filter((c) => !isMetaField(c.id));
+  const sortedRows = table.getSortedRowModel().rows;
+
+  // Group by subcontractor_name (mirrors exportDefectRawToExcelBySubcontractor).
+  const groups = new Map<string, Row<TRow>[]>();
+  for (const r of sortedRows) {
+    const original = r.original as any;
+    const raw = original?.subcontractor_name;
+    const key = raw && String(raw).trim() ? String(raw).trim() : 'Unassigned';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(r);
+  }
+
+  const filterSummary = summarizeFilters(table, fieldConfig);
+  const sortSummary = summarizeSort(table, fieldConfig);
+  const ts = timestampForFilename();
+  const fileNames: string[] = [];
+
+  const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
+    if (a === 'Unassigned') return 1;
+    if (b === 'Unassigned') return -1;
+    return a.localeCompare(b);
+  });
+
+  const suffix = format === 'reimport' ? '_REIMPORT' : '';
+  const total = sortedKeys.length;
+  const usedNames = new Set<string>();
+
+  for (let i = 0; i < sortedKeys.length; i++) {
+    const subconName = sortedKeys[i];
+    const groupRows = groups.get(subconName)!;
+    const wb = buildDefectWorkbook({
+      rows: groupRows,
+      visibleCols,
+      fieldConfig,
+      meta,
+      globalFilter,
+      searchParams,
+      format,
+      sourceSuffix: `Subcontractor: ${subconName}`,
+      _filterSummary: filterSummary,
+      _sortSummary: sortSummary,
+    } as BuildSheetParams<TRow>);
+
+    const baseName = `SHAW_Defects${suffix}_${sanitizeForFilename(subconName)}_${ts}`;
+    const fileName = await uniqueFileName(dirHandle, baseName, '.xlsx', usedNames);
+    usedNames.add(fileName);
+
+    const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
+    const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(buffer);
+    await writable.close();
+
+    fileNames.push(fileName);
+    onProgress?.(i + 1, total, subconName);
+  }
+
+  return {
+    fileCount: fileNames.length,
+    rowCount: sortedRows.length,
+    fileNames,
+    folderName: dirHandle.name || 'selected folder',
+  };
+}
+
+/**
+ * Resolve a non-conflicting file name in `dirHandle`. If `<base><ext>` already
+ * exists (either on disk or already used in this session), append ` (2)`,
+ * ` (3)`, ... until a free slot is found.
+ */
+async function uniqueFileName(
+  dirHandle: FileSystemDirectoryHandle,
+  base: string,
+  ext: string,
+  used: Set<string>,
+): Promise<string> {
+  const exists = async (name: string): Promise<boolean> => {
+    if (used.has(name)) return true;
+    try {
+      await dirHandle.getFileHandle(name, { create: false });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  let candidate = `${base}${ext}`;
+  let n = 2;
+  while (await exists(candidate)) {
+    candidate = `${base} (${n})${ext}`;
+    n += 1;
+  }
+  return candidate;
+}
+
 function setCell(
   ws: XLSX.WorkSheet,
   r: number,
