@@ -281,13 +281,14 @@ export default function DocsDrawingDetailPage() {
       const nextStr = newVal == null ? '' : String(newVal);
       if (prevStr === nextStr) continue;
       const isCycleField = /^sub[123]_/.test(field);
-      // If user did NOT edit this field but cleanup nulled it, mark source.
+      // If user did NOT edit this field but it changed via cleanup/auto-fill, mark source.
       const userVal = (form as any)[field];
       const userNorm = userVal === '' || userVal === undefined ? null : userVal;
       const userTouched = String(userNorm ?? '') !== prevStr;
-      const source = !userTouched && isCycleField && newVal == null
-        ? 'auto_close_cleanup'
-        : 'app_direct_input';
+      let source = 'app_direct_input';
+      if (!userTouched && isCycleField) {
+        source = newVal == null ? 'auto_close_cleanup' : 'auto_fill';
+      }
       changes.push({ field, oldValue: prev, newValue: newVal, source });
     }
 
