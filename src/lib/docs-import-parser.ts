@@ -75,6 +75,7 @@ export interface ParseDocsResult {
 type FieldKey =
   | 'document_no' | 'revision' | 'title' | 'organisation_raw'
   | 'discipline' | 'document_type' | 'series' | 'level_location' | 'sequential_no'
+  | 'trade'
   | 'current_status' | 'remarks'
   | 'sub1_planned_date' | 'sub1_submission_date' | 'sub1_approval_date' | 'sub1_approval_status'
   | 'sub2_planned_date' | 'sub2_submission_date' | 'sub2_approval_date' | 'sub2_approval_status'
