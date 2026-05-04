@@ -42,17 +42,37 @@ export function DocsBulkEditBar<TRow extends { id: string }>({
     setBusy(true);
     try {
       const ids = selectedRows.map((r) => r.id);
-      const submitValue: string | number | boolean | null =
-        value === '' ? null
-          : selectedField.inputType === 'select' && value === '__CLEAR__' ? null
-          : value;
+
+      // Coerce string -> typed value depending on inputType
+      let submitValue: string | number | boolean | null;
+      let extraUpdates: Record<string, string | number | boolean | null> | undefined;
+
+      if (value === '' || value === '__CLEAR__') {
+        submitValue = null;
+      } else if (selectedField.inputType === 'boolean') {
+        submitValue = value === 'true';
+      } else if (selectedField.inputType === 'number') {
+        const n = Number(value);
+        submitValue = Number.isFinite(n) ? n : null;
+      } else {
+        submitValue = value;
+      }
+
+      // Subcontractor: when picking from master, also write companion name field
+      if (selectedField.field === 'subcontractor_id' && selectedField.companionFields?.includes('subcontractor_name')) {
+        const opt = (selectedField.options ?? []).find((o) => o.value === value);
+        const name = opt && value !== '' && value !== '__CLEAR__' ? opt.label : null;
+        extraUpdates = { subcontractor_name: name };
+      }
+
       const res = await applyBulkUpdate({
         table: 'docs_drawings',
         ids,
-        field,
+        field: selectedField.field,
         value: submitValue,
         userId: user.id,
         changeSource: 'bulk_edit',
+        extraUpdates,
       });
       if (res.failed > 0) {
         toast({
@@ -63,7 +83,7 @@ export function DocsBulkEditBar<TRow extends { id: string }>({
       } else {
         toast({ title: 'Bulk update applied', description: `${res.succeeded} drawing(s) updated.` });
       }
-      onApplied({ field, value: submitValue, ids });
+      onApplied({ field: selectedField.field, value: submitValue, ids, extraUpdates });
       setOpen(false);
       setField('');
       setValue('');
