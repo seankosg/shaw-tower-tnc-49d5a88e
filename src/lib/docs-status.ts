@@ -56,12 +56,12 @@ export interface DrawingForStatus {
 
 export type CycleNumber = 1 | 2 | 3;
 
-const VALID_STATUS = new Set(['A', 'B', 'C']);
+const VALID_STATUS = new Set(['A', 'B', 'C', 'UR']);
 
-function normStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | null {
+function normStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | 'UR' | null {
   if (!raw) return null;
   const v = String(raw).trim().toUpperCase();
-  if (VALID_STATUS.has(v)) return v as 'A' | 'B' | 'C';
+  if (VALID_STATUS.has(v)) return v as 'A' | 'B' | 'C' | 'UR';
   return null;
 }
 
