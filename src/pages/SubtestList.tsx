@@ -1370,22 +1370,8 @@ export default function SubtestList() {
                 toast({ title: 'No rows to export', description: 'Adjust filters and try again.', variant: 'destructive' });
                 return;
               }
-              try {
-                const result = exportSubtestsToExcel({
-                  table,
-                  fieldConfig: fieldConfigRows,
-                  globalFilter,
-                  searchParams,
-                  meta: {
-                    userName: profile?.name || profile?.login_id || 'Unknown',
-                    userType: profile?.user_type ? USER_TYPE_LABELS[profile.user_type] : '',
-                  },
-                });
-                toast({ title: 'Export complete', description: `${result.rowCount} rows → ${result.fileName}` });
-              } catch (err) {
-                console.error('Excel export failed', err);
-                toast({ title: 'Export failed', description: String((err as Error)?.message ?? err), variant: 'destructive' });
-              }
+              setExportMode('single');
+              setExportDialogOpen(true);
             }}
           >
             <Download className="mr-1.5 h-3.5 w-3.5" /> Export Excel
