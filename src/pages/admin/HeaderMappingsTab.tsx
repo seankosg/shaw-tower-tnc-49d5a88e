@@ -16,6 +16,26 @@ import { useToast } from '@/hooks/use-toast';
 import { Lock, Plus, Trash2, Pencil, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCustomFields } from '@/hooks/useCustomFields';
+import { loadHeaderMappingsCache } from '@/lib/header-mappings-cache';
+
+/** Bump app_settings.header_mappings_version so other tabs/sessions reload parser cache. */
+async function bumpHeaderMappingsVersion() {
+  const { data } = await (supabase as any)
+    .from('app_settings')
+    .select('value')
+    .eq('key', 'header_mappings_version')
+    .maybeSingle();
+  const next = ((data?.value as number | null) ?? 0) + 1;
+  await (supabase as any)
+    .from('app_settings')
+    .upsert({ key: 'header_mappings_version', value: next }, { onConflict: 'key' });
+}
+
+/** Bump version + force-reload the in-memory parser cache immediately. */
+async function reloadHeaderMappings() {
+  await bumpHeaderMappingsVersion();
+  await loadHeaderMappingsCache(true).catch(() => {});
+}
 
 type TopModuleKey = 'tnc' | 'defect' | 'docs';
 type DocsSubKey = 'as_built' | 'warranty';
