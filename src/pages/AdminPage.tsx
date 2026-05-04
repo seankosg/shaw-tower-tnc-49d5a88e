@@ -2060,6 +2060,27 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
   const { toast } = useToast();
   const [fields, setFields] = useState<FieldCfg[]>([]);
   const [loading, setLoading] = useState(true);
+  const [aliasCounts, setAliasCounts] = useState<Record<string, { total: number; active: number }>>({});
+  const [pendingDisable, setPendingDisable] = useState<FieldCfg | null>(null);
+
+  // Map field_config table -> Header Mappings module key.
+  const moduleKey: 'tnc' | 'defect' | 'docs' =
+    table === 'field_config' ? 'tnc' : table === 'defect_field_config' ? 'defect' : 'docs';
+
+  const loadAliasCounts = async () => {
+    const { data } = await (supabase as any)
+      .from('import_header_mappings')
+      .select('target_field, is_active')
+      .eq('module', moduleKey);
+    const counts: Record<string, { total: number; active: number }> = {};
+    for (const r of (data ?? []) as Array<{ target_field: string; is_active: boolean }>) {
+      const c = counts[r.target_field] ?? { total: 0, active: 0 };
+      c.total += 1;
+      if (r.is_active) c.active += 1;
+      counts[r.target_field] = c;
+    }
+    setAliasCounts(counts);
+  };
 
   const load = async () => {
     setLoading(true);
@@ -2078,17 +2099,95 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
       }
       setFields(rows);
     }
+    await loadAliasCounts();
     setLoading(false);
   };
   useEffect(() => { load(); }, [table]);
 
-  const toggle = async (f: FieldCfg, key: 'is_enabled' | 'is_required') => {
+  /** Bump app_settings.header_mappings_version so other tabs/sessions reload parser cache. */
+  const bumpHeaderMappingsVersion = async () => {
+    const { data } = await (supabase as any)
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'header_mappings_version')
+      .maybeSingle();
+    const next = ((data?.value as number | null) ?? 0) + 1;
+    await (supabase as any)
+      .from('app_settings')
+      .upsert({ key: 'header_mappings_version', value: next }, { onConflict: 'key' });
+  };
+
+  /** Disable all aliases pointing at `target_field` for this module. */
+  const disableAliasesFor = async (fieldName: string): Promise<{ ok: boolean; affected: number; error?: string }> => {
+    const { data: rows, error: selErr } = await (supabase as any)
+      .from('import_header_mappings')
+      .select('id')
+      .eq('module', moduleKey)
+      .eq('target_field', fieldName)
+      .eq('is_active', true);
+    if (selErr) return { ok: false, affected: 0, error: selErr.message };
+    const ids = (rows ?? []).map((r: { id: string }) => r.id);
+    if (ids.length === 0) return { ok: true, affected: 0 };
+    const { error: updErr } = await (supabase as any)
+      .from('import_header_mappings')
+      .update({ is_active: false })
+      .in('id', ids);
+    if (updErr) return { ok: false, affected: 0, error: updErr.message };
+    return { ok: true, affected: ids.length };
+  };
+
+  const performToggle = async (f: FieldCfg, key: 'is_enabled' | 'is_required', cascade: boolean) => {
     const update = { is_enabled: f.is_enabled, is_required: f.is_required };
     update[key] = !f[key];
-    await (supabase as any).from(table).update(update).eq('id', f.id);
-    toast({ title: 'Field updated' });
+    const { error } = await (supabase as any).from(table).update(update).eq('id', f.id);
+    if (error) {
+      toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
+      load();
+      return;
+    }
+
+    if (cascade && key === 'is_enabled' && !update.is_enabled) {
+      // Cascade: disable all aliases pointing at this field.
+      const result = await disableAliasesFor(f.field_name);
+      if (!result.ok) {
+        toast({
+          title: 'Field disabled, but alias sync failed',
+          description: result.error,
+          variant: 'destructive',
+        });
+      } else {
+        await bumpHeaderMappingsVersion();
+        await loadHeaderMappingsCache(true).catch(() => {});
+        toast({
+          title: 'Field disabled',
+          description: result.affected > 0
+            ? `${result.affected} alias${result.affected === 1 ? '' : 'es'} also disabled in Header Mappings.`
+            : 'No active aliases needed updating.',
+        });
+      }
+    } else if (key === 'is_enabled' && update.is_enabled) {
+      toast({
+        title: 'Field enabled',
+        description: 'Aliases were not auto-enabled. Re-enable them in Header Mappings if needed.',
+      });
+    } else {
+      toast({ title: 'Field updated' });
+    }
     load();
   };
+
+  const toggle = async (f: FieldCfg, key: 'is_enabled' | 'is_required') => {
+    // If turning Visible OFF and there are aliases, prompt confirmation.
+    if (key === 'is_enabled' && f.is_enabled) {
+      const c = aliasCounts[f.field_name];
+      if (c && c.active > 0) {
+        setPendingDisable(f);
+        return;
+      }
+    }
+    performToggle(f, key, false);
+  };
+
 
   const updateName = async (f: FieldCfg, displayName: string) => {
     const value = displayName.trim();
