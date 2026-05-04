@@ -38,7 +38,9 @@ import { useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatTeamLabel, USER_TYPE_LABELS } from '@/types/enums';
 import { useToast } from '@/hooks/use-toast';
-import { exportDefectRawToExcel, exportDefectRawToExcelBySubcontractor, exportDefectRawToFolderBySubcontractor } from '@/lib/defect-excel-export';
+import { exportDefectRawToExcel, exportDefectRawToExcelBySubcontractor, exportDefectRawToZipBySubcontractor } from '@/lib/defect-excel-export';
+
+const ZIP_THRESHOLD = 7;
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -389,15 +391,9 @@ export default function DefectRawDataPage() {
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [exportMode, setExportMode] = useState<'single' | 'per-subcon-folder' | 'per-subcon-download'>('single');
+  const [exportMode, setExportMode] = useState<'single' | 'per-subcon'>('single');
   const [exportFormat, setExportFormat] = useState<'view' | 'reimport'>('view');
   const [exportBusy, setExportBusy] = useState(false);
-  const [exportProgress, setExportProgress] = useState<{ done: number; total: number; label: string } | null>(null);
-  // File System Access API is blocked inside cross-origin iframes (e.g. Lovable preview).
-  // Detect iframe so we can disable the option and guide the user to open in a new tab.
-  const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
-  const hasDirPickerApi = typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker === 'function';
-  const supportsDirPicker = hasDirPickerApi && !isInIframe;
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [commentSummary, setCommentSummary] = useState<Record<string, CommentSummary>>({});
@@ -1194,10 +1190,9 @@ export default function DefectRawDataPage() {
       <Dialog
         open={exportDialogOpen}
         onOpenChange={(open) => {
-          // Prevent closing while a folder export is in progress.
+          // Prevent closing while a ZIP export is in progress.
           if (!open && exportBusy) return;
           setExportDialogOpen(open);
-          if (!open) setExportProgress(null);
         }}
       >
         <DialogContent>
@@ -1213,6 +1208,7 @@ export default function DefectRawDataPage() {
               const key = raw && String(raw).trim() ? String(raw).trim() : 'Unassigned';
               subconSet.add(key);
             }
+            const willZip = subconSet.size >= ZIP_THRESHOLD;
             return (
               <div className="space-y-4 py-2">
                 <div>
@@ -1238,7 +1234,7 @@ export default function DefectRawDataPage() {
                   <div className="mb-2 text-xs font-medium text-muted-foreground">Output</div>
                   <RadioGroup
                     value={exportMode}
-                    onValueChange={(v) => setExportMode(v as 'single' | 'per-subcon-folder' | 'per-subcon-download')}
+                    onValueChange={(v) => setExportMode(v as 'single' | 'per-subcon')}
                     className="gap-2"
                   >
                     <div className="flex items-start gap-3 rounded-md border p-3">
@@ -1248,45 +1244,25 @@ export default function DefectRawDataPage() {
                         <p className="mt-1 text-xs text-muted-foreground">Exports the current view as one .xlsx file ({sortedRows.length} rows).</p>
                       </div>
                     </div>
-                    <div className={`flex items-start gap-3 rounded-md border p-3 ${supportsDirPicker ? '' : 'opacity-60'}`}>
-                      <RadioGroupItem value="per-subcon-folder" id="export-per-subcon-folder" className="mt-0.5" disabled={!supportsDirPicker} />
-                      <div className="flex-1">
-                        <Label htmlFor="export-per-subcon-folder" className={`text-sm font-medium ${supportsDirPicker ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
-                          One file per Subcontractor — Save to folder…
-                          <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">Recommended</span>
-                        </Label>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Pick a folder once; each Subcontractor is saved as a separate .xlsx in that folder — {subconSet.size} file{subconSet.size === 1 ? '' : 's'} ({sortedRows.length} rows total).
-                          No download blocking, no zip extraction needed.
-                          {!supportsDirPicker && (
-                            <span className="mt-1 block text-amber-600 dark:text-amber-400">
-                              {isInIframe && hasDirPickerApi
-                                ? 'This option is blocked inside the in-app preview. Open the app in a new browser tab (Chrome or Edge) to use it.'
-                                : 'Use Chrome or Edge to enable this option (your current browser does not support the File System Access API).'}
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
                     <div className="flex items-start gap-3 rounded-md border p-3">
-                      <RadioGroupItem value="per-subcon-download" id="export-per-subcon-download" className="mt-0.5" />
+                      <RadioGroupItem value="per-subcon" id="export-per-subcon" className="mt-0.5" />
                       <div className="flex-1">
-                        <Label htmlFor="export-per-subcon-download" className="cursor-pointer text-sm font-medium">
-                          One file per Subcontractor — Download separately
-                          <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">Legacy</span>
+                        <Label htmlFor="export-per-subcon" className="cursor-pointer text-sm font-medium">
+                          One file per Subcontractor
                         </Label>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Triggers {subconSet.size} download{subconSet.size === 1 ? '' : 's'}. May be blocked by the browser when there are many files. Empty Subcontractor rows go to "Unassigned".
+                          {willZip ? (
+                            <span className="text-amber-600 dark:text-amber-400">
+                              {subconSet.size} Subcontractors detected — files will be packaged into a single .zip to avoid browser download limits. Empty Subcontractor rows go to "Unassigned".
+                            </span>
+                          ) : (
+                            <>Triggers {subconSet.size} download{subconSet.size === 1 ? '' : 's'} (one .xlsx per Subcontractor). Empty Subcontractor rows go to "Unassigned".</>
+                          )}
                         </p>
                       </div>
                     </div>
                   </RadioGroup>
                 </div>
-                {exportProgress && (
-                  <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                    Saving {exportProgress.done} / {exportProgress.total} — {exportProgress.label}
-                  </div>
-                )}
               </div>
             );
           })()}
@@ -1305,69 +1281,43 @@ export default function DefectRawDataPage() {
                     const result = exportDefectRawToExcel({ table, fieldConfig: fieldConfigRows, globalFilter, searchParams, meta, format: exportFormat });
                     toast({ title: 'Export complete', description: `${result.rowCount} rows → ${result.fileName}` });
                     setExportDialogOpen(false);
-                  } else if (exportMode === 'per-subcon-folder') {
-                    if (!supportsDirPicker) {
-                      toast({
-                        title: 'Not supported here',
-                        description: isInIframe && hasDirPickerApi
-                          ? 'Open the app in a new browser tab (Chrome or Edge) to use "Save to folder".'
-                          : 'Use Chrome or Edge for "Save to folder".',
-                        variant: 'destructive',
-                      });
-                      return;
-                    }
-                    let dirHandle: FileSystemDirectoryHandle;
-                    try {
-                      dirHandle = await (window as any).showDirectoryPicker({ id: 'defect-raw-export', mode: 'readwrite' });
-                    } catch (e) {
-                      const err = e as DOMException;
-                      if (err?.name === 'AbortError') {
-                        toast({ title: 'Cancelled', description: 'No folder was selected.' });
-                        return;
-                      }
-                      if (err?.name === 'SecurityError') {
-                        toast({
-                          title: 'Blocked by browser',
-                          description: 'Folder picker is blocked inside an embedded preview. Open the app in a new tab and try again.',
-                          variant: 'destructive',
-                        });
-                        return;
-                      }
-                      throw e;
-                    }
-                    setExportBusy(true);
-                    setExportProgress({ done: 0, total: 0, label: 'Preparing…' });
-                    const result = await exportDefectRawToFolderBySubcontractor({
-                      table,
-                      fieldConfig: fieldConfigRows,
-                      globalFilter,
-                      searchParams,
-                      meta,
-                      format: exportFormat,
-                      dirHandle,
-                      onProgress: (done, total, label) => setExportProgress({ done, total, label }),
-                    });
-                    toast({
-                      title: 'Export complete',
-                      description: `${result.fileCount} file${result.fileCount === 1 ? '' : 's'} saved to "${result.folderName}" (${result.rowCount} rows total)`,
-                    });
-                    setExportBusy(false);
-                    setExportProgress(null);
-                    setExportDialogOpen(false);
                   } else {
-                    const result = exportDefectRawToExcelBySubcontractor({ table, fieldConfig: fieldConfigRows, globalFilter, searchParams, meta, format: exportFormat });
-                    toast({ title: 'Export complete', description: `${result.fileCount} file${result.fileCount === 1 ? '' : 's'} downloaded (${result.rowCount} rows total)` });
-                    setExportDialogOpen(false);
+                    const sortedRows = table.getSortedRowModel().rows;
+                    const subconSet = new Set<string>();
+                    for (const r of sortedRows) {
+                      const raw = (r.original as any)?.subcontractor_name;
+                      const key = raw && String(raw).trim() ? String(raw).trim() : 'Unassigned';
+                      subconSet.add(key);
+                    }
+                    if (subconSet.size >= ZIP_THRESHOLD) {
+                      toast({
+                        title: 'Packaging into ZIP',
+                        description: `${subconSet.size} Subcontractors detected — bundling into a single .zip to avoid browser download limits.`,
+                      });
+                      setExportBusy(true);
+                      const result = await exportDefectRawToZipBySubcontractor({
+                        table, fieldConfig: fieldConfigRows, globalFilter, searchParams, meta, format: exportFormat,
+                      });
+                      toast({
+                        title: 'Export complete',
+                        description: `${result.fileCount} file${result.fileCount === 1 ? '' : 's'} bundled in ${result.zipFileName} (${result.rowCount} rows total)`,
+                      });
+                      setExportBusy(false);
+                      setExportDialogOpen(false);
+                    } else {
+                      const result = exportDefectRawToExcelBySubcontractor({ table, fieldConfig: fieldConfigRows, globalFilter, searchParams, meta, format: exportFormat });
+                      toast({ title: 'Export complete', description: `${result.fileCount} file${result.fileCount === 1 ? '' : 's'} downloaded (${result.rowCount} rows total)` });
+                      setExportDialogOpen(false);
+                    }
                   }
                 } catch (err) {
                   console.error('Defect Excel export failed', err);
                   toast({ title: 'Export failed', description: String((err as Error)?.message ?? err), variant: 'destructive' });
                   setExportBusy(false);
-                  setExportProgress(null);
                 }
               }}
             >
-              <Download className="mr-1.5 h-3.5 w-3.5" /> {exportBusy ? 'Saving…' : 'Export'}
+              <Download className="mr-1.5 h-3.5 w-3.5" /> {exportBusy ? 'Exporting…' : 'Export'}
             </Button>
           </DialogFooter>
         </DialogContent>

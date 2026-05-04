@@ -502,26 +502,21 @@ export function exportDefectRawToExcelBySubcontractor<TRow>(opts: ExportDefectRa
 }
 
 // ---------------------------------------------------------------------------
-// Per-subcontractor "Save to folder" export (File System Access API)
+// Per-subcontractor ZIP export
 //
-// Avoids browser multi-download blocking. The caller obtains a directory
-// handle via `window.showDirectoryPicker()` and we write each .xlsx
-// directly into the chosen folder using `createWritable()`.
+// Bundles one .xlsx per Subcontractor into a single .zip download. Used
+// automatically when the Subcontractor count is large enough that the
+// browser would otherwise block multiple sequential downloads.
 // ---------------------------------------------------------------------------
 
-export interface ExportDefectRawToFolderOptions<TRow> extends ExportDefectRawOptions<TRow> {
-  dirHandle: FileSystemDirectoryHandle;
-  onProgress?: (done: number, total: number, label: string) => void;
-}
-
-export async function exportDefectRawToFolderBySubcontractor<TRow>(
-  opts: ExportDefectRawToFolderOptions<TRow>,
-): Promise<{ fileCount: number; rowCount: number; fileNames: string[]; folderName: string }> {
-  const { table, fieldConfig, globalFilter, searchParams, meta, format = 'view', dirHandle, onProgress } = opts;
+export async function exportDefectRawToZipBySubcontractor<TRow>(
+  opts: ExportDefectRawOptions<TRow>,
+): Promise<{ fileCount: number; rowCount: number; zipFileName: string; fileNames: string[] }> {
+  const { default: JSZip } = await import('jszip');
+  const { table, fieldConfig, globalFilter, searchParams, meta, format = 'view' } = opts;
   const visibleCols = table.getVisibleLeafColumns().filter((c) => !isMetaField(c.id));
   const sortedRows = table.getSortedRowModel().rows;
 
-  // Group by subcontractor_name (mirrors exportDefectRawToExcelBySubcontractor).
   const groups = new Map<string, Row<TRow>[]>();
   for (const r of sortedRows) {
     const original = r.original as any;
@@ -534,7 +529,7 @@ export async function exportDefectRawToFolderBySubcontractor<TRow>(
   const filterSummary = summarizeFilters(table, fieldConfig);
   const sortSummary = summarizeSort(table, fieldConfig);
   const ts = timestampForFilename();
-  const fileNames: string[] = [];
+  const suffix = format === 'reimport' ? '_REIMPORT' : '';
 
   const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
     if (a === 'Unassigned') return 1;
@@ -542,12 +537,11 @@ export async function exportDefectRawToFolderBySubcontractor<TRow>(
     return a.localeCompare(b);
   });
 
-  const suffix = format === 'reimport' ? '_REIMPORT' : '';
-  const total = sortedKeys.length;
+  const zip = new JSZip();
   const usedNames = new Set<string>();
+  const fileNames: string[] = [];
 
-  for (let i = 0; i < sortedKeys.length; i++) {
-    const subconName = sortedKeys[i];
+  for (const subconName of sortedKeys) {
     const groupRows = groups.get(subconName)!;
     const wb = buildDefectWorkbook({
       rows: groupRows,
@@ -563,54 +557,35 @@ export async function exportDefectRawToFolderBySubcontractor<TRow>(
     } as BuildSheetParams<TRow>);
 
     const baseName = `SHAW_Defects${suffix}_${sanitizeForFilename(subconName)}_${ts}`;
-    const fileName = await uniqueFileName(dirHandle, baseName, '.xlsx', usedNames);
-    usedNames.add(fileName);
+    let candidate = `${baseName}.xlsx`;
+    let n = 2;
+    while (usedNames.has(candidate)) {
+      candidate = `${baseName} (${n}).xlsx`;
+      n += 1;
+    }
+    usedNames.add(candidate);
 
     const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
-    const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(buffer);
-    await writable.close();
-
-    fileNames.push(fileName);
-    onProgress?.(i + 1, total, subconName);
+    zip.file(candidate, buffer);
+    fileNames.push(candidate);
   }
 
-  return {
-    fileCount: fileNames.length,
-    rowCount: sortedRows.length,
-    fileNames,
-    folderName: dirHandle.name || 'selected folder',
-  };
-}
+  const zipFileName = `SHAW_Defects${suffix}_BySubcontractor_${ts}.zip`;
+  const blob = await zip.generateAsync({
+    type: 'blob',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = zipFileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-/**
- * Resolve a non-conflicting file name in `dirHandle`. If `<base><ext>` already
- * exists (either on disk or already used in this session), append ` (2)`,
- * ` (3)`, ... until a free slot is found.
- */
-async function uniqueFileName(
-  dirHandle: FileSystemDirectoryHandle,
-  base: string,
-  ext: string,
-  used: Set<string>,
-): Promise<string> {
-  const exists = async (name: string): Promise<boolean> => {
-    if (used.has(name)) return true;
-    try {
-      await dirHandle.getFileHandle(name, { create: false });
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  let candidate = `${base}${ext}`;
-  let n = 2;
-  while (await exists(candidate)) {
-    candidate = `${base} (${n})${ext}`;
-    n += 1;
-  }
-  return candidate;
+  return { fileCount: fileNames.length, rowCount: sortedRows.length, zipFileName, fileNames };
 }
 
 function setCell(
