@@ -38,7 +38,9 @@ import { useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatTeamLabel, USER_TYPE_LABELS } from '@/types/enums';
 import { useToast } from '@/hooks/use-toast';
-import { exportDefectRawToExcel, exportDefectRawToExcelBySubcontractor, exportDefectRawToFolderBySubcontractor } from '@/lib/defect-excel-export';
+import { exportDefectRawToExcel, exportDefectRawToExcelBySubcontractor, exportDefectRawToZipBySubcontractor } from '@/lib/defect-excel-export';
+
+const ZIP_THRESHOLD = 7;
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -389,15 +391,9 @@ export default function DefectRawDataPage() {
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [exportMode, setExportMode] = useState<'single' | 'per-subcon-folder' | 'per-subcon-download'>('single');
+  const [exportMode, setExportMode] = useState<'single' | 'per-subcon'>('single');
   const [exportFormat, setExportFormat] = useState<'view' | 'reimport'>('view');
   const [exportBusy, setExportBusy] = useState(false);
-  const [exportProgress, setExportProgress] = useState<{ done: number; total: number; label: string } | null>(null);
-  // File System Access API is blocked inside cross-origin iframes (e.g. Lovable preview).
-  // Detect iframe so we can disable the option and guide the user to open in a new tab.
-  const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
-  const hasDirPickerApi = typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker === 'function';
-  const supportsDirPicker = hasDirPickerApi && !isInIframe;
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [commentSummary, setCommentSummary] = useState<Record<string, CommentSummary>>({});
