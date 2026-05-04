@@ -182,6 +182,17 @@ const SUB_ALIAS: Record<string, 'planned_date' | 'submission_date' | 'approval_d
   'approval status': 'approval_status',
 };
 
+/**
+ * Strip leading ordinal token (1st, 2nd, 3rd, 4th, first, second, third) from a
+ * normalized sub-header so labels like "1st planned date" match SUB_ALIAS.
+ * Group context (Submission 1/2/3) already encodes the cycle number, so the
+ * ordinal in the sub-cell is redundant and only used by the source spreadsheet
+ * for human readability.
+ */
+function stripOrdinalPrefix(s: string): string {
+  return s.replace(/^\s*(?:1st|2nd|3rd|\d+th|first|second|third|fourth)\s+/i, '').trim();
+}
+
 function normalizeHeader(value: unknown): string {
   return String(value ?? '')
     .replace(/\s*\(H\)\s*$/i, '')
