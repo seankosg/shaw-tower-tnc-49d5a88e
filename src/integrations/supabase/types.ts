@@ -944,6 +944,7 @@ export type Database = {
           subcontractor_name: string | null
           submitted_date: string | null
           title: string | null
+          trade: string | null
           transmittal_due_date: string | null
           transmittal_number: string | null
           updated_at: string
@@ -997,6 +998,7 @@ export type Database = {
           subcontractor_name?: string | null
           submitted_date?: string | null
           title?: string | null
+          trade?: string | null
           transmittal_due_date?: string | null
           transmittal_number?: string | null
           updated_at?: string
@@ -1050,6 +1052,7 @@ export type Database = {
           subcontractor_name?: string | null
           submitted_date?: string | null
           title?: string | null
+          trade?: string | null
           transmittal_due_date?: string | null
           transmittal_number?: string | null
           updated_at?: string
