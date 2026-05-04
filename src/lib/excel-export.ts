@@ -491,7 +491,7 @@ export async function exportSubtestsToZipBySubcontractor<TRow>(
 // Internals
 // ---------------------------------------------------------------------------
 
-function setCell(
+export function setCell(
   ws: XLSX.WorkSheet,
   r: number,
   c: number,
@@ -503,7 +503,7 @@ function setCell(
   ws[addr] = { t: 's', v: String(v), s: style };
 }
 
-function setDateCell(
+export function setDateCell(
   ws: XLSX.WorkSheet,
   r: number,
   c: number,
