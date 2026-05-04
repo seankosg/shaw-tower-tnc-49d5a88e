@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { CYCLE_DATA_FIELDS, normalizeApprovalStatus } from '@/lib/docs-status';
 
 export type BulkEditableInputType = 'select' | 'date' | 'text' | 'textarea' | 'boolean' | 'number';
 
