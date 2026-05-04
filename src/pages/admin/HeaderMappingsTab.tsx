@@ -284,6 +284,7 @@ export default function HeaderMappingsTab() {
       toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
     } else {
       toast({ title: row.is_active ? 'Mapping disabled' : 'Mapping enabled' });
+      await reloadHeaderMappings();
       refetch();
     }
   };
@@ -296,7 +297,7 @@ export default function HeaderMappingsTab() {
     if (!confirm(`Delete mapping "${row.header_alias}" → ${row.target_field}?`)) return;
     const { error } = await supabase.from('import_header_mappings').delete().eq('id', row.id);
     if (error) toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
-    else { toast({ title: 'Mapping deleted' }); refetch(); }
+    else { toast({ title: 'Mapping deleted' }); await reloadHeaderMappings(); refetch(); }
   };
 
   return (
