@@ -2962,7 +2962,7 @@ export type Database = {
         | "Approved"
         | "Returned"
       tc_status: "Planned" | "WIP" | "Done" | "Hold"
-      team_type: "Mech" | "Elec" | "Arch" | "Supp"
+      team_type: "Mech" | "Elec" | "Arch" | "Supp" | "Design"
       upload_status:
         | "pending"
         | "processing"
@@ -3129,7 +3129,7 @@ export const Constants = {
         "Returned",
       ],
       tc_status: ["Planned", "WIP", "Done", "Hold"],
-      team_type: ["Mech", "Elec", "Arch", "Supp"],
+      team_type: ["Mech", "Elec", "Arch", "Supp", "Design"],
       upload_status: [
         "pending",
         "processing",

@@ -1,93 +1,78 @@
-## 목표
+# Add Team Support to Docs Module + New "Design" Team
 
-도면이 어떤 차수에서든 Approval Status = `A` (승인) 에 도달하면 **종결(Closed)** 로 간주하여:
-1. **Raw Data 표 / 상세 페이지에서 행 전체를 회색(muted) 톤으로** 표시
-2. **A 이후 차수의 일정/상태 데이터를 삭제** (DB 에서 비움)
+## Overview
 
-현재 `computeIsClosed()` 헬퍼는 이미 존재하지만 UI 색상 처리·후속 차수 정리에는 사용되지 않고 있음.
+1. Add a new `Design` value to the existing `team_type` enum (currently: Mech, Elec, Arch, Supp).
+2. Add a `team` column to `docs_drawings` so the Docs module can track team like the Defects module already does.
+3. Surface team in Docs UI: Raw Data table + filter, Drawing Detail editor, Bulk Edit, Field Config, and Excel Import mapping.
 
----
+## 1. Database Migration
 
-## 1) 회색 종결 표시
+```sql
+-- Add Design to team_type enum
+ALTER TYPE public.team_type ADD VALUE IF NOT EXISTS 'Design';
 
-### Raw Data 행 (`src/pages/docs/DocsRawDataPage.tsx`)
+-- Add team column to docs_drawings
+ALTER TABLE public.docs_drawings
+  ADD COLUMN IF NOT EXISTS team public.team_type;
 
-- `renderRowClass()` 와 `stickyBgFor()` 에 `is_closed` 분기 추가
-  - 행 전체에 `text-muted-foreground opacity-60` 적용
-  - sticky 셀 배경을 `hsl(var(--muted) / 0.5)` 로
-  - 단, hover 시는 기존 hover 톤이 우선
-- `augmentedItems` 에 `is_closed: computeIsClosed(r)` 도 함께 derive
-
-### Cycle Progress pip (`src/components/docs/DocsCycleProgress.tsx`)
-
-- `overall === 'A'` 일 때 컨테이너에 `opacity-60 grayscale` 추가 → 종결 시각적 구분 강화
-
-### 상세 페이지 (`src/pages/docs/DocsDrawingDetailPage.tsx`)
-
-- 헤더 영역(Card 또는 최상단 컨테이너) 에 `computeIsClosed(form)` 시 `bg-muted/40 text-muted-foreground` 톤 적용
-- Overall 배지 옆에 `Closed` 라벨 추가
-
----
-
-## 2) A 이후 차수 일정 자동 정리
-
-### 정책
-
-- Cycle 1 status = A → cycle 2, 3 의 모든 날짜/상태 필드 = `null`
-- Cycle 2 status = A → cycle 3 의 모든 필드 = `null`
-- Cycle 3 status = A → 변경 없음
-- 정리 대상 필드 (차수별):
-  - `subN_planned_date`, `subN_submission_date`, `subN_approval_date`
-  - `subN_actual_response_date`, `subN_approval_status`
-
-### 적용 지점 (3곳)
-
-#### (a) 상세 페이지 저장 시 (`DocsDrawingDetailPage.tsx`)
-
-- 저장 직전 `payload` 에 정리 로직 적용:
-  ```ts
-  if (normalizeApprovalStatus(payload.sub1_approval_status) === 'A') {
-    clearCycle(payload, 2); clearCycle(payload, 3);
-  } else if (normalizeApprovalStatus(payload.sub2_approval_status) === 'A') {
-    clearCycle(payload, 3);
-  }
-  ```
-- 정리 결과로 변경되는 필드도 `docs_change_log` 에 `change_source = 'auto_close_cleanup'` 으로 기록
-
-#### (b) Raw Data 일괄 편집 시 (`src/lib/bulk-edit.ts` / `DocsBulkEditBar.tsx`)
-
-- `subN_approval_status` 를 'A' 로 일괄 변경하는 경우, 동일 정리 로직을 클라이언트에서 row 별로 적용 후 update
-
-#### (c) Import 파서 (`src/lib/docs-import-parser.ts`)
-
-- 행 정규화 마지막 단계에서 동일 헬퍼 호출 → A 이후 차수 데이터가 잘못 들어와도 무시되어 DB 에 빈 값으로 저장
-- 이로써 향후 신규 import 도 일관성 보장
-
-### 신규 헬퍼 (`src/lib/docs-status.ts`)
-
-```ts
-export function clearCyclesAfterClosure<T extends DrawingForStatus>(d: T): T;
-// returns shallow-cloned object with sub2/sub3 fields nulled where appropriate.
-// Idempotent. No-op if no 'A' present.
+-- Register team in docs_field_config so it shows up in tables/forms
+INSERT INTO public.docs_field_config
+  (field_name, display_name, is_enabled, is_required, sort_order, source_origin, visible_to_roles, editable_to_roles)
+VALUES
+  ('team', 'Team', true, false, 65, 'system',
+   ARRAY['guest','super_guest','user','senior_user','superuser','admin']::app_role[],
+   ARRAY['user','senior_user','superuser','admin']::app_role[])
+ON CONFLICT DO NOTHING;
 ```
 
-이 헬퍼를 (a)(b)(c) 모두에서 재사용.
+Sort order 65 places Team between Subcontractor (60) and Discipline (70).
 
-### 기존 데이터 일회성 정리 (선택)
+## 2. Shared Enum Constants (`src/types/enums.ts`)
 
-- 마이그레이션은 만들지 않음. 기존 데이터는 사용자가 다음 import / 저장 시 자연 정리되도록 함.
-  - 이유: 의도치 않은 데이터 손실 방지, 사용자가 먼저 데이터 검증 가능
-- 사용자가 원하면 별도 요청 시 일회성 정리 SQL 을 실행
+- Extend `TeamType` to include `'Design'`.
+- Append `'Design'` to `ALL_TEAMS`.
+- Add `Design: 'Design'` to `TEAM_LABELS` (label same as enum value).
+- Extend `normalizeTeamValue()` to map tokens like `design`, `designer`, `designteam` → `'Design'`.
 
----
+This automatically updates Defects module dropdowns, Profiles team selector, and any other consumer.
 
-## 변경 파일
+## 3. Docs Module Code Changes
 
-- `src/lib/docs-status.ts` — `clearCyclesAfterClosure()` 헬퍼 추가
-- `src/pages/docs/DocsRawDataPage.tsx` — `is_closed` derive + 행 회색 처리
-- `src/components/docs/DocsCycleProgress.tsx` — overall=A 시 opacity/grayscale
-- `src/pages/docs/DocsDrawingDetailPage.tsx` — 카드 회색 톤, 저장 전 cleanup, change_log 기록
-- `src/lib/bulk-edit.ts` — bulk update 시 cleanup
-- `src/lib/docs-import-parser.ts` — 파싱 끝에 cleanup 호출
+**`src/pages/docs/DocsRawDataPage.tsx`**
+- Add `team` to the `DocsDrawing` row type, `select(...)` query, derived row mapping, default field-width config (`team: 110`), default-visible columns list, and bulk-edit/filter `optionFields` (using `ALL_TEAMS`).
+- Add a `team` entry to the bulk-edit field definitions with `inputType: 'select'`, group `Classification`.
 
-DB 스키마 변경 없음. 기존 데이터 자동 마이그레이션 없음.
+**`src/pages/docs/DocsDrawingDetailPage.tsx`**
+- Add `team` to the `DocsDrawing` type, fetch select list, form state, change-log diffing, and `EDITABLE_FIELDS`.
+- Render a `SelectField` for team (options from `ALL_TEAMS` with `TEAM_LABELS`) next to Trade/Discipline, gated by `isFieldVisible('team')`.
+
+**`src/lib/bulk-edit.ts`**
+- Add `team` to the editable field whitelist for the docs module so bulk updates can write it.
+
+**`src/lib/docs-import-parser.ts`**
+- Add `'team'` to the `TargetField` union and to `HEADER_MAP` aliases (`team`, `team name`, `discipline team`, etc.).
+- During row normalization, run the raw value through `normalizeTeamValue()` and assign to `team` (drop unrecognized values with a row log warning, consistent with existing pattern).
+- Optional auto-derive: if `team` is missing but `discipline` matches a known token (e.g. discipline `Mechanical` → team `Mech`), backfill via `normalizeTeamValue(discipline)`. Keep this behind the same fallback already used elsewhere.
+
+**`src/integrations/supabase/types.ts`** — auto-regenerated; not edited manually.
+
+## 4. UI Behavior
+
+- Team column in Raw Data table is sortable and filterable using `TEAM_LABELS` for display.
+- Drawing Detail shows full label (e.g. "Mechanical") via `formatTeamLabel`.
+- "Closed" (Overall Status A) styling already implemented continues to apply; no interaction with team logic.
+
+## 5. Out of Scope
+
+- No changes to `defect_items` data; the new `Design` value is simply available to all team consumers.
+- No backfill of `team` for existing docs rows. Users can populate via Detail page edit, Bulk Edit, or next Excel import.
+
+## Files Touched
+
+- New migration (enum + column + field_config seed)
+- `src/types/enums.ts`
+- `src/pages/docs/DocsRawDataPage.tsx`
+- `src/pages/docs/DocsDrawingDetailPage.tsx`
+- `src/lib/bulk-edit.ts`
+- `src/lib/docs-import-parser.ts`
