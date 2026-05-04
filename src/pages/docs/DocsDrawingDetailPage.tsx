@@ -323,6 +323,7 @@ export default function DocsDrawingDetailPage() {
 
   const risk = computeRisk(form.is_submitted ?? record.is_submitted, scDate, leadDays ?? 30);
   const overallStatus = computeOverallStatus(form as any, dataDate);
+  const isClosed = computeIsClosed(form as any);
   const tradeDerived = resolveTrade(form as any);
 
   // Build Subcontractor Select options preserving legacy values
@@ -354,14 +355,18 @@ export default function DocsDrawingDetailPage() {
       </div>
 
       {/* Item Detail Card */}
-      <Card>
+      <Card className={cn(isClosed && 'bg-muted/40 border-muted')}>
         <CardHeader>
-          <CardTitle className="flex flex-wrap items-center gap-x-6 gap-y-2 text-lg">
+          <CardTitle className={cn('flex flex-wrap items-center gap-x-6 gap-y-2 text-lg', isClosed && 'text-muted-foreground')}>
             <span className="font-mono">ITEM DETAIL — {record.document_no}</span>
+            {isClosed && (
+              <Badge className="bg-muted text-muted-foreground hover:bg-muted text-[10px] uppercase tracking-wide">Closed</Badge>
+            )}
             <Badge className={cn('text-[10px]',
               risk === 'red' ? 'bg-red-100 text-red-800 hover:bg-red-100'
               : risk === 'amber' ? 'bg-amber-100 text-amber-800 hover:bg-amber-100'
               : 'bg-green-100 text-green-800 hover:bg-green-100',
+              isClosed && 'opacity-60',
             )}>RISK: {risk.toUpperCase()}</Badge>
             <Badge variant="outline" className="text-[10px]">Overall: {overallStatus}</Badge>
             <Badge variant="outline" className="text-[10px]">Trade (derived): {tradeDerived}</Badge>
