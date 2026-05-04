@@ -2355,6 +2355,41 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
           </Table>
         </div>
       </CardContent>
+
+      <AlertDialog open={!!pendingDisable} onOpenChange={(v) => !v && setPendingDisable(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disable field and its aliases?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDisable && (() => {
+                const c = aliasCounts[pendingDisable.field_name];
+                const n = c?.active ?? 0;
+                return (
+                  <>
+                    Disabling <span className="font-mono">{pendingDisable.field_name}</span> will hide its column in Raw Data / List / Detail UI.
+                    {' '}It will also disable <strong>{n} active alias{n === 1 ? '' : 'es'}</strong> in Header Mappings,
+                    so those headers will be ignored on future imports. Continue?
+                  </>
+                );
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingDisable) {
+                  const target = pendingDisable;
+                  setPendingDisable(null);
+                  performToggle(target, 'is_enabled', true);
+                }
+              }}
+            >
+              Disable both
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
