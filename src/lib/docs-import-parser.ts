@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { normalizeDate } from '@/lib/defect-parser';
 import { normalizeApprovalStatus, clearCyclesAfterClosure } from '@/lib/docs-status';
 import { getMappedField } from '@/lib/header-mappings-cache';
+import { normalizeTeamValue } from '@/types/enums';
 
 /**
  * Docs (As-Built Drawings) Excel parser.
@@ -551,6 +552,7 @@ export async function parseDocsExcel(
         hdec_pic_name: struct.hdec_pic_name ?? null,
         hdec_eng_name: struct.hdec_eng_name ?? null,
         subcontractor_name: subcontractorName,
+        team: normalizeTeamValue(struct.team) ?? normalizeTeamValue(discipline) ?? null,
         raw_payload: payload,
       });
       sheetRowCount++;
