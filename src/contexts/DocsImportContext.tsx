@@ -351,7 +351,7 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
           'sub2_planned_date', 'sub2_submission_date', 'sub2_approval_date', 'sub2_approval_status', 'sub2_actual_response_date',
           'sub3_planned_date', 'sub3_submission_date', 'sub3_approval_date', 'sub3_approval_status', 'sub3_actual_response_date',
           'transmittal_number', 'transmittal_due_date', 'days_due',
-          'remarks', 'hdec_pic_name', 'hdec_eng_name',
+          'remarks', 'hdec_pic_name', 'hdec_eng_name', 'team',
         ];
 
         await runWithConcurrency(f.parsed!, async (row) => {
@@ -416,6 +416,7 @@ export function DocsImportProvider({ children }: { children: ReactNode }) {
             hdec_pic_name: row.hdec_pic_name,
             hdec_eng_name: row.hdec_eng_name,
             subcontractor_name: row.subcontractor_name,
+            team: row.team,
             raw_payload: row.raw_payload,
             source_upload_id: batchId,
             data_source_type: 'excel_import',
