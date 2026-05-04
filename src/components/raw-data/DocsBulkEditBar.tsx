@@ -11,7 +11,12 @@ import { cn } from '@/lib/utils';
 interface DocsBulkEditBarProps<TRow extends { id: string }> {
   selectedRows: TRow[];
   fields: BulkEditableField[];
-  onApplied: (result: { field: string; value: string | number | boolean | null; ids: string[] }) => void;
+  onApplied: (result: {
+    field: string;
+    value: string | number | boolean | null;
+    ids: string[];
+    extraUpdates?: Record<string, string | number | boolean | null>;
+  }) => void;
   onClearSelection: () => void;
 }
 
