@@ -237,10 +237,16 @@ export default function HeaderMappingsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sections, lowerSearch]);
 
+  const [manualOpenIds, setManualOpenIds] = useState<string[] | null>(null);
+
   const openValues = useMemo(() => {
-    if (!lowerSearch) return undefined;
-    return visibleSections.map((s) => s.target);
-  }, [lowerSearch, visibleSections]);
+    if (lowerSearch) return visibleSections.map((s) => s.target);
+    if (manualOpenIds !== null) return manualOpenIds;
+    return undefined;
+  }, [lowerSearch, visibleSections, manualOpenIds]);
+
+  const expandAll = () => setManualOpenIds(visibleSections.map((s) => s.target));
+  const collapseAll = () => setManualOpenIds([]);
 
   const testResult = useMemo(() => {
     if (!testHeader.trim()) return null;
