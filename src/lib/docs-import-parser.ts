@@ -339,7 +339,7 @@ function detectHeader(matrix: unknown[][]): DetectedHeader | null {
   for (let c = 0; c < subRow.length; c++) {
     const sub = String(subRow[c] ?? '').trim();
     const grp = filledGroup[c];
-    const subNorm = normalizeHeader(sub);
+    const subNorm = stripOrdinalPrefix(normalizeHeader(sub));
     const grpNorm = normalizeHeader(grp);
     const submissionN = parseSubmissionGroup(grp);
     let field: FieldKey | null = null;
