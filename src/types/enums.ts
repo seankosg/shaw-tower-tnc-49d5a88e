@@ -33,13 +33,14 @@ export const isR2Done = (s: ReportStatus | string | null | undefined): boolean =
 export const ALL_ROLES: AppRole[] = ['guest', 'super_guest', 'user', 'senior_user', 'superuser', 'admin'];
 export const ALL_USER_TYPES: UserType[] = ['subcontractor', 'subsub', 'hdec', 'pm_pd', 'admin'];
 
-export type TeamType = 'Mech' | 'Elec' | 'Arch' | 'Supp';
-export const ALL_TEAMS: TeamType[] = ['Mech', 'Elec', 'Arch', 'Supp'];
+export type TeamType = 'Mech' | 'Elec' | 'Arch' | 'Supp' | 'Design';
+export const ALL_TEAMS: TeamType[] = ['Mech', 'Elec', 'Arch', 'Supp', 'Design'];
 export const TEAM_LABELS: Record<TeamType, string> = {
   Mech: 'Mechanical',
   Elec: 'Electrical',
   Arch: 'Architectural',
   Supp: 'Support',
+  Design: 'Design',
 };
 
 /**
@@ -67,6 +68,7 @@ export function normalizeTeamValue(value: unknown): TeamType | null {
   if (['elec', 'electrical', 'ict', 'sbt', 'verticaltransport'].includes(token)) return 'Elec';
   if (['mech', 'mechanical', 'acmv', 'bms', 'plumbing', 'sanitary', 'santary', 'gas', 'fireprotection'].includes(token)) return 'Mech';
   if (['supp', 'support'].includes(token)) return 'Supp';
+  if (['design', 'designer', 'designteam', 'designdept', 'designdepartment'].includes(token)) return 'Design';
 
   return null;
 }
