@@ -1,113 +1,49 @@
-# T&C Raw Data — Per-Subcontractor Export with Auto-ZIP
+## 시스템 필드 Hide/Unhide 기능
 
-## Goal
-T&C Raw Data (`SubtestList.tsx`) 페이지의 "Export Excel" 기능을 Defect Raw Data와 동일한 UX로 확장:
-- Single file 또는 One file per Subcontractor 선택 다이얼로그
-- Subcontractor 수 ≥ 7이면 자동으로 단일 ZIP으로 묶어 다운로드 (브라우저 다중 다운로드 차단 회피)
-- T&C에는 Re-import ready 포맷이 없으므로 **Format 섹션은 다이얼로그에서 제외**
+### 동작
+- 그룹 헤더(시스템 필드명) 옆에 **Hide field** 버튼 추가
+- 클릭 시 AlertDialog로 확인:
+  - "이 시스템 필드를 숨기면 해당 필드의 모든 alias가 비활성화되고, Raw Data / List / Detail UI에서도 컬럼이 숨겨집니다. 진행하시겠습니까?"
+- 확인 시 두 작업을 동시에 수행:
+  1. `import_header_mappings.is_active = false` (해당 module/sub_module의 모든 alias)
+  2. 대응 `*_field_config.is_enabled = false` (`field_name = target`)
+- 둘 중 하나라도 실패하면 toast로 실패 메시지 표시
 
-## Changes
+### Unhide
+- 툴바에 **Show hidden fields** 체크박스 추가
+- 숨겨진 필드는 회색 + `hidden` 뱃지로 표시되고, 그룹 헤더에 **Unhide field** 버튼
+- 클릭 시 `*_field_config.is_enabled = true`로 복구
+- alias의 `is_active`는 사용자가 원하는 항목만 개별 토글로 다시 켜도록 자동 복구하지 않음 (안전한 기본값)
 
-### 1. `src/lib/excel-export.ts`
+### 모듈별 대응 테이블
+| Header Mappings 컨텍스트 | Field Config 테이블 |
+|---|---|
+| `tnc` | `field_config` |
+| `defect` | `defect_field_config` |
+| `docs / as_built` | `docs_field_config` (field_name 기준) |
+| `docs / warranty` | `docs_field_config` (field_name 기준) |
 
-**리팩토링 — `exportSubtestsToExcel` 내부를 헬퍼로 추출**
-- 신규 내부 함수 `buildSubtestsWorkbook<TRow>(params)` — 기존 워크북/시트 조립 로직 전체 (AOA, merges, !cols, !rows, !freeze, !views, 셀별 스타일, date cell)
-- 시그니처: `{ rows, visibleCols, fieldConfig, globalFilter, searchParams, meta, sourceSuffix?, _filterSummary?, _sortSummary? }` → `{ wb, rowCount }`
-- `sourceSuffix` 있으면 Source 라인을 `<base> | <sourceSuffix>`로 표기 (예: `... | Subcontractor: HDEC`)
-- 기존 `exportSubtestsToExcel`는 `summarizeFilters`/`summarizeSort` 호출 후 `buildSubtestsWorkbook`에 위임 (반환값/파일명 동일)
-- 신규 헬퍼:
-  - `timestampForFilename()` — `YYYYMMDD_HHMM`
-  - `sanitizeForFilename(s)` — `[\\/:*?"<>|]+` 및 공백 치환, 80자 제한, 빈 문자열은 `Unnamed`
-  - `groupSubtestRowsBySubcontractor(rows)` — `subcontractor_name` 기준, 빈 값은 `Unassigned`
-  - `sortGroupKeys(keys)` — 알파벳 정렬, `Unassigned`는 마지막
+`docs_field_config`는 sub_module 컬럼이 없어 as_built/warranty 양쪽이 동일 테이블을 공유합니다 (필드명이 겹치지 않으므로 안전).
 
-**신규 함수**
-- `exportSubtestsToExcelBySubcontractor(opts): { fileCount, rowCount, fileNames }`
-  - 각 그룹 → `buildSubtestsWorkbook` → `XLSX.writeFile()` 개별 다운로드
-  - 파일명: `SHAW_Subtests_<sanitizedSubcon>_<ts>.xlsx`
+### Hidden 상태 fetch
+- `HeaderMappingsTab` 내부에 컨텍스트별로 해당 `*_field_config` 테이블에서 `field_name, is_enabled` 조회
+- 결과를 `Set<string>` (hiddenFields)로 변환해 섹션 렌더링 시 사용
+- Hide/Unhide 후 refetch
 
-- `exportSubtestsToZipBySubcontractor(opts): Promise<{ fileCount, rowCount, zipFileName, fileNames }>`
-  - 동적 import: `const { default: JSZip } = await import('jszip')`
-  - 각 그룹 워크북 → `XLSX.write({ type: 'array', bookType: 'xlsx' })` ArrayBuffer → `zip.file(name, buffer)`
-  - 동일 파일명 충돌 시 ` (2)`, ` (3)` 접미사
-  - ZIP 파일명: `SHAW_Subtests_BySubcontractor_<ts>.zip`
-  - `zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } })` → 임시 anchor click 다운로드
+### 표시 규칙
+- 기본: hidden 필드는 그룹 자체를 목록에서 제외
+- "Show hidden fields" ON: hidden 그룹도 표시하되 회색 처리 + `hidden` 뱃지 + Unhide 버튼
+- 검색은 hidden 필드도 항상 매칭 (사용자가 찾을 수 있도록)
 
-### 2. `src/pages/SubtestList.tsx`
+### 안전 장치
+- `subtest_id`(tnc), `id`(defect), `document_no`(docs) 등 항상 보여야 할 필수 필드는 Hide 버튼 비활성화 + tooltip "Required field cannot be hidden"
+  - 코드의 `ALWAYS_VISIBLE_FIELDS` 셋 (tnc는 `useFieldConfig.ts`에 이미 정의됨)을 참조
 
-**Imports**
-- `exportSubtestsToExcel` 외에 `exportSubtestsToExcelBySubcontractor`, `exportSubtestsToZipBySubcontractor` 추가
-- `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `DialogDescription`, `DialogFooter` from `@/components/ui/dialog`
-- `RadioGroup`, `RadioGroupItem` from `@/components/ui/radio-group`
-- `Label` from `@/components/ui/label` (이미 있다면 재사용)
+### 변경 파일
+- `src/pages/admin/HeaderMappingsTab.tsx` — 신규 hooks (hidden state fetch), Hide/Unhide 핸들러, 그룹 헤더 버튼 + AlertDialog, "Show hidden fields" 토글, hidden 뱃지/회색 처리
 
-**Constants**
-- `const ZIP_THRESHOLD = 7;` (모듈 상단 또는 컴포넌트 내부)
-
-**State**
-- `const [exportDialogOpen, setExportDialogOpen] = useState(false);`
-- `const [exportMode, setExportMode] = useState<'single' | 'per-subcon'>('single');`
-- `const [exportBusy, setExportBusy] = useState(false);`
-
-**Export 버튼 동작 변경**
-- 기존 `onClick`(즉시 단일 export) → `onClick={() => { /* row 0 검사 */ setExportDialogOpen(true); }}`
-- 행 0개일 때 토스트 분기는 그대로 유지 (다이얼로그 오픈 전)
-
-**다이얼로그 (Defect와 동일한 패턴, Format 섹션 제외)**
-- 위치: 기존 Export 버튼 아래(또는 컴포넌트 return JSX 적절한 위치)
-- `subconSet` 계산 → `willZip = subconSet.size >= ZIP_THRESHOLD`
-- Output 라디오 2개:
-  1. `Single file` — "Exports the current view as one .xlsx file (N rows)."
-  2. `One file per Subcontractor`:
-     - `willZip=false`: "Triggers N download(s) (one .xlsx per Subcontractor). Empty Subcontractor rows go to \"Unassigned\"."
-     - `willZip=true`: amber 텍스트, "N Subcontractors detected — files will be packaged into a single .zip to avoid browser download limits. Empty Subcontractor rows go to \"Unassigned\"."
-- DialogFooter: Cancel / Export 버튼
-- Export 버튼 라벨: `exportBusy ? 'Exporting…' : 'Export'`
-- onOpenChange에서 `exportBusy`일 때 닫기 차단
-
-**Export 핸들러 (Defect와 동일한 분기)**
-```ts
-if (exportMode === 'single') {
-  const result = exportSubtestsToExcel({ table, fieldConfig, globalFilter, searchParams, meta });
-  toast({ title: 'Export complete', description: `${result.rowCount} rows → ${result.fileName}` });
-  setExportDialogOpen(false);
-} else {
-  // per-subcon: < ZIP_THRESHOLD → individual, ≥ → ZIP
-  const sortedRows = table.getSortedRowModel().rows;
-  const subconSet = new Set<string>();
-  for (const r of sortedRows) {
-    const raw = (r.original as any)?.subcontractor_name;
-    subconSet.add(raw && String(raw).trim() ? String(raw).trim() : 'Unassigned');
-  }
-  if (subconSet.size >= ZIP_THRESHOLD) {
-    toast({ title: 'Packaging into ZIP', description: `${subconSet.size} Subcontractors detected — bundling into a single .zip to avoid browser download limits.` });
-    setExportBusy(true);
-    const result = await exportSubtestsToZipBySubcontractor({ table, fieldConfig, globalFilter, searchParams, meta });
-    toast({ title: 'Export complete', description: `${result.fileCount} files bundled in ${result.zipFileName} (${result.rowCount} rows total)` });
-    setExportBusy(false);
-    setExportDialogOpen(false);
-  } else {
-    const result = exportSubtestsToExcelBySubcontractor({ table, fieldConfig, globalFilter, searchParams, meta });
-    toast({ title: 'Export complete', description: `${result.fileCount} file(s) downloaded (${result.rowCount} rows total)` });
-    setExportDialogOpen(false);
-  }
-}
-```
-- `try/catch`로 감싸 에러 토스트 + `setExportBusy(false)`
-
-### 3. Dependencies
-- `jszip` — 이미 추가됨 (Defect export에서 사용 중)
-
-## Out of Scope
-- T&C용 Re-import ready 포맷 추가 (별도 작업)
-- 다른 페이지(Docs raw data, Defect schedule revision 등) 동일 기능 적용 (요청 없음)
-
-## Validation
-- [ ] T&C Raw Data 페이지에서 "Export Excel" 클릭 시 다이얼로그 열림 (즉시 다운로드 X)
-- [ ] Single file 선택: 기존과 동일한 단일 .xlsx 다운로드 (파일명 `SHAW_Subtests_<ts>.xlsx`)
-- [ ] One file per Subcontractor + Subcontractor 1~6: 개별 .xlsx 다운로드
-- [ ] One file per Subcontractor + Subcontractor ≥ 7: amber 안내 + 1개 .zip 다운로드, 압축 해제 시 모든 .xlsx 정상
-- [ ] Unassigned 그룹 정상 처리 및 알파벳 정렬에서 마지막 위치
-- [ ] 빈 행 시 다이얼로그 열리지 않고 토스트로 안내
-- [ ] Source 라인에 `Subcontractor: <name>` 표기
-- [ ] 빌드/타입 에러 없음
+### 변경하지 않는 것
+- DB 스키마 (모든 작업은 기존 컬럼 사용)
+- 하드코딩된 `TNC_FIELDS` / `DEFECT_FIELDS` / `DOCS_*_FIELDS` 화이트리스트 — 파서/익스포트 동작 유지를 위해 그대로 둠
+- `is_system=true` 행의 하드 삭제 (RLS 차단됨, 대신 is_active=false로 비활성화)
+- `useFieldConfig` / `useDefectFieldConfig` / `useDocsFieldConfig` 훅 — useState 기반이므로 페이지 재방문/새로고침 시 자동 반영
