@@ -245,6 +245,22 @@ function uniqueOptions(data: DocsRawRow[], field: keyof DocsRawRow) {
     .map((value) => ({ value, label: value }));
 }
 
+/** Merge seed values into an option list, preserving order: seeds first (in given order), then remaining unique data values. */
+function mergeOptionSeeds(
+  options: { value: string; label: string }[],
+  seeds: string[],
+): { value: string; label: string }[] {
+  const present = new Set(options.map((o) => o.value));
+  const seedOpts = seeds.filter((s) => !present.has(s)).map((s) => ({ value: s, label: s }));
+  const seedSet = new Set(seeds);
+  const ordered = [
+    ...seeds.filter((s) => present.has(s)).map((s) => options.find((o) => o.value === s)!),
+    ...seedOpts,
+    ...options.filter((o) => !seedSet.has(o.value)),
+  ];
+  return ordered;
+}
+
 // ─── Filter dropdowns (mirror Defect) ──────────────────────────────────────
 function MultiSelectDropdown({ column, options }: { column: any; options: { value: string; label: string }[] }) {
   const selected: string[] = (column.getFilterValue() as string[]) ?? [];
