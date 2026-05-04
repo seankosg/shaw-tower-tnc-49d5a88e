@@ -310,7 +310,7 @@ function detectHeader(matrix: unknown[][]): DetectedHeader | null {
     for (let c = 0; c < subRow.length; c++) {
       const sub = String(subRow[c] ?? '').trim();
       const grp = filledGroup[c];
-      const subNorm = normalizeHeader(sub);
+      const subNorm = stripOrdinalPrefix(normalizeHeader(sub));
       const grpN = parseSubmissionGroup(grp);
       if (grpN && SUB_ALIAS[subNorm]) { score += 2; continue; }
       const m = mapHeader(sub);
