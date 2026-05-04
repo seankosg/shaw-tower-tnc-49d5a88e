@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { computeRisk } from '@/lib/docs-risk';
 import { computeOverallStatus, computeIsClosed, clearCyclesAfterClosure, CYCLE_DATA_FIELDS } from '@/lib/docs-status';
 import { TRADE_OPTIONS, resolveTrade } from '@/lib/docs-trade';
+import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -29,6 +30,7 @@ interface DocsDrawing {
   revision: string | null;
   title: string | null;
   trade: string | null;
+  team: string | null;
   discipline: string | null;
   sheet_name: string | null;
   series: string | null;
@@ -85,7 +87,7 @@ type SubMaster = { id: string; name: string };
 // Editable fields (mapped to docs_drawings columns)
 const EDITABLE_FIELDS = [
   'revision', 'title',
-  'trade', 'discipline', 'sheet_name',
+  'trade', 'team', 'discipline', 'sheet_name',
   'series', 'level_location', 'sequential_no',
   'document_type',
   'organisation_raw', 'subcontractor_id', 'subcontractor_name',
@@ -396,6 +398,15 @@ export default function DocsDrawingDetailPage() {
             )}
             {isFieldVisible('discipline') && (
               <SelectField label={getLabel('discipline')} value={form.discipline} options={statusPool.discipline.map((v) => ({ value: v, label: v }))} disabled={!canEdit} onChange={(v) => updateField('discipline', v)} allowFreeText />
+            )}
+            {isFieldVisible('team') && (
+              <SelectField
+                label={getLabel('team') || 'Team'}
+                value={form.team}
+                options={ALL_TEAMS.map((t) => ({ value: t, label: TEAM_LABELS[t] }))}
+                disabled={!canEdit}
+                onChange={(v) => updateField('team', v)}
+              />
             )}
             {isFieldVisible('sheet_name') && <Field label={getLabel('sheet_name')} value={form.sheet_name} disabled={!canEdit} onChange={(v) => updateField('sheet_name', v)} />}
             {isFieldVisible('document_type') && (
