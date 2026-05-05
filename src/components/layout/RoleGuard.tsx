@@ -27,7 +27,21 @@ export function RoleGuard({ children }: { children: React.ReactNode }) {
   const { tnc, defect, docs, loading } = useModuleStatus();
 
   if (!canAccessRoute(roles, pathname)) {
-    return <Navigate to="/dashboard" replace />;
+    // Pick the first route the user can actually access — avoids redirect loops
+    // when the configured fallback (e.g. /dashboard) is itself restricted.
+    const fallbacks = ['/tc/dashboard', '/defects/dashboard', '/docs/dashboard', '/dashboard'];
+    const target = fallbacks.find((p) => canAccessRoute(roles, p));
+    if (!target || target === pathname) {
+      return (
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 p-6 text-center">
+          <h2 className="text-lg font-semibold">No accessible pages</h2>
+          <p className="text-sm text-muted-foreground">
+            Your account does not have permission to view any module. Please contact an administrator.
+          </p>
+        </div>
+      );
+    }
+    return <Navigate to={target} replace />;
   }
 
   // Module pause check — admin always passes
