@@ -127,6 +127,9 @@ export interface WorkerContext {
   batchId: string;
   userId: string | null;
   subModule: DocsSubModule;
+  /** Canonical field names the user excluded via column-select. The worker MUST
+   *  skip these keys on UPDATE so existing DB values are preserved. */
+  excludedFields?: Set<string>;
 }
 
 export interface ImporterAdapter<TRow> {
