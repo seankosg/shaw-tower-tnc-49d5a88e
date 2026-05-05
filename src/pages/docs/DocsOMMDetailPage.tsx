@@ -545,8 +545,7 @@ function FieldEditor({ field, label, value, disabled, onSave, subOptions, picOpt
           value={value ?? ''}
           options={(opts ?? []).map((o) => o.name)}
           disabled={disabled}
-          onCommit={(v) => onSave(v ? v : null)}
-          className="h-8"
+          onChange={(v) => onSave(v && v.trim() ? v.trim() : null)}
         />
       </div>
     );
