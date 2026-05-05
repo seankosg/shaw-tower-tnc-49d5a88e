@@ -314,14 +314,18 @@ export const ommAdapter: ImporterAdapter<ParsedOmmRow> = {
   keyFieldLabel: 'SN',
   dataDateRequired: false,
   rawDataPath: '/docs/omm',
-  parseFile: async (file, sheets) => {
+  parseFile: async (file, sheets, options) => {
     const { parseOmmExcel } = await import('@/lib/docs-omm-import-parser');
-    const r = await parseOmmExcel(file, sheets);
+    const r = await parseOmmExcel(file, sheets, options);
     return { rows: r.rows, unknownHeaders: r.unknownHeaders };
   },
   getSheetNames: async (file) => {
     const { getOmmExcelSheetNames } = await import('@/lib/docs-omm-import-parser');
     return getOmmExcelSheetNames(file);
+  },
+  getHeaderInfo: async (file, sheets) => {
+    const { getOmmHeaderInfo } = await import('@/lib/docs-omm-import-parser');
+    return getOmmHeaderInfo(file, sheets);
   },
   getRowKey: (row) => row.sn ?? null,
   upsertWorker: async (ctx, rows, onProgress) => {
