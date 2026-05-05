@@ -1010,6 +1010,58 @@ export default function SubtestList() {
     })),
   ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions, reportStatusOptions, dataDate, commentSummary, navigate]);
 
+  // ─── Dynamic columns: any field_config row that is enabled but has no
+  // matching hardcoded column above. Filter type is auto-inferred from the
+  // field name + original_header. Currently no field_config rows are missing,
+  // but this guarantees future additions auto-appear with sensible filters.
+  const dynamicColumns = useMemo<ColumnDef<SubtestRow>[]>(() => {
+    const baseIds = new Set<string>(
+      columns.map((c) => (c as any).id ?? (c as any).accessorKey).filter(Boolean) as string[],
+    );
+    // Map known column-id aliases back to field_config field_name
+    const aliasToField: Record<string, string> = { system_code: 'system' };
+    const baseFields = new Set<string>([...baseIds].map((id) => aliasToField[id] ?? id));
+    return (fieldConfigRows ?? [])
+      .filter((row) => row && row.is_enabled && !baseFields.has(row.field_name) && !isMetaField(row.field_name))
+      .map((row) => {
+        const fieldName = row.field_name;
+        const inferred = inferFilterType(fieldName);
+        const filterFn =
+          inferred === 'date-range' ? dateRangeFilterFn
+          : inferred === 'multi-select' ? multiSelectFilterFn
+          : textFilterFn;
+        const optionSet = inferred === 'multi-select'
+          ? [...new Set(data.map((r) => {
+              const v = (r as any)[fieldName];
+              return v == null || v === '' ? '' : String(v);
+            }).filter(Boolean))]
+              .sort((a, b) => a.localeCompare(b))
+              .map((v) => ({ value: v, label: v }))
+          : [];
+        return {
+          accessorKey: fieldName,
+          header: row.display_name || fieldName,
+          size: 140,
+          filterFn,
+          meta: { filterType: inferred, filterOptions: optionSet, isDynamic: true },
+          cell: ({ getValue }) => {
+            const value = getValue() as any;
+            if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
+            if (inferred === 'date-range') {
+              const iso = String(value).slice(0, 10);
+              return <span>{iso}</span>;
+            }
+            return <span className="block truncate">{String(value)}</span>;
+          },
+        } as ColumnDef<SubtestRow>;
+      });
+  }, [columns, fieldConfigRows, data]);
+
+  const allColumns = useMemo<ColumnDef<SubtestRow>[]>(
+    () => [...columns, ...dynamicColumns],
+    [columns, dynamicColumns],
+  );
+
   // Apply status (overdue / at_risk) + date URL filters at data level
   const urlT1PlannedTo = searchParams.get('t1_planned_to');
   const urlT2PlannedTo = searchParams.get('t2_planned_to');
