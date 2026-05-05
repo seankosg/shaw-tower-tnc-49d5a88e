@@ -2137,12 +2137,14 @@ function FieldConfigTable({ table, subModule, title, showOrigin = false }: { tab
 
   /** Disable all aliases pointing at `target_field` for this module. */
   const disableAliasesFor = async (fieldName: string): Promise<{ ok: boolean; affected: number; error?: string }> => {
-    const { data: rows, error: selErr } = await (supabase as any)
+    let sel = (supabase as any)
       .from('import_header_mappings')
       .select('id')
       .eq('module', moduleKey)
       .eq('target_field', fieldName)
       .eq('is_active', true);
+    if (subModule) sel = sel.eq('sub_module', subModule);
+    const { data: rows, error: selErr } = await sel;
     if (selErr) return { ok: false, affected: 0, error: selErr.message };
     const ids = (rows ?? []).map((r: { id: string }) => r.id);
     if (ids.length === 0) return { ok: true, affected: 0 };
