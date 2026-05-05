@@ -1,114 +1,188 @@
 
-# OMM Raw Data — Full Parity Rewrite (Defect Raw Data 수준)
+# Docs Import 허브 통합 (Phase 1: ABD + OMM)
 
-`DocsOMMRawDataPage.tsx`를 Defect Raw Data와 동등한 운영 도구로 전면 재작성합니다. 기존 `OmmStatusBadge`, `OmmCopyQuantityCell`, `docs-omm-status.ts` 로직은 그대로 재사용합니다.
+Warranty / Spare Part 는 본 단계에서 제외 → 별도 페이즈에서 진행.
 
-## 1. 테이블 엔진 (P0)
+## 현황
 
-- `@tanstack/react-table` + `@tanstack/react-virtual` 도입 (Defect와 동일 패턴).
-- 컬럼 정의는 `useDocsFieldConfig('omm')` 결과로 **동적 생성**. 하드코딩된 컬럼 분기 제거.
-- `SortingState` / `ColumnSizingState` / `ColumnFiltersState` / `RowSelectionState` / `VisibilityState` 전체 도입.
-- 컬럼 헤더: 클릭 정렬 + 더블클릭 auto-size + 우측 리사이즈 핸들.
-- `useFrozenColumnCount` 적용해 좌측 N개 컬럼 sticky.
-- `TopHorizontalScrollbar` 상단 미러 스크롤.
-- 행 가상화로 2000행 제한 해제 (전체 로드 + virtual window).
+| Sub-module | Raw Data | Import 페이지 | row_logs | field_logs | change_log |
+|---|---|---|---|---|---|
+| ABD | `/docs/abd` (풀기능) | `/docs/import` (풀기능) | 기록 | 기록 | 기록 |
+| OMM | `/docs/omm` (풀패리티) | `/docs/omm/import` (자체 state) | **미기록** | **미기록** | **미기록** |
 
-## 2. 필터 / 검색 (P0)
+공통 인프라는 이미 4개 sub-module 지원 — 활용만 하면 됨:
+- `docs_upload_batches.sub_module` (`as_built|omm|warranty|spare_part`)
+- `docs_upload_row_logs(upload_id, raw_row_no, document_no, action_taken, reason_code, reason_detail)` — `document_no` 컬럼은 sub-module 키 공용 슬롯으로 사용 (화면 라벨만 동적)
+- `docs_change_log(sub_module, record_id, drawing_id, …)` — `record_id` 가 범용 키, `drawing_id` 는 ABD 전용 레거시
+- `import_field_logs(kind='docs', row_log_id, field_name, outcome, raw_value, applied_value, previous_value)`
+- `DocsImportLogsPage` — batch 단위로 sub_module 표시 가능
 
-Defect와 동일한 4종 헤더 드롭다운:
+문제점:
+1. **`delete_docs_import_batch` RPC가 `docs_drawings`만 unlink** — OMM batch 삭제 시 `docs_omm.source_upload_id` 가 끊기지 않음.
+2. **OMM은 row/field/change log를 전혀 안 남김** — 감사 추적 단절, Logs 페이지에서 OMM batch가 빈 row만 노출.
+3. **Import 페이지가 sub-module별로 따로 존재** — OMM은 `/docs/omm/import` 자체 state, ABD는 `/docs/import` Context. 패턴 불일치.
 
-- **MultiSelectDropdown** — `category_group`, `category`, `team`, `subcontractor_name`, `hdec_pic_name`, `hdec_eng_name`, `training_required`, `draft_response_status`, `final_response_status`, `current_stage`, `current_status` 등 enum/저카디널리티 필드. Faceted counts + Empty 토큰.
-- **TextFilterDropdown** — `sn`, `section`, `work_trade_material`, `remarks` 등. AND-token (`,` 구분).
-- **DateRangeDropdown** — `instruction_date`, `draft_planned_date`, `draft_actual_date`, `draft_response_date`, `final_planned_date`, `final_actual_date`, `final_response_planned_date`, `final_response_actual_date`.
-- **NumberRangeDropdown** (신규, 작은 컴포넌트) — `pdf_required_qty`, `pdf_actual_qty`, `hardcopy_required_qty`, `hardcopy_actual_qty`. Defect의 progress filter 패턴 재활용.
-- 추가 toggle 필터 (테이블 상단 툴바):
-  - **Copy mismatch only** (기존 유지)
-  - **Resubmissions only / Hide resubmissions**
-  - **Overdue only** (planned_date 경과 + actual 미입력)
-- 글로벌 검색은 디바운스 + AND-token. 검색 대상: `RAW_SEARCH_FIELDS_OMM` 신규 정의 (sn, section, work_trade_material, subcontractor_name, hdec_pic_name, hdec_eng_name, remarks, category, category_group).
-- `buildColumnFilterChips`로 활성 필터 칩 + 전체 Clear.
+## 목표
 
-## 3. 상태 영속화 (P0)
+ABD 운영 품질 (헤더 자동 매핑, alias 매칭, batch + row_log + field_log + change_log, 풍부한 에러 UI, data date) 을 **단일 Import Hub `/docs/import`**에서 ABD/OMM 모두에 동일하게 제공. OMM 전용 페이지는 깔끔히 삭제.
 
-- `storageKey = omm-raw-data-state:${user.id}` 에 sorting/columnFilters/columnSizing/columnVisibility/globalFilter 저장 (Defect 패턴).
-- URL `searchParams` 동기화: `q`, `group`, `mismatch`, `resub`, `overdue`.
+## 1. 정보 구조
 
-## 4. 행 선택 + Bulk 작업 (P1)
+`/docs/import` 을 **2개 탭 허브**로 변경 (이후 Warranty / Spare Part 추가될 자리 미리 마련):
+- 탭: **ABD** · **OMM** (Warranty / Spare Part 는 disabled placeholder, "Coming soon" 안내)
+- URL: `/docs/import?sub=abd|omm`
+- 한쪽 탭이 import 진행 중이면 다른 탭의 Start 버튼 disable
+- `View Import Logs` 버튼은 `/docs/import/logs?sub=…` 로 sub_module 필터 미리 적용
 
-- 좌측 select 컬럼 (체크박스, sticky).
-- `BulkEditBar` (Defect와 동일 컴포넌트) 사용. OMM `bulkEditableFields` 정의:
-  - 카테고리: `category_group`, `category`, `team`, `training_required`
-  - 담당: `subcontractor_name`, `hdec_pic_name`, `hdec_eng_name`
-  - 수량: `pdf_required_qty`, `pdf_actual_qty`, `hardcopy_required_qty`, `hardcopy_actual_qty` (number)
-  - 일자: `instruction_date`, `draft_planned_date`, `draft_actual_date`, `draft_response_date`, `final_planned_date`, `final_actual_date`, `final_response_planned_date`, `final_response_actual_date`
-  - 응답: `draft_response_status`, `final_response_status` (A/B/C/clear) — **트리거 발화 주의**: B/C 일괄 적용 시 다량 resubmission row 자동 생성 가능 → confirm 다이얼로그에 경고 문구.
-  - 비고: `remarks`
-- `BulkDeleteDialog`, `BulkDuplicateDialog` 통합 (`entity='omm'`). `BulkReassignDialog`는 OMM에는 sub-trade 개념이 약하므로 1차 범위에서 제외.
-- Bulk Delete는 soft delete (`is_active=false`) 기본, hard delete는 admin 전용 (Defect와 동일 패턴).
+`/docs/omm/import` 라우트 → `/docs/import?sub=omm` 으로 **즉시 redirect 후 라우트 제거**.
 
-## 5. Export (P1)
+`/docs/import/logs`:
+- 상단에 sub_module 필터 (ALL / ABD / OMM / Warranty / Spare Part) 추가 — `docs_upload_batches.sub_module` 으로 필터링
+- batch detail 의 row log 컬럼 헤더는 sub_module 따라 라벨 변경 (ABD: `Document No`, OMM: `SN`)
+- field log / 삭제 / CSV 내보내기는 그대로 사용 (kind='docs')
 
-- 신규 `src/lib/docs-omm-excel-export.ts`:
-  - `exportOmmRawToExcel(rows, { format: 'view' | 'reimport' })`
-  - `exportOmmRawToExcelByCategory(rows)` — category_group별 시트 분할 (Defect의 per-subcon 대응)
-  - `exportOmmRawToZipByCategory(rows)` — 7개 초과 시 ZIP
-- 헤더의 Export 버튼 → Defect와 동일 형태의 Dialog (Single vs Per-Category, View vs Re-import, ZIP threshold=7).
-- View 포맷: 현재 visible 컬럼 + 라벨. Re-import 포맷: `import_header_mappings`의 alias 헤더로 출력 → 그대로 재업로드 가능.
+## 2. 공용 셸 (`DocsImportShell`)
 
-## 6. 메타 / 코멘트 / 시각화 (P2)
+ABD `DocsImportPage` UI 를 일반화 — 변하는 부분만 prop:
 
-- `META_FIELD_NAMES` 컬럼군 추가 (`MetaCell` 그대로 사용): created_by, created_at, updated_by, updated_at, source_origin, source_file.
-- **Comment summary 컬럼**: `omm_comments` 테이블에서 행별 집계 — 1회 쿼리로 `Map<row_id, CommentSummary>` 생성, `MetaCell field='comments'` 셀 클릭 시 Detail 페이지 이동(코멘트 섹션 앵커).
-- **OmmCycleProgress mini-bar 셀** (신규 작은 컴포넌트): Pending Draft → Draft UR → Pending Final → Final UR → Approved 5단계 progress dot. Rejected는 빨강 점.
-- **DDayBadge** 적용: 활성 stage의 planned date 기준. Overdue / At-risk 색.
-- 행 강조: `is_resubmission` 음영 (기존 유지) + Overdue시 좌측 빨강 보더.
-- 헤더에 `useLatestDocsDataDate` 표시.
+```text
+DocsImportShell (props: subModule, useImporter, keyFieldLabel, rawDataPath, dataDateRequired)
+ ├─ Header (제목 / 설명 / View Logs)
+ ├─ Module-paused banner
+ ├─ Drop zone + file picker
+ ├─ Files list
+ │    ├─ status, parsed count, data date
+ │    ├─ error code / details / hint
+ │    ├─ unmapped headers (+ Admin → Header Mappings 링크)
+ │    ├─ empty key count, in-file dup count, reject samples
+ │    └─ result badges (inserted/updated/skipped/rejected)
+ └─ Summary card (inserted/updated/skipped/rejected/unmatched + OMM resubmission 안내)
+```
 
-## 7. 인라인 편집 / 액션
+## 3. 공용 Importer Factory
 
-- 기존 Draft/Final response status select 인라인 편집 유지하되 `BulkEditBar`와 동일한 `applyBulkUpdate` 경로로 통일.
-- 행 우측 액션: ExternalLink (Detail) + 코멘트 아이콘(요약 카운트 표시).
-- 모바일(`useIsMobile`): 카드 리스트 fallback (Defect와 동일 패턴이지만 OMM은 1차로 horizontal scroll만 허용해도 됨 — 결정 필요).
+기존 `DocsImportContext` (ABD 전용) 를 factory 로 일반화:
 
-## 8. 권한 가드
+```ts
+createDocsImportProvider({
+  subModule,        // 'as_built' | 'omm'
+  parseFile,        // (File, sheets?) => ParseResult
+  getSheetNames,    // (File) => string[]
+  upsertWorker,     // sub-module 별 업서트 핵심
+  keyField,         // 'document_no' | 'sn'
+})
+```
 
-- `editableIds` 계산: subcontractor 역할은 본인 회사 행만 편집 가능 (Defect 패턴 차용). 그 외는 hdec_engineer 이상만 편집.
-- Bulk 액션 버튼은 `editableIds.length > 0` 일 때만 활성.
+Provider 2개 (`AbdImportProvider`, `OmmImportProvider`) → `DocsImportProviders` 로 묶어서 트리 마운트. Hook 시그니처 동일.
 
-## 9. 파일 변경
+## 4. 공통 로그 기록 (가장 중요)
+
+ABD/OMM worker 모두 **반드시 동일한 4종 로그를 남김**. 공통 헬퍼 `writeImportLogs(ctx, perRowResults)` 로 일반화 — worker 는 결과 객체만 푸시.
+
+### 4.1 `docs_upload_batches`
+- `sub_module` 정확히 채움
+- `total_rows / processed_rows / success_rows / skipped_rows / rejected_rows` 카운터 일관 적용
+- `data_date` 기록
+
+### 4.2 `docs_upload_row_logs`
+- 매 행 처리 결과 1건 기록
+- `action_taken`: `inserted | updated | skipped | rejected`
+- `document_no` 컬럼에 sub-module 키 값 저장 (ABD=Document No, OMM=SN). DB 컬럼명은 레거시지만 화면 라벨만 sub-module 별 표시.
+- `reason_code` / `reason_detail`: 빈 키, in-file 중복, 헤더 검증 실패, DB 에러 등
+
+### 4.3 `import_field_logs` (`kind='docs'`)
+- 각 sub-module TRACKED_FIELDS 정의 → `classifyChange` 로 outcome 분류
+  - **ABD**: 기존 그대로 유지
+  - **OMM**: 카테고리, section, work_trade_material, team, trade, subcontractor_id/name, hdec_pic_name, hdec_eng_name, 수량 4종 (pdf/hardcopy required/actual), 일자 8종 (draft planned/actual/response_planned/response_actual + final 동일), response_status 2종 (draft/final), remarks
+- `row_log_id` 로 `docs_upload_row_logs` 와 조인
+
+### 4.4 `docs_change_log`
+- `sub_module` + `record_id` 로 ABD/OMM 통합 기록
+- `drawing_id` 는 ABD 만 추가 채움 (호환), OMM 은 NULL
+- 변경된 필드만 1건씩 INSERT (`changed_field`, `old_value`, `new_value`, `change_source='excel_import'`, `upload_id`, `changed_by`)
+
+## 5. ABD (회귀 방지)
+
+기존 `DocsImportContext` 로직을 `createDocsImportProvider` 로 그대로 이전. 키: `(project_id, sub_module='as_built', document_no)`. 동작 변화 없음 (UI / 카운터 / 에러 메시지 동일).
+
+## 6. OMM 강화
+
+- 파서: 기존 `parseOmmExcel` 재활용
+- Worker: `(project_id, sn)` upsert
+- **신규 적용 항목**:
+  - org alias 매칭 (ABD `buildOrgResolver` 패턴 → `subcontractor_name → subcontractor_id` 자동 매칭)
+  - row_log / field_log / change_log 전체 기록 (§4)
+  - `rejected / unmatchedOrgs / emptyKeyCount / duplicateKeyCount / rejectSamples` 카운터 표시
+  - 헤더 자동 매핑 (`import_header_mappings` module='docs', sub_module='omm') — Admin UI 이미 지원
+  - Unmapped headers 패널 + Admin 이동 버튼
+- **OMM Resubmission 트리거**: 기존 `docs_omm_after_update_resubmit` 트리거 **그대로 ON 유지**. Import 시점 `draft_response_status` / `final_response_status` 가 B/C 로 바뀌는 row 가 있으면 자동으로 `create_omm_resubmission()` 발화.
+  - Summary card 에 `Auto-created N resubmission row(s) (Draft: X, Final: Y)` 메시지 표기 — import 후 `parent_id` + `source_upload_id IS NULL` + `is_resubmission=true` 조건으로 새로 생성된 row 카운트해서 노출.
+  - "Resubmission rows are auto-created when response status becomes B or C" 인포 배너로 사용자 사전 안내.
+
+## 7. RPC 업데이트 — `delete_docs_import_batch`
+
+현재 `docs_drawings` 만 unlink. **OMM 도 unlink 하도록 수정** (Warranty / Spare Part 는 다음 페이즈에서 추가):
+
+```sql
+UPDATE docs_drawings SET source_upload_id = NULL WHERE source_upload_id = _batch_id;
+UPDATE docs_omm      SET source_upload_id = NULL WHERE source_upload_id = _batch_id;
+```
+
+Return JSON 에 `omm_unlinked` 추가. 마이그레이션으로 함수 교체. (Phase 2 에서 `rollback_docs_import_batch` 별도 도입 검토 — 본 작업 범위 외.)
+
+OMM resubmission 으로 자동 생성된 child row (`is_resubmission=true`, `parent_id IS NOT NULL`) 는 `source_upload_id` 가 어차피 NULL 이므로 unlink 영향 없음. Batch 삭제해도 child 유지.
+
+## 8. UI 디테일
+
+- 파일 패널 라벨: ABD `Empty Document No` / OMM `Empty SN`
+- Unmapped headers 패널 + Admin → Header Mappings 이동 버튼 (공통)
+- Reject samples `{rawRowNo, key, reasonDetail}` 동일 포맷
+- 탭 라벨 mini 배지 (진행/완료/실패 카운트)
+- Logs 페이지 batch 행에 sub_module 배지 (ABD=blue, OMM=purple)
+
+## 9. 권한 / 모듈 일시중지
+
+- `useModuleStatus().docs.enabled` 체크 허브 레벨 1회
+- subcontractor 역할은 모든 import 거부 (ABD 패턴 유지)
+
+## 10. 파일 변경 요약
+
+**DB 마이그레이션** (1건)
+1. `delete_docs_import_batch` RPC 를 ABD + OMM 처리로 교체
 
 **신규**
-- `src/lib/docs-omm-excel-export.ts` — 3개 export 함수
-- `src/components/docs/OmmCycleProgress.tsx` — mini stage dots
-- `src/components/raw-data/NumberRangeDropdown.tsx` — 헤더 숫자범위 필터 (재사용 가능하게 raw-data 폴더에 둠)
-- `src/lib/omm-bulk-fields.ts` — `BulkEditableField[]` 정의 + `RAW_SEARCH_FIELDS_OMM`
+- `src/contexts/docs-import/createDocsImportProvider.ts`
+- `src/contexts/docs-import/AbdImportContext.tsx`
+- `src/contexts/docs-import/OmmImportContext.tsx`
+- `src/contexts/docs-import/DocsImportProviders.tsx`
+- `src/components/docs/import/DocsImportShell.tsx`
+- `src/components/docs/import/DocsImportTabs.tsx`
+- `src/lib/docs-import-workers.ts` (ABD + OMM worker)
+- `src/lib/docs-import-logging.ts` (`writeImportLogs` 공통 헬퍼)
 
 **수정**
-- `src/pages/docs/DocsOMMRawDataPage.tsx` — 전면 재작성 (~1500줄)
-- `src/lib/field-filter-type.ts` — `'number-range'` 타입 추가 (Defect progress 필드도 호환되게)
-- `src/lib/filter-chip-utils.ts` — number-range 칩 포맷 추가
-- `src/components/raw-data/BulkEditBar.tsx` — 필요 시 `entity` prop으로 OMM 라벨 분기 (최소 변경)
-- `src/components/raw-data/dialogs/BulkDeleteDialog.tsx`, `BulkDuplicateDialog.tsx` — `entity: 'omm'` 케이스 분기 (테이블명/라벨)
+- `src/pages/docs/DocsImportPage.tsx` → 허브 (탭 컨테이너) 재작성
+- `src/pages/docs/DocsImportLogsPage.tsx` → sub_module 탭 필터 + 키 라벨 동적
+- `src/pages/docs/DocsOMMRawDataPage.tsx` → "Import" 버튼 링크 `/docs/import?sub=omm`
+- `src/App.tsx` → `/docs/omm/import` 를 `/docs/import?sub=omm` 으로 redirect, `DocsImportProviders` 마운트
+- `src/components/layout/AppSidebar.tsx` → Docs 그룹 활성 매칭 보강
 
-**미변경 (재사용)**
-- `OmmStatusBadge`, `OmmCopyQuantityCell`, `docs-omm-status.ts`, `useDocsFieldConfig`, `TopHorizontalScrollbar`, `MetaCell`
+**삭제**
+- `src/pages/docs/DocsOMMImportPage.tsx`
+- `src/contexts/DocsImportContext.tsx` (새 `docs-import/` 폴더로 대체)
 
-## 10. 데이터 로딩
+**미변경**
+- `docs_omm`, `docs_drawings` 스키마
+- ABD / OMM 파서
+- HeaderMappings Admin UI
+- OMM Raw Data 페이지 본체
+- `docs_upload_batches`, `docs_upload_row_logs`, `docs_change_log`, `import_field_logs` 스키마
+- `docs_omm_after_update_resubmit` 트리거 (ON 유지 확정)
 
-- 기존 단일 쿼리(2000 limit) → `fetchAllRows` 패턴으로 page-fetch (Defect와 동일).
-- 코멘트 요약은 별도 쿼리 1회 (`select row_id, count(*), max(created_at)` group by row_id).
-- 트리거 발화 후 갱신을 위해 mutation 후 `load()` 대신 낙관적 업데이트 + 백그라운드 refetch.
+## 11. 결정 확정
 
-## 11. 범위 외 (이번 작업에서 다루지 않음)
+- ✅ Warranty / Spare Part 다음 단계로 분리
+- ✅ OMM Resubmission 트리거 import 시 ON 유지 + summary 안내
+- ✅ `/docs/omm/import` 즉시 redirect 후 라우트 제거 (별도 호환 기간 없음)
 
-- OMM Dashboard 위젯 (별도 페이즈)
-- Resubmission 자동 이메일 알림
-- Spare Part / Warranty / As-Built 페이지의 동일 패리티 (요청 시 동일 패턴 복제)
-- 모바일 전용 카드 뷰 (1차에서는 horizontal scroll로 대응)
-
-## 12. 검증
-
-- 빌드/타입 체크 자동 수행.
-- 수동 시나리오: 컬럼 정렬→필터→검색→bulk edit (response B로 5건 일괄)→resubmission row 자동 생성 확인→Export(view/reimport)→재업로드 round-trip.
-
-승인하시면 위 계획대로 구현을 시작하겠습니다.
+승인 후 (DB 마이그레이션 → factory + 로깅 헬퍼 → ABD/OMM worker → 허브 페이지 → Logs 페이지 탭 → 레거시 삭제) 순으로 구현합니다.
