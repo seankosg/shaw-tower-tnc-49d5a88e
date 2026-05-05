@@ -101,6 +101,8 @@ const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
   'dwg no': 'document_no',
   'as-built dwg number': 'document_no',
   'as built dwg number': 'document_no',
+  'as built dwg no': 'document_no',
+  'as-built dwg no': 'document_no',
   'document id': 'document_no',
   // revision
   'rev': 'revision',
