@@ -81,9 +81,9 @@ export default function DocsOMMDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, roles } = useAuth();
+  const { user, profile, roles } = useAuth();
   const { toast } = useToast();
-  const { getLabel, isFieldVisible, sortFieldNames } = useDocsFieldConfig('omm');
+  const { getLabel, isFieldVisible, sortFieldNames, isFieldEditable } = useDocsFieldConfig('omm');
 
   const [row, setRow] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,8 +95,33 @@ export default function DocsOMMDetailPage() {
   const [picOptions, setPicOptions] = useState<SuggestOption[]>([]);
   const [engOptions, setEngOptions] = useState<SuggestOption[]>([]);
 
-  // Read-only role check (server still enforces via RLS)
-  const canEdit = roles.some((r) => ['admin', 'superuser', 'senior_user', 'user', 'd_superuser'].includes(r));
+  // Row-level edit permission — mirrors `docs_omm` RLS policy:
+  //   admin / superuser / senior_user / user → all rows
+  //   d_superuser → only when profile.team matches row.team
+  //   guest / super_guest / no role → none
+  const isPrivileged = roles.some((r) => ['admin', 'superuser', 'senior_user', 'user'].includes(r));
+  const isDSuper = roles.includes('d_superuser');
+  const rowTeam = (row as any)?.team ?? null;
+  const teamMatches = !!profile?.team && !!rowTeam && profile.team === rowTeam;
+  const canEditRow = isPrivileged || (isDSuper && teamMatches);
+
+  // Per-field gate — combines row permission + field config `editable_to_roles`
+  const canEditField = (field: string) => {
+    if (!canEditRow) return false;
+    return isFieldEditable(field, roles);
+  };
+
+  // Reason text for read-only banner
+  const readOnlyReason = (() => {
+    if (canEditRow) return null;
+    if (isDSuper && rowTeam && profile?.team && !teamMatches) {
+      return `Read-only — D.Super User can only edit OMM records of their own team (your team: ${profile.team}, this row: ${rowTeam}).`;
+    }
+    if (isDSuper && !profile?.team) {
+      return 'Read-only — your profile has no team assigned. Contact admin.';
+    }
+    return 'Read-only — your role does not allow editing OMM records.';
+  })();
 
   const load = async () => {
     if (!id) return;
