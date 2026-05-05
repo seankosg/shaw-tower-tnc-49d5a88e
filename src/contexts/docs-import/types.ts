@@ -41,6 +41,12 @@ export interface DocsImportFile<TRow = unknown> {
   parsedCount: number;
   sheetNames?: string[];
   selectedSheets?: string[];
+  /** Distinct composite header labels detected across selected sheets. */
+  availableHeaders?: string[];
+  /** First non-empty sample value per detected header — fed to the column-select preview. */
+  headerSamples?: Record<string, unknown>;
+  /** Headers the user opted to exclude — passed back to the parser so they're ignored. */
+  excludedHeaders?: string[];
   unknownHeaders?: string[];
   unmatchedOrgs?: string[];
   rejectSamples?: DocsRejectSample[];
@@ -64,6 +70,8 @@ export interface DocsImportContextValue<TRow = unknown> {
   clearAll: () => void;
   setFileSheets: (id: string, sheets: string[]) => Promise<void>;
   setFileDataDate: (id: string, dataDate: string) => void;
+  /** Update the user-excluded header list and re-parse the file with the new selection. */
+  setFileExcludedHeaders: (id: string, excluded: string[]) => Promise<void>;
   startImport: () => Promise<void>;
 }
 
