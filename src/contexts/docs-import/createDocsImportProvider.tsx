@@ -134,6 +134,15 @@ export function createDocsImportProvider<TRow>(
         toast({ title: 'Nothing to import', description: 'Please add and parse files first.', variant: 'destructive' });
         return;
       }
+      const blocked = ready.filter((f) => f.validationError);
+      if (blocked.length > 0) {
+        toast({
+          title: 'Cannot start import',
+          description: `${blocked.length} file(s) are missing required columns. ${blocked[0].validationError}`,
+          variant: 'destructive',
+        });
+        return;
+      }
       setIsRunning(true);
 
       let project: { id: string };
