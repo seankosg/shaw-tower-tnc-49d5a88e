@@ -12,8 +12,18 @@ import { Badge } from '@/components/ui/badge';
 import { APP_NAME } from '@/lib/constants';
 import { useAuth } from '@/contexts/AuthContext';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
-import { filterNavItems } from '@/lib/role-permissions';
+import { canAccessRoute, filterNavItems } from '@/lib/role-permissions';
 import { getRememberedRoute } from '@/hooks/useRouteMemory';
+import type { AppRole } from '@/types/enums';
+
+// Remembered route may point to a sub-page the current role can't access
+// (e.g. a Guest with a stale memory of /admin). Fall back to the base path
+// when the recalled URL isn't accessible for the active roles.
+function safeRoute(basePath: string, roles: AppRole[]): string {
+  const remembered = getRememberedRoute(basePath);
+  const path = remembered.split('?')[0];
+  return canAccessRoute(roles, path) ? remembered : basePath;
+}
 
 const mainNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/tc/dashboard' },
