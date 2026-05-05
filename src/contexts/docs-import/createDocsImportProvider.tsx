@@ -271,6 +271,15 @@ export function createDocsImportProvider<TRow>(
 
       setIsRunning(false);
       toast({ title: 'Import complete', description: `${ready.length} file(s) processed.` });
+
+      if (ensurer && ensurer.warnings.length > 0) {
+        const sample = ensurer.warnings.slice(0, 2).join('; ');
+        toast({
+          title: 'Some master records could not be auto-registered',
+          description: `${ensurer.warnings.length} warning(s). ${sample}`,
+          variant: 'destructive',
+        });
+      }
     }, [files, isRunning, toast, user]);
 
     const value: DocsImportContextValue<TRow> = {
