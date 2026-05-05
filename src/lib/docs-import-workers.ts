@@ -493,12 +493,24 @@ export const ommAdapter: ImporterAdapter<ParsedOmmRow> = {
         let recordId: string | null = null;
         const changeLog: ImportRowOutcome['changeLog'] = [];
         if (existing) {
+          // Sanitize UPDATE payload: drop excluded keys + merge raw_payload
+          // with the previously stored one (preserve raw cells from excluded
+          // headers).
+          const updatePayload: Record<string, unknown> = { ...payload };
+          for (const f of excludedFields) delete updatePayload[f];
+          const prevRaw = ((existing as any).raw_payload && typeof (existing as any).raw_payload === 'object')
+            ? (existing as any).raw_payload as Record<string, unknown>
+            : {};
+          updatePayload.raw_payload = { ...prevRaw, ...(row.raw_payload ?? {}) };
+
           const { error } = await (supabase as any)
-            .from('docs_omm').update(payload).eq('id', existing.id);
+            .from('docs_omm').update(updatePayload).eq('id', existing.id);
           if (error) throw error;
           counters.updated++;
           recordId = existing.id;
           for (const fname of OMM_TRACKED_FIELDS) {
+            // Excluded fields are not written; skip audit too.
+            if (excludedFields.has(fname)) continue;
             const incoming = (payload as any)[fname];
             const previous = (existing as any)[fname] ?? null;
             const cls = classifyChange(incoming, previous);
