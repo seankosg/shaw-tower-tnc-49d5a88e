@@ -235,6 +235,15 @@ export function DocsImportShell({
                             </Button>
                           </div>
                         )}
+                        {f.validationError && f.status !== 'failed' && (
+                          <div className="mt-2 flex items-start gap-2 rounded border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+                            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <div>
+                              <p className="font-medium">Required column missing</p>
+                              <p className="mt-0.5 opacity-90">{f.validationError}</p>
+                            </div>
+                          </div>
+                        )}
                         {f.error && (
                           <div className="mt-1 rounded border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
                             <p className="font-medium">⚠ {f.error}</p>
