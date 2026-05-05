@@ -367,6 +367,27 @@ export function DocsImportShell({
           </CardContent>
         </Card>
       )}
+
+      {(() => {
+        const dlgFile = files.find((f) => f.id === columnDialogFileId);
+        if (!dlgFile || !dlgFile.availableHeaders) return null;
+        return (
+          <DocsColumnSelect
+            subModule={subModule as DocsFieldSubModule}
+            fileName={dlgFile.name}
+            headers={dlgFile.availableHeaders}
+            samples={dlgFile.headerSamples ?? {}}
+            fieldByHeader={dlgFile.fieldByHeader ?? {}}
+            defaultExcluded={dlgFile.excludedHeaders ?? []}
+            open={!!columnDialogFileId}
+            onClose={() => setColumnDialogFileId(null)}
+            onApply={(excluded) => {
+              setFileExcludedHeaders(dlgFile.id, excluded);
+              setColumnDialogFileId(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
