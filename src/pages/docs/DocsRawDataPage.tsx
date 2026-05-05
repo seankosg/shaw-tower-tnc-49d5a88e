@@ -393,6 +393,8 @@ export default function DocsRawDataPage() {
   const [items, setItems] = useState<DocsRawRow[]>([]);
   const [scDateMap, setScDateMap] = useState<Record<string, string>>({});
   const [subcontractorOptions, setSubcontractorOptions] = useState<{ value: string; label: string }[]>([]);
+  const [hdecPicOptions, setHdecPicOptions] = useState<{ value: string; label: string }[]>([]);
+  const [hdecEngOptions, setHdecEngOptions] = useState<{ value: string; label: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [stateLoaded, setStateLoaded] = useState(false);
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
@@ -478,6 +480,22 @@ export default function DocsRawDataPage() {
             .filter((r: any) => r.type === 'sub' || r.type === 'subsub')
             .map((r: any) => ({ value: r.id as string, label: r.name as string })),
         );
+      }
+    })();
+  }, []);
+
+  // HDEC PIC / ENG master lists for bulk-edit Select
+  useEffect(() => {
+    (async () => {
+      const [picRes, engRes] = await Promise.all([
+        (supabase as any).from('hdec_pic_master').select('name').eq('is_active', true).order('name', { ascending: true }),
+        (supabase as any).from('hdec_eng_master').select('name').eq('is_active', true).order('name', { ascending: true }),
+      ]);
+      if (picRes?.data) {
+        setHdecPicOptions((picRes.data as any[]).map((r) => ({ value: r.name as string, label: r.name as string })));
+      }
+      if (engRes?.data) {
+        setHdecEngOptions((engRes.data as any[]).map((r) => ({ value: r.name as string, label: r.name as string })));
       }
     })();
   }, []);
@@ -796,17 +814,16 @@ export default function DocsRawDataPage() {
     // Personnel
     {
       field: 'subcontractor_id',
-      label: getLabel('subcontractor_name') || 'Subcontractor (from master)',
+      label: getLabel('subcontractor_name') || 'Subcontractor',
       inputType: 'select',
       group: 'Personnel',
       options: subcontractorOptions,
       companionFields: ['subcontractor_name'],
     },
-    { field: 'subcontractor_name', label: (getLabel('subcontractor_name') || 'Subcontractor') + ' (free text)', inputType: 'text', group: 'Personnel' },
     { field: 'organisation_raw', label: getLabel('organisation_raw') || 'Organisation (raw label)', inputType: 'text', group: 'Personnel' },
-    { field: 'hdec_pic_name', label: getLabel('hdec_pic_name'), inputType: 'text', group: 'Personnel' },
-    { field: 'hdec_eng_name', label: getLabel('hdec_eng_name'), inputType: 'text', group: 'Personnel' },
-  ], [getLabel, optionFields, subcontractorOptions]);
+    { field: 'hdec_pic_name', label: getLabel('hdec_pic_name') || 'HDEC PIC', inputType: 'select', group: 'Personnel', options: hdecPicOptions },
+    { field: 'hdec_eng_name', label: getLabel('hdec_eng_name') || 'HDEC ENG', inputType: 'select', group: 'Personnel', options: hdecEngOptions },
+  ], [getLabel, optionFields, subcontractorOptions, hdecPicOptions, hdecEngOptions]);
 
   const handleBulkApplied = useCallback(({ field, value, ids, extraUpdates }: { field: string; value: string | number | boolean | null; ids: string[]; extraUpdates?: Record<string, string | number | boolean | null> }) => {
     setItems((prev) => prev.map((r) => {
