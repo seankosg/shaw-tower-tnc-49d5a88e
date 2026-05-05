@@ -1,13 +1,16 @@
 import type { ReactNode } from 'react';
 import { AbdImportProvider } from './AbdImportContext';
 import { OmmImportProvider } from './OmmImportContext';
+import { WarrantyImportProvider } from './WarrantyImportContext';
 
 /** Mounts every Docs Import sub-module provider in a single tree. */
 export function DocsImportProviders({ children }: { children: ReactNode }) {
   return (
     <AbdImportProvider>
       <OmmImportProvider>
-        {children}
+        <WarrantyImportProvider>
+          {children}
+        </WarrantyImportProvider>
       </OmmImportProvider>
     </AbdImportProvider>
   );
