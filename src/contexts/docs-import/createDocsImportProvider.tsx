@@ -233,7 +233,7 @@ export function createDocsImportProvider<TRow>(
       dataDateRequired: adapter.dataDateRequired,
       rawDataPath: adapter.rawDataPath,
       files, isRunning, addFiles, removeFile, clearAll,
-      setFileSheets, setFileDataDate, startImport,
+      setFileSheets, setFileDataDate, setFileExcludedHeaders, startImport,
     };
 
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
