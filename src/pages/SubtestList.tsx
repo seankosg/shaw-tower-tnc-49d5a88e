@@ -50,6 +50,7 @@ import type { BulkEditableField } from '@/lib/bulk-edit';
 import { META_FIELD_NAMES, type CommentSummary, EMPTY_SUMMARY, isMetaField } from '@/lib/meta-fields';
 import { MetaCell } from '@/components/raw-data/MetaCell';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
+import { inferFilterType } from '@/lib/field-filter-type';
 
 interface SubtestRow {
   id: string;
@@ -1009,6 +1010,58 @@ export default function SubtestList() {
     })),
   ], [systemOptions, statusOptions, sourceOptions, subcontractorOptions, subsubOptions, hdecPicOptions, teamOptions, reportStatusOptions, dataDate, commentSummary, navigate]);
 
+  // ─── Dynamic columns: any field_config row that is enabled but has no
+  // matching hardcoded column above. Filter type is auto-inferred from the
+  // field name + original_header. Currently no field_config rows are missing,
+  // but this guarantees future additions auto-appear with sensible filters.
+  const dynamicColumns = useMemo<ColumnDef<SubtestRow>[]>(() => {
+    const baseIds = new Set<string>(
+      columns.map((c) => (c as any).id ?? (c as any).accessorKey).filter(Boolean) as string[],
+    );
+    // Map known column-id aliases back to field_config field_name
+    const aliasToField: Record<string, string> = { system_code: 'system' };
+    const baseFields = new Set<string>([...baseIds].map((id) => aliasToField[id] ?? id));
+    return (fieldConfigRows ?? [])
+      .filter((row) => row && row.is_enabled && !baseFields.has(row.field_name) && !isMetaField(row.field_name))
+      .map((row) => {
+        const fieldName = row.field_name;
+        const inferred = inferFilterType(fieldName);
+        const filterFn =
+          inferred === 'date-range' ? dateRangeFilterFn
+          : inferred === 'multi-select' ? multiSelectFilterFn
+          : textFilterFn;
+        const optionSet = inferred === 'multi-select'
+          ? [...new Set(data.map((r) => {
+              const v = (r as any)[fieldName];
+              return v == null || v === '' ? '' : String(v);
+            }).filter(Boolean))]
+              .sort((a, b) => a.localeCompare(b))
+              .map((v) => ({ value: v, label: v }))
+          : [];
+        return {
+          accessorKey: fieldName,
+          header: row.display_name || fieldName,
+          size: 140,
+          filterFn,
+          meta: { filterType: inferred, filterOptions: optionSet, isDynamic: true },
+          cell: ({ getValue }) => {
+            const value = getValue() as any;
+            if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
+            if (inferred === 'date-range') {
+              const iso = String(value).slice(0, 10);
+              return <span>{iso}</span>;
+            }
+            return <span className="block truncate">{String(value)}</span>;
+          },
+        } as ColumnDef<SubtestRow>;
+      });
+  }, [columns, fieldConfigRows, data]);
+
+  const allColumns = useMemo<ColumnDef<SubtestRow>[]>(
+    () => [...columns, ...dynamicColumns],
+    [columns, dynamicColumns],
+  );
+
   // Apply status (overdue / at_risk) + date URL filters at data level
   const urlT1PlannedTo = searchParams.get('t1_planned_to');
   const urlT2PlannedTo = searchParams.get('t2_planned_to');
@@ -1187,7 +1240,7 @@ export default function SubtestList() {
   const fieldNameToColumnId: Record<string, string> = { system: 'system_code' };
   const columnVisibility = useMemo<VisibilityState>(() => {
     const visibility: VisibilityState = {};
-    for (const col of columns) {
+    for (const col of allColumns) {
       const id = (col as any).id ?? (col as any).accessorKey;
       if (!id) continue;
       if (id === 'stage_progress') continue;
@@ -1196,10 +1249,10 @@ export default function SubtestList() {
     }
     return visibility;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columns, isFieldVisible]);
+  }, [allColumns, isFieldVisible]);
 
   const columnOrder = useMemo<string[]>(() => {
-    const allIds = columns
+    const allIds = allColumns
       .map(c => (c as any).id ?? (c as any).accessorKey)
       .filter(Boolean) as string[];
     const PINNED_FRONT = ['__select', 'item_no', 'stage_progress'];
@@ -1221,11 +1274,11 @@ export default function SubtestList() {
     }
     return [...pinned, ...ordered];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columns, orderedFieldNames]);
+  }, [allColumns, orderedFieldNames]);
 
   const table = useReactTable({
     data: filteredData,
-    columns,
+    columns: allColumns,
     state: { sorting, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
