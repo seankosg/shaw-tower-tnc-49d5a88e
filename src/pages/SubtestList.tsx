@@ -1240,7 +1240,7 @@ export default function SubtestList() {
   const fieldNameToColumnId: Record<string, string> = { system: 'system_code' };
   const columnVisibility = useMemo<VisibilityState>(() => {
     const visibility: VisibilityState = {};
-    for (const col of columns) {
+    for (const col of allColumns) {
       const id = (col as any).id ?? (col as any).accessorKey;
       if (!id) continue;
       if (id === 'stage_progress') continue;
@@ -1249,10 +1249,10 @@ export default function SubtestList() {
     }
     return visibility;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columns, isFieldVisible]);
+  }, [allColumns, isFieldVisible]);
 
   const columnOrder = useMemo<string[]>(() => {
-    const allIds = columns
+    const allIds = allColumns
       .map(c => (c as any).id ?? (c as any).accessorKey)
       .filter(Boolean) as string[];
     const PINNED_FRONT = ['__select', 'item_no', 'stage_progress'];
@@ -1274,7 +1274,7 @@ export default function SubtestList() {
     }
     return [...pinned, ...ordered];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columns, orderedFieldNames]);
+  }, [allColumns, orderedFieldNames]);
 
   const table = useReactTable({
     data: filteredData,
