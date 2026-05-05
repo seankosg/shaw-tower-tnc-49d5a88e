@@ -1,37 +1,39 @@
-## Tooltip 잘림 문제 수정 — 전역 (모든 모듈 자동 적용)
+## OMM Cycle 도넛 5단계 라벨 변경
 
-### 문제
+### 변경 대상
+- `src/components/docs/OmmCycleProgress.tsx` 만 수정
+- 상태 계산 로직 (`src/lib/docs-omm-status.ts`)은 변경 없음 — 표시 라벨만 매핑
 
-도넛/Cycle/Progress 위에 마우스를 올렸을 때 나오는 툴팁이 테이블 행 높이만큼만 보이고 나머지는 잘림.
+### 5단계 매핑
 
-영향받는 화면:
-- T&C Raw Data (`/tc/raw-data`)
-- Defect Raw Data (`/defects/raw-data`)
-- Docs ABD Raw Data (`/docs/raw-data`)
-- Docs OMM Raw Data (`/docs/omm`)
-- 기타 모든 shadcn `Tooltip` 사용처
+| 단계 | 현재 글리프 | 새 라벨 (툴팁) | 새 글리프 (도넛 안) | 내부 상태 매핑 |
+|---|---|---|---|---|
+| 1 | PD | Draft Submission | DS | Pending Draft |
+| 2 | DUR | Draft Review | DR | Draft Under Review |
+| 3 | PF | Final Submission | FS | Pending Final Submission |
+| 4 | FUR | Final Review | FR | Final Under Review |
+| 5 | A | Final Status | **S** | Approved |
 
-### 원인
-
-`src/components/ui/tooltip.tsx` (shadcn 기본)이 `TooltipPrimitive.Portal` 없이 inline 렌더되고 있어, 부모 테이블 컨테이너의 `overflow: hidden`/`overflow: auto` 안에 갇혀 잘림.
-
-### 수정 (단 1개 파일)
-
-**`src/components/ui/tooltip.tsx`** — `TooltipContent`를:
-1. `<TooltipPrimitive.Portal>`로 감싸기 → body 직속으로 렌더되어 어떤 overflow 컨테이너에도 잘리지 않음
-2. `z-50` → `z-[9999]`로 상향 (Dialog/Sheet 위에서도 항상 최상단)
-3. `collisionPadding={8}` 추가 → viewport 가장자리 자동 회피
+### 수정 내용 (OmmCycleProgress.tsx)
+1. `STAGES` 배열을 새 약어로 변경: `['DS', 'DR', 'FS', 'FR', 'S']`
+2. `STAGE_TITLES` 매핑을 새 풀네임으로 교체:
+   - DS → "Draft Submission"
+   - DR → "Draft Review"
+   - FS → "Final Submission"
+   - FR → "Final Review"
+   - S → "Final Status"
+3. `statusToIndex()` 함수는 그대로 (내부 status 값은 변경되지 않음)
+4. 도넛 pip 색상/상태 로직(`done`/`active`/`rejected`/`closed`/`pending`) 그대로 유지
+5. Rejected 케이스: 현재 활성 단계가 빨간색(✕)으로 표시되는 동작 유지
+6. Legend의 "Approved" 글리프도 `A` → `S`로 통일
 
 ### 영향 범위
+- `OmmCycleProgress`를 사용하는 모든 곳 자동 적용:
+  - `DocsOMMRawDataPage` (OMM Raw Data 테이블)
+  - `DocsOMMDetailPage` (OMM 상세 페이지)
+- `OmmStatusBadge`, `computeOmmStatus`, `OMM_STATUS_COLOR` 등 다른 곳의 상태 표기는 변경 없음 (내부 상태 문자열 유지)
 
-이 한 파일이 모든 `Tooltip` 사용처의 공용 컴포넌트이므로 자동으로 전역 적용:
-- T&C / Defect / ABD / OMM Raw Data 페이지의 모든 도넛·Cycle·Progress 툴팁
-- 사이드바, 버튼, 헤더 등 모든 hover 툴팁
-- 향후 Warranty/Spare Part 모듈도 자동 포함
-
-기존 사용처들은 portal 가정으로 만들어졌으므로 동작 변경 없음 (잘리던 케이스만 정상화).
-
-### Out of Scope
-
-- 개별 페이지/컴포넌트 수정 없음 (공용 컴포넌트 한 곳만)
-- HTML native `title=""` 속성은 브라우저 제어라 영향 없음
+### 범위 외
+- ABD `DocsCycleProgress` (Cycle 1/2/3 방식 — 다른 워크플로우)
+- Warranty / Spare Part 모듈
+- DB 스키마 / 상태 계산 로직 / 가져오기 파서
