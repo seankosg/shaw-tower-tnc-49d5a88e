@@ -1,69 +1,68 @@
-# ABD/OMM Raw Data 내보내기 → 재import 호환성 수정
+# Docs Import에 Column Select 기능 추가 (T&C/Defect 동등)
 
-## 원인 진단
+## 목표
+ABD/OMM Import 페이지에서도 T&C/Defect와 동일한 **"Select Columns"** 다이얼로그로 import할 컬럼을 선택할 수 있게 합니다. 사용자가 제외한 헤더는 import 시 무시되며, required 필드 제외 시 경고를 표시합니다.
 
-업로드하신 `SHAW_Drawings_view_20260505_1442.xlsx`(ABD export)를 분석한 결과, 내보낸 파일이 import되지 않는 이유는 두 가지입니다.
-
-### 1. 시트명 필터 불일치 (ABD 전용)
-- ABD import는 시트명에 `"register"`가 포함된 시트만 인식 (`isRegisterSheet`).
-- 내보낸 파일 시트명은 **`Drawings`** → 필터에서 제외.
-- OMM import는 전 시트 허용 → 시트 필터 문제 없음.
-
-### 2. 헤더 라벨이 import alias와 불일치 (ABD/OMM 공통)
-ABD export 헤더(8행)에 다음 라벨이 있지만 alias 매칭 실패:
-
-| 내보낸 라벨 | Import 매핑 | 현재 |
-|---|---|---|
-| `As Built DWG No` | `document_no` | ❌ ('as built dwg **number**'만 있음) |
-| `1st Planned Submission` | `sub1_planned_date` | ❌ |
-| `1st Actual Submission` | `sub1_submission_date` | ❌ |
-| `1st Planned Response` | `sub1_approval_date` | ❌ |
-| `1st Actual Response` | `sub1_actual_response_date` | ❌ |
-| `1st Status` (2nd/3rd 동일) | `sub1_approval_status` | ❌ |
-| `__select`, `cycle_progress`, `Risk` | skip | ❌ (unknown으로 잡힘) |
-
-OMM export도 동일한 메타 6행 + 빈 행 + 헤더 8행 구조이고, `Draft Planned Date`, `Final Actual Date` 같은 export 라벨이 OMM parser alias와 불일치할 가능성 큼.
+## 현재 상태
+- T&C: `TncColumnSelect` + `ColumnSelectDialog` + `setFileExcludedHeaders` (`ImportPage.tsx`)
+- Defect: `DefectColumnSelect` + `ColumnSelectDialog`
+- ABD/OMM: **선택 기능 없음** — 모든 헤더가 자동으로 import됨
 
 ## 변경 사항
 
-### A. `src/lib/docs-import-parser.ts` (ABD)
+### 1. 헤더 추출 함수 신설 (parser 2개)
+- `src/lib/docs-import-parser.ts`에 `getDocsHeaderInfo(file, sheets?)` 추가:
+  - `XLSX.utils.sheet_to_json` + `detectHeader()`로 모든 시트 헤더의 `composite` 라벨 + 첫 데이터 행 샘플 값 수집
+  - 반환: `{ headers: string[]; samples: Record<string, unknown> }`
+- `parseDocsExcel(file, sheets, options?)` 시그니처에 `options?: { excludedHeaders?: string[] }` 추가:
+  - excluded에 포함된 composite 라벨은 `cols[].field`를 강제로 `null`로 설정 → payload/struct 모두 무시
+- `src/lib/docs-omm-import-parser.ts`에도 동일 패턴으로 `getOmmHeaderInfo` + `parseOmmExcel(..., options?)` 추가
 
-**A-1. 시트 필터 완화**
-- `isRegisterSheet`에 `'drawings'` 키워드 추가. (export 파일명/시트명 패턴 호환)
+### 2. types/adapter 확장
+- `src/contexts/docs-import/types.ts` `DocsImportFile`에 추가:
+  - `availableHeaders?: string[]`
+  - `headerSamples?: Record<string, unknown>`
+  - `excludedHeaders?: string[]`
+- `DocsImportContextValue`에 `setFileExcludedHeaders: (id: string, excluded: string[]) => Promise<void>` 추가
+- `ImporterAdapter`에 `getHeaderInfo: (file, sheets?) => Promise<{ headers, samples }>` 추가
+- `parseFile`은 3번째 인자 `options?: { excludedHeaders?: string[] }` 받음
 
-**A-2. FIELD_ALIASES 보강**
-- `'as built dwg no'`, `'as-built dwg no'` → `document_no`
-- `'risk'`, `'cycle progress'`, `'__select'` → `skip`
+### 3. Provider factory 업데이트
+- `createDocsImportProvider.tsx`:
+  - `addFiles`: 시트명 가져온 직후 `getHeaderInfo` 호출 → `availableHeaders`/`headerSamples` 저장
+  - `parseAndApply`에 `excludedHeaders` 인자 추가, parser에 전달
+  - `setFileExcludedHeaders(id, excluded)` 신설 → 상태 업데이트 후 재파싱
 
-**A-3. Sub-cycle 단일행 라벨 매핑** (export는 2행 그룹+서브 구조가 아닌 단일행 통합 라벨)
-- `mapHeader()`에 정규식 추가:
-  - `^(1st|2nd|3rd) planned submission$` → `subN_planned_date`
-  - `^(1st|2nd|3rd) actual submission$` → `subN_submission_date`
-  - `^(1st|2nd|3rd) planned response$` → `subN_approval_date`
-  - `^(1st|2nd|3rd) actual response$` → `subN_actual_response_date`
-  - `^(1st|2nd|3rd) status$` → `subN_approval_status`
+### 4. Adapter 2개 업데이트
+- `src/lib/docs-import-workers.ts` `abdAdapter` / `ommAdapter`:
+  - `parseFile` 시그니처에 `options` 추가 → parser에 그대로 전달
+  - `getHeaderInfo` 메서드 추가 (위 1번 함수 호출)
 
-**A-4. `__`로 시작하는 헤더는 자동 skip.**
+### 5. 새 컴포넌트 `src/components/docs/import/DocsColumnSelect.tsx`
+- `ColumnSelectDialog` 래퍼 (Defect/Tnc와 동일 패턴)
+- ABD용 helpers: `toFieldName` = ABD parser의 `mapHeader` 호출, `isFieldRequired`는 `useDocsFieldConfig('as_built')` 사용, required 항목(예: `document_no`) 표시
+- OMM용 helpers: 동일하지만 `useDocsFieldConfig('omm')` 사용, key는 `sn`
+- `subModule` prop으로 분기
 
-### B. `src/lib/docs-omm-import-parser.ts` (OMM)
-
-**B-1. OMM export 헤더 라벨을 OMM parser alias에 모두 등록.**
-- 우선 OMM export 파일의 실제 헤더 라벨을 코드(`getOmmRawExportColumns` 또는 export util)에서 추출해 정확한 alias 목록 확정.
-- 누락된 라벨(예: `Draft Planned Date`, `Draft Actual Date`, `Final Planned Date`, `Final Actual Date`, `Final Response Status`, `HDEC PIC`, `HDEC Eng`, `Subcontractor`, `Section`, `Category`, `Training Required`, `Hardcopy Required Qty`, `Hardcopy Actual Qty`, `PDF Required Qty`, `PDF Actual Qty` 등)을 alias 맵에 추가.
-
-**B-2. OMM도 `__`로 시작하는 헤더와 `Risk`/`cycle_progress` 같은 시스템 컬럼 skip 처리.**
-
-### C. Spare Part
-- 현재 Spare Part는 **Excel import 기능이 구현되어 있지 않음** → 이번 작업 대상 아님. (필요 시 별도 요청으로 진행)
+### 6. DocsImportShell UI 업데이트
+- 각 파일 카드에 T&C와 동일한 "Select Columns (X/Y)" 버튼 추가:
+  - `f.availableHeaders`가 있을 때만 표시
+  - 클릭 시 `DocsColumnSelect` 다이얼로그 열기
+- 다이얼로그 onApply → `importer.setFileExcludedHeaders(file.id, excluded)`
 
 ## 검증
-
-1. ABD: 업로드한 `SHAW_Drawings_view_*.xlsx`를 ABD Import에 올려 시트 선택에 `Drawings` 표시 → Preview에서 모든 라벨이 정확히 매핑되는지 확인. Unknown header 0건.
-2. OMM: OMM Raw Data에서 view 포맷으로 export → 같은 파일을 OMM Import에 다시 올려 모든 헤더가 매핑되고 upsert 성공하는지 확인.
-3. Sub-cycle 데이터(1st/2nd/3rd) 값이 `sub1_*`/`sub2_*`/`sub3_*` 컬럼에 정확히 들어가는지 검증.
+1. ABD: SHAW export 파일 업로드 → "Select Columns (32/32)" 버튼 표시 → 클릭 시 모든 헤더 + required 표시 (`Document No` 강조)
+2. 임의 컬럼 체크 해제 → 적용 → 카드에 `Select Columns (28/32)` 갱신 → Start import → 제외 컬럼은 DB에 반영되지 않음
+3. `Document No` 제외 시도 → 경고 표시 (system required)
+4. OMM도 동일 동작 — `SN` required
 
 ## 영향 범위
-
-- 변경: `src/lib/docs-import-parser.ts`, `src/lib/docs-omm-import-parser.ts`
-- 무영향: 기존 register/원본 import 파일은 alias가 추가만 되고 제거되지 않으므로 그대로 동작.
-- 메모리: 별도 업데이트 불필요.
+- 신규: `src/components/docs/import/DocsColumnSelect.tsx`
+- 변경: 
+  - `src/lib/docs-import-parser.ts` (header info + excluded option)
+  - `src/lib/docs-omm-import-parser.ts` (동일)
+  - `src/lib/docs-import-workers.ts` (adapter 2개)
+  - `src/contexts/docs-import/types.ts`
+  - `src/contexts/docs-import/createDocsImportProvider.tsx`
+  - `src/components/docs/import/DocsImportShell.tsx`
+- 무영향: 기존 T&C/Defect Import 흐름은 손대지 않음

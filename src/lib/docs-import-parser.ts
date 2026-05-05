@@ -434,16 +434,72 @@ export async function getDocsExcelSheetNames(file: File): Promise<string[]> {
   return workbook.SheetNames.filter(isRegisterSheet);
 }
 
+/**
+ * Inspect the workbook and return every detected composite header label across the
+ * given sheets (defaults to register sheets), plus a first non-empty sample value
+ * per header and the structured field it maps to. Used by the column-select
+ * dialog in the Docs import UI.
+ */
+export async function getDocsHeaderInfo(
+  file: File,
+  selectedSheets?: string[],
+): Promise<{
+  headers: string[];
+  samples: Record<string, unknown>;
+  fieldByHeader: Record<string, string | null>;
+}> {
+  const buffer = await readFileAsArrayBuffer(file);
+  const workbook = XLSX.read(buffer, { type: 'array' });
+  const targetSheets = (selectedSheets?.length
+    ? selectedSheets
+    : workbook.SheetNames.filter(isRegisterSheet));
+  const headerOrder: string[] = [];
+  const seen = new Set<string>();
+  const samples: Record<string, unknown> = {};
+  const fieldByHeader: Record<string, string | null> = {};
+  for (const sheetName of targetSheets) {
+    const ws = workbook.Sheets[sheetName];
+    if (!ws) continue;
+    const matrix: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null }) as unknown[][];
+    const detected = detectHeader(matrix);
+    if (!detected) continue;
+    for (const col of detected.cols) {
+      const label = col.composite;
+      if (!label) continue;
+      if (!seen.has(label)) {
+        seen.add(label);
+        headerOrder.push(label);
+        fieldByHeader[label] = col.field ?? null;
+      }
+    }
+    const startRow = detected.subRowIdx + 1;
+    const lastRow = Math.min(matrix.length, startRow + 20);
+    for (let r = startRow; r < lastRow; r++) {
+      const dataRow = matrix[r] ?? [];
+      for (let c = 0; c < detected.cols.length; c++) {
+        const label = detected.cols[c].composite;
+        if (!label || samples[label] != null) continue;
+        const v = dataRow[c];
+        if (v != null && String(v).trim() !== '') samples[label] = v;
+      }
+    }
+  }
+  return { headers: headerOrder, samples, fieldByHeader };
+}
+
 export async function parseDocsExcel(
   file: File,
   /** When provided, overrides the default register-only filter. */
   selectedSheets?: string[],
+  options?: { excludedHeaders?: string[] },
 ): Promise<ParseDocsResult> {
   const buffer = await readFileAsArrayBuffer(file);
   const workbook = XLSX.read(buffer, { type: 'array' });
   const targetSheets = (selectedSheets?.length
     ? selectedSheets
     : workbook.SheetNames.filter(isRegisterSheet));
+  const excludedSet = new Set((options?.excludedHeaders ?? []).map((h) => h.trim()).filter(Boolean));
+
 
   const rows: ParsedDocsRow[] = [];
   const sheetSummary: ParseDocsResult['sheets'] = [];
@@ -476,8 +532,9 @@ export async function parseDocsExcel(
       for (let c = 0; c < detected.cols.length; c++) {
         const col = detected.cols[c];
         const value = dataRow[c];
+        const isExcluded = col.composite && excludedSet.has(col.composite);
         if (col.composite) payload[col.composite] = value;
-        if (!col.field) continue;
+        if (!col.field || isExcluded) continue;
         if (col.field.endsWith('_date') || col.field === 'transmittal_due_date') {
           struct[col.field] = normalizeDate(value);
         } else if (col.field === 'days_due') {

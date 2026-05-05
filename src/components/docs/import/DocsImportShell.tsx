@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,8 +6,10 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
-  Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, Lock, AlertTriangle, Info, Settings,
+  Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, Lock, AlertTriangle, Info, Settings, Settings2,
 } from 'lucide-react';
+import { DocsColumnSelect } from '@/components/docs/import/DocsColumnSelect';
+import type { DocsSubModule as DocsFieldSubModule } from '@/hooks/useDocsFieldConfig';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { useAuth } from '@/contexts/AuthContext';
 import type {
@@ -45,8 +47,10 @@ export function DocsImportShell({
 }: DocsImportShellProps) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [columnDialogFileId, setColumnDialogFileId] = useState<string | null>(null);
   const {
     files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate,
+    setFileExcludedHeaders,
     keyFieldLabel, dataDateRequired, rawDataPath, subModule,
   } = importer;
   const { docs } = useModuleStatus();
@@ -209,6 +213,21 @@ export function DocsImportShell({
                             <span className="text-[11px] text-muted-foreground">Reference "today" for cycle delay calculation.</span>
                           </div>
                         )}
+                        {f.availableHeaders && f.availableHeaders.length > 0 && (
+                          <div className="mt-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1.5 text-xs"
+                              onClick={() => setColumnDialogFileId(f.id)}
+                              disabled={isRunning || f.status === 'done' || f.status === 'parsing'}
+                            >
+                              <Settings2 className="h-3.5 w-3.5" />
+                              Select Columns ({f.availableHeaders.length - (f.excludedHeaders?.length ?? 0)}/{f.availableHeaders.length})
+                            </Button>
+                          </div>
+                        )}
                         {f.error && (
                           <div className="mt-1 rounded border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
                             <p className="font-medium">⚠ {f.error}</p>
@@ -348,6 +367,27 @@ export function DocsImportShell({
           </CardContent>
         </Card>
       )}
+
+      {(() => {
+        const dlgFile = files.find((f) => f.id === columnDialogFileId);
+        if (!dlgFile || !dlgFile.availableHeaders) return null;
+        return (
+          <DocsColumnSelect
+            subModule={subModule as DocsFieldSubModule}
+            fileName={dlgFile.name}
+            headers={dlgFile.availableHeaders}
+            samples={dlgFile.headerSamples ?? {}}
+            fieldByHeader={dlgFile.fieldByHeader ?? {}}
+            defaultExcluded={dlgFile.excludedHeaders ?? []}
+            open={!!columnDialogFileId}
+            onClose={() => setColumnDialogFileId(null)}
+            onApply={(excluded) => {
+              setFileExcludedHeaders(dlgFile.id, excluded);
+              setColumnDialogFileId(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

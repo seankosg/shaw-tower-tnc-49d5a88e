@@ -41,6 +41,14 @@ export interface DocsImportFile<TRow = unknown> {
   parsedCount: number;
   sheetNames?: string[];
   selectedSheets?: string[];
+  /** Distinct composite header labels detected across selected sheets. */
+  availableHeaders?: string[];
+  /** First non-empty sample value per detected header — fed to the column-select preview. */
+  headerSamples?: Record<string, unknown>;
+  /** Map of detected header → structured field name (or null when unmapped). */
+  fieldByHeader?: Record<string, string | null>;
+  /** Headers the user opted to exclude — passed back to the parser so they're ignored. */
+  excludedHeaders?: string[];
   unknownHeaders?: string[];
   unmatchedOrgs?: string[];
   rejectSamples?: DocsRejectSample[];
@@ -64,6 +72,8 @@ export interface DocsImportContextValue<TRow = unknown> {
   clearAll: () => void;
   setFileSheets: (id: string, sheets: string[]) => Promise<void>;
   setFileDataDate: (id: string, dataDate: string) => void;
+  /** Update the user-excluded header list and re-parse the file with the new selection. */
+  setFileExcludedHeaders: (id: string, excluded: string[]) => Promise<void>;
   startImport: () => Promise<void>;
 }
 
@@ -104,8 +114,21 @@ export interface ImporterAdapter<TRow> {
   keyFieldLabel: string;
   dataDateRequired: boolean;
   rawDataPath: string;
-  parseFile: (file: File, sheets?: string[]) => Promise<ParsedFileResult<TRow>>;
+  parseFile: (
+    file: File,
+    sheets?: string[],
+    options?: { excludedHeaders?: string[] },
+  ) => Promise<ParsedFileResult<TRow>>;
   getSheetNames: (file: File) => Promise<string[]>;
+  /** Returns the composite headers + sample values + field mapping used by the column-select dialog. */
+  getHeaderInfo: (
+    file: File,
+    sheets?: string[],
+  ) => Promise<{
+    headers: string[];
+    samples: Record<string, unknown>;
+    fieldByHeader: Record<string, string | null>;
+  }>;
   /** Returns the sub-module key (Document No / SN) from a parsed row. */
   getRowKey: (row: TRow) => string | null;
   /** Performs upserts and returns per-row outcomes + global counters. */

@@ -33,9 +33,9 @@ export function createDocsImportProvider<TRow>(
     const [files, setFiles] = useState<DocsImportFile<TRow>[]>([]);
     const [isRunning, setIsRunning] = useState(false);
 
-    const parseAndApply = useCallback(async (id: string, file: File, sheets?: string[]) => {
+    const parseAndApply = useCallback(async (id: string, file: File, sheets?: string[], excludedHeaders?: string[]) => {
       try {
-        const parsed = await adapter.parseFile(file, sheets);
+        const parsed = await adapter.parseFile(file, sheets, { excludedHeaders });
         setFiles((cur) => cur.map((f) => f.id === id ? {
           ...f,
           status: 'ready',
@@ -68,8 +68,20 @@ export function createDocsImportProvider<TRow>(
       for (const item of next) {
         try {
           const sheetNames = await adapter.getSheetNames(item.file);
+          // Pre-extract headers + sample values for the column-select dialog.
+          let availableHeaders: string[] = [];
+          let headerSamples: Record<string, unknown> = {};
+          let fieldByHeader: Record<string, string | null> = {};
+          try {
+            const info = await adapter.getHeaderInfo(item.file, sheetNames);
+            availableHeaders = info.headers;
+            headerSamples = info.samples;
+            fieldByHeader = info.fieldByHeader;
+          } catch {
+            // Non-fatal — column select just won't be available for this file.
+          }
           setFiles((cur) => cur.map((f) => f.id === item.id ? {
-            ...f, sheetNames, selectedSheets: sheetNames,
+            ...f, sheetNames, selectedSheets: sheetNames, availableHeaders, headerSamples, fieldByHeader,
           } : f));
           await parseAndApply(item.id, item.file, sheetNames);
         } catch (error) {
@@ -92,12 +104,22 @@ export function createDocsImportProvider<TRow>(
         return cur.map((f) => f.id === id ? { ...f, status: 'parsing', selectedSheets: sheets } : f);
       });
       if (!target) return;
-      await parseAndApply(id, target.file, sheets);
+      await parseAndApply(id, target.file, sheets, target.excludedHeaders);
     }, [parseAndApply]);
 
     const setFileDataDate = useCallback((id: string, dataDate: string) => {
       setFiles((cur) => cur.map((f) => f.id === id ? { ...f, dataDate } : f));
     }, []);
+
+    const setFileExcludedHeaders = useCallback(async (id: string, excluded: string[]) => {
+      let target: DocsImportFile<TRow> | undefined;
+      setFiles((cur) => {
+        target = cur.find((f) => f.id === id);
+        return cur.map((f) => f.id === id ? { ...f, status: 'parsing', excludedHeaders: excluded } : f);
+      });
+      if (!target) return;
+      await parseAndApply(id, target.file, target.selectedSheets, excluded);
+    }, [parseAndApply]);
 
     const startImport = useCallback(async () => {
       if (isRunning) return;
@@ -213,7 +235,7 @@ export function createDocsImportProvider<TRow>(
       dataDateRequired: adapter.dataDateRequired,
       rawDataPath: adapter.rawDataPath,
       files, isRunning, addFiles, removeFile, clearAll,
-      setFileSheets, setFileDataDate, startImport,
+      setFileSheets, setFileDataDate, setFileExcludedHeaders, startImport,
     };
 
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
