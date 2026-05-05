@@ -540,8 +540,8 @@ function FieldEditor({ field, label, value, disabled, onSave, subOptions, picOpt
       field === 'subcontractor_name' ? subOptions : field === 'hdec_pic_name' ? picOptions : engOptions;
     return (
       <div>
-        <Label className="text-xs">{label}</Label>
         <SuggestField
+          label={label}
           value={value ?? ''}
           options={(opts ?? []).map((o) => o.name)}
           disabled={disabled}
