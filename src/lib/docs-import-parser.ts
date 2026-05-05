@@ -504,6 +504,10 @@ export async function parseDocsExcel(
     ? selectedSheets
     : workbook.SheetNames.filter(isRegisterSheet));
   const excludedSet = new Set((options?.excludedHeaders ?? []).map((h) => h.trim()).filter(Boolean));
+  // Canonical field names the user excluded — built up while iterating header
+  // columns inside each sheet. Workers use this to skip those keys on UPDATE
+  // so existing DB values are preserved.
+  const excludedFields = new Set<string>();
 
 
   const rows: ParsedDocsRow[] = [];
