@@ -92,6 +92,9 @@ export const abdAdapter: ImporterAdapter<ParsedDocsRow> = {
     const counters = { inserted: 0, updated: 0, skipped: 0, rejected: 0, unmatchedOrgs: new Set<string>() };
     const outcomes: ImportRowOutcome[] = [];
     const rejectSamples: DocsRejectSample[] = [];
+    // User-excluded canonical fields — UPDATE branch must skip these so the
+    // existing DB value is preserved (mirrors T&C / Defect importers).
+    const excludedFields = ctx.excludedFields ?? new Set<string>();
 
     // Performance pattern (mirrors DefectImportContext):
     //   1. Single sequential pre-pass to validate, build payloads, and split
