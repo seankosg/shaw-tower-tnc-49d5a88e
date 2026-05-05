@@ -3141,6 +3141,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      can_write_for_team: {
+        Args: {
+          _team: Database["public"]["Enums"]["team_type"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       compute_omm_status: {
         Args: { row_data: Database["public"]["Tables"]["docs_omm"]["Row"] }
         Returns: string
@@ -3253,6 +3260,13 @@ export type Database = {
           out_next_seq: number
           out_owner_code: string
         }[]
+      }
+      user_team_matches: {
+        Args: {
+          _team: Database["public"]["Enums"]["team_type"]
+          _user_id: string
+        }
+        Returns: boolean
       }
     }
     Enums: {
