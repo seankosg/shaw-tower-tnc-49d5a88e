@@ -37,13 +37,18 @@ export function createDocsImportProvider<TRow>(
     const parseAndApply = useCallback(async (id: string, file: File, sheets?: string[], excludedHeaders?: string[]) => {
       try {
         const parsed = await adapter.parseFile(file, sheets, { excludedHeaders });
-        setFiles((cur) => cur.map((f) => f.id === id ? {
-          ...f,
-          status: 'ready',
-          parsed: parsed.rows,
-          parsedCount: parsed.rows.length,
-          unknownHeaders: parsed.unknownHeaders,
-        } : f));
+        setFiles((cur) => cur.map((f) => {
+          if (f.id !== id) return f;
+          const validation = validateDocsHeaders(adapter.subModule, f.fieldByHeader, excludedHeaders ?? f.excludedHeaders);
+          return {
+            ...f,
+            status: 'ready',
+            parsed: parsed.rows,
+            parsedCount: parsed.rows.length,
+            unknownHeaders: parsed.unknownHeaders,
+            validationError: validation.error,
+          };
+        }));
       } catch (error) {
         setFiles((cur) => cur.map((f) => f.id === id ? {
           ...f,
