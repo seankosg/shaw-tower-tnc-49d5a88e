@@ -190,6 +190,8 @@ export const abdAdapter: ImporterAdapter<ParsedDocsRow> = {
       const changeLog: ImportRowOutcome['changeLog'] = [];
       const push = (args: Parameters<typeof buildFieldLog>[1]) => fieldLogs.push(buildFieldLog('docs', args));
       for (const fname of ABD_TRACKED_FIELDS) {
+        // Excluded fields are not written to DB on UPDATE; skip audit too.
+        if (excludedFields.has(fname)) continue;
         const incoming = (it.payload as any)[fname];
         const previous = it.prevPayload[fname] ?? null;
         const cls = classifyChange(incoming, previous);
