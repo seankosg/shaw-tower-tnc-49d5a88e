@@ -82,15 +82,20 @@ const DOCS_AS_BUILT_FIELDS = [
   'hdec_pic_name','hdec_eng_name','remarks',
 ] as const;
 
-// Docs / Warranty (warranty deed workflow)
+// Docs / Warranty (List of Warranties workflow — Schedule R + 4 stages + threads)
 const DOCS_WARRANTY_FIELDS = [
-  'item_no','category','sub_category','warranted_item','subcontractor_name_raw',
-  'sc_target_date','internal_target_date',
-  'stage1_date','stage2_date','stage3_date','stage4_date','stage5_date',
-  'stage6_date','stage7_date','stage8_date','stage9_date',
-  'witness_director','witness_secretary',
-  'validation_acra','validation_signature','validation_witness','validation_seal',
-  'validation_date','validation_pass','remarks',
+  'item_no','category','warranted_item','team','warranty_period_years','contract_spec_ref',
+  'subcontractor_name','subsub_name','hdec_pic_name','hdec_eng_name',
+  'r_works_description','r_acra_reg_no','r_acra_address','r_subcontract_date',
+  'r_brief_description','r_director_1','r_director_2','r_witness','acra_info_status',
+  'draft_planned_date','draft_actual_date','draft_response_planned_date','draft_response_actual_date','draft_status',
+  'subcon_signing_planned_date','subcon_signing_actual_date','subcon_signing_status',
+  'hdec_signing_planned_date','hdec_signing_actual_date','hdec_signing_status',
+  'final_planned_date','final_actual_date','final_status',
+  'remarks',
+  // Threads (separate child table — written via thread:<key> pseudo-targets)
+  'thread:tread_1','thread:tread_2_1','thread:tread_2_2','thread:tread_2_3',
+  'thread:tread_3_1','thread:tread_3_2',
 ] as const;
 
 // Docs / OMM (operation & maintenance manual workflow)
