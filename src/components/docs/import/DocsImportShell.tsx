@@ -169,7 +169,12 @@ export function DocsImportShell({
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base">2. Files ({files.length})</CardTitle>
-              <CardDescription>{readyCount} ready to import</CardDescription>
+              <CardDescription>
+                {importableCount} ready to import
+                {invalidCount > 0 && (
+                  <span className="ml-2 text-destructive">· {invalidCount} blocked by validation</span>
+                )}
+              </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
               {hasUnmappedHeaders && (
@@ -181,8 +186,8 @@ export function DocsImportShell({
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={clearAll} disabled={isRunning}>Clear all</Button>
-              <Button size="sm" onClick={startImport} disabled={isRunning || readyCount === 0 || blocked}>
-                {isRunning ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" />Importing…</> : `Start import (${readyCount})`}
+              <Button size="sm" onClick={startImport} disabled={isRunning || importableCount === 0 || blocked}>
+                {isRunning ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" />Importing…</> : `Start import (${importableCount})`}
               </Button>
             </div>
           </CardHeader>
