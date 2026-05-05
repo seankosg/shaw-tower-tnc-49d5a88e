@@ -42,7 +42,7 @@ import { computeRisk } from '@/lib/docs-risk';
 import { resolveTrade, TRADE_OPTIONS } from '@/lib/docs-trade';
 import { exportDocsRawToExcel } from '@/lib/docs-excel-export';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
-import { DocsBulkEditBar } from '@/components/raw-data/DocsBulkEditBar';
+import { BulkActionBar } from '@/components/raw-data/BulkActionBar';
 import { DocsCycleProgress } from '@/components/docs/DocsCycleProgress';
 import { computeOverallStatus, computeIsClosed } from '@/lib/docs-status';
 import { formatDdMmm } from '@/lib/format';
@@ -900,10 +900,38 @@ export default function DocsRawDataPage() {
         </span>
       </div>
 
-      <DocsBulkEditBar
+      <BulkActionBar
         selectedRows={selectedRows}
         fields={bulkFields}
-        onApplied={handleBulkApplied}
+        table="docs_drawings"
+        entity="drawing"
+        exportColumns={[
+          { id: 'document_no', label: 'Document No' },
+          { id: 'revision', label: 'Revision' },
+          { id: 'title', label: 'Title' },
+          { id: 'sub_module', label: 'Sub Module' },
+          { id: 'discipline', label: 'Discipline' },
+          { id: 'document_type', label: 'Document Type' },
+          { id: 'team', label: 'Team' },
+          { id: 'subcontractor_name', label: 'Subcontractor' },
+          { id: 'hdec_pic_name', label: 'HDEC PIC' },
+          { id: 'hdec_eng_name', label: 'HDEC ENG' },
+          { id: 'current_status', label: 'Current Status' },
+          { id: 'aconex_status', label: 'Aconex Status' },
+          { id: 'submitted_date', label: 'Submitted Date' },
+          { id: 'approved_date', label: 'Approved Date' },
+          { id: 'sub1_approval_status', label: 'Sub1 Status' },
+          { id: 'sub2_approval_status', label: 'Sub2 Status' },
+          { id: 'sub3_approval_status', label: 'Sub3 Status' },
+          { id: 'remarks', label: 'Remarks' },
+        ]}
+        reassignFields={[
+          { field: 'team', label: 'Team', options: ALL_TEAMS.map((t) => ({ value: t, label: TEAM_LABELS[t] ?? t })) },
+          { field: 'hdec_pic_name', label: 'HDEC PIC', options: hdecPicOptions },
+          { field: 'hdec_eng_name', label: 'HDEC ENG', options: hdecEngOptions },
+        ]}
+        onApplied={(r) => handleBulkApplied(r)}
+        onMutated={() => reload()}
         onClearSelection={() => setRowSelection({})}
       />
 

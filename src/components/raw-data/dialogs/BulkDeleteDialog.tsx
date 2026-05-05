@@ -23,6 +23,7 @@ interface Props {
 const CASCADE_LABELS: Record<string, string> = {
   subtests: 'Subtests',
   defects: 'Defect items',
+  drawings: 'Drawings',
   comments: 'Comments',
   comment_reads: 'Comment read marks',
   change_log: 'Change log entries',
@@ -40,7 +41,7 @@ export function BulkDeleteDialog({ open, onOpenChange, entity, mode, rows, edita
 
   const editableRows = rows.filter((r) => editableIds.includes(r.id));
   const skipped = rows.length - editableRows.length;
-  const labelKey = entity === 'subtest' ? 'subtest_id' : 'issue_no';
+  const labelKey = entity === 'subtest' ? 'subtest_id' : entity === 'drawing' ? 'document_no' : 'issue_no';
 
   // Load cascade preview only for hard mode
   useEffect(() => {

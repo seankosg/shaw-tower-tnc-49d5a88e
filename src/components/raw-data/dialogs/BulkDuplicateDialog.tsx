@@ -32,7 +32,7 @@ export function BulkDuplicateDialog({ open, onOpenChange, entity, rows, editable
 
   const editableRows = rows.filter((r) => editableIds.includes(r.id));
   const skipped = rows.length - editableRows.length;
-  const labelKey = entity === 'subtest' ? 'subtest_id' : 'issue_no';
+  const labelKey = entity === 'subtest' ? 'subtest_id' : entity === 'drawing' ? 'document_no' : 'issue_no';
 
   async function handleConfirm() {
     if (!user) return;
@@ -88,7 +88,11 @@ export function BulkDuplicateDialog({ open, onOpenChange, entity, rows, editable
               <span>
                 <div className="font-medium">Reset actual dates</div>
                 <div className="text-xs text-muted-foreground">
-                  {entity === 'subtest' ? 'T1/T2/Pred/R1/R2 actual dates' : 'Actual start/completion/closure dates'} will be cleared on the copies.
+                  {entity === 'subtest'
+                    ? 'T1/T2/Pred/R1/R2 actual dates'
+                    : entity === 'drawing'
+                      ? 'Submitted / approved / sub1–3 actual dates'
+                      : 'Actual start/completion/closure dates'} will be cleared on the copies.
                 </div>
               </span>
             </label>
@@ -101,7 +105,7 @@ export function BulkDuplicateDialog({ open, onOpenChange, entity, rows, editable
               <span>
                 <div className="font-medium">Reset progress / status</div>
                 <div className="text-xs text-muted-foreground">
-                  Status fields {entity === 'defect' ? 'and actual progress %' : ''} will be cleared on the copies.
+                  Status fields {entity === 'defect' ? 'and actual progress %' : entity === 'drawing' ? 'and submitted flag' : ''} will be cleared on the copies.
                 </div>
               </span>
             </label>

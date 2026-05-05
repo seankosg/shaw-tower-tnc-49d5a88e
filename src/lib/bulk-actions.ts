@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { applyBulkUpdate, type BulkUpdateRequest } from '@/lib/bulk-edit';
 
-export type BulkEntity = 'subtest' | 'defect';
+export type BulkEntity = 'subtest' | 'defect' | 'drawing';
 
 export type EditableScope = 'none' | 'assigned' | 'team' | 'full';
 
@@ -25,6 +25,32 @@ export async function getEditableScopeMap(
 ): Promise<ScopeMapResult> {
   const out: ScopeMapResult = { byId: {}, editableIds: [], skippedIds: [] };
   if (!ids.length || !userId) return out;
+
+  // Drawings: no per-row RPC. Resolve from role + team match against docs_drawings.team.
+  if (entity === 'drawing') {
+    const [{ data: roleRows }, { data: profileRow }, { data: drawingRows }] = await Promise.all([
+      (supabase as any).from('user_roles').select('role').eq('user_id', userId),
+      (supabase as any).from('profiles').select('team, is_active').eq('user_id', userId).maybeSingle(),
+      (supabase as any).from('docs_drawings').select('id, team').in('id', ids),
+    ]);
+    const roles = new Set<string>(((roleRows as any[]) ?? []).map((r) => r.role));
+    const isFull = roles.has('admin') || roles.has('superuser');
+    const isDSuper = roles.has('d_superuser');
+    const userTeam = (profileRow as any)?.team ?? null;
+    const profileActive = (profileRow as any)?.is_active !== false;
+    const teamById = new Map<string, string | null>(
+      ((drawingRows as any[]) ?? []).map((r) => [r.id, r.team ?? null]),
+    );
+    for (const id of ids) {
+      let scope: EditableScope = 'none';
+      if (isFull) scope = 'full';
+      else if (isDSuper && profileActive && userTeam && teamById.get(id) === userTeam) scope = 'team';
+      out.byId[id] = scope;
+      if (scope === 'none') out.skippedIds.push(id);
+      else out.editableIds.push(id);
+    }
+    return out;
+  }
 
   const fnName = entity === 'subtest' ? 'get_subtest_edit_scope' : 'get_defect_edit_scope';
   const idArg = entity === 'subtest' ? '_subtest_id' : '_defect_id';
@@ -75,7 +101,8 @@ export async function applyBulkReassign(args: {
   changes: ReassignFieldChange[];
   userId: string;
 }): Promise<BulkReassignResult> {
-  const table: BulkUpdateRequest['table'] = args.entity === 'subtest' ? 'subtests' : 'defect_items';
+  const table: BulkUpdateRequest['table'] =
+    args.entity === 'subtest' ? 'subtests' : args.entity === 'drawing' ? 'docs_drawings' : 'defect_items';
   const out: BulkReassignResult = { attempted: args.ids.length, succeeded: 0, failed: 0, perField: [] };
   for (const ch of args.changes) {
     const r = await applyBulkUpdate({
@@ -104,6 +131,14 @@ export interface CascadePreview {
 
 export async function previewBulkDelete(entity: BulkEntity, ids: string[]): Promise<CascadePreview> {
   if (!ids.length) return {};
+  if (entity === 'drawing') {
+    // No cascade RPC — count related change_log entries client-side.
+    const { count } = await (supabase as any)
+      .from('docs_change_log')
+      .select('id', { count: 'exact', head: true })
+      .in('drawing_id', ids);
+    return { drawings: ids.length, change_log: count ?? 0 };
+  }
   const fn = entity === 'subtest' ? 'preview_delete_subtests_cascade' : 'preview_delete_defects_cascade';
   const { data, error } = await (supabase as any).rpc(fn, { _ids: ids });
   if (error) throw error;
@@ -133,7 +168,10 @@ export async function applyBulkDelete(args: {
 
   if (args.mode === 'soft') {
     // Soft delete = is_active = false via RLS-protected UPDATE.
-    const table = args.entity === 'subtest' ? 'subtests' : 'defect_items';
+    const table =
+      args.entity === 'subtest' ? 'subtests'
+        : args.entity === 'drawing' ? 'docs_drawings'
+          : 'defect_items';
     const CHUNK = 200;
     let succeeded = 0;
     let failed = 0;
@@ -143,6 +181,29 @@ export async function applyBulkDelete(args: {
       const { data, error } = await (supabase as any)
         .from(table)
         .update({ is_active: false, updated_by: args.userId })
+        .in('id', slice)
+        .select('id');
+      if (error) { failed += slice.length; continue; }
+      succeeded += (data ?? []).length;
+      failed += slice.length - (data ?? []).length;
+    }
+    out.succeeded = succeeded;
+    out.failed = failed;
+    return out;
+  }
+
+  // Hard delete
+  if (args.entity === 'drawing') {
+    // No FK dependents on docs_drawings — direct DELETE, RLS gates admin/superuser only.
+    const CHUNK = 200;
+    let succeeded = 0;
+    let failed = 0;
+    for (let i = 0; i < args.ids.length; i += CHUNK) {
+      const slice = args.ids.slice(i, i + CHUNK);
+      // eslint-disable-next-line no-await-in-loop
+      const { data, error } = await (supabase as any)
+        .from('docs_drawings')
+        .delete()
         .in('id', slice)
         .select('id');
       if (error) { failed += slice.length; continue; }
@@ -185,6 +246,16 @@ const SUBTEST_RESET_ACTUALS = ['t1_actual_date', 't2_actual_date', 'pred_actual_
 const SUBTEST_RESET_STATUS = ['t1_status', 't2_status', 'pred_status', 'r1_status', 'r2_status'];
 const DEFECT_RESET_ACTUALS = ['actual_start_date', 'actual_completion_date', 'actual_closure_date'];
 const DEFECT_RESET_STATUS = ['status', 'completion_status', 'closure_status', 'actual_progress_pct'];
+const DRAWING_RESET_ACTUALS = [
+  'submitted_date', 'approved_date',
+  'sub1_submission_date', 'sub1_approval_date', 'sub1_actual_response_date',
+  'sub2_submission_date', 'sub2_approval_date', 'sub2_actual_response_date',
+  'sub3_submission_date', 'sub3_approval_date', 'sub3_actual_response_date',
+];
+const DRAWING_RESET_STATUS = [
+  'current_status', 'aconex_status',
+  'sub1_approval_status', 'sub2_approval_status', 'sub3_approval_status',
+];
 
 export async function applyBulkDuplicate(args: {
   entity: BulkEntity;
@@ -268,6 +339,68 @@ export async function applyBulkDuplicate(args: {
         const tryPayload = attempt === 1 ? payload : { ...payload, subtest_id: `${baseId}-${attempt}` };
         // eslint-disable-next-line no-await-in-loop
         const { error } = await (supabase as any).from('subtests').insert(tryPayload);
+        if (!error) { succeeded++; lastErr = null; break; }
+        lastErr = error;
+        if (error.code !== '23505') break;
+        attempt++;
+      }
+      if (lastErr) failed++;
+    }
+    out.succeeded = succeeded;
+    out.failed = failed;
+    return out;
+  }
+
+  if (args.entity === 'drawing') {
+    // Drawing duplicate — append "-2", "-3", … to document_no on per-(project, sub_module) collision.
+    const ids = args.rows.map((r) => r.id);
+    const { data: src, error: srcErr } = await (supabase as any)
+      .from('docs_drawings')
+      .select('*')
+      .in('id', ids);
+    if (srcErr) throw srcErr;
+
+    const inserts: any[] = [];
+    for (const row of src ?? []) {
+      const copy: any = { ...row };
+      delete copy.id;
+      delete copy.created_at;
+      delete copy.updated_at;
+      delete copy.row_version;
+      copy.updated_by = args.userId;
+      copy.data_source_type = 'manual';
+      copy.source_upload_id = null;
+      copy.is_active = true;
+      if (args.options.resetActualDates) for (const f of DRAWING_RESET_ACTUALS) copy[f] = null;
+      if (args.options.resetProgressStatus) {
+        for (const f of DRAWING_RESET_STATUS) copy[f] = null;
+        copy.is_submitted = false;
+      }
+      inserts.push(copy);
+    }
+
+    // Try batch insert first; on collision, retry per row with numeric suffix.
+    const { data: ins, error: insErr } = await (supabase as any)
+      .from('docs_drawings')
+      .insert(inserts)
+      .select('id');
+    if (!insErr) {
+      out.succeeded = (ins ?? []).length;
+      out.failed = inserts.length - out.succeeded;
+      return out;
+    }
+    let succeeded = 0;
+    let failed = 0;
+    for (const payload of inserts) {
+      const baseDoc = String((payload as any).document_no ?? '');
+      let attempt = 1;
+      let lastErr: any = null;
+      while (attempt <= 8) {
+        const tryPayload = attempt === 1
+          ? payload
+          : { ...payload, document_no: `${baseDoc}-${attempt}` };
+        // eslint-disable-next-line no-await-in-loop
+        const { error } = await (supabase as any).from('docs_drawings').insert(tryPayload);
         if (!error) { succeeded++; lastErr = null; break; }
         lastErr = error;
         if (error.code !== '23505') break;
