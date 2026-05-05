@@ -434,16 +434,63 @@ export async function getDocsExcelSheetNames(file: File): Promise<string[]> {
   return workbook.SheetNames.filter(isRegisterSheet);
 }
 
+/**
+ * Inspect the workbook and return every detected composite header label across the
+ * given sheets (defaults to register sheets), plus a first non-empty sample value
+ * per header. Used by the column-select dialog in the Docs import UI.
+ */
+export async function getDocsHeaderInfo(
+  file: File,
+  selectedSheets?: string[],
+): Promise<{ headers: string[]; samples: Record<string, unknown> }> {
+  const buffer = await readFileAsArrayBuffer(file);
+  const workbook = XLSX.read(buffer, { type: 'array' });
+  const targetSheets = (selectedSheets?.length
+    ? selectedSheets
+    : workbook.SheetNames.filter(isRegisterSheet));
+  const headerOrder: string[] = [];
+  const seen = new Set<string>();
+  const samples: Record<string, unknown> = {};
+  for (const sheetName of targetSheets) {
+    const ws = workbook.Sheets[sheetName];
+    if (!ws) continue;
+    const matrix: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null }) as unknown[][];
+    const detected = detectHeader(matrix);
+    if (!detected) continue;
+    for (const col of detected.cols) {
+      const label = col.composite;
+      if (!label) continue;
+      if (!seen.has(label)) { seen.add(label); headerOrder.push(label); }
+    }
+    // First non-empty sample value per header from the first 20 data rows.
+    const startRow = detected.subRowIdx + 1;
+    const lastRow = Math.min(matrix.length, startRow + 20);
+    for (let r = startRow; r < lastRow; r++) {
+      const dataRow = matrix[r] ?? [];
+      for (let c = 0; c < detected.cols.length; c++) {
+        const label = detected.cols[c].composite;
+        if (!label || samples[label] != null) continue;
+        const v = dataRow[c];
+        if (v != null && String(v).trim() !== '') samples[label] = v;
+      }
+    }
+  }
+  return { headers: headerOrder, samples };
+}
+
 export async function parseDocsExcel(
   file: File,
   /** When provided, overrides the default register-only filter. */
   selectedSheets?: string[],
+  options?: { excludedHeaders?: string[] },
 ): Promise<ParseDocsResult> {
   const buffer = await readFileAsArrayBuffer(file);
   const workbook = XLSX.read(buffer, { type: 'array' });
   const targetSheets = (selectedSheets?.length
     ? selectedSheets
     : workbook.SheetNames.filter(isRegisterSheet));
+  const excludedSet = new Set((options?.excludedHeaders ?? []).map((h) => h.trim()).filter(Boolean));
+
 
   const rows: ParsedDocsRow[] = [];
   const sheetSummary: ParseDocsResult['sheets'] = [];
