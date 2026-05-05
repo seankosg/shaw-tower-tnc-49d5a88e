@@ -74,6 +74,11 @@ export interface ParseDocsResult {
   sheetCount: number;
   sheets: Array<{ name: string; headerCount: number; rowCount: number; discipline: string | null }>;
   unknownHeaders: string[];
+  /** Canonical field names the user excluded via the column-select dialog.
+   *  Workers consult this set during UPDATE to skip those keys, preserving
+   *  the existing DB value. System-required fields (document_no) are forcibly
+   *  removed so they can never be excluded. */
+  excludedFields: Set<string>;
 }
 
 type FieldKey =
