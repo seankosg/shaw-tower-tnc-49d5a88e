@@ -48,6 +48,7 @@ import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import type { BulkEditableField } from '@/lib/bulk-edit';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
+import { inferFilterType } from '@/lib/field-filter-type';
 
 const EMPTY_TOKEN = '__EMPTY__';
 const DEFAULT_SORTING: SortingState = [{ id: 'issue_no', desc: false }];
