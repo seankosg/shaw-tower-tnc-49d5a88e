@@ -919,7 +919,7 @@ export default function DocsOMMRawDataPage() {
       };
     });
 
-    return [selectColumn, ...dataColumns, cycleColumn, statusColumn, openColumn];
+    return [selectColumn, cycleColumn, ...dataColumns, statusColumn, openColumn];
   }, [getLabel, optionFields, navigate, updateField]);
 
   // ── Visibility from Field Config (always show anchors) ────────────────────
