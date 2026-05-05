@@ -50,6 +50,7 @@ import type { BulkEditableField } from '@/lib/bulk-edit';
 import { META_FIELD_NAMES, type CommentSummary, EMPTY_SUMMARY, isMetaField } from '@/lib/meta-fields';
 import { MetaCell } from '@/components/raw-data/MetaCell';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
+import { inferFilterType } from '@/lib/field-filter-type';
 
 interface SubtestRow {
   id: string;
