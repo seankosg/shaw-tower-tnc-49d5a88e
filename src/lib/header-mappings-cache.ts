@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type MappingModule = 'tnc' | 'defect' | 'docs';
 /** Sub-modules currently used (Docs umbrella). Empty string for tnc/defect. */
-export type MappingSubModule = '' | 'as_built' | 'warranty';
+export type MappingSubModule = '' | 'as_built' | 'warranty' | 'omm' | 'spare_part';
 
 interface MappingRow {
   module: string;

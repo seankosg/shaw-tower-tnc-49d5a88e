@@ -38,12 +38,12 @@ async function reloadHeaderMappings() {
 }
 
 type TopModuleKey = 'tnc' | 'defect' | 'docs';
-type DocsSubKey = 'as_built' | 'warranty';
+type DocsSubKey = 'as_built' | 'warranty' | 'omm' | 'spare_part';
 
 /** Internal module context: (module, sub_module). sub_module is '' for tnc/defect. */
 interface ModuleContext {
   module: TopModuleKey;
-  sub_module: string; // '' | 'as_built' | 'warranty'
+  sub_module: string; // '' | 'as_built' | 'warranty' | 'omm' | 'spare_part'
 }
 
 // System field whitelists per (module, sub_module) — keep in sync with parsers.
@@ -93,6 +93,26 @@ const DOCS_WARRANTY_FIELDS = [
   'validation_date','validation_pass','remarks',
 ] as const;
 
+// Docs / OMM (operation & maintenance manual workflow)
+const DOCS_OMM_FIELDS = [
+  'sn','category','category_group','section','work_trade_material',
+  'subcontractor_name','training_required',
+  'pdf_required_qty','pdf_actual_qty','hardcopy_required_qty','hardcopy_actual_qty',
+  'instruction_date',
+  'draft_planned_date','draft_actual_date','draft_response_date','draft_response_status',
+  'final_planned_date','final_actual_date',
+  'final_response_planned_date','final_response_actual_date','final_response_status',
+  'hdec_pic_name','hdec_eng_name','remarks',
+  'current_stage','current_status',
+] as const;
+
+// Docs / Spare Part (placeholder — fields to be defined)
+const DOCS_SPARE_PART_FIELDS = [
+  'sn','category','parent_item','material','spec_ref',
+  'spares_requirements','unit','spares_quantity','storage_area_required',
+  'subcontractor_name','hdec_pic_name','hdec_eng_name','status','remarks',
+] as const;
+
 // Docs sub-modules registry — add new sub-modules here to auto-register a tab.
 const DOCS_SUBMODULES: Array<{
   key: DocsSubKey;
@@ -100,7 +120,9 @@ const DOCS_SUBMODULES: Array<{
   fields: readonly string[];
 }> = [
   { key: 'as_built', label: 'As-Built', fields: DOCS_AS_BUILT_FIELDS },
+  { key: 'omm', label: 'OMM', fields: DOCS_OMM_FIELDS },
   { key: 'warranty', label: 'Warranty', fields: DOCS_WARRANTY_FIELDS },
+  { key: 'spare_part', label: 'Spare Part', fields: DOCS_SPARE_PART_FIELDS },
 ];
 
 function getFieldList(ctx: ModuleContext): readonly string[] {

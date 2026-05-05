@@ -3,7 +3,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { computeRisk, type RiskLevel } from '@/lib/docs-risk';
-import { computeOMMStatus } from '@/lib/docs-omm-status';
+import { computeOmmStatus } from '@/lib/docs-omm-status';
 import { normalizeSparePartStatus } from '@/lib/docs-spare-part-status';
 import {
   startOfDay,
@@ -216,13 +216,13 @@ export async function loadDashboardData(opts: {
   const omm = emptyStats('omm');
   for (const row of (ommRes.data ?? []) as any[]) {
     omm.total++;
-    const status = computeOMMStatus(row);
+    const status = computeOmmStatus(row);
     const submitted = status === 'Approved';
     if (submitted) omm.submitted++;
     else omm.pending++;
 
-    // OMM has no SC-based risk yet — derive from submission_target vs asOf
-    const target = safeIso(row.submission_target_date) ?? safeIso(row.draft_target_date);
+    // OMM has no SC-based risk yet — derive from final response planned vs asOf
+    const target = safeIso(row.final_response_planned_date) ?? safeIso(row.final_planned_date) ?? safeIso(row.draft_planned_date);
     let r: RiskLevel = 'green';
     if (!submitted && target) {
       const days = differenceInDays(target, asOf);
@@ -239,12 +239,12 @@ export async function loadDashboardData(opts: {
       omm.overdue++;
       omm.topOverdue.push({
         id: row.id,
-        label: `${row.sn ?? '—'}${row.contract_doc ? ' — ' + row.contract_doc : ''}`,
+        label: `${row.sn ?? '—'}${row.work_trade_material ? ' — ' + row.work_trade_material : ''}`,
         daysLate,
       });
     }
 
-    const approved = safeIso(row.approved_date);
+    const approved = safeIso(row.final_response_actual_date);
     if (approved) {
       const k = format(approved, 'yyyy-MM-dd');
       omm.approvedByDay.set(k, (omm.approvedByDay.get(k) ?? 0) + 1);
