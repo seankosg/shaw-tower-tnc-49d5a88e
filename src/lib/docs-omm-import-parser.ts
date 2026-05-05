@@ -375,5 +375,7 @@ export async function parseOmmExcel(
     sheetCount: sheets.length,
     sheets: sheetSummary,
     unknownHeaders: [...unknown].sort(),
+    excludedFields,
   };
+}
 }
