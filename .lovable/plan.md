@@ -1,68 +1,59 @@
-# Docs Import에 Column Select 기능 추가 (T&C/Defect 동등)
-
 ## 목표
-ABD/OMM Import 페이지에서도 T&C/Defect와 동일한 **"Select Columns"** 다이얼로그로 import할 컬럼을 선택할 수 있게 합니다. 사용자가 제외한 헤더는 import 시 무시되며, required 필드 제외 시 경고를 표시합니다.
 
-## 현재 상태
-- T&C: `TncColumnSelect` + `ColumnSelectDialog` + `setFileExcludedHeaders` (`ImportPage.tsx`)
-- Defect: `DefectColumnSelect` + `ColumnSelectDialog`
-- ABD/OMM: **선택 기능 없음** — 모든 헤더가 자동으로 import됨
+ABD / OMM Import 시 Excel에 들어 있는 **HDEC PIC** 또는 **HDEC ENG** 이름이 마스터/프로필에 없는 새 사람이면, Defect Import와 똑같은 방식으로 **자동 등록**되도록 합니다. Warranty는 현재 "Coming soon" 상태이므로, 어댑터가 추가되는 즉시 자동으로 같은 흐름이 적용되도록 공용 위치에 훅을 심어 둡니다.
 
-## 변경 사항
+## 현재 구조
 
-### 1. 헤더 추출 함수 신설 (parser 2개)
-- `src/lib/docs-import-parser.ts`에 `getDocsHeaderInfo(file, sheets?)` 추가:
-  - `XLSX.utils.sheet_to_json` + `detectHeader()`로 모든 시트 헤더의 `composite` 라벨 + 첫 데이터 행 샘플 값 수집
-  - 반환: `{ headers: string[]; samples: Record<string, unknown> }`
-- `parseDocsExcel(file, sheets, options?)` 시그니처에 `options?: { excludedHeaders?: string[] }` 추가:
-  - excluded에 포함된 composite 라벨은 `cols[].field`를 강제로 `null`로 설정 → payload/struct 모두 무시
-- `src/lib/docs-omm-import-parser.ts`에도 동일 패턴으로 `getOmmHeaderInfo` + `parseOmmExcel(..., options?)` 추가
+- `src/lib/defect-master-autocreate.ts` 의 `createDefectMasterEnsurer(supabase)` 가 이미:
+  - `hdec_pic_master`, `hdec_eng_master`, `subcontractor_master`, `profiles` 를 미리 로드
+  - 행마다 `ensureHdecPic` / `ensureHdecEng` 호출 → 마스터에 없으면 INSERT, 그 후 edge function `auto-create-master-user` 로 프로필/사용자 생성
+  - `DefectImportContext` 에서만 사용 중
+- Edge function `auto-create-master-user` 는 이미 `master_type: 'hdec_pic' | 'hdec_eng'` 를 지원 → **백엔드 수정 불필요**
+- ABD/OMM 임포트는 `createDocsImportProvider.tsx` → `adapter.upsertWorker(...)` 흐름이며, `abdAdapter`/`ommAdapter` 의 파싱된 행에는 `hdec_pic_name`, `hdec_eng_name` 이 이미 포함되어 있음
+- Warranty(`'warranty'`)는 비활성 탭만 존재, 어댑터 미구현
 
-### 2. types/adapter 확장
-- `src/contexts/docs-import/types.ts` `DocsImportFile`에 추가:
-  - `availableHeaders?: string[]`
-  - `headerSamples?: Record<string, unknown>`
-  - `excludedHeaders?: string[]`
-- `DocsImportContextValue`에 `setFileExcludedHeaders: (id: string, excluded: string[]) => Promise<void>` 추가
-- `ImporterAdapter`에 `getHeaderInfo: (file, sheets?) => Promise<{ headers, samples }>` 추가
-- `parseFile`은 3번째 인자 `options?: { excludedHeaders?: string[] }` 받음
+## 작업 계획
 
-### 3. Provider factory 업데이트
-- `createDocsImportProvider.tsx`:
-  - `addFiles`: 시트명 가져온 직후 `getHeaderInfo` 호출 → `availableHeaders`/`headerSamples` 저장
-  - `parseAndApply`에 `excludedHeaders` 인자 추가, parser에 전달
-  - `setFileExcludedHeaders(id, excluded)` 신설 → 상태 업데이트 후 재파싱
+### 1. Ensurer 를 공용 모듈로 승격
 
-### 4. Adapter 2개 업데이트
-- `src/lib/docs-import-workers.ts` `abdAdapter` / `ommAdapter`:
-  - `parseFile` 시그니처에 `options` 추가 → parser에 그대로 전달
-  - `getHeaderInfo` 메서드 추가 (위 1번 함수 호출)
+- `defect-master-autocreate.ts` 는 그대로 두고(Defect 측 변경 없음), `src/lib/master-autocreate.ts` 를 신규로 추가해 `createDefectMasterEnsurer` 를 `createMasterEnsurer` 라는 이름으로 re-export. 입력 타입(`MasterRowInput`)도 함께 export.
 
-### 5. 새 컴포넌트 `src/components/docs/import/DocsColumnSelect.tsx`
-- `ColumnSelectDialog` 래퍼 (Defect/Tnc와 동일 패턴)
-- ABD용 helpers: `toFieldName` = ABD parser의 `mapHeader` 호출, `isFieldRequired`는 `useDocsFieldConfig('as_built')` 사용, required 항목(예: `document_no`) 표시
-- OMM용 helpers: 동일하지만 `useDocsFieldConfig('omm')` 사용, key는 `sn`
-- `subModule` prop으로 분기
+### 2. Docs Import 흐름에 Ensurer 연결
 
-### 6. DocsImportShell UI 업데이트
-- 각 파일 카드에 T&C와 동일한 "Select Columns (X/Y)" 버튼 추가:
-  - `f.availableHeaders`가 있을 때만 표시
-  - 클릭 시 `DocsColumnSelect` 다이얼로그 열기
-- 다이얼로그 onApply → `importer.setFileExcludedHeaders(file.id, excluded)`
+`src/contexts/docs-import/createDocsImportProvider.tsx` 의 `startImport` 안에서:
 
-## 검증
-1. ABD: SHAW export 파일 업로드 → "Select Columns (32/32)" 버튼 표시 → 클릭 시 모든 헤더 + required 표시 (`Document No` 강조)
-2. 임의 컬럼 체크 해제 → 적용 → 카드에 `Select Columns (28/32)` 갱신 → Start import → 제외 컬럼은 DB에 반영되지 않음
-3. `Document No` 제외 시도 → 경고 표시 (system required)
-4. OMM도 동일 동작 — `SN` required
+- `getDefaultProject()` 성공 후, 파일 루프 **시작 전에** `const ensurer = await createMasterEnsurer(supabase as any);` 로 1회만 생성
+- 파일 루프 안, `adapter.upsertWorker(...)` **호출 직전에**:
+  - 해당 파일의 `parsed` 행을 순회하며 `await ensurer.ensureForRow({ hdec_pic_name: r.hdec_pic_name, hdec_eng_name: r.hdec_eng_name })` 실행
+  - Ensurer 내부에 in-memory Set 으로 중복 차단이 이미 있으므로, 동일 이름 반복은 비용 거의 없음
+  - `try/catch` 로 감싸 실패 시 `ensurer.warnings` 에만 기록되고 임포트는 계속 진행
+- 모든 파일 처리 완료 후 `ensurer.warnings.length > 0` 이면 비-블로킹 토스트로 안내(첫 1~2개 메시지 + 총 개수)
 
-## 영향 범위
-- 신규: `src/components/docs/import/DocsColumnSelect.tsx`
-- 변경: 
-  - `src/lib/docs-import-parser.ts` (header info + excluded option)
-  - `src/lib/docs-omm-import-parser.ts` (동일)
-  - `src/lib/docs-import-workers.ts` (adapter 2개)
-  - `src/contexts/docs-import/types.ts`
-  - `src/contexts/docs-import/createDocsImportProvider.tsx`
-  - `src/components/docs/import/DocsImportShell.tsx`
-- 무영향: 기존 T&C/Defect Import 흐름은 손대지 않음
+이 순서는 Defect Import와 동일 — upsert **이전**에 마스터/프로필이 만들어져야 후속 team/role 조회가 정상 동작.
+
+### 3. 타입
+
+`DefectMasterRowInput` 의 모든 필드가 이미 optional 이므로, ABD/OMM 행에서 HDEC 두 필드만 넘기면 됨. **타입 변경 없음.**
+
+### 4. Warranty 사전 대응
+
+Ensurer 호출이 공용 `createDocsImportProvider` 에 들어가므로, 추후 Warranty 어댑터가 동일한 패턴으로 추가되기만 하면(`hdec_pic_name`, `hdec_eng_name` 을 행에 노출) **추가 작업 없이** 자동 등록이 동작.
+
+## 변경 파일
+
+- **신규**: `src/lib/master-autocreate.ts` — re-export 래퍼 (`createMasterEnsurer`, `MasterRowInput`)
+- **수정**: `src/contexts/docs-import/createDocsImportProvider.tsx` — `startImport` 에서 ensurer 생성 + 행마다 `ensureForRow` 호출 + 마지막 경고 토스트
+
+## 범위 외
+
+- DB 스키마/마이그레이션 변경 없음 (마스터 테이블·edge function 모두 이미 지원)
+- Defect Import 코드 변경 없음 (이미 동작)
+- Warranty 탭 활성화 없음 (어댑터 추가는 별건)
+- Subcontractor / Subsub 자동 등록은 이번 요청 범위(HDEC PIC/ENG)에 한정해 **포함하지 않음**. 추후 동일 `ensureForRow` 호출에 `subcontractor_name` 등을 추가하면 손쉽게 확장 가능
+
+## 검증 방법
+
+1. ABD Import 파일에 신규 `HDEC PIC` 이름 1건 → 임포트 후 `hdec_pic_master` 에 추가되고 프로필 생성 확인
+2. OMM Import 파일에 신규 `HDEC ENG` 이름 1건 → 동일 확인
+3. 같은 파일 재임포트 시 중복 마스터/프로필이 생기지 않음 (in-memory Set + edge function 자체 lookup 으로 멱등)
+4. 기존 Defect Import 동작 무변화

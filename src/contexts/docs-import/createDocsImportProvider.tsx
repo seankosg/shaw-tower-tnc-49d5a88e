@@ -14,6 +14,7 @@ import type {
   ImporterAdapter,
 } from '@/contexts/docs-import/types';
 import { validateDocsHeaders } from '@/lib/docs-import-validation';
+import { createMasterEnsurer, type MasterEnsurer } from '@/lib/master-autocreate';
 
 interface FactoryArgs<TRow> {
   adapter: ImporterAdapter<TRow>;
@@ -156,6 +157,17 @@ export function createDocsImportProvider<TRow>(
         return;
       }
 
+      // Build a single ensurer for the whole import run — it caches existing
+      // masters/profiles in-memory and de-dupes repeated names automatically.
+      let ensurer: MasterEnsurer | null = null;
+      try {
+        ensurer = await createMasterEnsurer(supabase as any);
+      } catch (err) {
+        // Non-blocking: imports may still proceed without auto-registration.
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn('[docs-import] master ensurer init failed', msg);
+      }
+
       for (const f of ready) {
         const parsed = f.parsed!;
         // Pre-pass: empty key + in-file duplicates.
@@ -192,6 +204,23 @@ export function createDocsImportProvider<TRow>(
             throw Object.assign(new Error(`Failed to create upload batch: ${e.message}`), e);
           }
           const batchId = batchData.id as string;
+
+          // Auto-register any new HDEC PIC / HDEC ENG names found in the file.
+          // Idempotent + cached; failures are non-blocking.
+          if (ensurer) {
+            for (const r of parsed) {
+              const row = r as { hdec_pic_name?: string | null; hdec_eng_name?: string | null };
+              if (!row.hdec_pic_name && !row.hdec_eng_name) continue;
+              try {
+                await ensurer.ensureForRow({
+                  hdec_pic_name: row.hdec_pic_name ?? null,
+                  hdec_eng_name: row.hdec_eng_name ?? null,
+                });
+              } catch (err) {
+                console.warn('[docs-import] ensureForRow failed', err);
+              }
+            }
+          }
 
           // Run sub-module-specific upserts.
           const onProgress = (processed: number, total: number) => {
@@ -242,6 +271,15 @@ export function createDocsImportProvider<TRow>(
 
       setIsRunning(false);
       toast({ title: 'Import complete', description: `${ready.length} file(s) processed.` });
+
+      if (ensurer && ensurer.warnings.length > 0) {
+        const sample = ensurer.warnings.slice(0, 2).join('; ');
+        toast({
+          title: 'Some master records could not be auto-registered',
+          description: `${ensurer.warnings.length} warning(s). ${sample}`,
+          variant: 'destructive',
+        });
+      }
     }, [files, isRunning, toast, user]);
 
     const value: DocsImportContextValue<TRow> = {
