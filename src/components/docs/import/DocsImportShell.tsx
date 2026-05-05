@@ -213,6 +213,21 @@ export function DocsImportShell({
                             <span className="text-[11px] text-muted-foreground">Reference "today" for cycle delay calculation.</span>
                           </div>
                         )}
+                        {f.availableHeaders && f.availableHeaders.length > 0 && (
+                          <div className="mt-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1.5 text-xs"
+                              onClick={() => setColumnDialogFileId(f.id)}
+                              disabled={isRunning || f.status === 'done' || f.status === 'parsing'}
+                            >
+                              <Settings2 className="h-3.5 w-3.5" />
+                              Select Columns ({f.availableHeaders.length - (f.excludedHeaders?.length ?? 0)}/{f.availableHeaders.length})
+                            </Button>
+                          </div>
+                        )}
                         {f.error && (
                           <div className="mt-1 rounded border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
                             <p className="font-medium">⚠ {f.error}</p>
