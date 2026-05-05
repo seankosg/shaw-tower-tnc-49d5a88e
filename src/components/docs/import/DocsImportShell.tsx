@@ -47,8 +47,10 @@ export function DocsImportShell({
 }: DocsImportShellProps) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [columnDialogFileId, setColumnDialogFileId] = useState<string | null>(null);
   const {
     files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate,
+    setFileExcludedHeaders,
     keyFieldLabel, dataDateRequired, rawDataPath, subModule,
   } = importer;
   const { docs } = useModuleStatus();
