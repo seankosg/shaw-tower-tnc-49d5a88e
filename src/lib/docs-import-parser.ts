@@ -101,6 +101,8 @@ const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
   'dwg no': 'document_no',
   'as-built dwg number': 'document_no',
   'as built dwg number': 'document_no',
+  'as built dwg no': 'document_no',
+  'as-built dwg no': 'document_no',
   'document id': 'document_no',
   // revision
   'rev': 'revision',
@@ -188,6 +190,10 @@ const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
   'no.': 'skip',
   'sno': 'skip',
   'drawing register': 'skip',
+  // SHAW export system columns / non-importable derived fields
+  'risk': 'skip',
+  'cycle progress': 'skip',
+  'cycle_progress': 'skip',
 };
 
 /** Sub-column alias inside Submission group → suffix used to compose field key. */
@@ -228,10 +234,30 @@ function parseSubmissionGroup(label: string | null | undefined): 1 | 2 | 3 | nul
 }
 
 function mapHeader(header: string): FieldKey | 'skip' | null {
+  const rawTrim = String(header ?? '').trim();
+  if (rawTrim.startsWith('__')) return 'skip';
   const norm = normalizeHeader(header);
   if (!norm) return 'skip';
   const exact = FIELD_ALIASES[norm];
   if (exact) return exact;
+  // SHAW export single-row sub-cycle labels: "1st planned submission" etc.
+  const subMatch = norm.match(/^(1st|2nd|3rd)\s+(planned|actual)\s+(submission|response)$/);
+  if (subMatch) {
+    const n = subMatch[1] === '1st' ? 1 : subMatch[1] === '2nd' ? 2 : 3;
+    const kind = subMatch[2]; // planned | actual
+    const target = subMatch[3]; // submission | response
+    let suffix: 'planned_date' | 'submission_date' | 'approval_date' | 'actual_response_date';
+    if (kind === 'planned' && target === 'submission') suffix = 'planned_date';
+    else if (kind === 'actual' && target === 'submission') suffix = 'submission_date';
+    else if (kind === 'planned' && target === 'response') suffix = 'approval_date';
+    else suffix = 'actual_response_date';
+    return `sub${n}_${suffix}` as FieldKey;
+  }
+  const statusMatch = norm.match(/^(1st|2nd|3rd)\s+status$/);
+  if (statusMatch) {
+    const n = statusMatch[1] === '1st' ? 1 : statusMatch[1] === '2nd' ? 2 : 3;
+    return `sub${n}_approval_status` as FieldKey;
+  }
   // Heuristics
   if (norm.includes('document') && norm.includes('no')) return 'document_no';
   if (norm.includes('drawing') && norm.includes('no')) return 'document_no';
@@ -397,7 +423,8 @@ async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
 }
 
 function isRegisterSheet(name: string): boolean {
-  return name.toLowerCase().includes('register');
+  const v = name.toLowerCase();
+  return v.includes('register') || v.includes('drawings');
 }
 
 export async function getDocsExcelSheetNames(file: File): Promise<string[]> {
