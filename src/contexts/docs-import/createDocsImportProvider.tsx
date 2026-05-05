@@ -14,6 +14,7 @@ import type {
   ImporterAdapter,
 } from '@/contexts/docs-import/types';
 import { validateDocsHeaders } from '@/lib/docs-import-validation';
+import { createMasterEnsurer, type MasterEnsurer } from '@/lib/master-autocreate';
 
 interface FactoryArgs<TRow> {
   adapter: ImporterAdapter<TRow>;
