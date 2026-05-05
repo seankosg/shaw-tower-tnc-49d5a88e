@@ -45,6 +45,10 @@ export interface ParseOmmResult {
   sheetCount: number;
   sheets: Array<{ name: string; headerCount: number; rowCount: number }>;
   unknownHeaders: string[];
+  /** Canonical field names the user excluded via column-select. Workers skip
+   *  these on UPDATE so existing DB values are preserved. The system-required
+   *  key (sn) is forcibly removed and can never be excluded. */
+  excludedFields: Set<string>;
 }
 
 function normalizeHeader(value: unknown): string {
@@ -272,6 +276,8 @@ export async function parseOmmExcel(
   const wb = XLSX.read(buf, { type: 'array' });
   const sheets = selectedSheets && selectedSheets.length > 0 ? selectedSheets : wb.SheetNames;
   const excludedSet = new Set((options?.excludedHeaders ?? []).map((h) => h.trim()).filter(Boolean));
+  // Track canonical fields the user excluded — workers will skip them on UPDATE.
+  const excludedFields = new Set<string>();
 
   const rows: ParsedOmmRow[] = [];
   const sheetSummary: ParseOmmResult['sheets'] = [];
@@ -299,7 +305,15 @@ export async function parseOmmExcel(
         const col = detected.cols[c];
         if (col.raw) payload[col.raw] = dataRow[c];
         if (!col.field || col.field === 'skip') continue;
-        if (col.raw && excludedSet.has(col.raw)) continue;
+        const isExcluded = !!(col.raw && excludedSet.has(col.raw));
+        if (isExcluded) {
+          // Track canonical excluded field (skip system-required key `sn`).
+          if (col.field !== 'sn') excludedFields.add(col.field);
+          // `team` is derived from `category`; if user excluded `category`,
+          // also preserve existing `team` (do not overwrite from null fallback).
+          if (col.field === 'category') excludedFields.add('team');
+          continue;
+        }
         const f = col.field;
         const v = dataRow[c];
         if (f.endsWith('_date')) struct[f] = normalizeDate(v);
@@ -361,5 +375,7 @@ export async function parseOmmExcel(
     sheetCount: sheets.length,
     sheets: sheetSummary,
     unknownHeaders: [...unknown].sort(),
+    excludedFields,
   };
 }
+

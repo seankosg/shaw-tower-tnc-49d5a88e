@@ -75,7 +75,7 @@ export const abdAdapter: ImporterAdapter<ParsedDocsRow> = {
   parseFile: async (file, sheets, options) => {
     const { parseDocsExcel } = await import('@/lib/docs-import-parser');
     const r = await parseDocsExcel(file, sheets, options);
-    return { rows: r.rows, unknownHeaders: r.unknownHeaders };
+    return { rows: r.rows, unknownHeaders: r.unknownHeaders, excludedFields: r.excludedFields };
   },
   getSheetNames: async (file) => {
     const { getDocsExcelSheetNames } = await import('@/lib/docs-import-parser');
@@ -92,6 +92,9 @@ export const abdAdapter: ImporterAdapter<ParsedDocsRow> = {
     const counters = { inserted: 0, updated: 0, skipped: 0, rejected: 0, unmatchedOrgs: new Set<string>() };
     const outcomes: ImportRowOutcome[] = [];
     const rejectSamples: DocsRejectSample[] = [];
+    // User-excluded canonical fields — UPDATE branch must skip these so the
+    // existing DB value is preserved (mirrors T&C / Defect importers).
+    const excludedFields = ctx.excludedFields ?? new Set<string>();
 
     // Performance pattern (mirrors DefectImportContext):
     //   1. Single sequential pre-pass to validate, build payloads, and split
@@ -187,6 +190,8 @@ export const abdAdapter: ImporterAdapter<ParsedDocsRow> = {
       const changeLog: ImportRowOutcome['changeLog'] = [];
       const push = (args: Parameters<typeof buildFieldLog>[1]) => fieldLogs.push(buildFieldLog('docs', args));
       for (const fname of ABD_TRACKED_FIELDS) {
+        // Excluded fields are not written to DB on UPDATE; skip audit too.
+        if (excludedFields.has(fname)) continue;
         const incoming = (it.payload as any)[fname];
         const previous = it.prevPayload[fname] ?? null;
         const cls = classifyChange(incoming, previous);
@@ -289,11 +294,24 @@ export const abdAdapter: ImporterAdapter<ParsedDocsRow> = {
     }
 
     // ---- UPDATE pool (8 concurrent) ---------------------------------------
+    // Build a sanitized payload per row: drop excluded keys (preserve existing
+    // DB value) and merge raw_payload with the previously stored one so raw
+    // cells from excluded headers are not lost.
+    const sanitizeUpdatePayload = (it: UpdateItem): Record<string, unknown> => {
+      const out: Record<string, unknown> = { ...it.payload };
+      for (const f of excludedFields) delete out[f];
+      const prevRaw = (it.prevPayload && typeof it.prevPayload === 'object') ? it.prevPayload : {};
+      const incomingRaw = (it.payload.raw_payload && typeof it.payload.raw_payload === 'object')
+        ? (it.payload.raw_payload as Record<string, unknown>) : {};
+      out.raw_payload = { ...prevRaw, ...incomingRaw };
+      return out;
+    };
+
     for (let i = 0; i < updateItems.length; i += UPDATE_CONCURRENCY) {
       const chunk = updateItems.slice(i, i + UPDATE_CONCURRENCY);
       const results = await Promise.all(
         chunk.map((it) =>
-          (supabase as any).from('docs_drawings').update(it.payload).eq('id', it.existingId)
+          (supabase as any).from('docs_drawings').update(sanitizeUpdatePayload(it)).eq('id', it.existingId)
             .then((r: any) => ({ it, error: r.error }))
             .catch((err: any) => ({ it, error: err })),
         ),
@@ -340,7 +358,7 @@ interface OmmExistingRow {
 
 async function loadExistingOmm(projectId: string): Promise<Map<string, OmmExistingRow>> {
   const map = new Map<string, OmmExistingRow>();
-  const cols = ['id', 'sn', 'draft_response_status', 'final_response_status', ...OMM_TRACKED_FIELDS]
+  const cols = ['id', 'sn', 'raw_payload', 'draft_response_status', 'final_response_status', ...OMM_TRACKED_FIELDS]
     .filter((v, i, a) => a.indexOf(v) === i)
     .join(', ');
   let from = 0;
@@ -389,7 +407,7 @@ export const ommAdapter: ImporterAdapter<ParsedOmmRow> = {
   parseFile: async (file, sheets, options) => {
     const { parseOmmExcel } = await import('@/lib/docs-omm-import-parser');
     const r = await parseOmmExcel(file, sheets, options);
-    return { rows: r.rows, unknownHeaders: r.unknownHeaders };
+    return { rows: r.rows, unknownHeaders: r.unknownHeaders, excludedFields: r.excludedFields };
   },
   getSheetNames: async (file) => {
     const { getOmmExcelSheetNames } = await import('@/lib/docs-omm-import-parser');
@@ -408,6 +426,9 @@ export const ommAdapter: ImporterAdapter<ParsedOmmRow> = {
     const rejectSamples: DocsRejectSample[] = [];
     const importStartedAt = new Date().toISOString();
     let processed = 0;
+    // User-excluded canonical fields — UPDATE branch must skip these so the
+    // existing DB value is preserved (mirrors T&C / Defect importers).
+    const excludedFields = ctx.excludedFields ?? new Set<string>();
 
     // OMM uses lower concurrency to keep the resubmission trigger ordering predictable.
     await runWithConcurrency(rows, async (row) => {
@@ -472,12 +493,24 @@ export const ommAdapter: ImporterAdapter<ParsedOmmRow> = {
         let recordId: string | null = null;
         const changeLog: ImportRowOutcome['changeLog'] = [];
         if (existing) {
+          // Sanitize UPDATE payload: drop excluded keys + merge raw_payload
+          // with the previously stored one (preserve raw cells from excluded
+          // headers).
+          const updatePayload: Record<string, unknown> = { ...payload };
+          for (const f of excludedFields) delete updatePayload[f];
+          const prevRaw = ((existing as any).raw_payload && typeof (existing as any).raw_payload === 'object')
+            ? (existing as any).raw_payload as Record<string, unknown>
+            : {};
+          updatePayload.raw_payload = { ...prevRaw, ...(row.raw_payload ?? {}) };
+
           const { error } = await (supabase as any)
-            .from('docs_omm').update(payload).eq('id', existing.id);
+            .from('docs_omm').update(updatePayload).eq('id', existing.id);
           if (error) throw error;
           counters.updated++;
           recordId = existing.id;
           for (const fname of OMM_TRACKED_FIELDS) {
+            // Excluded fields are not written; skip audit too.
+            if (excludedFields.has(fname)) continue;
             const incoming = (payload as any)[fname];
             const previous = (existing as any)[fname] ?? null;
             const cls = classifyChange(incoming, previous);

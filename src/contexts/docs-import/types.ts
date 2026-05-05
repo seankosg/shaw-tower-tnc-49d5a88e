@@ -49,6 +49,9 @@ export interface DocsImportFile<TRow = unknown> {
   fieldByHeader?: Record<string, string | null>;
   /** Headers the user opted to exclude — passed back to the parser so they're ignored. */
   excludedHeaders?: string[];
+  /** Canonical field names excluded from this import (derived from excludedHeaders by the parser).
+   *  Workers consult this set during UPDATE so existing DB values for those columns are preserved. */
+  excludedFields?: Set<string>;
   /** Pre-import validation message (e.g. missing system-required column). Blocks Start. */
   validationError?: string | null;
   unknownHeaders?: string[];
@@ -95,6 +98,8 @@ export interface DocsImportContextValue<TRow = unknown> {
 export interface ParsedFileResult<TRow> {
   rows: TRow[];
   unknownHeaders: string[];
+  /** Canonical field names the user excluded — propagated from the parser. */
+  excludedFields: Set<string>;
 }
 
 /** Per-row outcome captured by the worker, used by writeImportLogs. */
@@ -122,6 +127,9 @@ export interface WorkerContext {
   batchId: string;
   userId: string | null;
   subModule: DocsSubModule;
+  /** Canonical field names the user excluded via column-select. The worker MUST
+   *  skip these keys on UPDATE so existing DB values are preserved. */
+  excludedFields?: Set<string>;
 }
 
 export interface ImporterAdapter<TRow> {

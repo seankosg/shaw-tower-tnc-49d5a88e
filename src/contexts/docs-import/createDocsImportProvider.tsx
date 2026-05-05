@@ -47,6 +47,7 @@ export function createDocsImportProvider<TRow>(
             parsed: parsed.rows,
             parsedCount: parsed.rows.length,
             unknownHeaders: parsed.unknownHeaders,
+            excludedFields: parsed.excludedFields,
             validationError: validation.error,
           };
         }));
@@ -108,10 +109,11 @@ export function createDocsImportProvider<TRow>(
       let target: DocsImportFile<TRow> | undefined;
       setFiles((cur) => {
         target = cur.find((f) => f.id === id);
-        return cur.map((f) => f.id === id ? { ...f, status: 'parsing', selectedSheets: sheets } : f);
+        // Sheet change → headers may differ → reset excluded selections.
+        return cur.map((f) => f.id === id ? { ...f, status: 'parsing', selectedSheets: sheets, excludedHeaders: [], excludedFields: undefined } : f);
       });
       if (!target) return;
-      await parseAndApply(id, target.file, sheets, target.excludedHeaders);
+      await parseAndApply(id, target.file, sheets, []);
     }, [parseAndApply]);
 
     const setFileDataDate = useCallback((id: string, dataDate: string) => {
@@ -273,7 +275,7 @@ export function createDocsImportProvider<TRow>(
             setFiles((cur) => cur.map((x) => x.id === f.id ? { ...x, progress: pct } : x));
           };
           const result = await adapter.upsertWorker(
-            { projectId: project.id, batchId, userId: user?.id ?? null, subModule: adapter.subModule },
+            { projectId: project.id, batchId, userId: user?.id ?? null, subModule: adapter.subModule, excludedFields: f.excludedFields },
             parsed,
             onProgress,
           );

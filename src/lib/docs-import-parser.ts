@@ -74,6 +74,11 @@ export interface ParseDocsResult {
   sheetCount: number;
   sheets: Array<{ name: string; headerCount: number; rowCount: number; discipline: string | null }>;
   unknownHeaders: string[];
+  /** Canonical field names the user excluded via the column-select dialog.
+   *  Workers consult this set during UPDATE to skip those keys, preserving
+   *  the existing DB value. System-required fields (document_no) are forcibly
+   *  removed so they can never be excluded. */
+  excludedFields: Set<string>;
 }
 
 type FieldKey =
@@ -499,6 +504,10 @@ export async function parseDocsExcel(
     ? selectedSheets
     : workbook.SheetNames.filter(isRegisterSheet));
   const excludedSet = new Set((options?.excludedHeaders ?? []).map((h) => h.trim()).filter(Boolean));
+  // Canonical field names the user excluded — built up while iterating header
+  // columns inside each sheet. Workers use this to skip those keys on UPDATE
+  // so existing DB values are preserved.
+  const excludedFields = new Set<string>();
 
 
   const rows: ParsedDocsRow[] = [];
@@ -532,8 +541,12 @@ export async function parseDocsExcel(
       for (let c = 0; c < detected.cols.length; c++) {
         const col = detected.cols[c];
         const value = dataRow[c];
-        const isExcluded = col.composite && excludedSet.has(col.composite);
+        const isExcluded = !!(col.composite && excludedSet.has(col.composite));
         if (col.composite) payload[col.composite] = value;
+        // Track which canonical fields were excluded (skip the system-required key).
+        if (isExcluded && col.field && col.field !== 'document_no') {
+          excludedFields.add(col.field);
+        }
         if (!col.field || isExcluded) continue;
         if (col.field.endsWith('_date') || col.field === 'transmittal_due_date') {
           struct[col.field] = normalizeDate(value);
@@ -656,5 +669,6 @@ export async function parseDocsExcel(
     sheetCount: targetSheets.length,
     sheets: sheetSummary,
     unknownHeaders: [...unknownHeaderSet].sort(),
+    excludedFields,
   };
 }
