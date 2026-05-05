@@ -508,7 +508,7 @@ export default function DocsOMMRawDataPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isFieldVisible, getLabel } = useDocsFieldConfig('omm');
+  const { isFieldVisible, getLabel, sortFieldNames } = useDocsFieldConfig('omm');
   const storageKey = user?.id
     ? `omm-raw-data-state:${user.id}`
     : 'omm-raw-data-state:anon';
@@ -812,10 +812,8 @@ export default function DocsOMMRawDataPage() {
       ),
     };
 
-    // Build a column for each known data field
-    const dataFields = COLUMN_ORDER.filter(
-      (id) => id !== '__select' && id !== '__open' && id !== 'cycle_progress' && id !== 'current_status',
-    );
+    // Build a column for each known data field (Field Config drives order/visibility separately)
+    const dataFields = OMM_DATA_FIELDS as readonly string[];
 
     const dataColumns: ColumnDef<OMMRow>[] = dataFields.map((field) => {
       const isMulti = MULTI_SELECT_FIELDS.has(field);
