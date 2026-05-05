@@ -5,8 +5,8 @@ import type { AppRole } from '@/types/enums';
  *   guest < super_guest < user < senior_user < d_superuser < superuser < admin
  *
  * Page access rules:
- *   guest        → Dashboard, Schedule only
- *   super_guest  → + Raw Data (SubtestList, SubtestDetail)
+ *   guest        → Dashboard only
+ *   super_guest  → + Schedule, Raw Data (SubtestList, SubtestDetail)
  *   user+        → all module pages
  *   d_superuser  → all module pages (no Admin tab); writes restricted to own team via RLS
  *   superuser/admin → all pages including Admin
@@ -59,7 +59,7 @@ const ROUTE_MIN_RANK: [RegExp, number][] = [
   [/^\/raw-data/, 1],        // super_guest+ (Raw Data)
   [/^\/subtests\//, 1],      // super_guest+ (SubtestDetail)
   [/^\/dashboard/, 0],       // everyone
-  [/^\/schedule/, 0],        // everyone
+  [/^\/schedule/, 1],        // super_guest+
 ];
 
 function highestRank(roles: AppRole[]): number {
