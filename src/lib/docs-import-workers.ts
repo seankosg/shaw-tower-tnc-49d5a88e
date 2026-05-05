@@ -75,7 +75,7 @@ export const abdAdapter: ImporterAdapter<ParsedDocsRow> = {
   parseFile: async (file, sheets, options) => {
     const { parseDocsExcel } = await import('@/lib/docs-import-parser');
     const r = await parseDocsExcel(file, sheets, options);
-    return { rows: r.rows, unknownHeaders: r.unknownHeaders };
+    return { rows: r.rows, unknownHeaders: r.unknownHeaders, excludedFields: r.excludedFields };
   },
   getSheetNames: async (file) => {
     const { getDocsExcelSheetNames } = await import('@/lib/docs-import-parser');
