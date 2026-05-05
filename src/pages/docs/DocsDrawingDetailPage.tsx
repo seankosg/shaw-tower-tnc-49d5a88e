@@ -273,6 +273,9 @@ export default function DocsDrawingDetailPage() {
       }
     }
 
+    // 2c) Auto-sync current_status to computed Overall Status (single source of truth).
+    payload.current_status = computeOverallStatus(cleaned as any, dataDate);
+
     // 3) Diff against the original record (so cleanup-driven nullifications log too).
     for (const field of EDITABLE_FIELDS) {
       const prev = (record as any)[field] ?? null;

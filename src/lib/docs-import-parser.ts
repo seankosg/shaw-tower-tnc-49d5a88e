@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { normalizeDate } from '@/lib/defect-parser';
-import { normalizeApprovalStatus, clearCyclesAfterClosure } from '@/lib/docs-status';
+import { normalizeApprovalStatus, clearCyclesAfterClosure, computeOverallStatus } from '@/lib/docs-status';
 import { getMappedField } from '@/lib/header-mappings-cache';
 import { normalizeTeamValue } from '@/types/enums';
 
@@ -528,7 +528,8 @@ export async function parseDocsExcel(
         series: struct.series ?? null,
         level_location: struct.level_location ?? null,
         sequential_no: struct.sequential_no ?? null,
-        current_status: struct.current_status ?? null,
+        // current_status = computed Overall Status (single source of truth, derived from cycles).
+        current_status: computeOverallStatus(cleaned as any, null),
         aconex_status: aconexStatus,
         is_submitted: isSubmitted,
         sub1_planned_date: cleaned.sub1_planned_date ?? null,

@@ -569,7 +569,7 @@ export default function DocsRawDataPage() {
     series: uniqueOptions(augmentedItems, 'series'),
     document_type: uniqueOptions(augmentedItems, 'document_type'),
     aconex_status: uniqueOptions(augmentedItems, 'aconex_status'),
-    current_status: uniqueOptions(augmentedItems, 'current_status'),
+    current_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'overall_status'), ['Planned', 'S.Delayed', 'Under Review', 'WIP', 'R.Delayed', 'A', 'B', 'C']),
     sub1_approval_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'sub1_approval_status'), ['A', 'B', 'C', 'UR', 'WIP']),
     sub2_approval_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'sub2_approval_status'), ['A', 'B', 'C', 'UR', 'WIP']),
     sub3_approval_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'sub3_approval_status'), ['A', 'B', 'C', 'UR', 'WIP']),
@@ -643,7 +643,9 @@ export default function DocsRawDataPage() {
         : 'multi-select';
 
       const base: ColumnDef<DocsRawRow> = {
-        accessorKey: field,
+        ...(field === 'current_status'
+          ? { id: 'current_status', accessorFn: (r: DocsRawRow) => r.overall_status ?? r.current_status ?? '' }
+          : { accessorKey: field }),
         header: getLabel(field),
         size: sizeByField[field] ?? 130,
         filterFn:
@@ -667,8 +669,10 @@ export default function DocsRawDataPage() {
             );
           }
           if (field === 'aconex_status' || field === 'current_status') {
-            if (!value) return <span className="text-muted-foreground">—</span>;
-            return <Badge variant="outline" className="text-[10px]">{String(value)}</Badge>;
+            // current_status is rendered as the computed Overall Status (single source of truth).
+            const display = field === 'current_status' ? (row.original.overall_status ?? value) : value;
+            if (!display) return <span className="text-muted-foreground">—</span>;
+            return <Badge variant="outline" className="text-[10px]">{String(display)}</Badge>;
           }
           if (field === 'team') {
             if (!value) return <span className="text-muted-foreground">—</span>;

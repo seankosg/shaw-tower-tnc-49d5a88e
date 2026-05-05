@@ -1,66 +1,49 @@
-## 목적
+문제 원인을 확인했습니다.
 
-ABD(Docs) 모듈의 1st/2nd/3rd Status (`sub1/2/3_approval_status`)에 기존 A/B/C/UR 외 5번째 유효값 **WIP (Work In Progress)** 추가.
+- `HDEC-AR-SHD-2405-01-51`의 DB 값은 `sub1_approval_status = 'WIP'` 이지만 `current_status = null` 입니다.
+- ABD Raw Data 화면에서 사용자가 보고 있는 `Overall Status` 컬럼은 실제로 계산된 `overall_status`가 아니라 DB 컬럼 `current_status`를 보여주고 있습니다.
+- 즉, 화면 계산 로직은 이미 `WIP`를 만들 수 있지만, 표에 표시되는 컬럼이 계산값이 아니라 저장값이라서 `null`로 보이는 상태입니다.
 
-의미: "Planned와 유사 — 작업 시작했으나 아직 미완료". DB에 raw 값 `'WIP'`로 저장, Raw Data 표시·필터·Detail 입력·Overall Status 도출 모두 지원.
+진행 계획
 
----
+1. Raw Data의 Overall Status 표시 로직 수정
+- ABD Raw Data 테이블에서 `Overall Status`가 비어 있으면 `computeOverallStatus(...)`의 계산값을 표시하도록 수정합니다.
+- 필요하면 컬럼 자체를 진짜 파생값(`overall_status`) 기준으로 렌더링/필터링하도록 정리합니다.
+- 이렇게 하면 기존 데이터가 `current_status = null`이어도 즉시 `WIP`가 화면에 보입니다.
 
-## 동작 규칙 (UR과 동일하게 처리)
+2. 저장 시 current_status 자동 동기화
+- Drawing Detail 저장 로직에서 `sub1/2/3` 값들을 정리한 뒤, 최종 `computeOverallStatus(...)` 값을 `current_status`에도 함께 저장하도록 수정합니다.
+- 즉 앞으로는 1st/2nd/3rd status/date를 바꾸면 Overall Status가 자동으로 DB에도 반영됩니다.
 
-- **Cycle status 도출** (`computeCycleStatus`): K=`'WIP'`이면 cycle status는 `'WIP'` (UR이 `'Under Review'` 반환하는 것과 평행)
-- **Closure**: `WIP`는 종결 아님 (`computeIsClosed` 영향 없음, A만 종결)
-- **Next active cycle** (`computeNextActiveCycle`): B/C에서만 다음 cycle로 진행. WIP는 같은 cycle에 머무름 (UR과 동일)
-- **Auto-fill** (`applyCycleAutoFill`): B/C일 때만 다음 cycle planned_date 자동채움. WIP는 자동채움 트리거 안 함
-- **Clear after closure**: 영향 없음 (A=종결만 후속 cycle 클리어)
-- **All cycles exhausted**: B/C만 소진 조건. WIP는 영향 없음
+3. Bulk Edit도 동일 규칙 적용
+- Raw Data의 Bulk Edit로 `sub1/2/3_approval_status`나 관련 cycle 날짜를 수정할 때도 `current_status`를 재계산해 함께 저장하도록 맞춥니다.
+- Detail 화면에서만 맞고 Bulk Edit에서 다시 어긋나는 문제를 방지합니다.
 
----
+4. Import 경로도 동일 규칙 적용
+- ABD import 시 `current_status`를 원본 엑셀값에 의존하지 않고 cycle 데이터 기준으로 계산/동기화하도록 정리합니다.
+- 신규 업로드/재업로드 후에도 Overall Status가 일관되게 유지됩니다.
 
-## 변경 파일
+5. 기존 데이터 보정
+- 이미 저장된 ABD 행들 중 `current_status`가 비어 있거나 오래된 값인 데이터는 일괄 보정합니다.
+- 이렇게 해야 필터, export, 대시보드 등 `current_status`를 참조하는 다른 화면에서도 동일하게 맞습니다.
 
-### 1. `src/lib/docs-status.ts`
-- `CycleStatus` 유니온에 `'WIP'` 추가
-- `VALID_STATUS` Set에 `'WIP'` 추가
-- `normStatus` 반환 타입을 `'A' | 'B' | 'C' | 'UR' | 'WIP' | null`로 확장
-- `computeCycleStatus`: status === 'WIP' → return 'WIP' (UR 분기 바로 아래에 추가)
-- `normalizeApprovalStatus`: 입력 `'WIP'`, `'W.I.P'`, `'W/I/P'`, `'WORK IN PROGRESS'`, `'IN PROGRESS'`, `'INPROGRESS'`, `'ONGOING'`, `'IN-PROGRESS'`를 `'WIP'`로 매핑. 반환 타입 확장
-- `cycleStatusColorClasses`: `case 'WIP'` → 회색 계열 (Planned와 구분 위해 약간 진한 톤): `'bg-slate-200 border-slate-400 text-slate-700'`
-- `cycleStatusGlyph`: `case 'WIP'` → `'W'`
-- 파일 상단 주석 `K = approval_status ∈ {'A','B','C','UR','WIP',null}`로 갱신
+기술 상세
 
-### 2. `src/lib/docs-import-parser.ts`
-변경 없음 — `normalizeApprovalStatus`만 통해 처리되므로 자동 지원.
+- 수정 대상
+  - `src/pages/docs/DocsRawDataPage.tsx`
+  - `src/pages/docs/DocsDrawingDetailPage.tsx`
+  - `src/lib/bulk-edit.ts`
+  - `src/contexts/DocsImportContext.tsx`
+  - 필요 시 기존 ABD 데이터 보정용 DB migration
 
-### 3. `src/pages/docs/DocsRawDataPage.tsx`
-- 573~575행 multi-select 필터 옵션 시드에 `'WIP'` 추가:
-  ```
-  ['A', 'B', 'C', 'UR', 'WIP']
-  ```
+- 핵심 방향
+  - ABD의 `current_status`를 사실상 “Overall Status의 저장본”으로 취급
+  - 화면 계산값과 DB 저장값이 항상 같은 규칙을 따르도록 단일화
+  - `WIP`는 기존 `computeOverallStatus` 규칙대로 `UR`과 유사한 active 상태로 유지
 
-### 4. `src/pages/docs/DocsDrawingDetailPage.tsx`
-- 104행 `APPROVAL_STATUS_OPTIONS`에 `'WIP'` 추가:
-  ```ts
-  const APPROVAL_STATUS_OPTIONS = ['A', 'B', 'C', 'UR', 'WIP'];
-  ```
+- 예상 결과
+  - `1st/2nd/3rd` 중 어느 cycle이든 `WIP`면 Overall Status가 자동으로 `WIP`
+  - `A/B/C/UR/WIP` 변경 시 Raw Data, Detail, Bulk Edit, Import 결과가 서로 일치
+  - 현재 문제의 도면 `HDEC-AR-SHD-2405-01-51`도 보정 후 `WIP`로 표시
 
-### 5. `src/components/docs/DocsCycleProgress.tsx`
-변경 없음 — `cycleStatusColorClasses`/`cycleStatusGlyph`만 사용하므로 자동 지원.
-
----
-
-## DB 변경
-**없음**. `sub1/2/3_approval_status`는 `text` 컬럼이고 CHECK constraint 없음 — 'WIP' 문자열 저장 즉시 가능.
-
----
-
-## Overall Status 영향
-`computeOverallStatus`는 `computeCycleStatus`를 호출하므로 자동으로 'WIP'를 반환할 수 있게 됨. 별도 수정 불필요. 가장 진행된 cycle이 WIP면 Overall = 'WIP'.
-
----
-
-## 검증 시나리오
-1. Detail 페이지에서 cycle 1 status를 'WIP'로 저장 → Raw Data에서 1st Status='WIP', Overall Status='WIP' 표시
-2. Raw Data 필터에서 WIP 옵션 선택 가능
-3. Import 시 셀 값 'WIP', 'In Progress', 'Ongoing' 모두 'WIP'로 정규화되어 저장
-4. cycle 1=WIP 상태에서는 cycle 2 입력 비활성화 유지 (UR과 동일)
+승인해주시면 이 계획대로 바로 수정하겠습니다.
