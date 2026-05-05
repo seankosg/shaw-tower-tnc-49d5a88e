@@ -1132,7 +1132,7 @@ export default function DocsOMMRawDataPage() {
               {resubCount} resubmission{resubCount === 1 ? '' : 's'}
             </Badge>
           )}
-          <Button variant="outline" size="sm" onClick={() => navigate('/docs/omm/import')}>
+          <Button variant="outline" size="sm" onClick={() => navigate('/docs/import?sub=omm')}>
             <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
           </Button>
           <Button variant="outline" size="sm" onClick={handleExport}>

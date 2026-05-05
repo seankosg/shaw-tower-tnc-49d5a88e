@@ -1,281 +1,115 @@
-import { useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+import { useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, Lock, AlertTriangle } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { useDocsImport, type DocsFileStatus } from '@/contexts/DocsImportContext';
-import { useModuleStatus } from '@/contexts/ModuleStatusContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { Loader2 } from 'lucide-react';
+import { DocsImportShell } from '@/components/docs/import/DocsImportShell';
+import { useAbdImport } from '@/contexts/docs-import/AbdImportContext';
+import { useOmmImport } from '@/contexts/docs-import/OmmImportContext';
 
-const statusBadge: Record<DocsFileStatus, { label: string; cls: string }> = {
-  pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
-  parsing: { label: 'Parsing', cls: 'bg-muted text-muted-foreground' },
-  ready: { label: 'Ready', cls: 'bg-primary/10 text-primary' },
-  processing: { label: 'Processing', cls: 'bg-muted text-muted-foreground' },
-  done: { label: 'Done', cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200' },
-  failed: { label: 'Failed', cls: 'bg-destructive/10 text-destructive' },
-};
+type SubKey = 'abd' | 'omm' | 'warranty' | 'spare_part';
 
-function formatSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+const VALID: SubKey[] = ['abd', 'omm', 'warranty', 'spare_part'];
+
+function fileBadge(count: number, running: boolean) {
+  if (running) return <Loader2 className="ml-2 h-3 w-3 animate-spin" />;
+  if (count === 0) return null;
+  return <Badge variant="secondary" className="ml-2 h-4 px-1.5 text-[10px]">{count}</Badge>;
 }
 
 export default function DocsImportPage() {
-  const navigate = useNavigate();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate } = useDocsImport();
-  const { docs } = useModuleStatus();
-  const { isAdmin } = useAuth();
-  const moduleActuallyPaused = !docs.enabled;
-  const modulePaused = moduleActuallyPaused && !isAdmin;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const raw = (searchParams.get('sub') ?? 'abd').toLowerCase() as SubKey;
+  const sub: SubKey = VALID.includes(raw) ? raw : 'abd';
 
-  const onDrop = useCallback((event: React.DragEvent) => {
-    event.preventDefault();
-    if (modulePaused) return;
-    addFiles(Array.from(event.dataTransfer.files));
-  }, [addFiles, modulePaused]);
-
-  const onSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    addFiles(event.target.files ? Array.from(event.target.files) : []);
-    if (inputRef.current) inputRef.current.value = '';
-  }, [addFiles]);
-
-  const readyCount = files.filter((f) => f.status === 'ready').length;
-  const hasResults = files.some((f) => f.result);
-  const totals = files.reduce((acc, f) => {
-    if (f.result) {
-      acc.inserted += f.result.inserted;
-      acc.updated += f.result.updated;
-      acc.skipped += f.result.skipped;
-      acc.rejected += f.result.rejected;
-      acc.unmatched += f.result.unmatchedOrgs;
+  // Normalize URL when missing/invalid sub.
+  useEffect(() => {
+    if (searchParams.get('sub') !== sub) {
+      const next = new URLSearchParams(searchParams);
+      next.set('sub', sub);
+      setSearchParams(next, { replace: true });
     }
-    return acc;
-  }, { inserted: 0, updated: 0, skipped: 0, rejected: 0, unmatched: 0 });
+  }, [sub, searchParams, setSearchParams]);
+
+  const abd = useAbdImport();
+  const omm = useOmmImport();
+
+  // Cross-tab busy lock — disable Start on the other tab while one is running.
+  const anyRunning = abd.isRunning || omm.isRunning;
+
+  const handleTabChange = (val: string) => {
+    if (!VALID.includes(val as SubKey)) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('sub', val);
+    setSearchParams(next, { replace: false });
+  };
+
+  const summary = useMemo(() => ({
+    abdFiles: abd.files.length,
+    ommFiles: omm.files.length,
+  }), [abd.files.length, omm.files.length]);
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Docs Import — As-Built Drawings</h1>
-          <p className="text-sm text-muted-foreground">
-            Upload Aconex / register Excel files. Only sheets whose name contains <span className="font-mono">"register"</span> are imported; every column header (including 2-row banded Submission 1/2/3 headers) is mapped automatically.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => navigate('/docs/import/logs')}>
-          View Import Logs
-        </Button>
+    <div className="space-y-4 p-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Docs Import</h1>
+        <p className="text-sm text-muted-foreground">
+          Upload registers for each Docs sub-module. Each tab keeps its own files, parser, and logs.
+        </p>
       </div>
 
-      {moduleActuallyPaused && (
-        <Card className="border-amber-300 bg-amber-50 dark:bg-amber-900/20">
-          <CardContent className="flex items-center gap-3 p-4 text-sm">
-            {isAdmin ? <AlertTriangle className="h-5 w-5 text-amber-600" /> : <Lock className="h-5 w-5 text-amber-600" />}
-            <div>
-              <p className="font-medium">Docs module is currently disabled.</p>
-              <p className="text-muted-foreground">
-                {isAdmin
-                  ? 'You can import as an administrator. Regular users cannot access this page.'
-                  : 'Contact your administrator to enable the Docs module.'}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <Tabs value={sub} onValueChange={handleTabChange}>
+        <TabsList>
+          <TabsTrigger value="abd">
+            ABD (As-Built Drawings){fileBadge(summary.abdFiles, abd.isRunning)}
+          </TabsTrigger>
+          <TabsTrigger value="omm">
+            OMM Manuals{fileBadge(summary.ommFiles, omm.isRunning)}
+          </TabsTrigger>
+          <TabsTrigger value="warranty" disabled>
+            Warranty <Badge variant="outline" className="ml-2 h-4 px-1.5 text-[10px]">Coming soon</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="spare_part" disabled>
+            Spare Part <Badge variant="outline" className="ml-2 h-4 px-1.5 text-[10px]">Coming soon</Badge>
+          </TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">1. Upload Files</CardTitle>
-          <CardDescription>Drag and drop xlsx / xls files, or click to browse. Only "*register*" sheets are parsed.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={onDrop}
-            className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-10 text-center transition ${
-              modulePaused ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-primary hover:bg-accent/30'
-            }`}
-            onClick={() => !modulePaused && inputRef.current?.click()}
-          >
-            <Upload className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm font-medium">Drop Excel files here or click to browse</p>
-            <p className="text-xs text-muted-foreground">.xlsx, .xls — multi-sheet supported</p>
-            <input
-              ref={inputRef}
-              type="file"
-              multiple
-              accept=".xlsx,.xls"
-              className="hidden"
-              onChange={onSelect}
-              disabled={modulePaused}
-            />
+        <TabsContent value="abd" className="mt-4">
+          <DocsImportShell
+            title="ABD — As-Built Drawings"
+            description="Upload Aconex / register Excel files. Only sheets whose name contains “register” are imported; every column header (including 2-row banded Submission 1/2/3 headers) is mapped automatically."
+            importer={abd}
+            externallyBusy={omm.isRunning}
+          />
+        </TabsContent>
+
+        <TabsContent value="omm" className="mt-4">
+          <DocsImportShell
+            title="OMM — Operation & Maintenance Manuals"
+            description="Upload OMM register Excel files. Headers map per Admin → Header Mappings → Docs / OMM."
+            importer={omm}
+            externallyBusy={abd.isRunning}
+            infoBanner="Resubmission rows are auto-created when Draft / Final response status becomes B or C during import."
+          />
+        </TabsContent>
+
+        <TabsContent value="warranty" className="mt-4">
+          <div className="rounded border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+            Warranty import is being prepared in the next phase.
           </div>
-        </CardContent>
-      </Card>
+        </TabsContent>
 
-      {files.length > 0 && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base">2. Files ({files.length})</CardTitle>
-              <CardDescription>{readyCount} ready to import</CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={clearAll} disabled={isRunning}>Clear all</Button>
-              <Button size="sm" onClick={startImport} disabled={isRunning || readyCount === 0 || modulePaused}>
-                {isRunning ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" />Importing…</> : `Start import (${readyCount})`}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {files.map((f) => {
-              const badge = statusBadge[f.status];
-              return (
-                <div key={f.id} className="rounded border p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 flex-1 items-start gap-3">
-                      <FileSpreadsheet className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{f.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatSize(f.size)}
-                          {f.sheetNames && ` · ${f.sheetNames.length} sheet(s): ${f.sheetNames.join(', ')}`}
-                          {f.parsedCount > 0 && ` · ${f.parsedCount} rows parsed`}
-                        </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <span className="whitespace-nowrap text-xs text-muted-foreground">Data Date:</span>
-                          <Input
-                            type="date"
-                            value={f.dataDate || ''}
-                            onChange={(e) => setFileDataDate(f.id, e.target.value)}
-                            disabled={isRunning || f.status === 'done' || f.status === 'failed'}
-                            className="h-7 w-[150px] text-xs"
-                          />
-                          <span className="text-[11px] text-muted-foreground">Reference "today" for cycle delay calculation.</span>
-                        </div>
-                        {f.error && (
-                          <div className="mt-1 rounded border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
-                            <p className="font-medium">⚠ {f.error}</p>
-                            {(f.errorCode || f.errorDetails || f.errorHint) && (
-                              <p className="mt-1 font-mono text-[11px] opacity-80">
-                                {f.errorCode && <>code: {f.errorCode}<br /></>}
-                                {f.errorDetails && <>details: {f.errorDetails}<br /></>}
-                                {f.errorHint && <>hint: {f.errorHint}</>}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                        {f.unknownHeaders && f.unknownHeaders.length > 0 && (
-                          <p className="mt-1 text-xs text-amber-600">
-                            Unmapped headers: {f.unknownHeaders.slice(0, 5).join(', ')}{f.unknownHeaders.length > 5 ? ` (+${f.unknownHeaders.length - 5})` : ''}
-                          </p>
-                        )}
-                        {(f.emptyDocNoCount || f.duplicateDocNoCount) ? (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {f.emptyDocNoCount ? `Empty Document No: ${f.emptyDocNoCount} · ` : ''}
-                            {f.duplicateDocNoCount ? `In-file duplicates: ${f.duplicateDocNoCount}` : ''}
-                          </p>
-                        ) : null}
-                        {f.rejectSamples && f.rejectSamples.length > 0 && (
-                          <details className="mt-1 text-xs">
-                            <summary className="cursor-pointer text-destructive">Show first {f.rejectSamples.length} rejected row(s)</summary>
-                            <ul className="mt-1 space-y-1 pl-4">
-                              {f.rejectSamples.map((s, i) => (
-                                <li key={i} className="font-mono text-[11px]">
-                                  row {s.rawRowNo} ({s.documentNo ?? '—'}): {s.reasonDetail}
-                                </li>
-                              ))}
-                            </ul>
-                          </details>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge className={badge.cls}>{badge.label}</Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeFile(f.id)}
-                        disabled={isRunning}
-                        className="h-7 w-7"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  {f.status === 'processing' && (
-                    <Progress value={f.progress} className="mt-2 h-1.5" />
-                  )}
-                  {f.result && (
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                      <Badge variant="outline" className="border-emerald-300 text-emerald-700">
-                        <CheckCircle2 className="mr-1 h-3 w-3" />Inserted: {f.result.inserted}
-                      </Badge>
-                      <Badge variant="outline" className="border-blue-300 text-blue-700">
-                        Updated: {f.result.updated}
-                      </Badge>
-                      {f.result.rejected > 0 && (
-                        <Badge variant="outline" className="border-destructive text-destructive">
-                          <AlertCircle className="mr-1 h-3 w-3" />Rejected: {f.result.rejected}
-                        </Badge>
-                      )}
-                      {f.result.unmatchedOrgs > 0 && (
-                        <Badge variant="outline" className="border-amber-400 text-amber-700">
-                          Unmatched orgs: {f.result.unmatchedOrgs}
-                        </Badge>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      )}
+        <TabsContent value="spare_part" className="mt-4">
+          <div className="rounded border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+            Spare Part import is being prepared in the next phase.
+          </div>
+        </TabsContent>
+      </Tabs>
 
-      {hasResults && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">3. Summary</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <div className="rounded border p-3">
-                <p className="text-xs text-muted-foreground">Inserted</p>
-                <p className="text-2xl font-semibold text-emerald-700">{totals.inserted.toLocaleString()}</p>
-              </div>
-              <div className="rounded border p-3">
-                <p className="text-xs text-muted-foreground">Updated</p>
-                <p className="text-2xl font-semibold text-blue-700">{totals.updated.toLocaleString()}</p>
-              </div>
-              <div className="rounded border p-3">
-                <p className="text-xs text-muted-foreground">Skipped</p>
-                <p className="text-2xl font-semibold">{totals.skipped.toLocaleString()}</p>
-              </div>
-              <div className="rounded border p-3">
-                <p className="text-xs text-muted-foreground">Rejected</p>
-                <p className="text-2xl font-semibold text-destructive">{totals.rejected.toLocaleString()}</p>
-              </div>
-              <div className="rounded border p-3">
-                <p className="text-xs text-muted-foreground">Unmatched orgs</p>
-                <p className="text-2xl font-semibold text-amber-700">{totals.unmatched.toLocaleString()}</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => navigate('/docs/raw-data')}>
-                View Raw Data
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => navigate('/admin')}>
-                Manage in Admin
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      {anyRunning && (
+        <p className="text-xs text-muted-foreground">
+          Tip: switching tabs while an import is running is safe — progress continues in the background.
+        </p>
       )}
     </div>
   );
