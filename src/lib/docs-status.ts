@@ -312,6 +312,8 @@ export function cycleStatusColorClasses(status: CycleStatus): string {
       return 'bg-rose-500 border-rose-600 text-white';
     case 'Under Review':
       return 'bg-sky-400 border-sky-500 text-white';
+    case 'WIP':
+      return 'bg-slate-300 border-slate-400 text-slate-800';
     case 'R.Delayed':
       return 'bg-rose-600 border-rose-700 text-white';
     case 'S.Delayed':
@@ -332,6 +334,8 @@ export function cycleStatusGlyph(status: CycleStatus): string {
       return 'C';
     case 'Under Review':
       return '◐';
+    case 'WIP':
+      return 'W';
     case 'R.Delayed':
       return '⚠';
     case 'S.Delayed':
