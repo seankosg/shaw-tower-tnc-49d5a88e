@@ -437,12 +437,17 @@ export async function getDocsExcelSheetNames(file: File): Promise<string[]> {
 /**
  * Inspect the workbook and return every detected composite header label across the
  * given sheets (defaults to register sheets), plus a first non-empty sample value
- * per header. Used by the column-select dialog in the Docs import UI.
+ * per header and the structured field it maps to. Used by the column-select
+ * dialog in the Docs import UI.
  */
 export async function getDocsHeaderInfo(
   file: File,
   selectedSheets?: string[],
-): Promise<{ headers: string[]; samples: Record<string, unknown> }> {
+): Promise<{
+  headers: string[];
+  samples: Record<string, unknown>;
+  fieldByHeader: Record<string, string | null>;
+}> {
   const buffer = await readFileAsArrayBuffer(file);
   const workbook = XLSX.read(buffer, { type: 'array' });
   const targetSheets = (selectedSheets?.length
@@ -451,6 +456,7 @@ export async function getDocsHeaderInfo(
   const headerOrder: string[] = [];
   const seen = new Set<string>();
   const samples: Record<string, unknown> = {};
+  const fieldByHeader: Record<string, string | null> = {};
   for (const sheetName of targetSheets) {
     const ws = workbook.Sheets[sheetName];
     if (!ws) continue;
@@ -460,9 +466,12 @@ export async function getDocsHeaderInfo(
     for (const col of detected.cols) {
       const label = col.composite;
       if (!label) continue;
-      if (!seen.has(label)) { seen.add(label); headerOrder.push(label); }
+      if (!seen.has(label)) {
+        seen.add(label);
+        headerOrder.push(label);
+        fieldByHeader[label] = col.field ?? null;
+      }
     }
-    // First non-empty sample value per header from the first 20 data rows.
     const startRow = detected.subRowIdx + 1;
     const lastRow = Math.min(matrix.length, startRow + 20);
     for (let r = startRow; r < lastRow; r++) {
@@ -475,7 +484,7 @@ export async function getDocsHeaderInfo(
       }
     }
   }
-  return { headers: headerOrder, samples };
+  return { headers: headerOrder, samples, fieldByHeader };
 }
 
 export async function parseDocsExcel(
