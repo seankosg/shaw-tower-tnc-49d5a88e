@@ -221,7 +221,20 @@ export default function DocsImportLogsPage() {
 
       {!selectedBatch ? (
         <Card>
-          <CardContent className="pt-4">
+          <CardContent className="pt-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Sub-module:</span>
+              <Select value={subModuleFilter} onValueChange={setSubModuleFilter}>
+                <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="as_built">As-Built</SelectItem>
+                  <SelectItem value="omm">OMM</SelectItem>
+                  <SelectItem value="warranty">Warranty</SelectItem>
+                  <SelectItem value="spare_part">Spare Part</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="rounded-md border overflow-auto">
               <Table>
                 <TableHeader>
