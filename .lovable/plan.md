@@ -1,73 +1,93 @@
-## 목표
+# OMM: Field Config를 단일 기준(SoT)으로 정렬
 
-가져오기 시 사용자가 선택하지 않은(제외한) 컬럼은 **DB의 기존 값을 그대로 보존**합니다. 이미 T&C(`ImportContext`)와 Defect(`DefectImportContext`)에 검증된 패턴이 있으므로, 동일한 패턴을 ABD/OMM(`docs-import`) 흐름에 그대로 이식합니다.
+## 원칙
 
-## 참고한 기존 패턴 (T&C / Defect)
+**Field Config (`docs_field_config` where `sub_module='omm'`)가 단일 진실(Source of Truth)** 입니다.
+- 누락 필드 없음 — Raw Data에 표시되는 모든 데이터 컬럼이 Field Config에 등록됨
+- Raw Data의 **컬럼 순서**는 Field Config의 `sort_order`를 따름
+- Raw Data의 **노출/숨김**은 Field Config의 `is_enabled`를 따름 (시스템 anchor 제외)
+- Raw Data의 **헤더 라벨**은 Field Config의 `display_name`을 따름
+- (참고: ABD `DocsRawDataPage.tsx` 가 이미 동일 패턴으로 동작 중 — OMM만 미적용)
 
-**Defect (`src/lib/defect-parser.ts`)**
-- `parseDefectExcel(file, sheet, excludedHeaders)`가 `excludedFields: Set<string>`(canonical 필드명)을 결과에 포함하여 반환.
-- 헤더→canonical 매핑은 `toFieldName()`을 통해 변환, **시스템 필수 필드(`issue_no`)는 제외 대상에서 강제로 빼냄**.
+## 현재 불일치 (재정리)
 
-**Defect (`src/contexts/DefectImportContext.tsx`)**
-- 파일 상태에 `excludedHeaders: string[]`과 `excludedFields: Set<string>`을 함께 보관.
-- 시트 변경 시 `excludedHeaders`와 `excludedFields` 리셋.
-- UPDATE 페이로드 빌드 시 `if (excludedFields.has(field)) continue;`로 스킵.
-- 별도 `preserveExistingForBlank(row, existing)` 헬퍼: `PRESERVE_BLANK_FIELDS`에 한해 Excel 값이 비어 있고 DB에 값이 있으면 DB 값을 유지.
+Raw Data에는 있으나 Field Config에 누락 → **누락 보충 필요**
+- `cycle_progress` (Cycle 진행률 표시 컬럼)
+- `team` (분류 컬럼, 멀티선택 필터, 벌크 액션, 검색, 컬럼 메뉴 모두에서 사용 중)
 
-**T&C (`src/contexts/ImportContext.tsx`)**
-- 동일한 `excludedFields: Set<string>` 보관.
-- UPDATE 빌드 루프(540~570줄)에서 `[field, val]` 페어를 순회하며 `if (excludedFields?.has(field)) continue;` 후 `resolveValue`로 `undefined` vs 실제값 구분, 실제값일 때만 `updates[field] = ...` 적용.
-- 파생 필드 `team`도 별도로 `if (!excludedFields?.has('team') && resolved !== undefined) updates.team = ...` 처리.
+Field Config에는 있으나 Raw Data 컬럼 정의에서 누락 → **Raw Data에 컬럼 추가**
+- `current_stage` (Stage) — 현재 `OMMRow` 인터페이스/필터 옵션엔 있지만 컬럼으로는 미정의
 
-## ABD/OMM에 그대로 적용
+## 작업
 
-### 1. 파서: `excludedFields` 반환 (Defect의 `parseDefectExcel`과 동일 형태)
+### 1) DB 마이그레이션 — `docs_field_config` (sub_module='omm') 보강
 
-**`src/lib/docs-import-parser.ts` (ABD)**
-- `parseDocsExcel`의 결과 타입(`ParseDocsResult`)에 `excludedFields: Set<string>` 추가.
-- 헤더 컬럼 순회 중 `col.composite`가 `excludedSet`에 있고 `col.field`가 있으면 `excludedFields.add(col.field)`.
-- **시스템 필수 필드(`document_no`)는 강제로 제외에서 빼냄** (Defect의 `issue_no` 처리와 동일).
+A. 누락 필드 INSERT
+- `cycle_progress` — display "Progress", `is_enabled=true`, `is_required=false`, `source_origin='system'`, `sort_order=5`
+- `team` — display "Team", `is_enabled=true`, `is_required=false`, `source_origin='system'`, `sort_order=25`
 
-**`src/lib/docs-omm-import-parser.ts` (OMM)**
-- 동일하게 `ParseOmmResult`에 `excludedFields: Set<string>` 추가, 시스템 필수 `sn`은 강제 포함.
+B. 기존 행 sort_order 재정렬 (Raw Data 의도 순서에 맞춰 5/10/20/25/30/...)
+- 5 cycle_progress · 10 sn · 20 category_group · 25 team · 30 category · 40 section · 50 work_trade_material · 60 subcontractor_name · 70 hdec_pic_name · 80 hdec_eng_name · 90 training_required · 100 instruction_date · 110 pdf_required_qty · 120 pdf_actual_qty · 130 hardcopy_required_qty · 140 hardcopy_actual_qty · 150 draft_planned_date · 160 draft_actual_date · 170 draft_response_date · 180 draft_response_status · 190 final_planned_date · 200 final_actual_date · 210 final_response_planned_date · 220 final_response_actual_date · 230 final_response_status · 240 current_stage · 250 current_status · 260 remarks
+- (※ 사용자가 Field Config UI에서 자유롭게 재정렬할 수 있고 — 이는 초기값일 뿐)
 
-(중요: 파생 필드의 폴백/디폴트 로직은 손대지 않음. 워커가 UPDATE 시 `excludedFields`를 보고 해당 키를 페이로드에서 빼면, 파생 결과가 잘못 계산되어도 DB로 흘러가지 않음. T&C/Defect도 동일한 방식 — 파서는 그대로 두고 워커에서 거름.)
+C. `current_stage` 행은 유지하되 기본 `is_enabled=false` 로 설정 (현재 OMM Status가 `current_status` 단일 컬럼으로 표시되고 있어 기본 숨김이 적절). 사용자가 원하면 Field Config에서 켤 수 있음.
 
-### 2. 컨텍스트: 파일 상태에 `excludedFields` 저장 (T&C/Defect와 동일)
+### 2) 코드 — `src/pages/docs/DocsOMMRawDataPage.tsx`
 
-**`src/contexts/docs-import/types.ts`**
-- `DocsImportFile`에 `excludedFields?: Set<string>` 추가 (이미 `excludedHeaders?: string[]` 존재).
-- `WorkerContext` 또는 `upsertWorker`의 호출 시그니처에 `excludedFields: Set<string>` 전달.
+**변경 핵심: 하드코딩된 `COLUMN_ORDER` 제거 → ABD와 동일하게 Field Config 기반으로 동적 생성**
 
-**`src/contexts/docs-import/createDocsImportProvider.tsx`**
-- `parseAndApply`에서 `parsed.excludedFields`를 파일 상태에 저장 (Defect 라인 336과 동일).
-- 시트 변경 시 `excludedHeaders`/`excludedFields` 리셋.
-- 워커 호출 시 `excludedFields`를 컨텍스트로 전달.
+a. `useDocsFieldConfig('omm')` 호출 시 `sortFieldNames` 도 함께 구조분해 (이미 hook에서 export 중)
 
-### 3. 워커: UPDATE 페이로드에서 제외 필드 제거 (T&C 라인 564~570과 동일)
+b. **데이터 필드 목록을 상수로 분리** (시스템/anchor 제외 — 데이터 컬럼만):
+   ```ts
+   const OMM_DATA_FIELDS = [
+     'sn','category_group','category','team','section','work_trade_material',
+     'subcontractor_name','hdec_pic_name','hdec_eng_name','training_required',
+     'instruction_date','pdf_required_qty','pdf_actual_qty',
+     'hardcopy_required_qty','hardcopy_actual_qty',
+     'draft_planned_date','draft_actual_date','draft_response_date','draft_response_status',
+     'final_planned_date','final_actual_date',
+     'final_response_planned_date','final_response_actual_date','final_response_status',
+     'current_stage','remarks',
+   ] as const;
+   ```
 
-**`src/lib/docs-import-workers.ts`**
-- `abdAdapter.upsertWorker`, `ommAdapter.upsertWorker` 모두:
-  - 페이로드를 평소처럼 빌드한 뒤, **UPDATE 분기에서만** `excludedFields`의 각 키를 `delete payload[field]`로 제거.
-  - INSERT 분기는 그대로 둠 (신규 행에는 보존할 이전 값이 없음).
-  - per-row 변경 로그(`buildOutcomeForUpdate`, `OMM_TRACKED_FIELDS` 루프)에서도 `if (excludedFields.has(fname)) continue;` — "applied"/"unchanged" 노이즈 방지 + Defect/T&C와 동일한 감사 동작.
-  - `raw_payload`도 UPDATE 시 `{ ...prevRawPayload, ...row.raw_payload }`로 머지 (제외 컬럼의 이전 raw 값 보존). T&C의 `custom_payload` 머지(라인 572~581) 패턴을 그대로 적용.
+c. `columnOrder` 를 ABD 패턴으로 교체:
+   ```ts
+   const columnOrder = useMemo(() => {
+     const PINNED = ['__select', 'cycle_progress', 'sn'];
+     const TRAILING = ['current_status', '__open']; // status badge & open button 항상 끝
+     const remaining = OMM_DATA_FIELDS.filter(f => !PINNED.includes(f) && !TRAILING.includes(f));
+     return [...PINNED, ...sortFieldNames(remaining), ...TRAILING];
+   }, [sortFieldNames]);
+   ```
 
-### 4. UI: 변경 없음
+d. `columnVisibility` 단순화 — `ALWAYS_VISIBLE`(`__select`,`__open`,`sn`,`cycle_progress`,`current_status`,`pdf_actual_qty`,`hardcopy_actual_qty`) 외 모든 데이터 필드는 `isFieldVisible(field)` 따름. (기존 `COLUMN_ORDER` 순회 → `OMM_DATA_FIELDS` 순회로 대체)
 
-기존 "Select Columns (N/M)" 표시와 검증(`validateDocsHeaders`)은 그대로 사용. 추가 안내가 필요하면 후속 작업.
+e. **하드코딩 `COLUMN_ORDER` 배열 삭제**.
 
-## 의도적으로 변경하지 않는 것
+f. `current_stage` 컬럼 정의 추가 — `dataColumns` 생성 루프가 `OMM_DATA_FIELDS` 를 돌면 자동 생성됨. 셀은 `<span>{value ?? '—'}</span>` 단순 표시 (필터: multi-select, 옵션은 기존 `optionFields.current_stage` 사용).
 
-- 파서의 `?? null`, 디폴트(`'TBA'`), `clearCyclesAfterClosure` 등 파생 로직은 기존 그대로. 워커가 UPDATE 시 제외 키를 제거하므로 DB에는 영향 없음 (T&C/Defect도 동일 전략).
-- 매핑된 컬럼의 빈 셀 처리는 현 동작 유지. (Defect만 `PRESERVE_BLANK_FIELDS`라는 별도 화이트리스트가 있고, ABD/OMM은 사용자 요청 범위 밖.)
-- 시스템 필수 필드(`document_no`, `sn`) 제외 차단은 `validateDocsHeaders`로 이미 처리됨 + 파서가 한 번 더 보호.
+g. `MULTI_SELECT_FIELDS` / `TEXT_FIELDS` / `DATE_FIELDS` / `NUMBER_FIELDS` 세트는 그대로 유지 (필터 타입 결정용 — 컬럼 순서/노출과 무관).
 
-## 검증
+### 3) 검증
 
-1. ABD에서 `revision`, `title`, `remarks` 제외 → 기존 행의 해당 값 유지, 매핑된 컬럼만 갱신.
-2. ABD에서 `subcontractor_name` 제외 → 기존 값이 `'TBA'`로 덮어써지지 않음 (워커 단계에서 페이로드에서 제거되므로 파서가 `'TBA'`를 만들어도 무영향).
-3. OMM에서 `category` 제외 → DB의 `category`/파생 `team` 모두 유지.
-4. INSERT 경로(신규 행) 정상 동작, 제외 컬럼은 `null`로 입력.
-5. `raw_payload` 머지로 제외 컬럼의 이전 raw 값 보존.
-6. `document_no`/`sn` 제외 시도 시 기존 검증으로 차단됨.
+- Admin → Field Config → Docs / OMM 화면에서 행 수가 **27개**가 됨 (이전 26 + `cycle_progress` + `team` − `current_stage 제외아님,재정렬만`).
+- Field Config에서 임의 행을 비활성(`is_enabled=false`)으로 토글 → Raw Data에서 즉시 숨김 (anchor 제외).
+- Field Config에서 `sort_order` 변경 → Raw Data 컬럼 순서가 즉시 바뀜.
+- Field Config에서 `display_name` 변경 → Raw Data 헤더가 즉시 바뀜.
+- 실시간 채널(`docs-field-config-omm`) 이미 구독 중 → 새로고침 불필요.
+- ABD/Raw Data와의 동작 일관성 확보.
+
+## 영향/리스크
+
+- **데이터 손실 없음** — INSERT 2건 + UPDATE(sort_order) 만.
+- **사용자 시각적 변화 거의 없음** — 초기 sort_order를 현재 Raw Data 화면 순서와 동일하게 설정.
+- 추가로 노출되는 신규 컬럼: `current_stage` (단, `is_enabled=false`로 기본 숨김 → 실제 화면 변화 없음).
+- ABD와 동일 패턴이라 유지보수성 향상.
+
+## 변경 파일
+
+- 신규 마이그레이션 1건 (`docs_field_config` OMM 행 추가/정렬/`current_stage` 기본 disabled)
+- `src/pages/docs/DocsOMMRawDataPage.tsx` (`COLUMN_ORDER` 제거, Field Config 기반 동적 ordering, `current_stage` 컬럼 정의 추가)
+- `src/hooks/useDocsFieldConfig.ts` 의 `DOCS_DEFAULT_FIELD_LABELS` 에 `team` 라벨 보강 (이미 `cycle_progress`/`current_stage` 는 있는지 확인 후 보충)

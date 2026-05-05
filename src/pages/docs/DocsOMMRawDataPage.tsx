@@ -100,15 +100,16 @@ const NUMBER_FIELDS = new Set([
   'hardcopy_actual_qty',
 ]);
 
-const COLUMN_ORDER = [
-  '__select',
-  'cycle_progress',
+// Data fields rendered for each OMM row (system anchors like __select / __open
+// and the derived cycle_progress / current_status columns are NOT included here —
+// they are pinned by the page itself).
+const OMM_DATA_FIELDS = [
   'sn',
   'category_group',
+  'team',
   'category',
   'section',
   'work_trade_material',
-  'team',
   'subcontractor_name',
   'hdec_pic_name',
   'hdec_eng_name',
@@ -127,10 +128,9 @@ const COLUMN_ORDER = [
   'final_response_planned_date',
   'final_response_actual_date',
   'final_response_status',
-  'current_status',
+  'current_stage',
   'remarks',
-  '__open',
-];
+] as const;
 
 const RAW_SEARCH_FIELDS = [
   'sn',
@@ -508,7 +508,7 @@ export default function DocsOMMRawDataPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isFieldVisible, getLabel } = useDocsFieldConfig('omm');
+  const { isFieldVisible, getLabel, sortFieldNames } = useDocsFieldConfig('omm');
   const storageKey = user?.id
     ? `omm-raw-data-state:${user.id}`
     : 'omm-raw-data-state:anon';
@@ -812,10 +812,8 @@ export default function DocsOMMRawDataPage() {
       ),
     };
 
-    // Build a column for each known data field
-    const dataFields = COLUMN_ORDER.filter(
-      (id) => id !== '__select' && id !== '__open' && id !== 'cycle_progress' && id !== 'current_status',
-    );
+    // Build a column for each known data field (Field Config drives order/visibility separately)
+    const dataFields = OMM_DATA_FIELDS as readonly string[];
 
     const dataColumns: ColumnDef<OMMRow>[] = dataFields.map((field) => {
       const isMulti = MULTI_SELECT_FIELDS.has(field);
@@ -935,13 +933,26 @@ export default function DocsOMMRawDataPage() {
 
   const columnVisibility = useMemo<VisibilityState>(() => {
     const v: VisibilityState = {};
-    for (const id of COLUMN_ORDER) {
-      if (ALWAYS_VISIBLE.has(id)) v[id] = true;
-      else v[id] = isFieldVisible(id);
+    // Anchors always on
+    for (const id of ALWAYS_VISIBLE) v[id] = true;
+    // Data fields follow Field Config (is_enabled)
+    for (const id of OMM_DATA_FIELDS) {
+      if (ALWAYS_VISIBLE.has(id)) continue;
+      v[id] = isFieldVisible(id);
     }
     return v;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFieldVisible]);
+
+  // Column order driven by Field Config sort_order, with fixed pinned/trailing anchors
+  const columnOrder = useMemo(() => {
+    const PINNED = ['__select', 'cycle_progress', 'sn'];
+    const TRAILING = ['current_status', '__open'];
+    const remaining = (OMM_DATA_FIELDS as readonly string[]).filter(
+      (f) => !PINNED.includes(f) && !TRAILING.includes(f),
+    );
+    return [...PINNED, ...sortFieldNames(remaining), ...TRAILING];
+  }, [sortFieldNames]);
 
   // ── Table ─────────────────────────────────────────────────────────────────
   const table = useReactTable({
@@ -953,7 +964,7 @@ export default function DocsOMMRawDataPage() {
       columnFilters,
       columnSizing,
       columnVisibility,
-      columnOrder: COLUMN_ORDER,
+      columnOrder,
       rowSelection,
     },
     onSortingChange: setSorting,
