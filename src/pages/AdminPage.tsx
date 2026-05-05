@@ -2033,17 +2033,31 @@ function PermissionsTab() {
 /* ═══════ Tab 4: Field Config ═══════ */
 function FieldConfigTab() {
   const [scope, setScope] = useState<'tc' | 'defect' | 'docs'>('tc');
+  const [docsSub, setDocsSub] = useState<'as_built' | 'omm' | 'warranty' | 'spare_part'>('as_built');
 
   return (
     <Tabs value={scope} onValueChange={(value) => setScope(value as 'tc' | 'defect' | 'docs')}>
       <TabsList>
         <TabsTrigger value="tc">T&C Fields</TabsTrigger>
         <TabsTrigger value="defect">Defect Fields</TabsTrigger>
-        <TabsTrigger value="docs">Drawing Fields</TabsTrigger>
+        <TabsTrigger value="docs">Docs Fields</TabsTrigger>
       </TabsList>
       <TabsContent value="tc"><FieldConfigTable table="field_config" title="T&C Field Configuration" /></TabsContent>
       <TabsContent value="defect"><FieldConfigTable table="defect_field_config" title="Defect Field Configuration" showOrigin /></TabsContent>
-      <TabsContent value="docs"><FieldConfigTable table="docs_field_config" title="Drawing (ABD) Field Configuration" showOrigin /></TabsContent>
+      <TabsContent value="docs">
+        <Tabs value={docsSub} onValueChange={(v) => setDocsSub(v as typeof docsSub)} className="space-y-3">
+          <TabsList>
+            <TabsTrigger value="as_built">As-Built</TabsTrigger>
+            <TabsTrigger value="omm">OMM</TabsTrigger>
+            <TabsTrigger value="warranty">Warranty</TabsTrigger>
+            <TabsTrigger value="spare_part">Spare Part</TabsTrigger>
+          </TabsList>
+          <TabsContent value="as_built"><FieldConfigTable table="docs_field_config" subModule="as_built" title="Docs / As-Built Field Configuration" showOrigin /></TabsContent>
+          <TabsContent value="omm"><FieldConfigTable table="docs_field_config" subModule="omm" title="Docs / OMM Field Configuration" showOrigin /></TabsContent>
+          <TabsContent value="warranty"><FieldConfigTable table="docs_field_config" subModule="warranty" title="Docs / Warranty Field Configuration" showOrigin /></TabsContent>
+          <TabsContent value="spare_part"><FieldConfigTable table="docs_field_config" subModule="spare_part" title="Docs / Spare Part Field Configuration" showOrigin /></TabsContent>
+        </Tabs>
+      </TabsContent>
     </Tabs>
   );
 }
@@ -2056,7 +2070,7 @@ function normalizeOriginValue(value: string | null | undefined): 'hdec' | 'acone
   return 'system'; // covers 'system', 'derived', and unknown
 }
 
-function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_config' | 'defect_field_config' | 'docs_field_config'; title: string; showOrigin?: boolean }) {
+function FieldConfigTable({ table, subModule, title, showOrigin = false }: { table: 'field_config' | 'defect_field_config' | 'docs_field_config'; subModule?: string; title: string; showOrigin?: boolean }) {
   const { toast } = useToast();
   const [fields, setFields] = useState<FieldCfg[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2068,10 +2082,12 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
     table === 'field_config' ? 'tnc' : table === 'defect_field_config' ? 'defect' : 'docs';
 
   const loadAliasCounts = async () => {
-    const { data } = await (supabase as any)
+    let q = (supabase as any)
       .from('import_header_mappings')
       .select('target_field, is_active')
       .eq('module', moduleKey);
+    if (subModule) q = q.eq('sub_module', subModule);
+    const { data } = await q;
     const counts: Record<string, { total: number; active: number }> = {};
     for (const r of (data ?? []) as Array<{ target_field: string; is_active: boolean }>) {
       const c = counts[r.target_field] ?? { total: 0, active: 0 };
@@ -2084,7 +2100,9 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
 
   const load = async () => {
     setLoading(true);
-    const { data } = await (supabase as any).from(table).select('*').order('sort_order');
+    let q = (supabase as any).from(table).select('*').order('sort_order');
+    if (subModule && table === 'docs_field_config') q = q.eq('sub_module', subModule);
+    const { data } = await q;
     if (data) {
       let rows = data as FieldCfg[];
       // Normalize sort_order if all zero (initial seed) so swap works predictably.
@@ -2102,7 +2120,7 @@ function FieldConfigTable({ table, title, showOrigin = false }: { table: 'field_
     await loadAliasCounts();
     setLoading(false);
   };
-  useEffect(() => { load(); }, [table]);
+  useEffect(() => { load(); }, [table, subModule]);
 
   /** Bump app_settings.header_mappings_version so other tabs/sessions reload parser cache. */
   const bumpHeaderMappingsVersion = async () => {
