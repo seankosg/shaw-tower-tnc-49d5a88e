@@ -42,11 +42,32 @@ export function formatColumnFilterChip<TData>(
 
   // Object-shape filters
   if (value && typeof value === 'object') {
-    const v = value as { text?: string; from?: string; to?: string; emptyOnly?: boolean };
+    const v = value as {
+      text?: string;
+      from?: string;
+      to?: string;
+      min?: number;
+      max?: number;
+      emptyOnly?: boolean;
+    };
 
-    // empty-only flag (text / date / progress)
-    if (v.emptyOnly && !v.text && !v.from && !v.to) {
+    // empty-only flag (text / date / progress / number)
+    if (
+      v.emptyOnly &&
+      !v.text &&
+      !v.from &&
+      !v.to &&
+      v.min == null &&
+      v.max == null
+    ) {
       return { id: filter.id, label: `${label}: (empty only)` };
+    }
+
+    // number-range
+    if ('min' in v || 'max' in v) {
+      if (v.min != null && v.max != null) return { id: filter.id, label: `${label}: ${v.min} – ${v.max}` };
+      if (v.min != null) return { id: filter.id, label: `${label}: ≥ ${v.min}` };
+      if (v.max != null) return { id: filter.id, label: `${label}: ≤ ${v.max}` };
     }
 
     // date-range
