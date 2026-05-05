@@ -1,138 +1,72 @@
-## Add new role: D.Super User (d_superuser)
 
-### 권한 요약
-- **Superuser와 동일**: 모든 모듈 페이지(Dashboard/Raw Data/Import/Export 등) 접근, 댓글, 모든 모듈 사용 가능.
-- **Admin 탭 접근 금지**: `/admin/**` 경로는 superuser/admin 만.
-- **차이점(쓰기)**: INSERT / UPDATE / DELETE 는 **자기 팀(`profiles.team` == row.`team`)** 의 row 만 가능. 다른 팀 row 는 읽기 전용.
-- 일괄 롤백/스냅샷/마스터/필드 설정 등 admin 전용 기능은 사용 불가.
+# Goal
 
-### 등급 순서 (변경 후)
-```
-guest < super_guest < user < senior_user < d_superuser < superuser < admin
-```
+Bring the ABD Raw Data page to **functional + visual parity** with the T&C Raw Data bulk action bar. Today T&C uses the rich `BulkActionBar` (bulk edit + Duplicate + Reassign + Export `.xlsx` / Copy TSV + Hide / Permanent delete + permission counters). ABD only has a stripped-down `DocsBulkEditBar` (edit only). We will reuse the **same shared component** for ABD and wire it to the `docs_drawings` table.
 
----
+# What changes
 
-### 1. DB 마이그레이션 (schema)
+## 1. Generalize `BulkActionBar` to support ABD (`drawing` entity)
 
-**(a) enum 값 추가**
-```sql
-ALTER TYPE public.app_role ADD VALUE 'd_superuser' BEFORE 'superuser';
-```
+Currently the shared bar is hard-coded around two entities: `subtest` and `defect` (declared in `src/lib/bulk-actions.ts` as `BulkEntity = 'subtest' | 'defect'`). We extend it with a third entity, `drawing`, mirroring the same surface area:
 
-**(b) 새 헬퍼 함수**
-```sql
--- 팀 일치 여부
-CREATE OR REPLACE FUNCTION public.user_team_matches(_user_id uuid, _team team_type)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE user_id = _user_id AND is_active = true
-      AND team IS NOT NULL AND team = _team
-  )
-$$;
+- Add `'drawing'` to the `BulkEntity` union.
+- `getEditableScopeMap`: for `drawing` we don't have a per-row RPC, so resolve scope client-side from the user's role + team:
+  - admin / superuser → all rows editable (`full`)
+  - d_superuser → rows where `row.team === profile.team` (`team`)
+  - everyone else → not editable from this bar (drawings are normally edited inline; bulk actions stay admin-grade)
+  - This matches the existing RLS we put in place for `docs_drawings` and avoids needing a new RPC.
+- `applyBulkDelete` for `drawing`:
+  - **Soft**: `update docs_drawings set is_active=false` for the editable ids (RLS already gates this).
+  - **Hard**: chunked `delete from docs_drawings where id in (...)`. There are no FKs into `docs_drawings`, so no cascade RPC is needed; admin/superuser policy already restricts the operation.
+- `previewBulkDelete` for `drawing`: count related `docs_change_log` rows for those drawing ids so the cascade-impact panel still renders meaningful numbers (label: "Change log entries").
+- `applyBulkDuplicate` for `drawing`:
+  - Read full source rows from `docs_drawings`.
+  - For each row, compute next available `document_no` per `(project_id, sub_module)` by appending `-2`, `-3`, … if a collision occurs (same retry-on-`23505` pattern used for subtests).
+  - Drop `id`, `created_at`, `updated_at`, `row_version`; reset `data_source_type='manual'`, `source_upload_id=null`, `is_active=true`, `updated_by=userId`.
+  - Options:
+    - **Reset actual dates** → clear `submitted_date`, `approved_date`, `sub1_actual_response_date`, `sub2_actual_response_date`, `sub3_actual_response_date`, `sub1_submission_date`, `sub2_submission_date`, `sub3_submission_date`, `sub1_approval_date`, `sub2_approval_date`, `sub3_approval_date`.
+    - **Reset progress / status** → clear `current_status`, `aconex_status`, `sub1_approval_status`, `sub2_approval_status`, `sub3_approval_status`, set `is_submitted=false`.
+- `BulkDuplicateDialog`: extend its `entity === 'subtest' ? ... : ...` copy to also handle `'drawing'` (label key = `document_no`, reset-text wording for ABD).
+- `BulkDeleteDialog`: same — `labelKey = 'document_no'` for `drawing`, and add `'change_log'` cascade label entry (already present generically).
+- `BulkReassignDialog`: no changes — it is entity-agnostic.
 
--- 팀 범위 쓰기 권한 (admin/superuser 또는 자기 팀의 d_superuser)
-CREATE OR REPLACE FUNCTION public.can_write_for_team(_user_id uuid, _team team_type)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
-  SELECT public.is_admin_or_superuser(_user_id)
-      OR (public.has_role(_user_id, 'd_superuser'::app_role)
-          AND _team IS NOT NULL
-          AND public.user_team_matches(_user_id, _team))
-$$;
-```
+## 2. Default export columns for `drawing`
 
-**(c) `is_admin_or_superuser` — 변경 없음**
-Admin 페이지/스냅샷/마스터/필드 설정/롤백 등은 모두 이 함수에 의존하므로 d_superuser 는 자동으로 차단됨.
+In `src/components/raw-data/BulkEditBar.tsx` (the back-compat wrapper) and/or `BulkActionBar` itself, register a default `ExportColumn[]` set for `drawing` so the Export Excel / Copy TSV buttons work without each caller redeclaring them. Defaults will include: `document_no, revision, title, sub_module, discipline, document_type, team, subcontractor_name, hdec_pic_name, current_status, aconex_status, submitted_date, approved_date, remarks`.
 
-**(d) 기존 함수 확장 — d_superuser 가 자기 팀 row 에 한해 동작**
-- `get_defect_edit_scope`, `get_subtest_edit_scope`: admin/superuser 분기 다음에
-  ```sql
-  IF public.has_role(_user_id, 'd_superuser') AND d.team IS NOT NULL
-     AND prof.team = d.team THEN RETURN 'full'; END IF;
-  ```
-- `can_modify_defect_comment`, `can_modify_subtest_comment`, `can_edit_subtest`, `validate_defect_responsibility_update`: 동일 패턴 추가.
-- `delete_*_cascade`, `delete_*_import_batch`, `rollback_*`, `preview_*`: 변경 없음 → admin/superuser 전용 유지(d_superuser 일괄 작업 차단).
+## 3. Wire ABD page to the shared bar
 
-**(e) RLS 정책 업데이트 — INSERT/UPDATE/DELETE 만**
+In `src/pages/docs/DocsRawDataPage.tsx`:
 
-대상 테이블 (team 컬럼이 있고 데이터 변경 가능): `defect_items`, `docs_drawings`, `docs_omm`, `docs_spare_part`, 그리고 subtests/tests 관련 테이블(있는 경우 동일 패턴).
+- Replace the import and JSX of `DocsBulkEditBar` with `BulkActionBar` (or the back-compat `BulkEditBar` wrapper, whichever is cleaner — we'll use `BulkActionBar` directly for clarity).
+- Pass:
+  - `table="docs_drawings"`, `entity="drawing"`
+  - `fields={bulkFields}` (already defined in the page)
+  - `exportColumns` — the columns currently visible in the table, in user order (mirrors how T&C does it).
+  - `reassignFields` — Subcontractor (id-based, with `subcontractor_name` companion), HDEC PIC, HDEC ENG, Team. Options reuse the same `subcontractorOptions / hdecPicOptions / hdecEngOptions / team enum` already loaded on the page.
+  - `onApplied={handleBulkApplied}` — keep existing in-place row patching.
+  - `onMutated={() => fetchData()}` — refetch after duplicate / delete / reassign.
+  - `onClearSelection={() => setRowSelection({})}`.
+- Delete `src/components/raw-data/DocsBulkEditBar.tsx` (no other importers — verified).
 
-DELETE 정책 예시 (`defect_items`):
-```sql
-DROP POLICY "Admins can delete defects" ON public.defect_items;
-CREATE POLICY "Privileged can delete defects" ON public.defect_items
-FOR DELETE TO authenticated
-USING (public.can_write_for_team(auth.uid(), team));
-```
+## 4. Permission notes (no migrations needed)
 
-UPDATE 정책 (`defect_items`):
-```sql
-USING (
-  can_update_defect(auth.uid(), id)
-  OR has_any_role(auth.uid(), ARRAY['admin','superuser','senior_user','user']::app_role[])
-  OR (has_role(auth.uid(), 'd_superuser') AND user_team_matches(auth.uid(), team))
-)
--- WITH CHECK 동일
+- The existing RLS on `docs_drawings` already lets admin / superuser / d_superuser (own team) UPDATE & DELETE rows, and INSERT for the same set. Duplicate (INSERT) and hard-delete (DELETE) will therefore succeed for those roles and be silently rejected by RLS for others — exactly the same model as T&C.
+- The `is_admin_or_superuser` RPC is reused to gate the "Delete permanently…" menu item just like T&C.
+
+# Out of scope
+
+- No DB migrations.
+- No changes to OMM / Spare Part / Warranty bulk bars.
+- No changes to T&C / Defect bulk behavior (only additive `'drawing'` branch).
+- No new RPCs (we keep client-side delete because there are no dependent FK tables on `docs_drawings`).
+
+# UI parity check
+
+After this change ABD's bar will show the same controls in the same order as T&C:
+
+```text
+[● N selected · Editable X · Skipped Y]  [Edit field… ▾] [value] [Apply]   [Duplicate] [Reassign] [Export ▾] [⋯ Delete] [✕]
 ```
 
-INSERT 정책 (`defect_items`):
-```sql
-WITH CHECK (
-  has_any_role(auth.uid(), ARRAY['admin','superuser','senior_user','user']::app_role[])
-  OR (has_role(auth.uid(), 'd_superuser') AND user_team_matches(auth.uid(), team))
-)
-```
-
-**(f) Admin 전용 테이블** (`field_config`, `*_field_config`, `custom_field_definitions`, `defect_classification_*`, `defect_subcontractor_workscope`, `defect_work_types`, `defect_discipline_fallback`, `database_snapshots`, `event_log`, `app_settings`, `hdec_*_master`, `docs_org_alias`, `header_mappings`) — 모두 `is_admin_or_superuser` 그대로 유지. d_superuser 권한 없음.
-
----
-
-### 2. 프론트엔드 변경
-
-**(a) `src/types/enums.ts`**
-- `AppRole` 에 `'d_superuser'` 추가
-- `ALL_ROLES` 배열에 `senior_user` 와 `superuser` 사이에 삽입
-- `ROLE_LABELS.d_superuser = 'D.Super User'`
-
-**(b) `src/lib/role-permissions.ts`** (랭크 재조정)
-```ts
-ROLE_RANK = {
-  guest: 0, super_guest: 1, user: 2, senior_user: 3,
-  d_superuser: 4, superuser: 5, admin: 6,
-}
-```
-라우트 최소 rank 갱신:
-- `/admin` → **5** (superuser/admin 만, d_superuser 차단) ← **핵심 변경**
-- `/docs/org-mapping` → 5 (superuser/admin)
-- 그 외 모듈 페이지(`/docs/*`, `/defects/*`, `/tc/*`, `/import`, `/export`, `/mobile` 등)는 d_superuser 가 자동 통과하도록 기존 rank(2) 유지 → d_superuser(4) ≥ 2
-
-**(c) `src/contexts/AuthContext.tsx`**
-- 새 helper:
-  ```ts
-  const isDSuperuser = roles.includes('d_superuser');
-  ```
-- Admin UI 게이트는 기존 `isSuperuser || isAdmin` 그대로 (d_superuser 제외).
-
-**(d) UI 분기 업데이트** — 기존 `['admin','superuser','senior_user','user']` 체크 위치에 `'d_superuser'` 추가:
-- `src/pages/docs/DocsDrawingDetailPage.tsx`
-- 그 외 grep 으로 동일 패턴 검색하여 5~7곳 일괄 추가
-- `src/pages/admin/EventLogTab.tsx`: 필터/배지에 `d_superuser → 'D.Super User'` 라벨 추가 (이 페이지 자체는 admin 만 봄)
-- `src/components/raw-data/BulkActionBar.tsx`: `is_admin_or_superuser` RPC 결과에 의존하는 일괄삭제 버튼 그대로 유지(d_superuser 는 표시 안 됨)
-
-**(e) Admin → User Management**
-- 역할 선택 옵션 자동 추가 (`ALL_ROLES` 사용 시 자동)
-- 라벨/툴팁: "D.Super User — 자기 팀 데이터만 편집 가능, Admin 탭 접근 불가"
-
----
-
-### 3. 검증 항목 (수동)
-- d_superuser 로그인 → 사이드바에서 Admin 메뉴 비표시, `/admin` 직접 접근 시 차단.
-- 모든 모듈 페이지(Dashboard/Raw Data/Import/Export 등) 접근 가능.
-- 자기 팀 row → 수정/삭제/생성 가능.
-- 다른 팀 row → 수정/삭제 시 RLS 거부, UI readonly.
-- 일괄 롤백/스냅샷/마스터 변경/필드 설정 → 모두 차단.
-
-### 범위 외
-- 기존 superuser/admin/senior_user 권한 변경 없음.
-- 마스터/알리아스/필드 설정 등 admin 전용 영역은 그대로.
+Confirm dialogs (bulk-edit confirm with before/after preview, Duplicate options, Reassign keep/set/clear, Soft vs Hard delete with `DELETE` typing) are all the shared components — identical look-and-feel.
