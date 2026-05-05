@@ -280,7 +280,7 @@ export function applyCycleAutoFill<T extends DrawingForStatus>(drawing: T): T {
 }
 
 /** Normalize a free-text status to A/B/C/UR/null. Used during import. */
-export function normalizeApprovalStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | 'UR' | null {
+export function normalizeApprovalStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | 'UR' | 'WIP' | null {
   if (!raw) return null;
   const v = String(raw).trim().toUpperCase();
   if (v === 'A') return 'A';
@@ -289,6 +289,10 @@ export function normalizeApprovalStatus(raw: string | null | undefined): 'A' | '
   if (v === 'UR' || v === 'U/R' || v === 'U.R' || v === 'U R') return 'UR';
   if (v === 'UNDER REVIEW' || v === 'UNDERREVIEW' || v === 'IN REVIEW' || v === 'INREVIEW') return 'UR';
   if (v === 'PENDING' || v === 'PENDING REVIEW' || v === 'REVIEW') return 'UR';
+  if (v === 'WIP' || v === 'W.I.P' || v === 'W/I/P' || v === 'W.I.P.') return 'WIP';
+  if (v === 'WORK IN PROGRESS' || v === 'WORKINPROGRESS') return 'WIP';
+  if (v === 'IN PROGRESS' || v === 'INPROGRESS' || v === 'IN-PROGRESS') return 'WIP';
+  if (v === 'ONGOING' || v === 'ON GOING' || v === 'ON-GOING') return 'WIP';
   if (v === 'APPROVED') return 'A';
   if (v.startsWith('APPROVED WITH COMMENT')) return 'B';
   if (v.startsWith('APPROVED W/COMMENT')) return 'B';
