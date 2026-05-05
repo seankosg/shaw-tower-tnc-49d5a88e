@@ -47,6 +47,7 @@ export function createDocsImportProvider<TRow>(
             parsed: parsed.rows,
             parsedCount: parsed.rows.length,
             unknownHeaders: parsed.unknownHeaders,
+            excludedFields: parsed.excludedFields,
             validationError: validation.error,
           };
         }));
