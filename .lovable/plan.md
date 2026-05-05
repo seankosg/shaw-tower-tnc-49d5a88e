@@ -1,47 +1,69 @@
+# ABD/OMM Raw Data 내보내기 → 재import 호환성 수정
 
-# 목표
+## 원인 진단
 
-Admin → Field Configuration → OMM 탭에서 `docs_field_config` 행을 수정/추가/삭제하면, **OMM Raw Data 페이지가 새로고침 없이 즉시 반영**되도록 합니다 (컬럼 visible, 라벨, sort_order, required 등). 같은 메커니즘으로 ABD/Warranty/Spare Part Raw Data도 자동으로 혜택을 봅니다.
+업로드하신 `SHAW_Drawings_view_20260505_1442.xlsx`(ABD export)를 분석한 결과, 내보낸 파일이 import되지 않는 이유는 두 가지입니다.
 
-# 변경 사항
+### 1. 시트명 필터 불일치 (ABD 전용)
+- ABD import는 시트명에 `"register"`가 포함된 시트만 인식 (`isRegisterSheet`).
+- 내보낸 파일 시트명은 **`Drawings`** → 필터에서 제외.
+- OMM import는 전 시트 허용 → 시트 필터 문제 없음.
 
-## 1) DB 마이그레이션 — realtime publication 등록
+### 2. 헤더 라벨이 import alias와 불일치 (ABD/OMM 공통)
+ABD export 헤더(8행)에 다음 라벨이 있지만 alias 매칭 실패:
 
-`docs_field_config` 테이블을 Supabase realtime publication에 추가합니다 (현재 미등록 상태 확인됨).
+| 내보낸 라벨 | Import 매핑 | 현재 |
+|---|---|---|
+| `As Built DWG No` | `document_no` | ❌ ('as built dwg **number**'만 있음) |
+| `1st Planned Submission` | `sub1_planned_date` | ❌ |
+| `1st Actual Submission` | `sub1_submission_date` | ❌ |
+| `1st Planned Response` | `sub1_approval_date` | ❌ |
+| `1st Actual Response` | `sub1_actual_response_date` | ❌ |
+| `1st Status` (2nd/3rd 동일) | `sub1_approval_status` | ❌ |
+| `__select`, `cycle_progress`, `Risk` | skip | ❌ (unknown으로 잡힘) |
 
-```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE public.docs_field_config;
-```
+OMM export도 동일한 메타 6행 + 빈 행 + 헤더 8행 구조이고, `Draft Planned Date`, `Final Actual Date` 같은 export 라벨이 OMM parser alias와 불일치할 가능성 큼.
 
-선택적으로 같은 마이그레이션에서 자매 테이블도 함께 등록해 일관성 확보:
-- `public.field_config` (T&C)
-- `public.defect_field_config` (Defect)
+## 변경 사항
 
-이렇게 하면 향후 T&C/Defect Raw Data에도 동일 패턴을 쉽게 적용할 수 있습니다. (이미 등록돼 있으면 `IF NOT EXISTS` 가드를 위해 `DO $$ ... $$` 블록으로 감쌉니다.)
+### A. `src/lib/docs-import-parser.ts` (ABD)
 
-## 2) `useDocsFieldConfig` 훅에 realtime 구독 추가
+**A-1. 시트 필터 완화**
+- `isRegisterSheet`에 `'drawings'` 키워드 추가. (export 파일명/시트명 패턴 호환)
 
-`src/hooks/useDocsFieldConfig.ts`:
+**A-2. FIELD_ALIASES 보강**
+- `'as built dwg no'`, `'as-built dwg no'` → `document_no`
+- `'risk'`, `'cycle progress'`, `'__select'` → `skip`
 
-- 기존 1회성 fetch는 그대로 유지.
-- `useEffect` 내부에서 `supabase.channel('docs-field-config-{subModule}')` 채널을 만들고 `postgres_changes` (event `*`, table `docs_field_config`, `filter: sub_module=eq.{subModule}`) 를 구독.
-- 어떤 변경이든 들어오면 다시 전체 행을 fetch하여 `setFields`로 갱신 (행이 적기 때문에 부분 머지보다 단순 refetch가 안전·정확).
-- 언마운트 시 `supabase.removeChannel(channel)`로 정리.
-- 채널 이름에 `subModule`을 포함시켜 같은 페이지에 여러 sub_module이 마운트돼도 충돌이 없도록 합니다.
+**A-3. Sub-cycle 단일행 라벨 매핑** (export는 2행 그룹+서브 구조가 아닌 단일행 통합 라벨)
+- `mapHeader()`에 정규식 추가:
+  - `^(1st|2nd|3rd) planned submission$` → `subN_planned_date`
+  - `^(1st|2nd|3rd) actual submission$` → `subN_submission_date`
+  - `^(1st|2nd|3rd) planned response$` → `subN_approval_date`
+  - `^(1st|2nd|3rd) actual response$` → `subN_actual_response_date`
+  - `^(1st|2nd|3rd) status$` → `subN_approval_status`
 
-이 훅은 OMM 외에도 ABD/Warranty/Spare Part Raw Data 페이지에서 이미 사용 중이므로, **한 번 수정하면 네 페이지 모두 자동 적용**됩니다.
+**A-4. `__`로 시작하는 헤더는 자동 skip.**
 
-## 3) (선택, 짧은 추가) Admin Field Config 편집기에서도 같은 채널을 듣도록
+### B. `src/lib/docs-omm-import-parser.ts` (OMM)
 
-`src/pages/AdminPage.tsx`의 `FieldConfigTable` 내부 fetch 로직에도 동일한 realtime 구독을 추가하면, 두 명의 관리자가 동시에 편집하는 시나리오에서도 화면이 자동 동기화됩니다. (Out of scope로 둬도 핵심 요청은 충족됩니다 — 사용자가 원하면 같이 진행, 아니면 생략.) → **포함하겠습니다.** 마이너 변경이라 노이즈가 거의 없습니다.
+**B-1. OMM export 헤더 라벨을 OMM parser alias에 모두 등록.**
+- 우선 OMM export 파일의 실제 헤더 라벨을 코드(`getOmmRawExportColumns` 또는 export util)에서 추출해 정확한 alias 목록 확정.
+- 누락된 라벨(예: `Draft Planned Date`, `Draft Actual Date`, `Final Planned Date`, `Final Actual Date`, `Final Response Status`, `HDEC PIC`, `HDEC Eng`, `Subcontractor`, `Section`, `Category`, `Training Required`, `Hardcopy Required Qty`, `Hardcopy Actual Qty`, `PDF Required Qty`, `PDF Actual Qty` 등)을 alias 맵에 추가.
 
-# 검증 방법
+**B-2. OMM도 `__`로 시작하는 헤더와 `Risk`/`cycle_progress` 같은 시스템 컬럼 skip 처리.**
 
-1. Admin → Field Config → OMM 탭에서 임의 필드의 "Visible" 토글 또는 라벨을 수정.
-2. 다른 탭/창에서 OMM Raw Data 페이지를 열어둔 채로 1초 이내에 컬럼이 사라지거나 라벨이 바뀌는지 확인.
-3. ABD Raw Data에서도 같은 동작이 되는지 확인 (보너스).
+### C. Spare Part
+- 현재 Spare Part는 **Excel import 기능이 구현되어 있지 않음** → 이번 작업 대상 아님. (필요 시 별도 요청으로 진행)
 
-# 영향 범위 / 비목표
+## 검증
 
-- 영향: `docs_field_config`를 사용하는 4개 Raw Data 페이지 + Admin Field Config 화면.
-- 비목표: `import_header_mappings`(헤더 매핑) realtime, T&C/Defect Raw Data realtime 적용, `field_config` 행 자체의 RLS/스키마 변경, Header Mapping ↔ Field Config 사이의 추가 비즈니스 동기화 로직.
+1. ABD: 업로드한 `SHAW_Drawings_view_*.xlsx`를 ABD Import에 올려 시트 선택에 `Drawings` 표시 → Preview에서 모든 라벨이 정확히 매핑되는지 확인. Unknown header 0건.
+2. OMM: OMM Raw Data에서 view 포맷으로 export → 같은 파일을 OMM Import에 다시 올려 모든 헤더가 매핑되고 upsert 성공하는지 확인.
+3. Sub-cycle 데이터(1st/2nd/3rd) 값이 `sub1_*`/`sub2_*`/`sub3_*` 컬럼에 정확히 들어가는지 검증.
+
+## 영향 범위
+
+- 변경: `src/lib/docs-import-parser.ts`, `src/lib/docs-omm-import-parser.ts`
+- 무영향: 기존 register/원본 import 파일은 alias가 추가만 되고 제거되지 않으므로 그대로 동작.
+- 메모리: 별도 업데이트 불필요.
