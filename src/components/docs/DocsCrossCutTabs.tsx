@@ -3,9 +3,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { type CrossCutCell, MODULE_META, type ModuleStats } from '@/lib/docs-dashboard-data';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { type CrossCutCell, type ModuleStats } from '@/lib/docs-dashboard-data';
 
 type Dim = 'sub' | 'pic' | 'trade';
+type ModuleFilter = 'all' | 'abd' | 'omm';
 
 interface Props {
   modules: ModuleStats[]; // abd, omm, spare_part, warranty
@@ -13,25 +21,43 @@ interface Props {
 
 export function DocsCrossCutTabs({ modules }: Props) {
   const [dim, setDim] = useState<Dim>('sub');
+  const [moduleFilter, setModuleFilter] = useState<ModuleFilter>('all');
   const [q, setQ] = useState('');
 
-  const rows = useMemo(() => buildRows(modules, dim), [modules, dim]);
+  const rows = useMemo(() => buildRows(modules, dim, moduleFilter), [modules, dim, moduleFilter]);
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return rows;
     return rows.filter((r) => r.key.toLowerCase().includes(needle));
   }, [rows, q]);
 
+  const showAbd = moduleFilter === 'all' || moduleFilter === 'abd';
+  const showOmm = moduleFilter === 'all' || moduleFilter === 'omm';
+  const moduleCols = (showAbd ? 1 : 0) + (showOmm ? 1 : 0);
+  const colSpan = 1 + moduleCols * 4;
+
   return (
     <Card>
       <CardHeader className="flex flex-col gap-2 pb-3 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle className="text-base">Workload Breakdown</CardTitle>
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search…"
-          className="h-8 max-w-[220px] text-xs"
-        />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Select value={moduleFilter} onValueChange={(v) => setModuleFilter(v as ModuleFilter)}>
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">All modules</SelectItem>
+              <SelectItem value="abd" className="text-xs">ABD only</SelectItem>
+              <SelectItem value="omm" className="text-xs">OMM only</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search…"
+            className="h-8 max-w-[220px] text-xs"
+          />
+        </div>
       </CardHeader>
       <CardContent>
         <Tabs value={dim} onValueChange={(v) => setDim(v as Dim)}>
@@ -45,24 +71,28 @@ export function DocsCrossCutTabs({ modules }: Props) {
               <Table>
                 <TableHeader className="sticky top-0 bg-background">
                   <TableRow>
-                    <TableHead className="w-[180px]">{labelFor(dim)}</TableHead>
-                    {(['ABD', 'OMM', 'Spare Part'] as const).map((m) => (
-                      <TableHead key={m} colSpan={4} className="border-l text-center text-[11px] uppercase tracking-wide">
-                        {m}
+                    <TableHead className="w-[200px]">{labelFor(dim)}</TableHead>
+                    {showAbd && (
+                      <TableHead colSpan={4} className="border-l text-center text-[11px] uppercase tracking-wide">
+                        ABD
                       </TableHead>
-                    ))}
+                    )}
+                    {showOmm && (
+                      <TableHead colSpan={4} className="border-l text-center text-[11px] uppercase tracking-wide">
+                        OMM
+                      </TableHead>
+                    )}
                   </TableRow>
                   <TableRow className="text-[10px]">
                     <TableHead />
-                    {[0, 1, 2].map((i) => (
-                      <SubHeads key={i} />
-                    ))}
+                    {showAbd && <SubHeads />}
+                    {showOmm && <SubHeads />}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={13} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={colSpan} className="py-8 text-center text-sm text-muted-foreground">
                         No data
                       </TableCell>
                     </TableRow>
@@ -70,9 +100,8 @@ export function DocsCrossCutTabs({ modules }: Props) {
                     filtered.map((r) => (
                       <TableRow key={r.key}>
                         <TableCell className="font-medium">{r.key}</TableCell>
-                        <CellGroup cell={r.abd} />
-                        <CellGroup cell={r.omm} />
-                        <CellGroup cell={r.sp} />
+                        {showAbd && <CellGroup cell={r.abd} />}
+                        {showOmm && <CellGroup cell={r.omm} />}
                       </TableRow>
                     ))
                   )}
@@ -81,7 +110,7 @@ export function DocsCrossCutTabs({ modules }: Props) {
             </div>
             {filtered.length > 0 && (
               <p className="mt-2 text-[11px] text-muted-foreground">
-                {filtered.length} {labelFor(dim).toLowerCase()}{filtered.length === 1 ? '' : 's'} · Warranty excluded (placeholder)
+                {filtered.length} {labelFor(dim).toLowerCase()}{filtered.length === 1 ? '' : 's'} · T = total · S = submitted · P = pending · O = overdue
               </p>
             )}
           </TabsContent>
@@ -123,33 +152,33 @@ interface Row {
   key: string;
   abd: CrossCutCell;
   omm: CrossCutCell;
-  sp: CrossCutCell;
 }
 
-function buildRows(modules: ModuleStats[], dim: Dim): Row[] {
+function buildRows(modules: ModuleStats[], dim: Dim, filter: ModuleFilter): Row[] {
   const pick = (m: ModuleStats) =>
     dim === 'sub' ? m.bySubcontractor : dim === 'pic' ? m.byPic : m.byTrade;
   const abd = modules.find((m) => m.module === 'abd')!;
   const omm = modules.find((m) => m.module === 'omm')!;
-  const sp = modules.find((m) => m.module === 'spare_part')!;
-  const keys = new Set<string>();
-  for (const m of [abd, omm, sp]) for (const k of pick(m).keys()) keys.add(k);
   const empty = (): CrossCutCell => ({ total: 0, submitted: 0, pending: 0, overdue: 0 });
+
+  const sources: ModuleStats[] = [];
+  if (filter === 'all' || filter === 'abd') sources.push(abd);
+  if (filter === 'all' || filter === 'omm') sources.push(omm);
+
+  const keys = new Set<string>();
+  for (const m of sources) for (const k of pick(m).keys()) keys.add(k);
   return Array.from(keys)
     .map((k) => ({
       key: k,
       abd: pick(abd).get(k) ?? empty(),
       omm: pick(omm).get(k) ?? empty(),
-      sp: pick(sp).get(k) ?? empty(),
     }))
     .sort((a, b) => {
-      const ao = a.abd.overdue + a.omm.overdue + a.sp.overdue;
-      const bo = b.abd.overdue + b.omm.overdue + b.sp.overdue;
+      const ao = a.abd.overdue + a.omm.overdue;
+      const bo = b.abd.overdue + b.omm.overdue;
       if (bo !== ao) return bo - ao;
-      const at = a.abd.total + a.omm.total + a.sp.total;
-      const bt = b.abd.total + b.omm.total + b.sp.total;
+      const at = a.abd.total + a.omm.total;
+      const bt = b.abd.total + b.omm.total;
       return bt - at;
     });
 }
-// MODULE_META retained for future drill-down
-void MODULE_META;

@@ -21,7 +21,7 @@ interface Props {
 export function DocsSubmissionTrendChart({ data, asOf }: Props) {
   const [gran, setGran] = useState<TrendGranularity>('week');
   const points = buildTrend(data, gran, asOf);
-  const empty = points.every((p) => p.abd + p.omm + p.spare_part === 0);
+  const empty = points.every((p) => p.abd + p.omm === 0);
 
   return (
     <Card>
@@ -60,9 +60,23 @@ export function DocsSubmissionTrendChart({ data, asOf }: Props) {
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line type="monotone" dataKey="abd" name="ABD" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="omm" name="OMM" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-                <Line type="monotone" dataKey="spare_part" name="Spare Part" stroke="hsl(var(--foreground))" strokeWidth={1.5} dot={false} strokeDasharray="2 2" />
+                <Line
+                  type="monotone"
+                  dataKey="abd"
+                  name="ABD"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="omm"
+                  name="OMM"
+                  stroke="hsl(var(--accent-foreground))"
+                  strokeWidth={2}
+                  dot={false}
+                  strokeDasharray="4 2"
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>

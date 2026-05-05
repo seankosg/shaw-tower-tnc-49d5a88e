@@ -3,7 +3,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { computeRisk, type RiskLevel } from '@/lib/docs-risk';
-import { computeOmmStatus } from '@/lib/docs-omm-status';
+import { computeOmmStatus, computeOmmStage, copyAlertState, type OMMStatus } from '@/lib/docs-omm-status';
 import { normalizeSparePartStatus } from '@/lib/docs-spare-part-status';
 import {
   startOfDay,
@@ -26,11 +26,23 @@ export interface ModuleStats {
   submitted: number;
   pending: number;
   overdue: number;
+  /** rows currently waiting on counterpart response (Draft/Final Under Review for OMM, Sub-N submitted but not approved for ABD) */
+  awaitingResponse: number;
+  /** rows untouched / pending start for > 14 days (stuck) */
+  stuck: number;
   risk: Record<RiskLevel, number>;
   /** date(YYYY-MM-DD) -> approved count (for trend) */
   approvedByDay: Map<string, number>;
   /** Top-5 overdue items for detail card */
-  topOverdue: Array<{ id: string; label: string; daysLate: number }>;
+  topOverdue: Array<{ id: string; label: string; daysLate: number; pic?: string | null }>;
+  /** Top-5 stuck items for the Attention tab (no progress for > 14d) */
+  topStuck: Array<{ id: string; label: string; daysIdle: number; pic?: string | null }>;
+  /** Top-5 awaiting response items */
+  topAwaiting: Array<{ id: string; label: string; daysWaiting: number; pic?: string | null; stageHint?: string }>;
+  /** Stage distribution — semantics depend on module */
+  stageCounts: Record<string, number>;
+  /** OMM-only: how many rows are short on PDF copies */
+  copyShortfall?: number;
   /** Cross-cut: subcontractor / pic / trade -> {pending, overdue, total, submitted} */
   bySubcontractor: Map<string, CrossCutCell>;
   byPic: Map<string, CrossCutCell>;
@@ -61,9 +73,14 @@ const emptyStats = (module: DocsModuleId): ModuleStats => ({
   submitted: 0,
   pending: 0,
   overdue: 0,
+  awaitingResponse: 0,
+  stuck: 0,
   risk: { green: 0, amber: 0, red: 0 },
   approvedByDay: new Map(),
   topOverdue: [],
+  topStuck: [],
+  topAwaiting: [],
+  stageCounts: {},
   bySubcontractor: new Map(),
   byPic: new Map(),
   byTrade: new Map(),
@@ -87,6 +104,10 @@ function safeIso(d: string | null | undefined): Date | null {
   } catch {
     return null;
   }
+}
+
+function bumpStage(stats: ModuleStats, stage: string) {
+  stats.stageCounts[stage] = (stats.stageCounts[stage] ?? 0) + 1;
 }
 
 export async function loadDashboardData(opts: {
@@ -117,8 +138,11 @@ export async function loadDashboardData(opts: {
         .from('docs_drawings')
         .select(
           'id, document_no, title, project_id, is_submitted, submitted_date, approved_date, ' +
-            'sub1_planned_date, sub3_planned_date, sub3_approval_date, ' +
-            'discipline, current_status, raw_payload, custom_payload',
+            'sub1_planned_date, sub1_submission_date, sub1_approval_date, sub1_approval_status, ' +
+            'sub2_planned_date, sub2_submission_date, sub2_approval_date, sub2_approval_status, ' +
+            'sub3_planned_date, sub3_submission_date, sub3_approval_date, sub3_approval_status, ' +
+            'discipline, current_status, hdec_pic_name, subcontractor_name, trade, ' +
+            'created_at, updated_at, raw_payload, custom_payload',
         )
         .eq('sub_module', 'as_built')
         .eq('is_active', true),
@@ -127,9 +151,14 @@ export async function loadDashboardData(opts: {
       supabase
         .from('docs_omm')
         .select(
-          'id, sn, contract_doc, project_id, draft_actual_date, submission_actual_date, ' +
-            'approved_date, submission_target_date, draft_target_date, hdec_pic_name, ' +
-            'subcontractor_name, trade',
+          'id, sn, category, category_group, project_id, ' +
+            'instruction_date, draft_planned_date, draft_actual_date, ' +
+            'draft_response_date, draft_response_status, ' +
+            'final_planned_date, final_actual_date, ' +
+            'final_response_planned_date, final_response_actual_date, final_response_status, ' +
+            'pdf_required_qty, pdf_actual_qty, hardcopy_required_qty, hardcopy_actual_qty, ' +
+            'hdec_pic_name, subcontractor_name, trade, current_stage, current_status, ' +
+            'created_at, updated_at',
         )
         .eq('is_active', true),
     ),
@@ -145,10 +174,6 @@ export async function loadDashboardData(opts: {
     supabase.from('app_settings').select('key, value').like('key', 'docs_lead_days_%'),
   ]);
 
-  const abdRes = { data: abdRows };
-  const ommRes = { data: ommRows };
-  const sparePartRes = { data: sparePartRows };
-
   const scDateMap: Record<string, string> = {};
   for (const s of settingsRes.data ?? []) {
     const projectId = s.key.replace('docs_sc_date_', '');
@@ -159,20 +184,35 @@ export async function loadDashboardData(opts: {
     if (s.key === 'docs_lead_days_as_built' && typeof s.value === 'number') leadDays = s.value;
   }
 
-  // ── ABD
+  // ── ABD ────────────────────────────────────────────────────────
   const abd = emptyStats('abd');
-  for (const row of (abdRes.data ?? []) as any[]) {
+  for (const row of abdRows as any[]) {
     abd.total++;
     const submitted = !!row.is_submitted;
     if (submitted) abd.submitted++;
     else abd.pending++;
+
+    // ABD funnel stages: Pending → Sub1 → Sub2 → Sub3 → Approved
+    let stage: 'Pending' | 'Sub1' | 'Sub2' | 'Sub3' | 'Approved' = 'Pending';
+    if (row.sub3_approval_status?.toString().toUpperCase() === 'A' || row.approved_date) stage = 'Approved';
+    else if (row.sub3_submission_date) stage = 'Sub3';
+    else if (row.sub2_submission_date) stage = 'Sub2';
+    else if (row.sub1_submission_date) stage = 'Sub1';
+    bumpStage(abd, stage);
+
+    // Awaiting response = submitted at any sub but not yet approved at that step
+    const awaiting =
+      (row.sub1_submission_date && !row.sub1_approval_date) ||
+      (row.sub2_submission_date && !row.sub2_approval_date) ||
+      (row.sub3_submission_date && !row.sub3_approval_date);
+    if (awaiting && !submitted) abd.awaitingResponse++;
 
     // Risk uses SC date + lead
     const sc = scDateMap[row.project_id];
     const r = computeRisk(submitted, sc, leadDays, asOf);
     abd.risk[r]++;
 
-    // Overdue: not submitted and sub1_planned_date < asOf
+    // Overdue: not submitted and earliest planned date < asOf
     let isOverdue = false;
     let daysLate = 0;
     const due = safeIso(row.sub1_planned_date) ?? safeIso(row.sub3_planned_date);
@@ -184,6 +224,36 @@ export async function loadDashboardData(opts: {
         id: row.id,
         label: `${row.document_no}${row.title ? ' — ' + row.title : ''}`,
         daysLate,
+        pic: row.hdec_pic_name,
+      });
+    }
+
+    // Stuck: no submission yet & created > 14d ago
+    const created = safeIso(row.created_at);
+    if (!submitted && stage === 'Pending' && created) {
+      const idle = differenceInDays(asOf, created);
+      if (idle > 14) {
+        abd.stuck++;
+        abd.topStuck.push({
+          id: row.id,
+          label: `${row.document_no}${row.title ? ' — ' + row.title : ''}`,
+          daysIdle: idle,
+          pic: row.hdec_pic_name,
+        });
+      }
+    }
+
+    // Awaiting list
+    if (awaiting && !submitted) {
+      const submittedDate =
+        safeIso(row.sub3_submission_date) ?? safeIso(row.sub2_submission_date) ?? safeIso(row.sub1_submission_date);
+      const days = submittedDate ? differenceInDays(asOf, submittedDate) : 0;
+      abd.topAwaiting.push({
+        id: row.id,
+        label: `${row.document_no}${row.title ? ' — ' + row.title : ''}`,
+        daysWaiting: days,
+        pic: row.hdec_pic_name,
+        stageHint: stage,
       });
     }
 
@@ -194,11 +264,11 @@ export async function loadDashboardData(opts: {
       abd.approvedByDay.set(k, (abd.approvedByDay.get(k) ?? 0) + 1);
     }
 
-    // Cross-cut (ABD has no subcontractor/pic columns directly — pull from raw_payload)
+    // Cross-cut — prefer real columns, fall back to raw_payload / discipline
     const payload = (row.raw_payload ?? {}) as Record<string, any>;
-    const sub = payload.subcontractor_name ?? payload.subcontractor ?? row.discipline ?? null;
-    const pic = payload.hdec_pic_name ?? payload.hdec_pic ?? null;
-    const trade = payload.trade ?? row.discipline ?? null;
+    const sub = row.subcontractor_name ?? payload.subcontractor_name ?? payload.subcontractor ?? row.discipline ?? null;
+    const pic = row.hdec_pic_name ?? payload.hdec_pic_name ?? payload.hdec_pic ?? null;
+    const trade = row.trade ?? payload.trade ?? row.discipline ?? null;
     const patch = {
       total: 1,
       submitted: submitted ? 1 : 0,
@@ -211,23 +281,40 @@ export async function loadDashboardData(opts: {
   }
   abd.topOverdue.sort((a, b) => b.daysLate - a.daysLate);
   abd.topOverdue = abd.topOverdue.slice(0, 5);
+  abd.topStuck.sort((a, b) => b.daysIdle - a.daysIdle);
+  abd.topStuck = abd.topStuck.slice(0, 5);
+  abd.topAwaiting.sort((a, b) => b.daysWaiting - a.daysWaiting);
+  abd.topAwaiting = abd.topAwaiting.slice(0, 5);
 
-  // ── OMM
+  // ── OMM ────────────────────────────────────────────────────────
   const omm = emptyStats('omm');
-  for (const row of (ommRes.data ?? []) as any[]) {
+  omm.copyShortfall = 0;
+  for (const row of ommRows as any[]) {
     omm.total++;
-    const status = computeOmmStatus(row);
+    const status: OMMStatus = computeOmmStatus(row);
     const submitted = status === 'Approved';
     if (submitted) omm.submitted++;
     else omm.pending++;
 
-    // OMM has no SC-based risk yet — derive from final response planned vs asOf
-    const target = safeIso(row.final_response_planned_date) ?? safeIso(row.final_planned_date) ?? safeIso(row.draft_planned_date);
+    bumpStage(omm, status);
+
+    if (status === 'Draft Under Review' || status === 'Final Under Review') {
+      omm.awaitingResponse++;
+    }
+
+    // OMM risk — derive from final response planned vs asOf, considering whether already approved
+    const target =
+      safeIso(row.final_response_planned_date) ??
+      safeIso(row.final_planned_date) ??
+      safeIso(row.draft_planned_date);
     let r: RiskLevel = 'green';
     if (!submitted && target) {
       const days = differenceInDays(target, asOf);
       if (days < 0) r = 'red';
       else if (days < 7) r = 'amber';
+    } else if (!submitted && !target) {
+      // No planned date and not approved → amber by default to surface attention
+      r = 'amber';
     }
     omm.risk[r]++;
 
@@ -239,13 +326,51 @@ export async function loadDashboardData(opts: {
       omm.overdue++;
       omm.topOverdue.push({
         id: row.id,
-        label: `${row.sn ?? '—'}${row.work_trade_material ? ' — ' + row.work_trade_material : ''}`,
+        label: `${row.sn ?? '—'}${row.category ? ' — ' + row.category : ''}`,
         daysLate,
+        pic: row.hdec_pic_name,
       });
     }
 
+    // Stuck — Pending Draft > 14d since instruction_date or created_at
+    if (status === 'Pending Draft') {
+      const ref = safeIso(row.instruction_date) ?? safeIso(row.created_at);
+      if (ref) {
+        const idle = differenceInDays(asOf, ref);
+        if (idle > 14) {
+          omm.stuck++;
+          omm.topStuck.push({
+            id: row.id,
+            label: `${row.sn ?? '—'}${row.category ? ' — ' + row.category : ''}`,
+            daysIdle: idle,
+            pic: row.hdec_pic_name,
+          });
+        }
+      }
+    }
+
+    if (status === 'Draft Under Review' || status === 'Final Under Review') {
+      const since =
+        status === 'Final Under Review'
+          ? safeIso(row.final_actual_date)
+          : safeIso(row.draft_actual_date);
+      const days = since ? differenceInDays(asOf, since) : 0;
+      omm.topAwaiting.push({
+        id: row.id,
+        label: `${row.sn ?? '—'}${row.category ? ' — ' + row.category : ''}`,
+        daysWaiting: days,
+        pic: row.hdec_pic_name,
+        stageHint: status,
+      });
+    }
+
+    // Copy shortfall
+    if (copyAlertState(row.pdf_required_qty, row.pdf_actual_qty) === 'short') {
+      omm.copyShortfall = (omm.copyShortfall ?? 0) + 1;
+    }
+
     const approved = safeIso(row.final_response_actual_date);
-    if (approved) {
+    if (approved && submitted) {
       const k = format(approved, 'yyyy-MM-dd');
       omm.approvedByDay.set(k, (omm.approvedByDay.get(k) ?? 0) + 1);
     }
@@ -259,13 +384,18 @@ export async function loadDashboardData(opts: {
     bumpCell(omm.bySubcontractor, row.subcontractor_name, patch);
     bumpCell(omm.byPic, row.hdec_pic_name, patch);
     bumpCell(omm.byTrade, row.trade, patch);
+    void computeOmmStage; // imported for potential future use
   }
   omm.topOverdue.sort((a, b) => b.daysLate - a.daysLate);
   omm.topOverdue = omm.topOverdue.slice(0, 5);
+  omm.topStuck.sort((a, b) => b.daysIdle - a.daysIdle);
+  omm.topStuck = omm.topStuck.slice(0, 5);
+  omm.topAwaiting.sort((a, b) => b.daysWaiting - a.daysWaiting);
+  omm.topAwaiting = omm.topAwaiting.slice(0, 5);
 
-  // ── Spare Part (no due dates → no overdue / trend; use status normalisation for submitted)
+  // ── Spare Part ────────────────────────────────────────────────
   const sp = emptyStats('spare_part');
-  for (const row of (sparePartRes.data ?? []) as any[]) {
+  for (const row of sparePartRows as any[]) {
     sp.total++;
     const norm = normalizeSparePartStatus(row.status);
     const submitted = norm === 'stock' || norm === 'ordered';
@@ -285,7 +415,6 @@ export async function loadDashboardData(opts: {
     bumpCell(sp.byTrade, row.trade, patch);
   }
 
-  // Warranty placeholder
   const warranty = emptyStats('warranty');
 
   return { abd, omm, spare_part: sp, warranty, scDateMap, leadDays };
@@ -295,12 +424,10 @@ export async function loadDashboardData(opts: {
 export type TrendGranularity = 'day' | 'week' | 'month';
 
 export interface TrendPoint {
-  bucket: string; // ISO date of bucket start
+  bucket: string;
   label: string;
   abd: number;
   omm: number;
-  spare_part: number;
-  warranty: number;
 }
 
 export function buildTrend(data: DashboardData, granularity: TrendGranularity, asOf: Date = new Date()): TrendPoint[] {
@@ -313,7 +440,7 @@ export function buildTrend(data: DashboardData, granularity: TrendGranularity, a
     for (let i = 5; i >= 0; i--) buckets.push(startOfMonth(subMonths(asOf, i)));
   }
 
-  const fmt = granularity === 'month' ? 'MMM yyyy' : granularity === 'week' ? 'MMM dd' : 'MMM dd';
+  const fmt = granularity === 'month' ? 'MMM yyyy' : 'MMM dd';
 
   const sumModule = (m: ModuleStats, bucketStart: Date, nextStart: Date) => {
     let n = 0;
@@ -335,15 +462,22 @@ export function buildTrend(data: DashboardData, granularity: TrendGranularity, a
       label: format(b, fmt),
       abd: sumModule(data.abd, b, next),
       omm: sumModule(data.omm, b, next),
-      spare_part: sumModule(data.spare_part, b, next),
-      warranty: 0,
     };
   });
 }
 
-export const MODULE_META: Record<DocsModuleId, { label: string; short: string; route: string }> = {
-  abd: { label: 'As-Built Drawings', short: 'ABD', route: '/docs/abd' },
-  omm: { label: 'O&M Manuals', short: 'OMM', route: '/docs/omm' },
-  spare_part: { label: 'Spare Parts', short: 'Spare Part', route: '/docs/spare-part' },
-  warranty: { label: 'Warranty', short: 'Warranty', route: '/docs/warranty' },
+export const MODULE_META: Record<DocsModuleId, { label: string; short: string; route: string; tone: 'primary' | 'accent' | 'muted' }> = {
+  abd: { label: 'As-Built Drawings', short: 'ABD', route: '/docs/abd', tone: 'primary' },
+  omm: { label: 'O&M Manuals', short: 'OMM', route: '/docs/omm', tone: 'accent' },
+  spare_part: { label: 'Spare Parts', short: 'Spare Part', route: '/docs/spare-part', tone: 'muted' },
+  warranty: { label: 'Warranty', short: 'Warranty', route: '/docs/warranty', tone: 'muted' },
 };
+
+export const ABD_STAGES = ['Pending', 'Sub1', 'Sub2', 'Sub3', 'Approved'] as const;
+export const OMM_STAGES: OMMStatus[] = [
+  'Pending Draft',
+  'Draft Under Review',
+  'Pending Final Submission',
+  'Final Under Review',
+  'Approved',
+];
