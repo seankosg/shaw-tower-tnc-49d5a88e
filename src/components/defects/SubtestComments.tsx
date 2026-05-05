@@ -58,7 +58,7 @@ export function SubtestComments({
 }: SubtestCommentsProps) {
   const { user, profile, isAdmin, isSuperuser, roles } = useAuth();
   const { toast } = useToast();
-  const isSenior = roles.includes('senior_user');
+  const isSenior = roles.includes('senior_user') || roles.includes('d_superuser');
   const canPostInstruction = isAdmin || isSuperuser || isSenior;
   const isHdec = profile?.user_type === 'hdec';
   const [myTeam, setMyTeam] = useState<string | null>(null);
