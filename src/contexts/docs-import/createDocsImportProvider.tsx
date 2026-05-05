@@ -191,6 +191,8 @@ export function createDocsImportProvider<TRow>(
           rejectSamples: [], errorCode: undefined, errorDetails: undefined, errorHint: undefined, error: undefined,
         } : x));
 
+        const fileAutoEntries: import('@/contexts/docs-import/types').AutoRegisteredMasterEntry[] = [];
+
         try {
           // Create batch.
           const batchInsert: any = {
