@@ -205,6 +205,23 @@ export function createDocsImportProvider<TRow>(
           }
           const batchId = batchData.id as string;
 
+          // Auto-register any new HDEC PIC / HDEC ENG names found in the file.
+          // Idempotent + cached; failures are non-blocking.
+          if (ensurer) {
+            for (const r of parsed) {
+              const row = r as { hdec_pic_name?: string | null; hdec_eng_name?: string | null };
+              if (!row.hdec_pic_name && !row.hdec_eng_name) continue;
+              try {
+                await ensurer.ensureForRow({
+                  hdec_pic_name: row.hdec_pic_name ?? null,
+                  hdec_eng_name: row.hdec_eng_name ?? null,
+                });
+              } catch (err) {
+                console.warn('[docs-import] ensureForRow failed', err);
+              }
+            }
+          }
+
           // Run sub-module-specific upserts.
           const onProgress = (processed: number, total: number) => {
             const pct = Math.round((processed / total) * 100);
