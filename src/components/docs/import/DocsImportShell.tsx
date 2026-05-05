@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,8 +6,10 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
-  Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, Lock, AlertTriangle, Info, Settings,
+  Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, Lock, AlertTriangle, Info, Settings, Settings2,
 } from 'lucide-react';
+import { DocsColumnSelect } from '@/components/docs/import/DocsColumnSelect';
+import type { DocsSubModule as DocsFieldSubModule } from '@/hooks/useDocsFieldConfig';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { useAuth } from '@/contexts/AuthContext';
 import type {
