@@ -325,8 +325,13 @@ export default function DocsImportLogsPage() {
       ) : (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              {batches.find((b) => b.id === selectedBatch)?.uploaded_file_name}
+            <CardTitle className="text-base flex items-center gap-2">
+              <span>{batches.find((b) => b.id === selectedBatch)?.uploaded_file_name}</span>
+              {(() => {
+                const sm = batches.find(b => b.id === selectedBatch)?.sub_module ?? '';
+                if (!sm) return null;
+                return <Badge variant="outline" className={`text-xs ${SUB_MODULE_COLORS[sm] || ''}`}>{SUB_MODULE_LABELS[sm] || sm}</Badge>;
+              })()}
             </CardTitle>
           </CardHeader>
           <CardContent>
