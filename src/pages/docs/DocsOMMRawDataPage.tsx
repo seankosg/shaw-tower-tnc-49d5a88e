@@ -100,15 +100,16 @@ const NUMBER_FIELDS = new Set([
   'hardcopy_actual_qty',
 ]);
 
-const COLUMN_ORDER = [
-  '__select',
-  'cycle_progress',
+// Data fields rendered for each OMM row (system anchors like __select / __open
+// and the derived cycle_progress / current_status columns are NOT included here —
+// they are pinned by the page itself).
+const OMM_DATA_FIELDS = [
   'sn',
   'category_group',
+  'team',
   'category',
   'section',
   'work_trade_material',
-  'team',
   'subcontractor_name',
   'hdec_pic_name',
   'hdec_eng_name',
@@ -127,10 +128,9 @@ const COLUMN_ORDER = [
   'final_response_planned_date',
   'final_response_actual_date',
   'final_response_status',
-  'current_status',
+  'current_stage',
   'remarks',
-  '__open',
-];
+] as const;
 
 const RAW_SEARCH_FIELDS = [
   'sn',
