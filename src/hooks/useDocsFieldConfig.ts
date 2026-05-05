@@ -154,11 +154,25 @@ export function useDocsFieldConfig(subModule: DocsSubModule = 'as_built') {
 
   const sortFieldNames = (fieldNames: string[]) => [...fieldNames].sort((a, b) => getOrder(a) - getOrder(b));
 
+  /**
+   * Field-level edit gate based on `editable_to_roles` config.
+   * - If `editable_to_roles` is null/empty → editable by anyone with row write permission (default)
+   * - Otherwise → only listed roles are allowed (admin always)
+   */
+  const isFieldEditable = (fieldName: string, userRoles: AppRole[]) => {
+    const cfg = fieldMap.get(fieldName);
+    const allowed = cfg?.editable_to_roles;
+    if (!allowed || allowed.length === 0) return true;
+    if (userRoles.includes('admin')) return true;
+    return userRoles.some((r) => allowed.includes(r));
+  };
+
   return {
     fields,
     loading,
     isFieldVisible,
     isFieldRequired,
+    isFieldEditable,
     getLabel,
     getSourceLabel,
     getSourceOrigin,
