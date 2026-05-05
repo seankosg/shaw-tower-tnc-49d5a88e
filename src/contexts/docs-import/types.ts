@@ -49,6 +49,9 @@ export interface DocsImportFile<TRow = unknown> {
   fieldByHeader?: Record<string, string | null>;
   /** Headers the user opted to exclude — passed back to the parser so they're ignored. */
   excludedHeaders?: string[];
+  /** Canonical field names excluded from this import (derived from excludedHeaders by the parser).
+   *  Workers consult this set during UPDATE so existing DB values for those columns are preserved. */
+  excludedFields?: Set<string>;
   /** Pre-import validation message (e.g. missing system-required column). Blocks Start. */
   validationError?: string | null;
   unknownHeaders?: string[];
