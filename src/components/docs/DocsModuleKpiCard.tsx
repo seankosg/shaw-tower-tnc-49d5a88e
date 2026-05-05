@@ -9,11 +9,23 @@ interface Props {
   total: number;
   submitted: number;
   red: number;
+  awaiting?: number;
+  copyShort?: number;
   onClick?: () => void;
   disabled?: boolean;
 }
 
-export function DocsModuleKpiCard({ icon: Icon, label, total, submitted, red, onClick, disabled }: Props) {
+export function DocsModuleKpiCard({
+  icon: Icon,
+  label,
+  total,
+  submitted,
+  red,
+  awaiting,
+  copyShort,
+  onClick,
+  disabled,
+}: Props) {
   const pct = total > 0 ? Math.round((submitted / total) * 100) : 0;
   const interactive = !!onClick && !disabled;
   return (
@@ -42,11 +54,18 @@ export function DocsModuleKpiCard({ icon: Icon, label, total, submitted, red, on
             {label}
           </span>
         </div>
-        {red > 0 && (
-          <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
-            R {red}
-          </span>
-        )}
+        <div className="flex items-center gap-1">
+          {!!awaiting && awaiting > 0 && (
+            <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+              W {awaiting}
+            </span>
+          )}
+          {red > 0 && (
+            <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
+              R {red}
+            </span>
+          )}
+        </div>
       </div>
       <div className="mt-3 flex items-baseline gap-2">
         <span className="text-2xl font-semibold tabular-nums">{total.toLocaleString()}</span>
@@ -59,6 +78,11 @@ export function DocsModuleKpiCard({ icon: Icon, label, total, submitted, red, on
         </div>
         <Progress value={pct} className="mt-1 h-1.5" />
       </div>
+      {typeof copyShort === 'number' && copyShort > 0 && (
+        <div className="mt-2 text-[10px] text-muted-foreground">
+          <span className="font-medium text-destructive">{copyShort}</span> copy shortfall
+        </div>
+      )}
     </Card>
   );
 }
