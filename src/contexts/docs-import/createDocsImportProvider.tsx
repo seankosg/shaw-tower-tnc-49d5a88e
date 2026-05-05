@@ -13,6 +13,7 @@ import type {
   DocsImportFile,
   ImporterAdapter,
 } from '@/contexts/docs-import/types';
+import { validateDocsHeaders } from '@/lib/docs-import-validation';
 
 interface FactoryArgs<TRow> {
   adapter: ImporterAdapter<TRow>;
