@@ -435,7 +435,7 @@ export default function DocsImportLogsPage() {
                             <TableRow>
                               <TableHead className="text-xs w-8"></TableHead>
                               <TableHead className="text-xs">Row</TableHead>
-                              <TableHead className="text-xs">Document No</TableHead>
+                              <TableHead className="text-xs">{KEY_FIELD_LABELS[batches.find(b => b.id === selectedBatch)?.sub_module ?? ''] || 'Key'}</TableHead>
                               <TableHead className="text-xs">Action</TableHead>
                               <TableHead className="text-xs">Reason</TableHead>
                               <TableHead className="text-xs">Detail</TableHead>
