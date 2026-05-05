@@ -42,7 +42,6 @@ const defectNav = [
   { label: 'Import', icon: Upload, path: '/defects/import' },
   { label: 'Export', icon: Download, path: '/defects/export' },
   { label: 'Defect Classification', icon: Tags, path: '/admin/classification' },
-  { label: 'Quick Update', icon: ClipboardList, path: '/defects/quick-update' },
 ];
 
 const docsNav = [
