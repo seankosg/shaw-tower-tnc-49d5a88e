@@ -211,18 +211,57 @@ export function createDocsImportProvider<TRow>(
           const batchId = batchData.id as string;
 
           // Auto-register any new HDEC PIC / HDEC ENG names found in the file.
-          // Idempotent + cached; failures are non-blocking.
+          // Idempotent + cached; failures are non-blocking. Per-row events are
+          // collected here so we can show a detailed report after import.
+          const fileAutoEntries: import('@/contexts/docs-import/types').AutoRegisteredMasterEntry[] = [];
           if (ensurer) {
             for (const r of parsed) {
-              const row = r as { hdec_pic_name?: string | null; hdec_eng_name?: string | null };
-              if (!row.hdec_pic_name && !row.hdec_eng_name) continue;
+              const row = r as { hdec_pic_name?: string | null; hdec_eng_name?: string | null; rawRowNo?: number | null };
+              const picName = row.hdec_pic_name?.trim() || null;
+              const engName = row.hdec_eng_name?.trim() || null;
+              if (!picName && !engName) continue;
+
+              const isNewPic = !!picName && !attemptedPic.has(nameKey(picName));
+              const isNewEng = !!engName && !attemptedEng.has(nameKey(engName));
+              if (!isNewPic && !isNewEng) continue;
+
+              if (isNewPic) attemptedPic.add(nameKey(picName!));
+              if (isNewEng) attemptedEng.add(nameKey(engName!));
+
+              const warningsBefore = ensurer.warnings.length;
               try {
                 await ensurer.ensureForRow({
-                  hdec_pic_name: row.hdec_pic_name ?? null,
-                  hdec_eng_name: row.hdec_eng_name ?? null,
+                  hdec_pic_name: isNewPic ? picName : null,
+                  hdec_eng_name: isNewEng ? engName : null,
                 });
               } catch (err) {
                 console.warn('[docs-import] ensureForRow failed', err);
+              }
+              const newWarnings = ensurer.warnings.slice(warningsBefore);
+              const failedFor = (n: string) => newWarnings.find((w) => w.startsWith(`${n} (`));
+
+              const rowKey = adapter.getRowKey(r);
+              if (isNewPic && picName) {
+                const fail = failedFor(picName);
+                fileAutoEntries.push({
+                  rawRowNo: row.rawRowNo ?? null,
+                  key: rowKey,
+                  field: 'hdec_pic',
+                  name: picName,
+                  status: fail ? 'failed' : 'registered',
+                  reason: fail,
+                });
+              }
+              if (isNewEng && engName) {
+                const fail = failedFor(engName);
+                fileAutoEntries.push({
+                  rawRowNo: row.rawRowNo ?? null,
+                  key: rowKey,
+                  field: 'hdec_eng',
+                  name: engName,
+                  status: fail ? 'failed' : 'registered',
+                  reason: fail,
+                });
               }
             }
           }
