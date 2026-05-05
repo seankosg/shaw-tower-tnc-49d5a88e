@@ -63,6 +63,27 @@ const actionColor: Record<string, string> = {
   rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
 };
 
+const SUB_MODULE_LABELS: Record<string, string> = {
+  as_built: 'As-Built',
+  omm: 'OMM',
+  warranty: 'Warranty',
+  spare_part: 'Spare Part',
+};
+
+const SUB_MODULE_COLORS: Record<string, string> = {
+  as_built: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200',
+  omm: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
+  warranty: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+  spare_part: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+};
+
+const KEY_FIELD_LABELS: Record<string, string> = {
+  as_built: 'Document No',
+  omm: 'SN',
+  warranty: 'Warranty No',
+  spare_part: 'SN',
+};
+
 export default function DocsImportLogsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
