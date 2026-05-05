@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { canAccessRoute } from '@/lib/role-permissions';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { ModulePausedScreen } from './ModulePausedScreen';
+import { Button } from '@/components/ui/button';
 
 function detectModule(pathname: string): 'tnc' | 'defect' | 'docs' | null {
   if (pathname.startsWith('/tc/') || pathname === '/dashboard' || pathname === '/schedule'
@@ -21,23 +22,54 @@ function detectModule(pathname: string): 'tnc' | 'defect' | 'docs' | null {
   return null;
 }
 
+// Try guest-allowed pages first so a Guest is never left on a blank screen.
+const FALLBACK_ROUTES = [
+  '/tc/dashboard',
+  '/tc/progress',
+  '/defects/dashboard',
+  '/defects/progress',
+  '/docs/dashboard',
+  '/admin',
+];
+
 export function RoleGuard({ children }: { children: React.ReactNode }) {
-  const { roles, isAdmin } = useAuth();
+  const { roles, isAdmin, loading, session, signOut } = useAuth();
   const { pathname } = useLocation();
-  const { tnc, defect, docs, loading } = useModuleStatus();
+  const { tnc, defect, docs, loading: modLoading } = useModuleStatus();
+
+  // Wait for auth/role data before deciding access — prevents the blank
+  // "No accessible pages" flash right after login when roles haven't loaded yet.
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  // Authenticated but no roles assigned — give a clear message instead of a blank screen.
+  if (session && roles.length === 0) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 p-6 text-center">
+        <h2 className="text-lg font-semibold">No role assigned</h2>
+        <p className="max-w-md text-sm text-muted-foreground">
+          Your account has no role assigned yet. Please contact an administrator to grant access.
+        </p>
+        <Button variant="outline" size="sm" onClick={() => void signOut()}>Sign Out</Button>
+      </div>
+    );
+  }
 
   if (!canAccessRoute(roles, pathname)) {
-    // Pick the first route the user can actually access — avoids redirect loops
-    // when the configured fallback (e.g. /dashboard) is itself restricted.
-    const fallbacks = ['/tc/dashboard', '/defects/dashboard', '/docs/dashboard', '/dashboard'];
-    const target = fallbacks.find((p) => canAccessRoute(roles, p));
-    if (!target || target === pathname) {
+    const target = FALLBACK_ROUTES.find((p) => p !== pathname && canAccessRoute(roles, p));
+    if (!target) {
       return (
-        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 p-6 text-center">
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 p-6 text-center">
           <h2 className="text-lg font-semibold">No accessible pages</h2>
           <p className="text-sm text-muted-foreground">
             Your account does not have permission to view any module. Please contact an administrator.
           </p>
+          <Button variant="outline" size="sm" onClick={() => void signOut()}>Sign Out</Button>
         </div>
       );
     }
@@ -45,7 +77,7 @@ export function RoleGuard({ children }: { children: React.ReactNode }) {
   }
 
   // Module pause check — admin always passes
-  if (!loading && !isAdmin) {
+  if (!modLoading && !isAdmin) {
     const mod = detectModule(pathname);
     if (mod === 'tnc' && !tnc.enabled) {
       return <ModulePausedScreen module="tnc" status={tnc} />;
