@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { DocsImportShell } from '@/components/docs/import/DocsImportShell';
 import { useAbdImport } from '@/contexts/docs-import/AbdImportContext';
 import { useOmmImport } from '@/contexts/docs-import/OmmImportContext';
+import { useWarrantyImport } from '@/contexts/docs-import/WarrantyImportContext';
 
 type SubKey = 'abd' | 'omm' | 'warranty' | 'spare_part';
 
@@ -22,7 +23,6 @@ export default function DocsImportPage() {
   const raw = (searchParams.get('sub') ?? 'abd').toLowerCase() as SubKey;
   const sub: SubKey = VALID.includes(raw) ? raw : 'abd';
 
-  // Normalize URL when missing/invalid sub.
   useEffect(() => {
     if (searchParams.get('sub') !== sub) {
       const next = new URLSearchParams(searchParams);
@@ -33,9 +33,9 @@ export default function DocsImportPage() {
 
   const abd = useAbdImport();
   const omm = useOmmImport();
+  const warranty = useWarrantyImport();
 
-  // Cross-tab busy lock — disable Start on the other tab while one is running.
-  const anyRunning = abd.isRunning || omm.isRunning;
+  const anyRunning = abd.isRunning || omm.isRunning || warranty.isRunning;
 
   const handleTabChange = (val: string) => {
     if (!VALID.includes(val as SubKey)) return;
@@ -47,7 +47,8 @@ export default function DocsImportPage() {
   const summary = useMemo(() => ({
     abdFiles: abd.files.length,
     ommFiles: omm.files.length,
-  }), [abd.files.length, omm.files.length]);
+    warrantyFiles: warranty.files.length,
+  }), [abd.files.length, omm.files.length, warranty.files.length]);
 
   return (
     <div className="space-y-4 p-6">
@@ -66,8 +67,8 @@ export default function DocsImportPage() {
           <TabsTrigger value="omm">
             OMM Manuals{fileBadge(summary.ommFiles, omm.isRunning)}
           </TabsTrigger>
-          <TabsTrigger value="warranty" disabled>
-            Warranty <Badge variant="outline" className="ml-2 h-4 px-1.5 text-[10px]">Coming soon</Badge>
+          <TabsTrigger value="warranty">
+            Warranty{fileBadge(summary.warrantyFiles, warranty.isRunning)}
           </TabsTrigger>
           <TabsTrigger value="spare_part" disabled>
             Spare Part <Badge variant="outline" className="ml-2 h-4 px-1.5 text-[10px]">Coming soon</Badge>
@@ -79,7 +80,7 @@ export default function DocsImportPage() {
             title="ABD — As-Built Drawings"
             description="Upload Aconex / register Excel files. Only sheets whose name contains “register” are imported; every column header (including 2-row banded Submission 1/2/3 headers) is mapped automatically."
             importer={abd}
-            externallyBusy={omm.isRunning}
+            externallyBusy={omm.isRunning || warranty.isRunning}
           />
         </TabsContent>
 
@@ -88,15 +89,19 @@ export default function DocsImportPage() {
             title="OMM — Operation & Maintenance Manuals"
             description="Upload OMM register Excel files. Headers map per Admin → Header Mappings → Docs / OMM."
             importer={omm}
-            externallyBusy={abd.isRunning}
+            externallyBusy={abd.isRunning || warranty.isRunning}
             infoBanner="Resubmission rows are auto-created when Draft / Final response status becomes B or C during import."
           />
         </TabsContent>
 
         <TabsContent value="warranty" className="mt-4">
-          <div className="rounded border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
-            Warranty import is being prepared in the next phase.
-          </div>
+          <DocsImportShell
+            title="Warranty — List of Warranties"
+            description="Upload SHAW List of Warranties Excel. Rows are identified by No; Schedule R columns sync to Subcontractor Information Master; Tread columns become threaded discussion records."
+            importer={warranty as any}
+            externallyBusy={abd.isRunning || omm.isRunning}
+            infoBanner="Resubmission rows are auto-created when any stage status (Draft / Subcon Sign / HDEC Sign / Final) becomes B or C."
+          />
         </TabsContent>
 
         <TabsContent value="spare_part" className="mt-4">
