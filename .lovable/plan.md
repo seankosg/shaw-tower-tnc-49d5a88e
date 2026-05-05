@@ -1,69 +1,67 @@
-## Login Greeting Popup
+## 문제 진단
 
-로그인 성공 직후 화면 한가운데에 사용자 영문 이름과 시간대(접속자 로컬 표준시) 기반 인삿말을 띄우고, 6초 후 자동으로 사라지거나 X 버튼으로 즉시 닫을 수 있는 모달을 추가합니다.
+Guest 로그인 시 화면이 비어 있는 원인은 두 가지입니다.
 
-### 인삿말 카피 (Warm & concise, professional 유지)
+1. **로그인 직후 역할 로딩 경합 (가장 큰 원인)**
+   - `AuthContext`의 `signIn` 성공 → `Login.tsx`가 즉시 `/dashboard`로 이동
+   - `onAuthStateChange`에서 `setLoading(false)`는 즉시 실행되지만, `fetchUserData`(profile + user_roles)는 `setTimeout(..., 0)`으로 비동기 실행
+   - 그 사이 `RoleGuard`가 한 번 렌더되며 `roles = []` 상태로 평가됨
+   - `canAccessRoute([], '/tc/dashboard')`는 `rank = -1`이므로 모든 fallback도 실패 → "No accessible pages" 화면 표시
 
-시간대 인사 (접속자 브라우저 시간 기준):
-- 05:00–11:59 → "Good morning"
-- 12:00–17:59 → "Good afternoon"
-- 18:00–21:59 → "Good evening"
-- 22:00–04:59 → "Hello"
+2. **기억된 경로(remembered route) 부작용**
+   - 사이드바가 `getRememberedRoute('/tc/dashboard')` 등을 사용
+   - Guest가 과거에 어떤 경로를 본 적이 있다면 권한 없는 URL로 이동할 위험이 있음
 
-표시 형식 (2줄):
-```
-Good morning, John.
-Welcome to SHAW Tower Project Completion Management System.
-```
+3. **권한 매트릭스는 이미 의도대로 설정되어 있음**
+   - `role-permissions.ts`에서 Guest(rank 0) 허용 경로:
+     - `/tc/dashboard`, `/tc/progress`
+     - `/defects/dashboard`, `/defects/progress`
+   - 그 외 모든 페이지(Raw Data, Import, Export, Quick Update, Schedule Revision, Detail, Docs, Admin)는 차단됨 → 요구사항과 일치
 
-서브텍스트(작게, 한 줄):
-```
-Have a productive day.
-```
+## 수정 계획
 
-이름 추출 로직:
-- `profile.hdec_eng_name` 우선 사용 (있을 경우)
-- 없으면 `profile.name`에서 영문 토큰만 추출 (`/[A-Za-z][A-Za-z .'-]*/`)
-- 그래도 없으면 `login_id`의 첫 토큰(`_` 앞부분)을 Title Case로
-- 첫 단어(이름)만 사용 — 예: "John Smith" → "John"
+### 1. AuthContext: 역할 로딩이 끝날 때까지 `loading=true` 유지
+- `onAuthStateChange`에서 세션이 있으면 `fetchUserData` 완료 **후**에 `setLoading(false)`
+- 세션이 없을 때만 즉시 `setLoading(false)`
+- `getSession()` 초기화 경로도 동일하게 처리
+- 결과: `RoleGuard`가 `roles=[]` 상태로 호출되는 일이 사라짐
 
-### UI 사양
+### 2. RoleGuard: 로딩 중에는 판정 보류
+- `useAuth()`에서 `loading`을 받아 `loading === true`면 간단한 로딩 화면 표시
+- 세션은 있는데 `roles`가 비어 있는 비정상 케이스에 대비해, 명확한 안내 메시지 + 로그아웃 버튼을 표시 (현재의 "No accessible pages"보다 친절하게)
 
-- shadcn `Dialog` 사용, 화면 정중앙
-- 카드 폭 ~ `max-w-md`, padding 넉넉히 (p-8)
-- 우상단에 X 닫기 버튼 (Dialog 기본 close)
-- 본문 중앙 정렬:
-  - 큰 인삿말 (text-2xl, font-semibold)
-  - 시스템 환영 문구 (text-base, text-muted-foreground)
-  - 하단 작은 서브텍스트 (text-sm)
-- 6초 카운트다운 진행바 (하단 얇은 bar, primary 색)
-- 사용자가 마우스 hover 시 타이머 일시정지(작은 UX 개선) — 선택사항
-- Inter 폰트, 기존 디자인 토큰만 사용 (no playful)
+### 3. RoleGuard fallback 우선순위를 Guest 친화적으로 조정
+- 현재 fallback: `['/tc/dashboard', '/defects/dashboard', '/docs/dashboard', '/dashboard']`
+- Guest 허용 경로 4개를 모두 우선 시도하도록 명시:
+  - `/tc/dashboard` → `/tc/progress` → `/defects/dashboard` → `/defects/progress`
+- 어떤 잘못된 URL이든 Guest를 곧바로 첫 번째 접근 가능한 페이지로 보냄
 
-### 동작
+### 4. 사이드바: 권한 없는 remembered route 무시
+- `AppSidebar`에서 `getRememberedRoute(item.path)` 결과가 현재 `roles`로 접근 불가하면 `item.path`로 강제 폴백
+- Guest가 과거 세션의 잔여 URL로 튕기지 않도록 방지
 
-- 트리거: `Login.tsx`의 `signIn` 성공 + `is_active=true` → `navigate('/dashboard')` 직후
-- 구현: `AuthContext`에 `justLoggedIn` 플래그를 두거나, 더 단순히 `sessionStorage.setItem('shaw_just_logged_in', '1')` 후 `AppLayout` 마운트 시 읽어 모달 1회 표시 후 키 삭제
-- 빈도: 매 로그인 시 (요청대로 — 일자 게이트 없음)
-- 자동 닫힘: 6초 (`setTimeout`), X 버튼 클릭 시 즉시 닫힘 + 타이머 클리어
-- 키보드: ESC로 닫힘 (Dialog 기본)
+### 5. Guest 권한 매트릭스 재확인 (코드 변경 없음, 검증만)
+- 다음 페이지만 Guest 접근 가능:
+  - T&C / Dashboard (`/tc/dashboard`)
+  - T&C / Progress (`/tc/progress`)
+  - Defect / Dashboard (`/defects/dashboard`)
+  - Defect / Progress (`/defects/progress`)
+- 그 외 모든 경로는 첫 번째 접근 가능한 페이지로 자동 리다이렉트
 
-### 파일 변경
+### 6. 검증 시나리오
+- Guest 로그인 → 자동으로 `/tc/dashboard` 표시 (빈 화면 없음)
+- Guest가 `/admin`, `/tc/raw-data`, `/docs/dashboard`, `/defects/import` 등 직접 입력 → `/tc/dashboard`로 리다이렉트
+- 사이드바: T&C는 Dashboard/Progress 두 항목, Defect는 Dashboard/Progress 두 항목만 표시 (Docs/Admin/Raw Data/Import/Export/Quick Update/Schedule Revision/Defect Classification 모두 숨김)
+- 새로고침 후에도 동일 동작
+- 기존 일반 User/Admin 동작은 영향 없음
 
-- 신규: `src/components/auth/LoginGreetingDialog.tsx`
-  - props: `open`, `onClose`, `name`
-  - 내부에서 시간대별 인사 계산, 6초 자동 닫힘, 진행바
-- 신규: `src/lib/greeting.ts`
-  - `getTimeGreeting(date = new Date()): string`
-  - `extractEnglishFirstName(profile, loginId): string`
-- 수정: `src/pages/Login.tsx`
-  - 로그인 성공 시 `sessionStorage.setItem('shaw_greet', '1')` 후 navigate
-- 수정: `src/components/layout/AppLayout.tsx` (또는 최상위 인증 후 레이아웃)
-  - 마운트 시 `sessionStorage`에서 플래그 확인 → `LoginGreetingDialog` 렌더 → 닫히면 키 제거
-  - `profile`이 로드된 후에만 표시 (이름 필요)
+## 변경 파일
+- `src/contexts/AuthContext.tsx` — 로딩 종료 시점 수정
+- `src/components/layout/RoleGuard.tsx` — 로딩 가드 + fallback 순서 보강
+- `src/components/layout/AppSidebar.tsx` — remembered route 권한 검증
+- (필요 시) `src/lib/role-permissions.ts` — 변경 없음, 검증만
 
-### Edge cases
-
-- profile이 아직 로드 중이면 로드 완료까지 대기 (조건부 렌더)
-- 영문 이름을 전혀 추출 못하면 `"there"`로 폴백 → "Good morning, there." 대신 "Good morning." 처럼 이름 부분 생략
-- 모달이 열린 상태에서 라우트 이동해도 sessionStorage 키는 1회 표시 후 즉시 제거되므로 중복 노출 없음
+## 기술 메모
+- `role-permissions.ts`의 Guest(rank 0) 매트릭스는 이미 정확함 → 코드 변경보다 **타이밍 버그**가 핵심 원인
+- `ProtectedRoute`는 그대로 두고, 권한 판정만 `RoleGuard`에서 일관되게 처리
+- 접속 주소 자체는 문제가 아님 (`/dashboard` → `/tc/dashboard` 리다이렉트가 올바르게 정의되어 있음)

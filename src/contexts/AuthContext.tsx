@@ -65,19 +65,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (_event, newSession) => {
         setSession(newSession);
         if (newSession?.user) {
-          setTimeout(() => fetchUserData(newSession.user.id), 0);
+          // Keep loading=true until profile + roles are fetched, so RoleGuard
+          // doesn't evaluate access with an empty roles array (causing a blank
+          // "No accessible pages" screen for guests right after login).
+          setLoading(true);
+          // Defer to next tick to avoid deadlocks inside the auth callback.
+          setTimeout(async () => {
+            try {
+              await fetchUserData(newSession.user.id);
+            } finally {
+              setLoading(false);
+            }
+          }, 0);
         } else {
           setProfile(null);
           setRoles([]);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s);
-      if (s?.user) fetchUserData(s.user.id);
-      setLoading(false);
+      if (s?.user) {
+        try {
+          await fetchUserData(s.user.id);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        setLoading(false);
+      }
     });
 
     return () => subscription.unsubscribe();
