@@ -351,6 +351,68 @@ export async function applyBulkDuplicate(args: {
     return out;
   }
 
+  if (args.entity === 'drawing') {
+    // Drawing duplicate — append "-2", "-3", … to document_no on per-(project, sub_module) collision.
+    const ids = args.rows.map((r) => r.id);
+    const { data: src, error: srcErr } = await (supabase as any)
+      .from('docs_drawings')
+      .select('*')
+      .in('id', ids);
+    if (srcErr) throw srcErr;
+
+    const inserts: any[] = [];
+    for (const row of src ?? []) {
+      const copy: any = { ...row };
+      delete copy.id;
+      delete copy.created_at;
+      delete copy.updated_at;
+      delete copy.row_version;
+      copy.updated_by = args.userId;
+      copy.data_source_type = 'manual';
+      copy.source_upload_id = null;
+      copy.is_active = true;
+      if (args.options.resetActualDates) for (const f of DRAWING_RESET_ACTUALS) copy[f] = null;
+      if (args.options.resetProgressStatus) {
+        for (const f of DRAWING_RESET_STATUS) copy[f] = null;
+        copy.is_submitted = false;
+      }
+      inserts.push(copy);
+    }
+
+    // Try batch insert first; on collision, retry per row with numeric suffix.
+    const { data: ins, error: insErr } = await (supabase as any)
+      .from('docs_drawings')
+      .insert(inserts)
+      .select('id');
+    if (!insErr) {
+      out.succeeded = (ins ?? []).length;
+      out.failed = inserts.length - out.succeeded;
+      return out;
+    }
+    let succeeded = 0;
+    let failed = 0;
+    for (const payload of inserts) {
+      const baseDoc = String((payload as any).document_no ?? '');
+      let attempt = 1;
+      let lastErr: any = null;
+      while (attempt <= 8) {
+        const tryPayload = attempt === 1
+          ? payload
+          : { ...payload, document_no: `${baseDoc}-${attempt}` };
+        // eslint-disable-next-line no-await-in-loop
+        const { error } = await (supabase as any).from('docs_drawings').insert(tryPayload);
+        if (!error) { succeeded++; lastErr = null; break; }
+        lastErr = error;
+        if (error.code !== '23505') break;
+        attempt++;
+      }
+      if (lastErr) failed++;
+    }
+    out.succeeded = succeeded;
+    out.failed = failed;
+    return out;
+  }
+
   // Defect duplicate — increment issue_no per project (numeric portion if possible)
   const ids = args.rows.map((r) => r.id);
   const { data: src, error: srcErr } = await (supabase as any)
