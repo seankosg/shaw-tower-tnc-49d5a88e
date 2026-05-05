@@ -286,7 +286,7 @@ export default function DocsOMMDetailPage() {
               field={f}
               label={getLabel(f)}
               value={(row as any)[f]}
-              disabled={!canEdit || saving}
+              disabled={!canEditField(f) || saving}
               onSave={(v) => save(f, v)}
               subOptions={subOptions}
               picOptions={picOptions}
@@ -319,7 +319,7 @@ export default function DocsOMMDetailPage() {
                 field={f}
                 label={getLabel(f)}
                 value={(row as any)[f]}
-                disabled={!canEdit || saving}
+                disabled={!canEditField(f) || saving}
                 onSave={(v) => save(f, v)}
               />
             ))}
@@ -341,7 +341,7 @@ export default function DocsOMMDetailPage() {
                 field={f}
                 label={getLabel(f)}
                 value={(row as any)[f]}
-                disabled={!canEdit || saving || (f === 'final_response_status' && (row.draft_response_status ?? '').toUpperCase() !== 'A')}
+                disabled={!canEditField(f) || saving || (f === 'final_response_status' && (row.draft_response_status ?? '').toUpperCase() !== 'A')}
                 onSave={(v) => save(f, v)}
               />
             ))}
@@ -358,7 +358,7 @@ export default function DocsOMMDetailPage() {
           <CardContent>
             <Textarea
               defaultValue={row.remarks ?? ''}
-              disabled={!canEdit || saving}
+              disabled={!canEditField('remarks') || saving}
               onBlur={(e) => {
                 const v = e.target.value.trim();
                 if (v !== (row.remarks ?? '')) save('remarks', v || null);
