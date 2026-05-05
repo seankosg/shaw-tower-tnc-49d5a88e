@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { normalizeDate } from '@/lib/defect-parser';
-import { normalizeApprovalStatus, clearCyclesAfterClosure } from '@/lib/docs-status';
+import { normalizeApprovalStatus, clearCyclesAfterClosure, computeOverallStatus } from '@/lib/docs-status';
 import { getMappedField } from '@/lib/header-mappings-cache';
 import { normalizeTeamValue } from '@/types/enums';
 
