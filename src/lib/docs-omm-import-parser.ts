@@ -45,6 +45,10 @@ export interface ParseOmmResult {
   sheetCount: number;
   sheets: Array<{ name: string; headerCount: number; rowCount: number }>;
   unknownHeaders: string[];
+  /** Canonical field names the user excluded via column-select. Workers skip
+   *  these on UPDATE so existing DB values are preserved. The system-required
+   *  key (sn) is forcibly removed and can never be excluded. */
+  excludedFields: Set<string>;
 }
 
 function normalizeHeader(value: unknown): string {
