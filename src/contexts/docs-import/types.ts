@@ -120,11 +120,15 @@ export interface ImporterAdapter<TRow> {
     options?: { excludedHeaders?: string[] },
   ) => Promise<ParsedFileResult<TRow>>;
   getSheetNames: (file: File) => Promise<string[]>;
-  /** Returns the composite headers + sample values used by the column-select dialog. */
+  /** Returns the composite headers + sample values + field mapping used by the column-select dialog. */
   getHeaderInfo: (
     file: File,
     sheets?: string[],
-  ) => Promise<{ headers: string[]; samples: Record<string, unknown> }>;
+  ) => Promise<{
+    headers: string[];
+    samples: Record<string, unknown>;
+    fieldByHeader: Record<string, string | null>;
+  }>;
   /** Returns the sub-module key (Document No / SN) from a parsed row. */
   getRowKey: (row: TRow) => string | null;
   /** Performs upserts and returns per-row outcomes + global counters. */
