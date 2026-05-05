@@ -569,7 +569,7 @@ export default function DocsRawDataPage() {
     series: uniqueOptions(augmentedItems, 'series'),
     document_type: uniqueOptions(augmentedItems, 'document_type'),
     aconex_status: uniqueOptions(augmentedItems, 'aconex_status'),
-    current_status: uniqueOptions(augmentedItems, 'current_status'),
+    current_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'overall_status'), ['Planned', 'S.Delayed', 'Under Review', 'WIP', 'R.Delayed', 'A', 'B', 'C']),
     sub1_approval_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'sub1_approval_status'), ['A', 'B', 'C', 'UR', 'WIP']),
     sub2_approval_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'sub2_approval_status'), ['A', 'B', 'C', 'UR', 'WIP']),
     sub3_approval_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'sub3_approval_status'), ['A', 'B', 'C', 'UR', 'WIP']),
