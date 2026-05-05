@@ -643,7 +643,9 @@ export default function DocsRawDataPage() {
         : 'multi-select';
 
       const base: ColumnDef<DocsRawRow> = {
-        accessorKey: field,
+        ...(field === 'current_status'
+          ? { id: 'current_status', accessorFn: (r: DocsRawRow) => r.overall_status ?? r.current_status ?? '' }
+          : { accessorKey: field }),
         header: getLabel(field),
         size: sizeByField[field] ?? 130,
         filterFn:
