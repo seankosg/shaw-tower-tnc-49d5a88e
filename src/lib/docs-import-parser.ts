@@ -397,7 +397,8 @@ async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
 }
 
 function isRegisterSheet(name: string): boolean {
-  return name.toLowerCase().includes('register');
+  const v = name.toLowerCase();
+  return v.includes('register') || v.includes('drawings');
 }
 
 export async function getDocsExcelSheetNames(file: File): Promise<string[]> {
