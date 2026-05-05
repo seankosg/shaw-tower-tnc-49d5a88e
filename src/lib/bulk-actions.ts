@@ -246,6 +246,16 @@ const SUBTEST_RESET_ACTUALS = ['t1_actual_date', 't2_actual_date', 'pred_actual_
 const SUBTEST_RESET_STATUS = ['t1_status', 't2_status', 'pred_status', 'r1_status', 'r2_status'];
 const DEFECT_RESET_ACTUALS = ['actual_start_date', 'actual_completion_date', 'actual_closure_date'];
 const DEFECT_RESET_STATUS = ['status', 'completion_status', 'closure_status', 'actual_progress_pct'];
+const DRAWING_RESET_ACTUALS = [
+  'submitted_date', 'approved_date',
+  'sub1_submission_date', 'sub1_approval_date', 'sub1_actual_response_date',
+  'sub2_submission_date', 'sub2_approval_date', 'sub2_actual_response_date',
+  'sub3_submission_date', 'sub3_approval_date', 'sub3_actual_response_date',
+];
+const DRAWING_RESET_STATUS = [
+  'current_status', 'aconex_status',
+  'sub1_approval_status', 'sub2_approval_status', 'sub3_approval_status',
+];
 
 export async function applyBulkDuplicate(args: {
   entity: BulkEntity;
