@@ -167,6 +167,11 @@ export function createDocsImportProvider<TRow>(
         const msg = err instanceof Error ? err.message : String(err);
         console.warn('[docs-import] master ensurer init failed', msg);
       }
+      // Track names already attempted across the whole run so we only log the
+      // first occurrence of a brand-new name (subsequent rows = no-op).
+      const attemptedPic = new Set<string>();
+      const attemptedEng = new Set<string>();
+      const nameKey = (v: string) => v.trim().toLowerCase();
 
       for (const f of ready) {
         const parsed = f.parsed!;
