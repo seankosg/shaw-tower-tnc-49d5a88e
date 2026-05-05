@@ -216,19 +216,24 @@ export async function getOmmExcelSheetNames(file: File): Promise<string[]> {
 
 /**
  * Inspect the workbook and return every detected header label across the given
- * sheets, plus a first non-empty sample value per header. Used by the column-
- * select dialog in the Docs OMM import UI.
+ * sheets, plus a first non-empty sample value per header and the structured
+ * field it maps to. Used by the column-select dialog in the Docs OMM import UI.
  */
 export async function getOmmHeaderInfo(
   file: File,
   selectedSheets?: string[],
-): Promise<{ headers: string[]; samples: Record<string, unknown> }> {
+): Promise<{
+  headers: string[];
+  samples: Record<string, unknown>;
+  fieldByHeader: Record<string, string | null>;
+}> {
   const buf = await readArrayBuffer(file);
   const wb = XLSX.read(buf, { type: 'array' });
   const sheets = selectedSheets && selectedSheets.length > 0 ? selectedSheets : wb.SheetNames;
   const headerOrder: string[] = [];
   const seen = new Set<string>();
   const samples: Record<string, unknown> = {};
+  const fieldByHeader: Record<string, string | null> = {};
   for (const sheetName of sheets) {
     const ws = wb.Sheets[sheetName];
     if (!ws) continue;
@@ -237,7 +242,11 @@ export async function getOmmHeaderInfo(
     if (!detected) continue;
     for (const c of detected.cols) {
       if (!c.raw) continue;
-      if (!seen.has(c.raw)) { seen.add(c.raw); headerOrder.push(c.raw); }
+      if (!seen.has(c.raw)) {
+        seen.add(c.raw);
+        headerOrder.push(c.raw);
+        fieldByHeader[c.raw] = c.field && c.field !== 'skip' ? c.field : null;
+      }
     }
     const startRow = detected.idx + 1;
     const lastRow = Math.min(matrix.length, startRow + 20);
@@ -251,7 +260,7 @@ export async function getOmmHeaderInfo(
       }
     }
   }
-  return { headers: headerOrder, samples };
+  return { headers: headerOrder, samples, fieldByHeader };
 }
 
 export async function parseOmmExcel(
