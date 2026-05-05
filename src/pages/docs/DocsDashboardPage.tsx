@@ -12,9 +12,9 @@ import {
   type DashboardData,
 } from '@/lib/docs-dashboard-data';
 import { DocsModuleKpiCard } from '@/components/docs/DocsModuleKpiCard';
-import { DocsRiskMatrix } from '@/components/docs/DocsRiskMatrix';
-import { DocsModuleDetailCard } from '@/components/docs/DocsModuleDetailCard';
+import { DocsModuleFocusCard } from '@/components/docs/DocsModuleFocusCard';
 import { DocsSubmissionTrendChart } from '@/components/docs/DocsSubmissionTrendChart';
+import { DocsAttentionTabs } from '@/components/docs/DocsAttentionTabs';
 import { DocsCrossCutTabs } from '@/components/docs/DocsCrossCutTabs';
 
 export default function DocsDashboardPage() {
@@ -72,7 +72,7 @@ export default function DocsDashboardPage() {
         </Popover>
       </div>
 
-      {/* Section 1 — KPI strip */}
+      {/* Section 1 — Portfolio Health Strip */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {data ? (
           <>
@@ -82,6 +82,7 @@ export default function DocsDashboardPage() {
               total={data.abd.total}
               submitted={data.abd.submitted}
               red={data.abd.risk.red}
+              awaiting={data.abd.awaitingResponse}
               onClick={() => navigate(MODULE_META.abd.route)}
             />
             <DocsModuleKpiCard
@@ -90,6 +91,8 @@ export default function DocsDashboardPage() {
               total={data.omm.total}
               submitted={data.omm.submitted}
               red={data.omm.risk.red}
+              awaiting={data.omm.awaitingResponse}
+              copyShort={data.omm.copyShortfall}
               onClick={() => navigate(MODULE_META.omm.route)}
             />
             <DocsModuleKpiCard
@@ -99,6 +102,7 @@ export default function DocsDashboardPage() {
               submitted={data.spare_part.submitted}
               red={data.spare_part.risk.red}
               onClick={() => navigate(MODULE_META.spare_part.route)}
+              disabled={data.spare_part.total === 0}
             />
             <DocsModuleKpiCard
               icon={ShieldCheck}
@@ -116,23 +120,21 @@ export default function DocsDashboardPage() {
         )}
       </div>
 
-      {/* Section 2 — Risk matrix */}
-      {data && <DocsRiskMatrix modules={modules} />}
-
-      {/* Section 3 — Per-module detail */}
+      {/* Section 2 — Module Focus (ABD | OMM) */}
       {data && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <DocsModuleDetailCard stats={data.abd} icon={FileText} />
-          <DocsModuleDetailCard stats={data.omm} icon={BookOpen} />
-          <DocsModuleDetailCard stats={data.spare_part} icon={Boxes} />
-          <DocsModuleDetailCard stats={data.warranty} icon={ShieldCheck} comingSoon />
+        <div className="grid gap-4 xl:grid-cols-2">
+          <DocsModuleFocusCard stats={data.abd} icon={FileText} />
+          <DocsModuleFocusCard stats={data.omm} icon={BookOpen} />
         </div>
       )}
 
-      {/* Section 4 — Trend */}
+      {/* Section 3 — Approval trend */}
       {data && <DocsSubmissionTrendChart data={data} asOf={asOf} />}
 
-      {/* Section 5 — Cross-cut tabs */}
+      {/* Section 4 — Attention Required */}
+      {data && <DocsAttentionTabs modules={modules} />}
+
+      {/* Section 5 — Workload Cross-Cut */}
       {data && <DocsCrossCutTabs modules={modules} />}
 
       {loading && !data && (
