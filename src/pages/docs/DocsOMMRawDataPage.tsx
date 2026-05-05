@@ -102,6 +102,7 @@ const NUMBER_FIELDS = new Set([
 
 const COLUMN_ORDER = [
   '__select',
+  'cycle_progress',
   'sn',
   'category_group',
   'category',
@@ -126,7 +127,6 @@ const COLUMN_ORDER = [
   'final_response_planned_date',
   'final_response_actual_date',
   'final_response_status',
-  'cycle_progress',
   'current_status',
   'remarks',
   '__open',
