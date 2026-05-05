@@ -132,7 +132,7 @@ export function OmmCycleProgressLegend() {
       <span className="inline-flex items-center gap-1"><StagePip state="done" glyph="✓" label="Done" /> Done</span>
       <span className="inline-flex items-center gap-1"><StagePip state="active" glyph="•" label="Active" /> Active</span>
       <span className="inline-flex items-center gap-1"><StagePip state="pending" glyph="·" label="Pending" /> Pending</span>
-      <span className="inline-flex items-center gap-1"><StagePip state="closed" glyph="A" label="Approved" /> Approved</span>
+      <span className="inline-flex items-center gap-1"><StagePip state="closed" glyph="S" label="Approved" /> Approved</span>
       <span className="inline-flex items-center gap-1"><StagePip state="rejected" glyph="✕" label="Rejected" /> Rejected</span>
     </div>
   );
