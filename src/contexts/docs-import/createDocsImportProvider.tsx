@@ -109,10 +109,11 @@ export function createDocsImportProvider<TRow>(
       let target: DocsImportFile<TRow> | undefined;
       setFiles((cur) => {
         target = cur.find((f) => f.id === id);
-        return cur.map((f) => f.id === id ? { ...f, status: 'parsing', selectedSheets: sheets } : f);
+        // Sheet change → headers may differ → reset excluded selections.
+        return cur.map((f) => f.id === id ? { ...f, status: 'parsing', selectedSheets: sheets, excludedHeaders: [], excludedFields: undefined } : f);
       });
       if (!target) return;
-      await parseAndApply(id, target.file, sheets, target.excludedHeaders);
+      await parseAndApply(id, target.file, sheets, []);
     }, [parseAndApply]);
 
     const setFileDataDate = useCallback((id: string, dataDate: string) => {
