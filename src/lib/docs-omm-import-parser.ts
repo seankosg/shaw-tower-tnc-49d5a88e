@@ -174,6 +174,8 @@ const FALLBACK_ALIASES: Record<string, string | 'skip'> = {
 };
 
 function mapHeader(header: string): string | 'skip' | null {
+  const rawTrim = String(header ?? '').trim();
+  if (rawTrim.startsWith('__')) return 'skip';
   const norm = normalizeHeader(header);
   if (!norm) return 'skip';
   // DB-driven mapping first (admin can override)
