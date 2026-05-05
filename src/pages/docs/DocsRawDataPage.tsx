@@ -484,18 +484,26 @@ export default function DocsRawDataPage() {
     })();
   }, []);
 
-  // HDEC PIC / ENG master lists for bulk-edit Select
+  // HDEC PIC from master; HDEC ENG from active users in profiles (Admin > Users)
   useEffect(() => {
     (async () => {
       const [picRes, engRes] = await Promise.all([
         (supabase as any).from('hdec_pic_master').select('name').eq('is_active', true).order('name', { ascending: true }),
-        (supabase as any).from('hdec_eng_master').select('name').eq('is_active', true).order('name', { ascending: true }),
+        (supabase as any).from('profiles').select('name').eq('is_active', true).order('name', { ascending: true }),
       ]);
       if (picRes?.data) {
         setHdecPicOptions((picRes.data as any[]).map((r) => ({ value: r.name as string, label: r.name as string })));
       }
       if (engRes?.data) {
-        setHdecEngOptions((engRes.data as any[]).map((r) => ({ value: r.name as string, label: r.name as string })));
+        const seen = new Set<string>();
+        const opts: { value: string; label: string }[] = [];
+        for (const r of engRes.data as any[]) {
+          const n = (r.name ?? '').toString().trim();
+          if (!n || seen.has(n)) continue;
+          seen.add(n);
+          opts.push({ value: n, label: n });
+        }
+        setHdecEngOptions(opts);
       }
     })();
   }, []);
