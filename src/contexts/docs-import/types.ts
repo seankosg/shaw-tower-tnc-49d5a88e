@@ -98,6 +98,8 @@ export interface DocsImportContextValue<TRow = unknown> {
 export interface ParsedFileResult<TRow> {
   rows: TRow[];
   unknownHeaders: string[];
+  /** Canonical field names the user excluded — propagated from the parser. */
+  excludedFields: Set<string>;
 }
 
 /** Per-row outcome captured by the worker, used by writeImportLogs. */
