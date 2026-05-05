@@ -92,9 +92,22 @@ export const abdAdapter: ImporterAdapter<ParsedDocsRow> = {
     const counters = { inserted: 0, updated: 0, skipped: 0, rejected: 0, unmatchedOrgs: new Set<string>() };
     const outcomes: ImportRowOutcome[] = [];
     const rejectSamples: DocsRejectSample[] = [];
-    let processed = 0;
 
-    await runWithConcurrency(rows, async (row) => {
+    // Performance pattern (mirrors DefectImportContext):
+    //   1. Single sequential pre-pass to validate, build payloads, and split
+    //      rows into INSERT vs UPDATE buckets.
+    //   2. Bulk INSERT in chunks of 200 (cuts ~200x HTTP round-trips).
+    //   3. UPDATE pool of 8 concurrent requests (Supabase has no bulk update).
+    const INSERT_CHUNK = 200;
+    const UPDATE_CONCURRENCY = 8;
+
+    type InsertItem = { row: ParsedDocsRow; payload: Record<string, unknown> };
+    type UpdateItem = { row: ParsedDocsRow; payload: Record<string, unknown>; existingId: string; prevPayload: any };
+    const insertItems: InsertItem[] = [];
+    const updateItems: UpdateItem[] = [];
+
+    // ---- Pre-pass: validate + build payloads + bucketize ------------------
+    for (const row of rows) {
       const subId = resolveSubcontractorId(row.organisation_raw, orgMaps);
       if (row.organisation_raw && !subId) counters.unmatchedOrgs.add(normalizeOrgKey(row.organisation_raw));
 
@@ -111,8 +124,7 @@ export const abdAdapter: ImporterAdapter<ParsedDocsRow> = {
           reasonCode: 'empty_document_no', reasonDetail: 'Document No is empty',
           fieldLogs,
         });
-        processed++;
-        return;
+        continue;
       }
 
       const existing = existingByDocNo.get(row.document_no);
@@ -162,80 +174,140 @@ export const abdAdapter: ImporterAdapter<ParsedDocsRow> = {
         updated_by: ctx.userId,
       };
 
-      try {
-        let recordId: string | null = null;
-        const changeLog: ImportRowOutcome['changeLog'] = [];
-        if (existing) {
-          const { error } = await (supabase as any)
-            .from('docs_drawings').update(payload).eq('id', existing.id);
-          if (error) throw error;
-          counters.updated++;
-          recordId = existing.id;
-          const prev: any = existing.raw_payload || {};
-          for (const fname of ABD_TRACKED_FIELDS) {
-            const incoming = (payload as any)[fname];
-            const previous = prev[fname] ?? null;
-            const cls = classifyChange(incoming, previous);
-            if (cls === 'empty') continue;
-            if (cls === 'unchanged') {
-              pushLog({ rawRowNo: row.rawRowNo, field: fname, outcome: 'unchanged', raw: incoming, applied: incoming, previous });
-            } else {
-              const isTbaDefault = fname === 'subcontractor_name' && incoming === 'TBA';
-              pushLog({
-                rawRowNo: row.rawRowNo, field: fname,
-                outcome: isTbaDefault ? 'auto_filled' : 'applied',
-                raw: incoming, applied: incoming, previous,
-                code: isTbaDefault ? 'default_tba' : null,
-                detail: isTbaDefault ? 'Subcontractor not provided — defaulted to TBA' : null,
-              });
-              changeLog.push({ field: fname, oldValue: stringify(previous), newValue: stringify(incoming) });
-            }
-          }
-          outcomes.push({
-            rawRowNo: row.rawRowNo, key: row.document_no, action: 'updated',
-            recordId, drawingId: recordId, fieldLogs, changeLog,
-          });
+      if (existing) {
+        updateItems.push({ row, payload, existingId: existing.id, prevPayload: existing.raw_payload || {} });
+      } else {
+        insertItems.push({ row, payload });
+      }
+    }
+
+    // Helper to build per-row logs + changeLog after DB write succeeds.
+    const buildOutcomeForUpdate = (it: UpdateItem, recordId: string) => {
+      const fieldLogs: PendingFieldLog[] = [];
+      const changeLog: ImportRowOutcome['changeLog'] = [];
+      const push = (args: Parameters<typeof buildFieldLog>[1]) => fieldLogs.push(buildFieldLog('docs', args));
+      for (const fname of ABD_TRACKED_FIELDS) {
+        const incoming = (it.payload as any)[fname];
+        const previous = it.prevPayload[fname] ?? null;
+        const cls = classifyChange(incoming, previous);
+        if (cls === 'empty') continue;
+        if (cls === 'unchanged') {
+          push({ rawRowNo: it.row.rawRowNo, field: fname, outcome: 'unchanged', raw: incoming, applied: incoming, previous });
         } else {
-          const { data: ins, error } = await (supabase as any)
-            .from('docs_drawings').insert(payload).select('id').single();
-          if (error) throw error;
-          counters.inserted++;
-          recordId = ins?.id ?? null;
-          for (const fname of ABD_TRACKED_FIELDS) {
-            const incoming = (payload as any)[fname];
-            if (incoming === null || incoming === undefined || incoming === '') continue;
-            const isTbaDefault = fname === 'subcontractor_name' && incoming === 'TBA';
-            pushLog({
-              rawRowNo: row.rawRowNo, field: fname,
-              outcome: isTbaDefault ? 'auto_filled' : 'applied',
-              raw: incoming, applied: incoming,
-              code: isTbaDefault ? 'default_tba' : null,
-              detail: isTbaDefault ? 'Subcontractor not provided — defaulted to TBA' : null,
-            });
-            changeLog.push({ field: fname, oldValue: null, newValue: stringify(incoming) });
-          }
-          outcomes.push({
-            rawRowNo: row.rawRowNo, key: row.document_no, action: 'inserted',
-            recordId, drawingId: recordId, fieldLogs, changeLog,
+          const isTbaDefault = fname === 'subcontractor_name' && incoming === 'TBA';
+          push({
+            rawRowNo: it.row.rawRowNo, field: fname,
+            outcome: isTbaDefault ? 'auto_filled' : 'applied',
+            raw: incoming, applied: incoming, previous,
+            code: isTbaDefault ? 'default_tba' : null,
+            detail: isTbaDefault ? 'Subcontractor not provided — defaulted to TBA' : null,
           });
-        }
-      } catch (err: any) {
-        counters.rejected++;
-        const e = fmtSupabaseError(err);
-        const detail = [e.code, e.message, e.details, e.hint].filter(Boolean).join(' | ');
-        pushLog({ rawRowNo: row.rawRowNo, field: '__row__', outcome: 'rejected_invalid',
-          raw: row.document_no, code: e.code ?? 'db_error', detail });
-        outcomes.push({
-          rawRowNo: row.rawRowNo, key: row.document_no, action: 'rejected',
-          reasonCode: e.code ?? 'db_error', reasonDetail: detail, fieldLogs,
-        });
-        if (rejectSamples.length < 5) {
-          rejectSamples.push({ rawRowNo: row.rawRowNo, key: row.document_no, reasonCode: e.code, reasonDetail: detail });
+          changeLog.push({ field: fname, oldValue: stringify(previous), newValue: stringify(incoming) });
         }
       }
-      processed++;
-      if (processed % 25 === 0 || processed === rows.length) onProgress(processed, rows.length);
-    }, CONCURRENCY);
+      outcomes.push({
+        rawRowNo: it.row.rawRowNo, key: it.row.document_no, action: 'updated',
+        recordId, drawingId: recordId, fieldLogs, changeLog,
+      });
+    };
+
+    const buildOutcomeForInsert = (it: InsertItem, recordId: string | null) => {
+      const fieldLogs: PendingFieldLog[] = [];
+      const changeLog: ImportRowOutcome['changeLog'] = [];
+      const push = (args: Parameters<typeof buildFieldLog>[1]) => fieldLogs.push(buildFieldLog('docs', args));
+      for (const fname of ABD_TRACKED_FIELDS) {
+        const incoming = (it.payload as any)[fname];
+        if (incoming === null || incoming === undefined || incoming === '') continue;
+        const isTbaDefault = fname === 'subcontractor_name' && incoming === 'TBA';
+        push({
+          rawRowNo: it.row.rawRowNo, field: fname,
+          outcome: isTbaDefault ? 'auto_filled' : 'applied',
+          raw: incoming, applied: incoming,
+          code: isTbaDefault ? 'default_tba' : null,
+          detail: isTbaDefault ? 'Subcontractor not provided — defaulted to TBA' : null,
+        });
+        changeLog.push({ field: fname, oldValue: null, newValue: stringify(incoming) });
+      }
+      outcomes.push({
+        rawRowNo: it.row.rawRowNo, key: it.row.document_no, action: 'inserted',
+        recordId, drawingId: recordId, fieldLogs, changeLog,
+      });
+    };
+
+    const recordRejection = (row: ParsedDocsRow, err: any) => {
+      counters.rejected++;
+      const e = fmtSupabaseError(err);
+      const detail = [e.code, e.message, e.details, e.hint].filter(Boolean).join(' | ');
+      const fieldLogs: PendingFieldLog[] = [];
+      fieldLogs.push(buildFieldLog('docs', {
+        rawRowNo: row.rawRowNo, field: '__row__', outcome: 'rejected_invalid',
+        raw: row.document_no, code: e.code ?? 'db_error', detail,
+      }));
+      outcomes.push({
+        rawRowNo: row.rawRowNo, key: row.document_no, action: 'rejected',
+        reasonCode: e.code ?? 'db_error', reasonDetail: detail, fieldLogs,
+      });
+      if (rejectSamples.length < 5) {
+        rejectSamples.push({ rawRowNo: row.rawRowNo, key: row.document_no, reasonCode: e.code, reasonDetail: detail });
+      }
+    };
+
+    const totalWriteRows = insertItems.length + updateItems.length;
+    let processed = 0;
+    const tick = (n: number) => {
+      processed += n;
+      if (processed % 50 === 0 || processed >= totalWriteRows) {
+        onProgress(processed, Math.max(totalWriteRows, 1));
+      }
+    };
+
+    // ---- Bulk INSERT in chunks --------------------------------------------
+    for (let i = 0; i < insertItems.length; i += INSERT_CHUNK) {
+      const slice = insertItems.slice(i, i + INSERT_CHUNK);
+      const payloads = slice.map((it) => it.payload);
+      const { data, error } = await (supabase as any)
+        .from('docs_drawings').insert(payloads).select('id, document_no');
+      if (error) {
+        // Bulk failure: fall back to per-row inserts so good rows still land
+        // and we get accurate per-row reject reasons.
+        for (const it of slice) {
+          const { data: ins, error: e2 } = await (supabase as any)
+            .from('docs_drawings').insert(it.payload).select('id').single();
+          if (e2) { recordRejection(it.row, e2); continue; }
+          counters.inserted++;
+          buildOutcomeForInsert(it, ins?.id ?? null);
+        }
+      } else {
+        const idByDoc = new Map<string, string>();
+        for (const r of (data ?? [])) idByDoc.set(String(r.document_no), r.id);
+        for (const it of slice) {
+          counters.inserted++;
+          buildOutcomeForInsert(it, idByDoc.get(String(it.row.document_no)) ?? null);
+        }
+      }
+      tick(slice.length);
+    }
+
+    // ---- UPDATE pool (8 concurrent) ---------------------------------------
+    for (let i = 0; i < updateItems.length; i += UPDATE_CONCURRENCY) {
+      const chunk = updateItems.slice(i, i + UPDATE_CONCURRENCY);
+      const results = await Promise.all(
+        chunk.map((it) =>
+          (supabase as any).from('docs_drawings').update(it.payload).eq('id', it.existingId)
+            .then((r: any) => ({ it, error: r.error }))
+            .catch((err: any) => ({ it, error: err })),
+        ),
+      );
+      for (const { it, error } of results) {
+        if (error) { recordRejection(it.row, error); continue; }
+        counters.updated++;
+        buildOutcomeForUpdate(it, it.existingId);
+      }
+      tick(chunk.length);
+    }
+
+    // Force a final progress tick.
+    onProgress(Math.max(totalWriteRows, 1), Math.max(totalWriteRows, 1));
 
     await persistUnmatchedOrgs(counters.unmatchedOrgs, rows as any);
     return { outcomes, counters, rejectSamples };
