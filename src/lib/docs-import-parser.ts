@@ -669,5 +669,6 @@ export async function parseDocsExcel(
     sheetCount: targetSheets.length,
     sheets: sheetSummary,
     unknownHeaders: [...unknownHeaderSet].sort(),
+    excludedFields,
   };
 }
