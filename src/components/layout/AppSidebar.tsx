@@ -128,7 +128,7 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={pathname === item.path || (item.path === '/tc/raw-data' && pathname.startsWith('/subtests/'))}
-                      onClick={() => navigate(getRememberedRoute(item.path))}
+                      onClick={() => navigate(safeRoute(item.path, roles))}
                       tooltip={item.label}
                     >
                       <item.icon className="h-4 w-4" />
@@ -157,7 +157,7 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={pathname === item.path || (item.path === '/defects/raw-data' && /^\/defects\/[^/]+$/.test(pathname))}
-                      onClick={() => navigate(getRememberedRoute(item.path))}
+                      onClick={() => navigate(safeRoute(item.path, roles))}
                       tooltip={item.label}
                     >
                       <item.icon className="h-4 w-4" />
@@ -192,7 +192,7 @@ export function AppSidebar() {
                         (item.path === '/docs/spare-part' && pathname.startsWith('/docs/spare-part/')) ||
                         (item.path === '/docs/warranty' && pathname.startsWith('/docs/warranty/'))
                       }
-                      onClick={() => navigate(getRememberedRoute(item.path))}
+                      onClick={() => navigate(safeRoute(item.path, roles))}
                       tooltip={item.label}
                     >
                       <item.icon className="h-4 w-4" />
@@ -214,7 +214,7 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={pathname.startsWith(item.path)}
-                      onClick={() => navigate(getRememberedRoute(item.path))}
+                      onClick={() => navigate(safeRoute(item.path, roles))}
                       tooltip={item.label}
                     >
                       <item.icon className="h-4 w-4" />
