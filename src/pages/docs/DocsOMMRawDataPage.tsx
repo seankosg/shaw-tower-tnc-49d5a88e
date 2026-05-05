@@ -933,13 +933,26 @@ export default function DocsOMMRawDataPage() {
 
   const columnVisibility = useMemo<VisibilityState>(() => {
     const v: VisibilityState = {};
-    for (const id of COLUMN_ORDER) {
-      if (ALWAYS_VISIBLE.has(id)) v[id] = true;
-      else v[id] = isFieldVisible(id);
+    // Anchors always on
+    for (const id of ALWAYS_VISIBLE) v[id] = true;
+    // Data fields follow Field Config (is_enabled)
+    for (const id of OMM_DATA_FIELDS) {
+      if (ALWAYS_VISIBLE.has(id)) continue;
+      v[id] = isFieldVisible(id);
     }
     return v;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFieldVisible]);
+
+  // Column order driven by Field Config sort_order, with fixed pinned/trailing anchors
+  const columnOrder = useMemo(() => {
+    const PINNED = ['__select', 'cycle_progress', 'sn'];
+    const TRAILING = ['current_status', '__open'];
+    const remaining = (OMM_DATA_FIELDS as readonly string[]).filter(
+      (f) => !PINNED.includes(f) && !TRAILING.includes(f),
+    );
+    return [...PINNED, ...sortFieldNames(remaining), ...TRAILING];
+  }, [sortFieldNames]);
 
   // ── Table ─────────────────────────────────────────────────────────────────
   const table = useReactTable({
@@ -951,7 +964,7 @@ export default function DocsOMMRawDataPage() {
       columnFilters,
       columnSizing,
       columnVisibility,
-      columnOrder: COLUMN_ORDER,
+      columnOrder,
       rowSelection,
     },
     onSortingChange: setSorting,
