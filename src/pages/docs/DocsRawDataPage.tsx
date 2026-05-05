@@ -930,7 +930,7 @@ export default function DocsRawDataPage() {
           { field: 'hdec_pic_name', label: 'HDEC PIC', options: hdecPicOptions },
           { field: 'hdec_eng_name', label: 'HDEC ENG', options: hdecEngOptions },
         ]}
-        onApplied={handleBulkApplied}
+        onApplied={(r) => handleBulkApplied(r)}
         onMutated={() => reload()}
         onClearSelection={() => setRowSelection({})}
       />
