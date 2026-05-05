@@ -7,15 +7,15 @@ import { computeOmmStatus, type OMMStatusInput } from '@/lib/docs-omm-status';
  * Five stages: Pending Draft → Draft UR → Pending Final → Final UR → Approved.
  * Rejected (B/C response) renders the active stage in destructive red.
  */
-const STAGES = ['PD', 'DUR', 'PF', 'FUR', 'A'] as const;
+const STAGES = ['DS', 'DR', 'FS', 'FR', 'S'] as const;
 type Stage = typeof STAGES[number];
 
 const STAGE_TITLES: Record<Stage, string> = {
-  PD: 'Pending Draft',
-  DUR: 'Draft Under Review',
-  PF: 'Pending Final Submission',
-  FUR: 'Final Under Review',
-  A: 'Approved',
+  DS: 'Draft Submission',
+  DR: 'Draft Review',
+  FS: 'Final Submission',
+  FR: 'Final Review',
+  S: 'Final Status',
 };
 
 function statusToIndex(s: ReturnType<typeof computeOmmStatus>): number {
