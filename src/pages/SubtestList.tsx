@@ -1278,7 +1278,7 @@ export default function SubtestList() {
 
   const table = useReactTable({
     data: filteredData,
-    columns,
+    columns: allColumns,
     state: { sorting, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
