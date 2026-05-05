@@ -214,10 +214,55 @@ export async function getOmmExcelSheetNames(file: File): Promise<string[]> {
   return wb.SheetNames;
 }
 
-export async function parseOmmExcel(file: File, selectedSheets?: string[]): Promise<ParseOmmResult> {
+/**
+ * Inspect the workbook and return every detected header label across the given
+ * sheets, plus a first non-empty sample value per header. Used by the column-
+ * select dialog in the Docs OMM import UI.
+ */
+export async function getOmmHeaderInfo(
+  file: File,
+  selectedSheets?: string[],
+): Promise<{ headers: string[]; samples: Record<string, unknown> }> {
   const buf = await readArrayBuffer(file);
   const wb = XLSX.read(buf, { type: 'array' });
   const sheets = selectedSheets && selectedSheets.length > 0 ? selectedSheets : wb.SheetNames;
+  const headerOrder: string[] = [];
+  const seen = new Set<string>();
+  const samples: Record<string, unknown> = {};
+  for (const sheetName of sheets) {
+    const ws = wb.Sheets[sheetName];
+    if (!ws) continue;
+    const matrix = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null }) as unknown[][];
+    const detected = detectHeaderRow(matrix);
+    if (!detected) continue;
+    for (const c of detected.cols) {
+      if (!c.raw) continue;
+      if (!seen.has(c.raw)) { seen.add(c.raw); headerOrder.push(c.raw); }
+    }
+    const startRow = detected.idx + 1;
+    const lastRow = Math.min(matrix.length, startRow + 20);
+    for (let r = startRow; r < lastRow; r++) {
+      const dataRow = matrix[r] ?? [];
+      for (let c = 0; c < detected.cols.length; c++) {
+        const label = detected.cols[c].raw;
+        if (!label || samples[label] != null) continue;
+        const v = dataRow[c];
+        if (v != null && String(v).trim() !== '') samples[label] = v;
+      }
+    }
+  }
+  return { headers: headerOrder, samples };
+}
+
+export async function parseOmmExcel(
+  file: File,
+  selectedSheets?: string[],
+  options?: { excludedHeaders?: string[] },
+): Promise<ParseOmmResult> {
+  const buf = await readArrayBuffer(file);
+  const wb = XLSX.read(buf, { type: 'array' });
+  const sheets = selectedSheets && selectedSheets.length > 0 ? selectedSheets : wb.SheetNames;
+  const excludedSet = new Set((options?.excludedHeaders ?? []).map((h) => h.trim()).filter(Boolean));
 
   const rows: ParsedOmmRow[] = [];
   const sheetSummary: ParseOmmResult['sheets'] = [];
@@ -245,6 +290,7 @@ export async function parseOmmExcel(file: File, selectedSheets?: string[]): Prom
         const col = detected.cols[c];
         if (col.raw) payload[col.raw] = dataRow[c];
         if (!col.field || col.field === 'skip') continue;
+        if (col.raw && excludedSet.has(col.raw)) continue;
         const f = col.field;
         const v = dataRow[c];
         if (f.endsWith('_date')) struct[f] = normalizeDate(v);
