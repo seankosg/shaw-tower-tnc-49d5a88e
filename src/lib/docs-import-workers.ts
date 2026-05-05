@@ -358,7 +358,7 @@ interface OmmExistingRow {
 
 async function loadExistingOmm(projectId: string): Promise<Map<string, OmmExistingRow>> {
   const map = new Map<string, OmmExistingRow>();
-  const cols = ['id', 'sn', 'draft_response_status', 'final_response_status', ...OMM_TRACKED_FIELDS]
+  const cols = ['id', 'sn', 'raw_payload', 'draft_response_status', 'final_response_status', ...OMM_TRACKED_FIELDS]
     .filter((v, i, a) => a.indexOf(v) === i)
     .join(', ');
   let from = 0;
