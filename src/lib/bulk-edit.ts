@@ -259,7 +259,6 @@ export async function applyBulkUpdate(req: BulkUpdateRequest): Promise<BulkUpdat
       }
     }
   }
-  }
 
   return result;
 }
