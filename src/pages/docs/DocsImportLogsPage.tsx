@@ -254,18 +254,27 @@ export default function DocsImportLogsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {loading ? (
-                    <TableRow><TableCell colSpan={canDelete ? 12 : 11} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
-                  ) : batches.length === 0 ? (
-                    <TableRow><TableCell colSpan={canDelete ? 12 : 11} className="text-center py-8 text-muted-foreground">No import history</TableCell></TableRow>
-                  ) : batches.map((b) => {
-                    const uploader = b.uploaded_by ? (uploaderNames[b.uploaded_by] || '—') : '—';
-                    const dur = durationsMs[b.id];
-                    const typeLabel = b.sub_module === 'as_built' ? 'Docs / As-Built' : `Docs / ${b.sub_module ?? '—'}`;
-                    return (
-                      <TableRow key={b.id} className="hover:bg-muted/50">
-                        <TableCell className="text-xs font-medium cursor-pointer" onClick={() => selectBatch(b.id)}>{b.uploaded_file_name}</TableCell>
-                        <TableCell className="text-xs cursor-pointer" onClick={() => selectBatch(b.id)}>{typeLabel}</TableCell>
+                  {(() => {
+                    const visibleBatches = subModuleFilter === 'all'
+                      ? batches
+                      : batches.filter(b => (b.sub_module ?? '') === subModuleFilter);
+                    if (loading) {
+                      return <TableRow><TableCell colSpan={canDelete ? 12 : 11} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>;
+                    }
+                    if (visibleBatches.length === 0) {
+                      return <TableRow><TableCell colSpan={canDelete ? 12 : 11} className="text-center py-8 text-muted-foreground">No import history</TableCell></TableRow>;
+                    }
+                    return visibleBatches.map((b) => {
+                      const uploader = b.uploaded_by ? (uploaderNames[b.uploaded_by] || '—') : '—';
+                      const dur = durationsMs[b.id];
+                      const subKey = b.sub_module ?? '';
+                      const subLabel = SUB_MODULE_LABELS[subKey] || (subKey || '—');
+                      return (
+                        <TableRow key={b.id} className="hover:bg-muted/50">
+                          <TableCell className="text-xs font-medium cursor-pointer" onClick={() => selectBatch(b.id)}>{b.uploaded_file_name}</TableCell>
+                          <TableCell className="cursor-pointer" onClick={() => selectBatch(b.id)}>
+                            <Badge variant="outline" className={`text-xs ${SUB_MODULE_COLORS[subKey] || ''}`}>{subLabel}</Badge>
+                          </TableCell>
                         <TableCell className="text-xs cursor-pointer whitespace-nowrap" onClick={() => selectBatch(b.id)}>{formatDateTimeDdMmmYyyy(b.uploaded_at)}</TableCell>
                         <TableCell className="text-xs cursor-pointer" onClick={() => selectBatch(b.id)}>{uploader}</TableCell>
                         <TableCell className="text-xs cursor-pointer whitespace-nowrap" onClick={() => selectBatch(b.id)}>{formatDdMmm(b.data_date)}</TableCell>
