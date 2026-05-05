@@ -12,8 +12,18 @@ import { Badge } from '@/components/ui/badge';
 import { APP_NAME } from '@/lib/constants';
 import { useAuth } from '@/contexts/AuthContext';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
-import { filterNavItems } from '@/lib/role-permissions';
+import { canAccessRoute, filterNavItems } from '@/lib/role-permissions';
 import { getRememberedRoute } from '@/hooks/useRouteMemory';
+import type { AppRole } from '@/types/enums';
+
+// Remembered route may point to a sub-page the current role can't access
+// (e.g. a Guest with a stale memory of /admin). Fall back to the base path
+// when the recalled URL isn't accessible for the active roles.
+function safeRoute(basePath: string, roles: AppRole[]): string {
+  const remembered = getRememberedRoute(basePath);
+  const path = remembered.split('?')[0];
+  return canAccessRoute(roles, path) ? remembered : basePath;
+}
 
 const mainNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/tc/dashboard' },
@@ -118,7 +128,7 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={pathname === item.path || (item.path === '/tc/raw-data' && pathname.startsWith('/subtests/'))}
-                      onClick={() => navigate(getRememberedRoute(item.path))}
+                      onClick={() => navigate(safeRoute(item.path, roles))}
                       tooltip={item.label}
                     >
                       <item.icon className="h-4 w-4" />
@@ -147,7 +157,7 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={pathname === item.path || (item.path === '/defects/raw-data' && /^\/defects\/[^/]+$/.test(pathname))}
-                      onClick={() => navigate(getRememberedRoute(item.path))}
+                      onClick={() => navigate(safeRoute(item.path, roles))}
                       tooltip={item.label}
                     >
                       <item.icon className="h-4 w-4" />
@@ -182,7 +192,7 @@ export function AppSidebar() {
                         (item.path === '/docs/spare-part' && pathname.startsWith('/docs/spare-part/')) ||
                         (item.path === '/docs/warranty' && pathname.startsWith('/docs/warranty/'))
                       }
-                      onClick={() => navigate(getRememberedRoute(item.path))}
+                      onClick={() => navigate(safeRoute(item.path, roles))}
                       tooltip={item.label}
                     >
                       <item.icon className="h-4 w-4" />
@@ -204,7 +214,7 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={pathname.startsWith(item.path)}
-                      onClick={() => navigate(getRememberedRoute(item.path))}
+                      onClick={() => navigate(safeRoute(item.path, roles))}
                       tooltip={item.label}
                     >
                       <item.icon className="h-4 w-4" />
