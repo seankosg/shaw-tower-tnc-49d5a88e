@@ -49,7 +49,16 @@ export function DocsCycleProgress({ drawing, dataDate }: DocsCycleProgressProps)
         >
           {cycles.map((c, idx) => (
             <span key={c.n} className="inline-flex items-center">
-              <CyclePip status={c.status} label={`Cycle ${c.n}: ${c.status}`} />
+              {overall === 'A' ? (
+                <span
+                  aria-label={`Cycle ${c.n}: Closed`}
+                  className="inline-flex items-center justify-center h-4 min-w-4 px-0.5 rounded-full text-[9px] font-bold leading-none border bg-muted-foreground/40 text-white border-muted-foreground/50"
+                >
+                  {c.n}
+                </span>
+              ) : (
+                <CyclePip status={c.status} label={`Cycle ${c.n}: ${c.status}`} />
+              )}
               {idx < cycles.length - 1 && (
                 <span className="h-px w-1.5 bg-muted-foreground/30" aria-hidden />
               )}
