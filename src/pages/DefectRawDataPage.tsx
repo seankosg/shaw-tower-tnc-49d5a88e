@@ -889,25 +889,85 @@ export default function DefectRawDataPage() {
       return base;
     });
 
-    return [selectColumn, ...dataColumns];
-  }, [getLabel, optionFields, commentSummary, navigate, dataDate]);
+    // ─── Dynamic columns: any enabled defect_field_config row not already in
+    // DEFECT_RAW_FIELDS (typically `payload_*` raw-payload fields). They get
+    // an auto-inferred filter based on field name + original_header.
+    const knownIds = new Set<string>(DEFECT_RAW_FIELDS as readonly string[]);
+    const dynamicColumns: ColumnDef<DefectRawRow>[] = (fieldConfigRows ?? [])
+      .filter((row) => row && row.is_enabled && !knownIds.has(row.field_name) && !isMetaField(row.field_name))
+      .map((row) => {
+        const fieldName = row.field_name;
+        const headerKey = row.original_header || fieldName;
+        const inferred = inferFilterType(fieldName, row.original_header);
+        const filterFn =
+          inferred === 'date-range' ? dateRangeFilterFn
+          : inferred === 'progress' ? progressFilterFn
+          : inferred === 'multi-select' ? multiSelectFilterFn
+          : textFilterFn;
+        const accessorFn = (r: DefectRawRow): any => {
+          // Prefer top-level value if it exists, else fall back to raw_payload
+          const direct = (r as any)[fieldName];
+          if (direct != null && direct !== '') return direct;
+          const payload = (r as any).raw_payload;
+          if (payload && typeof payload === 'object') {
+            return payload[headerKey] ?? payload[fieldName] ?? null;
+          }
+          return null;
+        };
+        // Build options for multi-select dynamically from current data
+        const filterOptions = inferred === 'multi-select'
+          ? [...new Set(items.map((r) => {
+              const v = accessorFn(r);
+              return v == null || v === '' ? '' : String(v);
+            }).filter(Boolean))]
+              .sort((a, b) => a.localeCompare(b))
+              .map((v) => ({ value: v, label: v }))
+          : [];
+        return {
+          id: fieldName,
+          accessorFn,
+          header: row.display_name || getLabel(fieldName),
+          size: 140,
+          filterFn,
+          meta: {
+            filterType: inferred,
+            filterOptions,
+            isDynamic: true,
+          },
+          cell: ({ getValue }) => {
+            const value = getValue() as any;
+            if (value == null || value === '') return '—';
+            if (inferred === 'date-range') return formatDdMmm(String(value).slice(0, 10));
+            if (inferred === 'progress') return formatPct(value);
+            return <span className="block truncate">{String(value)}</span>;
+          },
+        } as ColumnDef<DefectRawRow>;
+      });
+
+    return [selectColumn, ...dataColumns, ...dynamicColumns];
+  }, [getLabel, optionFields, commentSummary, navigate, dataDate, fieldConfigRows, items]);
+
+  // List of all column ids actually present in the table (static + dynamic)
+  const allColumnIds = useMemo<string[]>(
+    () => columns.map((c) => (c as any).id ?? (c as any).accessorKey).filter(Boolean) as string[],
+    [columns],
+  );
 
   const columnVisibility = useMemo<VisibilityState>(() => {
     const visibility: VisibilityState = { __select: true };
-    for (const field of DEFECT_RAW_FIELDS) {
-      if (field === 'issue_no' || field === 'stage_progress') visibility[field] = true;
-      else visibility[field] = isFieldVisible(field);
+    for (const id of allColumnIds) {
+      if (id === '__select') continue;
+      if (id === 'issue_no' || id === 'stage_progress') visibility[id] = true;
+      else visibility[id] = isFieldVisible(id);
     }
     return visibility;
-  }, [isFieldVisible]);
+  }, [allColumnIds, isFieldVisible]);
 
   const columnOrder = useMemo(() => {
     const PINNED_FRONT = ['__select', 'issue_no', 'stage_progress'];
-    const remaining = (DEFECT_RAW_FIELDS as readonly string[]).filter(
-      (id) => !PINNED_FRONT.includes(id),
-    );
+    const remaining = allColumnIds.filter((id) => !PINNED_FRONT.includes(id));
     return [...PINNED_FRONT, ...sortFieldNames(remaining)];
-  }, [sortFieldNames]);
+  }, [allColumnIds, sortFieldNames]);
 
   const table = useReactTable({
     data: filteredBaseData,
