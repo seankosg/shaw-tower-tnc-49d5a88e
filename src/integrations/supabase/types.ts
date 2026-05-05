@@ -3262,6 +3262,7 @@ export type Database = {
         | "super_guest"
         | "user"
         | "senior_user"
+        | "d_superuser"
         | "superuser"
         | "admin"
       change_source:
@@ -3425,6 +3426,7 @@ export const Constants = {
         "super_guest",
         "user",
         "senior_user",
+        "d_superuser",
         "superuser",
         "admin",
       ],
