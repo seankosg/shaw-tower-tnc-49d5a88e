@@ -48,13 +48,27 @@ export interface ParseOmmResult {
 }
 
 function normalizeHeader(value: unknown): string {
-  return String(value ?? '')
+  let s = String(value ?? '')
     .replace(/[\r\n]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase()
     .replace(/\.$/, '')
     .trim();
+  // SHAW abbreviations: "D." / "F." prefix (with or without trailing space) → draft / final
+  s = s.replace(/^d\.\s*/, 'draft ').replace(/^f\.\s*/, 'final ');
+  // Standalone "d " / "f " prefix when followed by known tokens → draft / final
+  s = s.replace(/^d\s+(?=submission|response|actual|planned|respond)/, 'draft ');
+  s = s.replace(/^f\s+(?=submission|response|actual|planned|respond)/, 'final ');
+  // SHAW form: "Submission" is implicit; drop the word so canonical aliases match
+  s = s.replace(/\bsubmission\s+/g, '');
+  // Variant spellings
+  s = s.replace(/\brespond\b/g, 'response');
+  s = s.replace(/\btraning\b/g, 'training');
+  // Order normalization to canonical "<stage> response <kind> date"
+  s = s.replace(/^(draft|final) actual response date$/, '$1 response actual date');
+  s = s.replace(/^(draft|final) planned response date$/, '$1 response planned date');
+  return s.replace(/\s+/g, ' ').trim();
 }
 
 function toText(value: unknown): string | null {
