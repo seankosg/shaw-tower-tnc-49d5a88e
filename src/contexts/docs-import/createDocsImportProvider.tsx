@@ -167,6 +167,11 @@ export function createDocsImportProvider<TRow>(
         const msg = err instanceof Error ? err.message : String(err);
         console.warn('[docs-import] master ensurer init failed', msg);
       }
+      // Track names already attempted across the whole run so we only log the
+      // first occurrence of a brand-new name (subsequent rows = no-op).
+      const attemptedPic = new Set<string>();
+      const attemptedEng = new Set<string>();
+      const nameKey = (v: string) => v.trim().toLowerCase();
 
       for (const f of ready) {
         const parsed = f.parsed!;
@@ -185,6 +190,8 @@ export function createDocsImportProvider<TRow>(
           emptyKeyCount: emptyKey, duplicateKeyCount: dupCount,
           rejectSamples: [], errorCode: undefined, errorDetails: undefined, errorHint: undefined, error: undefined,
         } : x));
+
+        const fileAutoEntries: import('@/contexts/docs-import/types').AutoRegisteredMasterEntry[] = [];
 
         try {
           // Create batch.
@@ -206,18 +213,56 @@ export function createDocsImportProvider<TRow>(
           const batchId = batchData.id as string;
 
           // Auto-register any new HDEC PIC / HDEC ENG names found in the file.
-          // Idempotent + cached; failures are non-blocking.
+          // Idempotent + cached; failures are non-blocking. Per-row events are
+          // collected here so we can show a detailed report after import.
           if (ensurer) {
             for (const r of parsed) {
-              const row = r as { hdec_pic_name?: string | null; hdec_eng_name?: string | null };
-              if (!row.hdec_pic_name && !row.hdec_eng_name) continue;
+              const row = r as { hdec_pic_name?: string | null; hdec_eng_name?: string | null; rawRowNo?: number | null };
+              const picName = row.hdec_pic_name?.trim() || null;
+              const engName = row.hdec_eng_name?.trim() || null;
+              if (!picName && !engName) continue;
+
+              const isNewPic = !!picName && !attemptedPic.has(nameKey(picName));
+              const isNewEng = !!engName && !attemptedEng.has(nameKey(engName));
+              if (!isNewPic && !isNewEng) continue;
+
+              if (isNewPic) attemptedPic.add(nameKey(picName!));
+              if (isNewEng) attemptedEng.add(nameKey(engName!));
+
+              const warningsBefore = ensurer.warnings.length;
               try {
                 await ensurer.ensureForRow({
-                  hdec_pic_name: row.hdec_pic_name ?? null,
-                  hdec_eng_name: row.hdec_eng_name ?? null,
+                  hdec_pic_name: isNewPic ? picName : null,
+                  hdec_eng_name: isNewEng ? engName : null,
                 });
               } catch (err) {
                 console.warn('[docs-import] ensureForRow failed', err);
+              }
+              const newWarnings = ensurer.warnings.slice(warningsBefore);
+              const failedFor = (n: string) => newWarnings.find((w) => w.startsWith(`${n} (`));
+
+              const rowKey = adapter.getRowKey(r);
+              if (isNewPic && picName) {
+                const fail = failedFor(picName);
+                fileAutoEntries.push({
+                  rawRowNo: row.rawRowNo ?? null,
+                  key: rowKey,
+                  field: 'hdec_pic',
+                  name: picName,
+                  status: fail ? 'failed' : 'registered',
+                  reason: fail,
+                });
+              }
+              if (isNewEng && engName) {
+                const fail = failedFor(engName);
+                fileAutoEntries.push({
+                  rawRowNo: row.rawRowNo ?? null,
+                  key: rowKey,
+                  field: 'hdec_eng',
+                  name: engName,
+                  status: fail ? 'failed' : 'registered',
+                  reason: fail,
+                });
               }
             }
           }
@@ -250,6 +295,7 @@ export function createDocsImportProvider<TRow>(
             ...x, status: 'done', progress: 100,
             unmatchedOrgs: [...result.counters.unmatchedOrgs],
             rejectSamples: result.rejectSamples,
+            autoRegisteredMasters: fileAutoEntries,
             result: {
               inserted: result.counters.inserted,
               updated: result.counters.updated,
@@ -264,6 +310,7 @@ export function createDocsImportProvider<TRow>(
           const e = fmtSupabaseError(error);
           setFiles((cur) => cur.map((x) => x.id === f.id ? {
             ...x, status: 'failed',
+            autoRegisteredMasters: fileAutoEntries,
             error: e.message, errorCode: e.code, errorDetails: e.details, errorHint: e.hint,
           } : x));
         }
@@ -271,15 +318,6 @@ export function createDocsImportProvider<TRow>(
 
       setIsRunning(false);
       toast({ title: 'Import complete', description: `${ready.length} file(s) processed.` });
-
-      if (ensurer && ensurer.warnings.length > 0) {
-        const sample = ensurer.warnings.slice(0, 2).join('; ');
-        toast({
-          title: 'Some master records could not be auto-registered',
-          description: `${ensurer.warnings.length} warning(s). ${sample}`,
-          variant: 'destructive',
-        });
-      }
     }, [files, isRunning, toast, user]);
 
     const value: DocsImportContextValue<TRow> = {

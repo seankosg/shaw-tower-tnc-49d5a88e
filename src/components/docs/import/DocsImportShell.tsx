@@ -326,6 +326,41 @@ export function DocsImportShell({
                       )}
                     </div>
                   )}
+                  {f.autoRegisteredMasters && f.autoRegisteredMasters.length > 0 && (() => {
+                    const entries = f.autoRegisteredMasters;
+                    const okCount = entries.filter((e) => e.status === 'registered').length;
+                    const failCount = entries.length - okCount;
+                    return (
+                      <details className="mt-2 rounded border border-blue-200 bg-blue-50/60 p-2 text-xs dark:border-blue-900 dark:bg-blue-950/30">
+                        <summary className="cursor-pointer font-medium text-blue-800 dark:text-blue-200">
+                          Auto-registered HDEC masters: {okCount} added
+                          {failCount > 0 && <span className="ml-1 text-destructive">· {failCount} failed</span>}
+                        </summary>
+                        <ul className="mt-2 space-y-1">
+                          {entries.map((e, i) => (
+                            <li key={i} className="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
+                              <Badge
+                                variant="outline"
+                                className={e.status === 'registered'
+                                  ? 'border-emerald-300 text-emerald-700'
+                                  : 'border-destructive text-destructive'}
+                              >
+                                {e.status === 'registered' ? 'Added' : 'Failed'}
+                              </Badge>
+                              <span className="uppercase text-muted-foreground">{e.field === 'hdec_pic' ? 'PIC' : 'ENG'}</span>
+                              <span className="font-semibold">{e.name}</span>
+                              {(e.rawRowNo != null || e.key) && (
+                                <span className="text-muted-foreground">
+                                  · row {e.rawRowNo ?? '—'}{e.key ? ` (${e.key})` : ''}
+                                </span>
+                              )}
+                              {e.reason && <span className="text-destructive">— {e.reason}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    );
+                  })()}
                 </div>
               );
             })}

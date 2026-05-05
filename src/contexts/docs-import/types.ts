@@ -57,6 +57,19 @@ export interface DocsImportFile<TRow = unknown> {
   emptyKeyCount?: number;
   duplicateKeyCount?: number;
   result?: DocsImportResult;
+  /** Per-row HDEC PIC/ENG auto-registration log. Populated after import completes. */
+  autoRegisteredMasters?: AutoRegisteredMasterEntry[];
+}
+
+export interface AutoRegisteredMasterEntry {
+  rawRowNo?: number | null;
+  /** Row key (Document No / SN) for context. */
+  key?: string | null;
+  field: 'hdec_pic' | 'hdec_eng';
+  name: string;
+  status: 'registered' | 'failed';
+  /** Failure detail when status='failed'. */
+  reason?: string;
 }
 
 export interface DocsImportContextValue<TRow = unknown> {
