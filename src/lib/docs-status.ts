@@ -24,6 +24,7 @@ export type CycleStatus =
   | 'S.Delayed'
   | 'Under Review'
   | 'R.Delayed'
+  | 'WIP'
   | 'A'
   | 'B'
   | 'C';
