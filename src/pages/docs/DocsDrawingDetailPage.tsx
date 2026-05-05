@@ -101,7 +101,7 @@ const EDITABLE_FIELDS = [
   'remarks',
 ] as const;
 
-const APPROVAL_STATUS_OPTIONS = ['A', 'B', 'C', 'UR'];
+const APPROVAL_STATUS_OPTIONS = ['A', 'B', 'C', 'UR', 'WIP'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 function toDateInput(value: unknown): string {

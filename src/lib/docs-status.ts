@@ -5,7 +5,7 @@
  *   S = submission_date
  *   P = approval_date  (== Planned Response Date = S + lead_days, or Excel value)
  *   R = actual_response_date
- *   K = approval_status ∈ {'A','B','C','UR',null}
+ *   K = approval_status ∈ {'A','B','C','UR','WIP',null}
  *
  * Status mapping (per-cycle):
  *   K=UR         → 'Under Review'   (explicit; cycle stays active)
@@ -24,6 +24,7 @@ export type CycleStatus =
   | 'S.Delayed'
   | 'Under Review'
   | 'R.Delayed'
+  | 'WIP'
   | 'A'
   | 'B'
   | 'C';
@@ -56,12 +57,12 @@ export interface DrawingForStatus {
 
 export type CycleNumber = 1 | 2 | 3;
 
-const VALID_STATUS = new Set(['A', 'B', 'C', 'UR']);
+const VALID_STATUS = new Set(['A', 'B', 'C', 'UR', 'WIP']);
 
-function normStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | 'UR' | null {
+function normStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | 'UR' | 'WIP' | null {
   if (!raw) return null;
   const v = String(raw).trim().toUpperCase();
-  if (VALID_STATUS.has(v)) return v as 'A' | 'B' | 'C' | 'UR';
+  if (VALID_STATUS.has(v)) return v as 'A' | 'B' | 'C' | 'UR' | 'WIP';
   return null;
 }
 
@@ -93,6 +94,8 @@ export function computeCycleStatus(
   const status = normStatus(cycle.approval_status);
   // Explicit "Under Review" overrides date-based derivation.
   if (status === 'UR') return 'Under Review';
+  // Explicit "Work In Progress" overrides date-based derivation (cycle stays active).
+  if (status === 'WIP') return 'WIP';
   if (cycle.actual_response_date) {
     if (status) return status;
     return 'Under Review';
@@ -277,7 +280,7 @@ export function applyCycleAutoFill<T extends DrawingForStatus>(drawing: T): T {
 }
 
 /** Normalize a free-text status to A/B/C/UR/null. Used during import. */
-export function normalizeApprovalStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | 'UR' | null {
+export function normalizeApprovalStatus(raw: string | null | undefined): 'A' | 'B' | 'C' | 'UR' | 'WIP' | null {
   if (!raw) return null;
   const v = String(raw).trim().toUpperCase();
   if (v === 'A') return 'A';
@@ -286,6 +289,10 @@ export function normalizeApprovalStatus(raw: string | null | undefined): 'A' | '
   if (v === 'UR' || v === 'U/R' || v === 'U.R' || v === 'U R') return 'UR';
   if (v === 'UNDER REVIEW' || v === 'UNDERREVIEW' || v === 'IN REVIEW' || v === 'INREVIEW') return 'UR';
   if (v === 'PENDING' || v === 'PENDING REVIEW' || v === 'REVIEW') return 'UR';
+  if (v === 'WIP' || v === 'W.I.P' || v === 'W/I/P' || v === 'W.I.P.') return 'WIP';
+  if (v === 'WORK IN PROGRESS' || v === 'WORKINPROGRESS') return 'WIP';
+  if (v === 'IN PROGRESS' || v === 'INPROGRESS' || v === 'IN-PROGRESS') return 'WIP';
+  if (v === 'ONGOING' || v === 'ON GOING' || v === 'ON-GOING') return 'WIP';
   if (v === 'APPROVED') return 'A';
   if (v.startsWith('APPROVED WITH COMMENT')) return 'B';
   if (v.startsWith('APPROVED W/COMMENT')) return 'B';
@@ -305,6 +312,8 @@ export function cycleStatusColorClasses(status: CycleStatus): string {
       return 'bg-rose-500 border-rose-600 text-white';
     case 'Under Review':
       return 'bg-sky-400 border-sky-500 text-white';
+    case 'WIP':
+      return 'bg-slate-300 border-slate-400 text-slate-800';
     case 'R.Delayed':
       return 'bg-rose-600 border-rose-700 text-white';
     case 'S.Delayed':
@@ -325,6 +334,8 @@ export function cycleStatusGlyph(status: CycleStatus): string {
       return 'C';
     case 'Under Review':
       return '◐';
+    case 'WIP':
+      return 'W';
     case 'R.Delayed':
       return '⚠';
     case 'S.Delayed':
