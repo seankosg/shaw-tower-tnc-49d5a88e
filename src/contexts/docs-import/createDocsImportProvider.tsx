@@ -71,15 +71,17 @@ export function createDocsImportProvider<TRow>(
           // Pre-extract headers + sample values for the column-select dialog.
           let availableHeaders: string[] = [];
           let headerSamples: Record<string, unknown> = {};
+          let fieldByHeader: Record<string, string | null> = {};
           try {
             const info = await adapter.getHeaderInfo(item.file, sheetNames);
             availableHeaders = info.headers;
             headerSamples = info.samples;
+            fieldByHeader = info.fieldByHeader;
           } catch {
             // Non-fatal — column select just won't be available for this file.
           }
           setFiles((cur) => cur.map((f) => f.id === item.id ? {
-            ...f, sheetNames, selectedSheets: sheetNames, availableHeaders, headerSamples,
+            ...f, sheetNames, selectedSheets: sheetNames, availableHeaders, headerSamples, fieldByHeader,
           } : f));
           await parseAndApply(item.id, item.file, sheetNames);
         } catch (error) {
