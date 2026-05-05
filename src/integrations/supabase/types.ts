@@ -1113,108 +1113,155 @@ export type Database = {
       }
       docs_omm: {
         Row: {
-          approved_date: string | null
           category: string | null
-          contract_doc: string | null
-          contractor_supplier: string | null
+          category_group: string | null
           created_at: string
+          current_stage: string | null
+          current_status: string | null
           custom_payload: Json
           data_source_type: string | null
           draft_actual_date: string | null
-          draft_section: string | null
-          draft_target_date: string | null
-          hardcopy_required: string | null
+          draft_planned_date: string | null
+          draft_response_date: string | null
+          draft_response_status: string | null
+          final_actual_date: string | null
+          final_planned_date: string | null
+          final_response_actual_date: string | null
+          final_response_planned_date: string | null
+          final_response_status: string | null
+          hardcopy_actual_qty: number | null
+          hardcopy_required_qty: number | null
           hdec_eng_name: string | null
           hdec_pic_name: string | null
           id: string
+          instruction_date: string | null
           is_active: boolean
+          is_resubmission: boolean
+          parent_id: string | null
+          pdf_actual_qty: number | null
+          pdf_required_qty: number | null
           project_id: string
           raw_payload: Json
           remarks: string | null
+          resubmission_seq: number
           row_no: number | null
           row_version: number
+          section: string | null
           sheet_name: string | null
           sn: string | null
-          softcopy_required: string | null
           source_upload_id: string | null
+          subcontractor_id: string | null
           subcontractor_name: string | null
-          submission_actual_date: string | null
-          submission_target_date: string | null
           team: Database["public"]["Enums"]["team_type"] | null
           trade: string | null
+          training_required: string | null
           updated_at: string
           updated_by: string | null
           work_trade_material: string | null
         }
         Insert: {
-          approved_date?: string | null
           category?: string | null
-          contract_doc?: string | null
-          contractor_supplier?: string | null
+          category_group?: string | null
           created_at?: string
+          current_stage?: string | null
+          current_status?: string | null
           custom_payload?: Json
           data_source_type?: string | null
           draft_actual_date?: string | null
-          draft_section?: string | null
-          draft_target_date?: string | null
-          hardcopy_required?: string | null
+          draft_planned_date?: string | null
+          draft_response_date?: string | null
+          draft_response_status?: string | null
+          final_actual_date?: string | null
+          final_planned_date?: string | null
+          final_response_actual_date?: string | null
+          final_response_planned_date?: string | null
+          final_response_status?: string | null
+          hardcopy_actual_qty?: number | null
+          hardcopy_required_qty?: number | null
           hdec_eng_name?: string | null
           hdec_pic_name?: string | null
           id?: string
+          instruction_date?: string | null
           is_active?: boolean
+          is_resubmission?: boolean
+          parent_id?: string | null
+          pdf_actual_qty?: number | null
+          pdf_required_qty?: number | null
           project_id: string
           raw_payload?: Json
           remarks?: string | null
+          resubmission_seq?: number
           row_no?: number | null
           row_version?: number
+          section?: string | null
           sheet_name?: string | null
           sn?: string | null
-          softcopy_required?: string | null
           source_upload_id?: string | null
+          subcontractor_id?: string | null
           subcontractor_name?: string | null
-          submission_actual_date?: string | null
-          submission_target_date?: string | null
           team?: Database["public"]["Enums"]["team_type"] | null
           trade?: string | null
+          training_required?: string | null
           updated_at?: string
           updated_by?: string | null
           work_trade_material?: string | null
         }
         Update: {
-          approved_date?: string | null
           category?: string | null
-          contract_doc?: string | null
-          contractor_supplier?: string | null
+          category_group?: string | null
           created_at?: string
+          current_stage?: string | null
+          current_status?: string | null
           custom_payload?: Json
           data_source_type?: string | null
           draft_actual_date?: string | null
-          draft_section?: string | null
-          draft_target_date?: string | null
-          hardcopy_required?: string | null
+          draft_planned_date?: string | null
+          draft_response_date?: string | null
+          draft_response_status?: string | null
+          final_actual_date?: string | null
+          final_planned_date?: string | null
+          final_response_actual_date?: string | null
+          final_response_planned_date?: string | null
+          final_response_status?: string | null
+          hardcopy_actual_qty?: number | null
+          hardcopy_required_qty?: number | null
           hdec_eng_name?: string | null
           hdec_pic_name?: string | null
           id?: string
+          instruction_date?: string | null
           is_active?: boolean
+          is_resubmission?: boolean
+          parent_id?: string | null
+          pdf_actual_qty?: number | null
+          pdf_required_qty?: number | null
           project_id?: string
           raw_payload?: Json
           remarks?: string | null
+          resubmission_seq?: number
           row_no?: number | null
           row_version?: number
+          section?: string | null
           sheet_name?: string | null
           sn?: string | null
-          softcopy_required?: string | null
           source_upload_id?: string | null
+          subcontractor_id?: string | null
           subcontractor_name?: string | null
-          submission_actual_date?: string | null
-          submission_target_date?: string | null
           team?: Database["public"]["Enums"]["team_type"] | null
           trade?: string | null
+          training_required?: string | null
           updated_at?: string
           updated_by?: string | null
           work_trade_material?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "docs_omm_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "docs_omm"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       docs_org_alias: {
         Row: {
@@ -1647,6 +1694,60 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
+      }
+      omm_comments: {
+        Row: {
+          author_user_id: string
+          created_at: string
+          edited: boolean
+          id: string
+          message: string
+          omm_id: string
+          parent_comment_id: string | null
+          recipients: string[]
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          author_user_id: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          message: string
+          omm_id: string
+          parent_comment_id?: string | null
+          recipients?: string[]
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          author_user_id?: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          message?: string
+          omm_id?: string
+          parent_comment_id?: string | null
+          recipients?: string[]
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omm_comments_omm_id_fkey"
+            columns: ["omm_id"]
+            isOneToOne: false
+            referencedRelation: "docs_omm"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "omm_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "omm_comments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -2995,7 +3096,7 @@ export type Database = {
         }[]
       }
       add_business_days_no_sun: {
-        Args: { _days: number; _start: string }
+        Args: { base: string; days: number }
         Returns: string
       }
       allot_subcontractor_issue_no: {
@@ -3039,6 +3140,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      compute_omm_status: {
+        Args: { row_data: Database["public"]["Tables"]["docs_omm"]["Row"] }
+        Returns: string
+      }
+      create_omm_resubmission: {
+        Args: { p_parent_id: string; p_stage: string }
+        Returns: string
       }
       delete_defect_import_batch: {
         Args: { _batch_id: string }
