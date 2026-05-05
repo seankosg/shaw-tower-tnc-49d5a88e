@@ -72,14 +72,18 @@ export const abdAdapter: ImporterAdapter<ParsedDocsRow> = {
   keyFieldLabel: 'Document No',
   dataDateRequired: true,
   rawDataPath: '/docs/abd',
-  parseFile: async (file, sheets) => {
+  parseFile: async (file, sheets, options) => {
     const { parseDocsExcel } = await import('@/lib/docs-import-parser');
-    const r = await parseDocsExcel(file, sheets);
+    const r = await parseDocsExcel(file, sheets, options);
     return { rows: r.rows, unknownHeaders: r.unknownHeaders };
   },
   getSheetNames: async (file) => {
     const { getDocsExcelSheetNames } = await import('@/lib/docs-import-parser');
     return getDocsExcelSheetNames(file);
+  },
+  getHeaderInfo: async (file, sheets) => {
+    const { getDocsHeaderInfo } = await import('@/lib/docs-import-parser');
+    return getDocsHeaderInfo(file, sheets);
   },
   getRowKey: (row) => row.document_no ?? null,
   upsertWorker: async (ctx, rows, onProgress) => {
