@@ -85,6 +85,7 @@ export default function DocsImportLogsPage() {
   const [renderLimit, setRenderLimit] = useState<number>(500);
   const [fieldLogs, setFieldLogs] = useState<FieldLog[]>([]);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [subModuleFilter, setSubModuleFilter] = useState<string>(searchParams.get('sub') || 'all');
 
   useEffect(() => { void fetchBatches(); }, []);
   useEffect(() => { if (selectedBatch) void loadBatchDetails(selectedBatch); }, []);
