@@ -268,9 +268,9 @@ export default function DocsOMMDetailPage() {
         </Button>
       </div>
 
-      {!canEdit && (
+      {readOnlyReason && (
         <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-          Read-only mode — your role does not allow editing OMM records.
+          {readOnlyReason}
         </div>
       )}
 
