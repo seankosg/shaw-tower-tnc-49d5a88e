@@ -329,12 +329,15 @@ function TextFilterDropdown({ column }: { column: any }) {
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-52 space-y-2 p-3" align="start" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 px-1">
+          <button className="text-[11px] text-muted-foreground/40 cursor-not-allowed" disabled title="Not applicable for text filters">Select all</button>
+          <button className="text-[11px] text-muted-foreground hover:underline" onClick={() => column.setFilterValue(undefined)}>Clear all</button>
+        </div>
         <Input placeholder="Search... (use , for AND)" value={text} onChange={(e) => update({ text: e.target.value || undefined })} className="h-7 text-xs" disabled={emptyOnly} />
         <p className="text-[10px] text-muted-foreground">Tip: comma separates AND terms</p>
         <label className="flex cursor-pointer items-center gap-2 text-xs">
           <Checkbox checked={emptyOnly} onCheckedChange={(c) => update({ emptyOnly: !!c, text: undefined })} className="h-3.5 w-3.5" /> Empty only
         </label>
-        <button className="text-[11px] text-muted-foreground hover:underline" onClick={() => column.setFilterValue(undefined)}>Clear</button>
       </PopoverContent>
     </Popover>
   );
