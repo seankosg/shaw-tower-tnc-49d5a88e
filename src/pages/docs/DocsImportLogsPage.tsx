@@ -313,9 +313,10 @@ export default function DocsImportLogsPage() {
                             </AlertDialog>
                           </TableCell>
                         )}
-                      </TableRow>
-                    );
-                  })}
+                        </TableRow>
+                      );
+                    });
+                  })()}
                 </TableBody>
               </Table>
             </div>
