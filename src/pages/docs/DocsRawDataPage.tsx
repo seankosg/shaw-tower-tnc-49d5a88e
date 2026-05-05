@@ -358,12 +358,15 @@ function DateRangeDropdown({ column }: { column: any }) {
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 space-y-2 p-3" align="start" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 px-1">
+          <button className="text-[11px] text-muted-foreground/40 cursor-not-allowed" disabled title="Not applicable for date filters">Select all</button>
+          <button className="text-[11px] text-muted-foreground hover:underline" onClick={() => column.setFilterValue(undefined)}>Clear all</button>
+        </div>
         <div className="space-y-1"><label className="text-[11px] text-muted-foreground">From</label><Input type="date" value={filterValue?.from ?? ''} onChange={(e) => update({ from: e.target.value || undefined })} className="h-7 text-xs" disabled={!!filterValue?.emptyOnly} /></div>
         <div className="space-y-1"><label className="text-[11px] text-muted-foreground">To</label><Input type="date" value={filterValue?.to ?? ''} onChange={(e) => update({ to: e.target.value || undefined })} className="h-7 text-xs" disabled={!!filterValue?.emptyOnly} /></div>
         <label className="flex cursor-pointer items-center gap-2 pt-1 text-xs">
           <Checkbox checked={!!filterValue?.emptyOnly} onCheckedChange={(c) => update({ emptyOnly: !!c, from: undefined, to: undefined })} className="h-3.5 w-3.5" /> Empty only
         </label>
-        <button className="text-[11px] text-muted-foreground hover:underline" onClick={() => column.setFilterValue(undefined)}>Clear</button>
       </PopoverContent>
     </Popover>
   );
