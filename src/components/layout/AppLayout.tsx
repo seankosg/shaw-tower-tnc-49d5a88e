@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { LoginGreetingDialog } from '@/components/auth/LoginGreetingDialog';
+import { extractEnglishFirstName } from '@/lib/greeting';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { Separator } from '@/components/ui/separator';
@@ -162,6 +164,23 @@ function AccountMenu() {
   );
 }
 
+function GreetingHost() {
+  const { profile } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+
+  useEffect(() => {
+    if (!profile) return;
+    if (sessionStorage.getItem('shaw_greet') !== '1') return;
+    setName(extractEnglishFirstName(profile));
+    setOpen(true);
+    sessionStorage.removeItem('shaw_greet');
+  }, [profile]);
+
+  if (!open) return null;
+  return <LoginGreetingDialog open={open} name={name} onClose={() => setOpen(false)} />;
+}
+
 export function AppLayout() {
   const pageLabel = useCurrentPageLabel();
   useRouteMemory();
@@ -195,6 +214,7 @@ export function AppLayout() {
           <Outlet />
         </main>
       </SidebarInset>
+      <GreetingHost />
     </SidebarProvider>
   );
 }

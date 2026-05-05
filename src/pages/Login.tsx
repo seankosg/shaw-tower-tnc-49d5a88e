@@ -27,6 +27,7 @@ export default function Login() {
     } else if (profile && !profile.is_active) {
       toast({ title: 'Login Failed', description: 'Your account has been deactivated. Please contact an administrator.', variant: 'destructive' });
     } else {
+      sessionStorage.setItem('shaw_greet', '1');
       navigate('/dashboard');
     }
   };
