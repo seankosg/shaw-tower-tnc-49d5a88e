@@ -221,7 +221,44 @@ export async function applyBulkUpdate(req: BulkUpdateRequest): Promise<BulkUpdat
           }
         }
       }
+
+      // 5) Docs-only: re-sync current_status when any cycle field changed.
+      const cycleFieldChanged =
+        /^sub([123])_(planned_date|submission_date|approval_date|actual_response_date|approval_status)$/.test(field);
+      if (cycleFieldChanged) {
+        const ids = [...updatedIds];
+        if (ids.length > 0) {
+          const cycleCols = ['id', 'current_status'];
+          for (const n of [1, 2, 3]) for (const f of CYCLE_DATA_FIELDS) cycleCols.push(`sub${n}_${f}`);
+          const { data: cur } = await (supabase as any)
+            .from('docs_drawings')
+            .select(cycleCols.join(', '))
+            .in('id', ids);
+          const syncLogs: any[] = [];
+          for (const row of (cur ?? []) as any[]) {
+            const next = computeOverallStatus(row as any, null);
+            const prev = row.current_status ?? null;
+            if (String(prev ?? '') === String(next ?? '')) continue;
+            await (supabase as any)
+              .from('docs_drawings')
+              .update({ current_status: next, updated_by: userId })
+              .eq('id', row.id);
+            syncLogs.push({
+              drawing_id: row.id,
+              changed_field: 'current_status',
+              old_value: prev == null ? null : String(prev),
+              new_value: next == null ? null : String(next),
+              changed_by: userId,
+              change_source: 'auto_overall_status',
+            });
+          }
+          if (syncLogs.length > 0) {
+            await (supabase as any).from('docs_change_log').insert(syncLogs);
+          }
+        }
+      }
     }
+  }
   }
 
   return result;
