@@ -667,8 +667,10 @@ export default function DocsRawDataPage() {
             );
           }
           if (field === 'aconex_status' || field === 'current_status') {
-            if (!value) return <span className="text-muted-foreground">—</span>;
-            return <Badge variant="outline" className="text-[10px]">{String(value)}</Badge>;
+            // current_status is rendered as the computed Overall Status (single source of truth).
+            const display = field === 'current_status' ? (row.original.overall_status ?? value) : value;
+            if (!display) return <span className="text-muted-foreground">—</span>;
+            return <Badge variant="outline" className="text-[10px]">{String(display)}</Badge>;
           }
           if (field === 'team') {
             if (!value) return <span className="text-muted-foreground">—</span>;
