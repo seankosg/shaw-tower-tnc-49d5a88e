@@ -6,7 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ImportProvider } from "@/contexts/ImportContext";
 import { DefectImportProvider } from "@/contexts/DefectImportContext";
-import { DocsImportProvider } from "@/contexts/DocsImportContext";
+import { DocsImportProviders } from "@/contexts/docs-import/DocsImportProviders";
 import { ModuleStatusProvider } from "@/contexts/ModuleStatusContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
@@ -43,7 +43,7 @@ import DocsDrawingDetailPage from "./pages/docs/DocsDrawingDetailPage";
 import DocsImportLogsPage from "./pages/docs/DocsImportLogsPage";
 import DocsOMMRawDataPage from "./pages/docs/DocsOMMRawDataPage";
 import DocsOMMDetailPage from "./pages/docs/DocsOMMDetailPage";
-import DocsOMMImportPage from "./pages/docs/DocsOMMImportPage";
+
 import DocsSparePartRawDataPage from "./pages/docs/DocsSparePartRawDataPage";
 import DocsWarrantyRawDataPage from "./pages/docs/DocsWarrantyRawDataPage";
 import { useHeaderMappingsSync } from "@/hooks/useHeaderMappings";
@@ -75,7 +75,7 @@ const App = () => (
       <ModuleStatusProvider>
       <ImportProvider>
         <DefectImportProvider>
-        <DocsImportProvider>
+        <DocsImportProviders>
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -123,7 +123,7 @@ const App = () => (
                 <Route path="/docs/abd" element={<DocsRawDataPage />} />
                 <Route path="/docs/abd/:id" element={<DocsDrawingDetailPage />} />
                 <Route path="/docs/omm" element={<DocsOMMRawDataPage />} />
-                <Route path="/docs/omm/import" element={<DocsOMMImportPage />} />
+                <Route path="/docs/omm/import" element={<Navigate to="/docs/import?sub=omm" replace />} />
                 <Route path="/docs/omm/:id" element={<DocsOMMDetailPage />} />
                 <Route path="/docs/warranty" element={<DocsWarrantyRawDataPage />} />
                 <Route path="/docs/spare-part" element={<DocsSparePartRawDataPage />} />
@@ -142,7 +142,7 @@ const App = () => (
             </Routes>
           </BrowserRouter>
         </TooltipProvider>
-        </DocsImportProvider>
+        </DocsImportProviders>
         </DefectImportProvider>
       </ImportProvider>
       </ModuleStatusProvider>
