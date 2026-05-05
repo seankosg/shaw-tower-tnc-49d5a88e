@@ -71,6 +71,8 @@ export function DocsImportShell({
   }, [addFiles]);
 
   const readyCount = files.filter((f) => f.status === 'ready').length;
+  const invalidCount = files.filter((f) => f.status === 'ready' && f.validationError).length;
+  const importableCount = readyCount - invalidCount;
   const hasResults = files.some((f) => f.result);
   const totals = files.reduce((acc, f) => {
     if (f.result) {
