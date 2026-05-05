@@ -32,7 +32,6 @@ const mainNav = [
   { label: 'Raw Data',  icon: Database,  path: '/tc/raw-data' },
   { label: 'Import',    icon: Upload,    path: '/tc/import' },
   { label: 'Export',    icon: Download,  path: '/tc/export' },
-  { label: 'Quick Update', icon: ClipboardList, path: '/tc/quick-update' },
 ];
 
 const defectNav = [
@@ -43,7 +42,6 @@ const defectNav = [
   { label: 'Import', icon: Upload, path: '/defects/import' },
   { label: 'Export', icon: Download, path: '/defects/export' },
   { label: 'Defect Classification', icon: Tags, path: '/admin/classification' },
-  { label: 'Quick Update', icon: ClipboardList, path: '/defects/quick-update' },
 ];
 
 const docsNav = [
