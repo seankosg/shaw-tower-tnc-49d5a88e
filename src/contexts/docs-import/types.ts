@@ -45,6 +45,8 @@ export interface DocsImportFile<TRow = unknown> {
   availableHeaders?: string[];
   /** First non-empty sample value per detected header — fed to the column-select preview. */
   headerSamples?: Record<string, unknown>;
+  /** Map of detected header → structured field name (or null when unmapped). */
+  fieldByHeader?: Record<string, string | null>;
   /** Headers the user opted to exclude — passed back to the parser so they're ignored. */
   excludedHeaders?: string[];
   unknownHeaders?: string[];
