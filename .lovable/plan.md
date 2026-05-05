@@ -1,324 +1,114 @@
 
-# OMM Raw Data — 구현 계획 (v5 최종)
+# OMM Raw Data — Full Parity Rewrite (Defect Raw Data 수준)
 
-OMM은 Docs 우산 아래 4개 sub-module 중 하나입니다 (`as_built`, `omm`, `warranty`, `spare_part`). 모든 통합점(Admin Header Mappings 탭, Admin Field Config 탭, header-mappings cache, Import 페이지, AppRouter, Bulk 편집)을 일관되게 확장합니다.
+`DocsOMMRawDataPage.tsx`를 Defect Raw Data와 동등한 운영 도구로 전면 재작성합니다. 기존 `OmmStatusBadge`, `OmmCopyQuantityCell`, `docs-omm-status.ts` 로직은 그대로 재사용합니다.
 
----
+## 1. 테이블 엔진 (P0)
 
-## v5 변경사항 (이전 대비)
+- `@tanstack/react-table` + `@tanstack/react-virtual` 도입 (Defect와 동일 패턴).
+- 컬럼 정의는 `useDocsFieldConfig('omm')` 결과로 **동적 생성**. 하드코딩된 컬럼 분기 제거.
+- `SortingState` / `ColumnSizingState` / `ColumnFiltersState` / `RowSelectionState` / `VisibilityState` 전체 도입.
+- 컬럼 헤더: 클릭 정렬 + 더블클릭 auto-size + 우측 리사이즈 핸들.
+- `useFrozenColumnCount` 적용해 좌측 N개 컬럼 sticky.
+- `TopHorizontalScrollbar` 상단 미러 스크롤.
+- 행 가상화로 2000행 제한 해제 (전체 로드 + virtual window).
 
-1. **Copy 수량 비교 alert**:
-   - `Readible PDF` (계약상 제출 필요한 PDF 부수) vs `PDF Check` (실제 제출 부수)
-   - `Hardcopy` (계약상 제출 필요한 부수) vs `Hardcopy Check` (실제 제출 부수)
-   - 두 값이 다르면 행에 시각적 alert 표시
-2. **헤더 매핑 정정**:
-   - Excel 헤더 `Category` → `category_group` 컬럼 (Architectural / Mechanical & Electrical / Miscellaneous)
-   - Excel 헤더 `TEAM` → `category` 컬럼 + `team` ENUM 동시 (Architectural / Mechanical / Electrical)
+## 2. 필터 / 검색 (P0)
 
----
+Defect와 동일한 4종 헤더 드롭다운:
 
-## 0. Docs 4개 sub-module 통합 패턴 정리
+- **MultiSelectDropdown** — `category_group`, `category`, `team`, `subcontractor_name`, `hdec_pic_name`, `hdec_eng_name`, `training_required`, `draft_response_status`, `final_response_status`, `current_stage`, `current_status` 등 enum/저카디널리티 필드. Faceted counts + Empty 토큰.
+- **TextFilterDropdown** — `sn`, `section`, `work_trade_material`, `remarks` 등. AND-token (`,` 구분).
+- **DateRangeDropdown** — `instruction_date`, `draft_planned_date`, `draft_actual_date`, `draft_response_date`, `final_planned_date`, `final_actual_date`, `final_response_planned_date`, `final_response_actual_date`.
+- **NumberRangeDropdown** (신규, 작은 컴포넌트) — `pdf_required_qty`, `pdf_actual_qty`, `hardcopy_required_qty`, `hardcopy_actual_qty`. Defect의 progress filter 패턴 재활용.
+- 추가 toggle 필터 (테이블 상단 툴바):
+  - **Copy mismatch only** (기존 유지)
+  - **Resubmissions only / Hide resubmissions**
+  - **Overdue only** (planned_date 경과 + actual 미입력)
+- 글로벌 검색은 디바운스 + AND-token. 검색 대상: `RAW_SEARCH_FIELDS_OMM` 신규 정의 (sn, section, work_trade_material, subcontractor_name, hdec_pic_name, hdec_eng_name, remarks, category, category_group).
+- `buildColumnFilterChips`로 활성 필터 칩 + 전체 Clear.
 
-| 통합점 | 현재 상태 | OMM 추가 작업 |
-|---|---|---|
-| `useDocsFieldConfig.ts` | 타입에 `'omm','spare_part'` 이미 선언됨 | 그대로 사용 |
-| `header-mappings-cache.ts` | `MappingSubModule = '' \| 'as_built' \| 'warranty'` | `'omm' \| 'spare_part'` 추가 |
-| `useHeaderMappings.ts` `DocsSubModule` | `'as_built' \| 'warranty'` | `'omm' \| 'spare_part'` 추가 |
-| Admin → HeaderMappingsTab `DOCS_SUBMODULES` 레지스트리 | as_built / warranty 2개 | **omm + spare_part 항목 추가** + `DOCS_OMM_FIELDS` 화이트리스트 정의 |
-| Admin → FieldConfigTab `docs` 탭 | `<FieldConfigTable table='docs_field_config' />` 단일 (sub_module 필터 없음) | **Docs 탭 내부에 4개 sub-module 탭** + `FieldConfigTable`에 `subModule` prop 추가 |
-| `import_header_mappings` 데이터 | docs/as_built (96), docs/warranty (41) | **docs/omm 시드** (아래 매핑 표 기준 25개) |
-| `docs_field_config` 데이터 | as_built, omm(legacy 15), warranty | omm 행 **재시드** (legacy 컬럼명 폐기 후 새 컬럼 기준) |
-| `App.tsx` | `/docs/omm` 라우트 존재 | `/docs/omm/:id` 상세 라우트 추가 |
-| `DocsImportPage` / `DocsImportContext` | as_built / warranty 분기 | **omm 분기 추가** |
-| `DocsBulkEditBar` | as_built/warranty 필드 정의 | **omm 필드 정의 추가** (테이블=`docs_omm`) |
-| `docs_change_log` / `docs_upload_batches` / `docs_upload_row_logs` | sub_module 컬럼 존재 | sub_module='omm'로 사용 |
-| Comments | defect_comments 존재. ABD에는 없음 | 신규 `omm_comments` (defect_comments 동형 + RLS) |
+## 3. 상태 영속화 (P0)
 
----
+- `storageKey = omm-raw-data-state:${user.id}` 에 sorting/columnFilters/columnSizing/columnVisibility/globalFilter 저장 (Defect 패턴).
+- URL `searchParams` 동기화: `q`, `group`, `mismatch`, `resub`, `overdue`.
 
-## 1. 공통 마스터 재사용 원칙 (강제)
+## 4. 행 선택 + Bulk 작업 (P1)
 
-| OMM 필드 | 사용 마스터 | 비고 |
-|---|---|---|
-| HDEC PIC | `hdec_pic_master` + `auto-create-master-user` | Defect/ABD 동일 흐름. 별칭 매칭(JH Lee, MC Cha) 적용. |
-| HDEC ENG | `hdec_eng_master` | 동일 |
-| Subcontractor | `defect_subcontractor_workscope` + `docs_org_alias` | label/keywords 매처 |
-| Team (시스템 ENUM) | `normalizeTeamValue` → `team` ENUM | Excel TEAM 값을 ENUM으로도 정규화 저장 |
-| Trade | `docs-trade.ts` `resolveTrade` | 자동 산정 |
-| 영업일 계산 | `business-days.ts` `addBusinessDaysNoSunday` | 일요일 제외 |
-| Bulk 편집 | `BulkEditBar`/`DocsBulkEditBar` | omm 정의만 추가 |
-| 코멘트 UI | `RecipientSelector`, `TranslatePanel` | 재사용 |
+- 좌측 select 컬럼 (체크박스, sticky).
+- `BulkEditBar` (Defect와 동일 컴포넌트) 사용. OMM `bulkEditableFields` 정의:
+  - 카테고리: `category_group`, `category`, `team`, `training_required`
+  - 담당: `subcontractor_name`, `hdec_pic_name`, `hdec_eng_name`
+  - 수량: `pdf_required_qty`, `pdf_actual_qty`, `hardcopy_required_qty`, `hardcopy_actual_qty` (number)
+  - 일자: `instruction_date`, `draft_planned_date`, `draft_actual_date`, `draft_response_date`, `final_planned_date`, `final_actual_date`, `final_response_planned_date`, `final_response_actual_date`
+  - 응답: `draft_response_status`, `final_response_status` (A/B/C/clear) — **트리거 발화 주의**: B/C 일괄 적용 시 다량 resubmission row 자동 생성 가능 → confirm 다이얼로그에 경고 문구.
+  - 비고: `remarks`
+- `BulkDeleteDialog`, `BulkDuplicateDialog` 통합 (`entity='omm'`). `BulkReassignDialog`는 OMM에는 sub-trade 개념이 약하므로 1차 범위에서 제외.
+- Bulk Delete는 soft delete (`is_active=false`) 기본, hard delete는 admin 전용 (Defect와 동일 패턴).
 
----
+## 5. Export (P1)
 
-## 2. 헤더 매핑 (정정)
+- 신규 `src/lib/docs-omm-excel-export.ts`:
+  - `exportOmmRawToExcel(rows, { format: 'view' | 'reimport' })`
+  - `exportOmmRawToExcelByCategory(rows)` — category_group별 시트 분할 (Defect의 per-subcon 대응)
+  - `exportOmmRawToZipByCategory(rows)` — 7개 초과 시 ZIP
+- 헤더의 Export 버튼 → Defect와 동일 형태의 Dialog (Single vs Per-Category, View vs Re-import, ZIP threshold=7).
+- View 포맷: 현재 visible 컬럼 + 라벨. Re-import 포맷: `import_header_mappings`의 alias 헤더로 출력 → 그대로 재업로드 가능.
 
-| Excel 헤더 | DB 필드 / 처리 |
-|---|---|
-| No | `sn` |
-| **TEAM** (대문자) | `category` (Architectural / Mechanical / Electrical) + `team` ENUM 정규화 동시 저장 |
-| **Category** | `category_group` (Architectural / Mechanical & Electrical / Miscellaneous) |
-| Section | `section` |
-| Work Trade / Material | `work_trade_material` |
-| Subcontractor | raw → `subcontractor_name` + workscope 매처 → `subcontractor_id` |
-| HDEC PIC | raw → `hdec_pic_name` + 마스터 자동 매칭/생성 |
-| HDEC ENG | raw → `hdec_eng_name` + 마스터 자동 매칭/생성 |
-| Instruction Date | `instruction_date` |
-| D. Submission Planned Date | `draft_planned_date` |
-| D. Submission Actual Date | `draft_actual_date` |
-| **Readible PDF** | `pdf_required_qty` (integer, 계약상 제출 필요 부수) |
-| **PDF Check** | `pdf_actual_qty` (integer, 실제 제출 부수) |
-| **Hardcopy** | `hardcopy_required_qty` (integer, 계약상 제출 필요 부수) |
-| **Hardcopy Check** | `hardcopy_actual_qty` (integer, 실제 제출 부수) |
-| D. Response Date | `draft_response_date` |
-| D. Response Status | `draft_response_status` (A/B/C/UR/WIP) |
-| F. Submission Planned Date | `final_planned_date` |
-| F. Submission Actual Date | `final_actual_date` |
-| F. Response Planned Date | `final_response_planned_date` |
-| F. Actual Respond Date | `final_response_actual_date` |
-| F. Response Status | `final_response_status` (A/B/C/UR/WIP) |
-| Traning Required | `training_required` |
-| Remark | `remarks` |
+## 6. 메타 / 코멘트 / 시각화 (P2)
 
-`import_header_mappings`에 `module='docs', sub_module='omm', is_system=true`로 시드.
+- `META_FIELD_NAMES` 컬럼군 추가 (`MetaCell` 그대로 사용): created_by, created_at, updated_by, updated_at, source_origin, source_file.
+- **Comment summary 컬럼**: `omm_comments` 테이블에서 행별 집계 — 1회 쿼리로 `Map<row_id, CommentSummary>` 생성, `MetaCell field='comments'` 셀 클릭 시 Detail 페이지 이동(코멘트 섹션 앵커).
+- **OmmCycleProgress mini-bar 셀** (신규 작은 컴포넌트): Pending Draft → Draft UR → Pending Final → Final UR → Approved 5단계 progress dot. Rejected는 빨강 점.
+- **DDayBadge** 적용: 활성 stage의 planned date 기준. Overdue / At-risk 색.
+- 행 강조: `is_resubmission` 음영 (기존 유지) + Overdue시 좌측 빨강 보더.
+- 헤더에 `useLatestDocsDataDate` 표시.
 
----
+## 7. 인라인 편집 / 액션
 
-## 3. Copy 수량 alert 로직
+- 기존 Draft/Final response status select 인라인 편집 유지하되 `BulkEditBar`와 동일한 `applyBulkUpdate` 경로로 통일.
+- 행 우측 액션: ExternalLink (Detail) + 코멘트 아이콘(요약 카운트 표시).
+- 모바일(`useIsMobile`): 카드 리스트 fallback (Defect와 동일 패턴이지만 OMM은 1차로 horizontal scroll만 허용해도 됨 — 결정 필요).
 
-### 데이터 표현
-- 4개 신규 컬럼 모두 **integer NULL 허용** (`pdf_required_qty`, `pdf_actual_qty`, `hardcopy_required_qty`, `hardcopy_actual_qty`)
-- Excel 셀이 비어 있으면 NULL, 숫자가 아니면 import 시 reject row log
+## 8. 권한 가드
 
-### Alert 산출 (`computeOmmCopyAlert`)
-- `pdf_short = pdf_required_qty != null && pdf_actual_qty != null && pdf_actual_qty < pdf_required_qty`
-- `pdf_over = pdf_required_qty != null && pdf_actual_qty != null && pdf_actual_qty > pdf_required_qty`
-- 동일 로직을 hardcopy에도 적용
-- 한쪽만 채워진 경우 (예: required는 있는데 actual NULL) → 별도 `pdf_pending` 표시 (앰버)
+- `editableIds` 계산: subcontractor 역할은 본인 회사 행만 편집 가능 (Defect 패턴 차용). 그 외는 hdec_engineer 이상만 편집.
+- Bulk 액션 버튼은 `editableIds.length > 0` 일 때만 활성.
 
-### UI 표현 (Raw Data 페이지 셀)
-- 두 컬럼을 묶음 셀로 렌더: `2 / 3` 형식 (실제 / 필요)
-- **부족(red)**: 적색 배경 + 우측 ⚠ 아이콘 + tooltip "Submitted 2 / Required 3 (short by 1)"
-- **초과(amber)**: 황색 배경 + tooltip "Submitted 4 / Required 3 (over by 1)"
-- **일치(green)**: 옅은 녹색 텍스트
-- **미제출(gray)**: 기본 색
-- 행 레벨 종합 배지: PDF 또는 Hardcopy 중 하나라도 short/over면 행 좌측에 작은 ⚠ 도트
-
-### 필터
-- 컬럼 헤더 필터에 `Mismatch only` 빠른 토글 추가 (PDF/Hardcopy 각각)
-
----
-
-## 4. 스키마 변경 (마이그레이션)
-
-```text
-TRUNCATE docs_omm;
-ALTER TABLE docs_omm
-  DROP COLUMN contract_doc, draft_section, draft_target_date, submission_target_date,
-              submission_actual_date, approved_date, softcopy_required, hardcopy_required,
-              contractor_supplier;
-
-ALTER TABLE docs_omm ADD COLUMN
-  category_group text,
-  section text,
-  instruction_date date,
-  draft_planned_date date,
-  draft_actual_date date,
-  pdf_required_qty integer,
-  pdf_actual_qty integer,
-  hardcopy_required_qty integer,
-  hardcopy_actual_qty integer,
-  draft_response_date date,
-  draft_response_status text,
-  final_planned_date date,
-  final_actual_date date,
-  final_response_planned_date date,
-  final_response_actual_date date,
-  final_response_status text,
-  training_required text,
-  parent_id uuid references docs_omm(id) on delete cascade,
-  resubmission_seq int default 0,
-  is_resubmission boolean default false,
-  subcontractor_id uuid,
-  current_stage text,
-  current_status text;
-```
-
-기존 시스템 공통 컬럼 (`category`, `hdec_pic_name`, `hdec_eng_name`, `subcontractor_name`, `team`, `trade`, `raw_payload`, `custom_payload`, `is_active`, `row_version`, `source_upload_id`, `data_source_type`, `updated_by`, `sn`)은 유지.
-
-`docs_field_config (sub_module='omm')` 행은 기존 15개 삭제 후 새 컬럼 기준으로 재시드 (역할별 visible/editable 포함).
-
-신규 `omm_comments` 테이블 (defect_comments 동형) + RLS 정책.
-
-PL/pgSQL 함수 `create_omm_resubmission(parent_id uuid, stage text)` + `docs_omm` AFTER UPDATE 트리거.
-
----
-
-## 5. 워크플로우 규칙
-
-### 단계 진행
-- Draft `A` → Final 단계 활성화
-- Final `A` → 행 **Approved**로 잠김 (read-only)
-- Draft 또는 Final `B`/`C` → **자동 재제출 행 생성**
-
-### 자동 재제출 행 생성 (`create_omm_resubmission`)
-1. 부모 `sn` (예: `06`) 기준 다음 미사용 접미번호 결정 (`06-01`, `06-02`, …)
-2. 새 행 INSERT: `sn = '06-01'`, `parent_id`, `is_resubmission = true`, `resubmission_seq = parent.seq + 1`
-3. 식별 정보 복사: `team`, `category`, `category_group`, `section`, `work_trade_material`, `subcontractor_name`, `subcontractor_id`, `hdec_pic_name`, `hdec_eng_name`, `pdf_required_qty`, `hardcopy_required_qty` (계약 부수는 동일)
-4. 생성일 `D0` 기준 자동 일정 (`addBusinessDaysNoSunday`):
-   - **Draft 거절**: `draft_planned_date = D0 + 3영업일`, `final_response_planned_date = draft_planned_date + 7영업일`
-   - **Final 거절**: `final_planned_date = D0 + 3영업일`, `final_response_planned_date = final_planned_date + 7영업일`
-5. UI 정렬: 부모 바로 아래 (`sn` + `resubmission_seq`)
-6. Idempotent: 동일 단계 자식이 이미 존재하면 skip
-
-### 필드 비활성화
-- Draft `A` + Final `B`/`C` → 해당 행의 Draft 제출 관련 필드 read-only
-- `current_stage = 'Closed'` (Final A) → 행 전체 read-only
-- 재제출 행은 부모의 Draft가 이미 승인된 경우 Draft 비활성 상태 상속
-
-### 트리거
-- DB 트리거 `docs_omm` AFTER UPDATE — response_status 컬럼 변경 시 호출
-- Import upsert 경로에서도 동일 함수 작동
-
----
-
-## 6. Admin 탭 확장
-
-### 6-1. Header Mappings 탭
-- `DOCS_SUBMODULES` 레지스트리에 **2개 항목 추가**:
-  ```ts
-  { key: 'omm', label: 'OMM', fields: DOCS_OMM_FIELDS },
-  { key: 'spare_part', label: 'Spare Part', fields: DOCS_SPARE_PART_FIELDS }
-  ```
-- `DocsSubKey` 타입 확장 → `'as_built' | 'warranty' | 'omm' | 'spare_part'`
-- `DOCS_OMM_FIELDS` 화이트리스트 (위 §2 매핑 기준 25개 + `current_status`, `current_stage` 등 파생 필드)
-- Spare Part 화이트리스트는 placeholder만 (별도 작업)
-
-### 6-2. Field Config 탭
-- 현재 `<FieldConfigTab>`의 Docs 탭은 `<FieldConfigTable table='docs_field_config' />` 단일 호출 → as_built 데이터만 표시되는 한계
-- **개선**: `FieldConfigTable`에 `subModule?: string` 옵션 prop 추가
-  - 데이터 SELECT에 `.eq('sub_module', subModule)` 필터
-  - INSERT/UPDATE 시 `sub_module` 자동 채움
-- Docs 탭 내부에 sub-module Tabs (`as_built` / `omm` / `warranty` / `spare_part`) 추가
-- 각 탭이 `<FieldConfigTable table='docs_field_config' subModule='omm' title='Docs / OMM Field Configuration' showOrigin />` 호출
-
-### 6-3. 헤더 캐시
-- `MappingSubModule` 타입에 `'omm'`, `'spare_part'` 추가
-- `useHeaderMappings.ts`의 `DocsSubModule`도 확장
-
----
-
-## 7. Import 흐름
-
-신규 `src/lib/docs-omm-import-parser.ts` — `docs-import-parser.ts` 패턴.
-- 단일 헤더 행
-- `getMappedField('docs', alias, 'omm')` 캐시 매핑
-- `normalizeDate` 재사용
-- 정수 셀 (`pdf_required_qty` 등) 파싱: 비어있으면 NULL, 숫자 변환 실패시 row reject
-- HDEC PIC/ENG: `auto-create-master-user` 호출
-- Subcontractor: workscope 매처
-- 미매핑 헤더는 `UnmappedAliasQueue`로 (sub_module='omm')
-
-`DocsImportPage` & `DocsImportContext`에 `omm` 분기 추가. `docs_upload_batches.sub_module='omm'`로 기록.
-
-Upsert 키: `(project_id, sn)` — `06-01`은 별도 행으로 유지.
-
----
-
-## 8. Raw Data 페이지 — 기능 패리티
-
-`src/pages/docs/DocsOMMRawDataPage.tsx`를 **DefectRawDataPage 미러로 전면 재작성**.
-
-Defect에서 가져오는 기능:
-- TanStack Table + 가상화, 컬럼 리사이즈, 좌측 컬럼 고정
-- 컬럼별 필터 (multi-select / text / date-range / number-mismatch) + 글로벌 검색
-- 정렬 (기본: `sn` + `resubmission_seq`)
-- `useDocsFieldConfig('omm')` 기반 visible/editable
-- Bulk 편집/삭제/재배정 (HDEC PIC, HDEC ENG, Subcontractor 셀렉터는 공통 마스터 dropdown)
-- 행별 코멘트 (`omm_comments`) + RecipientSelector + TranslatePanel
-- Excel export (subcon별 ZIP 임계값 7) — view + reimport 두 형식
-- 행 상세 페이지 `/docs/omm/:id` + change log + 코멘트 스레드
-- URL 쿼리에 필터/정렬 영속화
-- Mobile compact 모드
-- 필드 편집 시 `docs_change_log` (sub_module='omm') 감사 로그
-
-ABD에서 가져오는 기능:
-- `current_status` 컬러 배지 (신규 `computeOmmStatus`)
-- Risk pill (Red/Amber/Green) — `final_response_planned_date` 대비 지연
-- Cycle progress 미니 그래픽 (Draft → Final → Approved)
-- `resolveTrade`로 trade 산정
-- Frozen header + 상단 가로 스크롤바
-- `module_docs_status` 모듈 일시중단 배너
-
-OMM 전용 시각 요소:
-- PDF/Hardcopy 부수 mismatch 셀 (위 §3)
-- 응답 상태 배지: `A` 녹색, `B`/`C` 빨강, `UR` 주황, `WIP` 파랑
-- 재제출 행: `sn` 들여쓰기 + 화살표 + 옅은 배경
-- `category_group`은 그룹/필터 컬럼
-
----
-
-## 9. 상태 산정 (`src/lib/docs-omm-status.ts` 재작성)
-
-```
-computeOmmStatus(row):
-  if final_response_status == 'A' → 'Approved'
-  else if final_actual_date && !final_response_status → 'Final Under Review'
-  else if final_planned_date && !final_actual_date → 'Pending Final Submission'
-  else if draft_response_status == 'A' → 'Pending Final Submission'
-  else if draft_actual_date && !draft_response_status → 'Draft Under Review'
-  else if draft_planned_date && !draft_actual_date → 'Pending Draft'
-  else → 'Pending Draft'
-```
-
-재제출 행은 배지에 R1/R2 접미사 (`Pending Draft (R1)`).
-
-`computeOmmCopyAlert(row)` → `{ pdf: 'ok'|'short'|'over'|'pending', hardcopy: 'ok'|'short'|'over'|'pending' }` 분리 export.
-
----
-
-## 10. 변경/생성 파일 요약
+## 9. 파일 변경
 
 **신규**
-- `src/lib/docs-omm-import-parser.ts`
-- `src/lib/docs-omm-excel-export.ts`
-- `src/lib/docs-omm-status.ts` (재작성, copy alert 헬퍼 포함)
-- `src/components/docs/OmmStatusBadge.tsx`
-- `src/components/docs/OmmCycleProgress.tsx`
-- `src/components/docs/OmmCopyQuantityCell.tsx` (PDF/Hardcopy 부수 비교 셀)
-- `src/pages/docs/DocsOMMDetailPage.tsx`
-- DB 마이그레이션:
-  - `docs_omm` 스키마 재구성 (TRUNCATE + DROP + ADD)
-  - `docs_field_config (sub_module='omm')` 재시드
-  - `import_header_mappings (module='docs', sub_module='omm')` 25개 시드
-  - `omm_comments` 테이블 + RLS
-  - `create_omm_resubmission` 함수 + AFTER UPDATE 트리거
+- `src/lib/docs-omm-excel-export.ts` — 3개 export 함수
+- `src/components/docs/OmmCycleProgress.tsx` — mini stage dots
+- `src/components/raw-data/NumberRangeDropdown.tsx` — 헤더 숫자범위 필터 (재사용 가능하게 raw-data 폴더에 둠)
+- `src/lib/omm-bulk-fields.ts` — `BulkEditableField[]` 정의 + `RAW_SEARCH_FIELDS_OMM`
 
 **수정**
-- `src/pages/docs/DocsOMMRawDataPage.tsx` (전면 재작성)
-- `src/pages/docs/DocsImportPage.tsx` (omm sub-module)
-- `src/contexts/DocsImportContext.tsx` (omm 분기)
-- `src/lib/header-mappings-cache.ts` (`MappingSubModule` 확장)
-- `src/hooks/useHeaderMappings.ts` (`DocsSubModule` 확장)
-- `src/pages/admin/HeaderMappingsTab.tsx` (`DocsSubKey` 확장 + `DOCS_OMM_FIELDS`/`DOCS_SPARE_PART_FIELDS` 추가 + 레지스트리 등록)
-- `src/pages/AdminPage.tsx` (`FieldConfigTab` Docs 탭 내 sub-module Tabs + `FieldConfigTable`에 `subModule` prop 추가)
-- `src/App.tsx` (`/docs/omm/:id` 라우트)
-- `src/components/raw-data/DocsBulkEditBar.tsx` (omm 설정)
+- `src/pages/docs/DocsOMMRawDataPage.tsx` — 전면 재작성 (~1500줄)
+- `src/lib/field-filter-type.ts` — `'number-range'` 타입 추가 (Defect progress 필드도 호환되게)
+- `src/lib/filter-chip-utils.ts` — number-range 칩 포맷 추가
+- `src/components/raw-data/BulkEditBar.tsx` — 필요 시 `entity` prop으로 OMM 라벨 분기 (최소 변경)
+- `src/components/raw-data/dialogs/BulkDeleteDialog.tsx`, `BulkDuplicateDialog.tsx` — `entity: 'omm'` 케이스 분기 (테이블명/라벨)
 
----
+**미변경 (재사용)**
+- `OmmStatusBadge`, `OmmCopyQuantityCell`, `docs-omm-status.ts`, `useDocsFieldConfig`, `TopHorizontalScrollbar`, `MetaCell`
 
-## 11. 범위 외
-- OMM 전용 Dashboard 위젯
-- 재제출 자동 생성 시 이메일 알림
-- 표준 view/reimport 외 OMM 전용 export preset
-- Spare Part Admin 화이트리스트의 실제 필드 정의 (placeholder만 등록)
+## 10. 데이터 로딩
 
----
+- 기존 단일 쿼리(2000 limit) → `fetchAllRows` 패턴으로 page-fetch (Defect와 동일).
+- 코멘트 요약은 별도 쿼리 1회 (`select row_id, count(*), max(created_at)` group by row_id).
+- 트리거 발화 후 갱신을 위해 mutation 후 `load()` 대신 낙관적 업데이트 + 백그라운드 refetch.
 
-## 12. 실행 순서
-1. DB 마이그레이션 (스키마 재구성, 헤더 매핑 시드, field_config 재시드, omm_comments, 트리거)
-2. `header-mappings-cache.ts` / `useHeaderMappings.ts` / `HeaderMappingsTab.tsx` / `AdminPage.tsx`의 sub-module 등록 확장
-3. Import 파서 + DocsImportPage/Context 확장
-4. Raw Data 페이지 전면 재작성 + 상세 페이지 + Copy 수량 셀
-5. Bulk 편집 + 코멘트 + Excel export
-6. 동작 검증 (업로드 → 행 생성 → status B/C → 재제출 자동행 / Copy mismatch alert 표시 확인)
+## 11. 범위 외 (이번 작업에서 다루지 않음)
+
+- OMM Dashboard 위젯 (별도 페이즈)
+- Resubmission 자동 이메일 알림
+- Spare Part / Warranty / As-Built 페이지의 동일 패리티 (요청 시 동일 패턴 복제)
+- 모바일 전용 카드 뷰 (1차에서는 horizontal scroll로 대응)
+
+## 12. 검증
+
+- 빌드/타입 체크 자동 수행.
+- 수동 시나리오: 컬럼 정렬→필터→검색→bulk edit (response B로 5건 일괄)→resubmission row 자동 생성 확인→Export(view/reimport)→재업로드 round-trip.
+
+승인하시면 위 계획대로 구현을 시작하겠습니다.
