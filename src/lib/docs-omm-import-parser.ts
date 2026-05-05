@@ -305,7 +305,15 @@ export async function parseOmmExcel(
         const col = detected.cols[c];
         if (col.raw) payload[col.raw] = dataRow[c];
         if (!col.field || col.field === 'skip') continue;
-        if (col.raw && excludedSet.has(col.raw)) continue;
+        const isExcluded = !!(col.raw && excludedSet.has(col.raw));
+        if (isExcluded) {
+          // Track canonical excluded field (skip system-required key `sn`).
+          if (col.field !== 'sn') excludedFields.add(col.field);
+          // `team` is derived from `category`; if user excluded `category`,
+          // also preserve existing `team` (do not overwrite from null fallback).
+          if (col.field === 'category') excludedFields.add('team');
+          continue;
+        }
         const f = col.field;
         const v = dataRow[c];
         if (f.endsWith('_date')) struct[f] = normalizeDate(v);
