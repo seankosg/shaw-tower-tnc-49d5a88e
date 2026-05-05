@@ -63,6 +63,27 @@ const actionColor: Record<string, string> = {
   rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
 };
 
+const SUB_MODULE_LABELS: Record<string, string> = {
+  as_built: 'As-Built',
+  omm: 'OMM',
+  warranty: 'Warranty',
+  spare_part: 'Spare Part',
+};
+
+const SUB_MODULE_COLORS: Record<string, string> = {
+  as_built: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200',
+  omm: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
+  warranty: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+  spare_part: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+};
+
+const KEY_FIELD_LABELS: Record<string, string> = {
+  as_built: 'Document No',
+  omm: 'SN',
+  warranty: 'Warranty No',
+  spare_part: 'SN',
+};
+
 export default function DocsImportLogsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -85,6 +106,7 @@ export default function DocsImportLogsPage() {
   const [renderLimit, setRenderLimit] = useState<number>(500);
   const [fieldLogs, setFieldLogs] = useState<FieldLog[]>([]);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [subModuleFilter, setSubModuleFilter] = useState<string>(searchParams.get('sub') || 'all');
 
   useEffect(() => { void fetchBatches(); }, []);
   useEffect(() => { if (selectedBatch) void loadBatchDetails(selectedBatch); }, []);
@@ -93,8 +115,9 @@ export default function DocsImportLogsPage() {
     const next = new URLSearchParams(searchParams);
     if (selectedBatch) next.set('batch', selectedBatch); else next.delete('batch');
     if (selectedBatch && detailTab !== 'rows') next.set('tab', detailTab); else next.delete('tab');
+    if (!selectedBatch && subModuleFilter !== 'all') next.set('sub', subModuleFilter); else next.delete('sub');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [selectedBatch, detailTab, searchParams, setSearchParams]);
+  }, [selectedBatch, detailTab, subModuleFilter, searchParams, setSearchParams]);
 
   const fetchBatches = async () => {
     setLoading(true);
@@ -198,7 +221,20 @@ export default function DocsImportLogsPage() {
 
       {!selectedBatch ? (
         <Card>
-          <CardContent className="pt-4">
+          <CardContent className="pt-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Sub-module:</span>
+              <Select value={subModuleFilter} onValueChange={setSubModuleFilter}>
+                <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="as_built">As-Built</SelectItem>
+                  <SelectItem value="omm">OMM</SelectItem>
+                  <SelectItem value="warranty">Warranty</SelectItem>
+                  <SelectItem value="spare_part">Spare Part</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="rounded-md border overflow-auto">
               <Table>
                 <TableHeader>
@@ -218,18 +254,27 @@ export default function DocsImportLogsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {loading ? (
-                    <TableRow><TableCell colSpan={canDelete ? 12 : 11} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
-                  ) : batches.length === 0 ? (
-                    <TableRow><TableCell colSpan={canDelete ? 12 : 11} className="text-center py-8 text-muted-foreground">No import history</TableCell></TableRow>
-                  ) : batches.map((b) => {
-                    const uploader = b.uploaded_by ? (uploaderNames[b.uploaded_by] || '—') : '—';
-                    const dur = durationsMs[b.id];
-                    const typeLabel = b.sub_module === 'as_built' ? 'Docs / As-Built' : `Docs / ${b.sub_module ?? '—'}`;
-                    return (
-                      <TableRow key={b.id} className="hover:bg-muted/50">
-                        <TableCell className="text-xs font-medium cursor-pointer" onClick={() => selectBatch(b.id)}>{b.uploaded_file_name}</TableCell>
-                        <TableCell className="text-xs cursor-pointer" onClick={() => selectBatch(b.id)}>{typeLabel}</TableCell>
+                  {(() => {
+                    const visibleBatches = subModuleFilter === 'all'
+                      ? batches
+                      : batches.filter(b => (b.sub_module ?? '') === subModuleFilter);
+                    if (loading) {
+                      return <TableRow><TableCell colSpan={canDelete ? 12 : 11} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>;
+                    }
+                    if (visibleBatches.length === 0) {
+                      return <TableRow><TableCell colSpan={canDelete ? 12 : 11} className="text-center py-8 text-muted-foreground">No import history</TableCell></TableRow>;
+                    }
+                    return visibleBatches.map((b) => {
+                      const uploader = b.uploaded_by ? (uploaderNames[b.uploaded_by] || '—') : '—';
+                      const dur = durationsMs[b.id];
+                      const subKey = b.sub_module ?? '';
+                      const subLabel = SUB_MODULE_LABELS[subKey] || (subKey || '—');
+                      return (
+                        <TableRow key={b.id} className="hover:bg-muted/50">
+                          <TableCell className="text-xs font-medium cursor-pointer" onClick={() => selectBatch(b.id)}>{b.uploaded_file_name}</TableCell>
+                          <TableCell className="cursor-pointer" onClick={() => selectBatch(b.id)}>
+                            <Badge variant="outline" className={`text-xs ${SUB_MODULE_COLORS[subKey] || ''}`}>{subLabel}</Badge>
+                          </TableCell>
                         <TableCell className="text-xs cursor-pointer whitespace-nowrap" onClick={() => selectBatch(b.id)}>{formatDateTimeDdMmmYyyy(b.uploaded_at)}</TableCell>
                         <TableCell className="text-xs cursor-pointer" onClick={() => selectBatch(b.id)}>{uploader}</TableCell>
                         <TableCell className="text-xs cursor-pointer whitespace-nowrap" onClick={() => selectBatch(b.id)}>{formatDdMmm(b.data_date)}</TableCell>
@@ -268,9 +313,10 @@ export default function DocsImportLogsPage() {
                             </AlertDialog>
                           </TableCell>
                         )}
-                      </TableRow>
-                    );
-                  })}
+                        </TableRow>
+                      );
+                    });
+                  })()}
                 </TableBody>
               </Table>
             </div>
@@ -279,8 +325,13 @@ export default function DocsImportLogsPage() {
       ) : (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              {batches.find((b) => b.id === selectedBatch)?.uploaded_file_name}
+            <CardTitle className="text-base flex items-center gap-2">
+              <span>{batches.find((b) => b.id === selectedBatch)?.uploaded_file_name}</span>
+              {(() => {
+                const sm = batches.find(b => b.id === selectedBatch)?.sub_module ?? '';
+                if (!sm) return null;
+                return <Badge variant="outline" className={`text-xs ${SUB_MODULE_COLORS[sm] || ''}`}>{SUB_MODULE_LABELS[sm] || sm}</Badge>;
+              })()}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -389,7 +440,7 @@ export default function DocsImportLogsPage() {
                             <TableRow>
                               <TableHead className="text-xs w-8"></TableHead>
                               <TableHead className="text-xs">Row</TableHead>
-                              <TableHead className="text-xs">Document No</TableHead>
+                              <TableHead className="text-xs">{KEY_FIELD_LABELS[batches.find(b => b.id === selectedBatch)?.sub_module ?? ''] || 'Key'}</TableHead>
                               <TableHead className="text-xs">Action</TableHead>
                               <TableHead className="text-xs">Reason</TableHead>
                               <TableHead className="text-xs">Detail</TableHead>
