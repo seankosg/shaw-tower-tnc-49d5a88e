@@ -215,7 +215,6 @@ export function createDocsImportProvider<TRow>(
           // Auto-register any new HDEC PIC / HDEC ENG names found in the file.
           // Idempotent + cached; failures are non-blocking. Per-row events are
           // collected here so we can show a detailed report after import.
-          const fileAutoEntries: import('@/contexts/docs-import/types').AutoRegisteredMasterEntry[] = [];
           if (ensurer) {
             for (const r of parsed) {
               const row = r as { hdec_pic_name?: string | null; hdec_eng_name?: string | null; rawRowNo?: number | null };
