@@ -276,6 +276,8 @@ export async function parseOmmExcel(
   const wb = XLSX.read(buf, { type: 'array' });
   const sheets = selectedSheets && selectedSheets.length > 0 ? selectedSheets : wb.SheetNames;
   const excludedSet = new Set((options?.excludedHeaders ?? []).map((h) => h.trim()).filter(Boolean));
+  // Track canonical fields the user excluded — workers will skip them on UPDATE.
+  const excludedFields = new Set<string>();
 
   const rows: ParsedOmmRow[] = [];
   const sheetSummary: ParseOmmResult['sheets'] = [];
