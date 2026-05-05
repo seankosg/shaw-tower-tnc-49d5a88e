@@ -5,7 +5,7 @@
  *   S = submission_date
  *   P = approval_date  (== Planned Response Date = S + lead_days, or Excel value)
  *   R = actual_response_date
- *   K = approval_status ∈ {'A','B','C','UR',null}
+ *   K = approval_status ∈ {'A','B','C','UR','WIP',null}
  *
  * Status mapping (per-cycle):
  *   K=UR         → 'Under Review'   (explicit; cycle stays active)
