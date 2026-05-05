@@ -1983,6 +1983,62 @@ export type Database = {
         }
         Relationships: []
       }
+      subcontractor_info_master: {
+        Row: {
+          acra_address: string | null
+          acra_info_verified: boolean
+          acra_reg_no: string | null
+          created_at: string
+          default_director_1: string | null
+          default_director_2: string | null
+          default_witness: string | null
+          id: string
+          last_subcontract_date: string | null
+          notes: string | null
+          subcontractor_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          acra_address?: string | null
+          acra_info_verified?: boolean
+          acra_reg_no?: string | null
+          created_at?: string
+          default_director_1?: string | null
+          default_director_2?: string | null
+          default_witness?: string | null
+          id?: string
+          last_subcontract_date?: string | null
+          notes?: string | null
+          subcontractor_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          acra_address?: string | null
+          acra_info_verified?: boolean
+          acra_reg_no?: string | null
+          created_at?: string
+          default_director_1?: string | null
+          default_director_2?: string | null
+          default_witness?: string | null
+          id?: string
+          last_subcontract_date?: string | null
+          notes?: string | null
+          subcontractor_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subcontractor_info_master_subcontractor_id_fkey"
+            columns: ["subcontractor_id"]
+            isOneToOne: true
+            referencedRelation: "subcontractor_master"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subcontractor_issue_counters: {
         Row: {
           next_seq: number
@@ -2701,193 +2757,9 @@ export type Database = {
           },
         ]
       }
-      warranty: {
-        Row: {
-          category: string | null
-          created_at: string
-          custom_payload: Json
-          data_source_type: string | null
-          id: string
-          internal_target_date: string | null
-          is_active: boolean
-          item_no: string
-          project_id: string
-          raw_payload: Json
-          remarks: string | null
-          row_hash: string | null
-          row_version: number
-          sc_target_date: string | null
-          source_row_position: number | null
-          source_upload_id: string | null
-          stage1_date: string | null
-          stage2_date: string | null
-          stage3_date: string | null
-          stage4_date: string | null
-          stage5_date: string | null
-          stage6_date: string | null
-          stage7_date: string | null
-          stage8_date: string | null
-          stage9_date: string | null
-          sub_category: string | null
-          subcontractor_id: string | null
-          subcontractor_name_raw: string | null
-          updated_at: string
-          updated_by: string | null
-          validation_acra: boolean
-          validation_date: boolean
-          validation_pass: boolean
-          validation_seal: boolean
-          validation_signature: boolean
-          validation_witness: boolean
-          warranted_item: string | null
-          witness_director: string | null
-          witness_secretary: string | null
-        }
-        Insert: {
-          category?: string | null
-          created_at?: string
-          custom_payload?: Json
-          data_source_type?: string | null
-          id?: string
-          internal_target_date?: string | null
-          is_active?: boolean
-          item_no: string
-          project_id: string
-          raw_payload?: Json
-          remarks?: string | null
-          row_hash?: string | null
-          row_version?: number
-          sc_target_date?: string | null
-          source_row_position?: number | null
-          source_upload_id?: string | null
-          stage1_date?: string | null
-          stage2_date?: string | null
-          stage3_date?: string | null
-          stage4_date?: string | null
-          stage5_date?: string | null
-          stage6_date?: string | null
-          stage7_date?: string | null
-          stage8_date?: string | null
-          stage9_date?: string | null
-          sub_category?: string | null
-          subcontractor_id?: string | null
-          subcontractor_name_raw?: string | null
-          updated_at?: string
-          updated_by?: string | null
-          validation_acra?: boolean
-          validation_date?: boolean
-          validation_pass?: boolean
-          validation_seal?: boolean
-          validation_signature?: boolean
-          validation_witness?: boolean
-          warranted_item?: string | null
-          witness_director?: string | null
-          witness_secretary?: string | null
-        }
-        Update: {
-          category?: string | null
-          created_at?: string
-          custom_payload?: Json
-          data_source_type?: string | null
-          id?: string
-          internal_target_date?: string | null
-          is_active?: boolean
-          item_no?: string
-          project_id?: string
-          raw_payload?: Json
-          remarks?: string | null
-          row_hash?: string | null
-          row_version?: number
-          sc_target_date?: string | null
-          source_row_position?: number | null
-          source_upload_id?: string | null
-          stage1_date?: string | null
-          stage2_date?: string | null
-          stage3_date?: string | null
-          stage4_date?: string | null
-          stage5_date?: string | null
-          stage6_date?: string | null
-          stage7_date?: string | null
-          stage8_date?: string | null
-          stage9_date?: string | null
-          sub_category?: string | null
-          subcontractor_id?: string | null
-          subcontractor_name_raw?: string | null
-          updated_at?: string
-          updated_by?: string | null
-          validation_acra?: boolean
-          validation_date?: boolean
-          validation_pass?: boolean
-          validation_seal?: boolean
-          validation_signature?: boolean
-          validation_witness?: boolean
-          warranted_item?: string | null
-          witness_director?: string | null
-          witness_secretary?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "warranty_subcontractor_id_fkey"
-            columns: ["subcontractor_id"]
-            isOneToOne: false
-            referencedRelation: "subcontractor_master"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      warranty_acra_conflict_queue: {
-        Row: {
-          created_at: string
-          existing_value: string | null
-          field_name: string
-          id: string
-          incoming_value: string | null
-          resolution: string | null
-          resolved: boolean
-          resolved_at: string | null
-          resolved_by: string | null
-          source_upload_id: string | null
-          subcontractor_id: string
-        }
-        Insert: {
-          created_at?: string
-          existing_value?: string | null
-          field_name: string
-          id?: string
-          incoming_value?: string | null
-          resolution?: string | null
-          resolved?: boolean
-          resolved_at?: string | null
-          resolved_by?: string | null
-          source_upload_id?: string | null
-          subcontractor_id: string
-        }
-        Update: {
-          created_at?: string
-          existing_value?: string | null
-          field_name?: string
-          id?: string
-          incoming_value?: string | null
-          resolution?: string | null
-          resolved?: boolean
-          resolved_at?: string | null
-          resolved_by?: string | null
-          source_upload_id?: string | null
-          subcontractor_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "warranty_acra_conflict_queue_subcontractor_id_fkey"
-            columns: ["subcontractor_id"]
-            isOneToOne: false
-            referencedRelation: "subcontractor_master"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       warranty_change_log: {
         Row: {
-          change_source: string | null
+          change_source: Database["public"]["Enums"]["change_source"] | null
           changed_at: string
           changed_by: string | null
           changed_field: string
@@ -2895,10 +2767,10 @@ export type Database = {
           new_value: string | null
           old_value: string | null
           upload_id: string | null
-          warranty_id: string
+          warranty_item_id: string
         }
         Insert: {
-          change_source?: string | null
+          change_source?: Database["public"]["Enums"]["change_source"] | null
           changed_at?: string
           changed_by?: string | null
           changed_field: string
@@ -2906,10 +2778,10 @@ export type Database = {
           new_value?: string | null
           old_value?: string | null
           upload_id?: string | null
-          warranty_id: string
+          warranty_item_id: string
         }
         Update: {
-          change_source?: string | null
+          change_source?: Database["public"]["Enums"]["change_source"] | null
           changed_at?: string
           changed_by?: string | null
           changed_field?: string
@@ -2917,65 +2789,276 @@ export type Database = {
           new_value?: string | null
           old_value?: string | null
           upload_id?: string | null
-          warranty_id?: string
-        }
-        Relationships: []
-      }
-      warranty_discussion: {
-        Row: {
-          author: string | null
-          content: string | null
-          created_at: string
-          discussion_date: string | null
-          discussion_type: string | null
-          id: string
-          is_active: boolean
-          project_id: string
-          raw_payload: Json
-          sort_order: number
-          source_upload_id: string | null
-          updated_at: string
-          updated_by: string | null
-          warranty_id: string
-        }
-        Insert: {
-          author?: string | null
-          content?: string | null
-          created_at?: string
-          discussion_date?: string | null
-          discussion_type?: string | null
-          id?: string
-          is_active?: boolean
-          project_id: string
-          raw_payload?: Json
-          sort_order?: number
-          source_upload_id?: string | null
-          updated_at?: string
-          updated_by?: string | null
-          warranty_id: string
-        }
-        Update: {
-          author?: string | null
-          content?: string | null
-          created_at?: string
-          discussion_date?: string | null
-          discussion_type?: string | null
-          id?: string
-          is_active?: boolean
-          project_id?: string
-          raw_payload?: Json
-          sort_order?: number
-          source_upload_id?: string | null
-          updated_at?: string
-          updated_by?: string | null
-          warranty_id?: string
+          warranty_item_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "warranty_discussion_warranty_id_fkey"
-            columns: ["warranty_id"]
+            foreignKeyName: "warranty_change_log_warranty_item_id_fkey"
+            columns: ["warranty_item_id"]
             isOneToOne: false
-            referencedRelation: "warranty"
+            referencedRelation: "warranty_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warranty_items: {
+        Row: {
+          acra_info_status: string | null
+          category: string | null
+          contract_spec_ref: string | null
+          created_at: string
+          created_by: string | null
+          current_stage: string | null
+          current_status: string | null
+          custom_payload: Json
+          data_source_type: string | null
+          draft_actual_date: string | null
+          draft_planned_date: string | null
+          draft_response_actual_date: string | null
+          draft_response_planned_date: string | null
+          draft_status: Database["public"]["Enums"]["warranty_status"] | null
+          final_actual_date: string | null
+          final_planned_date: string | null
+          final_status: Database["public"]["Enums"]["warranty_status"] | null
+          hdec_eng_name: string | null
+          hdec_pic_name: string | null
+          hdec_signing_actual_date: string | null
+          hdec_signing_planned_date: string | null
+          hdec_signing_status:
+            | Database["public"]["Enums"]["warranty_status"]
+            | null
+          id: string
+          is_active: boolean
+          is_resubmission: boolean
+          item_no: number
+          parent_id: string | null
+          project_id: string
+          r_acra_address: string | null
+          r_acra_reg_no: string | null
+          r_brief_description: string | null
+          r_director_1: string | null
+          r_director_2: string | null
+          r_subcontract_date: string | null
+          r_witness: string | null
+          r_works_description: string | null
+          raw_payload: Json
+          remarks: string | null
+          resubmission_seq: number
+          row_version: number
+          source_upload_id: string | null
+          subcon_signing_actual_date: string | null
+          subcon_signing_planned_date: string | null
+          subcon_signing_status:
+            | Database["public"]["Enums"]["warranty_status"]
+            | null
+          subcontractor_id: string | null
+          subcontractor_name: string | null
+          subsub_name: string | null
+          team: string | null
+          updated_at: string
+          updated_by: string | null
+          warranted_item: string | null
+          warranty_period_years: number | null
+        }
+        Insert: {
+          acra_info_status?: string | null
+          category?: string | null
+          contract_spec_ref?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_stage?: string | null
+          current_status?: string | null
+          custom_payload?: Json
+          data_source_type?: string | null
+          draft_actual_date?: string | null
+          draft_planned_date?: string | null
+          draft_response_actual_date?: string | null
+          draft_response_planned_date?: string | null
+          draft_status?: Database["public"]["Enums"]["warranty_status"] | null
+          final_actual_date?: string | null
+          final_planned_date?: string | null
+          final_status?: Database["public"]["Enums"]["warranty_status"] | null
+          hdec_eng_name?: string | null
+          hdec_pic_name?: string | null
+          hdec_signing_actual_date?: string | null
+          hdec_signing_planned_date?: string | null
+          hdec_signing_status?:
+            | Database["public"]["Enums"]["warranty_status"]
+            | null
+          id?: string
+          is_active?: boolean
+          is_resubmission?: boolean
+          item_no: number
+          parent_id?: string | null
+          project_id: string
+          r_acra_address?: string | null
+          r_acra_reg_no?: string | null
+          r_brief_description?: string | null
+          r_director_1?: string | null
+          r_director_2?: string | null
+          r_subcontract_date?: string | null
+          r_witness?: string | null
+          r_works_description?: string | null
+          raw_payload?: Json
+          remarks?: string | null
+          resubmission_seq?: number
+          row_version?: number
+          source_upload_id?: string | null
+          subcon_signing_actual_date?: string | null
+          subcon_signing_planned_date?: string | null
+          subcon_signing_status?:
+            | Database["public"]["Enums"]["warranty_status"]
+            | null
+          subcontractor_id?: string | null
+          subcontractor_name?: string | null
+          subsub_name?: string | null
+          team?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          warranted_item?: string | null
+          warranty_period_years?: number | null
+        }
+        Update: {
+          acra_info_status?: string | null
+          category?: string | null
+          contract_spec_ref?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_stage?: string | null
+          current_status?: string | null
+          custom_payload?: Json
+          data_source_type?: string | null
+          draft_actual_date?: string | null
+          draft_planned_date?: string | null
+          draft_response_actual_date?: string | null
+          draft_response_planned_date?: string | null
+          draft_status?: Database["public"]["Enums"]["warranty_status"] | null
+          final_actual_date?: string | null
+          final_planned_date?: string | null
+          final_status?: Database["public"]["Enums"]["warranty_status"] | null
+          hdec_eng_name?: string | null
+          hdec_pic_name?: string | null
+          hdec_signing_actual_date?: string | null
+          hdec_signing_planned_date?: string | null
+          hdec_signing_status?:
+            | Database["public"]["Enums"]["warranty_status"]
+            | null
+          id?: string
+          is_active?: boolean
+          is_resubmission?: boolean
+          item_no?: number
+          parent_id?: string | null
+          project_id?: string
+          r_acra_address?: string | null
+          r_acra_reg_no?: string | null
+          r_brief_description?: string | null
+          r_director_1?: string | null
+          r_director_2?: string | null
+          r_subcontract_date?: string | null
+          r_witness?: string | null
+          r_works_description?: string | null
+          raw_payload?: Json
+          remarks?: string | null
+          resubmission_seq?: number
+          row_version?: number
+          source_upload_id?: string | null
+          subcon_signing_actual_date?: string | null
+          subcon_signing_planned_date?: string | null
+          subcon_signing_status?:
+            | Database["public"]["Enums"]["warranty_status"]
+            | null
+          subcontractor_id?: string | null
+          subcontractor_name?: string | null
+          subsub_name?: string | null
+          team?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          warranted_item?: string | null
+          warranty_period_years?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warranty_items_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "warranty_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warranty_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warranty_items_subcontractor_id_fkey"
+            columns: ["subcontractor_id"]
+            isOneToOne: false
+            referencedRelation: "subcontractor_master"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warranty_threads: {
+        Row: {
+          action_party: string | null
+          content: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          project_id: string
+          sort_order: number
+          source_upload_id: string | null
+          thread_date: string | null
+          thread_label: string
+          updated_at: string
+          updated_by: string | null
+          warranty_item_id: string
+        }
+        Insert: {
+          action_party?: string | null
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          project_id: string
+          sort_order?: number
+          source_upload_id?: string | null
+          thread_date?: string | null
+          thread_label: string
+          updated_at?: string
+          updated_by?: string | null
+          warranty_item_id: string
+        }
+        Update: {
+          action_party?: string | null
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          project_id?: string
+          sort_order?: number
+          source_upload_id?: string | null
+          thread_date?: string | null
+          thread_label?: string
+          updated_at?: string
+          updated_by?: string | null
+          warranty_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warranty_threads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warranty_threads_warranty_item_id_fkey"
+            columns: ["warranty_item_id"]
+            isOneToOne: false
+            referencedRelation: "warranty_items"
             referencedColumns: ["id"]
           },
         ]
@@ -2984,88 +3067,81 @@ export type Database = {
         Row: {
           data_date: string | null
           id: string
+          inserted_rows: number | null
           note: string | null
           processed_rows: number | null
           project_id: string | null
           rejected_rows: number | null
-          rollback_force: boolean | null
-          rolled_back_at: string | null
-          rolled_back_by: string | null
-          skipped_rows: number | null
-          status: Database["public"]["Enums"]["upload_status"]
-          success_rows: number | null
+          source_filename: string | null
           total_rows: number | null
+          updated_rows: number | null
           uploaded_at: string
           uploaded_by: string | null
-          uploaded_file_name: string
         }
         Insert: {
           data_date?: string | null
           id?: string
+          inserted_rows?: number | null
           note?: string | null
           processed_rows?: number | null
           project_id?: string | null
           rejected_rows?: number | null
-          rollback_force?: boolean | null
-          rolled_back_at?: string | null
-          rolled_back_by?: string | null
-          skipped_rows?: number | null
-          status?: Database["public"]["Enums"]["upload_status"]
-          success_rows?: number | null
+          source_filename?: string | null
           total_rows?: number | null
+          updated_rows?: number | null
           uploaded_at?: string
           uploaded_by?: string | null
-          uploaded_file_name: string
         }
         Update: {
           data_date?: string | null
           id?: string
+          inserted_rows?: number | null
           note?: string | null
           processed_rows?: number | null
           project_id?: string | null
           rejected_rows?: number | null
-          rollback_force?: boolean | null
-          rolled_back_at?: string | null
-          rolled_back_by?: string | null
-          skipped_rows?: number | null
-          status?: Database["public"]["Enums"]["upload_status"]
-          success_rows?: number | null
+          source_filename?: string | null
           total_rows?: number | null
+          updated_rows?: number | null
           uploaded_at?: string
           uploaded_by?: string | null
-          uploaded_file_name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "warranty_upload_batches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       warranty_upload_row_logs: {
         Row: {
-          action_taken: Database["public"]["Enums"]["action_taken"] | null
+          created_at: string
           id: string
-          item_no: string | null
-          processed_at: string
-          raw_row_no: number | null
-          reason_code: string | null
-          reason_detail: string | null
+          item_no: number | null
+          message: string | null
+          row_no: number | null
+          status: string | null
           upload_id: string
         }
         Insert: {
-          action_taken?: Database["public"]["Enums"]["action_taken"] | null
+          created_at?: string
           id?: string
-          item_no?: string | null
-          processed_at?: string
-          raw_row_no?: number | null
-          reason_code?: string | null
-          reason_detail?: string | null
+          item_no?: number | null
+          message?: string | null
+          row_no?: number | null
+          status?: string | null
           upload_id: string
         }
         Update: {
-          action_taken?: Database["public"]["Enums"]["action_taken"] | null
+          created_at?: string
           id?: string
-          item_no?: string | null
-          processed_at?: string
-          raw_row_no?: number | null
-          reason_code?: string | null
-          reason_detail?: string | null
+          item_no?: number | null
+          message?: string | null
+          row_no?: number | null
+          status?: string | null
           upload_id?: string
         }
         Relationships: [
@@ -3152,7 +3228,20 @@ export type Database = {
         Args: { row_data: Database["public"]["Tables"]["docs_omm"]["Row"] }
         Returns: string
       }
+      compute_warranty_stage_status: {
+        Args: {
+          row_data: Database["public"]["Tables"]["warranty_items"]["Row"]
+        }
+        Returns: {
+          stage: string
+          status: string
+        }[]
+      }
       create_omm_resubmission: {
+        Args: { p_parent_id: string; p_stage: string }
+        Returns: string
+      }
+      create_warranty_resubmission: {
         Args: { p_parent_id: string; p_stage: string }
         Returns: string
       }
@@ -3163,6 +3252,7 @@ export type Database = {
       delete_defects_cascade: { Args: { _ids: string[] }; Returns: Json }
       delete_docs_import_batch: { Args: { _batch_id: string }; Returns: Json }
       delete_subtests_cascade: { Args: { _ids: string[] }; Returns: Json }
+      delete_warranty_cascade: { Args: { _ids: string[] }; Returns: Json }
       get_defect_comment_summary: {
         Args: { _defect_ids: string[] }
         Returns: {
@@ -3307,6 +3397,7 @@ export type Database = {
         | "failed"
         | "rolled_back"
       user_type: "subcontractor" | "hdec" | "pm_pd" | "admin" | "subsub"
+      warranty_status: "A" | "B" | "C" | "UR" | "WIP" | "Planned"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3476,6 +3567,7 @@ export const Constants = {
         "rolled_back",
       ],
       user_type: ["subcontractor", "hdec", "pm_pd", "admin", "subsub"],
+      warranty_status: ["A", "B", "C", "UR", "WIP", "Planned"],
     },
   },
 } as const
