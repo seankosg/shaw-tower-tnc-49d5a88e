@@ -55,7 +55,7 @@ export const DOCS_DEFAULT_FIELD_LABELS: Record<string, string> = {
   sub3_approval_status: '3rd Status (A/B/C)',
   remarks: 'Remarks',
   risk: 'Risk',
-  cycle_progress: 'Cycle Progress',
+  cycle_progress: 'Progress',
   overall_status: 'Overall Status',
   updated_at: 'Updated At',
   created_at: 'Created At',
