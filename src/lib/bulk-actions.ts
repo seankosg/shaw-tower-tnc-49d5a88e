@@ -131,6 +131,14 @@ export interface CascadePreview {
 
 export async function previewBulkDelete(entity: BulkEntity, ids: string[]): Promise<CascadePreview> {
   if (!ids.length) return {};
+  if (entity === 'drawing') {
+    // No cascade RPC — count related change_log entries client-side.
+    const { count } = await (supabase as any)
+      .from('docs_change_log')
+      .select('id', { count: 'exact', head: true })
+      .in('drawing_id', ids);
+    return { drawings: ids.length, change_log: count ?? 0 };
+  }
   const fn = entity === 'subtest' ? 'preview_delete_subtests_cascade' : 'preview_delete_defects_cascade';
   const { data, error } = await (supabase as any).rpc(fn, { _ids: ids });
   if (error) throw error;
@@ -160,7 +168,10 @@ export async function applyBulkDelete(args: {
 
   if (args.mode === 'soft') {
     // Soft delete = is_active = false via RLS-protected UPDATE.
-    const table = args.entity === 'subtest' ? 'subtests' : 'defect_items';
+    const table =
+      args.entity === 'subtest' ? 'subtests'
+        : args.entity === 'drawing' ? 'docs_drawings'
+          : 'defect_items';
     const CHUNK = 200;
     let succeeded = 0;
     let failed = 0;
@@ -170,6 +181,29 @@ export async function applyBulkDelete(args: {
       const { data, error } = await (supabase as any)
         .from(table)
         .update({ is_active: false, updated_by: args.userId })
+        .in('id', slice)
+        .select('id');
+      if (error) { failed += slice.length; continue; }
+      succeeded += (data ?? []).length;
+      failed += slice.length - (data ?? []).length;
+    }
+    out.succeeded = succeeded;
+    out.failed = failed;
+    return out;
+  }
+
+  // Hard delete
+  if (args.entity === 'drawing') {
+    // No FK dependents on docs_drawings — direct DELETE, RLS gates admin/superuser only.
+    const CHUNK = 200;
+    let succeeded = 0;
+    let failed = 0;
+    for (let i = 0; i < args.ids.length; i += CHUNK) {
+      const slice = args.ids.slice(i, i + CHUNK);
+      // eslint-disable-next-line no-await-in-loop
+      const { data, error } = await (supabase as any)
+        .from('docs_drawings')
+        .delete()
         .in('id', slice)
         .select('id');
       if (error) { failed += slice.length; continue; }
