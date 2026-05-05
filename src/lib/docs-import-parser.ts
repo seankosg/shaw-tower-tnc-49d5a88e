@@ -541,8 +541,12 @@ export async function parseDocsExcel(
       for (let c = 0; c < detected.cols.length; c++) {
         const col = detected.cols[c];
         const value = dataRow[c];
-        const isExcluded = col.composite && excludedSet.has(col.composite);
+        const isExcluded = !!(col.composite && excludedSet.has(col.composite));
         if (col.composite) payload[col.composite] = value;
+        // Track which canonical fields were excluded (skip the system-required key).
+        if (isExcluded && col.field && col.field !== 'document_no') {
+          excludedFields.add(col.field);
+        }
         if (!col.field || isExcluded) continue;
         if (col.field.endsWith('_date') || col.field === 'transmittal_due_date') {
           struct[col.field] = normalizeDate(value);
