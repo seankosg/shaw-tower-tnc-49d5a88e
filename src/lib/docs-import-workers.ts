@@ -389,7 +389,7 @@ export const ommAdapter: ImporterAdapter<ParsedOmmRow> = {
   parseFile: async (file, sheets, options) => {
     const { parseOmmExcel } = await import('@/lib/docs-omm-import-parser');
     const r = await parseOmmExcel(file, sheets, options);
-    return { rows: r.rows, unknownHeaders: r.unknownHeaders };
+    return { rows: r.rows, unknownHeaders: r.unknownHeaders, excludedFields: r.excludedFields };
   },
   getSheetNames: async (file) => {
     const { getOmmExcelSheetNames } = await import('@/lib/docs-omm-import-parser');
