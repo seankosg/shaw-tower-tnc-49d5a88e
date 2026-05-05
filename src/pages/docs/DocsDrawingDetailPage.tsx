@@ -130,7 +130,7 @@ export default function DocsDrawingDetailPage() {
   const { value: leadDays } = useAppSetting<number>('docs_lead_days_as_built', 30);
 
   const canEdit = useMemo(
-    () => roles.some((r) => ['admin', 'superuser', 'senior_user', 'user'].includes(r)),
+    () => roles.some((r) => ['admin', 'superuser', 'd_superuser', 'senior_user', 'user'].includes(r)),
     [roles],
   );
 

@@ -1,4 +1,4 @@
-export type AppRole = 'guest' | 'super_guest' | 'user' | 'senior_user' | 'superuser' | 'admin';
+export type AppRole = 'guest' | 'super_guest' | 'user' | 'senior_user' | 'd_superuser' | 'superuser' | 'admin';
 export type UserType = 'subcontractor' | 'subsub' | 'hdec' | 'pm_pd' | 'admin';
 export type TcStatus = 'Planned' | 'WIP' | 'Done' | 'Hold';
 export type DataSource = 'legacy_import_inherited' | 'app_direct_input' | 'mobile_input' | 'standard_import' | 'admin_edit';
@@ -30,7 +30,7 @@ export const isR2Submitted = (s: ReportStatus | string | null | undefined): bool
 export const isR2Done = (s: ReportStatus | string | null | undefined): boolean =>
   !!s && (R2_DONE_STATUSES as string[]).includes(s);
 
-export const ALL_ROLES: AppRole[] = ['guest', 'super_guest', 'user', 'senior_user', 'superuser', 'admin'];
+export const ALL_ROLES: AppRole[] = ['guest', 'super_guest', 'user', 'senior_user', 'd_superuser', 'superuser', 'admin'];
 export const ALL_USER_TYPES: UserType[] = ['subcontractor', 'subsub', 'hdec', 'pm_pd', 'admin'];
 
 export type TeamType = 'Mech' | 'Elec' | 'Arch' | 'Supp' | 'Design';
@@ -78,6 +78,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   super_guest: 'Super Guest',
   user: 'User',
   senior_user: 'Senior User',
+  d_superuser: 'D.Super User',
   superuser: 'Superuser',
   admin: 'Admin',
 };
