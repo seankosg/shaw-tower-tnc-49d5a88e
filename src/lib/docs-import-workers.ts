@@ -426,6 +426,9 @@ export const ommAdapter: ImporterAdapter<ParsedOmmRow> = {
     const rejectSamples: DocsRejectSample[] = [];
     const importStartedAt = new Date().toISOString();
     let processed = 0;
+    // User-excluded canonical fields — UPDATE branch must skip these so the
+    // existing DB value is preserved (mirrors T&C / Defect importers).
+    const excludedFields = ctx.excludedFields ?? new Set<string>();
 
     // OMM uses lower concurrency to keep the resubmission trigger ordering predictable.
     await runWithConcurrency(rows, async (row) => {
