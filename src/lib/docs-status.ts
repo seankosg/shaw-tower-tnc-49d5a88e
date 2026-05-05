@@ -94,6 +94,8 @@ export function computeCycleStatus(
   const status = normStatus(cycle.approval_status);
   // Explicit "Under Review" overrides date-based derivation.
   if (status === 'UR') return 'Under Review';
+  // Explicit "Work In Progress" overrides date-based derivation (cycle stays active).
+  if (status === 'WIP') return 'WIP';
   if (cycle.actual_response_date) {
     if (status) return status;
     return 'Under Review';
