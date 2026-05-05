@@ -157,6 +157,17 @@ export function createDocsImportProvider<TRow>(
         return;
       }
 
+      // Build a single ensurer for the whole import run — it caches existing
+      // masters/profiles in-memory and de-dupes repeated names automatically.
+      let ensurer: MasterEnsurer | null = null;
+      try {
+        ensurer = await createMasterEnsurer(supabase as any);
+      } catch (err) {
+        // Non-blocking: imports may still proceed without auto-registration.
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn('[docs-import] master ensurer init failed', msg);
+      }
+
       for (const f of ready) {
         const parsed = f.parsed!;
         // Pre-pass: empty key + in-file duplicates.
