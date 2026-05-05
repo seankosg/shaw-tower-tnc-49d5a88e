@@ -115,8 +115,9 @@ export default function DocsImportLogsPage() {
     const next = new URLSearchParams(searchParams);
     if (selectedBatch) next.set('batch', selectedBatch); else next.delete('batch');
     if (selectedBatch && detailTab !== 'rows') next.set('tab', detailTab); else next.delete('tab');
+    if (!selectedBatch && subModuleFilter !== 'all') next.set('sub', subModuleFilter); else next.delete('sub');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [selectedBatch, detailTab, searchParams, setSearchParams]);
+  }, [selectedBatch, detailTab, subModuleFilter, searchParams, setSearchParams]);
 
   const fetchBatches = async () => {
     setLoading(true);
