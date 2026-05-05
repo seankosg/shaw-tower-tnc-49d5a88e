@@ -112,8 +112,17 @@ export interface ImporterAdapter<TRow> {
   keyFieldLabel: string;
   dataDateRequired: boolean;
   rawDataPath: string;
-  parseFile: (file: File, sheets?: string[]) => Promise<ParsedFileResult<TRow>>;
+  parseFile: (
+    file: File,
+    sheets?: string[],
+    options?: { excludedHeaders?: string[] },
+  ) => Promise<ParsedFileResult<TRow>>;
   getSheetNames: (file: File) => Promise<string[]>;
+  /** Returns the composite headers + sample values used by the column-select dialog. */
+  getHeaderInfo: (
+    file: File,
+    sheets?: string[],
+  ) => Promise<{ headers: string[]; samples: Record<string, unknown> }>;
   /** Returns the sub-module key (Document No / SN) from a parsed row. */
   getRowKey: (row: TRow) => string | null;
   /** Performs upserts and returns per-row outcomes + global counters. */
