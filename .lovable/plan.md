@@ -1,59 +1,73 @@
 ## 목표
 
-ABD / OMM Import 시 Excel에 들어 있는 **HDEC PIC** 또는 **HDEC ENG** 이름이 마스터/프로필에 없는 새 사람이면, Defect Import와 똑같은 방식으로 **자동 등록**되도록 합니다. Warranty는 현재 "Coming soon" 상태이므로, 어댑터가 추가되는 즉시 자동으로 같은 흐름이 적용되도록 공용 위치에 훅을 심어 둡니다.
+가져오기 시 사용자가 선택하지 않은(제외한) 컬럼은 **DB의 기존 값을 그대로 보존**합니다. 이미 T&C(`ImportContext`)와 Defect(`DefectImportContext`)에 검증된 패턴이 있으므로, 동일한 패턴을 ABD/OMM(`docs-import`) 흐름에 그대로 이식합니다.
 
-## 현재 구조
+## 참고한 기존 패턴 (T&C / Defect)
 
-- `src/lib/defect-master-autocreate.ts` 의 `createDefectMasterEnsurer(supabase)` 가 이미:
-  - `hdec_pic_master`, `hdec_eng_master`, `subcontractor_master`, `profiles` 를 미리 로드
-  - 행마다 `ensureHdecPic` / `ensureHdecEng` 호출 → 마스터에 없으면 INSERT, 그 후 edge function `auto-create-master-user` 로 프로필/사용자 생성
-  - `DefectImportContext` 에서만 사용 중
-- Edge function `auto-create-master-user` 는 이미 `master_type: 'hdec_pic' | 'hdec_eng'` 를 지원 → **백엔드 수정 불필요**
-- ABD/OMM 임포트는 `createDocsImportProvider.tsx` → `adapter.upsertWorker(...)` 흐름이며, `abdAdapter`/`ommAdapter` 의 파싱된 행에는 `hdec_pic_name`, `hdec_eng_name` 이 이미 포함되어 있음
-- Warranty(`'warranty'`)는 비활성 탭만 존재, 어댑터 미구현
+**Defect (`src/lib/defect-parser.ts`)**
+- `parseDefectExcel(file, sheet, excludedHeaders)`가 `excludedFields: Set<string>`(canonical 필드명)을 결과에 포함하여 반환.
+- 헤더→canonical 매핑은 `toFieldName()`을 통해 변환, **시스템 필수 필드(`issue_no`)는 제외 대상에서 강제로 빼냄**.
 
-## 작업 계획
+**Defect (`src/contexts/DefectImportContext.tsx`)**
+- 파일 상태에 `excludedHeaders: string[]`과 `excludedFields: Set<string>`을 함께 보관.
+- 시트 변경 시 `excludedHeaders`와 `excludedFields` 리셋.
+- UPDATE 페이로드 빌드 시 `if (excludedFields.has(field)) continue;`로 스킵.
+- 별도 `preserveExistingForBlank(row, existing)` 헬퍼: `PRESERVE_BLANK_FIELDS`에 한해 Excel 값이 비어 있고 DB에 값이 있으면 DB 값을 유지.
 
-### 1. Ensurer 를 공용 모듈로 승격
+**T&C (`src/contexts/ImportContext.tsx`)**
+- 동일한 `excludedFields: Set<string>` 보관.
+- UPDATE 빌드 루프(540~570줄)에서 `[field, val]` 페어를 순회하며 `if (excludedFields?.has(field)) continue;` 후 `resolveValue`로 `undefined` vs 실제값 구분, 실제값일 때만 `updates[field] = ...` 적용.
+- 파생 필드 `team`도 별도로 `if (!excludedFields?.has('team') && resolved !== undefined) updates.team = ...` 처리.
 
-- `defect-master-autocreate.ts` 는 그대로 두고(Defect 측 변경 없음), `src/lib/master-autocreate.ts` 를 신규로 추가해 `createDefectMasterEnsurer` 를 `createMasterEnsurer` 라는 이름으로 re-export. 입력 타입(`MasterRowInput`)도 함께 export.
+## ABD/OMM에 그대로 적용
 
-### 2. Docs Import 흐름에 Ensurer 연결
+### 1. 파서: `excludedFields` 반환 (Defect의 `parseDefectExcel`과 동일 형태)
 
-`src/contexts/docs-import/createDocsImportProvider.tsx` 의 `startImport` 안에서:
+**`src/lib/docs-import-parser.ts` (ABD)**
+- `parseDocsExcel`의 결과 타입(`ParseDocsResult`)에 `excludedFields: Set<string>` 추가.
+- 헤더 컬럼 순회 중 `col.composite`가 `excludedSet`에 있고 `col.field`가 있으면 `excludedFields.add(col.field)`.
+- **시스템 필수 필드(`document_no`)는 강제로 제외에서 빼냄** (Defect의 `issue_no` 처리와 동일).
 
-- `getDefaultProject()` 성공 후, 파일 루프 **시작 전에** `const ensurer = await createMasterEnsurer(supabase as any);` 로 1회만 생성
-- 파일 루프 안, `adapter.upsertWorker(...)` **호출 직전에**:
-  - 해당 파일의 `parsed` 행을 순회하며 `await ensurer.ensureForRow({ hdec_pic_name: r.hdec_pic_name, hdec_eng_name: r.hdec_eng_name })` 실행
-  - Ensurer 내부에 in-memory Set 으로 중복 차단이 이미 있으므로, 동일 이름 반복은 비용 거의 없음
-  - `try/catch` 로 감싸 실패 시 `ensurer.warnings` 에만 기록되고 임포트는 계속 진행
-- 모든 파일 처리 완료 후 `ensurer.warnings.length > 0` 이면 비-블로킹 토스트로 안내(첫 1~2개 메시지 + 총 개수)
+**`src/lib/docs-omm-import-parser.ts` (OMM)**
+- 동일하게 `ParseOmmResult`에 `excludedFields: Set<string>` 추가, 시스템 필수 `sn`은 강제 포함.
 
-이 순서는 Defect Import와 동일 — upsert **이전**에 마스터/프로필이 만들어져야 후속 team/role 조회가 정상 동작.
+(중요: 파생 필드의 폴백/디폴트 로직은 손대지 않음. 워커가 UPDATE 시 `excludedFields`를 보고 해당 키를 페이로드에서 빼면, 파생 결과가 잘못 계산되어도 DB로 흘러가지 않음. T&C/Defect도 동일한 방식 — 파서는 그대로 두고 워커에서 거름.)
 
-### 3. 타입
+### 2. 컨텍스트: 파일 상태에 `excludedFields` 저장 (T&C/Defect와 동일)
 
-`DefectMasterRowInput` 의 모든 필드가 이미 optional 이므로, ABD/OMM 행에서 HDEC 두 필드만 넘기면 됨. **타입 변경 없음.**
+**`src/contexts/docs-import/types.ts`**
+- `DocsImportFile`에 `excludedFields?: Set<string>` 추가 (이미 `excludedHeaders?: string[]` 존재).
+- `WorkerContext` 또는 `upsertWorker`의 호출 시그니처에 `excludedFields: Set<string>` 전달.
 
-### 4. Warranty 사전 대응
+**`src/contexts/docs-import/createDocsImportProvider.tsx`**
+- `parseAndApply`에서 `parsed.excludedFields`를 파일 상태에 저장 (Defect 라인 336과 동일).
+- 시트 변경 시 `excludedHeaders`/`excludedFields` 리셋.
+- 워커 호출 시 `excludedFields`를 컨텍스트로 전달.
 
-Ensurer 호출이 공용 `createDocsImportProvider` 에 들어가므로, 추후 Warranty 어댑터가 동일한 패턴으로 추가되기만 하면(`hdec_pic_name`, `hdec_eng_name` 을 행에 노출) **추가 작업 없이** 자동 등록이 동작.
+### 3. 워커: UPDATE 페이로드에서 제외 필드 제거 (T&C 라인 564~570과 동일)
 
-## 변경 파일
+**`src/lib/docs-import-workers.ts`**
+- `abdAdapter.upsertWorker`, `ommAdapter.upsertWorker` 모두:
+  - 페이로드를 평소처럼 빌드한 뒤, **UPDATE 분기에서만** `excludedFields`의 각 키를 `delete payload[field]`로 제거.
+  - INSERT 분기는 그대로 둠 (신규 행에는 보존할 이전 값이 없음).
+  - per-row 변경 로그(`buildOutcomeForUpdate`, `OMM_TRACKED_FIELDS` 루프)에서도 `if (excludedFields.has(fname)) continue;` — "applied"/"unchanged" 노이즈 방지 + Defect/T&C와 동일한 감사 동작.
+  - `raw_payload`도 UPDATE 시 `{ ...prevRawPayload, ...row.raw_payload }`로 머지 (제외 컬럼의 이전 raw 값 보존). T&C의 `custom_payload` 머지(라인 572~581) 패턴을 그대로 적용.
 
-- **신규**: `src/lib/master-autocreate.ts` — re-export 래퍼 (`createMasterEnsurer`, `MasterRowInput`)
-- **수정**: `src/contexts/docs-import/createDocsImportProvider.tsx` — `startImport` 에서 ensurer 생성 + 행마다 `ensureForRow` 호출 + 마지막 경고 토스트
+### 4. UI: 변경 없음
 
-## 범위 외
+기존 "Select Columns (N/M)" 표시와 검증(`validateDocsHeaders`)은 그대로 사용. 추가 안내가 필요하면 후속 작업.
 
-- DB 스키마/마이그레이션 변경 없음 (마스터 테이블·edge function 모두 이미 지원)
-- Defect Import 코드 변경 없음 (이미 동작)
-- Warranty 탭 활성화 없음 (어댑터 추가는 별건)
-- Subcontractor / Subsub 자동 등록은 이번 요청 범위(HDEC PIC/ENG)에 한정해 **포함하지 않음**. 추후 동일 `ensureForRow` 호출에 `subcontractor_name` 등을 추가하면 손쉽게 확장 가능
+## 의도적으로 변경하지 않는 것
 
-## 검증 방법
+- 파서의 `?? null`, 디폴트(`'TBA'`), `clearCyclesAfterClosure` 등 파생 로직은 기존 그대로. 워커가 UPDATE 시 제외 키를 제거하므로 DB에는 영향 없음 (T&C/Defect도 동일 전략).
+- 매핑된 컬럼의 빈 셀 처리는 현 동작 유지. (Defect만 `PRESERVE_BLANK_FIELDS`라는 별도 화이트리스트가 있고, ABD/OMM은 사용자 요청 범위 밖.)
+- 시스템 필수 필드(`document_no`, `sn`) 제외 차단은 `validateDocsHeaders`로 이미 처리됨 + 파서가 한 번 더 보호.
 
-1. ABD Import 파일에 신규 `HDEC PIC` 이름 1건 → 임포트 후 `hdec_pic_master` 에 추가되고 프로필 생성 확인
-2. OMM Import 파일에 신규 `HDEC ENG` 이름 1건 → 동일 확인
-3. 같은 파일 재임포트 시 중복 마스터/프로필이 생기지 않음 (in-memory Set + edge function 자체 lookup 으로 멱등)
-4. 기존 Defect Import 동작 무변화
+## 검증
+
+1. ABD에서 `revision`, `title`, `remarks` 제외 → 기존 행의 해당 값 유지, 매핑된 컬럼만 갱신.
+2. ABD에서 `subcontractor_name` 제외 → 기존 값이 `'TBA'`로 덮어써지지 않음 (워커 단계에서 페이로드에서 제거되므로 파서가 `'TBA'`를 만들어도 무영향).
+3. OMM에서 `category` 제외 → DB의 `category`/파생 `team` 모두 유지.
+4. INSERT 경로(신규 행) 정상 동작, 제외 컬럼은 `null`로 입력.
+5. `raw_payload` 머지로 제외 컬럼의 이전 raw 값 보존.
+6. `document_no`/`sn` 제외 시도 시 기존 검증으로 차단됨.
