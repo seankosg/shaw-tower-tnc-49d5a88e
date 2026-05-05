@@ -112,10 +112,13 @@ async function findExistingMasterUser(
       .ilike('subcontractor_name', ciEq(body.subcontractor_name ?? ''))
       .ilike('subsub_name', ciEq(trimmed));
   } else {
-    // HDEC: same person if name matches EITHER hdec_pic_name OR hdec_eng_name.
-    // PIC and ENG are roles a single HDEC person can hold simultaneously.
+    // HDEC: same person if name matches hdec_pic_name, hdec_eng_name, OR profile.name.
+    // The `name` fallback catches legacy HDEC accounts created before per-role
+    // columns were populated (those rows have hdec_pic_name/hdec_eng_name = NULL).
     const escaped = ciEq(trimmed);
-    query = query.or(`hdec_pic_name.ilike.${escaped},hdec_eng_name.ilike.${escaped}`);
+    query = query.or(
+      `hdec_pic_name.ilike.${escaped},hdec_eng_name.ilike.${escaped},name.ilike.${escaped}`,
+    );
   }
 
   const { data, error } = await query.maybeSingle();

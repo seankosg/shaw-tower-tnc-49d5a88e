@@ -1,40 +1,74 @@
-현재 상태 확인 결과:
+## 배경
 
-- **Subcontractor**: ABD Bulk Edit에서 이미 `subcontractor_master`에서 active 항목들을 불러와 select로 제공 중 (단, sub/subsub 타입만 필터). 추가로 "free text" 옵션도 있어 두 줄로 표시되어 혼란스러움.
-- **HDEC PIC**: 현재 `inputType: 'text'` (자유 텍스트). 마스터 미사용.
-- **HDEC ENG**: 현재 `inputType: 'text'` (자유 텍스트). 마스터 미사용.
+오늘 master 등록 시 자동 생성한 6명 중 일부는 이미 다른 login_id 로 존재하는 인물입니다. 원인은 `auto-create-master-user` 의 중복 검사가 `profiles.hdec_pic_name` / `hdec_eng_name` 만 비교하는데, 기존 HDEC 계정 다수가 이 두 컬럼이 NULL 이라 매칭 실패했기 때문입니다. `name` 컬럼을 추가로 비교하면 막을 수 있습니다.
 
-`hdec_pic_master`와 `hdec_eng_master`는 Admin 탭에 이미 존재하며 `name`, `is_active` 컬럼을 가집니다.
+---
 
-진행 계획
+## 1. 사용자별 처리 (수정됨)
 
-1. ABD Raw Data Bulk Edit 정비
-- HDEC PIC를 `inputType: 'select'`로 변경, `hdec_pic_master`에서 active한 name 목록을 옵션으로 사용
-- HDEC ENG를 `inputType: 'select'`로 변경, `hdec_eng_master`에서 active한 name 목록을 옵션으로 사용
-- Subcontractor select는 그대로 두되, 라벨을 "Subcontractor"로 정리하고 free text 옵션은 제거 (마스터에 없는 값이 필요하면 Admin에서 추가하도록 유도)
-- 마스터 옵션 로딩은 페이지 마운트 시 한 번만 수행 (이미 `subcontractorOptions` 패턴이 있어 동일 구조로 추가)
+### 신규 생성된 6명
 
-2. Detail 페이지에도 동일하게 적용 (선택)
-- Drawing Detail 페이지 HDEC PIC/ENG 입력도 마스터 기반 select가 되도록 정렬해 일관성 유지
-- 이미 `statusPool`에 `hdec_pic_name` / `hdec_eng_name` distinct 값을 모으고 있는데, 이를 `hdec_pic_master` / `hdec_eng_master` 기반으로 교체
+| Master 이름 | 신규 계정 | 동일 인물 기존 계정 | 처리 |
+|---|---|---|---|
+| JW Park | `jw_pa2` | `jw_park` (name='JW Park', PIC=NULL) | **`jw_pa2` 삭제**, `jw_park.hdec_pic_name='JW Park'` 백필 |
+| KY Kim | `ky_ki2` | `ky_kim` (name='KI YEOL KIM', PIC=NULL) | **`ky_ki2` 삭제**, `ky_kim.hdec_pic_name='KY Kim'` 백필 |
+| Lee Jung Hyun | `lee_jung_hyun` | `jh_lee` (name='JH Lee', PIC='JH Lee') | **`lee_jung_hyun` 삭제만**. `jh_lee` profile 은 **기존 유지** (PIC='JH Lee' 그대로) |
+| Cha Min Chul | `cha_min_chul` | `mc_cha` (name='MC Cha', PIC='MC Cha') | **`cha_min_chul` 삭제만**. `mc_cha` profile 은 **기존 유지** (PIC='MC Cha' 그대로) |
+| YS Kim | `ys_kim` | `ys_lee` (name='YS KIM', PIC=NULL) — 동일인이지만 현상유지 | **`ys_kim` 삭제만**. `ys_lee` profile 은 건드리지 않음 |
+| ST JEON | `st_jeon` | 없음 | **유지** |
 
-기술 상세
+→ **삭제 5건**: `jw_pa2`, `ky_ki2`, `lee_jung_hyun`, `cha_min_chul`, `ys_kim`
+→ **profile 백필 2건**: `jw_park`, `ky_kim`
 
-- 수정 대상
-  - `src/pages/docs/DocsRawDataPage.tsx`
-    - `hdec_pic_master` / `hdec_eng_master` fetch 추가, state로 보관
-    - `bulkFields`에서 `hdec_pic_name`, `hdec_eng_name`을 select로 변경
-    - free-text Subcontractor 옵션 제거
-  - `src/pages/docs/DocsDrawingDetailPage.tsx` (옵션)
-    - 마스터에서 옵션 로드 후 select 옵션으로 사용
+### 기존 HDEC profile 추가 백필 (재발 방지용 사전 정리)
 
-- 동작 방향
-  - 옵션 = master.name where is_active = true, 알파벳 순
-  - 마스터에 없는 이름은 입력 불가 (필요한 경우 Admin → HDEC PIC/ENG Master에서 먼저 추가)
-  - Subcontractor는 기존대로 master id를 저장하면서 companion으로 name도 저장
+이름이 master 와 정확히 일치하지만 PIC/ENG 컬럼이 NULL 인 경우:
 
-- 예상 결과
-  - Bulk Edit에서 HDEC PIC/ENG/Subcontractor가 모두 Admin 마스터 목록과 1:1 일치
-  - 잘못된 자유 텍스트 입력으로 인한 데이터 불일치 방지
+- `st_kim` (name='ST Kim') → `hdec_pic_name='ST Kim'`
+- `darwin` (name='Darwin') → `hdec_eng_name='Darwin'`
 
-승인해주시면 바로 수정하겠습니다.
+(`jw_park`, `ky_kim` 은 위 표에서 이미 처리)
+
+---
+
+## 2. Edge Function 보강 (`auto-create-master-user`)
+
+`findExistingMasterUser` 의 HDEC 분기 변경:
+
+- 현재: `hdec_pic_name.ilike.{n}` OR `hdec_eng_name.ilike.{n}`
+- 변경: 위 두 조건에 **`name.ilike.{n}`** 을 OR 로 추가
+
+PIC/ENG 컬럼이 비어있는 기존 HDEC 계정도 같은 인물로 인식되어 중복 생성이 방지됩니다. 매칭된 후 PIC/ENG 컬럼이 비어 있으면 기존 backfill 로직(`patch.hdec_pic_name = trimmedName`)이 자동으로 채워줍니다.
+
+> 단, `jh_lee`/`mc_cha` 처럼 PIC 컬럼이 이미 다른 값으로 채워진 경우에는 backfill 조건(`!existing.hdec_pic_name`)에서 자동으로 건너뛰므로 사용자 의도(JH Lee, MC Cha 표기 유지)와 일치합니다. 결과적으로 `Lee Jung Hyun` / `Cha Min Chul` 이름으로 import 가 들어와도 새 계정은 만들지 않고 기존 `jh_lee` / `mc_cha` 를 그대로 재사용하게 됩니다.
+
+Subcontractor / Subsub 분기는 변경하지 않습니다.
+
+---
+
+## 3. 실행 순서
+
+1. **데이터 변경 (마이그레이션 / insert 도구):**
+   - `auth.users` 5건 삭제 → cascade 로 `profiles`, `user_roles` 정리
+     - `jw_pa2`, `ky_ki2`, `lee_jung_hyun`, `cha_min_chul`, `ys_kim`
+   - `profiles` update 4건:
+     - `jw_park.hdec_pic_name = 'JW Park'`
+     - `ky_kim.hdec_pic_name = 'KY Kim'`
+     - `st_kim.hdec_pic_name = 'ST Kim'`
+     - `darwin.hdec_eng_name = 'Darwin'`
+
+2. **Edge function 수정 (자동 배포):**
+   - `supabase/functions/auto-create-master-user/index.ts` 의 `findExistingMasterUser` HDEC 분기에 `name.ilike` OR 조건 추가
+
+3. **검증:**
+   - profiles 조회로 5건 삭제 + 4건 백필 확인
+   - master 이름 6개로 다시 호출 시 모두 `already_exists: true` 응답 확인
+
+---
+
+## 영향받는 파일
+
+- `supabase/functions/auto-create-master-user/index.ts` (1곳 수정)
+- 데이터: `auth.users` 5건 삭제(cascade), `profiles` 4건 update
+
+승인해 주시면 진행하겠습니다.
