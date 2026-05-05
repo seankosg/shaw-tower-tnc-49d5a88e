@@ -80,7 +80,7 @@ export function useDocsFieldConfig(subModule: DocsSubModule = 'as_built') {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const fetchAll = async () => {
       const { data } = await (supabase as any)
         .from('docs_field_config')
         .select('*')
@@ -90,8 +90,22 @@ export function useDocsFieldConfig(subModule: DocsSubModule = 'as_built') {
         setFields((data ?? []) as DocsFieldConfigRow[]);
         setLoading(false);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    fetchAll();
+
+    const channel = supabase
+      .channel(`docs-field-config-${subModule}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'docs_field_config', filter: `sub_module=eq.${subModule}` },
+        () => { fetchAll(); }
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, [subModule]);
 
   const fieldMap = useMemo(() => new Map(fields.map((field) => [field.field_name, field])), [fields]);

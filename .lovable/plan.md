@@ -1,72 +1,47 @@
 
-# Goal
+# 목표
 
-Bring the ABD Raw Data page to **functional + visual parity** with the T&C Raw Data bulk action bar. Today T&C uses the rich `BulkActionBar` (bulk edit + Duplicate + Reassign + Export `.xlsx` / Copy TSV + Hide / Permanent delete + permission counters). ABD only has a stripped-down `DocsBulkEditBar` (edit only). We will reuse the **same shared component** for ABD and wire it to the `docs_drawings` table.
+Admin → Field Configuration → OMM 탭에서 `docs_field_config` 행을 수정/추가/삭제하면, **OMM Raw Data 페이지가 새로고침 없이 즉시 반영**되도록 합니다 (컬럼 visible, 라벨, sort_order, required 등). 같은 메커니즘으로 ABD/Warranty/Spare Part Raw Data도 자동으로 혜택을 봅니다.
 
-# What changes
+# 변경 사항
 
-## 1. Generalize `BulkActionBar` to support ABD (`drawing` entity)
+## 1) DB 마이그레이션 — realtime publication 등록
 
-Currently the shared bar is hard-coded around two entities: `subtest` and `defect` (declared in `src/lib/bulk-actions.ts` as `BulkEntity = 'subtest' | 'defect'`). We extend it with a third entity, `drawing`, mirroring the same surface area:
+`docs_field_config` 테이블을 Supabase realtime publication에 추가합니다 (현재 미등록 상태 확인됨).
 
-- Add `'drawing'` to the `BulkEntity` union.
-- `getEditableScopeMap`: for `drawing` we don't have a per-row RPC, so resolve scope client-side from the user's role + team:
-  - admin / superuser → all rows editable (`full`)
-  - d_superuser → rows where `row.team === profile.team` (`team`)
-  - everyone else → not editable from this bar (drawings are normally edited inline; bulk actions stay admin-grade)
-  - This matches the existing RLS we put in place for `docs_drawings` and avoids needing a new RPC.
-- `applyBulkDelete` for `drawing`:
-  - **Soft**: `update docs_drawings set is_active=false` for the editable ids (RLS already gates this).
-  - **Hard**: chunked `delete from docs_drawings where id in (...)`. There are no FKs into `docs_drawings`, so no cascade RPC is needed; admin/superuser policy already restricts the operation.
-- `previewBulkDelete` for `drawing`: count related `docs_change_log` rows for those drawing ids so the cascade-impact panel still renders meaningful numbers (label: "Change log entries").
-- `applyBulkDuplicate` for `drawing`:
-  - Read full source rows from `docs_drawings`.
-  - For each row, compute next available `document_no` per `(project_id, sub_module)` by appending `-2`, `-3`, … if a collision occurs (same retry-on-`23505` pattern used for subtests).
-  - Drop `id`, `created_at`, `updated_at`, `row_version`; reset `data_source_type='manual'`, `source_upload_id=null`, `is_active=true`, `updated_by=userId`.
-  - Options:
-    - **Reset actual dates** → clear `submitted_date`, `approved_date`, `sub1_actual_response_date`, `sub2_actual_response_date`, `sub3_actual_response_date`, `sub1_submission_date`, `sub2_submission_date`, `sub3_submission_date`, `sub1_approval_date`, `sub2_approval_date`, `sub3_approval_date`.
-    - **Reset progress / status** → clear `current_status`, `aconex_status`, `sub1_approval_status`, `sub2_approval_status`, `sub3_approval_status`, set `is_submitted=false`.
-- `BulkDuplicateDialog`: extend its `entity === 'subtest' ? ... : ...` copy to also handle `'drawing'` (label key = `document_no`, reset-text wording for ABD).
-- `BulkDeleteDialog`: same — `labelKey = 'document_no'` for `drawing`, and add `'change_log'` cascade label entry (already present generically).
-- `BulkReassignDialog`: no changes — it is entity-agnostic.
-
-## 2. Default export columns for `drawing`
-
-In `src/components/raw-data/BulkEditBar.tsx` (the back-compat wrapper) and/or `BulkActionBar` itself, register a default `ExportColumn[]` set for `drawing` so the Export Excel / Copy TSV buttons work without each caller redeclaring them. Defaults will include: `document_no, revision, title, sub_module, discipline, document_type, team, subcontractor_name, hdec_pic_name, current_status, aconex_status, submitted_date, approved_date, remarks`.
-
-## 3. Wire ABD page to the shared bar
-
-In `src/pages/docs/DocsRawDataPage.tsx`:
-
-- Replace the import and JSX of `DocsBulkEditBar` with `BulkActionBar` (or the back-compat `BulkEditBar` wrapper, whichever is cleaner — we'll use `BulkActionBar` directly for clarity).
-- Pass:
-  - `table="docs_drawings"`, `entity="drawing"`
-  - `fields={bulkFields}` (already defined in the page)
-  - `exportColumns` — the columns currently visible in the table, in user order (mirrors how T&C does it).
-  - `reassignFields` — Subcontractor (id-based, with `subcontractor_name` companion), HDEC PIC, HDEC ENG, Team. Options reuse the same `subcontractorOptions / hdecPicOptions / hdecEngOptions / team enum` already loaded on the page.
-  - `onApplied={handleBulkApplied}` — keep existing in-place row patching.
-  - `onMutated={() => fetchData()}` — refetch after duplicate / delete / reassign.
-  - `onClearSelection={() => setRowSelection({})}`.
-- Delete `src/components/raw-data/DocsBulkEditBar.tsx` (no other importers — verified).
-
-## 4. Permission notes (no migrations needed)
-
-- The existing RLS on `docs_drawings` already lets admin / superuser / d_superuser (own team) UPDATE & DELETE rows, and INSERT for the same set. Duplicate (INSERT) and hard-delete (DELETE) will therefore succeed for those roles and be silently rejected by RLS for others — exactly the same model as T&C.
-- The `is_admin_or_superuser` RPC is reused to gate the "Delete permanently…" menu item just like T&C.
-
-# Out of scope
-
-- No DB migrations.
-- No changes to OMM / Spare Part / Warranty bulk bars.
-- No changes to T&C / Defect bulk behavior (only additive `'drawing'` branch).
-- No new RPCs (we keep client-side delete because there are no dependent FK tables on `docs_drawings`).
-
-# UI parity check
-
-After this change ABD's bar will show the same controls in the same order as T&C:
-
-```text
-[● N selected · Editable X · Skipped Y]  [Edit field… ▾] [value] [Apply]   [Duplicate] [Reassign] [Export ▾] [⋯ Delete] [✕]
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.docs_field_config;
 ```
 
-Confirm dialogs (bulk-edit confirm with before/after preview, Duplicate options, Reassign keep/set/clear, Soft vs Hard delete with `DELETE` typing) are all the shared components — identical look-and-feel.
+선택적으로 같은 마이그레이션에서 자매 테이블도 함께 등록해 일관성 확보:
+- `public.field_config` (T&C)
+- `public.defect_field_config` (Defect)
+
+이렇게 하면 향후 T&C/Defect Raw Data에도 동일 패턴을 쉽게 적용할 수 있습니다. (이미 등록돼 있으면 `IF NOT EXISTS` 가드를 위해 `DO $$ ... $$` 블록으로 감쌉니다.)
+
+## 2) `useDocsFieldConfig` 훅에 realtime 구독 추가
+
+`src/hooks/useDocsFieldConfig.ts`:
+
+- 기존 1회성 fetch는 그대로 유지.
+- `useEffect` 내부에서 `supabase.channel('docs-field-config-{subModule}')` 채널을 만들고 `postgres_changes` (event `*`, table `docs_field_config`, `filter: sub_module=eq.{subModule}`) 를 구독.
+- 어떤 변경이든 들어오면 다시 전체 행을 fetch하여 `setFields`로 갱신 (행이 적기 때문에 부분 머지보다 단순 refetch가 안전·정확).
+- 언마운트 시 `supabase.removeChannel(channel)`로 정리.
+- 채널 이름에 `subModule`을 포함시켜 같은 페이지에 여러 sub_module이 마운트돼도 충돌이 없도록 합니다.
+
+이 훅은 OMM 외에도 ABD/Warranty/Spare Part Raw Data 페이지에서 이미 사용 중이므로, **한 번 수정하면 네 페이지 모두 자동 적용**됩니다.
+
+## 3) (선택, 짧은 추가) Admin Field Config 편집기에서도 같은 채널을 듣도록
+
+`src/pages/AdminPage.tsx`의 `FieldConfigTable` 내부 fetch 로직에도 동일한 realtime 구독을 추가하면, 두 명의 관리자가 동시에 편집하는 시나리오에서도 화면이 자동 동기화됩니다. (Out of scope로 둬도 핵심 요청은 충족됩니다 — 사용자가 원하면 같이 진행, 아니면 생략.) → **포함하겠습니다.** 마이너 변경이라 노이즈가 거의 없습니다.
+
+# 검증 방법
+
+1. Admin → Field Config → OMM 탭에서 임의 필드의 "Visible" 토글 또는 라벨을 수정.
+2. 다른 탭/창에서 OMM Raw Data 페이지를 열어둔 채로 1초 이내에 컬럼이 사라지거나 라벨이 바뀌는지 확인.
+3. ABD Raw Data에서도 같은 동작이 되는지 확인 (보너스).
+
+# 영향 범위 / 비목표
+
+- 영향: `docs_field_config`를 사용하는 4개 Raw Data 페이지 + Admin Field Config 화면.
+- 비목표: `import_header_mappings`(헤더 매핑) realtime, T&C/Defect Raw Data realtime 적용, `field_config` 행 자체의 RLS/스키마 변경, Header Mapping ↔ Field Config 사이의 추가 비즈니스 동기화 로직.
