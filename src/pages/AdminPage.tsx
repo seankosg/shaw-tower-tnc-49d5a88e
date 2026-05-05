@@ -2122,6 +2122,16 @@ function FieldConfigTable({ table, subModule, title, showOrigin = false }: { tab
   };
   useEffect(() => { load(); }, [table, subModule]);
 
+  // Realtime: keep editor in sync when another admin edits the same field config.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`admin-field-config-${table}-${subModule ?? 'all'}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table }, () => { load(); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table, subModule]);
+
   /** Bump app_settings.header_mappings_version so other tabs/sessions reload parser cache. */
   const bumpHeaderMappingsVersion = async () => {
     const { data } = await (supabase as any)
