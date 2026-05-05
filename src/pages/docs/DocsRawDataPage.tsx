@@ -573,6 +573,7 @@ export default function DocsRawDataPage() {
     sub1_approval_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'sub1_approval_status'), ['A', 'B', 'C', 'UR', 'WIP']),
     sub2_approval_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'sub2_approval_status'), ['A', 'B', 'C', 'UR', 'WIP']),
     sub3_approval_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'sub3_approval_status'), ['A', 'B', 'C', 'UR', 'WIP']),
+    overall_status: mergeOptionSeeds(uniqueOptions(augmentedItems, 'overall_status'), ['Planned', 'S.Delayed', 'Under Review', 'WIP', 'R.Delayed', 'A', 'B', 'C']),
     is_submitted: [{ value: 'true', label: 'Submitted' }, { value: 'false', label: 'Not submitted' }],
     trade: TRADE_OPTIONS.map((t) => ({ value: t, label: t })),
     team: ALL_TEAMS.map((t) => ({ value: t, label: TEAM_LABELS[t] })),
