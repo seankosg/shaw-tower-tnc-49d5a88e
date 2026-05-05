@@ -273,6 +273,21 @@ function DateRangeDropdown({ column }: { column: any }) {
         onClick={(e) => e.stopPropagation()}
         onPointerDownOutside={(e) => e.stopPropagation()}
       >
+        <div className="flex items-center gap-2 px-1">
+          <button
+            className="text-[11px] text-muted-foreground/40 cursor-not-allowed"
+            disabled
+            title="Not applicable for date filters"
+          >
+            Select all
+          </button>
+          <button
+            className="text-[11px] text-muted-foreground hover:underline"
+            onClick={() => column.setFilterValue(undefined)}
+          >
+            Clear all
+          </button>
+        </div>
         <div className="space-y-1">
           <label className="text-[11px] text-muted-foreground">From</label>
           <Input
@@ -301,12 +316,6 @@ function DateRangeDropdown({ column }: { column: any }) {
           />
           Empty only
         </label>
-        <button
-          className="text-[11px] text-muted-foreground hover:underline"
-          onClick={() => column.setFilterValue(undefined)}
-        >
-          Clear
-        </button>
       </PopoverContent>
     </Popover>
   );
