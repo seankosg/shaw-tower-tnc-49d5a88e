@@ -294,11 +294,24 @@ export const abdAdapter: ImporterAdapter<ParsedDocsRow> = {
     }
 
     // ---- UPDATE pool (8 concurrent) ---------------------------------------
+    // Build a sanitized payload per row: drop excluded keys (preserve existing
+    // DB value) and merge raw_payload with the previously stored one so raw
+    // cells from excluded headers are not lost.
+    const sanitizeUpdatePayload = (it: UpdateItem): Record<string, unknown> => {
+      const out: Record<string, unknown> = { ...it.payload };
+      for (const f of excludedFields) delete out[f];
+      const prevRaw = (it.prevPayload && typeof it.prevPayload === 'object') ? it.prevPayload : {};
+      const incomingRaw = (it.payload.raw_payload && typeof it.payload.raw_payload === 'object')
+        ? (it.payload.raw_payload as Record<string, unknown>) : {};
+      out.raw_payload = { ...prevRaw, ...incomingRaw };
+      return out;
+    };
+
     for (let i = 0; i < updateItems.length; i += UPDATE_CONCURRENCY) {
       const chunk = updateItems.slice(i, i + UPDATE_CONCURRENCY);
       const results = await Promise.all(
         chunk.map((it) =>
-          (supabase as any).from('docs_drawings').update(it.payload).eq('id', it.existingId)
+          (supabase as any).from('docs_drawings').update(sanitizeUpdatePayload(it)).eq('id', it.existingId)
             .then((r: any) => ({ it, error: r.error }))
             .catch((err: any) => ({ it, error: err })),
         ),
