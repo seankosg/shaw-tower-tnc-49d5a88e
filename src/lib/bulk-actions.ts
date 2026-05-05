@@ -26,6 +26,32 @@ export async function getEditableScopeMap(
   const out: ScopeMapResult = { byId: {}, editableIds: [], skippedIds: [] };
   if (!ids.length || !userId) return out;
 
+  // Drawings: no per-row RPC. Resolve from role + team match against docs_drawings.team.
+  if (entity === 'drawing') {
+    const [{ data: roleRows }, { data: profileRow }, { data: drawingRows }] = await Promise.all([
+      (supabase as any).from('user_roles').select('role').eq('user_id', userId),
+      (supabase as any).from('profiles').select('team, is_active').eq('user_id', userId).maybeSingle(),
+      (supabase as any).from('docs_drawings').select('id, team').in('id', ids),
+    ]);
+    const roles = new Set<string>(((roleRows as any[]) ?? []).map((r) => r.role));
+    const isFull = roles.has('admin') || roles.has('superuser');
+    const isDSuper = roles.has('d_superuser');
+    const userTeam = (profileRow as any)?.team ?? null;
+    const profileActive = (profileRow as any)?.is_active !== false;
+    const teamById = new Map<string, string | null>(
+      ((drawingRows as any[]) ?? []).map((r) => [r.id, r.team ?? null]),
+    );
+    for (const id of ids) {
+      let scope: EditableScope = 'none';
+      if (isFull) scope = 'full';
+      else if (isDSuper && profileActive && userTeam && teamById.get(id) === userTeam) scope = 'team';
+      out.byId[id] = scope;
+      if (scope === 'none') out.skippedIds.push(id);
+      else out.editableIds.push(id);
+    }
+    return out;
+  }
+
   const fnName = entity === 'subtest' ? 'get_subtest_edit_scope' : 'get_defect_edit_scope';
   const idArg = entity === 'subtest' ? '_subtest_id' : '_defect_id';
 
