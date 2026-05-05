@@ -214,6 +214,7 @@ export function AppLayout() {
           <Outlet />
         </main>
       </SidebarInset>
+      <GreetingHost />
     </SidebarProvider>
   );
 }
