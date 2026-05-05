@@ -49,6 +49,8 @@ export interface DocsImportFile<TRow = unknown> {
   fieldByHeader?: Record<string, string | null>;
   /** Headers the user opted to exclude — passed back to the parser so they're ignored. */
   excludedHeaders?: string[];
+  /** Pre-import validation message (e.g. missing system-required column). Blocks Start. */
+  validationError?: string | null;
   unknownHeaders?: string[];
   unmatchedOrgs?: string[];
   rejectSamples?: DocsRejectSample[];
