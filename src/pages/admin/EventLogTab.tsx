@@ -13,7 +13,13 @@ import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import { useToast } from '@/hooks/use-toast';
 
 type EventAction = 'update' | 'delete' | 'soft_delete';
-type EventActorRole = 'senior_user' | 'superuser';
+type EventActorRole = 'senior_user' | 'd_superuser' | 'superuser';
+
+const ROLE_LABEL: Record<EventActorRole, string> = {
+  senior_user: 'Senior User',
+  d_superuser: 'D.Super User',
+  superuser: 'Super User',
+};
 
 interface EventLogRow {
   id: string;
@@ -196,6 +202,7 @@ export default function EventLogTab() {
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="senior_user">Senior User</SelectItem>
+                <SelectItem value="d_superuser">D.Super User</SelectItem>
                 <SelectItem value="superuser">Super User</SelectItem>
               </SelectContent>
             </Select>
@@ -262,7 +269,7 @@ export default function EventLogTab() {
                   </TableCell>
                   <TableCell>
                     <Badge variant={r.actor_role === 'superuser' ? 'default' : 'secondary'} className="text-[10px]">
-                      {r.actor_role === 'superuser' ? 'Super User' : 'Senior User'}
+                      {ROLE_LABEL[r.actor_role] ?? r.actor_role}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -313,7 +320,7 @@ export default function EventLogTab() {
               <div className="grid grid-cols-2 gap-2 rounded bg-muted/50 p-3">
                 <div><span className="text-muted-foreground">Time: </span>{formatDateTimeDdMmmYyyy(detail.occurred_at)}</div>
                 <div><span className="text-muted-foreground">Actor: </span>{detail.actor_login_id} ({detail.actor_name})</div>
-                <div><span className="text-muted-foreground">Role: </span>{detail.actor_role === 'superuser' ? 'Super User' : 'Senior User'}</div>
+                <div><span className="text-muted-foreground">Role: </span>{ROLE_LABEL[detail.actor_role] ?? detail.actor_role}</div>
                 <div><span className="text-muted-foreground">Record ID: </span><span className="font-mono">{detail.record_id ?? '—'}</span></div>
               </div>
 
