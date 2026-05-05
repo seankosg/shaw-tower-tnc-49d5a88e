@@ -190,6 +190,10 @@ const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
   'no.': 'skip',
   'sno': 'skip',
   'drawing register': 'skip',
+  // SHAW export system columns / non-importable derived fields
+  'risk': 'skip',
+  'cycle progress': 'skip',
+  'cycle_progress': 'skip',
 };
 
 /** Sub-column alias inside Submission group → suffix used to compose field key. */
