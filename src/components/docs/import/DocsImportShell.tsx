@@ -71,6 +71,8 @@ export function DocsImportShell({
   }, [addFiles]);
 
   const readyCount = files.filter((f) => f.status === 'ready').length;
+  const invalidCount = files.filter((f) => f.status === 'ready' && f.validationError).length;
+  const importableCount = readyCount - invalidCount;
   const hasResults = files.some((f) => f.result);
   const totals = files.reduce((acc, f) => {
     if (f.result) {
@@ -167,7 +169,12 @@ export function DocsImportShell({
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base">2. Files ({files.length})</CardTitle>
-              <CardDescription>{readyCount} ready to import</CardDescription>
+              <CardDescription>
+                {importableCount} ready to import
+                {invalidCount > 0 && (
+                  <span className="ml-2 text-destructive">· {invalidCount} blocked by validation</span>
+                )}
+              </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
               {hasUnmappedHeaders && (
@@ -179,8 +186,8 @@ export function DocsImportShell({
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={clearAll} disabled={isRunning}>Clear all</Button>
-              <Button size="sm" onClick={startImport} disabled={isRunning || readyCount === 0 || blocked}>
-                {isRunning ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" />Importing…</> : `Start import (${readyCount})`}
+              <Button size="sm" onClick={startImport} disabled={isRunning || importableCount === 0 || blocked}>
+                {isRunning ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" />Importing…</> : `Start import (${importableCount})`}
               </Button>
             </div>
           </CardHeader>
@@ -226,6 +233,15 @@ export function DocsImportShell({
                               <Settings2 className="h-3.5 w-3.5" />
                               Select Columns ({f.availableHeaders.length - (f.excludedHeaders?.length ?? 0)}/{f.availableHeaders.length})
                             </Button>
+                          </div>
+                        )}
+                        {f.validationError && f.status !== 'failed' && (
+                          <div className="mt-2 flex items-start gap-2 rounded border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+                            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <div>
+                              <p className="font-medium">Required column missing</p>
+                              <p className="mt-0.5 opacity-90">{f.validationError}</p>
+                            </div>
                           </div>
                         )}
                         {f.error && (
