@@ -777,17 +777,36 @@ export default function DefectRawDataPage() {
     const dataColumns: ColumnDef<DefectRawRow>[] = DEFECT_RAW_FIELDS.map((field) => {
       // ─── Virtual Stage Progress column (Start → Completion → Closure pip pipeline) ───
       if (field === 'stage_progress') {
+        const PROGRESS_OPTIONS = [
+          { value: 'Not Started', label: 'Not Started' },
+          { value: 'In Progress', label: 'In Progress' },
+          { value: 'Completed', label: 'Completed' },
+          { value: 'Closed', label: 'Closed' },
+          { value: 'Delayed', label: 'Delayed' },
+        ];
+        const asOfDate = dataDate ?? new Date().toISOString().slice(0, 10);
+        const classifyDefect = (r: DefectRawRow): string => {
+          const item = r as any;
+          const startDelayed = isStageDelayedAsOf(item, 'start', asOfDate);
+          const compDelayed = isStageDelayedAsOf(item, 'completion', asOfDate);
+          const closureDelayed = isStageDelayedAsOf(item, 'closure', asOfDate);
+          if (startDelayed || compDelayed || closureDelayed) return 'Delayed';
+          if (isDefectStageDone(item, 'closure')) return 'Closed';
+          if (isDefectStageDone(item, 'completion')) return 'Completed';
+          if (isDefectStageDone(item, 'start')) return 'In Progress';
+          return 'Not Started';
+        };
         return {
           id: 'stage_progress',
           header: 'Progress',
           size: 110,
-          enableColumnFilter: false,
+          enableColumnFilter: true,
           enableSorting: true,
-          accessorFn: (r: DefectRawRow) => {
-            const startDone = isDefectStageDone(r as any, 'start');
-            const compDone = isDefectStageDone(r as any, 'completion');
-            const closureDone = isDefectStageDone(r as any, 'closure');
-            return (startDone ? 1 : 0) + (compDone ? 2 : 0) + (closureDone ? 4 : 0);
+          accessorFn: classifyDefect,
+          filterFn: multiSelectFilterFn,
+          meta: {
+            filterType: 'multi-select',
+            filterOptions: PROGRESS_OPTIONS,
           },
           cell: ({ row }) => <DefectStageProgress item={row.original as any} asOfDate={dataDate} />,
         } as ColumnDef<DefectRawRow>;

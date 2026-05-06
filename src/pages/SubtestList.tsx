@@ -811,45 +811,62 @@ export default function SubtestList() {
         );
       },
     },
-    {
-      id: 'stage_progress',
-      header: 'Progress',
-      size: 170,
-      enableColumnFilter: false,
-      enableSorting: true,
-      accessorFn: (r) => {
-        const t1Done = r.t1_status === 'Done';
-        const t2Done = r.t2_status === 'Done';
-        const predDone = r.pred_status === 'Done' || (r.pred_status == null && r.predecessor_status_raw
-          ? /done|완료|complete|completed|finished/i.test(r.predecessor_status_raw ?? '')
-          : false);
-        const r1Done = r.r1_status === 'Submitted' || r.r1_status === 'Under Review' || r.r1_status === 'Approved'
-          || (!r.r1_status && !!r.r1_actual_submission_date);
-        const r2aDone = r.r2_status === 'Approved' || (!r.r2_status && !!r.r2_actual_approval_date);
-        return (predDone ? 1 : 0) + (t1Done ? 2 : 0) + (t2Done ? 4 : 0) + (r1Done ? 8 : 0) + (r2aDone ? 16 : 0);
-      },
-      cell: ({ row }) => (
-        <StageProgress
-          predecessorRaw={row.original.predecessor_status_raw}
-          predStatus={row.original.pred_status}
-          predActualDate={row.original.pred_actual_date}
-          predPlannedDate={row.original.pred_planned_date}
-          t1Status={row.original.t1_status}
-          t1ActualDate={row.original.t1_actual_date}
-          t1PlannedDate={row.original.t1_planned_date}
-          t2Status={row.original.t2_status}
-          t2ActualDate={row.original.t2_actual_date}
-          t2PlannedDate={row.original.t2_planned_date}
-          r1Status={row.original.r1_status}
-          r1ActualSubmissionDate={row.original.r1_actual_submission_date}
-          r1TargetSubmissionDate={row.original.r1_target_submission_date}
-          r2Status={row.original.r2_status}
-          r2ActualApprovalDate={row.original.r2_actual_approval_date}
-          r2TargetApprovalDate={row.original.r2_target_approval_date}
-          asOfDate={dataDate}
-        />
-      ),
-    },
+    (() => {
+      const TC_PROGRESS_OPTIONS = [
+        { value: 'Not Started', label: 'Not Started' },
+        { value: 'T1 In Progress', label: 'T1 In Progress' },
+        { value: 'T2 In Progress', label: 'T2 In Progress' },
+        { value: 'R1 In Progress', label: 'R1 In Progress' },
+        { value: 'R2 In Progress', label: 'R2 In Progress' },
+        { value: 'Closed', label: 'Closed' },
+        { value: 'Delayed', label: 'Delayed' },
+      ];
+      const classifyTc = (r: any): string => {
+        const asOf = dataDate ?? new Date().toISOString().slice(0, 10);
+        const stages: Array<'pred' | 't1' | 't2' | 'r1' | 'r2a'> = ['pred', 't1', 't2', 'r1', 'r2a'];
+        if (stages.some((s) => isStageDelayedAsOf(r, s, asOf))) return 'Delayed';
+        if (isStageDone(r, 'r2a')) return 'Closed';
+        if (isStageDone(r, 'r1')) return 'R2 In Progress';
+        if (isStageDone(r, 't2')) return 'R1 In Progress';
+        if (isStageDone(r, 't1')) return 'T2 In Progress';
+        if (isStageDone(r, 'pred')) return 'T1 In Progress';
+        return 'Not Started';
+      };
+      return {
+        id: 'stage_progress',
+        header: 'Progress',
+        size: 170,
+        enableColumnFilter: true,
+        enableSorting: true,
+        accessorFn: classifyTc,
+        filterFn: multiSelectFilterFn,
+        meta: {
+          filterType: 'multi-select',
+          filterOptions: TC_PROGRESS_OPTIONS,
+        },
+        cell: ({ row }) => (
+          <StageProgress
+            predecessorRaw={row.original.predecessor_status_raw}
+            predStatus={row.original.pred_status}
+            predActualDate={row.original.pred_actual_date}
+            predPlannedDate={row.original.pred_planned_date}
+            t1Status={row.original.t1_status}
+            t1ActualDate={row.original.t1_actual_date}
+            t1PlannedDate={row.original.t1_planned_date}
+            t2Status={row.original.t2_status}
+            t2ActualDate={row.original.t2_actual_date}
+            t2PlannedDate={row.original.t2_planned_date}
+            r1Status={row.original.r1_status}
+            r1ActualSubmissionDate={row.original.r1_actual_submission_date}
+            r1TargetSubmissionDate={row.original.r1_target_submission_date}
+            r2Status={row.original.r2_status}
+            r2ActualApprovalDate={row.original.r2_actual_approval_date}
+            r2TargetApprovalDate={row.original.r2_target_approval_date}
+            asOfDate={dataDate}
+          />
+        ),
+      };
+    })(),
     { accessorKey: 'system_code', header: 'System', size: 100, filterFn: multiSelectFilterFn,
       meta: { filterType: 'multi-select', filterOptions: systemOptions } },
     { accessorKey: 'team', header: 'Team', size: 80, filterFn: multiSelectFilterFn,
