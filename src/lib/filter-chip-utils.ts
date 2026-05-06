@@ -49,7 +49,23 @@ export function formatColumnFilterChip<TData>(
       min?: number;
       max?: number;
       emptyOnly?: boolean;
+      pred?: string[];
+      t1?: string[];
+      t2?: string[];
+      r1?: string[];
+      r2a?: string[];
     };
+
+    // Stage-progress (T&C Progress column): keys pred/t1/t2/r1/r2a
+    const STAGE_KEYS: Array<'pred' | 't1' | 't2' | 'r1' | 'r2a'> = ['pred', 't1', 't2', 'r1', 'r2a'];
+    const STAGE_LABEL: Record<string, string> = {
+      pred: 'Pred', t1: 'T1', t2: 'T2', r1: 'R1', r2a: 'R2A',
+    };
+    const stagesPresent = STAGE_KEYS.filter((k) => Array.isArray(v[k]) && v[k]!.length > 0);
+    if (stagesPresent.length > 0) {
+      const parts = stagesPresent.map((k) => `${STAGE_LABEL[k]}(${v[k]!.join(', ')})`);
+      return { id: filter.id, label: `${label}: ${parts.join(', ')}` };
+    }
 
     // empty-only flag (text / date / progress / number)
     if (
