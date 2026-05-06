@@ -965,37 +965,26 @@ export default function SubtestList() {
       },
     },
     (() => {
-      const TC_PROGRESS_OPTIONS = [
-        { value: 'Not Started', label: 'Not Started' },
-        { value: 'T1 In Progress', label: 'T1 In Progress' },
-        { value: 'T2 In Progress', label: 'T2 In Progress' },
-        { value: 'R1 In Progress', label: 'R1 In Progress' },
-        { value: 'R2 In Progress', label: 'R2 In Progress' },
-        { value: 'Closed', label: 'Closed' },
-        { value: 'Delayed', label: 'Delayed' },
-      ];
-      const classifyTc = (r: any): string => {
-        const asOf = dataDate ?? new Date().toISOString().slice(0, 10);
-        const stages: Array<'pred' | 't1' | 't2' | 'r1' | 'r2a'> = ['pred', 't1', 't2', 'r1', 'r2a'];
-        if (stages.some((s) => isStageDelayedAsOf(r, s, asOf))) return 'Delayed';
-        if (isStageDone(r, 'r2a')) return 'Closed';
-        if (isStageDone(r, 'r1')) return 'R2 In Progress';
-        if (isStageDone(r, 't2')) return 'R1 In Progress';
-        if (isStageDone(r, 't1')) return 'T2 In Progress';
-        if (isStageDone(r, 'pred')) return 'T1 In Progress';
-        return 'Not Started';
-      };
+      const asOfDate = dataDate ?? new Date().toISOString().slice(0, 10);
+      // Sortable bitmask: pred=1, t1=2, t2=4, r1=8, r2a=16 (more progress = larger).
+      const progressBitmask = (r: any): number =>
+        (isStageDone(r, 'pred') ? 1 : 0)
+        + (isStageDone(r, 't1') ? 2 : 0)
+        + (isStageDone(r, 't2') ? 4 : 0)
+        + (isStageDone(r, 'r1') ? 8 : 0)
+        + (isStageDone(r, 'r2a') ? 16 : 0);
       return {
         id: 'stage_progress',
         header: 'Progress',
         size: 170,
         enableColumnFilter: true,
         enableSorting: true,
-        accessorFn: classifyTc,
-        filterFn: multiSelectFilterFn,
+        accessorFn: progressBitmask,
+        filterFn: stageProgressFilterFn,
         meta: {
-          filterType: 'multi-select',
-          filterOptions: TC_PROGRESS_OPTIONS,
+          filterType: 'stage-progress',
+          label: 'Progress',
+          asOfDate,
         },
         cell: ({ row }) => (
           <StageProgress
