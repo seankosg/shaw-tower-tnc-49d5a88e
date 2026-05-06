@@ -767,12 +767,27 @@ export default function DocsOMMRawDataPage() {
       ),
     };
 
+    const OMM_PROGRESS_OPTIONS = [
+      { value: 'Pending Draft', label: 'Pending Draft' },
+      { value: 'Draft Under Review', label: 'Draft Under Review' },
+      { value: 'Pending Final Submission', label: 'Pending Final Submission' },
+      { value: 'Final Under Review', label: 'Final Under Review' },
+      { value: 'Approved', label: 'Approved' },
+      { value: 'Rejected', label: 'Rejected' },
+    ];
+
     const cycleColumn: ColumnDef<OMMRow> = {
       id: 'cycle_progress',
       header: 'Cycle',
       size: 110,
       enableSorting: false,
-      enableColumnFilter: false,
+      enableColumnFilter: true,
+      accessorFn: (r) => computeOmmStatus(r),
+      filterFn: multiSelectFilterFn,
+      meta: {
+        filterType: 'multi-select',
+        filterOptions: OMM_PROGRESS_OPTIONS,
+      },
       cell: ({ row }) => <OmmCycleProgress row={row.original} />,
     };
 
