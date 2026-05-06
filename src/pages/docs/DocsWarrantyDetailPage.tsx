@@ -152,6 +152,36 @@ export default function DocsWarrantyDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Scroll to #comments anchor
+  useEffect(() => {
+    if (!row || location.hash !== '#comments') return;
+    const t = window.setTimeout(() => {
+      document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [row, location.hash]);
+
+  const addComment = async () => {
+    if (!id || !newComment.trim() || !user) return;
+    const { error } = await (supabase as any).from('warranty_comments').insert({
+      warranty_item_id: id,
+      author_user_id: user.id,
+      message: newComment.trim(),
+      type: 'comment',
+    });
+    if (error) {
+      toast({ title: 'Comment failed', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setNewComment('');
+    const cmtRes = await (supabase as any)
+      .from('warranty_comments')
+      .select('*')
+      .eq('warranty_item_id', id)
+      .order('created_at', { ascending: true });
+    setComments((cmtRes.data ?? []) as WarrantyComment[]);
+  };
+
   const save = async (field: string, value: any) => {
     if (!id || !row) return;
     if ((row as any)[field] === value) return;
