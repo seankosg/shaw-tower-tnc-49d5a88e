@@ -1,80 +1,93 @@
-## 목표
+# Defect Status — 동기화 + In Dispute 카드 신설
 
-Defect Dashboard Tier 1 KPI 카드 "Closure Done"이 **`closure_status === 'Done'`**일 때만 카운트되도록 변경. 현재는 `actual_closure_date`에 날짜가 들어 있기만 해도 status와 무관하게 Done으로 집계되어 부정확함.
+## 변경 개요
 
-## 현재 동작 (문제)
+**수정사항 1**: `actual_closure_date`가 있는데 `closure_status≠Done`인 9건을 일괄 정렬 + DB 트리거로 향후 동기화 자동화. Dashboard는 기존 엄격 모드(`closure_status==='Done'`만 카운트) 유지.
 
-`src/lib/defect-dashboard-utils.ts:103`
-```ts
-export function isClosureComplete(item) {
-  if (item.actual_closure_date) return true;  // ← status 무시하고 무조건 Done
-  const status = String(item.closure_status ?? '').trim().toLowerCase();
-  return status === 'done' || status === 'closed';
-}
-```
+**수정사항 2**: Aconex Status에 `In Dispute` 값이 들어오면 `closure_status='InD'`로 매핑. Tier 2 KPI 카드에 신규 `In Dispute` 카드 추가, Raw Data 배지에 색상 추가, Tier 3 알람 배너 추가.
 
-이 함수는 카드 카운트 외에도:
-- `buildClosurePie` (도넛 차트)
-- `topOverdue` (지연 Top 10)
-- `isStageDone(item, 'closure')` (cascade 로직 → completion/start 단계 판정)
-- `DefectRawDataPage` 의 `closureComplete` URL 필터
-- `DefectStageProgress` 컴포넌트
+---
 
-전반에 사용되므로 **단일 소스인 `isClosureComplete` 자체를 수정**하면 모든 곳에 일관되게 적용됨.
+## 사용자 승인 사항
 
-## 변경 사항
+- [x] 9건 일괄 UPDATE 진행
+- [x] `Done` vs `InD` 충돌 시 → **Done 우선**
+- [x] 알람 = Tier 3 보라 AlertBanner
 
-### 1. `src/lib/defect-dashboard-utils.ts` — `isClosureComplete` 엄격화
+---
 
-```ts
-export function isClosureComplete(item: Pick<DefectForDashboard, 'closure_status'>): boolean {
-  const status = String((item as any).closure_status ?? '').trim().toLowerCase();
-  return status === 'done';
-}
-```
+## DB 상태 (확인 완료)
 
-- `actual_closure_date` 체크 제거
-- `'closed'` 도 제거 (사용자가 "Done만"이라고 명시)
-- JSDoc 주석을 새 정책에 맞게 업데이트
+| 케이스 | 행수 |
+|---|---|
+| `actual_closure_date` 있고 `closure_status≠Done` | **9건** (WIP 5, NULL 2, Planned 2) |
+| `status ILIKE 'in dispute'` | **32건** |
 
-### 2. Cascade 로직(`isStageDone`) 검토 — 변경 없음
+---
 
-`isStageDone`의 cascade ("completion done이면 closure도 done으로 간주")는 그대로 유지. 단, closure 단계 자체는 새 엄격 정의를 따르므로 자연스럽게 일관됨:
-- `closure` → `closure_status === 'Done'`만
-- `completion` → closure done이거나 actual_completion_date 있음
-- `start` → 위 둘 중 하나거나 actual_start_date 있음
+## 작업 항목
 
-### 3. 부수 효과 (자동 반영, 추가 코드 변경 불필요)
-
-- **Closure Done KPI 카드** (`DefectDashboardPage.tsx:170`): status='Done' 행만 집계
-- **Overall Progress %** (line 172): `closureDone / total` 비율도 함께 정정
-- **Difference KPI** (`actualDone - closureDone`): 의미가 더 명확해짐 (완료됐지만 아직 closure 처리 안 된 항목 수)
-- **Closure Pie** (`DefectDashboardPage.tsx:941`): Closed 슬라이스가 status='Done'만
-- **Top Overdue** (line 277): `closure_status='Done'`이 아닌 행은 모두 지연 후보가 됨
-- **Raw Data 필터** (`DefectRawDataPage.tsx:670-671`): "closureComplete=true" URL 필터가 동일 기준
-- **DefectStageProgress** 컴포넌트: 단계 표시 일관
-
-### 4. 사용자 영향 안내
-
-이 변경 후 다음 케이스가 새롭게 "미완료(Not Done)"로 바뀝니다:
-- `actual_closure_date`는 입력됐지만 `closure_status`가 `WIP`/`Planned`/`Delay` 등인 행
-- `closure_status`가 `'Closed'` 인 행 (있다면)
-
-→ **데이터 영향도 사전 확인 쿼리** 1회 실행:
+### Step A — DB 마이그레이션 (트리거)
+`defect_items` BEFORE INSERT/UPDATE 트리거 추가:
 ```sql
-SELECT closure_status, count(*) 
-FROM defect_items 
-WHERE is_active=true AND actual_closure_date IS NOT NULL 
-GROUP BY closure_status;
+CREATE OR REPLACE FUNCTION sync_defect_closure_status()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.actual_closure_date IS NOT NULL THEN
+    NEW.closure_status := 'Done';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_sync_defect_closure_status
+BEFORE INSERT OR UPDATE ON defect_items
+FOR EACH ROW EXECUTE FUNCTION sync_defect_closure_status();
 ```
-결과를 사용자에게 보고하여, 의외로 큰 수의 행이 Done에서 빠진다면 추가 협의.
 
-## 변경 파일 (1개)
+### Step B — DB 데이터 일괄 정렬 (insert 도구)
+```sql
+-- 1) closure_status 동기화 (9건)
+UPDATE defect_items
+   SET closure_status = 'Done', updated_at = now()
+ WHERE actual_closure_date IS NOT NULL
+   AND (closure_status IS NULL OR closure_status <> 'Done');
 
-- `src/lib/defect-dashboard-utils.ts` — `isClosureComplete` 함수 본문 + 주석
+-- 2) In Dispute 백필 (32건)
+UPDATE defect_items
+   SET closure_status = 'InD', updated_at = now()
+ WHERE LOWER(TRIM(status)) = 'in dispute'
+   AND actual_closure_date IS NULL
+   AND (closure_status IS NULL OR closure_status <> 'InD');
+```
 
-## 테스트
+### Step C — 코드 변경
 
-- Defect Dashboard 진입 → "Closure Done" 카드 숫자가 `closure_status='Done'` 행 수와 정확히 일치하는지 확인
-- "Closure Done" 카드 클릭 → Raw Data 페이지에서 같은 수의 행이 표시되는지 확인
-- Closure pie 차트의 Closed 슬라이스도 동일 수치인지 확인
+1. **`src/lib/defect-utils.ts`**
+   - `DefectStatusValue` → `'Planned' | 'Delay' | 'Done' | 'WIP' | 'InD'`
+   - `DEFECT_STATUS_VALUES` 배열에 `'InD'` 추가
+
+2. **`src/lib/defect-status.ts`**
+   - `isStatusInDispute(status)` 헬퍼 추가
+   - `computeClosureStatus()` 분기 추가 (순서: closure date → Closed → **InD** → planned overdue → ...)
+   - 우선순위: `actual_closure_date`가 있으면 `Done` 우선 (사용자 결정)
+
+3. **`src/components/defects/DefectStatusBadge.tsx`**
+   - `InD` 보라 톤 클래스 추가
+
+4. **`src/pages/DefectDashboardPage.tsx`**
+   - `kpis`에 `inDisputeCount` 추가
+   - Tier 2 카드: Overdue-Completion ↔ Overdue-Closure 사이에 `In Dispute` 카드 삽입
+   - Tier 3: `inDisputeCount > 0`일 때 보라 `AlertBanner` 추가
+
+5. **`src/pages/DefectRawDataPage.tsx`**
+   - `closure_status` 필터 옵션에 `InD` 자동 포함 (enum 기반이면 무수정)
+
+### Step D — 테스트
+- `src/test/defect-status.test.ts`에 `InD` 매핑 케이스 추가
+
+---
+
+## Out of scope
+- Schedule/Critical Watchlist 등 status 직접 사용 6곳은 InD 값 그대로 표시 (별도 색상 처리 후속)
+- Overdue/At-Risk에서 InD 행 제외하지 않음 (요청 시 후속)
