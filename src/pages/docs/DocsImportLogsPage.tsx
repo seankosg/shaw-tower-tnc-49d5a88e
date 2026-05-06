@@ -121,10 +121,34 @@ export default function DocsImportLogsPage() {
 
   const fetchBatches = async () => {
     setLoading(true);
-    const { data } = await (supabase as any).from('docs_upload_batches')
-      .select('id, uploaded_file_name, uploaded_at, status, total_rows, success_rows, skipped_rows, rejected_rows, uploaded_by, data_date, sub_module')
-      .order('uploaded_at', { ascending: false }).limit(100);
-    const list = (data ?? []) as DocsBatch[];
+    const [docsRes, warrantyRes] = await Promise.all([
+      (supabase as any).from('docs_upload_batches')
+        .select('id, uploaded_file_name, uploaded_at, status, total_rows, success_rows, skipped_rows, rejected_rows, uploaded_by, data_date, sub_module')
+        .order('uploaded_at', { ascending: false }).limit(100),
+      (supabase as any).from('warranty_upload_batches')
+        .select('id, source_filename, uploaded_at, total_rows, processed_rows, inserted_rows, updated_rows, rejected_rows, uploaded_by, data_date')
+        .order('uploaded_at', { ascending: false }).limit(100),
+    ]);
+    const docsList = (docsRes?.data ?? []) as DocsBatch[];
+    const warrantyList = ((warrantyRes?.data ?? []) as any[]).map((w): DocsBatch => ({
+      id: w.id,
+      uploaded_file_name: w.source_filename ?? '(warranty import)',
+      uploaded_at: w.uploaded_at,
+      // warranty_upload_batches has no status column; infer from row totals
+      status: (w.processed_rows ?? 0) >= (w.total_rows ?? 0) && (w.total_rows ?? 0) > 0 ? 'completed' : 'processing',
+      total_rows: w.total_rows ?? null,
+      success_rows: ((w.inserted_rows ?? 0) + (w.updated_rows ?? 0)) || null,
+      skipped_rows: w.total_rows != null
+        ? Math.max(0, (w.total_rows ?? 0) - (w.inserted_rows ?? 0) - (w.updated_rows ?? 0) - (w.rejected_rows ?? 0))
+        : null,
+      rejected_rows: w.rejected_rows ?? null,
+      uploaded_by: w.uploaded_by ?? null,
+      data_date: w.data_date ?? null,
+      sub_module: 'warranty',
+    }));
+    const list = [...docsList, ...warrantyList].sort(
+      (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime(),
+    );
     setBatches(list);
     setLoading(false);
 
@@ -136,17 +160,17 @@ export default function DocsImportLogsPage() {
       setUploaderNames(map);
     } else setUploaderNames({});
 
-    const batchIds = list.map(b => b.id);
-    if (batchIds.length) {
+    const docsBatchIds = docsList.map(b => b.id);
+    if (docsBatchIds.length) {
       const { data: logs } = await (supabase as any).from('docs_upload_row_logs')
-        .select('upload_id, processed_at').in('upload_id', batchIds);
+        .select('upload_id, processed_at').in('upload_id', docsBatchIds);
       const maxByBatch: Record<string, number> = {};
       (logs ?? []).forEach((l: any) => {
         const t = new Date(l.processed_at).getTime();
         if (!maxByBatch[l.upload_id] || t > maxByBatch[l.upload_id]) maxByBatch[l.upload_id] = t;
       });
       const durs: Record<string, number> = {};
-      list.forEach(b => {
+      docsList.forEach(b => {
         const end = maxByBatch[b.id];
         if (end) durs[b.id] = end - new Date(b.uploaded_at).getTime();
       });
