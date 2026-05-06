@@ -516,6 +516,47 @@ export default function DocsWarrantyRawDataPage() {
     return () => { supabase.removeChannel(ch); };
   }, [reload]);
 
+  // ── Comment counts (warranty_comments) ──
+  useEffect(() => {
+    if (rows.length === 0) { setCommentCounts({}); return; }
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const refresh = async () => {
+      const ids = rows.map((r) => r.id);
+      const next: Record<string, number> = {};
+      const CHUNK = 500;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const chunk = ids.slice(i, i + CHUNK);
+        const { data, error } = await (supabase as any)
+          .from('warranty_comments')
+          .select('warranty_item_id')
+          .in('warranty_item_id', chunk);
+        if (error || !data) continue;
+        for (const r of data as Array<{ warranty_item_id: string }>) {
+          next[r.warranty_item_id] = (next[r.warranty_item_id] ?? 0) + 1;
+        }
+      }
+      if (!cancelled) setCommentCounts(next);
+    };
+
+    const debounced = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(refresh, 400);
+    };
+
+    refresh();
+
+    const ch = supabase.channel('warranty_comments_counts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'warranty_comments' }, debounced)
+      .subscribe();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      supabase.removeChannel(ch);
+    };
+  }, [rows]);
+
   // ── State persistence ──
   useEffect(() => {
     setStateLoaded(false);
