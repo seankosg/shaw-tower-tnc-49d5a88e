@@ -53,6 +53,7 @@ import {
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
+import { useCommonMasters, unionWithLegacy } from '@/hooks/useCommonMasters';
 import { useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
