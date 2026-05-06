@@ -475,6 +475,7 @@ export default function DocsWarrantyRawDataPage() {
 
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<WarrantyExportFormat>('view');
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
 
   const tableRef = useRef<HTMLDivElement>(null);
 
