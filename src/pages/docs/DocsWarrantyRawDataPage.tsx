@@ -831,12 +831,24 @@ export default function DocsWarrantyRawDataPage() {
 
           if (field === 'item_no') {
             const isResub = r.is_resubmission;
+            const cCount = commentCounts[r.id] ?? 0;
             return (
-              <span className={cn('font-mono text-xs', isResub && 'text-muted-foreground')}>
-                {isResub && <span className="mr-1">↳</span>}
+              <span className={cn('inline-flex items-center gap-1 font-mono text-xs', isResub && 'text-muted-foreground')}>
+                {isResub && <span className="mr-0.5">↳</span>}
                 {value ?? '—'}
                 {isResub && r.resubmission_seq > 0 && (
                   <span className="ml-1 text-[10px] text-muted-foreground">R{r.resubmission_seq}</span>
+                )}
+                {cCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); navigate(`/docs/warranty/${r.id}#comments`); }}
+                    title={`${cCount} comment${cCount > 1 ? 's' : ''}`}
+                    className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] leading-none text-muted-foreground hover:text-foreground hover:bg-muted"
+                  >
+                    <MessageSquare className="h-3 w-3" />
+                    <span className="tabular-nums">{cCount}</span>
+                  </button>
                 )}
               </span>
             );
@@ -851,7 +863,7 @@ export default function DocsWarrantyRawDataPage() {
     });
 
     return [selectColumn, expandColumn, cycleColumn, ...dataColumns, statusColumn, openColumn];
-  }, [getLabel, navigate, childCounts, collapsedParents, toggleParent]);
+  }, [getLabel, navigate, childCounts, collapsedParents, toggleParent, commentCounts]);
 
   // ── Visibility from Field Config (always show anchors) ──
   const ALWAYS_VISIBLE = useMemo(() => new Set([
