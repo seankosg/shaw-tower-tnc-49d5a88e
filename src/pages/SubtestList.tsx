@@ -394,10 +394,163 @@ function TextFilterDropdown({ column }: { column: any }) {
   );
 }
 
+// ---- Stage Progress per-stage filter ----------------------------------------
+type StageProgressState = 'Done' | 'WIP' | 'Planned' | 'Delayed';
+const STAGE_PROGRESS_STATES: StageProgressState[] = ['Done', 'WIP', 'Planned', 'Delayed'];
+const STAGE_FILTER_KEYS = ['pred', 't1', 't2', 'r1', 'r2a'] as const;
+type StageFilterKey = typeof STAGE_FILTER_KEYS[number];
+const STAGE_FILTER_LABELS: Record<StageFilterKey, string> = {
+  pred: 'Predecessor',
+  t1: 'T1',
+  t2: 'T2',
+  r1: 'R1',
+  r2a: 'R2A',
+};
+
+export type StageProgressFilter = Partial<Record<StageFilterKey, StageProgressState[]>>;
+
+export function isStageProgressFilterEmpty(v: StageProgressFilter | undefined | null): boolean {
+  if (!v) return true;
+  return STAGE_FILTER_KEYS.every((k) => !v[k] || v[k]!.length === 0);
+}
+
+function classifyStageState(
+  row: any,
+  stage: StageFilterKey,
+  asOfDate: string,
+): StageProgressState {
+  const stageKey: StageKey = stage;
+  if (isStageDone(row, stageKey)) return 'Done';
+  if (isStageDelayedAsOf(row, stageKey, asOfDate)) return 'Delayed';
+  const status =
+    stage === 'pred' ? row.pred_status
+    : stage === 't1' ? row.t1_status
+    : stage === 't2' ? row.t2_status
+    : stage === 'r1' ? row.r1_status
+    : row.r2_status;
+  if (status === 'Hold') return 'Delayed';
+  if (status === 'WIP') return 'WIP';
+  if (stage === 'r2a' && (status === 'Submitted' || status === 'Under Review')) return 'WIP';
+  return 'Planned';
+}
+
+const stageProgressFilterFn = (row: any, _columnId: string, filterValue: StageProgressFilter) => {
+  if (isStageProgressFilterEmpty(filterValue)) return true;
+  const original = row.original;
+  const asOf = original?.__asOfDate || todayIso();
+  for (const k of STAGE_FILTER_KEYS) {
+    const allowed = filterValue[k];
+    if (!allowed || allowed.length === 0) continue;
+    const state = classifyStageState(original, k, asOf);
+    if (!allowed.includes(state)) return false;
+  }
+  return true;
+};
+
+function StageProgressFilterDropdown({ column }: { column: any }) {
+  const value = (column.getFilterValue() as StageProgressFilter | undefined) ?? {};
+  const isActive = !isStageProgressFilterEmpty(value);
+
+  const toggle = (stage: StageFilterKey, state: StageProgressState) => {
+    const current = value[stage] ?? [];
+    const next = current.includes(state)
+      ? current.filter((s) => s !== state)
+      : [...current, state];
+    const merged: StageProgressFilter = { ...value, [stage]: next };
+    if (next.length === 0) delete (merged as any)[stage];
+    column.setFilterValue(isStageProgressFilterEmpty(merged) ? undefined : merged);
+  };
+
+  const setStageAll = (stage: StageFilterKey, all: boolean) => {
+    const merged: StageProgressFilter = { ...value };
+    if (all) merged[stage] = [...STAGE_PROGRESS_STATES];
+    else delete (merged as any)[stage];
+    column.setFilterValue(isStageProgressFilterEmpty(merged) ? undefined : merged);
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          className={cn(
+            'inline-flex items-center justify-center h-4 w-4 rounded hover:bg-muted/80',
+            isActive ? 'text-primary' : 'text-muted-foreground/50',
+          )}
+          onClick={(e) => e.stopPropagation()}
+          title="Filter Progress by stage"
+        >
+          <Filter className="h-3 w-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-72 p-3 space-y-2 max-h-[440px] overflow-auto"
+        align="start"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDownOutside={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-2 px-1">
+          <span className="text-[11px] font-semibold text-foreground">Filter by stage state</span>
+          <button
+            className="text-[11px] text-muted-foreground hover:underline"
+            onClick={() => column.setFilterValue(undefined)}
+          >
+            Clear all
+          </button>
+        </div>
+        <div className="space-y-2">
+          {STAGE_FILTER_KEYS.map((stage) => {
+            const selected = value[stage] ?? [];
+            return (
+              <div key={stage} className="border rounded-md p-2 bg-muted/30">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="text-[11px] font-semibold">{STAGE_FILTER_LABELS[stage]}</span>
+                  <div className="flex gap-1.5">
+                    <button
+                      className="text-[10px] text-muted-foreground hover:underline"
+                      onClick={() => setStageAll(stage, true)}
+                    >
+                      All
+                    </button>
+                    <span className="text-[10px] text-muted-foreground/40">·</span>
+                    <button
+                      className="text-[10px] text-muted-foreground hover:underline"
+                      onClick={() => setStageAll(stage, false)}
+                    >
+                      None
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-1">
+                  {STAGE_PROGRESS_STATES.map((state) => (
+                    <label
+                      key={state}
+                      className="flex items-center gap-1.5 px-1 py-0.5 text-xs cursor-pointer hover:bg-background/60 rounded"
+                    >
+                      <Checkbox
+                        checked={selected.includes(state)}
+                        onCheckedChange={() => toggle(stage, state)}
+                        className="h-3.5 w-3.5"
+                      />
+                      <span className="truncate">{state}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function ColumnFilterDropdown({ column }: { column: any }) {
   const meta = column.columnDef.meta as any;
   const filterType = meta?.filterType;
 
+  if (filterType === 'stage-progress') {
+    return <StageProgressFilterDropdown column={column} />;
+  }
   if (filterType === 'multi-select') {
     return <MultiSelectDropdown column={column} options={meta?.filterOptions ?? []} />;
   }
