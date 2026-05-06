@@ -6,6 +6,7 @@ const STATUS_CLASSES: Record<string, string> = {
   WIP: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
   Done: 'border-primary/30 bg-primary/10 text-primary',
   Delay: 'border-destructive/40 bg-destructive/10 text-destructive',
+  InD: 'border-purple-500/40 bg-purple-500/10 text-purple-700 dark:text-purple-300',
 };
 
 export function DefectStatusBadge({ status }: { status?: string | null }) {

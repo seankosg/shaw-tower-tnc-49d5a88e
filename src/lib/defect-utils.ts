@@ -2,9 +2,9 @@ import { isOverdue as isOverdueDashboard } from '@/lib/defect-dashboard-utils';
 
 export type DefectEditScope = 'none' | 'assigned' | 'team' | 'full';
 
-export type DefectStatusValue = 'Planned' | 'Delay' | 'Done' | 'WIP';
+export type DefectStatusValue = 'Planned' | 'Delay' | 'Done' | 'WIP' | 'InD';
 
-export const DEFECT_STATUS_VALUES: DefectStatusValue[] = ['Planned', 'Delay', 'Done', 'WIP'];
+export const DEFECT_STATUS_VALUES: DefectStatusValue[] = ['Planned', 'Delay', 'Done', 'WIP', 'InD'];
 
 export interface DefectItem {
   id: string;
