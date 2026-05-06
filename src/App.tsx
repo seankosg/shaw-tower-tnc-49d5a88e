@@ -127,6 +127,7 @@ const App = () => (
                 <Route path="/docs/omm/import" element={<Navigate to="/docs/import?sub=omm" replace />} />
                 <Route path="/docs/omm/:id" element={<DocsOMMDetailPage />} />
                 <Route path="/docs/warranty" element={<DocsWarrantyRawDataPage />} />
+                <Route path="/docs/warranty/:id" element={<DocsWarrantyDetailPage />} />
                 <Route path="/docs/spare-part" element={<DocsSparePartRawDataPage />} />
                 <Route path="/docs/import" element={<DocsImportPage />} />
                 <Route path="/docs/import/logs" element={<DocsImportLogsPage />} />
