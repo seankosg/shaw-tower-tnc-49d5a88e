@@ -212,6 +212,10 @@ export default function DocsWarrantyDetailPage() {
         <div className="ml-auto text-xs text-muted-foreground">
           Updated {formatDateTimeDdMmmYyyy(row.updated_at)}
         </div>
+        <Button variant="outline" size="sm" onClick={() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' })}>
+          <MessageSquare className="h-4 w-4 mr-1" /> Comments
+          {comments.length > 0 && <Badge variant="secondary" className="ml-2 h-4 px-1.5 text-[10px]">{comments.length}</Badge>}
+        </Button>
       </div>
 
       {!canEditRow && (
