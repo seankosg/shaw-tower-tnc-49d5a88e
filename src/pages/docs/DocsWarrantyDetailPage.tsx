@@ -26,13 +26,15 @@ import {
   type WarrantyStatusToken,
 } from '@/lib/docs-warranty-status';
 
-interface WarrantyThread {
+interface WarrantyComment {
   id: string;
-  thread_label: string;
-  thread_date: string | null;
-  action_party: string | null;
-  content: string | null;
-  sort_order: number;
+  warranty_item_id: string;
+  author_user_id: string;
+  parent_comment_id: string | null;
+  type: string;
+  message: string;
+  recipients: string[];
+  edited: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -96,13 +98,15 @@ const STAGE_GROUPS: Array<{ title: string; fields: string[] }> = [
 export default function DocsWarrantyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile, roles } = useAuth();
   const { toast } = useToast();
   const { getLabel, isFieldVisible, isFieldEditable } = useDocsFieldConfig('warranty');
 
   const [row, setRow] = useState<any | null>(null);
   const [siblings, setSiblings] = useState<any[]>([]);
-  const [threads, setThreads] = useState<WarrantyThread[]>([]);
+  const [comments, setComments] = useState<WarrantyComment[]>([]);
+  const [newComment, setNewComment] = useState('');
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -125,19 +129,19 @@ export default function DocsWarrantyDetailPage() {
     setRow(data);
 
     if (data) {
-      const [sibRes, thrRes, logRes] = await Promise.all([
+      const [sibRes, cmtRes, logRes] = await Promise.all([
         (supabase as any).from('warranty_items')
           .select('id, item_no, resubmission_seq, is_resubmission, parent_id, current_stage, current_status')
           .eq('item_no', data.item_no).eq('is_active', true)
           .order('resubmission_seq', { ascending: true }),
-        (supabase as any).from('warranty_threads')
-          .select('*').eq('warranty_item_id', id).order('sort_order', { ascending: true }),
+        (supabase as any).from('warranty_comments')
+          .select('*').eq('warranty_item_id', id).order('created_at', { ascending: true }),
         (supabase as any).from('docs_change_log')
           .select('*').eq('record_id', id).eq('sub_module', 'warranty')
           .order('changed_at', { ascending: false }).limit(50),
       ]);
       setSiblings(sibRes.data ?? []);
-      setThreads((thrRes.data ?? []) as WarrantyThread[]);
+      setComments((cmtRes.data ?? []) as WarrantyComment[]);
       setLogs(logRes.data ?? []);
     }
     setLoading(false);
