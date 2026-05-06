@@ -15,7 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { formatDateTimeDdMmmYyyy, formatDdMmm } from '@/lib/format';
+import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import {
   WarrantyCycleProgress,
 } from '@/components/docs/WarrantyCycleProgress';
