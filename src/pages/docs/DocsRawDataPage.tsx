@@ -668,9 +668,22 @@ export default function DocsRawDataPage() {
         : TEXT_FILTER_FIELDS.has(field) || NUMERIC_FIELDS.has(field) ? 'text'
         : 'multi-select';
 
+      const cycleOptions = [
+        { value: 'A', label: 'A (Closed)' },
+        { value: 'B', label: 'B' },
+        { value: 'C', label: 'C' },
+        { value: 'WIP', label: 'WIP' },
+        { value: 'Under Review', label: 'Under Review' },
+        { value: 'Planned', label: 'Planned' },
+        { value: 'S.Delayed', label: 'S.Delayed' },
+        { value: 'R.Delayed', label: 'R.Delayed' },
+      ];
+
       const base: ColumnDef<DocsRawRow> = {
         ...(field === 'current_status'
           ? { id: 'current_status', accessorFn: (r: DocsRawRow) => r.overall_status ?? r.current_status ?? '' }
+          : field === 'cycle_progress'
+          ? { id: 'cycle_progress', accessorFn: (r: DocsRawRow) => computeOverallStatus(r as any, dataDate) }
           : { accessorKey: field }),
         header: getLabel(field),
         size: sizeByField[field] ?? 130,
@@ -680,7 +693,8 @@ export default function DocsRawDataPage() {
           : multiSelectFilterFn,
         meta: {
           filterType,
-          filterOptions: (optionFields as any)[field] ?? [],
+          filterOptions:
+            field === 'cycle_progress' ? cycleOptions : ((optionFields as any)[field] ?? []),
         },
         cell: ({ row, getValue }) => {
           const value = getValue() as any;
