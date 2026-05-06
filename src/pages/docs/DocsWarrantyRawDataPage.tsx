@@ -770,7 +770,7 @@ export default function DocsWarrantyRawDataPage() {
 
       {/* Table */}
       <div className="rounded border bg-card">
-        <TopHorizontalScrollbar targetRef={tableScrollRef} />
+        <TopHorizontalScrollbar targetRef={tableContainerRef} width={table.getTotalSize()} />
         <div ref={tableContainerRef} className="max-h-[calc(100vh-260px)] overflow-auto" style={{ contain: 'strict' }}>
           <div ref={tableScrollRef}>
             <Table>
