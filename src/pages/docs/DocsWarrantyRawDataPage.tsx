@@ -660,7 +660,6 @@ export default function DocsWarrantyRawDataPage() {
 
   // Virtualizer
   const tableContainerRef = useRef<HTMLDivElement>(null);
-  const tableScrollRef = useRef<HTMLDivElement>(null);
   const { rows: rowModelRows } = table.getRowModel();
   const rowVirtualizer = useVirtualizer({
     count: rowModelRows.length,
