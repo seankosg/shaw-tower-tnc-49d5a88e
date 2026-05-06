@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   flexRender,
   getCoreRowModel,
@@ -10,27 +10,56 @@ import {
   useReactTable,
   type ColumnDef,
   type ColumnFiltersState,
+  type ColumnSizingState,
   type RowSelectionState,
   type SortingState,
   type VisibilityState,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Download, Filter, Search, Upload, X, ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, ExternalLink, Filter, Search, Upload } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
+import { useFrozenColumnCount } from '@/hooks/useAppSettings';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import { NumberRangeDropdown, numberRangeFilterFn } from '@/components/raw-data/NumberRangeDropdown';
+import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
+import { WarrantyBulkActionBar, type WarrantyBulkField } from '@/components/raw-data/WarrantyBulkActionBar';
+import { exportWarrantyToExcel, type WarrantyExportFormat } from '@/lib/warranty-excel-export';
 import {
   WarrantyCycleProgress,
   WarrantyCycleProgressLegend,
@@ -46,7 +75,6 @@ import {
   type WarrantyStageState,
   type WarrantyStatusToken,
 } from '@/lib/docs-warranty-status';
-import * as XLSX from 'xlsx';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const EMPTY_TOKEN = '__EMPTY__';
@@ -90,8 +118,13 @@ const ALL_DATA_FIELDS = [
   'subcon_signing_planned_date', 'subcon_signing_actual_date', 'subcon_signing_status',
   'hdec_signing_planned_date', 'hdec_signing_actual_date', 'hdec_signing_status',
   'final_planned_date', 'final_actual_date', 'final_status',
-  'current_stage', 'current_status', 'remarks',
+  'current_stage', 'remarks',
 ] as const;
+
+const DEFAULT_SORTING: SortingState = [
+  { id: 'item_no', desc: false },
+  { id: 'resubmission_seq', desc: false },
+];
 
 interface WarrantyRow {
   id: string;
@@ -392,8 +425,9 @@ function StageProgressFilterDropdown({ column }: { column: any }) {
   );
 }
 
-function ColumnFilterDropdown({ column, filterType }: { column: any; filterType: string }) {
-  switch (filterType) {
+function ColumnFilterDropdown({ column }: { column: any }) {
+  const meta = column.columnDef.meta as any;
+  switch (meta?.filterType) {
     case 'multi-select': return <MultiSelectDropdown column={column} />;
     case 'text': return <TextFilterDropdown column={column} />;
     case 'date-range': return <DateRangeDropdown column={column} />;
@@ -416,21 +450,35 @@ function StatusBadge({ value }: { value: WarrantyStatusToken | null }) {
 // ─── Page ───────────────────────────────────────────────────────────────────
 export default function DocsWarrantyRawDataPage() {
   const navigate = useNavigate();
+  const { user, profile } = useAuth() as any;
   const { toast } = useToast();
-  const { getLabel, isFieldVisible, sortFieldNames } = useDocsFieldConfig('warranty');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { fields: fieldConfigRows, getLabel, isFieldVisible, sortFieldNames } = useDocsFieldConfig('warranty');
+
+  const storageKey = user?.id
+    ? `warranty-raw-data-state:${user.id}`
+    : 'warranty-raw-data-state:anon';
 
   const [rows, setRows] = useState<WarrantyRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stateLoaded, setStateLoaded] = useState(false);
+
+  const [searchInput, setSearchInput] = useState('');
   const [globalFilter, setGlobalFilter] = useState('');
+  const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: 'item_no', desc: false },
-    { id: 'resubmission_seq', desc: false },
-  ]);
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [resubFilter, setResubFilter] = useState<'all' | 'only' | 'hide'>('all');
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set());
 
-  const load = useCallback(async () => {
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<WarrantyExportFormat>('view');
+
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  // ── Data load ────────────────────────────────────────────────────────────
+  const reload = useCallback(async () => {
     setLoading(true);
     const all: WarrantyRow[] = [];
     const PAGE = 1000;
@@ -443,7 +491,10 @@ export default function DocsWarrantyRawDataPage() {
         .order('item_no', { ascending: true })
         .order('resubmission_seq', { ascending: true })
         .range(from, from + PAGE - 1);
-      if (error) { toast({ title: 'Load failed', description: error.message, variant: 'destructive' }); break; }
+      if (error) {
+        toast({ title: 'Load failed', description: error.message, variant: 'destructive' });
+        break;
+      }
       if (!data || data.length === 0) break;
       all.push(...(data as WarrantyRow[]));
       if (data.length < PAGE) break;
@@ -453,24 +504,85 @@ export default function DocsWarrantyRawDataPage() {
     setLoading(false);
   }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { reload(); }, [reload]);
 
-  // Realtime
+  // ── Realtime ──
   useEffect(() => {
     const ch = supabase.channel('warranty_items_raw')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'warranty_items' }, () => { load(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'warranty_items' }, () => { reload(); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [load]);
+  }, [reload]);
 
-  // Group resubmissions: hide children whose parent is collapsed.
-  const visibleRows = useMemo(() => {
-    return rows.filter((r) => {
+  // ── State persistence ──
+  useEffect(() => {
+    setStateLoaded(false);
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setSorting(
+          Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING,
+        );
+        setColumnFilters(Array.isArray(parsed.columnFilters) ? parsed.columnFilters : []);
+        setColumnSizing(parsed.columnSizing && typeof parsed.columnSizing === 'object' ? parsed.columnSizing : {});
+        if (typeof parsed.globalFilter === 'string') {
+          setGlobalFilter(parsed.globalFilter);
+          setSearchInput(parsed.globalFilter);
+        }
+        if (parsed.resubFilter === 'only' || parsed.resubFilter === 'hide') setResubFilter(parsed.resubFilter);
+      }
+    } catch { /* ignore */ }
+    const urlQ = searchParams.get('q');
+    if (urlQ != null) {
+      setGlobalFilter(urlQ);
+      setSearchInput(urlQ);
+    }
+    const resub = searchParams.get('resub');
+    if (resub === 'only' || resub === 'hide') setResubFilter(resub);
+    setStateLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!stateLoaded) return;
+    const t = window.setTimeout(() => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify({
+          sorting, columnFilters, columnSizing, globalFilter, resubFilter,
+        }));
+      } catch { /* ignore quota */ }
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [stateLoaded, storageKey, sorting, columnFilters, columnSizing, globalFilter, resubFilter]);
+
+  // Debounced global search
+  useEffect(() => {
+    const t = window.setTimeout(() => setGlobalFilter(searchInput), 300);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
+
+  // URL sync
+  useEffect(() => {
+    if (!stateLoaded) return;
+    const next = new URLSearchParams(searchParams);
+    if (globalFilter) next.set('q', globalFilter); else next.delete('q');
+    if (resubFilter !== 'all') next.set('resub', resubFilter); else next.delete('resub');
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalFilter, resubFilter, stateLoaded]);
+
+  // ── Filter base data (resub filter + collapse) ──
+  const filteredBaseData = useMemo(() => {
+    let next = rows;
+    if (resubFilter === 'only') next = next.filter((r) => r.is_resubmission);
+    else if (resubFilter === 'hide') next = next.filter((r) => !r.is_resubmission);
+    next = next.filter((r) => {
       if (!r.is_resubmission || !r.parent_id) return true;
-      // child shown unless its top-level parent is collapsed
       return !collapsedParents.has(r.parent_id);
     });
-  }, [rows, collapsedParents]);
+    return next;
+  }, [rows, resubFilter, collapsedParents]);
 
   const childCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -480,355 +592,758 @@ export default function DocsWarrantyRawDataPage() {
     return m;
   }, [rows]);
 
-  const toggleParent = (parentId: string) => {
+  const toggleParent = useCallback((parentId: string) => {
     setCollapsedParents((prev) => {
       const next = new Set(prev);
       if (next.has(parentId)) next.delete(parentId);
       else next.add(parentId);
       return next;
     });
-  };
+  }, []);
+
+  const resubCount = useMemo(() => rows.filter((r) => r.is_resubmission).length, [rows]);
+
+  // ── Bulk update helper ──
+  const updateField = useCallback(
+    async (id: string, field: string, value: any) => {
+      const { error } = await (supabase as any)
+        .from('warranty_items')
+        .update({ [field]: value, updated_by: user?.id ?? null })
+        .eq('id', id);
+      if (error) {
+        toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
+        return;
+      }
+      toast({ title: 'Saved', description: `${field} updated` });
+      reload();
+    },
+    [user, toast, reload],
+  );
 
   // ── Column definitions ──
   const columns = useMemo<ColumnDef<WarrantyRow>[]>(() => {
-    const baseCols: ColumnDef<WarrantyRow>[] = [
-      {
-        id: '__select',
-        size: 36,
-        enableSorting: false,
-        enableColumnFilter: false,
-        header: ({ table }) => (
+    const sizeByField: Record<string, number> = {
+      item_no: 80,
+      category: 130,
+      warranted_item: 240,
+      team: 90,
+      subcontractor_name: 160,
+      hdec_pic_name: 120,
+      hdec_eng_name: 120,
+      warranty_period_years: 90,
+      contract_spec_ref: 130,
+      acra_info_status: 110,
+      r_subcontract_date: 110,
+      r_works_description: 220,
+      r_acra_reg_no: 120,
+      r_acra_address: 220,
+      r_brief_description: 220,
+      r_director_1: 130,
+      r_director_2: 130,
+      r_witness: 130,
+      draft_planned_date: 110,
+      draft_actual_date: 110,
+      draft_response_planned_date: 120,
+      draft_response_actual_date: 120,
+      draft_status: 80,
+      subcon_signing_planned_date: 120,
+      subcon_signing_actual_date: 120,
+      subcon_signing_status: 80,
+      hdec_signing_planned_date: 120,
+      hdec_signing_actual_date: 120,
+      hdec_signing_status: 80,
+      final_planned_date: 110,
+      final_actual_date: 110,
+      final_status: 80,
+      current_stage: 110,
+      current_status: 160,
+      remarks: 220,
+      cycle_progress: 160,
+    };
+
+    const selectColumn: ColumnDef<WarrantyRow> = {
+      id: '__select',
+      size: 36,
+      enableSorting: false,
+      enableColumnFilter: false,
+      enableResizing: false,
+      header: ({ table: t }) => (
+        <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
           <Checkbox
-            checked={table.getIsAllRowsSelected() ? true : table.getIsSomeRowsSelected() ? 'indeterminate' : false}
-            onCheckedChange={(v) => table.toggleAllRowsSelected(!!v)}
+            checked={t.getIsAllRowsSelected() ? true : t.getIsSomeRowsSelected() ? 'indeterminate' : false}
+            onCheckedChange={(c) => t.toggleAllRowsSelected(!!c)}
             className="h-3.5 w-3.5"
           />
-        ),
-        cell: ({ row }) => (
-          <Checkbox checked={row.getIsSelected()} onCheckedChange={(v) => row.toggleSelected(!!v)}
-            onClick={(e) => e.stopPropagation()} className="h-3.5 w-3.5" />
-        ),
+        </span>
+      ),
+      cell: ({ row }) => (
+        <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+          <Checkbox checked={row.getIsSelected()} onCheckedChange={(c) => row.toggleSelected(!!c)} className="h-3.5 w-3.5" />
+        </span>
+      ),
+    };
+
+    const expandColumn: ColumnDef<WarrantyRow> = {
+      id: '__expand',
+      size: 32,
+      enableSorting: false,
+      enableColumnFilter: false,
+      enableResizing: false,
+      header: () => null,
+      cell: ({ row }) => {
+        const r = row.original;
+        if (r.is_resubmission) return null;
+        const count = childCounts.get(r.id) ?? 0;
+        if (count === 0) return null;
+        const collapsed = collapsedParents.has(r.id);
+        return (
+          <button onClick={(e) => { e.stopPropagation(); toggleParent(r.id); }}
+            className="inline-flex items-center text-muted-foreground hover:text-foreground"
+            title={collapsed ? `Show ${count} resubmissions` : 'Hide resubmissions'}>
+            {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            <span className="text-[10px] ml-0.5">{count}</span>
+          </button>
+        );
       },
-      {
-        id: '__expand',
-        size: 28,
-        enableSorting: false, enableColumnFilter: false,
-        header: () => null,
-        cell: ({ row }) => {
-          const r = row.original;
-          if (r.is_resubmission) return null;
-          const count = childCounts.get(r.id) ?? 0;
-          if (count === 0) return null;
-          const collapsed = collapsedParents.has(r.id);
-          return (
-            <button onClick={(e) => { e.stopPropagation(); toggleParent(r.id); }}
-              className="inline-flex items-center text-muted-foreground hover:text-foreground"
-              title={collapsed ? `Show ${count} resubmissions` : 'Hide resubmissions'}>
-              {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              <span className="text-[10px] ml-0.5">{count}</span>
-            </button>
-          );
-        },
+    };
+
+    const cycleColumn: ColumnDef<WarrantyRow> = {
+      id: 'cycle_progress',
+      header: 'Progress',
+      size: 160,
+      enableSorting: false,
+      enableColumnFilter: true,
+      accessorFn: (r) => computeWarrantyOverallStatus(r),
+      filterFn: stageProgressFilterFn as any,
+      meta: { filterType: 'stage-progress', label: 'Progress' },
+      cell: ({ row }) => <WarrantyCycleProgress row={row.original} />,
+    };
+
+    const statusColumn: ColumnDef<WarrantyRow> = {
+      id: 'current_status',
+      header: 'Status',
+      size: 160,
+      enableColumnFilter: true,
+      filterFn: multiSelectFilterFn as any,
+      meta: { filterType: 'multi-select', label: 'Status' },
+      accessorFn: (r) => computeWarrantyOverallStatus(r),
+      cell: ({ getValue }) => {
+        const v = getValue() as string;
+        return <span className="text-xs">{v}</span>;
       },
-    ];
+    };
 
-    const dataCols: ColumnDef<WarrantyRow>[] = [];
+    const openColumn: ColumnDef<WarrantyRow> = {
+      id: '__open',
+      size: 50,
+      enableSorting: false,
+      enableColumnFilter: false,
+      enableResizing: false,
+      header: '',
+      cell: ({ row }) => (
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/docs/warranty/${row.original.id}`);
+          }}
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </Button>
+      ),
+    };
 
-    // Custom: Cycle Progress
-    if (isFieldVisible('cycle_progress')) {
-      dataCols.push({
-        id: 'cycle_progress',
-        accessorFn: (r) => computeWarrantyOverallStatus(r),
-        header: () => (
-          <span className="inline-flex items-center gap-1">
-            {getLabel('cycle_progress')}
-          </span>
-        ),
-        cell: ({ row }) => <WarrantyCycleProgress row={row.original} />,
-        size: 160,
-        enableColumnFilter: true,
-        filterFn: stageProgressFilterFn,
-        meta: { filterType: 'stage-progress' },
-      });
-    }
+    const dataFields = ALL_DATA_FIELDS as readonly string[];
 
-    for (const field of ALL_DATA_FIELDS) {
-      if (!isFieldVisible(field)) continue;
+    const dataColumns: ColumnDef<WarrantyRow>[] = dataFields.map((field) => {
       const isStatus = STATUS_FIELDS.has(field);
-      const isDate = DATE_FIELDS.has(field);
-      const isNumber = NUMBER_FIELDS.has(field);
       const isMulti = MULTI_SELECT_FIELDS.has(field);
       const isText = TEXT_FIELDS.has(field);
-
-      const filterType = isMulti ? 'multi-select'
-        : isText ? 'text'
-        : isDate ? 'date-range'
-        : isNumber ? 'number-range'
+      const isDate = DATE_FIELDS.has(field);
+      const isNum = NUMBER_FIELDS.has(field);
+      const filterType = isDate ? 'date-range'
+        : isNum ? 'number-range'
         : isMulti ? 'multi-select'
+        : isText ? 'text'
         : null;
-      const filterFn = isMulti ? multiSelectFilterFn
+      const filterFn: any = isDate ? dateRangeFilterFn
+        : isNum ? numberRangeFilterFn
+        : isMulti ? multiSelectFilterFn
         : isText ? textFilterFn
-        : isDate ? dateRangeFilterFn
-        : isNumber ? numberRangeFilterFn
         : undefined;
 
-      const col: ColumnDef<WarrantyRow> = {
+      return {
+        accessorKey: field,
         id: field,
-        accessorFn: (r) => (r as any)[field],
-        header: () => <span>{getLabel(field)}</span>,
-        size: isDate ? 100 : isStatus ? 80 : isNumber ? 80 : 140,
+        header: getLabel(field) || field,
+        size: sizeByField[field] ?? 130,
+        filterFn,
         enableColumnFilter: !!filterType,
-        filterFn: filterFn as any,
-        meta: { filterType },
-        cell: ({ getValue, row }) => {
-          const v = getValue() as any;
-          if (isStatus) return <StatusBadge value={v as WarrantyStatusToken | null} />;
-          if (isDate) return <span className="text-xs">{formatDdMmm(v) || '—'}</span>;
-          if (isNumber) return <span className="tabular-nums text-xs">{v ?? '—'}</span>;
+        meta: { filterType, label: getLabel(field) || field },
+        cell: ({ row, getValue }) => {
+          const value = getValue() as any;
+          const r = row.original;
+
           if (field === 'item_no') {
+            const isResub = r.is_resubmission;
             return (
-              <span className="font-mono text-xs">
-                {v}{row.original.is_resubmission && (
-                  <span className="ml-1 text-[10px] text-muted-foreground">·{row.original.resubmission_seq}</span>
+              <span className={cn('font-mono text-xs', isResub && 'text-muted-foreground')}>
+                {isResub && <span className="mr-1">↳</span>}
+                {value ?? '—'}
+                {isResub && r.resubmission_seq > 0 && (
+                  <span className="ml-1 text-[10px] text-muted-foreground">R{r.resubmission_seq}</span>
                 )}
               </span>
             );
           }
-          if (v == null || v === '') return <span className="text-xs text-muted-foreground">—</span>;
-          return <span className="text-xs">{String(v)}</span>;
+          if (isStatus) return <StatusBadge value={value as WarrantyStatusToken | null} />;
+          if (isDate) return <span className="text-xs">{formatDdMmm(value ? String(value).slice(0, 10) : null) || '—'}</span>;
+          if (isNum) return value == null ? <span className="text-muted-foreground">—</span> : <span className="tabular-nums text-xs">{value}</span>;
+          if (value == null || value === '') return <span className="text-xs text-muted-foreground">—</span>;
+          return <span className="block truncate text-xs" title={String(value)}>{String(value)}</span>;
         },
       };
-      dataCols.push(col);
+    });
+
+    return [selectColumn, expandColumn, cycleColumn, ...dataColumns, statusColumn, openColumn];
+  }, [getLabel, navigate, childCounts, collapsedParents, toggleParent]);
+
+  // ── Visibility from Field Config (always show anchors) ──
+  const ALWAYS_VISIBLE = useMemo(() => new Set([
+    '__select', '__expand', '__open', 'item_no', 'cycle_progress', 'current_status',
+  ]), []);
+
+  const columnVisibility = useMemo<VisibilityState>(() => {
+    const v: VisibilityState = {};
+    for (const id of ALWAYS_VISIBLE) v[id] = true;
+    for (const id of ALL_DATA_FIELDS) {
+      if (ALWAYS_VISIBLE.has(id)) continue;
+      v[id] = isFieldVisible(id);
     }
+    return v;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFieldVisible]);
 
-    // Sort data cols by field config order
-    const fieldOrder = sortFieldNames(dataCols.map((c) => c.id as string));
-    dataCols.sort((a, b) => fieldOrder.indexOf(a.id as string) - fieldOrder.indexOf(b.id as string));
+  // Column order from Field Config sort_order with pinned anchors
+  const columnOrder = useMemo(() => {
+    const PINNED = ['__select', '__expand', 'cycle_progress', 'item_no'];
+    const TRAILING = ['current_status', '__open'];
+    const remaining = (ALL_DATA_FIELDS as readonly string[]).filter(
+      (f) => !PINNED.includes(f) && !TRAILING.includes(f),
+    );
+    return [...PINNED, ...sortFieldNames(remaining), ...TRAILING];
+  }, [sortFieldNames]);
 
-    return [...baseCols, ...dataCols];
-  }, [getLabel, isFieldVisible, sortFieldNames, childCounts, collapsedParents]);
-
-  // Column visibility from field config (built into columns above already via filter)
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-
+  // ── Table ──
   const table = useReactTable({
-    data: visibleRows,
+    data: filteredBaseData,
     columns,
-    state: { sorting, columnFilters, globalFilter, rowSelection, columnVisibility },
+    state: {
+      sorting: sorting.length ? sorting : DEFAULT_SORTING,
+      globalFilter,
+      columnFilters,
+      columnSizing,
+      columnVisibility,
+      columnOrder,
+      rowSelection,
+    },
     onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
+    onColumnFiltersChange: setColumnFilters,
+    onColumnSizingChange: setColumnSizing,
     onRowSelectionChange: setRowSelection,
-    onColumnVisibilityChange: setColumnVisibility,
+    getRowId: (row) => row.id,
+    enableRowSelection: true,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
-    globalFilterFn: globalFilterFn as any,
-    enableRowSelection: true,
-    getRowId: (row) => row.id,
+    globalFilterFn,
+    enableMultiSort: true,
+    enableSortingRemoval: true,
+    isMultiSortEvent: (e) => (e as unknown as MouseEvent).shiftKey,
+    maxMultiSortColCount: 5,
+    enableColumnResizing: true,
+    columnResizeMode: 'onEnd',
+    defaultColumn: { minSize: 60, maxSize: 600 },
   });
 
-  // Active filter chips
-  const activeChips = useMemo(() => {
-    return columnFilters.map((f) => {
-      const col = table.getColumn(f.id);
-      const label = col?.columnDef.id ? getLabel(col.columnDef.id) : f.id;
-      let summary = '';
-      const v = f.value;
-      if (Array.isArray(v)) summary = v.map((x) => x === EMPTY_TOKEN ? '(empty)' : x).join(', ');
-      else if (v && typeof v === 'object') {
-        if (WARRANTY_STAGE_KEYS.some((k) => (v as any)[k]?.length)) {
-          summary = WARRANTY_STAGE_KEYS
-            .filter((k) => (v as any)[k]?.length)
-            .map((k) => `${WARRANTY_STAGE_LABELS[k]}(${(v as any)[k].join(',')})`)
-            .join(' · ');
-        } else if ('text' in v || 'emptyOnly' in v) {
-          summary = (v as any).text || ((v as any).emptyOnly ? '(empty)' : '');
-        } else if ('from' in v || 'to' in v) {
-          summary = `${(v as any).from ?? '*'} → ${(v as any).to ?? '*'}`;
-          if ((v as any).emptyOnly) summary = '(empty)';
-        } else if ('min' in v || 'max' in v) {
-          summary = `${(v as any).min ?? '*'} – ${(v as any).max ?? '*'}`;
-          if ((v as any).emptyOnly) summary = '(empty)';
-        }
-      } else if (typeof v === 'string') summary = v;
-      return { id: f.id, label, summary };
-    });
-  }, [columnFilters, getLabel, table]);
+  // Clear selection when filters change
+  useEffect(() => {
+    setRowSelection({});
+  }, [columnFilters, globalFilter, resubFilter]);
 
-  // Virtualizer
-  const tableContainerRef = useRef<HTMLDivElement>(null);
-  const { rows: rowModelRows } = table.getRowModel();
-  const rowVirtualizer = useVirtualizer({
-    count: rowModelRows.length,
-    getScrollElement: () => tableContainerRef.current,
-    estimateSize: () => 36,
-    overscan: 12,
-  });
-  const virtualRows = rowVirtualizer.getVirtualItems();
-  const totalSize = rowVirtualizer.getTotalSize();
-  const paddingTop = virtualRows.length ? virtualRows[0].start : 0;
-  const paddingBottom = virtualRows.length ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
+  const selectedRows = useMemo(
+    () => table.getSelectedRowModel().rows.map((r) => r.original),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rowSelection, filteredBaseData],
+  );
 
-  // Export
-  const handleExport = (mode: 'all' | 'visible' | 'selected') => {
-    let exportRows: WarrantyRow[];
-    if (mode === 'selected') {
-      const ids = Object.keys(rowSelection);
-      exportRows = rows.filter((r) => ids.includes(r.id));
-    } else if (mode === 'visible') {
-      exportRows = rowModelRows.map((r) => r.original);
-    } else {
-      exportRows = rows;
+  // ── Bulk fields ──
+  const optionFields = useMemo(() => {
+    const opts = (field: keyof WarrantyRow) =>
+      [...new Set(rows.map((r) => r[field]).filter((v): v is string => Boolean(v)))]
+        .sort((a, b) => a.localeCompare(b))
+        .map((v) => ({ value: v, label: v }));
+    return {
+      category: opts('category'),
+      team: opts('team'),
+      subcontractor_name: opts('subcontractor_name'),
+      hdec_pic_name: opts('hdec_pic_name'),
+      hdec_eng_name: opts('hdec_eng_name'),
+      acra_info_status: opts('acra_info_status'),
+    };
+  }, [rows]);
+
+  const STATUS_OPTIONS = useMemo(() => ([
+    { value: 'A', label: 'A — Approved' },
+    { value: 'B', label: 'B — Rejected' },
+    { value: 'C', label: 'C — Rejected (major)' },
+    { value: 'UR', label: 'UR — Under Review' },
+    { value: 'WIP', label: 'WIP' },
+    { value: 'Planned', label: 'Planned' },
+  ]), []);
+
+  const bulkFields = useMemo<WarrantyBulkField[]>(() => ([
+    { field: 'category', label: getLabel('category') || 'Category', inputType: 'select', group: 'Classification', options: optionFields.category },
+    { field: 'team', label: getLabel('team') || 'Team', inputType: 'select', group: 'Classification', options: optionFields.team },
+    { field: 'subcontractor_name', label: getLabel('subcontractor_name') || 'Subcontractor', inputType: 'select', group: 'Assignment', options: optionFields.subcontractor_name },
+    { field: 'hdec_pic_name', label: 'HDEC PIC', inputType: 'select', group: 'Assignment', options: optionFields.hdec_pic_name },
+    { field: 'hdec_eng_name', label: 'HDEC ENG', inputType: 'select', group: 'Assignment', options: optionFields.hdec_eng_name },
+    { field: 'warranty_period_years', label: 'Warranty Period (yrs)', inputType: 'number', group: 'Classification' },
+    { field: 'acra_info_status', label: 'ACRA Info Status', inputType: 'select', group: 'Workflow', options: optionFields.acra_info_status },
+    { field: 'r_subcontract_date', label: 'Subcontract Date', inputType: 'date', group: 'Schedule' },
+    { field: 'draft_planned_date', label: 'Draft Planned', inputType: 'date', group: 'Schedule' },
+    { field: 'draft_actual_date', label: 'Draft Actual', inputType: 'date', group: 'Schedule' },
+    { field: 'draft_response_planned_date', label: 'Draft Response Planned', inputType: 'date', group: 'Schedule' },
+    { field: 'draft_response_actual_date', label: 'Draft Response Actual', inputType: 'date', group: 'Schedule' },
+    { field: 'draft_status', label: 'Draft Status', inputType: 'select', group: 'Workflow', options: STATUS_OPTIONS, warning: 'B/C indicates rejection — resubmission rows may be required.' },
+    { field: 'subcon_signing_planned_date', label: 'Subcon Sign Planned', inputType: 'date', group: 'Schedule' },
+    { field: 'subcon_signing_actual_date', label: 'Subcon Sign Actual', inputType: 'date', group: 'Schedule' },
+    { field: 'subcon_signing_status', label: 'Subcon Sign Status', inputType: 'select', group: 'Workflow', options: STATUS_OPTIONS },
+    { field: 'hdec_signing_planned_date', label: 'HDEC Sign Planned', inputType: 'date', group: 'Schedule' },
+    { field: 'hdec_signing_actual_date', label: 'HDEC Sign Actual', inputType: 'date', group: 'Schedule' },
+    { field: 'hdec_signing_status', label: 'HDEC Sign Status', inputType: 'select', group: 'Workflow', options: STATUS_OPTIONS },
+    { field: 'final_planned_date', label: 'Final Planned', inputType: 'date', group: 'Schedule' },
+    { field: 'final_actual_date', label: 'Final Actual', inputType: 'date', group: 'Schedule' },
+    { field: 'final_status', label: 'Final Status', inputType: 'select', group: 'Workflow', options: STATUS_OPTIONS },
+    { field: 'remarks', label: 'Remarks', inputType: 'text', group: 'Notes' },
+  ]), [getLabel, optionFields, STATUS_OPTIONS]);
+
+  // ── Filter chips (extend buildColumnFilterChips with stage-progress) ──
+  const columnFilterChips = useMemo(() => {
+    const base = buildColumnFilterChips(table, columnFilters);
+    // Add chips for stage-progress filters that base may have skipped
+    const extra: { id: string; label: string }[] = [];
+    for (const f of columnFilters) {
+      if (base.some((c) => c.id === f.id)) continue;
+      const v = f.value as any;
+      if (v && typeof v === 'object' && WARRANTY_STAGE_KEYS.some((k) => Array.isArray(v[k]) && v[k].length)) {
+        const parts = WARRANTY_STAGE_KEYS
+          .filter((k) => Array.isArray(v[k]) && v[k].length)
+          .map((k) => `${WARRANTY_STAGE_LABELS[k]}(${v[k].join(',')})`);
+        extra.push({ id: f.id, label: `Progress: ${parts.join(' · ')}` });
+      }
     }
-    if (exportRows.length === 0) {
-      toast({ title: 'Nothing to export', variant: 'destructive' });
+    return [...base, ...extra];
+  }, [table, columnFilters]);
+
+  const removeColumnFilter = (id: string) =>
+    setColumnFilters((prev) => prev.filter((f) => f.id !== id));
+
+  // ── Export ──
+  const exportRowCount = table.getFilteredRowModel().rows.length;
+  const handleExport = useCallback(() => {
+    if (exportRowCount === 0) {
+      toast({ title: 'No rows to export', description: 'Adjust filters and try again.', variant: 'destructive' });
       return;
     }
-    const data = exportRows.map((r) => {
-      const o: Record<string, any> = { No: r.item_no };
-      ALL_DATA_FIELDS.forEach((f) => {
-        if (f === 'item_no') return;
-        if (isFieldVisible(f)) o[getLabel(f)] = (r as any)[f];
-      });
-      o['Stage'] = r.current_stage;
-      o['Status'] = r.current_status;
-      return o;
+    exportWarrantyToExcel({
+      table,
+      fieldConfig: fieldConfigRows,
+      globalFilter,
+      meta: { userName: profile?.name ?? user?.email ?? 'unknown', userType: profile?.user_type ?? 'unknown' },
+      format: exportFormat,
     });
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Warranty');
-    XLSX.writeFile(wb, `warranty-raw-data-${new Date().toISOString().slice(0, 10)}.xlsx`);
-  };
+    setExportDialogOpen(false);
+    toast({ title: 'Export started', description: `${exportRowCount} rows queued for download.` });
+  }, [table, fieldConfigRows, globalFilter, profile, user, exportFormat, exportRowCount, toast]);
 
   const selectedCount = Object.keys(rowSelection).length;
 
   return (
-    <div className="space-y-3 p-4">
+    <div className="space-y-4 p-4">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Warranty Deeds — Raw Data</h1>
-          <p className="text-xs text-muted-foreground">
-            {loading ? 'Loading…' : `${rowModelRows.length} of ${rows.length} items`}
-            {selectedCount > 0 && ` · ${selectedCount} selected`}
+          <p className="text-sm text-muted-foreground">
+            Warranty deed lifecycle: ACRA info, draft, subcon &amp; HDEC signing, final issuance.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">
+            {table.getFilteredRowModel().rows.length} / {rows.length} rows
+          </Badge>
+          {selectedCount > 0 && (
+            <Badge variant="outline" className="border-primary/40 text-primary">
+              {selectedCount} selected
+            </Badge>
+          )}
+          {resubCount > 0 && (
+            <Badge variant="outline" className="border-amber-300 text-amber-700">
+              {resubCount} resubmission{resubCount === 1 ? '' : 's'}
+            </Badge>
+          )}
           <Button variant="outline" size="sm" onClick={() => navigate('/docs/import?sub=warranty')}>
-            <Upload className="mr-1 h-4 w-4" /> Import
+            <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
           </Button>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Download className="mr-1 h-4 w-4" /> Export
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-52 p-1" align="end">
-              <button className="block w-full px-2 py-1.5 text-left text-xs hover:bg-muted/50 rounded"
-                onClick={() => handleExport('all')}>All ({rows.length})</button>
-              <button className="block w-full px-2 py-1.5 text-left text-xs hover:bg-muted/50 rounded"
-                onClick={() => handleExport('visible')}>Filtered ({rowModelRows.length})</button>
-              <button className="block w-full px-2 py-1.5 text-left text-xs hover:bg-muted/50 rounded disabled:opacity-50"
-                disabled={selectedCount === 0}
-                onClick={() => handleExport('selected')}>Selected ({selectedCount})</button>
-            </PopoverContent>
-          </Popover>
+          <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(true)}>
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export Excel
+          </Button>
         </div>
-      </div>
-
-      {/* Search + legend */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search no, item, subcontractor, PIC… (, for AND)"
-            value={globalFilter} onChange={(e) => setGlobalFilter(e.target.value)}
-            className="h-8 pl-8 text-xs" />
-        </div>
-        <WarrantyCycleProgressLegend />
       </div>
 
       {/* Active filter chips */}
-      {activeChips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
-          {activeChips.map((c) => (
-            <Badge key={c.id} variant="secondary" className="text-[10px] gap-1">
-              <span className="font-medium">{c.label}:</span>
-              <span className="opacity-80">{c.summary}</span>
-              <button onClick={() => table.getColumn(c.id)?.setFilterValue(undefined)} className="hover:text-destructive">
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
+      {columnFilterChips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
+          <span className="text-xs font-medium text-muted-foreground">Active column filters:</span>
+          {columnFilterChips.map((chip) => (
+            <button
+              key={chip.id}
+              onClick={() => removeColumnFilter(chip.id)}
+              className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground hover:bg-secondary/80"
+              title="Click to remove"
+            >
+              {chip.label} ✕
+            </button>
           ))}
-          <button className="text-[10px] text-muted-foreground hover:underline ml-1"
-            onClick={() => setColumnFilters([])}>Clear all</button>
+          <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs" onClick={() => setColumnFilters([])}>
+            Clear all
+          </Button>
         </div>
       )}
 
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[220px] max-w-sm flex-1">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search warranty... (comma = AND)"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="h-9 pl-8"
+          />
+        </div>
+        <Select value={resubFilter} onValueChange={(v) => setResubFilter(v as any)}>
+          <SelectTrigger className="h-9 w-[200px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All rows</SelectItem>
+            <SelectItem value="only">Resubmissions only</SelectItem>
+            <SelectItem value="hide">Hide resubmissions</SelectItem>
+          </SelectContent>
+        </Select>
+        {sorting.length > 0 && (
+          <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setSorting(DEFAULT_SORTING)}>
+            Clear sort ({sorting.length})
+          </Button>
+        )}
+        <WarrantyCycleProgressLegend />
+        <span className="hidden self-center text-xs text-muted-foreground md:inline">
+          Tip: Shift+Click headers for multi-sort · Click <Filter className="inline h-3 w-3" /> to filter columns
+        </span>
+      </div>
+
+      {/* Bulk action bar */}
+      <WarrantyBulkActionBar
+        selectedRows={selectedRows}
+        fields={bulkFields}
+        onApplied={({ field, value, ids }) => {
+          setRows((prev) =>
+            prev.map((r) => (ids.includes(r.id) ? ({ ...r, [field]: value as any } as WarrantyRow) : r)),
+          );
+          setRowSelection({});
+        }}
+        onMutated={() => reload()}
+        onClearSelection={() => setRowSelection({})}
+      />
+
       {/* Table */}
-      <div className="flex max-h-[calc(100vh-260px)] flex-col overflow-hidden rounded border bg-card">
-        <TopHorizontalScrollbar targetRef={tableContainerRef} width={table.getTotalSize()} />
-        <div ref={tableContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-hide">
-          <Table style={{ width: table.getTotalSize(), tableLayout: 'fixed' }}>
-            <TableHeader className="bg-card">
-              {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id} className="border-b bg-card [&>th]:sticky [&>th]:top-0 [&>th]:z-[2] [&>th]:bg-card">
-                  {hg.headers.map((h) => {
-                    const ft = (h.column.columnDef.meta as any)?.filterType;
-                    return (
-                      <TableHead key={h.id} style={{ width: h.getSize() }}
-                        className="text-xs h-9 cursor-pointer select-none"
-                        onClick={h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined}>
-                        <div className="flex items-center gap-1">
-                          {flexRender(h.column.columnDef.header, h.getContext())}
-                          {h.column.getIsSorted() === 'asc' && <span>▲</span>}
-                          {h.column.getIsSorted() === 'desc' && <span>▼</span>}
-                          {ft && <ColumnFilterDropdown column={h.column} filterType={ft} />}
-                        </div>
-                      </TableHead>
-                    );
-                  })}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground text-sm">Loading…</TableCell></TableRow>
-              ) : rowModelRows.length === 0 ? (
-                <TableRow><TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground text-sm">
-                  No matching warranty items.
-                </TableCell></TableRow>
-              ) : (
-                <>
-                  {paddingTop > 0 && <TableRow style={{ height: paddingTop }}><TableCell colSpan={columns.length} className="p-0" /></TableRow>}
-                  {virtualRows.map((vr) => {
-                    const row = rowModelRows[vr.index];
-                    const r = row.original;
-                    return (
-                      <TableRow key={row.id}
-                        data-index={vr.index}
-                        ref={(el) => el && rowVirtualizer.measureElement(el)}
-                        className={cn('cursor-pointer hover:bg-muted/40',
-                          r.is_resubmission && 'bg-muted/20',
-                          row.getIsSelected() && 'bg-primary/5')}
-                        onClick={() => navigate(`/docs/warranty/${r.id}`)}>
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id} className={cn('py-1.5', r.is_resubmission && cell.column.id === 'item_no' && 'pl-6')}
-                            style={{ width: cell.column.getSize() }}>
+      <WarrantyRawTableView
+        table={table}
+        loading={loading}
+        sorting={sorting.length ? sorting : DEFAULT_SORTING}
+        navigate={navigate}
+        tableRef={tableRef}
+      />
+
+      {/* Export dialog */}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export Warranty Deeds</DialogTitle>
+            <DialogDescription>
+              Choose a format. Filters and sort are preserved in both options.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <RadioGroup value={exportFormat} onValueChange={(v) => setExportFormat(v as WarrantyExportFormat)}>
+              <label className="flex items-start gap-2 rounded-md border p-3 cursor-pointer hover:bg-muted/30">
+                <RadioGroupItem value="view" className="mt-1" />
+                <div>
+                  <div className="text-sm font-medium">Current view</div>
+                  <div className="text-xs text-muted-foreground">
+                    Uses currently visible columns. Includes computed Status; suitable for review &amp; sharing.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-2 rounded-md border p-3 cursor-pointer hover:bg-muted/30">
+                <RadioGroupItem value="reimport" className="mt-1" />
+                <div>
+                  <div className="text-sm font-medium">Re-import ready</div>
+                  <div className="text-xs text-muted-foreground">
+                    Includes ID columns; computed columns excluded; suitable for editing and re-importing.
+                  </div>
+                </div>
+              </label>
+            </RadioGroup>
+            <div className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+              {exportRowCount} rows will be exported.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setExportDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleExport}>Download</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Virtualised table view with sticky frozen columns ────────────────────
+interface ViewProps {
+  table: ReturnType<typeof useReactTable<WarrantyRow>>;
+  loading: boolean;
+  sorting: SortingState;
+  navigate: (path: string) => void;
+  tableRef: React.RefObject<HTMLDivElement>;
+}
+
+function WarrantyRawTableView({ table, loading, sorting, navigate, tableRef }: ViewProps) {
+  const isMobile = useIsMobile();
+  const { value: frozenSetting } = useFrozenColumnCount();
+  const userFrozenCount = isMobile ? 1 : Math.min(Math.max(Number(frozenSetting) || 1, 1), 4);
+  const frozenCount = userFrozenCount + 1; // +1 for select column
+
+  const leafColumns = table.getVisibleLeafColumns();
+  const stickyLefts = useMemo(() => {
+    const lefts: number[] = [];
+    let acc = 0;
+    for (let i = 0; i < frozenCount && i < leafColumns.length; i++) {
+      lefts.push(acc);
+      acc += leafColumns[i].getSize();
+    }
+    return lefts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leafColumns, frozenCount, table.getState().columnSizing]);
+  const frozenWidth = useMemo(
+    () => leafColumns.slice(0, frozenCount).reduce((s, c) => s + c.getSize(), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [leafColumns, frozenCount, table.getState().columnSizing],
+  );
+  const totalWidth = useMemo(
+    () => leafColumns.reduce((s, c) => s + c.getSize(), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [leafColumns, table.getState().columnSizing],
+  );
+
+  const rows = table.getRowModel().rows;
+  const ROW_HEIGHT = 36;
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => tableRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 12,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const totalSize = rowVirtualizer.getTotalSize();
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const paddingBottom = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  const headerGroup = table.getHeaderGroups().at(-1);
+  const allHeaders = headerGroup?.headers ?? [];
+
+  const renderHeader = (header: any, index: number) => {
+    const isSticky = index < frozenCount;
+    const isLastSticky = index === frozenCount - 1;
+    const headerDef = header.column.columnDef.header;
+    const headerText = typeof headerDef === 'string' ? headerDef : header.column.id;
+    return (
+      <TableHead
+        key={header.id}
+        title={headerText}
+        style={{
+          width: header.getSize(),
+          minWidth: header.getSize(),
+          maxWidth: header.getSize(),
+          ...(isSticky ? {
+            position: 'sticky',
+            left: stickyLefts[index],
+            zIndex: 3,
+            background: 'hsl(var(--background))',
+          } : {}),
+        }}
+        className={cn(
+          'relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background px-3 py-0 text-left text-xs font-medium',
+          isLastSticky && 'shadow-[2px_0_4px_-2px_hsl(var(--border))]',
+        )}
+        onClick={header.column.getToggleSortingHandler()}
+      >
+        <div className="flex w-full items-center justify-between gap-1">
+          <span className="inline-flex min-w-0 items-center gap-1 truncate">
+            <span className="truncate">
+              {flexRender(header.column.columnDef.header, header.getContext())}
+            </span>
+            {header.column.getIsSorted() && (
+              <span className="flex-shrink-0">
+                {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
+                {sorting.length > 1 && (
+                  <sup className="ml-0.5 text-[9px] text-muted-foreground">
+                    {header.column.getSortIndex() + 1}
+                  </sup>
+                )}
+              </span>
+            )}
+          </span>
+          {header.column.getCanFilter() && (
+            <span className="flex-shrink-0" onClick={(event) => event.stopPropagation()}>
+              <ColumnFilterDropdown column={header.column} />
+            </span>
+          )}
+        </div>
+        {header.column.getCanResize() && (
+          <div
+            onMouseDown={header.getResizeHandler()}
+            onTouchStart={header.getResizeHandler()}
+            onClick={(event) => event.stopPropagation()}
+            title="Drag to resize"
+            className={cn(
+              'absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40',
+              header.column.getIsResizing() && 'bg-primary/60',
+            )}
+          />
+        )}
+      </TableHead>
+    );
+  };
+
+  const stickyBgFor = (row: WarrantyRow, index: number): string => {
+    const base = 'hsl(var(--background))';
+    const opaque = `linear-gradient(${base}, ${base})`;
+    if (hoveredIndex === index) return `${opaque}, hsl(var(--muted) / 0.95)`;
+    if (row.is_resubmission) return `${opaque}, hsl(var(--muted) / 0.45)`;
+    return base;
+  };
+
+  return (
+    <div className="flex max-h-[calc(100vh-260px)] flex-col overflow-hidden rounded-md border bg-background">
+      <TopHorizontalScrollbar
+        targetRef={tableRef}
+        width={totalWidth}
+        frozenWidth={frozenWidth}
+      />
+      <div ref={tableRef} className="min-w-0 flex-1 overflow-auto scrollbar-hide">
+        <Table style={{ width: totalWidth, tableLayout: 'fixed' }}>
+          <TableHeader className="bg-background">
+            <TableRow className="border-b bg-background [&>th]:sticky [&>th]:top-0 [&>th]:z-[2] [&>th]:bg-background">
+              {allHeaders.map(renderHeader)}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={leafColumns.length} className="py-8 text-center text-muted-foreground">
+                  Loading...
+                </TableCell>
+              </TableRow>
+            ) : rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={leafColumns.length} className="py-8 text-center text-muted-foreground">
+                  No warranty records. Use the Import page to upload.
+                </TableCell>
+              </TableRow>
+            ) : (
+              <>
+                {paddingTop > 0 && (
+                  <tr style={{ height: paddingTop }} aria-hidden>
+                    <td colSpan={leafColumns.length} style={{ padding: 0, border: 0 }} />
+                  </tr>
+                )}
+                {virtualRows.map((virtualRow) => {
+                  const row = rows[virtualRow.index];
+                  const stickyBg = stickyBgFor(row.original, virtualRow.index);
+                  return (
+                    <TableRow
+                      key={row.id}
+                      data-index={virtualRow.index}
+                      style={{ height: ROW_HEIGHT, maxHeight: ROW_HEIGHT }}
+                      className={cn(
+                        'cursor-pointer',
+                        row.original.is_resubmission && 'bg-muted/30',
+                        hoveredIndex === virtualRow.index && 'bg-muted/50',
+                      )}
+                      onMouseEnter={() => setHoveredIndex(virtualRow.index)}
+                      onMouseLeave={() => setHoveredIndex(null)}
+                      onClick={() => navigate(`/docs/warranty/${row.original.id}`)}
+                    >
+                      {row.getVisibleCells().map((cell, cellIdx) => {
+                        const isSticky = cellIdx < frozenCount;
+                        const isLastSticky = cellIdx === frozenCount - 1;
+                        return (
+                          <TableCell
+                            key={cell.id}
+                            style={{
+                              width: cell.column.getSize(),
+                              minWidth: cell.column.getSize(),
+                              maxWidth: cell.column.getSize(),
+                              height: ROW_HEIGHT,
+                              maxHeight: ROW_HEIGHT,
+                              overflow: 'hidden',
+                              ...(isSticky ? {
+                                position: 'sticky',
+                                left: stickyLefts[cellIdx],
+                                zIndex: 1,
+                                background: stickyBg,
+                              } : {}),
+                            }}
+                            className={cn(
+                              'truncate whitespace-nowrap px-3 py-2 text-xs',
+                              isLastSticky && 'shadow-[2px_0_4px_-2px_hsl(var(--border))]',
+                            )}
+                          >
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           </TableCell>
-                        ))}
-                      </TableRow>
-                    );
-                  })}
-                  {paddingBottom > 0 && <TableRow style={{ height: paddingBottom }}><TableCell colSpan={columns.length} className="p-0" /></TableRow>}
-                </>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                        );
+                      })}
+                    </TableRow>
+                  );
+                })}
+                {paddingBottom > 0 && (
+                  <tr style={{ height: paddingBottom }} aria-hidden>
+                    <td colSpan={leafColumns.length} style={{ padding: 0, border: 0 }} />
+                  </tr>
+                )}
+              </>
+            )}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
