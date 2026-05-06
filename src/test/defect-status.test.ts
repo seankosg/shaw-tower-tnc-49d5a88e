@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeCompletionStatus, computeClosureStatus, computeDefectStatuses, isValidDefectStatus, reconcileClosureCompletion, isStatusWorkDone, isStatusClosed } from '@/lib/defect-status';
+import { computeCompletionStatus, computeClosureStatus, computeDefectStatuses, isValidDefectStatus, reconcileClosureCompletion, isStatusWorkDone, isStatusClosed, isStatusInDispute } from '@/lib/defect-status';
 
 const base = {
   planned_start_date: null,
@@ -13,16 +13,43 @@ const base = {
 };
 
 describe('isValidDefectStatus', () => {
-  it('accepts the four enum values', () => {
+  it('accepts the five enum values', () => {
     expect(isValidDefectStatus('Planned')).toBe(true);
     expect(isValidDefectStatus('Delay')).toBe(true);
     expect(isValidDefectStatus('Done')).toBe(true);
     expect(isValidDefectStatus('WIP')).toBe(true);
+    expect(isValidDefectStatus('InD')).toBe(true);
   });
   it('rejects others', () => {
     expect(isValidDefectStatus('done')).toBe(false);
     expect(isValidDefectStatus('Open')).toBe(false);
     expect(isValidDefectStatus(null)).toBe(false);
+  });
+});
+
+describe('isStatusInDispute', () => {
+  it('matches case-insensitively with trim', () => {
+    expect(isStatusInDispute('In Dispute')).toBe(true);
+    expect(isStatusInDispute('  in dispute  ')).toBe(true);
+    expect(isStatusInDispute('IN DISPUTE')).toBe(true);
+    expect(isStatusInDispute('Open')).toBe(false);
+    expect(isStatusInDispute(null)).toBe(false);
+  });
+});
+
+describe('computeClosureStatus — InD mapping', () => {
+  const asOf = '2026-04-24';
+  it('returns InD when status is "In Dispute" and not yet closed', () => {
+    const result = computeClosureStatus({ ...base, status: 'In Dispute' }, asOf, 'WIP');
+    expect(result).toBe('InD');
+  });
+  it('Done wins over InD when actual_closure_date is set', () => {
+    const result = computeClosureStatus({ ...base, status: 'In Dispute', actual_closure_date: '2026-04-20' }, asOf, 'Done');
+    expect(result).toBe('Done');
+  });
+  it('Closed wins over InD too', () => {
+    const result = computeClosureStatus({ ...base, status: 'Closed' }, asOf, 'Done');
+    expect(result).toBe('Done');
   });
 });
 
