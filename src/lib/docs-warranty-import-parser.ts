@@ -321,7 +321,10 @@ export async function parseWarrantyExcel(
 
         if (f.endsWith('_date')) struct[f] = normalizeDate(v);
         else if (f === 'item_no' || f === 'warranty_period_years') struct[f] = toIntOrNull(v);
-        else if (f.endsWith('_status')) struct[f] = normalizeWarrantyStatus(v);
+        else if (
+          f === 'draft_status' || f === 'subcon_signing_status' ||
+          f === 'hdec_signing_status' || f === 'final_status'
+        ) struct[f] = normalizeWarrantyStatus(v);
         else struct[f] = toText(v);
       }
 
