@@ -434,10 +434,16 @@ function classifyStageState(
   return 'Planned';
 }
 
-const stageProgressFilterFn = (row: any, _columnId: string, filterValue: StageProgressFilter) => {
+const stageProgressFilterFn: any = (
+  row: any,
+  columnId: string,
+  filterValue: StageProgressFilter,
+) => {
   if (isStageProgressFilterEmpty(filterValue)) return true;
   const original = row.original;
-  const asOf = original?.__asOfDate || todayIso();
+  const meta = (row as any).getAllCells?.()?.find?.((c: any) => c.column.id === columnId)
+    ?.column?.columnDef?.meta as any;
+  const asOf: string = meta?.asOfDate || todayIso();
   for (const k of STAGE_FILTER_KEYS) {
     const allowed = filterValue[k];
     if (!allowed || allowed.length === 0) continue;
