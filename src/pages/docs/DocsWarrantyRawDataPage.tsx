@@ -769,68 +769,66 @@ export default function DocsWarrantyRawDataPage() {
       )}
 
       {/* Table */}
-      <div className="rounded border bg-card">
+      <div className="flex max-h-[calc(100vh-260px)] flex-col overflow-hidden rounded border bg-card">
         <TopHorizontalScrollbar targetRef={tableContainerRef} width={table.getTotalSize()} />
-        <div ref={tableContainerRef} className="max-h-[calc(100vh-260px)] overflow-auto" style={{ contain: 'strict' }}>
-          <div ref={tableScrollRef}>
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
-                {table.getHeaderGroups().map((hg) => (
-                  <TableRow key={hg.id}>
-                    {hg.headers.map((h) => {
-                      const ft = (h.column.columnDef.meta as any)?.filterType;
-                      return (
-                        <TableHead key={h.id} style={{ width: h.getSize() }}
-                          className="text-xs h-9 cursor-pointer select-none"
-                          onClick={h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined}>
-                          <div className="flex items-center gap-1">
-                            {flexRender(h.column.columnDef.header, h.getContext())}
-                            {h.column.getIsSorted() === 'asc' && <span>▲</span>}
-                            {h.column.getIsSorted() === 'desc' && <span>▼</span>}
-                            {ft && <ColumnFilterDropdown column={h.column} filterType={ft} />}
-                          </div>
-                        </TableHead>
-                      );
-                    })}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow><TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground text-sm">Loading…</TableCell></TableRow>
-                ) : rowModelRows.length === 0 ? (
-                  <TableRow><TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground text-sm">
-                    No matching warranty items.
-                  </TableCell></TableRow>
-                ) : (
-                  <>
-                    {paddingTop > 0 && <TableRow style={{ height: paddingTop }}><TableCell colSpan={columns.length} className="p-0" /></TableRow>}
-                    {virtualRows.map((vr) => {
-                      const row = rowModelRows[vr.index];
-                      const r = row.original;
-                      return (
-                        <TableRow key={row.id}
-                          data-index={vr.index}
-                          ref={(el) => el && rowVirtualizer.measureElement(el)}
-                          className={cn('cursor-pointer hover:bg-muted/40',
-                            r.is_resubmission && 'bg-muted/20',
-                            row.getIsSelected() && 'bg-primary/5')}
-                          onClick={() => navigate(`/docs/warranty/${r.id}`)}>
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id} className={cn('py-1.5', r.is_resubmission && cell.column.id === 'item_no' && 'pl-6')}
-                              style={{ width: cell.column.getSize() }}>
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      );
-                    })}
-                    {paddingBottom > 0 && <TableRow style={{ height: paddingBottom }}><TableCell colSpan={columns.length} className="p-0" /></TableRow>}
-                  </>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+        <div ref={tableContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-hide">
+          <Table style={{ width: table.getTotalSize(), tableLayout: 'fixed' }}>
+            <TableHeader className="bg-card">
+              {table.getHeaderGroups().map((hg) => (
+                <TableRow key={hg.id} className="border-b bg-card [&>th]:sticky [&>th]:top-0 [&>th]:z-[2] [&>th]:bg-card">
+                  {hg.headers.map((h) => {
+                    const ft = (h.column.columnDef.meta as any)?.filterType;
+                    return (
+                      <TableHead key={h.id} style={{ width: h.getSize() }}
+                        className="text-xs h-9 cursor-pointer select-none"
+                        onClick={h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined}>
+                        <div className="flex items-center gap-1">
+                          {flexRender(h.column.columnDef.header, h.getContext())}
+                          {h.column.getIsSorted() === 'asc' && <span>▲</span>}
+                          {h.column.getIsSorted() === 'desc' && <span>▼</span>}
+                          {ft && <ColumnFilterDropdown column={h.column} filterType={ft} />}
+                        </div>
+                      </TableHead>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground text-sm">Loading…</TableCell></TableRow>
+              ) : rowModelRows.length === 0 ? (
+                <TableRow><TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground text-sm">
+                  No matching warranty items.
+                </TableCell></TableRow>
+              ) : (
+                <>
+                  {paddingTop > 0 && <TableRow style={{ height: paddingTop }}><TableCell colSpan={columns.length} className="p-0" /></TableRow>}
+                  {virtualRows.map((vr) => {
+                    const row = rowModelRows[vr.index];
+                    const r = row.original;
+                    return (
+                      <TableRow key={row.id}
+                        data-index={vr.index}
+                        ref={(el) => el && rowVirtualizer.measureElement(el)}
+                        className={cn('cursor-pointer hover:bg-muted/40',
+                          r.is_resubmission && 'bg-muted/20',
+                          row.getIsSelected() && 'bg-primary/5')}
+                        onClick={() => navigate(`/docs/warranty/${r.id}`)}>
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id} className={cn('py-1.5', r.is_resubmission && cell.column.id === 'item_no' && 'pl-6')}
+                            style={{ width: cell.column.getSize() }}>
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    );
+                  })}
+                  {paddingBottom > 0 && <TableRow style={{ height: paddingBottom }}><TableCell colSpan={columns.length} className="p-0" /></TableRow>}
+                </>
+              )}
+            </TableBody>
+          </Table>
         </div>
       </div>
     </div>
