@@ -49,6 +49,7 @@ import { OmmStatusBadge } from '@/components/docs/OmmStatusBadge';
 import { OmmCopyQuantityCell } from '@/components/docs/OmmCopyQuantityCell';
 import { OmmCycleProgress } from '@/components/docs/OmmCycleProgress';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
+import { useCommonMasters, unionWithLegacy } from '@/hooks/useCommonMasters';
 import { useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
