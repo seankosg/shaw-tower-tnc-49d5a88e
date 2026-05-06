@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { exportDefectSCurveToExcel } from '@/lib/scurve-excel-export';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertTriangle, CalendarIcon, CheckCircle2, ChevronDown, ChevronRight, Clock, Download, Filter, ListChecks, ShieldCheck, TrendingUp } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CalendarIcon, CheckCircle2, ChevronDown, ChevronRight, Clock, Download, Filter, ListChecks, ShieldCheck, TrendingUp } from 'lucide-react';
 import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { supabase } from '@/integrations/supabase/client';
@@ -176,7 +176,8 @@ export default function DefectDashboardPage() {
     const startOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'start', dataDate)).length;
     const completionOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'completion', dataDate)).length;
     const closureOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'closure', dataDate)).length;
-    return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, startOverdue, completionOverdue, closureOverdue };
+    const inDisputeCount = filteredItems.filter((item) => item.closure_status === 'InD').length;
+    return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, startOverdue, completionOverdue, closureOverdue, inDisputeCount };
   }, [filteredItems, today, dataDate, atRiskDays]);
 
   const bySubTrade = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.sub_trade ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
@@ -331,9 +332,10 @@ export default function DefectDashboardPage() {
         <KpiCard icon={<Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />} label="Remain Inspection" value={kpis.difference.toLocaleString()} sub="검측 대기" onClick={() => goRaw({ actualComplete: 'true', closureComplete: 'false' })} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <KpiCard icon={<AlertTriangle className="h-6 w-6 text-destructive" />} label="Overdue - Start" value={kpis.startOverdue} accent="destructive" sub="Start 지연" onClick={() => goRaw({ overdue: 'true', stage: 'start', asOf: dataDate })} />
         <KpiCard icon={<AlertTriangle className="h-6 w-6 text-destructive" />} label="Overdue - Completion" value={kpis.completionOverdue} accent="destructive" sub="Completion 지연" onClick={() => goRaw({ overdue: 'true', stage: 'completion', asOf: dataDate })} />
+        <KpiCard icon={<AlertCircle className="h-6 w-6 text-purple-600 dark:text-purple-400" />} label="In Dispute" value={kpis.inDisputeCount} sub="LL 이견 알람" onClick={() => goRaw({ closureStatus: 'InD' })} />
         <KpiCard icon={<AlertTriangle className="h-6 w-6 text-destructive" />} label="Overdue - Closure" value={kpis.closureOverdue} accent="destructive" sub="Closure 지연" onClick={() => goRaw({ overdue: 'true', stage: 'closure', asOf: dataDate })} />
         <Card className="flex flex-col justify-center p-4">
           <div className="mb-1 flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-muted-foreground" /><p className="text-xs text-muted-foreground">Overall Progress</p></div>
@@ -347,6 +349,9 @@ export default function DefectDashboardPage() {
       <div className="grid gap-3 md:grid-cols-2">
         <AlertBanner tone="destructive" title={`${kpis.overdueCount} Overdue Defect${kpis.overdueCount === 1 ? '' : 's'}`} description={`Planned date is on/before Data Date (${dataDateLabel}) and not yet complete.`} onClick={() => goRaw({ overdue: 'true', asOf: dataDate })} />
         <AlertBanner tone="warning" title={`${kpis.atRiskCount} At-Risk Defect${kpis.atRiskCount === 1 ? '' : 's'}`} description={`Planned date is within ${atRiskDays} day(s) and not yet complete.`} onClick={() => goRaw({ atRisk: 'true', atRiskDays: String(atRiskDays) })} />
+        {kpis.inDisputeCount > 0 && (
+          <AlertBanner tone="dispute" title={`${kpis.inDisputeCount} In Dispute Defect${kpis.inDisputeCount === 1 ? '' : 's'}`} description="Aconex Status = 'In Dispute' — LL과 당사 간 이견 발생. 검토 필요." onClick={() => goRaw({ closureStatus: 'InD' })} />
+        )}
       </div>
 
       <Card>
@@ -606,7 +611,7 @@ function KpiCard({ icon, label, value, sub, accent, progress, progressTone, onCl
   return <Card onClick={onClick} className={cn(onClick && 'cursor-pointer transition-colors hover:bg-muted/40', accent === 'destructive' && 'border-destructive/30')}><CardContent className="flex items-center gap-3 p-4">{icon}<div className="min-w-0 flex-1"><p className="truncate text-xs text-muted-foreground">{label}</p><p className={cn('text-2xl font-bold', accent === 'destructive' ? 'text-destructive' : 'text-foreground')}>{value}</p>{sub && <p className="text-xs text-muted-foreground">{sub}</p>}{typeof progress === 'number' && <Progress value={Math.max(0, Math.min(100, progress))} className={cn('mt-1.5 h-1.5', progressTone === 'destructive' && '[&>div]:bg-destructive')} />}</div></CardContent></Card>;
 }
 
-function AlertBanner({ tone, title, description, onClick }: { tone: 'destructive' | 'warning'; title: string; description: string; onClick: () => void }) { const cls = tone === 'destructive' ? 'border-destructive/40 bg-destructive/5 text-destructive' : 'border-primary/40 bg-primary/5 text-primary'; return <button onClick={onClick} className={cn('flex items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/40', cls)}><div className="flex items-center gap-3"><AlertTriangle className="h-5 w-5" /><div><p className="font-semibold">{title}</p><p className="text-xs text-muted-foreground">{description}</p></div></div><span className="text-sm font-medium text-muted-foreground">View</span></button>; }
+function AlertBanner({ tone, title, description, onClick }: { tone: 'destructive' | 'warning' | 'dispute'; title: string; description: string; onClick: () => void }) { const cls = tone === 'destructive' ? 'border-destructive/40 bg-destructive/5 text-destructive' : tone === 'dispute' ? 'border-purple-500/40 bg-purple-500/5 text-purple-700 dark:text-purple-300' : 'border-primary/40 bg-primary/5 text-primary'; const Icon = tone === 'dispute' ? AlertCircle : AlertTriangle; return <button onClick={onClick} className={cn('flex items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/40', cls)}><div className="flex items-center gap-3"><Icon className="h-5 w-5" /><div><p className="font-semibold">{title}</p><p className="text-xs text-muted-foreground">{description}</p></div></div><span className="text-sm font-medium text-muted-foreground">View</span></button>; }
 function DateButton({ value, onChange }: { value: string; onChange: (value: string) => void }) { return <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-8 gap-1 text-xs"><CalendarIcon className="h-3.5 w-3.5" />{formatDdMmm(value)}</Button></PopoverTrigger><PopoverContent className="w-auto p-0" align="end"><Calendar mode="single" selected={new Date(value + 'T00:00:00')} onSelect={(d) => d && onChange(d.toISOString().slice(0, 10))} className={cn('p-3 pointer-events-auto')} /></PopoverContent></Popover>; }
 function HeaderTotalNumber({ value, tone }: { value: number; tone?: 'done' | 'remain' | 'delay' }) { return <span className={cn('tabular-nums font-semibold', value === 0 ? 'text-muted-foreground/40' : tone === 'done' ? 'text-emerald-700 dark:text-emerald-400' : tone === 'remain' ? 'text-amber-700 dark:text-amber-400' : tone === 'delay' ? 'text-destructive' : 'text-foreground')}>{value.toLocaleString()}</span>; }
 function VarianceCell({ value, invert = false }: { value: number; invert?: boolean }) {
