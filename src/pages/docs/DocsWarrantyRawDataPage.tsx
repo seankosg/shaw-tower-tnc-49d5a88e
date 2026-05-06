@@ -16,7 +16,7 @@ import {
   type VisibilityState,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ChevronDown, ChevronRight, Download, ExternalLink, Filter, Search, Upload } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, ExternalLink, Filter, MessageSquare, Search, Upload } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -475,6 +475,7 @@ export default function DocsWarrantyRawDataPage() {
 
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<WarrantyExportFormat>('view');
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
 
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -514,6 +515,47 @@ export default function DocsWarrantyRawDataPage() {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [reload]);
+
+  // ── Comment counts (warranty_comments) ──
+  useEffect(() => {
+    if (rows.length === 0) { setCommentCounts({}); return; }
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const refresh = async () => {
+      const ids = rows.map((r) => r.id);
+      const next: Record<string, number> = {};
+      const CHUNK = 500;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const chunk = ids.slice(i, i + CHUNK);
+        const { data, error } = await (supabase as any)
+          .from('warranty_comments')
+          .select('warranty_item_id')
+          .in('warranty_item_id', chunk);
+        if (error || !data) continue;
+        for (const r of data as Array<{ warranty_item_id: string }>) {
+          next[r.warranty_item_id] = (next[r.warranty_item_id] ?? 0) + 1;
+        }
+      }
+      if (!cancelled) setCommentCounts(next);
+    };
+
+    const debounced = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(refresh, 400);
+    };
+
+    refresh();
+
+    const ch = supabase.channel('warranty_comments_counts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'warranty_comments' }, debounced)
+      .subscribe();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      supabase.removeChannel(ch);
+    };
+  }, [rows]);
 
   // ── State persistence ──
   useEffect(() => {
@@ -789,12 +831,24 @@ export default function DocsWarrantyRawDataPage() {
 
           if (field === 'item_no') {
             const isResub = r.is_resubmission;
+            const cCount = commentCounts[r.id] ?? 0;
             return (
-              <span className={cn('font-mono text-xs', isResub && 'text-muted-foreground')}>
-                {isResub && <span className="mr-1">↳</span>}
+              <span className={cn('inline-flex items-center gap-1 font-mono text-xs', isResub && 'text-muted-foreground')}>
+                {isResub && <span className="mr-0.5">↳</span>}
                 {value ?? '—'}
                 {isResub && r.resubmission_seq > 0 && (
                   <span className="ml-1 text-[10px] text-muted-foreground">R{r.resubmission_seq}</span>
+                )}
+                {cCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); navigate(`/docs/warranty/${r.id}#comments`); }}
+                    title={`${cCount} comment${cCount > 1 ? 's' : ''}`}
+                    className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] leading-none text-muted-foreground hover:text-foreground hover:bg-muted"
+                  >
+                    <MessageSquare className="h-3 w-3" />
+                    <span className="tabular-nums">{cCount}</span>
+                  </button>
                 )}
               </span>
             );
@@ -809,7 +863,7 @@ export default function DocsWarrantyRawDataPage() {
     });
 
     return [selectColumn, expandColumn, cycleColumn, ...dataColumns, statusColumn, openColumn];
-  }, [getLabel, navigate, childCounts, collapsedParents, toggleParent]);
+  }, [getLabel, navigate, childCounts, collapsedParents, toggleParent, commentCounts]);
 
   // ── Visibility from Field Config (always show anchors) ──
   const ALWAYS_VISIBLE = useMemo(() => new Set([
