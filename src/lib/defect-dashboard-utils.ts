@@ -96,14 +96,13 @@ export function isActualComplete(item: Pick<DefectForDashboard, 'actual_completi
 }
 
 /**
- * Closure stage is "done" when:
- *   - actual_closure_date exists, OR
- *   - closure_status indicates closed (Done / Closed)
+ * Closure stage is "done" ONLY when closure_status === 'Done'.
+ * The presence of actual_closure_date alone is NOT sufficient — the status
+ * field is the single source of truth for closure completion.
  */
-export function isClosureComplete(item: Pick<DefectForDashboard, 'actual_closure_date' | 'closure_status'>): boolean {
-  if (item.actual_closure_date) return true;
+export function isClosureComplete(item: Pick<DefectForDashboard, 'closure_status'>): boolean {
   const status = String((item as any).closure_status ?? '').trim().toLowerCase();
-  return status === 'done' || status === 'closed';
+  return status === 'done';
 }
 
 export function getStagePlanDate(item: DefectForDashboard, stage: DefectDashboardStage): string | null {
