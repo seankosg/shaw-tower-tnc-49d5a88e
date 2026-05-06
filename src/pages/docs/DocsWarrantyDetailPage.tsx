@@ -313,15 +313,35 @@ export default function DocsWarrantyDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Threads */}
-      <ThreadsPanel
-        warrantyItemId={row.id}
-        projectId={row.project_id}
-        threads={threads}
-        canEdit={canEditRow}
-        userId={user?.id ?? null}
-        onChanged={load}
-      />
+      {/* Comments (includes migrated discussion threads) */}
+      <Card id="comments">
+        <CardHeader className="py-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Comments <span className="text-muted-foreground font-normal">({comments.length})</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {comments.length === 0 && <p className="text-xs text-muted-foreground">No comments yet.</p>}
+          {comments.map((c) => (
+            <div key={c.id} className="rounded border p-2 text-xs">
+              <div className="text-muted-foreground">{formatDateTimeDdMmmYyyy(c.created_at)}</div>
+              <div className="mt-1 whitespace-pre-wrap">{c.message.replace(/\s*<!--\s*migrated_from_thread:[^>]+-->\s*$/g, '').trim()}</div>
+            </div>
+          ))}
+          <div className="flex gap-2 pt-2 border-t">
+            <Input
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Add a comment…"
+              disabled={!user}
+            />
+            <Button size="sm" onClick={addComment} disabled={!newComment.trim() || saving || !user}>
+              Post
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Remarks */}
       {isFieldVisible('remarks') && (
