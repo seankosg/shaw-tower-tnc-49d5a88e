@@ -28,6 +28,11 @@ export function isStatusWorkDone(status: string | null | undefined): boolean {
   return String(status ?? '').trim().toLowerCase() === 'work done';
 }
 
+/** Returns true when the Aconex `Status` column indicates a dispute between LL and HDEC. */
+export function isStatusInDispute(status: string | null | undefined): boolean {
+  return String(status ?? '').trim().toLowerCase() === 'in dispute';
+}
+
 export function isValidDefectStatus(value: unknown): value is DefectStatusValue {
   return typeof value === 'string' && (DEFECT_STATUS_VALUES as string[]).includes(value);
 }
@@ -71,9 +76,13 @@ export function computeClosureStatus(
   asOf: string,
   completionStatus: DefectStatusValue,
 ): DefectStatusValue {
+  // Done has highest priority — actual_closure_date wins over any other state.
   if (input.actual_closure_date) return 'Done';
   // LL Status === "Closed" → treat as closure Done even when no actual_closure_date is present
   if (isStatusClosed(input.status)) return 'Done';
+  // LL Status === "In Dispute" → mark as InD (dispute between LL and HDEC).
+  // Only applies when not yet closed.
+  if (isStatusInDispute(input.status)) return 'InD';
   if (input.planned_closure_date && input.planned_closure_date < asOf) return 'Delay';
   if (completionStatus === 'Done' && !input.actual_closure_date) return 'WIP';
   return 'Planned';
