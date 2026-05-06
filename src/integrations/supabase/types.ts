@@ -2801,6 +2801,60 @@ export type Database = {
           },
         ]
       }
+      warranty_comments: {
+        Row: {
+          author_user_id: string
+          created_at: string
+          edited: boolean
+          id: string
+          message: string
+          parent_comment_id: string | null
+          recipients: string[]
+          type: string
+          updated_at: string
+          warranty_item_id: string
+        }
+        Insert: {
+          author_user_id: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          message: string
+          parent_comment_id?: string | null
+          recipients?: string[]
+          type?: string
+          updated_at?: string
+          warranty_item_id: string
+        }
+        Update: {
+          author_user_id?: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          message?: string
+          parent_comment_id?: string | null
+          recipients?: string[]
+          type?: string
+          updated_at?: string
+          warranty_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warranty_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "warranty_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warranty_comments_warranty_item_id_fkey"
+            columns: ["warranty_item_id"]
+            isOneToOne: false
+            referencedRelation: "warranty_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       warranty_items: {
         Row: {
           acra_info_status: string | null

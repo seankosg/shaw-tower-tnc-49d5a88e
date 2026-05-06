@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, MessageSquare, Plus, Trash2 } from 'lucide-react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { ArrowLeft, Loader2, MessageSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -15,7 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { formatDateTimeDdMmmYyyy, formatDdMmm } from '@/lib/format';
+import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import {
   WarrantyCycleProgress,
 } from '@/components/docs/WarrantyCycleProgress';
@@ -26,13 +26,15 @@ import {
   type WarrantyStatusToken,
 } from '@/lib/docs-warranty-status';
 
-interface WarrantyThread {
+interface WarrantyComment {
   id: string;
-  thread_label: string;
-  thread_date: string | null;
-  action_party: string | null;
-  content: string | null;
-  sort_order: number;
+  warranty_item_id: string;
+  author_user_id: string;
+  parent_comment_id: string | null;
+  type: string;
+  message: string;
+  recipients: string[];
+  edited: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -96,13 +98,15 @@ const STAGE_GROUPS: Array<{ title: string; fields: string[] }> = [
 export default function DocsWarrantyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile, roles } = useAuth();
   const { toast } = useToast();
   const { getLabel, isFieldVisible, isFieldEditable } = useDocsFieldConfig('warranty');
 
   const [row, setRow] = useState<any | null>(null);
   const [siblings, setSiblings] = useState<any[]>([]);
-  const [threads, setThreads] = useState<WarrantyThread[]>([]);
+  const [comments, setComments] = useState<WarrantyComment[]>([]);
+  const [newComment, setNewComment] = useState('');
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -125,19 +129,19 @@ export default function DocsWarrantyDetailPage() {
     setRow(data);
 
     if (data) {
-      const [sibRes, thrRes, logRes] = await Promise.all([
+      const [sibRes, cmtRes, logRes] = await Promise.all([
         (supabase as any).from('warranty_items')
           .select('id, item_no, resubmission_seq, is_resubmission, parent_id, current_stage, current_status')
           .eq('item_no', data.item_no).eq('is_active', true)
           .order('resubmission_seq', { ascending: true }),
-        (supabase as any).from('warranty_threads')
-          .select('*').eq('warranty_item_id', id).order('sort_order', { ascending: true }),
+        (supabase as any).from('warranty_comments')
+          .select('*').eq('warranty_item_id', id).order('created_at', { ascending: true }),
         (supabase as any).from('docs_change_log')
           .select('*').eq('record_id', id).eq('sub_module', 'warranty')
           .order('changed_at', { ascending: false }).limit(50),
       ]);
       setSiblings(sibRes.data ?? []);
-      setThreads((thrRes.data ?? []) as WarrantyThread[]);
+      setComments((cmtRes.data ?? []) as WarrantyComment[]);
       setLogs(logRes.data ?? []);
     }
     setLoading(false);
@@ -147,6 +151,36 @@ export default function DocsWarrantyDetailPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Scroll to #comments anchor
+  useEffect(() => {
+    if (!row || location.hash !== '#comments') return;
+    const t = window.setTimeout(() => {
+      document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [row, location.hash]);
+
+  const addComment = async () => {
+    if (!id || !newComment.trim() || !user) return;
+    const { error } = await (supabase as any).from('warranty_comments').insert({
+      warranty_item_id: id,
+      author_user_id: user.id,
+      message: newComment.trim(),
+      type: 'comment',
+    });
+    if (error) {
+      toast({ title: 'Comment failed', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setNewComment('');
+    const cmtRes = await (supabase as any)
+      .from('warranty_comments')
+      .select('*')
+      .eq('warranty_item_id', id)
+      .order('created_at', { ascending: true });
+    setComments((cmtRes.data ?? []) as WarrantyComment[]);
+  };
 
   const save = async (field: string, value: any) => {
     if (!id || !row) return;
@@ -208,6 +242,10 @@ export default function DocsWarrantyDetailPage() {
         <div className="ml-auto text-xs text-muted-foreground">
           Updated {formatDateTimeDdMmmYyyy(row.updated_at)}
         </div>
+        <Button variant="outline" size="sm" onClick={() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' })}>
+          <MessageSquare className="h-4 w-4 mr-1" /> Comments
+          {comments.length > 0 && <Badge variant="secondary" className="ml-2 h-4 px-1.5 text-[10px]">{comments.length}</Badge>}
+        </Button>
       </div>
 
       {!canEditRow && (
@@ -305,15 +343,35 @@ export default function DocsWarrantyDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Threads */}
-      <ThreadsPanel
-        warrantyItemId={row.id}
-        projectId={row.project_id}
-        threads={threads}
-        canEdit={canEditRow}
-        userId={user?.id ?? null}
-        onChanged={load}
-      />
+      {/* Comments (includes migrated discussion threads) */}
+      <Card id="comments">
+        <CardHeader className="py-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Comments <span className="text-muted-foreground font-normal">({comments.length})</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {comments.length === 0 && <p className="text-xs text-muted-foreground">No comments yet.</p>}
+          {comments.map((c) => (
+            <div key={c.id} className="rounded border p-2 text-xs">
+              <div className="text-muted-foreground">{formatDateTimeDdMmmYyyy(c.created_at)}</div>
+              <div className="mt-1 whitespace-pre-wrap">{c.message.replace(/\s*<!--\s*migrated_from_thread:[^>]+-->\s*$/g, '').trim()}</div>
+            </div>
+          ))}
+          <div className="flex gap-2 pt-2 border-t">
+            <Input
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Add a comment…"
+              disabled={!user}
+            />
+            <Button size="sm" onClick={addComment} disabled={!newComment.trim() || saving || !user}>
+              Post
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Remarks */}
       {isFieldVisible('remarks') && (
@@ -431,113 +489,3 @@ function FieldEditor({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-function ThreadsPanel({
-  warrantyItemId, projectId, threads, canEdit, userId, onChanged,
-}: {
-  warrantyItemId: string; projectId: string; threads: WarrantyThread[];
-  canEdit: boolean; userId: string | null; onChanged: () => void;
-}) {
-  const { toast } = useToast();
-  const [newLabel, setNewLabel] = useState('');
-  const [newDate, setNewDate] = useState('');
-  const [newParty, setNewParty] = useState('');
-  const [newContent, setNewContent] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const addThread = async () => {
-    if (!newLabel.trim() && !newContent.trim()) return;
-    setBusy(true);
-    const nextOrder = (threads[threads.length - 1]?.sort_order ?? 0) + 10;
-    const label = newLabel.trim() || `Note ${nextOrder / 10}`;
-    const { error } = await (supabase as any).from('warranty_threads').insert({
-      warranty_item_id: warrantyItemId,
-      project_id: projectId,
-      thread_label: label,
-      thread_date: newDate || null,
-      action_party: newParty.trim() || null,
-      content: newContent.trim() || null,
-      sort_order: nextOrder,
-      created_by: userId,
-    });
-    setBusy(false);
-    if (error) {
-      toast({ title: 'Add failed', description: error.message, variant: 'destructive' });
-      return;
-    }
-    setNewLabel(''); setNewDate(''); setNewParty(''); setNewContent('');
-    onChanged();
-  };
-
-  const updateThread = async (t: WarrantyThread, patch: Partial<WarrantyThread>) => {
-    const { error } = await (supabase as any).from('warranty_threads')
-      .update({ ...patch, updated_by: userId }).eq('id', t.id);
-    if (error) { toast({ title: 'Save failed', description: error.message, variant: 'destructive' }); return; }
-    onChanged();
-  };
-
-  const deleteThread = async (t: WarrantyThread) => {
-    if (!confirm(`Delete thread "${t.thread_label}"?`)) return;
-    const { error } = await (supabase as any).from('warranty_threads').delete().eq('id', t.id);
-    if (error) { toast({ title: 'Delete failed', description: error.message, variant: 'destructive' }); return; }
-    onChanged();
-  };
-
-  return (
-    <Card>
-      <CardHeader className="py-3 flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <MessageSquare className="h-4 w-4" />
-          Discussion Threads <span className="text-muted-foreground font-normal">({threads.length})</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {threads.length === 0 && (
-          <p className="text-xs text-muted-foreground">No threads yet.</p>
-        )}
-        {threads.map((t) => (
-          <div key={t.id} className="rounded border p-2 text-xs space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold">{t.thread_label}</span>
-              {t.thread_date && <span className="text-muted-foreground">· {formatDdMmm(t.thread_date)}</span>}
-              {t.action_party && <Badge variant="outline" className="text-[9px]">{t.action_party}</Badge>}
-              {canEdit && (
-                <Button variant="ghost" size="sm" className="ml-auto h-6 w-6 p-0" onClick={() => deleteThread(t)}>
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              )}
-            </div>
-            {canEdit ? (
-              <Textarea
-                defaultValue={t.content ?? ''}
-                rows={2}
-                className="text-xs"
-                onBlur={(e) => {
-                  const v = e.target.value.trim();
-                  if (v !== (t.content ?? '')) updateThread(t, { content: v || null });
-                }}
-              />
-            ) : (
-              <div className="whitespace-pre-wrap text-foreground/90">{t.content ?? '—'}</div>
-            )}
-          </div>
-        ))}
-
-        {canEdit && (
-          <div className="border-t pt-3 space-y-2">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Add thread</div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              <Input className="h-8 text-xs" placeholder="Label (e.g. Tread 1)" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
-              <Input className="h-8 text-xs" type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
-              <Input className="h-8 text-xs" placeholder="Action party" value={newParty} onChange={(e) => setNewParty(e.target.value)} />
-            </div>
-            <Textarea className="text-xs" placeholder="Content / discussion notes" rows={2} value={newContent} onChange={(e) => setNewContent(e.target.value)} />
-            <Button size="sm" disabled={busy || (!newLabel.trim() && !newContent.trim())} onClick={addThread}>
-              <Plus className="h-3 w-3 mr-1" /> Add thread
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}

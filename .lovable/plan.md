@@ -1,39 +1,61 @@
-# Defect Status — 동기화 + In Dispute 카드 신설
+# Warranty Comments 통합 + Thread 일회성 마이그레이션
 
-## 사용자 결정 사항
-- 9건 일괄 UPDATE 진행: **승인**
-- `Done` vs `InD` 충돌 → **Done 우선**
-- 알람 위치 → **Tier 3 보라색 AlertBanner**
+## 목표
+T&C / OMM Raw Data와 동일한 **댓글(Comments) 기능**을 Warranty Raw Data/Detail에 추가하고, 기존 임포트로 쌓인 `warranty_threads` **185건(59 항목)** 을 신규 `warranty_comments` 테이블로 **1회 이전**합니다. **Thread와 Comment를 분리하지 않고 모두 동일한 Comment로 통합**합니다.
 
----
+## Step A — DB 마이그레이션 (스키마)
 
-## DB 현황 (확인 완료)
-- `actual_closure_date` 있고 `closure_status≠Done`: **9건** (WIP 5, NULL 2, Planned 2)
-- `status ILIKE 'in dispute'`: **32건**
+`warranty_comments` 테이블 생성 (omm_comments 패턴 그대로):
+- `id`, `warranty_item_id` (FK CASCADE), `author_user_id`
+- `parent_comment_id` (self-FK CASCADE) — 답글
+- `type` ('comment' / 'instruction' / 'reply')
+- `message`, `recipients text[]`, `edited`, `created_at`, `updated_at`
+- 인덱스: `warranty_item_id`, `parent_comment_id`, `created_at`, GIN(`recipients`)
+- RLS (omm_comments와 동일):
+  - SELECT: authenticated 모두
+  - INSERT: 본인
+  - UPDATE/DELETE: 작성자 본인 또는 admin/superuser
+- updated_at 트리거
 
----
+## Step B — 일회성 데이터 마이그레이션
 
-## 실행 순서
+`warranty_threads` 185건 → `warranty_comments` 복사:
+- **`message`** = thread 헤더 + 내용 합성:
+  ```
+  **{display_label}**
+  {content}
+  ```
+  action_party 있으면 `_Action: {party}_` 라인 추가
+- **`author_user_id`** = 첫 admin 유저 ID (시스템 마이그레이션)
+- **`type`** = `'comment'`
+- **`parent_comment_id`** = NULL (모두 최상위, 평탄화)
+- **`created_at`** = thread.created_at + sort_order × 1ms (순서 보존)
+- 중복 방지 마커: message 끝에 `<!-- migrated_from_thread:{id} -->`
 
-### Step A — DB 트리거 마이그레이션
-`defect_items`에 BEFORE INSERT/UPDATE 트리거 추가. `actual_closure_date IS NOT NULL`이면 `closure_status := 'Done'` 강제. 향후 어느 경로(import / inline edit / bulk edit)에서도 비동기화 방지.
+## Step C — UI 코드 변경
 
-### Step B — DB 일괄 UPDATE (insert 도구)
-1. 기존 9건 → `closure_status='Done'` 동기화
-2. 기존 32건 → `closure_status='InD'` 백필 (단, `actual_closure_date IS NULL`인 것만)
+1. **`src/components/docs/WarrantyComments.tsx`** (신규)
+   - OMM Detail의 댓글 컴포넌트(`DocsOMMDetailPage` 내부 패턴)를 참고해 작성
+   - 목록/작성/수정/삭제/답글/recipients 멘션
 
-### Step C — 코드 변경
-1. **`src/lib/defect-utils.ts`** — `DefectStatusValue`에 `'InD'` 추가, `DEFECT_STATUS_VALUES` 배열 확장
-2. **`src/lib/defect-status.ts`** — `isStatusInDispute()` 헬퍼 + `computeClosureStatus()`에 InD 분기 추가 (Done > InD 우선순위)
-3. **`src/components/defects/DefectStatusBadge.tsx`** — `InD` 보라 톤 클래스 추가
-4. **`src/pages/DefectDashboardPage.tsx`** — `inDisputeCount` KPI 추가 + Tier 2 카드 (Overdue-Completion ↔ Overdue-Closure 사이 삽입) + Tier 3 보라 AlertBanner
-5. **`src/pages/DefectRawDataPage.tsx`** — closure_status 필터 옵션에 `InD` 자동 포함 확인
+2. **`src/pages/docs/DocsWarrantyDetailPage.tsx`**
+   - 기존 **Discussion Threads 섹션 제거** (사용자 지시: thread/comment 분리 안 함)
+   - 그 자리에 `<WarrantyComments warrantyItemId={...} projectId={...} />` 1개 섹션만 노출
+   - thread CRUD 코드 / state / fetch 로직 제거
 
-### Step D — 테스트
-`src/test/defect-status.test.ts`에 InD 매핑 케이스 추가
+3. **`src/pages/docs/DocsWarrantyRawDataPage.tsx`**
+   - 변경 없음 (선택적으로 댓글 카운트 배지는 후속 작업)
 
----
+## Step D — 후속 정리 (선택)
 
-## Out of scope
-- Schedule/Critical Watchlist 등 status 직접 사용 6곳은 InD 값 그대로 표시 (별도 색상은 후속)
-- Overdue/At-Risk 계산에서 InD 행 제외하지 않음 (요청 시 후속)
+- **`warranty_threads` 테이블 자체는 이번 작업에서 유지** (안전망). UI에서는 더 이상 노출하지 않음. 안정화 확인 후 별도 작업으로 DROP 가능.
+- **임포트 파서**: 다음 임포트부터 `Tread*` 헤더를 `warranty_comments`로 직접 적재하도록 변경 — 별도 작업으로 분리 (이번엔 out of scope).
+
+## Step E — 검증
+
+- `SELECT count(*) FROM warranty_comments` = 185
+- `SELECT count(DISTINCT warranty_item_id) FROM warranty_comments` = 59
+- Warranty Detail 진입 → Comments 섹션에 임포트된 thread가 시간순으로 평탄하게 표시
+- 새 댓글 작성/수정/삭제/답글 동작
+
+승인하시면 Step A 마이그레이션부터 실행합니다.
