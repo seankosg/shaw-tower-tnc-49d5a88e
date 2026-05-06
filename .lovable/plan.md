@@ -1,69 +1,80 @@
-## 문제 진단
+## 목표
 
-`DocsWarrantyRawDataPage.tsx`(L886–899)와 `DocsOMMRawDataPage.tsx`(L656–682) 모두 4개 필드의 옵션을 **현재 화면에 로드된 행에서 distinct 추출**해 만들고 있습니다:
+Defect Dashboard Tier 1 KPI 카드 "Closure Done"이 **`closure_status === 'Done'`**일 때만 카운트되도록 변경. 현재는 `actual_closure_date`에 날짜가 들어 있기만 해도 status와 무관하게 Done으로 집계되어 부정확함.
 
+## 현재 동작 (문제)
+
+`src/lib/defect-dashboard-utils.ts:103`
 ```ts
-const optionFields = useMemo(() => {
-  const opts = (field) =>
-    [...new Set(rows.map((r) => r[field]).filter(Boolean))]...
-  return {
-    team: opts('team'),
-    subcontractor_name: opts('subcontractor_name'),
-    hdec_pic_name: opts('hdec_pic_name'),
-    hdec_eng_name: opts('hdec_eng_name'),
-    ...
-  };
-}, [rows]);
+export function isClosureComplete(item) {
+  if (item.actual_closure_date) return true;  // ← status 무시하고 무조건 Done
+  const status = String(item.closure_status ?? '').trim().toLowerCase();
+  return status === 'done' || status === 'closed';
+}
 ```
 
-이 옵션은 **컬럼 필터 드롭다운**과 **BulkActionBar의 select**, 양쪽에서 모두 사용됩니다. 결과적으로:
-- 마스터에 등록된 사람/업체라도 **현재 데이터에 한 번도 등장하지 않으면** 드롭다운에 안 보임
-- 새 행을 만들 때나 잘못된 데이터를 정정할 때 마스터 표준값으로 일괄 변경 불가
-- 다른 모듈(Defect Detail, OMM Detail, Docs As-Built)은 이미 마스터를 직접 조회하고 있어 일관성이 깨짐
+이 함수는 카드 카운트 외에도:
+- `buildClosurePie` (도넛 차트)
+- `topOverdue` (지연 Top 10)
+- `isStageDone(item, 'closure')` (cascade 로직 → completion/start 단계 판정)
+- `DefectRawDataPage` 의 `closureComplete` URL 필터
+- `DefectStageProgress` 컴포넌트
 
-## 정정 방향 — 공통 마스터를 단일 소스로
+전반에 사용되므로 **단일 소스인 `isClosureComplete` 자체를 수정**하면 모든 곳에 일관되게 적용됨.
 
-다른 모듈(`DocsRawDataPage`, `DefectDetailPage`, `DocsOMMDetailPage`)이 이미 사용하는 패턴을 그대로 재사용합니다.
+## 변경 사항
 
-| 필드 | 소스 |
-|---|---|
-| **team** | `team_type` enum: `Mech`, `Elec`, `Arch`, `Supp`, `Design` (하드코드 상수) |
-| **subcontractor_name** | `subcontractor_master` 테이블 (`is_active = true`, `type in ('sub','subsub')`, `name` 사용) |
-| **hdec_pic_name** | `hdec_pic_master` 테이블 (`is_active = true`, `name`) |
-| **hdec_eng_name** | `profiles` 테이블 (`is_active = true`, `name` distinct) — `DocsRawDataPage`와 동일 규칙 |
+### 1. `src/lib/defect-dashboard-utils.ts` — `isClosureComplete` 엄격화
 
-## 작업 내용
+```ts
+export function isClosureComplete(item: Pick<DefectForDashboard, 'closure_status'>): boolean {
+  const status = String((item as any).closure_status ?? '').trim().toLowerCase();
+  return status === 'done';
+}
+```
 
-### 1) 공통 훅 신규 작성 — `src/hooks/useCommonMasters.ts`
-- 한 번 마운트 시 4개 마스터를 병렬로 조회 (`Promise.all`)
-- 반환: `{ teamOptions, subcontractorOptions, hdecPicOptions, hdecEngOptions, loading }`
-- 각 옵션은 `{ value, label }[]` (이미 알파벳순 정렬, distinct)
-- TanStack Query 없이 `useEffect` + 모듈 레벨 메모리 캐시(60초)로 단순화 — Warranty/OMM이 같은 세션에서 양쪽 다 들러도 1회만 fetch
-- 페이지에서 새 마스터가 추가됐을 때를 대비해 `refresh()` 노출
+- `actual_closure_date` 체크 제거
+- `'closed'` 도 제거 (사용자가 "Done만"이라고 명시)
+- JSDoc 주석을 새 정책에 맞게 업데이트
 
-### 2) `DocsWarrantyRawDataPage.tsx` 수정
-- `optionFields` 정의에서 `team` / `subcontractor_name` / `hdec_pic_name` / `hdec_eng_name` 4개 키를 마스터에서 받은 옵션으로 교체
-- 나머지 키(`category`, `acra_info_status`)는 기존대로 distinct 추출 유지 — 마스터가 없는 도메인 값
-- 컬럼 필터 드롭다운에 전달되는 `filterOptions`도 같은 소스를 보도록 정리 (이미 `optionFields`를 보고 있으므로 자동으로 반영됨)
-- BulkActionBar `bulkFields`의 4개 필드 옵션이 자동으로 마스터값으로 전환됨 (참조만 바뀜)
+### 2. Cascade 로직(`isStageDone`) 검토 — 변경 없음
 
-### 3) `DocsOMMRawDataPage.tsx` 수정
-- 동일한 4개 키 교체 (Warranty와 같은 패턴)
-- 나머지(`category_group`, `category`, `training_required`, `current_stage`, `current_status`, `draft_response_status`, `final_response_status`)는 그대로 유지
+`isStageDone`의 cascade ("completion done이면 closure도 done으로 간주")는 그대로 유지. 단, closure 단계 자체는 새 엄격 정의를 따르므로 자연스럽게 일관됨:
+- `closure` → `closure_status === 'Done'`만
+- `completion` → closure done이거나 actual_completion_date 있음
+- `start` → 위 둘 중 하나거나 actual_start_date 있음
 
-### 4) 정렬·표시 보정
-- 마스터에 없는 값이 raw_payload/import로 이미 들어와 있는 경우, **드롭다운에 같이 보이도록** 마스터 옵션과 현재 데이터에서 추출한 값을 union (마스터 우선, 그 외는 라벨 끝에 ` (legacy)` 표기)
-- 이렇게 하면 기존 데이터를 가리지 않으면서도 "표준값으로 일괄 정정"이 가능해짐
+### 3. 부수 효과 (자동 반영, 추가 코드 변경 불필요)
 
-## 변경 파일
+- **Closure Done KPI 카드** (`DefectDashboardPage.tsx:170`): status='Done' 행만 집계
+- **Overall Progress %** (line 172): `closureDone / total` 비율도 함께 정정
+- **Difference KPI** (`actualDone - closureDone`): 의미가 더 명확해짐 (완료됐지만 아직 closure 처리 안 된 항목 수)
+- **Closure Pie** (`DefectDashboardPage.tsx:941`): Closed 슬라이스가 status='Done'만
+- **Top Overdue** (line 277): `closure_status='Done'`이 아닌 행은 모두 지연 후보가 됨
+- **Raw Data 필터** (`DefectRawDataPage.tsx:670-671`): "closureComplete=true" URL 필터가 동일 기준
+- **DefectStageProgress** 컴포넌트: 단계 표시 일관
 
-- 신규: `src/hooks/useCommonMasters.ts`
-- 수정: `src/pages/docs/DocsWarrantyRawDataPage.tsx`
-- 수정: `src/pages/docs/DocsOMMRawDataPage.tsx`
+### 4. 사용자 영향 안내
 
-## 영향 범위
+이 변경 후 다음 케이스가 새롭게 "미완료(Not Done)"로 바뀝니다:
+- `actual_closure_date`는 입력됐지만 `closure_status`가 `WIP`/`Planned`/`Delay` 등인 행
+- `closure_status`가 `'Closed'` 인 행 (있다면)
 
-- DB 스키마 변경 없음
-- RLS/엣지함수 변경 없음
-- 기존 데이터 그대로 표시됨 (legacy 값 union 처리 덕분)
-- 두 페이지의 컬럼 필터·BulkActionBar 양쪽에서 동일하게 마스터 기반 옵션 노출
+→ **데이터 영향도 사전 확인 쿼리** 1회 실행:
+```sql
+SELECT closure_status, count(*) 
+FROM defect_items 
+WHERE is_active=true AND actual_closure_date IS NOT NULL 
+GROUP BY closure_status;
+```
+결과를 사용자에게 보고하여, 의외로 큰 수의 행이 Done에서 빠진다면 추가 협의.
+
+## 변경 파일 (1개)
+
+- `src/lib/defect-dashboard-utils.ts` — `isClosureComplete` 함수 본문 + 주석
+
+## 테스트
+
+- Defect Dashboard 진입 → "Closure Done" 카드 숫자가 `closure_status='Done'` 행 수와 정확히 일치하는지 확인
+- "Closure Done" 카드 클릭 → Raw Data 페이지에서 같은 수의 행이 표시되는지 확인
+- Closure pie 차트의 Closed 슬라이스도 동일 수치인지 확인
