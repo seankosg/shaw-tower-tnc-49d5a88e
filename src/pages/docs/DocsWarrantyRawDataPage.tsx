@@ -53,6 +53,7 @@ import {
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
+import { useCommonMasters, unionWithLegacy } from '@/hooks/useCommonMasters';
 import { useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
@@ -883,20 +884,23 @@ export default function DocsWarrantyRawDataPage() {
   );
 
   // ── Bulk fields ──
+  const masters = useCommonMasters();
   const optionFields = useMemo(() => {
     const opts = (field: keyof WarrantyRow) =>
       [...new Set(rows.map((r) => r[field]).filter((v): v is string => Boolean(v)))]
         .sort((a, b) => a.localeCompare(b))
         .map((v) => ({ value: v, label: v }));
+    const present = (field: keyof WarrantyRow) =>
+      rows.map((r) => r[field] as unknown as string | null | undefined);
     return {
       category: opts('category'),
-      team: opts('team'),
-      subcontractor_name: opts('subcontractor_name'),
-      hdec_pic_name: opts('hdec_pic_name'),
-      hdec_eng_name: opts('hdec_eng_name'),
+      team: unionWithLegacy(masters.teamOptions, present('team')),
+      subcontractor_name: unionWithLegacy(masters.subcontractorOptions, present('subcontractor_name')),
+      hdec_pic_name: unionWithLegacy(masters.hdecPicOptions, present('hdec_pic_name')),
+      hdec_eng_name: unionWithLegacy(masters.hdecEngOptions, present('hdec_eng_name')),
       acra_info_status: opts('acra_info_status'),
     };
-  }, [rows]);
+  }, [rows, masters.teamOptions, masters.subcontractorOptions, masters.hdecPicOptions, masters.hdecEngOptions]);
 
   const STATUS_OPTIONS = useMemo(() => ([
     { value: 'A', label: 'A — Approved' },

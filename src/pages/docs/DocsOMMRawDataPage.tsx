@@ -49,6 +49,7 @@ import { OmmStatusBadge } from '@/components/docs/OmmStatusBadge';
 import { OmmCopyQuantityCell } from '@/components/docs/OmmCopyQuantityCell';
 import { OmmCycleProgress } from '@/components/docs/OmmCycleProgress';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
+import { useCommonMasters, unionWithLegacy } from '@/hooks/useCommonMasters';
 import { useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
@@ -653,18 +654,21 @@ export default function DocsOMMRawDataPage() {
   }, [rows, mismatchOnly, resubFilter]);
 
   // ── Option fields for multi-select filters ────────────────────────────────
+  const masters = useCommonMasters();
   const optionFields = useMemo(() => {
     const opts = (field: keyof OMMRow) =>
       [...new Set(rows.map((r) => r[field]).filter((v): v is string => Boolean(v)))]
         .sort((a, b) => a.localeCompare(b))
         .map((v) => ({ value: v, label: v }));
+    const present = (field: keyof OMMRow) =>
+      rows.map((r) => r[field] as unknown as string | null | undefined);
     return {
       category_group: opts('category_group'),
       category: opts('category'),
-      team: opts('team'),
-      subcontractor_name: opts('subcontractor_name'),
-      hdec_pic_name: opts('hdec_pic_name'),
-      hdec_eng_name: opts('hdec_eng_name'),
+      team: unionWithLegacy(masters.teamOptions, present('team')),
+      subcontractor_name: unionWithLegacy(masters.subcontractorOptions, present('subcontractor_name')),
+      hdec_pic_name: unionWithLegacy(masters.hdecPicOptions, present('hdec_pic_name')),
+      hdec_eng_name: unionWithLegacy(masters.hdecEngOptions, present('hdec_eng_name')),
       training_required: opts('training_required'),
       draft_response_status: [
         { value: 'A', label: 'A' },
@@ -679,7 +683,7 @@ export default function DocsOMMRawDataPage() {
       current_stage: opts('current_stage'),
       current_status: opts('current_status'),
     };
-  }, [rows]);
+  }, [rows, masters.teamOptions, masters.subcontractorOptions, masters.hdecPicOptions, masters.hdecEngOptions]);
 
   // ── Column definitions ────────────────────────────────────────────────────
   const updateField = useCallback(
