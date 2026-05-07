@@ -1,33 +1,44 @@
-## 확인 결과
-Raw Data 테이블들에는 내부 세로 스크롤 자체는 있습니다. 다만 공통으로 `scrollbar-hide` 클래스가 적용되어 있어서 **스크롤은 되지만 스크롤바는 보이지 않게** 되어 있습니다.
+## 1회성 마이그레이션 계획
 
-### 영향 받는 페이지
-- `src/pages/SubtestList.tsx:2018`
-- `src/pages/DefectRawDataPage.tsx:1576`
-- `src/pages/docs/DocsRawDataPage.tsx:1148`
-- `src/pages/docs/DocsOMMRawDataPage.tsx:1450`
-- `src/pages/docs/DocsWarrantyRawDataPage.tsx:1320`
+### 1단계 — 2026년 5월 6일 작성 코멘트 일괄 삭제
+- `warranty_comments`에서 `created_at >= '2026-05-06' AND created_at < '2026-05-07'` 조건의 행 삭제
+- 영향: **19행** (모두 `Tread 2-2 Action party` 마이그레이션 잔재로 확인됨)
 
-### 숨김 원인
-`src/index.css:121-126`
-```css
-.scrollbar-hide {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
+### 2단계 — 마이그레이션 흔적 제거 (실제 내용만 노출)
+대상: `warranty_comments` 중 message에 `<!-- migrated_from_thread:... -->` 마커가 포함된 행 (1단계 후 약 130행)
+
+각 코멘트 message에서 다음을 정규식으로 제거:
+1. **선두 thread 헤더 줄**: `**Tread …**` 로 시작하는 첫 줄
+2. **선두 Action 줄**: 그 다음에 오는 `_Action: …_` 한 줄 (있을 때만)
+3. **말미 HTML 주석 마커**: `<!-- migrated_from_thread:UUID -->`
+4. 결과 양 끝의 공백/빈 줄을 `trim`
+
+남는 본문(실제 내용)만 저장됩니다.
+
+### 기술 메모 (실행 SQL)
+```sql
+-- 1단계
+DELETE FROM warranty_comments
+WHERE created_at >= '2026-05-06' AND created_at < '2026-05-07';
+
+-- 2단계
+UPDATE warranty_comments
+SET message = btrim(
+  regexp_replace(
+    regexp_replace(
+      regexp_replace(message,
+        '^\*\*Tread[^\n]*\n', '', 'i'),         -- 선두 Tread 헤더
+      '^_Action:[^\n]*_\s*\n', '', 'i'),         -- 선두 Action 줄
+    '\s*<!--\s*migrated_from_thread:[^>]+-->\s*$', '', 'i'  -- 말미 마커
+  ),
+  E' \t\n\r'
+),
+updated_at = updated_at  -- created_at/updated_at는 변경하지 않음
+WHERE message ~ 'migrated_from_thread';
 ```
 
-## 수정 계획
-1. Raw Data 테이블 스크롤 컨테이너들에서 `scrollbar-hide` 제거
-2. 세로 스크롤바가 항상 자리 차지를 하도록 `scrollbar-gutter: stable` 적용 검토
-3. 각 Raw Data 페이지에서 테이블 내부 세로 스크롤바가 실제로 보이는지 확인
+### 범위 외
+- `warranty_threads` 테이블 변경 없음
+- 코드 변경 없음, 1회성
 
-## 기술 메모
-- 현재 구조는 `max-h-[calc(100vh-...)] + overflow-auto`라서 내부 스크롤은 정상입니다.
-- 문제는 기능 부재가 아니라 **의도된 숨김 스타일**입니다.
-- Spare Part Raw Data는 별도 구조라 이번 이슈와는 조금 다르게 동작합니다.
-
-승인해주시면 스크롤바가 실제로 보이도록 반영하겠습니다.
+승인하시면 실행합니다.
