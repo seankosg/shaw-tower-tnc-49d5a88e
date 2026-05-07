@@ -9,6 +9,33 @@ const corsHeaders = {
 const CHUNK_SIZE = 8;
 const BUCKET = "db-backups";
 
+// Retry policy for transient failures (network blips, 5xx, rate limits).
+const RETRY_MAX_ATTEMPTS = Number(Deno.env.get("SNAPSHOT_RETRY_MAX_ATTEMPTS") ?? 5);
+const RETRY_BASE_MS = Number(Deno.env.get("SNAPSHOT_RETRY_BASE_MS") ?? 500);
+const RETRY_MAX_MS = Number(Deno.env.get("SNAPSHOT_RETRY_MAX_MS") ?? 8000);
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= RETRY_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (attempt >= RETRY_MAX_ATTEMPTS) break;
+      const expo = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** (attempt - 1));
+      const jitter = Math.floor(Math.random() * Math.min(250, expo));
+      const delay = expo + jitter;
+      console.warn(`[retry] ${label} attempt ${attempt} failed: ${(e as Error).message}; retrying in ${delay}ms`);
+      await sleep(delay);
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
 // Split BACKUP_TABLES into chunks of CHUNK_SIZE.
 function getStages(): string[][] {
   const stages: string[][] = [];
@@ -25,7 +52,11 @@ async function uploadTable(client: any, folder: string, table: string): Promise<
   const chunks: string[] = ["["];
   let first = true;
   while (true) {
-    const { data, error } = await client.from(table).select("*").range(from, from + pageSize - 1);
+    const { data, error } = await withRetry(`select ${table} @${from}`, async () => {
+      const res = await client.from(table).select("*").range(from, from + pageSize - 1);
+      if (res.error) throw new Error(`${table}: ${res.error.message}`);
+      return res;
+    });
     if (error) throw new Error(`${table}: ${error.message}`);
     if (!data || data.length === 0) break;
     for (const row of data) {
@@ -39,13 +70,15 @@ async function uploadTable(client: any, folder: string, table: string): Promise<
   chunks.push("]");
   const json = chunks.join("");
   const path = `${folder}/${table}.json`;
-  const { error: upErr } = await client.storage
-    .from(BUCKET)
-    .upload(path, new Blob([json], { type: "application/json" }), {
-      contentType: "application/json",
-      upsert: true,
-    });
-  if (upErr) throw new Error(`upload ${table}: ${upErr.message}`);
+  await withRetry(`upload ${table}`, async () => {
+    const { error: upErr } = await client.storage
+      .from(BUCKET)
+      .upload(path, new Blob([json], { type: "application/json" }), {
+        contentType: "application/json",
+        upsert: true,
+      });
+    if (upErr) throw new Error(`upload ${table}: ${upErr.message}`);
+  });
   return total;
 }
 
