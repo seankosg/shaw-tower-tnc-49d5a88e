@@ -26,6 +26,8 @@ import {
   WARRANTY_OVERALL_STATUS_COLOR,
   type WarrantyStatusToken,
 } from '@/lib/docs-warranty-status';
+import { useCommonMasters, unionWithLegacy, type MasterOption } from '@/hooks/useCommonMasters';
+import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 
 interface WarrantyComment {
   id: string;
@@ -117,6 +119,19 @@ export default function DocsWarrantyDetailPage() {
   const canEditRow = isPrivileged || (isDSuper && teamMatches);
   const canEditField = (field: string) => canEditRow && isFieldEditable(field, roles);
 
+  const masters = useCommonMasters();
+  const subOptions = useMemo(
+    () => unionWithLegacy(masters.subcontractorOptions, [row?.subcontractor_name]),
+    [masters.subcontractorOptions, row?.subcontractor_name],
+  );
+  const picOptions = useMemo(
+    () => unionWithLegacy(masters.hdecPicOptions, [row?.hdec_pic_name]),
+    [masters.hdecPicOptions, row?.hdec_pic_name],
+  );
+  const engOptions = useMemo(
+    () => unionWithLegacy(masters.hdecEngOptions, [row?.hdec_eng_name]),
+    [masters.hdecEngOptions, row?.hdec_eng_name],
+  );
 
   const load = async () => {
     if (!id) return;
@@ -269,6 +284,7 @@ export default function DocsWarrantyDetailPage() {
               value={(row as any)[f]}
               disabled={!canEditField(f) || saving || f === 'item_no'}
               onSave={(v) => save(f, v)}
+              subOptions={subOptions} picOptions={picOptions} engOptions={engOptions}
             />
           ))}
         </CardContent>
@@ -294,6 +310,7 @@ export default function DocsWarrantyDetailPage() {
                       value={(row as any)[f]}
                       disabled={!canEditField(f) || saving}
                       onSave={(v) => save(f, v)}
+                      subOptions={subOptions} picOptions={picOptions} engOptions={engOptions}
                     />
                   ))}
                 </div>
@@ -315,6 +332,7 @@ export default function DocsWarrantyDetailPage() {
               value={(row as any)[f]}
               disabled={!canEditField(f) || saving}
               onSave={(v) => save(f, v)}
+              subOptions={subOptions} picOptions={picOptions} engOptions={engOptions}
             />
           ))}
         </CardContent>
@@ -390,8 +408,11 @@ export default function DocsWarrantyDetailPage() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 function FieldEditor({
-  field, label, value, disabled, onSave,
-}: { field: string; label: string; value: any; disabled?: boolean; onSave: (v: any) => void }) {
+  field, label, value, disabled, onSave, subOptions, picOptions, engOptions,
+}: {
+  field: string; label: string; value: any; disabled?: boolean; onSave: (v: any) => void;
+  subOptions?: MasterOption[]; picOptions?: MasterOption[]; engOptions?: MasterOption[];
+}) {
   if (DATE_FIELDS.has(field)) {
     return (
       <div>
@@ -426,6 +447,39 @@ function FieldEditor({
               <SelectItem key={s} value={s}>
                 <span className={cn('inline-block px-1.5 py-0.5 rounded text-[10px] border', WARRANTY_STATUS_BADGE[s])}>{s}</span>
               </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+  if (field === 'team') {
+    return (
+      <div>
+        <Label className="text-xs">{label}</Label>
+        <Select value={value ?? '__none__'} disabled={disabled} onValueChange={(v) => onSave(v === '__none__' ? null : v)}>
+          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">—</SelectItem>
+            {ALL_TEAMS.map((t) => (
+              <SelectItem key={t} value={t}>{TEAM_LABELS[t as TeamType]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+  if (field === 'subcontractor_name' || field === 'hdec_pic_name' || field === 'hdec_eng_name') {
+    const opts = field === 'subcontractor_name' ? subOptions : field === 'hdec_pic_name' ? picOptions : engOptions;
+    return (
+      <div>
+        <Label className="text-xs">{label}</Label>
+        <Select value={value ?? '__none__'} disabled={disabled} onValueChange={(v) => onSave(v === '__none__' ? null : v)}>
+          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">—</SelectItem>
+            {(opts ?? []).map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>

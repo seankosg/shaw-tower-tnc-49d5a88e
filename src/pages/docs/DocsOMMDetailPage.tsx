@@ -10,7 +10,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SuggestField } from '@/components/ui/suggest-field';
 import { ArrowLeft, Loader2, MessageSquare } from 'lucide-react';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import { OmmStatusBadge } from '@/components/docs/OmmStatusBadge';
@@ -20,8 +19,7 @@ import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { OMM_CATEGORY_LABELS } from '@/lib/docs-omm-status';
 import { OmmComments } from '@/components/comments/OmmComments';
-
-type SuggestOption = { name: string };
+import { useCommonMasters, unionWithLegacy, type MasterOption } from '@/hooks/useCommonMasters';
 
 const IDENTITY_FIELDS = [
   'sn',
@@ -92,9 +90,7 @@ export default function DocsOMMDetailPage() {
   const [logs, setLogs] = useState<any[]>([]);
   // Comments handled by <OmmComments />
 
-  const [subOptions, setSubOptions] = useState<SuggestOption[]>([]);
-  const [picOptions, setPicOptions] = useState<SuggestOption[]>([]);
-  const [engOptions, setEngOptions] = useState<SuggestOption[]>([]);
+  const masters = useCommonMasters();
 
   // Row-level edit permission — mirrors `docs_omm` RLS policy:
   //   admin / superuser / senior_user / user → all rows
@@ -155,19 +151,19 @@ export default function DocsOMMDetailPage() {
     return () => window.clearTimeout(t);
   }, [row, location.hash]);
 
-  // Master data for suggest fields
-  useEffect(() => {
-    (async () => {
-      const [subRes, picRes, engRes] = await Promise.all([
-        (supabase as any).from('subcontractor_master').select('name').eq('is_active', true).order('name'),
-        (supabase as any).from('hdec_pic_master').select('name').eq('is_active', true).order('name'),
-        (supabase as any).from('hdec_eng_master').select('name').eq('is_active', true).order('name'),
-      ]);
-      setSubOptions((subRes.data ?? []) as SuggestOption[]);
-      setPicOptions((picRes.data ?? []) as SuggestOption[]);
-      setEngOptions((engRes.data ?? []) as SuggestOption[]);
-    })();
-  }, []);
+  // Master options merged with current row's legacy values
+  const subOptions = useMemo(
+    () => unionWithLegacy(masters.subcontractorOptions, [row?.subcontractor_name]),
+    [masters.subcontractorOptions, row?.subcontractor_name],
+  );
+  const picOptions = useMemo(
+    () => unionWithLegacy(masters.hdecPicOptions, [row?.hdec_pic_name]),
+    [masters.hdecPicOptions, row?.hdec_pic_name],
+  );
+  const engOptions = useMemo(
+    () => unionWithLegacy(masters.hdecEngOptions, [row?.hdec_eng_name]),
+    [masters.hdecEngOptions, row?.hdec_eng_name],
+  );
 
   const save = async (field: string, value: any) => {
     if (!id || !row) return;
@@ -401,9 +397,9 @@ interface FieldEditorProps {
   value: any;
   disabled?: boolean;
   onSave: (v: any) => void;
-  subOptions?: SuggestOption[];
-  picOptions?: SuggestOption[];
-  engOptions?: SuggestOption[];
+  subOptions?: MasterOption[];
+  picOptions?: MasterOption[];
+  engOptions?: MasterOption[];
 }
 
 function FieldEditor({ field, label, value, disabled, onSave, subOptions, picOptions, engOptions }: FieldEditorProps) {
@@ -528,19 +524,26 @@ function FieldEditor({ field, label, value, disabled, onSave, subOptions, picOpt
       </div>
     );
   }
-  // Suggest fields with master options
+  // Master-driven dropdowns (subcontractor / HDEC PIC / HDEC ENG)
   if (field === 'subcontractor_name' || field === 'hdec_pic_name' || field === 'hdec_eng_name') {
     const opts =
       field === 'subcontractor_name' ? subOptions : field === 'hdec_pic_name' ? picOptions : engOptions;
     return (
       <div>
-        <SuggestField
-          label={label}
-          value={value ?? ''}
-          options={(opts ?? []).map((o) => o.name)}
+        <Label className="text-xs">{label}</Label>
+        <Select
+          value={value ?? '__none__'}
           disabled={disabled}
-          onChange={(v) => onSave(v && v.trim() ? v.trim() : null)}
-        />
+          onValueChange={(v) => onSave(v === '__none__' ? null : v)}
+        >
+          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">—</SelectItem>
+            {(opts ?? []).map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     );
   }

@@ -10,7 +10,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SuggestField } from '@/components/ui/suggest-field';
 import { ArrowLeft, Loader2, MessageSquare } from 'lucide-react';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
@@ -21,8 +20,7 @@ import {
   normalizeSparePartStatus,
 } from '@/lib/docs-spare-part-status';
 import { SparePartComments } from '@/components/comments/SparePartComments';
-
-type SuggestOption = { name: string };
+import { useCommonMasters, unionWithLegacy, type MasterOption } from '@/hooks/useCommonMasters';
 
 const OVERVIEW_FIELDS = ['category', 'sn', 'parent_item', 'material', 'spec_ref', 'status'] as const;
 const REQUIREMENTS_FIELDS = ['spares_requirements', 'unit', 'spares_quantity', 'storage_area_required'] as const;
@@ -44,9 +42,7 @@ export default function DocsSparePartDetailPage() {
   const [saving, setSaving] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
 
-  const [subOptions, setSubOptions] = useState<SuggestOption[]>([]);
-  const [picOptions, setPicOptions] = useState<SuggestOption[]>([]);
-  const [engOptions, setEngOptions] = useState<SuggestOption[]>([]);
+  const masters = useCommonMasters();
 
   const isPrivileged = roles.some((r) => ['admin', 'superuser', 'senior_user', 'user'].includes(r));
   const isDSuper = roles.includes('d_superuser');
@@ -96,18 +92,18 @@ export default function DocsSparePartDetailPage() {
     return () => window.clearTimeout(t);
   }, [row, location.hash]);
 
-  useEffect(() => {
-    (async () => {
-      const [subRes, picRes, engRes] = await Promise.all([
-        (supabase as any).from('subcontractor_master').select('name').eq('is_active', true).order('name'),
-        (supabase as any).from('hdec_pic_master').select('name').eq('is_active', true).order('name'),
-        (supabase as any).from('hdec_eng_master').select('name').eq('is_active', true).order('name'),
-      ]);
-      setSubOptions((subRes.data ?? []) as SuggestOption[]);
-      setPicOptions((picRes.data ?? []) as SuggestOption[]);
-      setEngOptions((engRes.data ?? []) as SuggestOption[]);
-    })();
-  }, []);
+  const subOptions = useMemo(
+    () => unionWithLegacy(masters.subcontractorOptions, [row?.subcontractor_name]),
+    [masters.subcontractorOptions, row?.subcontractor_name],
+  );
+  const picOptions = useMemo(
+    () => unionWithLegacy(masters.hdecPicOptions, [row?.hdec_pic_name]),
+    [masters.hdecPicOptions, row?.hdec_pic_name],
+  );
+  const engOptions = useMemo(
+    () => unionWithLegacy(masters.hdecEngOptions, [row?.hdec_eng_name]),
+    [masters.hdecEngOptions, row?.hdec_eng_name],
+  );
 
   const save = async (field: string, value: any) => {
     if (!id || !row) return;
@@ -314,9 +310,9 @@ interface FieldEditorProps {
   value: any;
   disabled?: boolean;
   onSave: (v: any) => void;
-  subOptions?: SuggestOption[];
-  picOptions?: SuggestOption[];
-  engOptions?: SuggestOption[];
+  subOptions?: MasterOption[];
+  picOptions?: MasterOption[];
+  engOptions?: MasterOption[];
 }
 
 function FieldEditor({ field, label, value, disabled, onSave, subOptions, picOptions, engOptions }: FieldEditorProps) {
@@ -373,13 +369,16 @@ function FieldEditor({ field, label, value, disabled, onSave, subOptions, picOpt
     const opts = field === 'subcontractor_name' ? subOptions : field === 'hdec_pic_name' ? picOptions : engOptions;
     return (
       <div>
-        <SuggestField
-          label={label}
-          value={value ?? ''}
-          options={(opts ?? []).map((o) => o.name)}
-          disabled={disabled}
-          onChange={(v) => onSave(v && v.trim() ? v.trim() : null)}
-        />
+        <Label className="text-xs">{label}</Label>
+        <Select value={value ?? '__none__'} disabled={disabled} onValueChange={(v) => onSave(v === '__none__' ? null : v)}>
+          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">—</SelectItem>
+            {(opts ?? []).map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     );
   }
