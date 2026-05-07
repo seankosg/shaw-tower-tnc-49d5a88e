@@ -35,8 +35,9 @@ export default function DocsImportPage() {
   const abd = useAbdImport();
   const omm = useOmmImport();
   const warranty = useWarrantyImport();
+  const sparePart = useSparePartImport();
 
-  const anyRunning = abd.isRunning || omm.isRunning || warranty.isRunning;
+  const anyRunning = abd.isRunning || omm.isRunning || warranty.isRunning || sparePart.isRunning;
 
   const handleTabChange = (val: string) => {
     if (!VALID.includes(val as SubKey)) return;
@@ -49,7 +50,8 @@ export default function DocsImportPage() {
     abdFiles: abd.files.length,
     ommFiles: omm.files.length,
     warrantyFiles: warranty.files.length,
-  }), [abd.files.length, omm.files.length, warranty.files.length]);
+    sparePartFiles: sparePart.files.length,
+  }), [abd.files.length, omm.files.length, warranty.files.length, sparePart.files.length]);
 
   return (
     <div className="space-y-4 p-6">
