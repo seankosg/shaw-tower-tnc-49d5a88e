@@ -425,8 +425,23 @@ export default function DocsWarrantyDetailPage() {
         <CardContent className="space-y-3">
           {comments.length === 0 && <p className="text-xs text-muted-foreground">No comments yet.</p>}
           {comments.map((c) => (
-            <div key={c.id} className="rounded border p-2 text-xs">
-              <div className="text-muted-foreground">{formatDateTimeDdMmmYyyy(c.created_at)}</div>
+            <div key={c.id} className="rounded border p-2 text-xs group relative">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-muted-foreground">
+                  {formatDateTimeDdMmmYyyy(c.created_at)}
+                  {c.edited && <span className="ml-1 italic">(edited)</span>}
+                </div>
+                {canModifyComments && (
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => openEdit(c)} title="Edit">
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => deleteComment(c)} title="Delete">
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+              </div>
               <div className="mt-1 whitespace-pre-wrap">{c.message.replace(/\s*<!--\s*migrated_from_thread:[^>]+-->\s*$/g, '').trim()}</div>
             </div>
           ))}
