@@ -1,52 +1,67 @@
 ## 목표
-Warranty Raw Data의 코멘트를 Admin/Superuser가 수정할 수 있도록 합니다. 수정 가능 항목: 코멘트 **내용**과 **작성 일시(created_at)**. 또한 삭제도 가능하게 합니다.
 
-## 권한 정책 (이미 준비됨)
-`warranty_comments` 테이블의 RLS는 이미 `(author_user_id = auth.uid()) OR is_admin_or_superuser(auth.uid())` 조건으로 UPDATE/DELETE를 허용하고 있습니다. 따라서 **DB 마이그레이션은 불필요**합니다. 단, UPDATE 트리거가 `updated_at`을 자동 갱신하므로 `created_at`을 수동 변경해도 안전합니다.
+Defect raw data import 시, **Excel 원본 또는 기존 DB에 `actual_completion_date`가 명시적으로 있는** 행에 한해, `actual_start_date`가 비어 있으면 동일값으로 자동 보정.
 
-## 변경 사항
+(T&C subtests는 스키마상 해당 없음 → 변경 없음)
 
-### `src/pages/docs/DocsWarrantyDetailPage.tsx`
+---
 
-**a. 권한 플래그 추가**
-- `const canModifyComments = roles.some(r => ['admin', 'superuser'].includes(r));`
-- (작성자 본인의 메시지 편집 권한은 이번 범위에서 다루지 않음 — 요청은 Admin 한정)
+## 적용 규칙
 
-**b. 코멘트 카드에 편집/삭제 UI 추가**
-각 코멘트 항목 우측에 `canModifyComments`일 때만 작은 아이콘 버튼 두 개:
-- `Pencil` (편집) → 인라인 또는 Dialog로 편집 모드 전환
-- `Trash2` (삭제) → confirm 후 `delete from warranty_comments where id=...`
+다음 **모두** 충족 시에만 보정:
 
-**c. 편집 Dialog (shadcn `Dialog`)**
-필드:
-- **Message**: `Textarea` (필수, trim 후 저장)
-- **Created at**: `Input type="datetime-local"` (현재 `created_at`을 로컬 datetime-local 포맷으로 표시 ↔ 저장 시 ISO string으로 변환)
+1. Excel 원본(`row.actual_completion_date`) 또는 기존 DB(`existing.actual_completion_date`)에 completion이 존재.
+2. `reconcileClosureCompletion`이 임의로 채운 completion(Status="Work Done"/"Closed" 자동 보정값)은 **제외**.
+3. Excel과 기존 DB 모두 `actual_start_date`가 비어 있음.
 
-저장 동작:
-```ts
-await supabase.from('warranty_comments').update({
-  message: newMessage.trim(),
-  created_at: new Date(newDateTimeLocal).toISOString(),
-  edited: true,
-}).eq('id', commentId);
-```
-- 성공 시 toast + 코멘트 목록 재조회 (`order created_at asc`)
-- 권한 부족(RLS) 에러는 친절한 메시지로 변환
+만족 시:
+- `row.actual_start_date := <위 1번의 명시적 actual_completion_date>`
+- `import_field_logs`에 `auto_filled` + `reason_code='actual_start_imputed_from_completion'` 기록.
+- `schedule_revisions` 자동 생성에서 이 보정 1건은 **제외** (혹은 trigger가 actual_start_date 변경을 감지하지 않도록 우회).
 
-**d. 삭제 동작**
-- `window.confirm('Delete this comment?')` 후 delete → 토스트 + 재조회
+---
 
-**e. 표시 보강**
-- 코멘트가 `edited === true`이면 날짜 옆에 작은 `(edited)` 라벨 표시
+## 변경 파일
 
-### 범위 외
-- 작성자 본인의 자가 편집 UI는 추가하지 않음 (요청은 Admin 한정)
-- Realtime 구독 변경 없음 (Raw Data 페이지의 카운트는 기존 구독으로 자동 갱신)
-- 다른 모듈(OMM/Defect) 코멘트 편집 UI 변경 없음
-- DB 스키마/정책 변경 없음
+### `src/contexts/DefectImportContext.tsx`
 
-## 기술 메모
-- `datetime-local` ↔ ISO 변환:
-  - 표시: `new Date(c.created_at).toISOString().slice(0,16)` 대신 로컬 시간 기준으로 `toLocaleString` 분해 또는 `formatInTimeZone` 없이 간단히 `Date` getters로 `YYYY-MM-DDTHH:mm` 구성
-  - 저장: `new Date(value).toISOString()` (브라우저가 로컬 → UTC 변환)
-- 정렬은 `created_at asc` 유지하므로 created_at 수정 시 카드 순서가 자연스럽게 재배치됨
+- `excelExplicit` 직후, blank-preservation 이후에 신규 보정 블록 추가:
+  - `excelHasCompletion = !!(원본 row.actual_completion_date)` 캡처(blank-preservation 이전 값 사용 — 이미 `excelExplicit.actual_completion_date`로 캡처되어 있으므로 그대로 활용).
+  - `dbHasCompletion = !!existing?.actual_completion_date`.
+  - `excelHasStart = !!(원본 row.actual_start_date)` (캡처 추가 필요 — 새 변수).
+  - `dbHasStart = !!existing?.actual_start_date`.
+  - 조건 충족 시 `row.actual_start_date = excelExplicit.actual_completion_date ?? existing.actual_completion_date`.
+  - field log push: `fl(rawRowNo, 'actual_start_date', 'auto_filled', { applied, code: 'actual_start_imputed_from_completion', detail: 'Imputed from actual_completion_date' })`.
+  - `pendingLogs.push({ ..., action_taken: existing ? 'updated' : 'inserted', reason_code: 'actual_start_imputed_from_completion', reason_detail: ... })`.
+
+- 보정은 `reconcileClosureCompletion` **이전**에 수행하되, completion 출처는 항상 "Excel-explicit 또는 DB 기존값"만 사용 → reconcile이 만든 completion에는 영향받지 않음.
+
+### `src/lib/import-field-log.ts`
+
+- `auto_filled` 코드는 이미 사용 중인지 확인 후 없으면 추가. 새 reason_code 문자열 등록.
+
+### Schedule revision 제외 처리
+
+- `src/lib/schedule-change-utils.ts`(또는 import 시 `buildScheduleChangeImpact` 호출부)에서 actual_start_date 변경분 중 "이번 import에서 imputed 표시된 행"은 revision에서 제외.
+- 가장 단순한 구현: 보정한 행의 set에 id를 모아두고 revision 생성 직전에 actual_start 항목만 제외. 기존 revision 트리거 로직을 최소 침해.
+
+---
+
+## 검증 (구현 후)
+
+- 단위 테스트(추가):
+  - completion 있고 start 없음 → 보정 적용, log 기록.
+  - completion 없음 → 보정 미적용.
+  - reconcile이 채운 completion만 있고 Excel/DB 모두 completion 없음 → 보정 미적용.
+  - start 이미 존재 → 보정 미적용.
+- 수동 테스트: 샘플 Excel 1개로 raw data와 import logs, schedule revisions 화면에서 의도대로 동작 확인.
+- 빌드 통과 확인.
+
+---
+
+## 범위 외
+
+- T&C subtests 변경 없음.
+- DB schema 변경 없음 (마이그레이션 불필요).
+- Quick Update / Detail / Bulk Edit 화면의 사용자 입력 흐름은 변경 없음.
+- Memory 업데이트(business-rules)는 구현 후 별도 반영.
