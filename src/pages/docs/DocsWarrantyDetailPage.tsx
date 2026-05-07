@@ -119,6 +119,74 @@ export default function DocsWarrantyDetailPage() {
   const teamMatches = !!profile?.team && !!row?.team && profile.team === row.team;
   const canEditRow = isPrivileged || (isDSuper && teamMatches);
   const canEditField = (field: string) => canEditRow && isFieldEditable(field, roles);
+  const canModifyComments = roles.some((r) => ['admin', 'superuser'].includes(r));
+
+  const [editingComment, setEditingComment] = useState<WarrantyComment | null>(null);
+  const [editMessage, setEditMessage] = useState('');
+  const [editCreatedAt, setEditCreatedAt] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
+  const toLocalInput = (iso: string) => {
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const reloadComments = async () => {
+    if (!id) return;
+    const cmtRes = await (supabase as any)
+      .from('warranty_comments')
+      .select('*')
+      .eq('warranty_item_id', id)
+      .order('created_at', { ascending: true });
+    setComments((cmtRes.data ?? []) as WarrantyComment[]);
+  };
+
+  const openEdit = (c: WarrantyComment) => {
+    setEditingComment(c);
+    setEditMessage(c.message.replace(/\s*<!--\s*migrated_from_thread:[^>]+-->\s*$/g, '').trim());
+    setEditCreatedAt(toLocalInput(c.created_at));
+  };
+
+  const saveEdit = async () => {
+    if (!editingComment) return;
+    const msg = editMessage.trim();
+    if (!msg || !editCreatedAt) {
+      toast({ title: 'Message and date are required', variant: 'destructive' });
+      return;
+    }
+    setEditSaving(true);
+    const { error } = await (supabase as any).from('warranty_comments').update({
+      message: msg,
+      created_at: new Date(editCreatedAt).toISOString(),
+      edited: true,
+    }).eq('id', editingComment.id);
+    setEditSaving(false);
+    if (error) {
+      const friendly = /row-level security|policy|permission/i.test(error.message)
+        ? 'You do not have permission to edit this comment.'
+        : error.message;
+      toast({ title: 'Update failed', description: friendly, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Comment updated' });
+    setEditingComment(null);
+    await reloadComments();
+  };
+
+  const deleteComment = async (c: WarrantyComment) => {
+    if (!window.confirm('Delete this comment? This cannot be undone.')) return;
+    const { error } = await (supabase as any).from('warranty_comments').delete().eq('id', c.id);
+    if (error) {
+      const friendly = /row-level security|policy|permission/i.test(error.message)
+        ? 'You do not have permission to delete this comment.'
+        : error.message;
+      toast({ title: 'Delete failed', description: friendly, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Comment deleted' });
+    await reloadComments();
+  };
 
   const load = async () => {
     if (!id) return;
