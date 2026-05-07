@@ -459,7 +459,30 @@ export default function DocsWarrantyDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Remarks */}
+      <Dialog open={!!editingComment} onOpenChange={(o) => !o && !editSaving && setEditingComment(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit comment</DialogTitle>
+            <DialogDescription>Update the message and posted date/time.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Message</Label>
+              <Textarea rows={4} value={editMessage} onChange={(e) => setEditMessage(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">Created at</Label>
+              <Input type="datetime-local" value={editCreatedAt} onChange={(e) => setEditCreatedAt(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingComment(null)} disabled={editSaving}>Cancel</Button>
+            <Button onClick={saveEdit} disabled={editSaving}>
+              {editSaving ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Saving…</> : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {isFieldVisible('remarks') && (
         <Card>
           <CardHeader className="py-3">
