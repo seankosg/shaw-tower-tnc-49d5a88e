@@ -633,6 +633,20 @@ export default function DocsWarrantyRawDataPage() {
     return next;
   }, [rows, resubFilter, collapsedParents]);
 
+  // ── Dashboard URL filter (from Executive Dashboard) ───────────────────────
+  const dashboardParams = useMemo(() => readDashboardFilterParams(searchParams), [searchParams]);
+  const tableData = useMemo(() => {
+    if (!hasAnyDashboardFilter(dashboardParams)) return filteredBaseData;
+    const ids = computeDashboardFilteredIds('warranty', filteredBaseData, dashboardParams);
+    if (!ids) return filteredBaseData;
+    return filteredBaseData.filter((r) => ids.has(r.id));
+  }, [filteredBaseData, dashboardParams]);
+  const clearDashboardFilter = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    ['status', 'overdue', 'stage', 'team'].forEach((k) => next.delete(k));
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const childCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of rows) {
