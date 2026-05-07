@@ -130,19 +130,16 @@ export default function DocsWarrantyDetailPage() {
     setRow(data);
 
     if (data) {
-      const [sibRes, cmtRes, logRes] = await Promise.all([
+      const [sibRes, logRes] = await Promise.all([
         (supabase as any).from('warranty_items')
           .select('id, item_no, resubmission_seq, is_resubmission, parent_id, current_stage, current_status')
           .eq('item_no', data.item_no).eq('is_active', true)
           .order('resubmission_seq', { ascending: true }),
-        (supabase as any).from('warranty_comments')
-          .select('*').eq('warranty_item_id', id).order('created_at', { ascending: true }),
         (supabase as any).from('docs_change_log')
           .select('*').eq('record_id', id).eq('sub_module', 'warranty')
           .order('changed_at', { ascending: false }).limit(50),
       ]);
       setSiblings(sibRes.data ?? []);
-      setComments((cmtRes.data ?? []) as WarrantyComment[]);
       setLogs(logRes.data ?? []);
     }
     setLoading(false);
@@ -161,27 +158,6 @@ export default function DocsWarrantyDetailPage() {
     }, 150);
     return () => window.clearTimeout(t);
   }, [row, location.hash]);
-
-  const addComment = async () => {
-    if (!id || !newComment.trim() || !user) return;
-    const { error } = await (supabase as any).from('warranty_comments').insert({
-      warranty_item_id: id,
-      author_user_id: user.id,
-      message: newComment.trim(),
-      type: 'comment',
-    });
-    if (error) {
-      toast({ title: 'Comment failed', description: error.message, variant: 'destructive' });
-      return;
-    }
-    setNewComment('');
-    const cmtRes = await (supabase as any)
-      .from('warranty_comments')
-      .select('*')
-      .eq('warranty_item_id', id)
-      .order('created_at', { ascending: true });
-    setComments((cmtRes.data ?? []) as WarrantyComment[]);
-  };
 
   const save = async (field: string, value: any) => {
     if (!id || !row) return;
