@@ -766,6 +766,12 @@ function CreateUserDialog({
             </div>
           </>
         )}
+        {userType === 'guest' && (
+          <div className="space-y-1.5">
+            <Label htmlFor="guest-org">Organisation (optional)</Label>
+            <Input id="guest-org" value={subconName} onChange={(e) => setSubconName(e.target.value)} placeholder="e.g. Client team, Inspector firm" />
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label>Team (optional)</Label>
           <Select value={team} onValueChange={setTeam}>
