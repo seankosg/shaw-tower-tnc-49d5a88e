@@ -62,7 +62,16 @@ import {
   OmmBulkActionBar,
   type OmmBulkField,
 } from '@/components/raw-data/OmmBulkActionBar';
-import * as XLSX from 'xlsx';
+import { exportOmmToExcel, type OmmExportFormat } from '@/lib/omm-excel-export';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 // ─── Field categorisation ───────────────────────────────────────────────────
 const MULTI_SELECT_FIELDS = new Set([
@@ -506,10 +515,13 @@ function ColumnFilterDropdown({ column }: { column: any }) {
 // ────────────────────────────────────────────────────────────────────────────
 export default function DocsOMMRawDataPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isFieldVisible, getLabel, sortFieldNames } = useDocsFieldConfig('omm');
+  const { user, profile } = useAuth() as any;
+  const { fields: fieldConfigRows, isFieldVisible, getLabel, sortFieldNames } = useDocsFieldConfig('omm');
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<OmmExportFormat>('view');
   const storageKey = user?.id
     ? `omm-raw-data-state:${user.id}`
     : 'omm-raw-data-state:anon';
@@ -1101,10 +1113,10 @@ export default function DocsOMMRawDataPage() {
   );
   const resubCount = useMemo(() => rows.filter((r) => r.is_resubmission).length, [rows]);
 
-  // ── Export (current view, single .xlsx) ───────────────────────────────────
+  // ── Export ────────────────────────────────────────────────────────────────
+  const exportRowCount = table.getFilteredRowModel().rows.length;
   const handleExport = useCallback(() => {
-    const sorted = table.getSortedRowModel().rows;
-    if (sorted.length === 0) {
+    if (exportRowCount === 0) {
       toast({
         title: 'No rows to export',
         description: 'Adjust filters and try again.',
@@ -1112,31 +1124,19 @@ export default function DocsOMMRawDataPage() {
       });
       return;
     }
-    const visibleCols = table
-      .getVisibleLeafColumns()
-      .filter((c) => c.id !== '__select' && c.id !== '__open' && c.id !== 'cycle_progress');
-    const headers = visibleCols.map((c) => {
-      const meta = c.columnDef.meta as any;
-      return meta?.label ?? (typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id);
+    exportOmmToExcel({
+      table,
+      fieldConfig: fieldConfigRows,
+      globalFilter,
+      meta: {
+        userName: profile?.name ?? user?.email ?? 'unknown',
+        userType: profile?.user_type ?? 'unknown',
+      },
+      format: exportFormat,
     });
-    const aoa: unknown[][] = [headers];
-    for (const r of sorted) {
-      aoa.push(
-        visibleCols.map((c) => {
-          const v = (r.original as any)[c.id];
-          if (c.id === 'current_status') return computeOmmStatus(r.original);
-          if (v == null) return '';
-          if (DATE_FIELDS.has(c.id)) return String(v).slice(0, 10);
-          return v;
-        }),
-      );
-    }
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'OMM');
-    XLSX.writeFile(wb, `omm-raw-${new Date().toISOString().slice(0, 10)}.xlsx`);
-    toast({ title: 'Export complete', description: `${sorted.length} rows exported.` });
-  }, [table, toast]);
+    setExportDialogOpen(false);
+    toast({ title: 'Export started', description: `${exportRowCount} rows queued for download.` });
+  }, [table, fieldConfigRows, globalFilter, profile, user, exportFormat, exportRowCount, toast]);
 
   return (
     <div className="space-y-4 p-4">
@@ -1165,7 +1165,7 @@ export default function DocsOMMRawDataPage() {
           <Button variant="outline" size="sm" onClick={() => navigate('/docs/import?sub=omm')}>
             <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
           </Button>
-          <Button variant="outline" size="sm" onClick={handleExport}>
+          <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(true)}>
             <Download className="mr-1.5 h-3.5 w-3.5" /> Export Excel
           </Button>
         </div>
@@ -1270,6 +1270,47 @@ export default function DocsOMMRawDataPage() {
         navigate={navigate}
         tableRef={tableRef}
       />
+
+      {/* Export dialog */}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export OMM Manuals</DialogTitle>
+            <DialogDescription>
+              Choose a format. Filters and sort are preserved in both options.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <RadioGroup value={exportFormat} onValueChange={(v) => setExportFormat(v as OmmExportFormat)}>
+              <label className="flex items-start gap-2 rounded-md border p-3 cursor-pointer hover:bg-muted/30">
+                <RadioGroupItem value="view" className="mt-1" />
+                <div>
+                  <div className="text-sm font-medium">Current view</div>
+                  <div className="text-xs text-muted-foreground">
+                    Uses currently visible columns. Includes computed Status; suitable for review &amp; sharing.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-2 rounded-md border p-3 cursor-pointer hover:bg-muted/30">
+                <RadioGroupItem value="reimport" className="mt-1" />
+                <div>
+                  <div className="text-sm font-medium">Re-import ready</div>
+                  <div className="text-xs text-muted-foreground">
+                    Includes ID columns; computed columns excluded; suitable for editing and re-importing.
+                  </div>
+                </div>
+              </label>
+            </RadioGroup>
+            <div className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+              {exportRowCount} rows will be exported.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setExportDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleExport}>Download</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
