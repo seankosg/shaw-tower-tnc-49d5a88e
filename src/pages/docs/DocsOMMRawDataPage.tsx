@@ -1165,7 +1165,7 @@ export default function DocsOMMRawDataPage() {
           <Button variant="outline" size="sm" onClick={() => navigate('/docs/import?sub=omm')}>
             <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
           </Button>
-          <Button variant="outline" size="sm" onClick={handleExport}>
+          <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(true)}>
             <Download className="mr-1.5 h-3.5 w-3.5" /> Export Excel
           </Button>
         </div>
