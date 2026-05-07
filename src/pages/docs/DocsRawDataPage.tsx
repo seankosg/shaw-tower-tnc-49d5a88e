@@ -528,6 +528,20 @@ export default function DocsRawDataPage() {
     };
   }), [items, scDateMap, leadDays, dataDate]);
 
+  // Dashboard URL filter (status/overdue/stage/team coming from Executive Dashboard)
+  const dashboardParams = useMemo(() => readDashboardFilterParams(searchParams), [searchParams]);
+  const dashboardItems = useMemo<DocsRawRow[]>(() => {
+    if (!hasAnyDashboardFilter(dashboardParams)) return augmentedItems;
+    const ids = computeDashboardFilteredIds('abd', augmentedItems, dashboardParams);
+    if (!ids) return augmentedItems;
+    return augmentedItems.filter((r) => ids.has(r.id));
+  }, [augmentedItems, dashboardParams]);
+  const clearDashboardFilter = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    ['status', 'overdue', 'stage', 'team'].forEach((k) => next.delete(k));
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   // ─── State persistence (localStorage) ───
   useEffect(() => {
     setStateLoaded(false);
