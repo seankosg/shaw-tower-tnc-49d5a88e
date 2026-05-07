@@ -58,6 +58,12 @@ import {
   numberRangeFilterFn,
 } from '@/components/raw-data/NumberRangeDropdown';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
+import { DocsDashboardFilterBanner } from '@/components/docs/DocsDashboardFilterBanner';
+import {
+  readDashboardFilterParams,
+  computeDashboardFilteredIds,
+  hasAnyDashboardFilter,
+} from '@/lib/docs-dashboard-filter';
 import {
   OmmBulkActionBar,
   type OmmBulkField,
