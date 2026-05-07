@@ -1,60 +1,51 @@
-# Spare Part Excel Import — 구축 계획
+# Spare Part Detail Page
 
-OMM/Warranty 임포트와 동일한 아키텍처(adapter + provider + DocsImportShell)를 그대로 따라 Spare Part 임포트를 추가합니다.
+OMM Detail 패턴을 그대로 미러링하여 `docs_spare_part` 행 1개를 상세 조회/편집하는 페이지를 추가합니다. Raw Data 페이지에서 행을 클릭하면 진입합니다.
 
-## 1. 업로드 엑셀 구조 (확인 완료)
+## 추가할 파일
 
-`Spare_Stock_Quantities_Summary` 형식:
-- **3행**이 헤더: `S/N | MATERIAL | SPARES REQUIREMENTS | Unit | Spares Quantity | Required Area for Storage | Status | Remarks`
-- **카테고리 그룹 행** (예: `A | Architectural`) — 카테고리 컨텍스트
-- **부모 항목 행** (S/N=숫자, B열에 `Tiling (LLA-PM-LST-05-05-v02)` 형태) — `parent_item` + 괄호 안 코드 → `spec_ref`
-- **자식 항목 행** (S/N=`a)`, `b)`...) — `material`, `spares_requirements`, `unit`, `spares_quantity`, `storage_area_required`, `status`, `remarks`
+1. **`src/pages/docs/DocsSparePartDetailPage.tsx`** — `DocsOMMDetailPage`를 베이스로 작성
+   - URL: `/docs/spare-part/:id`
+   - 헤더: Category · Parent Item · S/N · Status 배지, "Back to Raw Data" + "Comments" 버튼
+   - **Overview 카드**: Category, S/N, Parent Item, Material, Spec Ref, Status (badge)
+   - **Spare Requirements 카드**: Spares Requirements, Unit, Spares Quantity, Storage Area Required
+   - **Assignment 카드**: Subcontractor, HDEC PIC, HDEC Eng, Trade, Team
+   - **Notes 카드**: Remarks (textarea)
+   - **Comments 카드**: `<SparePartComments sparePartId={id} />` (#comments 앵커)
+   - 각 필드는 OMM Detail과 동일한 inline edit + Save/Cancel + 권한 체크 + `docs_change_log`에 변경 이력 기록 (sub_module='spare_part')
+   - row_version 낙관적 잠금 사용
 
-## 2. 신규/수정 파일
+2. **`src/components/comments/SparePartComments.tsx`** — `OmmComments.tsx`를 미러링
+   - 새 테이블 `spare_part_comments`, `spare_part_comment_reads` 사용
+   - 멘션, 답글, 편집/삭제, 읽음 처리, RecipientSelector 통합
 
-### 신규
-- `src/lib/docs-spare-part-import-parser.ts` — 시트 파서 (헤더 자동 탐지, 카테고리/부모/자식 행 분류, `ParsedSparePartRow` 타입)
-- `src/contexts/docs-import/SparePartImportContext.tsx` — `createDocsImportProvider`로 provider 생성
-- `src/lib/docs-spare-part-import.ts` *(또는 기존 `docs-import-workers.ts`에 `sparePartAdapter` 추가)*
+## 수정할 파일
 
-### 수정
-- `src/contexts/docs-import/DocsImportProviders.tsx` — `SparePartImportProvider` 마운트
-- `src/pages/docs/DocsImportPage.tsx` — `spare_part` 탭의 `disabled` 제거, `DocsImportShell` 연결
-- `src/lib/docs-import-workers.ts` — `sparePartAdapter` export 추가
+3. **`src/App.tsx`** — 라우트 추가
+   ```
+   <Route path="/docs/spare-part/:id" element={<DocsSparePartDetailPage />} />
+   ```
 
-## 3. Adapter 동작
+4. **`src/pages/docs/DocsSparePartRawDataPage.tsx`**
+   - `<TableRow>`에 `onClick={() => navigate('/docs/spare-part/' + r.id)}` + `cursor-pointer hover:bg-muted/50` 추가
+   - `useNavigate` import
 
-`sparePartAdapter: ImporterAdapter<ParsedSparePartRow>`
-- `subModule: 'spare_part'`
-- `keyFieldLabel: 'Category + S/N'` (복합 키)
-- `dataDateRequired: false`
-- `rawDataPath: '/docs/spare-part'`
-- `getRowKey`: `${category}::${parent_sn}::${sn}` 형태로 idempotent 보장
+## DB 마이그레이션
 
-### Upsert 로직
-- 기존 행 로드: `docs_spare_part` where `project_id`, `is_active=true` → 위 복합 키로 Map
-- 카테고리 그룹 행은 임포트 대상 아님(컨텍스트만 제공, skip 로그)
-- 부모/자식 모두 row로 저장하되 `parent_item`/`sn` 조합으로 구분
-- INSERT 200개 청크 + UPDATE 8 동시 실행 (ABD 패턴 그대로)
-- `excludedFields` 적용 → UPDATE 시 제외 컬럼 보존
-- 검증: `category` 또는 `parent_item` 또는 `material` 중 하나도 없으면 skip(`empty_row`)
+5. 새 테이블 2개 (omm 패턴 1:1 복제)
+   - **`spare_part_comments`** — `spare_part_id uuid → docs_spare_part(id) ON DELETE CASCADE`, `author_user_id`, `parent_comment_id`, `message`, `recipients text[]`, `type`, `edited`, timestamps
+   - **`spare_part_comment_reads`** — `user_id`, `spare_part_id`, `last_read_at`
+   - RLS: omm_comments / omm_comment_reads 와 동일 정책 (read=any authenticated, insert/update/delete=author 또는 admin/superuser)
+   - 인덱스: `idx_spare_part_comments_sp(spare_part_id)`
 
-### 추적 필드 (`SPARE_PART_TRACKED_FIELDS`)
-`category`, `parent_item`, `sn`, `material`, `spec_ref`, `spares_requirements`, `unit`, `spares_quantity`, `storage_area_required`, `status`, `remarks`, `subcontractor_name`, `team`, `trade`, `hdec_pic_name`, `hdec_eng_name`
+## 범위 외 (이번 작업에 포함 안 함)
 
-## 4. 기존 인프라 재사용
+- Bulk action, Excel export, Raw Data 페이지 정렬/필터 강화
+- Cycle progress, Stage funnel, Dashboard 위젯
+- 알림(notification) 연동 — 추후 다른 모듈과 함께 일괄
 
-- **DocsImportShell**: 파일 드롭 → 시트 선택 → 헤더 매핑 → 미리보기 → 실행 → 결과/로그 표시 — 그대로 동작
-- **Header Mappings**: Admin → Header Mappings 에 `spare_part` 모듈 항목이 자동 사용됨 (테이블 구조 이미 호환)
-- **Field config**: `docs_field_config`의 `sub_module='spare_part'` 행으로 표시/편집 규칙 적용
-- **Import logs**: `docs_upload_batches` + `docs_upload_row_logs` + `docs_change_log`에 그대로 기록 (이미 `sub_module` 컬럼 보유)
+## 기술 메모
 
-## 5. DB 변경
-
-**없음.** `docs_spare_part` 테이블·RLS·`docs_upload_batches.sub_module`·`docs_change_log.sub_module` 모두 이미 존재합니다.
-
-선택적으로 카테고리/부모/자식을 안정적으로 식별하기 위한 보조 컬럼이 필요하면 후속 마이그레이션으로 `parent_sn TEXT` 추가를 제안할 수 있으나, 1차 구현은 기존 `parent_item` + `sn` 조합으로 진행합니다.
-
-## 6. 범위 외 (다음 단계)
-
-- Detail 페이지, Comments, Bulk Action, Excel Export, Cycle Progress, Stage Funnel 집계 — 본 계획에서 제외 (요청 시 별도 진행)
+- 권한: `can_write_for_team(uid, team)` 또는 `has_any_role(['admin','superuser','senior_user','user'])` — 기존 docs_spare_part RLS와 동일
+- 변경 이력: `docs_change_log` (sub_module='spare_part', record_id=spare_part.id) — 기존 OMM 코드 재사용
+- 타입: `supabase as any` 캐스트 사용 (자동 생성 타입은 마이그레이션 후 갱신됨)

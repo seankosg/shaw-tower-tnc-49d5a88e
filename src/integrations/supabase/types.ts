@@ -2013,6 +2013,81 @@ export type Database = {
         }
         Relationships: []
       }
+      spare_part_comment_reads: {
+        Row: {
+          id: string
+          last_read_at: string
+          spare_part_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          last_read_at?: string
+          spare_part_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          last_read_at?: string
+          spare_part_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      spare_part_comments: {
+        Row: {
+          author_user_id: string
+          created_at: string
+          edited: boolean
+          id: string
+          message: string
+          parent_comment_id: string | null
+          recipients: string[]
+          spare_part_id: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          author_user_id: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          message: string
+          parent_comment_id?: string | null
+          recipients?: string[]
+          spare_part_id: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          author_user_id?: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          message?: string
+          parent_comment_id?: string | null
+          recipients?: string[]
+          spare_part_id?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spare_part_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "spare_part_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spare_part_comments_spare_part_id_fkey"
+            columns: ["spare_part_id"]
+            isOneToOne: false
+            referencedRelation: "docs_spare_part"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subcontractor_info_master: {
         Row: {
           acra_address: string | null

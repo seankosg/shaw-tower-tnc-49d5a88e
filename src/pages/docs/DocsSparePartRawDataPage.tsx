@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +26,7 @@ export default function DocsSparePartRawDataPage() {
   const [rows, setRows] = useState<SparePartRow[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +87,11 @@ export default function DocsSparePartRawDataPage() {
                   {rows.map((r) => {
                     const norm = normalizeSparePartStatus(r.status);
                     return (
-                      <TableRow key={r.id}>
+                      <TableRow
+                        key={r.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => navigate(`/docs/spare-part/${r.id}`)}
+                      >
                         <TableCell>{r.category ?? ''}</TableCell>
                         <TableCell>{r.sn ?? ''}</TableCell>
                         <TableCell>{r.parent_item ?? ''}</TableCell>
