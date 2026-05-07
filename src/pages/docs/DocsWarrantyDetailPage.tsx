@@ -119,6 +119,19 @@ export default function DocsWarrantyDetailPage() {
   const canEditRow = isPrivileged || (isDSuper && teamMatches);
   const canEditField = (field: string) => canEditRow && isFieldEditable(field, roles);
 
+  const masters = useCommonMasters();
+  const subOptions = useMemo(
+    () => unionWithLegacy(masters.subcontractorOptions, [row?.subcontractor_name]),
+    [masters.subcontractorOptions, row?.subcontractor_name],
+  );
+  const picOptions = useMemo(
+    () => unionWithLegacy(masters.hdecPicOptions, [row?.hdec_pic_name]),
+    [masters.hdecPicOptions, row?.hdec_pic_name],
+  );
+  const engOptions = useMemo(
+    () => unionWithLegacy(masters.hdecEngOptions, [row?.hdec_eng_name]),
+    [masters.hdecEngOptions, row?.hdec_eng_name],
+  );
 
   const load = async () => {
     if (!id) return;
