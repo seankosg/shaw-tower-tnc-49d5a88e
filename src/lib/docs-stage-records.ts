@@ -329,7 +329,6 @@ export function summariseByItem(records: DocsStageRecord[]): ItemSummary[] {
         current_stage: r.current_stage,
         is_completed: false,
         is_overdue: false,
-        is_at_risk: false,
         max_delay_days: 0,
         overdue_stages: [],
         detail_route: r.detail_route,
@@ -341,7 +340,6 @@ export function summariseByItem(records: DocsStageRecord[]): ItemSummary[] {
       s.overdue_stages.push(r.stage_label);
       if (r.delay_days > s.max_delay_days) s.max_delay_days = r.delay_days;
     }
-    if (r.is_at_risk) s.is_at_risk = true;
     // approval / completed stages: last stage of each module
     const lastKey = ALL_STAGE_DEFS[r.document_type].at(-1)!.key;
     if (r.stage_key === lastKey && r.is_done) s.is_completed = true;
