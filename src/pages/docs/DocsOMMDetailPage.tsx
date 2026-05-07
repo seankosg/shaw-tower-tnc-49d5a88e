@@ -10,7 +10,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SuggestField } from '@/components/ui/suggest-field';
 import { ArrowLeft, Loader2, MessageSquare } from 'lucide-react';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import { OmmStatusBadge } from '@/components/docs/OmmStatusBadge';
@@ -20,8 +19,7 @@ import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { OMM_CATEGORY_LABELS } from '@/lib/docs-omm-status';
 import { OmmComments } from '@/components/comments/OmmComments';
-
-type SuggestOption = { name: string };
+import { useCommonMasters, unionWithLegacy, type MasterOption } from '@/hooks/useCommonMasters';
 
 const IDENTITY_FIELDS = [
   'sn',
