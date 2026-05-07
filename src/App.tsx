@@ -35,7 +35,7 @@ import DefectQuickUpdatePage from "./pages/DefectQuickUpdatePage";
 import DefectScheduleRevisionPage from "./pages/DefectScheduleRevisionPage";
 import AllSubtestCommentsPage from "./pages/AllSubtestCommentsPage";
 import AllDefectCommentsPage from "./pages/AllDefectCommentsPage";
-import DocsDashboardPage from "./pages/docs/DocsDashboardPage";
+import DocsExecutiveDashboardPage from "./pages/docs/DocsExecutiveDashboardPage";
 import DocsRawDataPage from "./pages/docs/DocsRawDataPage";
 import DocsImportPage from "./pages/docs/DocsImportPage";
 import DocsExportPage from "./pages/docs/DocsExportPage";
@@ -121,7 +121,7 @@ const App = () => (
                 <Route path="/defect/export" element={<RedirectPreserveSearch to="/defects/export" />} />
                 <Route path="/defect/quick-update" element={<RedirectPreserveSearch to="/defects/quick-update" />} />
                 <Route path="/defects/:id" element={<DefectDetailPage />} />
-                <Route path="/docs/dashboard" element={<DocsDashboardPage />} />
+                <Route path="/docs/dashboard" element={<DocsExecutiveDashboardPage />} />
                 <Route path="/docs/abd" element={<DocsRawDataPage />} />
                 <Route path="/docs/abd/:id" element={<DocsDrawingDetailPage />} />
                 <Route path="/docs/omm" element={<DocsOMMRawDataPage />} />
