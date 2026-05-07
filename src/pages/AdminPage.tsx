@@ -2742,8 +2742,8 @@ function BackupTab() {
           <AlertDialogHeader>
             <AlertDialogTitle>Restore Snapshot?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will DELETE all current subtests data and replace it with the snapshot.
-              This action cannot be undone. Upload logs and change history will remain intact.
+              This will WIPE all current data across every backed-up table (Subtests, Defect, Docs, Warranty, masters, permissions, audit logs) and replace it with the snapshot.
+              This action cannot be undone. Legacy snapshots created before the full-backup upgrade will only restore the Subtests table.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
