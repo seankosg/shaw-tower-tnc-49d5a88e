@@ -1,127 +1,78 @@
-# Document Executive Dashboard — 개정안
+## Document Executive Dashboard — 개정안
 
-사용자 피드백 반영:
-- ❌ Plan vs Actual 테이블 / S-Curve 제거
-- ✅ Overdue 상세 항목 리스트가 핵심
-- ✅ 각 stage별 "총 N건 중 M건 완료" 진도 표시
+### 1. 제거 / 변경 사항
+- **At-Risk 로직 전면 제거**: KPI 카드, Alert 카드, 탭, `is_at_risk` 분류 로직, `useAtRiskThreshold` 의존 모두 삭제. `DocsStageRecord`에서도 `is_at_risk` 필드 제거.
+- **상단 전체 합산 KPI 스트립 제거**: Total / Completed / Remaining / Progress% / Overdue / At-Risk 6장 카드 모두 삭제. (전체 합산은 의미 없음)
+- **Warranty Comments Spotlight 등 미구현 섹션은 이번 개정에 포함하지 않음** — 추후 별도 단계.
+- **OMM 표기 통일**: 모든 라벨/제목/탭/툴팁에서 "OMM Manuals" → **"Operation & Maintenance Manual"**. 내부 키(`omm`, `MODULE_LABEL.omm`)만 노출 라벨 변경, 라우트는 유지.
 
-기존 `dashboard-utils.isOverdue` / `isAtRisk` / `useAtRiskThreshold`는 그대로 재사용 (계산 일관성 유지).
+### 2. 새로운 페이지 구조
 
-## 1. 라우팅
-기존 `/docs/dashboard` 페이지를 신규 **Document Executive Dashboard**로 전면 교체. 사이드바 "Docs Management" 메뉴 구조 유지 (Dashboard / ABD / OMM / Spare Part / Warranty / Import / Export).
+```text
+[Header]  Title · Data Date · Export
 
-## 2. Stage Normalization
-신규 헬퍼 `src/lib/docs-stage-records.ts`: 각 문서 행을 stage-record 배열로 펼쳐 모든 모듈에 공통 로직 적용.
+[Section: As-Built Drawings]
+  ┌─ Module Card (Total / Done / Overdue + Progress Bar)
+  │     · Total → /docs/abd
+  │     · Done  → /docs/abd?status=approved
+  │     · Overdue → /docs/abd?overdue=1
+  └─ Stage Progress Strip (탭: All Teams | Team A | Team B …)
+        7 stage cards (1st Submission … Approved) — 풀 네임
+        각 카드: 큰 진도율, M/N, 진도바, Overdue 배지
+        클릭 → /docs/abd?stage=<key>(&team=…)
 
-```ts
-interface DocsStageRecord {
-  item_id: string;
-  document_type: 'abd' | 'omm' | 'warranty';
-  document_no: string;
-  title: string;
-  category / trade / team / subcontractor / hdec_pic / hdec_eng;
-  current_stage: string;       // 행 단위 현재 stage
-  stage_key: string;           // ex sub1_submission
-  stage_label: string;
-  planned_date / actual_date;
-  is_done / is_overdue / is_at_risk / delay_days;
-}
+[Section: Operation & Maintenance Manual]
+  └─ 동일 패턴 (5 stages) → /docs/omm 연동
+
+[Section: Warranty Deeds]
+  └─ 동일 패턴 (5 stages) → /docs/warranty 연동
 ```
 
-Stage 매핑:
-- **ABD (7)**: sub1_sub, sub1_review, sub2_sub, sub2_review, sub3_sub, sub3_review, approval
-- **OMM (5)**: draft_sub, draft_review, final_sub, final_review, completed
-- **Warranty (5)**: acra, draft, subcon_sign, hdec_sign, final (`classifyWarrantyStageState` 재사용)
+### 3. 섹션(모듈) 카드 사양
+각 섹션 최상단에 **하나의 큰 모듈 카드**를 배치. 내부적으로 3개의 클릭 가능한 sub-tile + 진도 바:
 
-## 3. 페이지 구성
+| Tile | 값 | 클릭 시 |
+|---|---|---|
+| Total | 해당 모듈 총 문서 수 | Raw Data (모듈) — 필터 없음 |
+| Done | 최종 단계 완료 문서 수 | Raw Data — `status=completed` 쿼리 |
+| Overdue | 1개 이상 stage가 overdue인 문서 수 | Raw Data — `overdue=1` 쿼리 |
 
-### 3-1. Header
-- 타이틀 "Document Executive Dashboard"
-- Data Date / MC D-Day
-- 필터: Document Type / Trade / Team / Subcontractor / HDEC PIC / HDEC ENG / Current Stage / **Overdue Only** / **At-Risk Only**
-- Export to Excel
+진도 바 = Done / Total. **Stage Progress Strip과 카드는 연동되지 않음** — 카드는 자기 숫자에 해당하는 Raw Data로만 이동.
 
-### 3-2. Top KPI Cards (6개)
-Total / Completed / Remaining / Progress % / **Overdue** / **At-Risk** — `DefectKpiCard` 재사용.
+### 4. Stage Progress Strip 사양 (핵심 신규)
 
-### 3-3. Document Type Summary Cards (3개)
-ABD / OMM / Warranty 각각: Total · Completed · Remaining · Progress % · Overdue · At-Risk. 클릭 → Doc Type 필터 적용.
+탭 구성:
+- **All Teams** (기본) + DB의 해당 모듈 row에 존재하는 distinct `team` 목록 동적 생성
+- 탭 전환 시 해당 섹션의 stage 카드만 재집계 (다른 섹션에 영향 없음)
 
-### 3-4. Stage Progress Strip ★ (사용자 핵심 요구)
-**각 stage별 카드 — "총 N건 중 M건 완료" + 진도 바 + Overdue 배지**
+각 stage 카드:
+- 풀 네임 라벨 (예: "1st Submission", "Draft Submission", "Subcontractor Signing", "HDEC Signing" — `*_STAGE_DEFS`의 label 풀어서 사용)
+- 큰 진도율 % (대형 폰트)
+- M / N (완료/총)
+- 가는 진도 바
+- Overdue 건수 배지(있을 때만)
+- Hover 시 미세한 elevation, 카드 좌측 컬러 액센트(모듈별 hue)
+- 클릭 → Raw Data로 이동, 쿼리: `?stage=<stage_key>&team=<탭값>`
 
-- All Documents 뷰: 모듈별 grouped 카드 (ABD/OMM/Warranty)
-- 모듈 선택 뷰: 해당 모듈 모든 stage 카드
-  - 예) ABD 뷰 → 1st Sub `120/150 (80%)`, 1st Review `100/150 (67%)`, 2nd Sub `60/120 (50%)` … Approved `45/150 (30%)`
-  - 각 카드: Total Applicable / Done / Remaining / Progress % / **Overdue stage count** (빨강 배지)
-  - 카드 클릭 → 하단 Action List가 해당 stage로 필터
+UI 톤: 카드 그림자 약하게, rounded-xl, 일관 spacing, 숫자 tabular-nums, 진도바는 모듈 액센트 컬러 사용. Defect 대시보드의 카드 패턴(`DefectKpiCard` / `DefectStageProgress`) 참고하되 더 컴팩트하고 정렬감 있게.
 
-`DefectStageProgress` 패턴 재사용.
+### 5. Raw Data 페이지 연동
+ABD/OMM/Warranty Raw Data 페이지(`DocsRawDataPage`, `DocsOMMRawDataPage`, `DocsWarrantyRawDataPage`)에 **URL 쿼리 파라미터 처리**를 추가:
+- `?status=completed` → 최종 단계 완료 행만
+- `?overdue=1` → 1개 이상 overdue stage가 있는 행만
+- `?stage=<key>&team=<team>` → 해당 stage가 미완료(또는 overdue)인 행 + team 필터
 
-### 3-5. Large Alert Cards (4개)
-1. **DOCUMENT OVERDUE** — overdue stage ≥1개 보유 unique 문서 수 (빨강)
-2. **TOTAL STAGE OVERDUE** — overdue stage occurrence 합계 (빨강)
-3. **DOCUMENT AT RISK** — at-risk stage 보유 문서 수 (앰버)
-4. **TOTAL STAGE AT RISK** — at-risk occurrence 합계 (앰버)
+Raw Data의 기존 필터 UI에는 칩으로 표시되어 사용자가 해제 가능. (필터 적용 로직은 클라이언트 측, 기존 행 분류 함수 재사용)
 
-각 카드 "View" → Action List 자동 필터.
+### 6. 기술 변경 요약
+- `src/lib/docs-stage-records.ts`: `is_at_risk` 필드 + `classifyStage`의 at-risk 분기 제거. 모듈 라벨에서 OMM 풀 네임 사용.
+- `src/lib/docs-executive-dashboard-data.ts`: `atRiskDays` 인자 제거.
+- `src/pages/docs/DocsExecutiveDashboardPage.tsx`: 전면 재구성 — 상단 KPI/Alert 제거, 섹션 단위 레이아웃(모듈 카드 + 팀 탭 + Stage Strip × 3).
+- 신규 컴포넌트:
+  - `src/components/docs/DocsModuleSummaryCard.tsx` (Total/Done/Overdue + 진도바, 클릭 시 Raw Data 이동)
+  - `src/components/docs/DocsStageProgressStrip.tsx` (팀 탭 + stage 카드 그리드, 클릭 시 Raw Data 이동)
+- Raw Data 페이지 3종에 `useSearchParams` 기반 초기 필터 적용 + 칩 표시.
 
-### 3-6. ★ Overdue Detail List (핵심 신규 섹션)
-대시보드의 메인 콘텐츠. T&C/Defect 대시보드에는 없는 SHAW Docs 전용 강조.
-
-**컬럼**: Doc Type / Doc No / Title / Trade / Team / Subcontractor / HDEC PIC / HDEC ENG / **Current Stage** / **Overdue Stage(s)** / Planned / Actual(공란) / **Delay Days** (정렬 기본) / Risk / Remarks
-
-**기본 정렬**: Delay Days desc → 가장 심각한 지연부터.
-**서브 탭**:
-1. Document-level Overdue (행 1개 = 문서 1개, 가장 심한 지연 stage 표시)
-2. Stage-level Overdue (행 1개 = stage 1개, 모든 overdue stage 노출)
-3. At-Risk (단계 ≤ atRiskDays threshold)
-
-**기능**: Search / Sort / Stage 필터 / Doc Type 필터 / Excel Export / 행 클릭 → Detail 페이지(기존 라우트).
-
-### 3-7. Charts (간소화 — 3개)
-1. **Stage Progress by Module** — 모듈별 stage 진도 horizontal bar (각 stage별 % 표시)
-2. **Overdue by Responsible Party** — horizontal bar, 토글 (HDEC PIC / Subcontractor / HDEC ENG / Team)
-3. **Aging Analysis** — overdue stage의 Aging bucket (0–3 / 4–7 / 8–14 / 15–30 / 30+)
-
-(트렌드/S-Curve는 별도 모듈 페이지로 미루고 Executive Dashboard에서는 제외)
-
-### 3-8. Warranty Comments Spotlight (직전 요구 유지)
-3분할 카드:
-1. Recent Comments (7일)
-2. Important / Pinned (`type IN ('issue','blocker')`)
-3. Unanswered Threads (>3일)
-→ 클릭 시 Detail 페이지 코멘트 탭 점프.
-
-### 3-9. Data Quality Cards
-컴팩트 경고 배지: Missing Planned / Actual on Completed / Subcontractor / HDEC PIC / HDEC ENG / Status / Transmittal No(ABD) / Warranty Years(Warranty).
-
-## 4. 재사용 매핑
-
-| 기능 | 재사용 |
-|---|---|
-| Overdue 판정 | `dashboard-utils.isOverdue` (stage-record 적용) |
-| At-Risk 판정 | `dashboard-utils.isAtRisk` + `useAtRiskThreshold` |
-| KPI Card | `DefectKpiCard` |
-| Stage Progress 카드 | `DefectStageProgress` 패턴 |
-| Aging | Defect Dashboard의 aging 계산 |
-| Excel | `docs-excel-export` 확장 |
-| Comments | `WarrantyComments` / `OmmComments` / `comment-threads` |
-
-## 5. 작업 순서
-
-1. `docs-stage-records.ts` (normalization + 단위 테스트)
-2. `DocsExecutiveDashboardPage.tsx` 신규 — 위 섹션 조립
-3. Stage Progress 카드, Overdue Detail Table 컴포넌트 추출
-4. Charts (recharts 재사용)
-5. Excel export 확장
-6. `App.tsx` 라우트 교체
-7. T&C/Defect Dashboard 회귀 점검
-
-## 6. 확인 사항
-
-1. **Spare Part 모듈 포함 여부?** — Lovable Prompt에는 ABD/OMM/Warranty 3종만 명시. 현 사이드바엔 Spare Part 있음. **3종만 포함(권장) vs 4종 모두?**
-2. **Warranty stage**: 첨부 프롬프트는 4단계(Draft/Subcon/HDEC/Final). 실제 스키마는 ACRA 포함 5단계. **5단계 그대로 사용 OK?**
-3. **Important Comment 플래그**: Phase 1 = `type IN ('issue','blocker')` 활용 vs 신규 `is_important boolean` 컬럼 추가?
-
-승인 시 위 순서대로 구현합니다.
+### 7. 보존
+- 라우팅 (`/docs/dashboard`), 데이터 fetch 함수, ABD/OMM/Warranty 분류 로직(overdue 판정), 디자인 시스템 토큰 모두 유지.
+- Overdue Detail List(3-탭 테이블)는 유지할지 여부 — **이번 개정에서는 카드의 Overdue → Raw Data 연동으로 충분하므로 제거 권장**. (확인 필요 시 구현 중 결정 가능, 기본은 제거)

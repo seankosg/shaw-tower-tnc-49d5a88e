@@ -40,8 +40,6 @@ export interface DocsStageRecord {
   is_done: boolean;
   /** true when planned < today and not done */
   is_overdue: boolean;
-  /** true when not overdue but planned within at-risk threshold */
-  is_at_risk: boolean;
   /** positive number of days overdue (0 if not overdue) */
   delay_days: number;
 
@@ -89,8 +87,14 @@ export const ALL_STAGE_DEFS: Record<DocModule, StageDefinition[]> = {
 
 export const MODULE_LABEL: Record<DocModule, string> = {
   abd: 'As-Built Drawings',
-  omm: 'OMM Manuals',
+  omm: 'Operation & Maintenance Manual',
   warranty: 'Warranty Deeds',
+};
+
+export const MODULE_RAW_ROUTE: Record<DocModule, string> = {
+  abd: '/docs/abd',
+  omm: '/docs/omm',
+  warranty: '/docs/warranty',
 };
 
 function safeDate(d: string | null | undefined): Date | null {
@@ -105,23 +109,21 @@ function safeDate(d: string | null | undefined): Date | null {
 
 function classifyStage(
   planned: string | null,
-  actual: string | null,
+  _actual: string | null,
   isDone: boolean,
   asOf: Date,
-  atRiskDays: number,
-): { is_overdue: boolean; is_at_risk: boolean; delay_days: number } {
-  if (isDone) return { is_overdue: false, is_at_risk: false, delay_days: 0 };
+): { is_overdue: boolean; delay_days: number } {
+  if (isDone) return { is_overdue: false, delay_days: 0 };
   const p = safeDate(planned);
-  if (!p) return { is_overdue: false, is_at_risk: false, delay_days: 0 };
+  if (!p) return { is_overdue: false, delay_days: 0 };
   if (isAfter(asOf, p)) {
-    return { is_overdue: true, is_at_risk: false, delay_days: differenceInDays(asOf, p) };
+    return { is_overdue: true, delay_days: differenceInDays(asOf, p) };
   }
-  const daysUntil = differenceInDays(p, asOf);
-  return { is_overdue: false, is_at_risk: daysUntil >= 0 && daysUntil <= atRiskDays, delay_days: 0 };
+  return { is_overdue: false, delay_days: 0 };
 }
 
 // ─── ABD ─────────────────────────────────────────────────────────────────
-export function buildAbdStageRecords(rows: any[], asOf: Date, atRiskDays: number): DocsStageRecord[] {
+export function buildAbdStageRecords(rows: any[], asOf: Date, ): DocsStageRecord[] {
   const out: DocsStageRecord[] = [];
   for (const row of rows) {
     const base = {
@@ -174,7 +176,7 @@ export function buildAbdStageRecords(rows: any[], asOf: Date, atRiskDays: number
 
     for (const s of stages) {
       if (s.applicable === false) continue;
-      const cls = classifyStage(s.planned ?? null, s.actual ?? null, s.done, asOf, atRiskDays);
+      const cls = classifyStage(s.planned ?? null, s.actual ?? null, s.done, asOf);
       out.push({
         ...base,
         current_stage,
@@ -192,7 +194,7 @@ export function buildAbdStageRecords(rows: any[], asOf: Date, atRiskDays: number
 }
 
 // ─── OMM ─────────────────────────────────────────────────────────────────
-export function buildOmmStageRecords(rows: any[], asOf: Date, atRiskDays: number): DocsStageRecord[] {
+export function buildOmmStageRecords(rows: any[], asOf: Date, ): DocsStageRecord[] {
   const out: DocsStageRecord[] = [];
   for (const row of rows) {
     const status = computeOmmStatus(row);
@@ -226,7 +228,7 @@ export function buildOmmStageRecords(rows: any[], asOf: Date, atRiskDays: number
     ];
 
     for (const s of stages) {
-      const cls = classifyStage(s.planned ?? null, s.actual ?? null, s.done, asOf, atRiskDays);
+      const cls = classifyStage(s.planned ?? null, s.actual ?? null, s.done, asOf);
       out.push({
         ...base,
         current_stage,
@@ -244,7 +246,7 @@ export function buildOmmStageRecords(rows: any[], asOf: Date, atRiskDays: number
 }
 
 // ─── Warranty ────────────────────────────────────────────────────────────
-export function buildWarrantyStageRecords(rows: any[], asOf: Date, atRiskDays: number): DocsStageRecord[] {
+export function buildWarrantyStageRecords(rows: any[], asOf: Date, ): DocsStageRecord[] {
   const out: DocsStageRecord[] = [];
   const asOfIso = asOf.toISOString().slice(0, 10);
   for (const row of rows) {
@@ -273,7 +275,7 @@ export function buildWarrantyStageRecords(rows: any[], asOf: Date, atRiskDays: n
     for (const s of items) {
       const state = classifyWarrantyStageState(row, s.key, asOfIso);
       const isDone = state === 'Done';
-      const cls = classifyStage(s.planned ?? null, s.actual ?? null, isDone, asOf, atRiskDays);
+      const cls = classifyStage(s.planned ?? null, s.actual ?? null, isDone, asOf);
       out.push({
         ...base,
         current_stage,
@@ -304,7 +306,6 @@ export interface ItemSummary {
   current_stage: string;
   is_completed: boolean;
   is_overdue: boolean;
-  is_at_risk: boolean;
   max_delay_days: number;
   overdue_stages: string[];
   detail_route: string;
@@ -328,7 +329,6 @@ export function summariseByItem(records: DocsStageRecord[]): ItemSummary[] {
         current_stage: r.current_stage,
         is_completed: false,
         is_overdue: false,
-        is_at_risk: false,
         max_delay_days: 0,
         overdue_stages: [],
         detail_route: r.detail_route,
@@ -340,7 +340,6 @@ export function summariseByItem(records: DocsStageRecord[]): ItemSummary[] {
       s.overdue_stages.push(r.stage_label);
       if (r.delay_days > s.max_delay_days) s.max_delay_days = r.delay_days;
     }
-    if (r.is_at_risk) s.is_at_risk = true;
     // approval / completed stages: last stage of each module
     const lastKey = ALL_STAGE_DEFS[r.document_type].at(-1)!.key;
     if (r.stage_key === lastKey && r.is_done) s.is_completed = true;
@@ -357,7 +356,6 @@ export interface StageProgress {
   done: number;
   remaining: number;
   overdue: number;
-  at_risk: number;
   progress_pct: number;
 }
 
@@ -375,7 +373,6 @@ export function computeStageProgress(records: DocsStageRecord[]): StageProgress[
         done: 0,
         remaining: 0,
         overdue: 0,
-        at_risk: 0,
         progress_pct: 0,
       };
       map.set(r.stage_key, s);
@@ -383,7 +380,6 @@ export function computeStageProgress(records: DocsStageRecord[]): StageProgress[
     s.total++;
     if (r.is_done) s.done++;
     if (r.is_overdue) s.overdue++;
-    if (r.is_at_risk) s.at_risk++;
   }
   for (const s of map.values()) {
     s.remaining = s.total - s.done;

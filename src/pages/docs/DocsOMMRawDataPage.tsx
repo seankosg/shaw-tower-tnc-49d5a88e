@@ -58,6 +58,12 @@ import {
   numberRangeFilterFn,
 } from '@/components/raw-data/NumberRangeDropdown';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
+import { DocsDashboardFilterBanner } from '@/components/docs/DocsDashboardFilterBanner';
+import {
+  readDashboardFilterParams,
+  computeDashboardFilteredIds,
+  hasAnyDashboardFilter,
+} from '@/lib/docs-dashboard-filter';
 import {
   OmmBulkActionBar,
   type OmmBulkField,
@@ -665,6 +671,20 @@ export default function DocsOMMRawDataPage() {
     return next;
   }, [rows, mismatchOnly, resubFilter]);
 
+  // ── Dashboard URL filter (from Executive Dashboard) ───────────────────────
+  const dashboardParams = useMemo(() => readDashboardFilterParams(searchParams), [searchParams]);
+  const tableData = useMemo(() => {
+    if (!hasAnyDashboardFilter(dashboardParams)) return filteredBaseData;
+    const ids = computeDashboardFilteredIds('omm', filteredBaseData, dashboardParams);
+    if (!ids) return filteredBaseData;
+    return filteredBaseData.filter((r) => ids.has(r.id));
+  }, [filteredBaseData, dashboardParams]);
+  const clearDashboardFilter = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    ['status', 'overdue', 'stage', 'team'].forEach((k) => next.delete(k));
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   // ── Option fields for multi-select filters ────────────────────────────────
   const masters = useCommonMasters();
   const optionFields = useMemo(() => {
@@ -987,7 +1007,7 @@ export default function DocsOMMRawDataPage() {
 
   // ── Table ─────────────────────────────────────────────────────────────────
   const table = useReactTable({
-    data: filteredBaseData,
+    data: tableData,
     columns,
     state: {
       sorting: sorting.length ? sorting : DEFAULT_SORTING,
@@ -1028,7 +1048,7 @@ export default function DocsOMMRawDataPage() {
   const selectedRows = useMemo(
     () => table.getSelectedRowModel().rows.map((r) => r.original),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rowSelection, filteredBaseData],
+    [rowSelection, tableData],
   );
 
   // ── Bulk fields ───────────────────────────────────────────────────────────
@@ -1143,7 +1163,7 @@ export default function DocsOMMRawDataPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">OMM Manuals — Raw Data</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Operation &amp; Maintenance Manual — Raw Data</h1>
           <p className="text-sm text-muted-foreground">
             Operation &amp; Maintenance Manual list, lifecycle status &amp; copy quantities.
           </p>
@@ -1170,6 +1190,8 @@ export default function DocsOMMRawDataPage() {
           </Button>
         </div>
       </div>
+
+      <DocsDashboardFilterBanner module="omm" params={dashboardParams} onClear={clearDashboardFilter} />
 
       {/* Active filter chips */}
       {columnFilterChips.length > 0 && (

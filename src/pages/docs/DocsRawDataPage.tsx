@@ -48,6 +48,12 @@ import { computeOverallStatus, computeIsClosed } from '@/lib/docs-status';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
+import { DocsDashboardFilterBanner } from '@/components/docs/DocsDashboardFilterBanner';
+import {
+  readDashboardFilterParams,
+  computeDashboardFilteredIds,
+  hasAnyDashboardFilter,
+} from '@/lib/docs-dashboard-filter';
 import type { BulkEditableField } from '@/lib/bulk-edit';
 import { ALL_TEAMS, TEAM_LABELS, formatTeamLabel } from '@/types/enums';
 
@@ -522,6 +528,20 @@ export default function DocsRawDataPage() {
     };
   }), [items, scDateMap, leadDays, dataDate]);
 
+  // Dashboard URL filter (status/overdue/stage/team coming from Executive Dashboard)
+  const dashboardParams = useMemo(() => readDashboardFilterParams(searchParams), [searchParams]);
+  const dashboardItems = useMemo<DocsRawRow[]>(() => {
+    if (!hasAnyDashboardFilter(dashboardParams)) return augmentedItems;
+    const ids = computeDashboardFilteredIds('abd', augmentedItems, dashboardParams);
+    if (!ids) return augmentedItems;
+    return augmentedItems.filter((r) => ids.has(r.id));
+  }, [augmentedItems, dashboardParams]);
+  const clearDashboardFilter = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    ['status', 'overdue', 'stage', 'team'].forEach((k) => next.delete(k));
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   // ─── State persistence (localStorage) ───
   useEffect(() => {
     setStateLoaded(false);
@@ -760,7 +780,7 @@ export default function DocsRawDataPage() {
   }, [sortFieldNames]);
 
   const table = useReactTable({
-    data: augmentedItems,
+    data: dashboardItems,
     columns,
     state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
@@ -789,7 +809,7 @@ export default function DocsRawDataPage() {
 
   const selectedRows = useMemo(
     () => table.getSelectedRowModel().rows.map((r) => r.original),
-    [rowSelection, augmentedItems],
+    [rowSelection, dashboardItems],
   );
 
   const bulkFields = useMemo<BulkEditableField[]>(() => [
@@ -888,6 +908,8 @@ export default function DocsRawDataPage() {
           </Button>
         </div>
       </div>
+
+      <DocsDashboardFilterBanner module="abd" params={dashboardParams} onClear={clearDashboardFilter} />
 
       {columnFilterChips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">

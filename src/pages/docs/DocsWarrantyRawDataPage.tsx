@@ -59,6 +59,12 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import { NumberRangeDropdown, numberRangeFilterFn } from '@/components/raw-data/NumberRangeDropdown';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
+import { DocsDashboardFilterBanner } from '@/components/docs/DocsDashboardFilterBanner';
+import {
+  readDashboardFilterParams,
+  computeDashboardFilteredIds,
+  hasAnyDashboardFilter,
+} from '@/lib/docs-dashboard-filter';
 import { WarrantyBulkActionBar, type WarrantyBulkField } from '@/components/raw-data/WarrantyBulkActionBar';
 import { exportWarrantyToExcel, type WarrantyExportFormat } from '@/lib/warranty-excel-export';
 import {
@@ -627,6 +633,20 @@ export default function DocsWarrantyRawDataPage() {
     return next;
   }, [rows, resubFilter, collapsedParents]);
 
+  // ── Dashboard URL filter (from Executive Dashboard) ───────────────────────
+  const dashboardParams = useMemo(() => readDashboardFilterParams(searchParams), [searchParams]);
+  const tableData = useMemo(() => {
+    if (!hasAnyDashboardFilter(dashboardParams)) return filteredBaseData;
+    const ids = computeDashboardFilteredIds('warranty', filteredBaseData, dashboardParams);
+    if (!ids) return filteredBaseData;
+    return filteredBaseData.filter((r) => ids.has(r.id));
+  }, [filteredBaseData, dashboardParams]);
+  const clearDashboardFilter = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    ['status', 'overdue', 'stage', 'team'].forEach((k) => next.delete(k));
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const childCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of rows) {
@@ -893,7 +913,7 @@ export default function DocsWarrantyRawDataPage() {
 
   // ── Table ──
   const table = useReactTable({
-    data: filteredBaseData,
+    data: tableData,
     columns,
     state: {
       sorting: sorting.length ? sorting : DEFAULT_SORTING,
@@ -934,7 +954,7 @@ export default function DocsWarrantyRawDataPage() {
   const selectedRows = useMemo(
     () => table.getSelectedRowModel().rows.map((r) => r.original),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rowSelection, filteredBaseData],
+    [rowSelection, tableData],
   );
 
   // ── Bulk fields ──
@@ -1064,6 +1084,8 @@ export default function DocsWarrantyRawDataPage() {
           </Button>
         </div>
       </div>
+
+      <DocsDashboardFilterBanner module="warranty" params={dashboardParams} onClear={clearDashboardFilter} />
 
       {/* Active filter chips */}
       {columnFilterChips.length > 0 && (
