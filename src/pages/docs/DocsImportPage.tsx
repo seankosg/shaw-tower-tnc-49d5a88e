@@ -73,8 +73,8 @@ export default function DocsImportPage() {
           <TabsTrigger value="warranty">
             Warranty{fileBadge(summary.warrantyFiles, warranty.isRunning)}
           </TabsTrigger>
-          <TabsTrigger value="spare_part" disabled>
-            Spare Part <Badge variant="outline" className="ml-2 h-4 px-1.5 text-[10px]">Coming soon</Badge>
+          <TabsTrigger value="spare_part">
+            Spare Part{fileBadge(summary.sparePartFiles, sparePart.isRunning)}
           </TabsTrigger>
         </TabsList>
 
