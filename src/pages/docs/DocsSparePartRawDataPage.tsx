@@ -26,6 +26,7 @@ export default function DocsSparePartRawDataPage() {
   const [rows, setRows] = useState<SparePartRow[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     let cancelled = false;
