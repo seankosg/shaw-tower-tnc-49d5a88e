@@ -369,13 +369,16 @@ function FieldEditor({ field, label, value, disabled, onSave, subOptions, picOpt
     const opts = field === 'subcontractor_name' ? subOptions : field === 'hdec_pic_name' ? picOptions : engOptions;
     return (
       <div>
-        <SuggestField
-          label={label}
-          value={value ?? ''}
-          options={(opts ?? []).map((o) => o.name)}
-          disabled={disabled}
-          onChange={(v) => onSave(v && v.trim() ? v.trim() : null)}
-        />
+        <Label className="text-xs">{label}</Label>
+        <Select value={value ?? '__none__'} disabled={disabled} onValueChange={(v) => onSave(v === '__none__' ? null : v)}>
+          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">—</SelectItem>
+            {(opts ?? []).map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     );
   }
