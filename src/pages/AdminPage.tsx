@@ -646,6 +646,8 @@ function CreateUserDialog({
       if (!subsubParent) { toast({ title: 'Sub-Sub has no parent Subcontractor', variant: 'destructive' }); return; }
       payloadSubsubName = selectedSubsub.name;
       payloadSubconName = subsubParent.name;
+    } else if (userType === 'guest') {
+      payloadSubconName = subconName.trim() || null;
     }
     setSubmitting(true);
     const { data, error } = await supabase.functions.invoke('admin-create-user', {
