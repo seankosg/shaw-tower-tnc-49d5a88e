@@ -1124,6 +1124,8 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
           });
         }
         for (const field of activeTrackedFields) {
+          // Exclude imputed actual_start_date from schedule revision audit (per import policy).
+          if (field === 'actual_start_date' && actualStartImputedFromCompletion) continue;
           if (changed(existing[field], (row as any)[field])) {
             const isDate = field.endsWith('_date');
             const oldVal = (existing as any)[field] ?? null;
