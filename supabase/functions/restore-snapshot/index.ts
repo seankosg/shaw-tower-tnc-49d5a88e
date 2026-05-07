@@ -15,8 +15,7 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Missing auth" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -24,15 +23,13 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Verify caller is admin/superuser
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -40,20 +37,17 @@ Deno.serve(async (req) => {
     const { data: isAdmin } = await adminClient.rpc("is_admin_or_superuser", { _user_id: user.id });
     if (!isAdmin) {
       return new Response(JSON.stringify({ error: "Admin required" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const { snapshot_id } = await req.json();
     if (!snapshot_id) {
       return new Response(JSON.stringify({ error: "snapshot_id required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fetch snapshot row
     const { data: snapshot, error: snapErr } = await adminClient
       .from("database_snapshots")
       .select("id, snapshot_data, storage_path, backup_version, manifest")
@@ -61,32 +55,73 @@ Deno.serve(async (req) => {
       .single();
     if (snapErr || !snapshot) {
       return new Response(JSON.stringify({ error: "Snapshot not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Resolve payload: prefer Storage (v2), fall back to DB jsonb (v1 = subtests-only)
+    const bucket = "db-backups";
+    const result: Record<string, number> = {};
+    const errors: Array<{ table: string; error: string }> = [];
+
+    // v3: storage_path points to manifest.json in folder; per-table files alongside
+    const isV3 = (snapshot.backup_version === 3) ||
+      (typeof snapshot.storage_path === "string" && snapshot.storage_path.endsWith("/manifest.json"));
+
+    if (isV3 && snapshot.storage_path) {
+      const folder = snapshot.storage_path.replace(/\/manifest\.json$/, "");
+      const manifestObj = (snapshot.manifest ?? {}) as Record<string, number>;
+      const presentTables = BACKUP_TABLES.filter((t) => (manifestObj[t] ?? 0) >= 0);
+
+      // Truncate all (reverse for child-first safety)
+      const { error: trErr } = await adminClient.rpc("restore_truncate_all", {
+        _tables: [...presentTables].reverse(),
+      });
+      if (trErr) {
+        return new Response(JSON.stringify({ error: `truncate: ${trErr.message}` }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      for (const t of BACKUP_TABLES) {
+        if ((manifestObj[t] ?? 0) === 0) { result[t] = 0; continue; }
+        const path = `${folder}/${t}.json`;
+        const { data: dl, error: dlErr } = await adminClient.storage.from(bucket).download(path);
+        if (dlErr) { errors.push({ table: t, error: `download: ${dlErr.message}` }); continue; }
+        let rows: any[] = [];
+        try { rows = JSON.parse(await dl.text()); } catch (e) {
+          errors.push({ table: t, error: `parse: ${(e as Error).message}` }); continue;
+        }
+        let inserted = 0;
+        for (let i = 0; i < rows.length; i += 500) {
+          const batch = rows.slice(i, i + 500);
+          const { data, error } = await adminClient.rpc("restore_insert_rows", { _table: t, _rows: batch });
+          if (error) { errors.push({ table: t, error: error.message }); break; }
+          inserted += (data as number) ?? batch.length;
+        }
+        result[t] = inserted;
+      }
+
+      return new Response(
+        JSON.stringify({ success: errors.length === 0, version: 3, restored: result, errors }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // v2 / v1 fallback (single JSON or legacy subtests-only)
     let tables: Record<string, any[]> | null = null;
     let isLegacyV1 = false;
 
     if (snapshot.storage_path) {
-      const { data: dl, error: dlErr } = await adminClient.storage
-        .from("db-backups")
-        .download(snapshot.storage_path);
+      const { data: dl, error: dlErr } = await adminClient.storage.from(bucket).download(snapshot.storage_path);
       if (dlErr) {
         return new Response(JSON.stringify({ error: `storage download: ${dlErr.message}` }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const text = await dl.text();
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(await dl.text());
       tables = parsed.tables ?? null;
     }
-
     if (!tables) {
-      // Legacy: snapshot_data is an array of subtests rows
       if (Array.isArray(snapshot.snapshot_data)) {
         tables = { subtests: snapshot.snapshot_data as any[] };
         isLegacyV1 = true;
@@ -94,63 +129,38 @@ Deno.serve(async (req) => {
         tables = snapshot.snapshot_data as Record<string, any[]>;
       }
     }
-
     if (!tables) {
       return new Response(JSON.stringify({ error: "Snapshot payload missing" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Determine which tables to truncate. For v1 we only touch subtests to preserve old behavior.
     const tablesToTruncate = isLegacyV1
       ? ["subtests"]
       : BACKUP_TABLES.filter((t) => Array.isArray(tables![t]));
-
-    // Truncate (reverse order = children first to be safe even with CASCADE)
-    const truncList = [...tablesToTruncate].reverse();
-    const { error: trErr } = await adminClient.rpc("restore_truncate_all", { _tables: truncList });
+    const { error: trErr } = await adminClient.rpc("restore_truncate_all", { _tables: [...tablesToTruncate].reverse() });
     if (trErr) {
       return new Response(JSON.stringify({ error: `truncate: ${trErr.message}` }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    // Insert in dependency order, batch 500 rows at a time
-    const result: Record<string, number> = {};
-    const errors: Array<{ table: string; error: string }> = [];
 
     const insertOrder = isLegacyV1 ? ["subtests"] : BACKUP_TABLES;
     for (const t of insertOrder) {
       const rows = tables[t];
-      if (!Array.isArray(rows) || rows.length === 0) {
-        result[t] = 0;
-        continue;
-      }
+      if (!Array.isArray(rows) || rows.length === 0) { result[t] = 0; continue; }
       let inserted = 0;
       for (let i = 0; i < rows.length; i += 500) {
         const batch = rows.slice(i, i + 500);
-        const { data, error } = await adminClient.rpc("restore_insert_rows", {
-          _table: t,
-          _rows: batch,
-        });
-        if (error) {
-          errors.push({ table: t, error: error.message });
-          break;
-        }
+        const { data, error } = await adminClient.rpc("restore_insert_rows", { _table: t, _rows: batch });
+        if (error) { errors.push({ table: t, error: error.message }); break; }
         inserted += (data as number) ?? batch.length;
       }
       result[t] = inserted;
     }
 
     return new Response(
-      JSON.stringify({
-        success: errors.length === 0,
-        legacy_v1: isLegacyV1,
-        restored: result,
-        errors,
-      }),
+      JSON.stringify({ success: errors.length === 0, legacy_v1: isLegacyV1, restored: result, errors }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
