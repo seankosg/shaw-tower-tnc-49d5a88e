@@ -284,6 +284,7 @@ export default function DocsWarrantyDetailPage() {
               value={(row as any)[f]}
               disabled={!canEditField(f) || saving || f === 'item_no'}
               onSave={(v) => save(f, v)}
+              subOptions={subOptions} picOptions={picOptions} engOptions={engOptions}
             />
           ))}
         </CardContent>
