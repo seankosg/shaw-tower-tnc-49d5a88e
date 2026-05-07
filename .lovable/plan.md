@@ -1,33 +1,26 @@
-## Add Guest User Type
+## 목표
+Warranty raw data의 comment(`warranty_threads`)에서 `created_at`을 comment 내용에서 파싱된 `thread_date`로 보정 (1회성 마이그레이션).
 
-Adds a new `guest` value to the `user_type` enum so users like external visitors / observers can be classified separately from HDEC, Subcontractor, Sub-Sub, PM/PD, Admin.
+## 범위
+- 테이블: `warranty_threads`
+- 조건: `created_at >= '2026-05-01'` AND `thread_date IS NOT NULL`
+- 그 외(2026-05-01 이전 생성, 또는 `thread_date` 없음)는 건드리지 않음
 
-### Scope
+## SQL
+```sql
+UPDATE public.warranty_threads
+SET created_at = (thread_date::timestamp AT TIME ZONE 'UTC'),
+    updated_at = (thread_date::timestamp AT TIME ZONE 'UTC')
+WHERE created_at >= '2026-05-01'
+  AND thread_date IS NOT NULL;
+```
+- 시각은 해당 날짜 00:00 UTC로 설정
+- `updated_at`도 함께 맞춤
 
-- `user_type` (소속 유형) only. The `role` (권한) system is untouched — guest user_type users will typically be assigned the `guest` or `super_guest` role, but that's chosen independently in the same form.
-- Affiliation fields (`subcontractor_name`, `subsub_name`, `hdec_pic_name`, `hdec_eng_name`) remain nullable. For Guest, the only optional field shown is **Organisation / Company** — stored in existing `subcontractor_name` column as a free-text label (no master matching, no owner code).
+## 범위 외
+- `warranty_items` 등 다른 테이블 변경 없음
+- 스키마/코드/RLS 변경 없음
+- 이후 import 동작 변경 없음 (1회성)
 
-### Changes
-
-**1. Database migration**
-- `ALTER TYPE public.user_type ADD VALUE 'guest';`
-
-**2. `src/types/enums.ts`**
-- Add `'guest'` to `UserType` union.
-- Append `'guest'` to `ALL_USER_TYPES`.
-- Add `guest: 'Guest'` to `USER_TYPE_LABELS`.
-
-**3. `src/pages/AdminPage.tsx`**
-- Create User & Edit User dialogs: when `userType === 'guest'`, show one optional **Organisation** text input bound to `subcontractor_name` payload (no select, no validation). Hide all HDEC PIC/ENG and subcontractor master selectors.
-- `handleSubmit`: skip required-field guards for guest; pass `subcontractor_name` (trimmed, or null), all other affiliation fields null.
-- Display helpers (sort/export/table cells around lines 369, 405, 514): treat `guest` like a no-affiliation type — show `subcontractor_name` if present, else `—`.
-
-**4. Edge functions**
-- `supabase/functions/admin-create-user/index.ts` — extend `Body.user_type` union to include `'guest'`.
-- `supabase/functions/admin-update-user/index.ts` — same.
-
-### Out of scope
-
-- No RLS changes. Access control stays driven entirely by `role`, not `user_type`.
-- No changes to data tables or imports — `user_type` is purely a profile classification.
-- No new master tables for Guest organisations.
+## 확인
+시간대를 Asia/Singapore 등으로 바꿔야 하면 알려주세요. 기본은 00:00 UTC입니다.
