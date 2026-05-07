@@ -109,19 +109,17 @@ function safeDate(d: string | null | undefined): Date | null {
 
 function classifyStage(
   planned: string | null,
-  actual: string | null,
+  _actual: string | null,
   isDone: boolean,
   asOf: Date,
-  atRiskDays: number,
-): { is_overdue: boolean; is_at_risk: boolean; delay_days: number } {
-  if (isDone) return { is_overdue: false, is_at_risk: false, delay_days: 0 };
+): { is_overdue: boolean; delay_days: number } {
+  if (isDone) return { is_overdue: false, delay_days: 0 };
   const p = safeDate(planned);
-  if (!p) return { is_overdue: false, is_at_risk: false, delay_days: 0 };
+  if (!p) return { is_overdue: false, delay_days: 0 };
   if (isAfter(asOf, p)) {
-    return { is_overdue: true, is_at_risk: false, delay_days: differenceInDays(asOf, p) };
+    return { is_overdue: true, delay_days: differenceInDays(asOf, p) };
   }
-  const daysUntil = differenceInDays(p, asOf);
-  return { is_overdue: false, is_at_risk: daysUntil >= 0 && daysUntil <= atRiskDays, delay_days: 0 };
+  return { is_overdue: false, delay_days: 0 };
 }
 
 // ─── ABD ─────────────────────────────────────────────────────────────────
