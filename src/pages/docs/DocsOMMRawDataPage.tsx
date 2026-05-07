@@ -62,7 +62,16 @@ import {
   OmmBulkActionBar,
   type OmmBulkField,
 } from '@/components/raw-data/OmmBulkActionBar';
-import * as XLSX from 'xlsx';
+import { exportOmmToExcel, type OmmExportFormat } from '@/lib/omm-excel-export';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 // ─── Field categorisation ───────────────────────────────────────────────────
 const MULTI_SELECT_FIELDS = new Set([
