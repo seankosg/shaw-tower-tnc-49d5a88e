@@ -130,6 +130,7 @@ const App = () => (
                 <Route path="/docs/warranty" element={<DocsWarrantyRawDataPage />} />
                 <Route path="/docs/warranty/:id" element={<DocsWarrantyDetailPage />} />
                 <Route path="/docs/spare-part" element={<DocsSparePartRawDataPage />} />
+                <Route path="/docs/spare-part/:id" element={<DocsSparePartDetailPage />} />
                 <Route path="/docs/import" element={<DocsImportPage />} />
                 <Route path="/docs/import/logs" element={<DocsImportLogsPage />} />
                 <Route path="/docs/export" element={<DocsExportPage />} />
