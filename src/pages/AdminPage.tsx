@@ -2601,7 +2601,7 @@ function BackupTab() {
   const load = async () => {
     setLoading(true);
     const { data } = await supabase.from('database_snapshots' as any)
-      .select('id, snapshot_name, snapshot_date, row_count, created_at, note, snapshot_type')
+      .select('id, snapshot_name, snapshot_date, row_count, created_at, note, snapshot_type, storage_path, manifest, backup_version')
       .order('created_at', { ascending: false });
     setSnapshots(data || []);
     setLoading(false);
@@ -2609,38 +2609,18 @@ function BackupTab() {
 
   useEffect(() => { load(); }, []);
 
-  const fetchAllSubtests = async () => {
-    const allRows: any[] = [];
-    let from = 0;
-    const pageSize = 1000;
-    while (true) {
-      const { data, error } = await supabase.from('subtests')
-        .select('*')
-        .range(from, from + pageSize - 1);
-      if (error) throw error;
-      if (!data || data.length === 0) break;
-      allRows.push(...data);
-      if (data.length < pageSize) break;
-      from += pageSize;
-    }
-    return allRows;
-  };
-
   const createSnapshot = async () => {
     setSaving(true);
     try {
-      const allRows = await fetchAllSubtests();
-      const name = new Date().toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-      const { error } = await supabase.from('database_snapshots' as any).insert({
-        snapshot_name: name,
-        snapshot_data: allRows,
-        row_count: allRows.length,
-        created_by: user?.id,
-        note: note || null,
-        snapshot_type: 'manual',
+      const { data, error } = await supabase.functions.invoke('auto-snapshot', {
+        body: { mode: 'manual', note: note || undefined },
       });
       if (error) throw error;
-      toast({ title: 'Snapshot created', description: `${allRows.length} rows saved` });
+      if (data?.error) throw new Error(data.error);
+      toast({
+        title: 'Snapshot created',
+        description: `${data.total_rows?.toLocaleString?.() ?? data.total_rows} rows across ${Object.keys(data.manifest || {}).length} tables`,
+      });
       setNote('');
       load();
     } catch (e: any) {
@@ -2657,7 +2637,16 @@ function BackupTab() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast({ title: 'Restore complete', description: `${data.restored} rows restored` });
+      const restored = data?.restored ?? {};
+      const total = typeof restored === 'object'
+        ? Object.values(restored as Record<string, number>).reduce((a, b) => a + b, 0)
+        : restored;
+      const errCount = (data?.errors || []).length;
+      toast({
+        title: errCount ? 'Restore finished with errors' : 'Restore complete',
+        description: `${total?.toLocaleString?.() ?? total} rows restored${errCount ? ` · ${errCount} table errors` : ''}${data?.legacy_v1 ? ' (legacy snapshot — subtests only)' : ''}`,
+        variant: errCount ? 'destructive' : 'default',
+      });
     } catch (e: any) {
       toast({ title: 'Restore failed', description: e.message, variant: 'destructive' });
     }
