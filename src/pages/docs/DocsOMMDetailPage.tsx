@@ -397,9 +397,9 @@ interface FieldEditorProps {
   value: any;
   disabled?: boolean;
   onSave: (v: any) => void;
-  subOptions?: SuggestOption[];
-  picOptions?: SuggestOption[];
-  engOptions?: SuggestOption[];
+  subOptions?: MasterOption[];
+  picOptions?: MasterOption[];
+  engOptions?: MasterOption[];
 }
 
 function FieldEditor({ field, label, value, disabled, onSave, subOptions, picOptions, engOptions }: FieldEditorProps) {
