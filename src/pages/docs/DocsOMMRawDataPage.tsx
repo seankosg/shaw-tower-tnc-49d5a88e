@@ -1113,10 +1113,10 @@ export default function DocsOMMRawDataPage() {
   );
   const resubCount = useMemo(() => rows.filter((r) => r.is_resubmission).length, [rows]);
 
-  // ── Export (current view, single .xlsx) ───────────────────────────────────
+  // ── Export ────────────────────────────────────────────────────────────────
+  const exportRowCount = table.getFilteredRowModel().rows.length;
   const handleExport = useCallback(() => {
-    const sorted = table.getSortedRowModel().rows;
-    if (sorted.length === 0) {
+    if (exportRowCount === 0) {
       toast({
         title: 'No rows to export',
         description: 'Adjust filters and try again.',
@@ -1124,31 +1124,19 @@ export default function DocsOMMRawDataPage() {
       });
       return;
     }
-    const visibleCols = table
-      .getVisibleLeafColumns()
-      .filter((c) => c.id !== '__select' && c.id !== '__open' && c.id !== 'cycle_progress');
-    const headers = visibleCols.map((c) => {
-      const meta = c.columnDef.meta as any;
-      return meta?.label ?? (typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id);
+    exportOmmToExcel({
+      table,
+      fieldConfig: fieldConfigRows,
+      globalFilter,
+      meta: {
+        userName: profile?.name ?? user?.email ?? 'unknown',
+        userType: profile?.user_type ?? 'unknown',
+      },
+      format: exportFormat,
     });
-    const aoa: unknown[][] = [headers];
-    for (const r of sorted) {
-      aoa.push(
-        visibleCols.map((c) => {
-          const v = (r.original as any)[c.id];
-          if (c.id === 'current_status') return computeOmmStatus(r.original);
-          if (v == null) return '';
-          if (DATE_FIELDS.has(c.id)) return String(v).slice(0, 10);
-          return v;
-        }),
-      );
-    }
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'OMM');
-    XLSX.writeFile(wb, `omm-raw-${new Date().toISOString().slice(0, 10)}.xlsx`);
-    toast({ title: 'Export complete', description: `${sorted.length} rows exported.` });
-  }, [table, toast]);
+    setExportDialogOpen(false);
+    toast({ title: 'Export started', description: `${exportRowCount} rows queued for download.` });
+  }, [table, fieldConfigRows, globalFilter, profile, user, exportFormat, exportRowCount, toast]);
 
   return (
     <div className="space-y-4 p-4">
