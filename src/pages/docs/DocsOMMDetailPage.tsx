@@ -130,17 +130,13 @@ export default function DocsOMMDetailPage() {
     const { data } = await (supabase as any).from('docs_omm').select('*').eq('id', id).maybeSingle();
     setRow(data);
 
-    const [cmtRes, logRes] = await Promise.all([
-      (supabase as any).from('omm_comments').select('*').eq('omm_id', id).order('created_at', { ascending: true }),
-      (supabase as any)
-        .from('docs_change_log')
-        .select('*')
-        .eq('record_id', id)
-        .eq('sub_module', 'omm')
-        .order('changed_at', { ascending: false })
-        .limit(50),
-    ]);
-    setComments(cmtRes.data ?? []);
+    const logRes = await (supabase as any)
+      .from('docs_change_log')
+      .select('*')
+      .eq('record_id', id)
+      .eq('sub_module', 'omm')
+      .order('changed_at', { ascending: false })
+      .limit(50);
     setLogs(logRes.data ?? []);
     setLoading(false);
   };
@@ -200,26 +196,8 @@ export default function DocsOMMDetailPage() {
     setLogs(logRes.data ?? []);
   };
 
-  const addComment = async () => {
-    if (!id || !newComment.trim() || !user) return;
-    const { error } = await (supabase as any).from('omm_comments').insert({
-      omm_id: id,
-      author_user_id: user.id,
-      message: newComment.trim(),
-      type: 'comment',
-    });
-    if (error) {
-      toast({ title: 'Comment failed', description: error.message, variant: 'destructive' });
-    } else {
-      setNewComment('');
-      const cmtRes = await (supabase as any)
-        .from('omm_comments')
-        .select('*')
-        .eq('omm_id', id)
-        .order('created_at', { ascending: true });
-      setComments(cmtRes.data ?? []);
-    }
-  };
+
+
 
   const visibleSorted = (fields: readonly string[]) =>
     sortFieldNames(fields.filter((f) => isFieldVisible(f)));
