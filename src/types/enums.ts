@@ -31,7 +31,7 @@ export const isR2Done = (s: ReportStatus | string | null | undefined): boolean =
   !!s && (R2_DONE_STATUSES as string[]).includes(s);
 
 export const ALL_ROLES: AppRole[] = ['guest', 'super_guest', 'user', 'senior_user', 'd_superuser', 'superuser', 'admin'];
-export const ALL_USER_TYPES: UserType[] = ['subcontractor', 'subsub', 'hdec', 'pm_pd', 'admin'];
+export const ALL_USER_TYPES: UserType[] = ['subcontractor', 'subsub', 'hdec', 'pm_pd', 'admin', 'guest'];
 
 export type TeamType = 'Mech' | 'Elec' | 'Arch' | 'Supp' | 'Design';
 export const ALL_TEAMS: TeamType[] = ['Mech', 'Elec', 'Arch', 'Supp', 'Design'];
