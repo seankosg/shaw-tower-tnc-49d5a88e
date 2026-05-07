@@ -221,7 +221,7 @@ export default function DocsWarrantyDetailPage() {
         </div>
         <Button variant="outline" size="sm" onClick={() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' })}>
           <MessageSquare className="h-4 w-4 mr-1" /> Comments
-          {comments.length > 0 && <Badge variant="secondary" className="ml-2 h-4 px-1.5 text-[10px]">{comments.length}</Badge>}
+          {commentCount > 0 && <Badge variant="secondary" className="ml-2 h-4 px-1.5 text-[10px]">{commentCount}</Badge>}
         </Button>
       </div>
 
@@ -325,7 +325,7 @@ export default function DocsWarrantyDetailPage() {
         <CardHeader className="py-3">
           <CardTitle className="text-sm flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
-            Comments <span className="text-muted-foreground font-normal">({comments.length})</span>
+            Comments <span className="text-muted-foreground font-normal">({commentCount})</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -335,8 +335,8 @@ export default function DocsWarrantyDetailPage() {
             hdecPicName={(row as any)?.hdec_pic_name ?? null}
             hdecEngName={(row as any)?.hdec_eng_name ?? null}
             subcontractorName={(row as any)?.subcontractor_name ?? null}
-            subsubName={(row as any)?.subsub_name ?? null}
-            onCountChange={(n) => setComments(Array.from({ length: n }, (_, i) => ({ id: String(i) } as any)))}
+            subsubName={null}
+            onCountChange={setCommentCount}
           />
         </CardContent>
       </Card>
