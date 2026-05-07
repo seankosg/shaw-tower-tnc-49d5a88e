@@ -2682,8 +2682,9 @@ function BackupTab() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Saves all subtests data as a snapshot. You can restore it later to rollback changes.
+            Saves a full backup of all business tables (Subtests, Defect, Docs, Warranty, masters, permissions, audit logs) to both the database and Storage. You can restore it later to roll back the entire system.
           </p>
+
         </CardContent>
       </Card>
 
