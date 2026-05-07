@@ -518,7 +518,10 @@ export default function DocsOMMRawDataPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isFieldVisible, getLabel, sortFieldNames } = useDocsFieldConfig('omm');
+  const { user, profile } = useAuth() as any;
+  const { fields: fieldConfigRows, isFieldVisible, getLabel, sortFieldNames } = useDocsFieldConfig('omm');
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<OmmExportFormat>('view');
   const storageKey = user?.id
     ? `omm-raw-data-state:${user.id}`
     : 'omm-raw-data-state:anon';
