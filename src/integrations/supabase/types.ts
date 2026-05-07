@@ -1704,6 +1704,27 @@ export type Database = {
         }
         Relationships: []
       }
+      omm_comment_reads: {
+        Row: {
+          id: string
+          last_read_at: string
+          omm_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          last_read_at?: string
+          omm_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          last_read_at?: string
+          omm_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       omm_comments: {
         Row: {
           author_user_id: string
@@ -2810,6 +2831,27 @@ export type Database = {
           },
         ]
       }
+      warranty_comment_reads: {
+        Row: {
+          id: string
+          last_read_at: string
+          user_id: string
+          warranty_item_id: string
+        }
+        Insert: {
+          id?: string
+          last_read_at?: string
+          user_id: string
+          warranty_item_id: string
+        }
+        Update: {
+          id?: string
+          last_read_at?: string
+          user_id?: string
+          warranty_item_id?: string
+        }
+        Relationships: []
+      }
       warranty_comments: {
         Row: {
           author_user_id: string
@@ -3260,7 +3302,15 @@ export type Database = {
         Args: { _comment_id: string; _user_id: string }
         Returns: boolean
       }
+      can_modify_omm_comment: {
+        Args: { _comment_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_modify_subtest_comment: {
+        Args: { _comment_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_modify_warranty_comment: {
         Args: { _comment_id: string; _user_id: string }
         Returns: boolean
       }
