@@ -89,6 +89,7 @@ export const USER_TYPE_LABELS: Record<UserType, string> = {
   hdec: 'HDEC',
   pm_pd: 'PM/PD',
   admin: 'Administrator',
+  guest: 'Guest',
 };
 
 export const DATA_SOURCE_LABELS: Record<DataSource, string> = {
