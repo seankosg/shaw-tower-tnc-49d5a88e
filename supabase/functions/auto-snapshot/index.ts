@@ -52,7 +52,11 @@ async function uploadTable(client: any, folder: string, table: string): Promise<
   const chunks: string[] = ["["];
   let first = true;
   while (true) {
-    const { data, error } = await client.from(table).select("*").range(from, from + pageSize - 1);
+    const { data, error } = await withRetry(`select ${table} @${from}`, async () => {
+      const res = await client.from(table).select("*").range(from, from + pageSize - 1);
+      if (res.error) throw new Error(`${table}: ${res.error.message}`);
+      return res;
+    });
     if (error) throw new Error(`${table}: ${error.message}`);
     if (!data || data.length === 0) break;
     for (const row of data) {
@@ -66,13 +70,15 @@ async function uploadTable(client: any, folder: string, table: string): Promise<
   chunks.push("]");
   const json = chunks.join("");
   const path = `${folder}/${table}.json`;
-  const { error: upErr } = await client.storage
-    .from(BUCKET)
-    .upload(path, new Blob([json], { type: "application/json" }), {
-      contentType: "application/json",
-      upsert: true,
-    });
-  if (upErr) throw new Error(`upload ${table}: ${upErr.message}`);
+  await withRetry(`upload ${table}`, async () => {
+    const { error: upErr } = await client.storage
+      .from(BUCKET)
+      .upload(path, new Blob([json], { type: "application/json" }), {
+        contentType: "application/json",
+        upsert: true,
+      });
+    if (upErr) throw new Error(`upload ${table}: ${upErr.message}`);
+  });
   return total;
 }
 
