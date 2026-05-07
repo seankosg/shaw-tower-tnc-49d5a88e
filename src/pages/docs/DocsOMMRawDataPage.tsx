@@ -1270,6 +1270,47 @@ export default function DocsOMMRawDataPage() {
         navigate={navigate}
         tableRef={tableRef}
       />
+
+      {/* Export dialog */}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export OMM Manuals</DialogTitle>
+            <DialogDescription>
+              Choose a format. Filters and sort are preserved in both options.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <RadioGroup value={exportFormat} onValueChange={(v) => setExportFormat(v as OmmExportFormat)}>
+              <label className="flex items-start gap-2 rounded-md border p-3 cursor-pointer hover:bg-muted/30">
+                <RadioGroupItem value="view" className="mt-1" />
+                <div>
+                  <div className="text-sm font-medium">Current view</div>
+                  <div className="text-xs text-muted-foreground">
+                    Uses currently visible columns. Includes computed Status; suitable for review &amp; sharing.
+                  </div>
+                </div>
+              </label>
+              <label className="flex items-start gap-2 rounded-md border p-3 cursor-pointer hover:bg-muted/30">
+                <RadioGroupItem value="reimport" className="mt-1" />
+                <div>
+                  <div className="text-sm font-medium">Re-import ready</div>
+                  <div className="text-xs text-muted-foreground">
+                    Includes ID columns; computed columns excluded; suitable for editing and re-importing.
+                  </div>
+                </div>
+              </label>
+            </RadioGroup>
+            <div className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+              {exportRowCount} rows will be exported.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setExportDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleExport}>Download</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
