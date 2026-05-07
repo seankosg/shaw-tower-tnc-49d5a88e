@@ -356,7 +356,6 @@ export interface StageProgress {
   done: number;
   remaining: number;
   overdue: number;
-  at_risk: number;
   progress_pct: number;
 }
 
@@ -374,7 +373,6 @@ export function computeStageProgress(records: DocsStageRecord[]): StageProgress[
         done: 0,
         remaining: 0,
         overdue: 0,
-        at_risk: 0,
         progress_pct: 0,
       };
       map.set(r.stage_key, s);
@@ -382,7 +380,6 @@ export function computeStageProgress(records: DocsStageRecord[]): StageProgress[
     s.total++;
     if (r.is_done) s.done++;
     if (r.is_overdue) s.overdue++;
-    if (r.is_at_risk) s.at_risk++;
   }
   for (const s of map.values()) {
     s.remaining = s.total - s.done;
