@@ -85,37 +85,46 @@ export type Database = {
       }
       database_snapshots: {
         Row: {
+          backup_version: number
           created_at: string
           created_by: string | null
           id: string
+          manifest: Json | null
           note: string | null
           row_count: number
-          snapshot_data: Json
+          snapshot_data: Json | null
           snapshot_date: string
           snapshot_name: string
           snapshot_type: string
+          storage_path: string | null
         }
         Insert: {
+          backup_version?: number
           created_at?: string
           created_by?: string | null
           id?: string
+          manifest?: Json | null
           note?: string | null
           row_count?: number
-          snapshot_data: Json
+          snapshot_data?: Json | null
           snapshot_date?: string
           snapshot_name: string
           snapshot_type?: string
+          storage_path?: string | null
         }
         Update: {
+          backup_version?: number
           created_at?: string
           created_by?: string | null
           id?: string
+          manifest?: Json | null
           note?: string | null
           row_count?: number
-          snapshot_data?: Json
+          snapshot_data?: Json | null
           snapshot_date?: string
           snapshot_name?: string
           snapshot_type?: string
+          storage_path?: string | null
         }
         Relationships: []
       }
@@ -3389,6 +3398,11 @@ export type Database = {
         Returns: Json
       }
       purge_old_event_log: { Args: never; Returns: number }
+      restore_insert_rows: {
+        Args: { _rows: Json; _table: string }
+        Returns: number
+      }
+      restore_truncate_all: { Args: { _tables: string[] }; Returns: undefined }
       rollback_defect_import_batch: {
         Args: { _batch_id: string; _force?: boolean }
         Returns: Json

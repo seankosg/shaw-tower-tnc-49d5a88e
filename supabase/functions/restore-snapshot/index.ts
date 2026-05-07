@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { BACKUP_TABLES } from "../_shared/backup-tables.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,9 +22,10 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Verify caller is admin
-    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    // Verify caller is admin/superuser
+    const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user } } = await userClient.auth.getUser();
@@ -51,13 +53,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch snapshot
+    // Fetch snapshot row
     const { data: snapshot, error: snapErr } = await adminClient
       .from("database_snapshots")
-      .select("snapshot_data, row_count")
+      .select("id, snapshot_data, storage_path, backup_version, manifest")
       .eq("id", snapshot_id)
       .single();
-
     if (snapErr || !snapshot) {
       return new Response(JSON.stringify({ error: "Snapshot not found" }), {
         status: 404,
@@ -65,39 +66,97 @@ Deno.serve(async (req) => {
       });
     }
 
-    const rows = snapshot.snapshot_data as any[];
+    // Resolve payload: prefer Storage (v2), fall back to DB jsonb (v1 = subtests-only)
+    let tables: Record<string, any[]> | null = null;
+    let isLegacyV1 = false;
 
-    // Use service role for direct DB operations via REST
-    // Delete all subtests
-    const { error: delErr } = await adminClient.from("subtests").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    if (delErr) {
-      return new Response(JSON.stringify({ error: `Delete failed: ${delErr.message}` }), {
+    if (snapshot.storage_path) {
+      const { data: dl, error: dlErr } = await adminClient.storage
+        .from("db-backups")
+        .download(snapshot.storage_path);
+      if (dlErr) {
+        return new Response(JSON.stringify({ error: `storage download: ${dlErr.message}` }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const text = await dl.text();
+      const parsed = JSON.parse(text);
+      tables = parsed.tables ?? null;
+    }
+
+    if (!tables) {
+      // Legacy: snapshot_data is an array of subtests rows
+      if (Array.isArray(snapshot.snapshot_data)) {
+        tables = { subtests: snapshot.snapshot_data as any[] };
+        isLegacyV1 = true;
+      } else if (snapshot.snapshot_data && typeof snapshot.snapshot_data === "object") {
+        tables = snapshot.snapshot_data as Record<string, any[]>;
+      }
+    }
+
+    if (!tables) {
+      return new Response(JSON.stringify({ error: "Snapshot payload missing" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Insert in batches of 500
-    let inserted = 0;
-    for (let i = 0; i < rows.length; i += 500) {
-      const batch = rows.slice(i, i + 500);
-      const { error: insErr } = await adminClient.from("subtests").insert(batch);
-      if (insErr) {
-        return new Response(JSON.stringify({ error: `Insert failed at batch ${i}: ${insErr.message}`, inserted }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      inserted += batch.length;
+    // Determine which tables to truncate. For v1 we only touch subtests to preserve old behavior.
+    const tablesToTruncate = isLegacyV1
+      ? ["subtests"]
+      : BACKUP_TABLES.filter((t) => Array.isArray(tables![t]));
+
+    // Truncate (reverse order = children first to be safe even with CASCADE)
+    const truncList = [...tablesToTruncate].reverse();
+    const { error: trErr } = await adminClient.rpc("restore_truncate_all", { _tables: truncList });
+    if (trErr) {
+      return new Response(JSON.stringify({ error: `truncate: ${trErr.message}` }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(JSON.stringify({ success: true, restored: inserted }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Insert in dependency order, batch 500 rows at a time
+    const result: Record<string, number> = {};
+    const errors: Array<{ table: string; error: string }> = [];
+
+    const insertOrder = isLegacyV1 ? ["subtests"] : BACKUP_TABLES;
+    for (const t of insertOrder) {
+      const rows = tables[t];
+      if (!Array.isArray(rows) || rows.length === 0) {
+        result[t] = 0;
+        continue;
+      }
+      let inserted = 0;
+      for (let i = 0; i < rows.length; i += 500) {
+        const batch = rows.slice(i, i + 500);
+        const { data, error } = await adminClient.rpc("restore_insert_rows", {
+          _table: t,
+          _rows: batch,
+        });
+        if (error) {
+          errors.push({ table: t, error: error.message });
+          break;
+        }
+        inserted += (data as number) ?? batch.length;
+      }
+      result[t] = inserted;
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: errors.length === 0,
+        legacy_v1: isLegacyV1,
+        restored: result,
+        errors,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: (e as Error).message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 });
