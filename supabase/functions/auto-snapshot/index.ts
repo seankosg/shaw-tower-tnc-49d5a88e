@@ -188,6 +188,8 @@ Deno.serve(async (req) => {
           next_stage: stage + 1,
           total_stages: totalStages,
           tables_in_stage: tables,
+          processed,
+          skipped,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
