@@ -45,6 +45,7 @@ import DocsOMMRawDataPage from "./pages/docs/DocsOMMRawDataPage";
 import DocsOMMDetailPage from "./pages/docs/DocsOMMDetailPage";
 
 import DocsSparePartRawDataPage from "./pages/docs/DocsSparePartRawDataPage";
+import DocsSparePartDetailPage from "./pages/docs/DocsSparePartDetailPage";
 import DocsWarrantyRawDataPage from "./pages/docs/DocsWarrantyRawDataPage";
 import DocsWarrantyDetailPage from "./pages/docs/DocsWarrantyDetailPage";
 import { useHeaderMappingsSync } from "@/hooks/useHeaderMappings";
