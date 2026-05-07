@@ -19,6 +19,7 @@ import { OmmCycleProgress } from '@/components/docs/OmmCycleProgress';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { OMM_CATEGORY_LABELS } from '@/lib/docs-omm-status';
+import { OmmComments } from '@/components/comments/OmmComments';
 
 type SuggestOption = { name: string };
 
@@ -400,25 +401,15 @@ export default function DocsOMMDetailPage() {
         <CardHeader className="py-3">
           <CardTitle className="text-sm">Comments</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {comments.length === 0 && <p className="text-xs text-muted-foreground">No comments yet.</p>}
-          {comments.map((c) => (
-            <div key={c.id} className="rounded border p-2 text-xs">
-              <div className="text-muted-foreground">{formatDateTimeDdMmmYyyy(c.created_at)}</div>
-              <div className="mt-1 whitespace-pre-wrap">{c.message}</div>
-            </div>
-          ))}
-          <div className="flex gap-2 pt-2 border-t">
-            <Input
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add a comment…"
-              disabled={!user}
-            />
-            <Button size="sm" onClick={addComment} disabled={!newComment.trim() || saving || !user}>
-              Post
-            </Button>
-          </div>
+        <CardContent>
+          <OmmComments
+            ommId={id!}
+            ommTeam={(row as any)?.team ?? null}
+            hdecPicName={(row as any)?.hdec_pic_name ?? null}
+            hdecEngName={(row as any)?.hdec_eng_name ?? null}
+            subcontractorName={(row as any)?.subcontractor_name ?? null}
+            subsubName={(row as any)?.subsub_name ?? null}
+          />
         </CardContent>
       </Card>
     </div>
