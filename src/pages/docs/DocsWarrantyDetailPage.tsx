@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Loader2, MessageSquare, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, MessageSquare } from 'lucide-react';
+import { WarrantyComments } from '@/components/comments/WarrantyComments';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
@@ -414,7 +415,7 @@ export default function DocsWarrantyDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Comments (includes migrated discussion threads) */}
+      {/* Comments */}
       <Card id="comments">
         <CardHeader className="py-3">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -422,67 +423,18 @@ export default function DocsWarrantyDetailPage() {
             Comments <span className="text-muted-foreground font-normal">({comments.length})</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {comments.length === 0 && <p className="text-xs text-muted-foreground">No comments yet.</p>}
-          {comments.map((c) => (
-            <div key={c.id} className="rounded border p-2 text-xs group relative">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-muted-foreground">
-                  {formatDateTimeDdMmmYyyy(c.created_at)}
-                  {c.edited && <span className="ml-1 italic">(edited)</span>}
-                </div>
-                {canModifyComments && (
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => openEdit(c)} title="Edit">
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => deleteComment(c)} title="Delete">
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-              <div className="mt-1 whitespace-pre-wrap">{c.message.replace(/\s*<!--\s*migrated_from_thread:[^>]+-->\s*$/g, '').trim()}</div>
-            </div>
-          ))}
-          <div className="flex gap-2 pt-2 border-t">
-            <Input
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add a comment…"
-              disabled={!user}
-            />
-            <Button size="sm" onClick={addComment} disabled={!newComment.trim() || saving || !user}>
-              Post
-            </Button>
-          </div>
+        <CardContent>
+          <WarrantyComments
+            warrantyItemId={id!}
+            warrantyTeam={(row as any)?.team ?? null}
+            hdecPicName={(row as any)?.hdec_pic_name ?? null}
+            hdecEngName={(row as any)?.hdec_eng_name ?? null}
+            subcontractorName={(row as any)?.subcontractor_name ?? null}
+            subsubName={(row as any)?.subsub_name ?? null}
+            onCountChange={(n) => setComments(Array.from({ length: n }, (_, i) => ({ id: String(i) } as any)))}
+          />
         </CardContent>
       </Card>
-
-      <Dialog open={!!editingComment} onOpenChange={(o) => !o && !editSaving && setEditingComment(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit comment</DialogTitle>
-            <DialogDescription>Update the message and posted date/time.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs">Message</Label>
-              <Textarea rows={4} value={editMessage} onChange={(e) => setEditMessage(e.target.value)} />
-            </div>
-            <div>
-              <Label className="text-xs">Created at</Label>
-              <Input type="datetime-local" value={editCreatedAt} onChange={(e) => setEditCreatedAt(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingComment(null)} disabled={editSaving}>Cancel</Button>
-            <Button onClick={saveEdit} disabled={editSaving}>
-              {editSaving ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Saving…</> : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       {isFieldVisible('remarks') && (
         <Card>
           <CardHeader className="py-3">
