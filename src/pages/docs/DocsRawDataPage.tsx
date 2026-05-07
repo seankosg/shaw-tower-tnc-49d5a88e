@@ -909,6 +909,8 @@ export default function DocsRawDataPage() {
         </div>
       </div>
 
+      <DocsDashboardFilterBanner module="abd" params={dashboardParams} onClear={clearDashboardFilter} />
+
       {columnFilterChips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
           <span className="text-xs font-medium text-muted-foreground">Active column filters:</span>
