@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Loader2, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Loader2, MessageSquare, Pencil, Trash2 } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -116,6 +119,74 @@ export default function DocsWarrantyDetailPage() {
   const teamMatches = !!profile?.team && !!row?.team && profile.team === row.team;
   const canEditRow = isPrivileged || (isDSuper && teamMatches);
   const canEditField = (field: string) => canEditRow && isFieldEditable(field, roles);
+  const canModifyComments = roles.some((r) => ['admin', 'superuser'].includes(r));
+
+  const [editingComment, setEditingComment] = useState<WarrantyComment | null>(null);
+  const [editMessage, setEditMessage] = useState('');
+  const [editCreatedAt, setEditCreatedAt] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
+  const toLocalInput = (iso: string) => {
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const reloadComments = async () => {
+    if (!id) return;
+    const cmtRes = await (supabase as any)
+      .from('warranty_comments')
+      .select('*')
+      .eq('warranty_item_id', id)
+      .order('created_at', { ascending: true });
+    setComments((cmtRes.data ?? []) as WarrantyComment[]);
+  };
+
+  const openEdit = (c: WarrantyComment) => {
+    setEditingComment(c);
+    setEditMessage(c.message.replace(/\s*<!--\s*migrated_from_thread:[^>]+-->\s*$/g, '').trim());
+    setEditCreatedAt(toLocalInput(c.created_at));
+  };
+
+  const saveEdit = async () => {
+    if (!editingComment) return;
+    const msg = editMessage.trim();
+    if (!msg || !editCreatedAt) {
+      toast({ title: 'Message and date are required', variant: 'destructive' });
+      return;
+    }
+    setEditSaving(true);
+    const { error } = await (supabase as any).from('warranty_comments').update({
+      message: msg,
+      created_at: new Date(editCreatedAt).toISOString(),
+      edited: true,
+    }).eq('id', editingComment.id);
+    setEditSaving(false);
+    if (error) {
+      const friendly = /row-level security|policy|permission/i.test(error.message)
+        ? 'You do not have permission to edit this comment.'
+        : error.message;
+      toast({ title: 'Update failed', description: friendly, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Comment updated' });
+    setEditingComment(null);
+    await reloadComments();
+  };
+
+  const deleteComment = async (c: WarrantyComment) => {
+    if (!window.confirm('Delete this comment? This cannot be undone.')) return;
+    const { error } = await (supabase as any).from('warranty_comments').delete().eq('id', c.id);
+    if (error) {
+      const friendly = /row-level security|policy|permission/i.test(error.message)
+        ? 'You do not have permission to delete this comment.'
+        : error.message;
+      toast({ title: 'Delete failed', description: friendly, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Comment deleted' });
+    await reloadComments();
+  };
 
   const load = async () => {
     if (!id) return;
@@ -354,8 +425,23 @@ export default function DocsWarrantyDetailPage() {
         <CardContent className="space-y-3">
           {comments.length === 0 && <p className="text-xs text-muted-foreground">No comments yet.</p>}
           {comments.map((c) => (
-            <div key={c.id} className="rounded border p-2 text-xs">
-              <div className="text-muted-foreground">{formatDateTimeDdMmmYyyy(c.created_at)}</div>
+            <div key={c.id} className="rounded border p-2 text-xs group relative">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-muted-foreground">
+                  {formatDateTimeDdMmmYyyy(c.created_at)}
+                  {c.edited && <span className="ml-1 italic">(edited)</span>}
+                </div>
+                {canModifyComments && (
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => openEdit(c)} title="Edit">
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => deleteComment(c)} title="Delete">
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+              </div>
               <div className="mt-1 whitespace-pre-wrap">{c.message.replace(/\s*<!--\s*migrated_from_thread:[^>]+-->\s*$/g, '').trim()}</div>
             </div>
           ))}
@@ -373,7 +459,30 @@ export default function DocsWarrantyDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Remarks */}
+      <Dialog open={!!editingComment} onOpenChange={(o) => !o && !editSaving && setEditingComment(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit comment</DialogTitle>
+            <DialogDescription>Update the message and posted date/time.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Message</Label>
+              <Textarea rows={4} value={editMessage} onChange={(e) => setEditMessage(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">Created at</Label>
+              <Input type="datetime-local" value={editCreatedAt} onChange={(e) => setEditCreatedAt(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingComment(null)} disabled={editSaving}>Cancel</Button>
+            <Button onClick={saveEdit} disabled={editSaving}>
+              {editSaving ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" />Saving…</> : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {isFieldVisible('remarks') && (
         <Card>
           <CardHeader className="py-3">
