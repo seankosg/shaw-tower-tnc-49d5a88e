@@ -646,6 +646,8 @@ function CreateUserDialog({
       if (!subsubParent) { toast({ title: 'Sub-Sub has no parent Subcontractor', variant: 'destructive' }); return; }
       payloadSubsubName = selectedSubsub.name;
       payloadSubconName = subsubParent.name;
+    } else if (userType === 'guest') {
+      payloadSubconName = subconName.trim() || null;
     }
     setSubmitting(true);
     const { data, error } = await supabase.functions.invoke('admin-create-user', {
@@ -764,6 +766,12 @@ function CreateUserDialog({
             </div>
           </>
         )}
+        {userType === 'guest' && (
+          <div className="space-y-1.5">
+            <Label htmlFor="guest-org">Organisation (optional)</Label>
+            <Input id="guest-org" value={subconName} onChange={(e) => setSubconName(e.target.value)} placeholder="e.g. Client team, Inspector firm" />
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label>Team (optional)</Label>
           <Select value={team} onValueChange={setTeam}>
@@ -836,6 +844,8 @@ function EditUserDialog({
     } else if (userType === 'hdec' || userType === 'pm_pd') {
       payloadHdecPicName = hdecPicName || null;
       payloadHdecEngName = hdecEngName || null;
+    } else if (userType === 'guest') {
+      payloadSubconName = subconName.trim() || null;
     }
 
     setSaving(true);
@@ -936,6 +946,12 @@ function EditUserDialog({
                 </Select>
               </div>
             </>
+          )}
+          {userType === 'guest' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-guest-org">Organisation (optional)</Label>
+              <Input id="edit-guest-org" value={subconName} onChange={(e) => setSubconName(e.target.value)} placeholder="e.g. Client team, Inspector firm" />
+            </div>
           )}
           <div className="space-y-1.5">
             <Label>Team (optional)</Label>
