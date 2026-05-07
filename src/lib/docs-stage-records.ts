@@ -306,7 +306,6 @@ export interface ItemSummary {
   current_stage: string;
   is_completed: boolean;
   is_overdue: boolean;
-  is_at_risk: boolean;
   max_delay_days: number;
   overdue_stages: string[];
   detail_route: string;
