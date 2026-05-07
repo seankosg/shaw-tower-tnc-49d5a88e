@@ -90,9 +90,7 @@ export default function DocsOMMDetailPage() {
   const [logs, setLogs] = useState<any[]>([]);
   // Comments handled by <OmmComments />
 
-  const [subOptions, setSubOptions] = useState<SuggestOption[]>([]);
-  const [picOptions, setPicOptions] = useState<SuggestOption[]>([]);
-  const [engOptions, setEngOptions] = useState<SuggestOption[]>([]);
+  const masters = useCommonMasters();
 
   // Row-level edit permission — mirrors `docs_omm` RLS policy:
   //   admin / superuser / senior_user / user → all rows
@@ -153,19 +151,19 @@ export default function DocsOMMDetailPage() {
     return () => window.clearTimeout(t);
   }, [row, location.hash]);
 
-  // Master data for suggest fields
-  useEffect(() => {
-    (async () => {
-      const [subRes, picRes, engRes] = await Promise.all([
-        (supabase as any).from('subcontractor_master').select('name').eq('is_active', true).order('name'),
-        (supabase as any).from('hdec_pic_master').select('name').eq('is_active', true).order('name'),
-        (supabase as any).from('hdec_eng_master').select('name').eq('is_active', true).order('name'),
-      ]);
-      setSubOptions((subRes.data ?? []) as SuggestOption[]);
-      setPicOptions((picRes.data ?? []) as SuggestOption[]);
-      setEngOptions((engRes.data ?? []) as SuggestOption[]);
-    })();
-  }, []);
+  // Master options merged with current row's legacy values
+  const subOptions = useMemo(
+    () => unionWithLegacy(masters.subcontractorOptions, [row?.subcontractor_name]),
+    [masters.subcontractorOptions, row?.subcontractor_name],
+  );
+  const picOptions = useMemo(
+    () => unionWithLegacy(masters.hdecPicOptions, [row?.hdec_pic_name]),
+    [masters.hdecPicOptions, row?.hdec_pic_name],
+  );
+  const engOptions = useMemo(
+    () => unionWithLegacy(masters.hdecEngOptions, [row?.hdec_eng_name]),
+    [masters.hdecEngOptions, row?.hdec_eng_name],
+  );
 
   const save = async (field: string, value: any) => {
     if (!id || !row) return;
