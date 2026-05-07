@@ -19,6 +19,7 @@ import { OmmCycleProgress } from '@/components/docs/OmmCycleProgress';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 import { OMM_CATEGORY_LABELS } from '@/lib/docs-omm-status';
+import { OmmComments } from '@/components/comments/OmmComments';
 
 type SuggestOption = { name: string };
 
@@ -89,8 +90,8 @@ export default function DocsOMMDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
-  const [comments, setComments] = useState<any[]>([]);
-  const [newComment, setNewComment] = useState('');
+  // Comments handled by <OmmComments />
+
   const [subOptions, setSubOptions] = useState<SuggestOption[]>([]);
   const [picOptions, setPicOptions] = useState<SuggestOption[]>([]);
   const [engOptions, setEngOptions] = useState<SuggestOption[]>([]);
@@ -129,17 +130,13 @@ export default function DocsOMMDetailPage() {
     const { data } = await (supabase as any).from('docs_omm').select('*').eq('id', id).maybeSingle();
     setRow(data);
 
-    const [cmtRes, logRes] = await Promise.all([
-      (supabase as any).from('omm_comments').select('*').eq('omm_id', id).order('created_at', { ascending: true }),
-      (supabase as any)
-        .from('docs_change_log')
-        .select('*')
-        .eq('record_id', id)
-        .eq('sub_module', 'omm')
-        .order('changed_at', { ascending: false })
-        .limit(50),
-    ]);
-    setComments(cmtRes.data ?? []);
+    const logRes = await (supabase as any)
+      .from('docs_change_log')
+      .select('*')
+      .eq('record_id', id)
+      .eq('sub_module', 'omm')
+      .order('changed_at', { ascending: false })
+      .limit(50);
     setLogs(logRes.data ?? []);
     setLoading(false);
   };
@@ -199,26 +196,8 @@ export default function DocsOMMDetailPage() {
     setLogs(logRes.data ?? []);
   };
 
-  const addComment = async () => {
-    if (!id || !newComment.trim() || !user) return;
-    const { error } = await (supabase as any).from('omm_comments').insert({
-      omm_id: id,
-      author_user_id: user.id,
-      message: newComment.trim(),
-      type: 'comment',
-    });
-    if (error) {
-      toast({ title: 'Comment failed', description: error.message, variant: 'destructive' });
-    } else {
-      setNewComment('');
-      const cmtRes = await (supabase as any)
-        .from('omm_comments')
-        .select('*')
-        .eq('omm_id', id)
-        .order('created_at', { ascending: true });
-      setComments(cmtRes.data ?? []);
-    }
-  };
+
+
 
   const visibleSorted = (fields: readonly string[]) =>
     sortFieldNames(fields.filter((f) => isFieldVisible(f)));
@@ -400,25 +379,15 @@ export default function DocsOMMDetailPage() {
         <CardHeader className="py-3">
           <CardTitle className="text-sm">Comments</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {comments.length === 0 && <p className="text-xs text-muted-foreground">No comments yet.</p>}
-          {comments.map((c) => (
-            <div key={c.id} className="rounded border p-2 text-xs">
-              <div className="text-muted-foreground">{formatDateTimeDdMmmYyyy(c.created_at)}</div>
-              <div className="mt-1 whitespace-pre-wrap">{c.message}</div>
-            </div>
-          ))}
-          <div className="flex gap-2 pt-2 border-t">
-            <Input
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add a comment…"
-              disabled={!user}
-            />
-            <Button size="sm" onClick={addComment} disabled={!newComment.trim() || saving || !user}>
-              Post
-            </Button>
-          </div>
+        <CardContent>
+          <OmmComments
+            ommId={id!}
+            ommTeam={(row as any)?.team ?? null}
+            hdecPicName={(row as any)?.hdec_pic_name ?? null}
+            hdecEngName={(row as any)?.hdec_eng_name ?? null}
+            subcontractorName={(row as any)?.subcontractor_name ?? null}
+            subsubName={(row as any)?.subsub_name ?? null}
+          />
         </CardContent>
       </Card>
     </div>
