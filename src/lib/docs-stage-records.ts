@@ -123,7 +123,7 @@ function classifyStage(
 }
 
 // ─── ABD ─────────────────────────────────────────────────────────────────
-export function buildAbdStageRecords(rows: any[], asOf: Date, atRiskDays: number): DocsStageRecord[] {
+export function buildAbdStageRecords(rows: any[], asOf: Date, ): DocsStageRecord[] {
   const out: DocsStageRecord[] = [];
   for (const row of rows) {
     const base = {
@@ -176,7 +176,7 @@ export function buildAbdStageRecords(rows: any[], asOf: Date, atRiskDays: number
 
     for (const s of stages) {
       if (s.applicable === false) continue;
-      const cls = classifyStage(s.planned ?? null, s.actual ?? null, s.done, asOf, atRiskDays);
+      const cls = classifyStage(s.planned ?? null, s.actual ?? null, s.done, asOf);
       out.push({
         ...base,
         current_stage,
@@ -194,7 +194,7 @@ export function buildAbdStageRecords(rows: any[], asOf: Date, atRiskDays: number
 }
 
 // ─── OMM ─────────────────────────────────────────────────────────────────
-export function buildOmmStageRecords(rows: any[], asOf: Date, atRiskDays: number): DocsStageRecord[] {
+export function buildOmmStageRecords(rows: any[], asOf: Date, ): DocsStageRecord[] {
   const out: DocsStageRecord[] = [];
   for (const row of rows) {
     const status = computeOmmStatus(row);
@@ -228,7 +228,7 @@ export function buildOmmStageRecords(rows: any[], asOf: Date, atRiskDays: number
     ];
 
     for (const s of stages) {
-      const cls = classifyStage(s.planned ?? null, s.actual ?? null, s.done, asOf, atRiskDays);
+      const cls = classifyStage(s.planned ?? null, s.actual ?? null, s.done, asOf);
       out.push({
         ...base,
         current_stage,
@@ -246,7 +246,7 @@ export function buildOmmStageRecords(rows: any[], asOf: Date, atRiskDays: number
 }
 
 // ─── Warranty ────────────────────────────────────────────────────────────
-export function buildWarrantyStageRecords(rows: any[], asOf: Date, atRiskDays: number): DocsStageRecord[] {
+export function buildWarrantyStageRecords(rows: any[], asOf: Date, ): DocsStageRecord[] {
   const out: DocsStageRecord[] = [];
   const asOfIso = asOf.toISOString().slice(0, 10);
   for (const row of rows) {
@@ -275,7 +275,7 @@ export function buildWarrantyStageRecords(rows: any[], asOf: Date, atRiskDays: n
     for (const s of items) {
       const state = classifyWarrantyStageState(row, s.key, asOfIso);
       const isDone = state === 'Done';
-      const cls = classifyStage(s.planned ?? null, s.actual ?? null, isDone, asOf, atRiskDays);
+      const cls = classifyStage(s.planned ?? null, s.actual ?? null, isDone, asOf);
       out.push({
         ...base,
         current_stage,
