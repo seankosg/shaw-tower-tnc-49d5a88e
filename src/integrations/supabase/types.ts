@@ -3450,7 +3450,13 @@ export type Database = {
         | "completed"
         | "failed"
         | "rolled_back"
-      user_type: "subcontractor" | "hdec" | "pm_pd" | "admin" | "subsub"
+      user_type:
+        | "subcontractor"
+        | "hdec"
+        | "pm_pd"
+        | "admin"
+        | "subsub"
+        | "guest"
       warranty_status: "A" | "B" | "C" | "UR" | "WIP" | "Planned"
     }
     CompositeTypes: {
@@ -3620,7 +3626,7 @@ export const Constants = {
         "failed",
         "rolled_back",
       ],
-      user_type: ["subcontractor", "hdec", "pm_pd", "admin", "subsub"],
+      user_type: ["subcontractor", "hdec", "pm_pd", "admin", "subsub", "guest"],
       warranty_status: ["A", "B", "C", "UR", "WIP", "Planned"],
     },
   },

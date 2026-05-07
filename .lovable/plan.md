@@ -1,38 +1,33 @@
-## 목표
+## Add Guest User Type
 
-기존 `defect_items` 중 `actual_completion_date`는 있으나 `actual_start_date`가 비어 있는 행을 찾아 **`actual_start_date := actual_completion_date`** 로 일회성 백필.
+Adds a new `guest` value to the `user_type` enum so users like external visitors / observers can be classified separately from HDEC, Subcontractor, Sub-Sub, PM/PD, Admin.
 
-대상 건수: **1,150건** (is_active=true 기준).
+### Scope
 
----
+- `user_type` (소속 유형) only. The `role` (권한) system is untouched — guest user_type users will typically be assigned the `guest` or `super_guest` role, but that's chosen independently in the same form.
+- Affiliation fields (`subcontractor_name`, `subsub_name`, `hdec_pic_name`, `hdec_eng_name`) remain nullable. For Guest, the only optional field shown is **Organisation / Company** — stored in existing `subcontractor_name` column as a free-text label (no master matching, no owner code).
 
-## 적용 규칙 (이전에 합의된 import 정책과 동일)
+### Changes
 
-- 조건: `actual_completion_date IS NOT NULL AND actual_start_date IS NULL AND is_active = true`
-- 값: `actual_start_date = actual_completion_date`
-- 변경 출처: `change_source = 'one_time_migration'`, reason `'actual_start_imputed_from_completion'`
+**1. Database migration**
+- `ALTER TYPE public.user_type ADD VALUE 'guest';`
 
----
+**2. `src/types/enums.ts`**
+- Add `'guest'` to `UserType` union.
+- Append `'guest'` to `ALL_USER_TYPES`.
+- Add `guest: 'Guest'` to `USER_TYPE_LABELS`.
 
-## 실행 단계 (insert 도구로 일괄 실행, 단일 트랜잭션)
+**3. `src/pages/AdminPage.tsx`**
+- Create User & Edit User dialogs: when `userType === 'guest'`, show one optional **Organisation** text input bound to `subcontractor_name` payload (no select, no validation). Hide all HDEC PIC/ENG and subcontractor master selectors.
+- `handleSubmit`: skip required-field guards for guest; pass `subcontractor_name` (trimmed, or null), all other affiliation fields null.
+- Display helpers (sort/export/table cells around lines 369, 405, 514): treat `guest` like a no-affiliation type — show `subcontractor_name` if present, else `—`.
 
-1. **defect_change_log 기록**: 대상 행마다 `changed_field='actual_start_date'`, `old_value=NULL`, `new_value=actual_completion_date`, `change_source='one_time_migration'`, `changed_by=NULL` (시스템).
-2. **defect_items UPDATE**: `actual_start_date = actual_completion_date`, `updated_at = now()` (트리거가 row_version 증가).
-3. **defect_schedule_change_audit 에는 기록하지 않음** — 합의된 정책(c) "스케줄 revision에서 제외"와 일관.
+**4. Edge functions**
+- `supabase/functions/admin-create-user/index.ts` — extend `Body.user_type` union to include `'guest'`.
+- `supabase/functions/admin-update-user/index.ts` — same.
 
----
+### Out of scope
 
-## 검증 (실행 후)
-
-- `SELECT COUNT(*) FROM defect_items WHERE actual_completion_date IS NOT NULL AND actual_start_date IS NULL AND is_active = true;` → 0
-- `SELECT COUNT(*) FROM defect_change_log WHERE change_source='one_time_migration' AND changed_field='actual_start_date';` → 1150
-- 샘플 5건 spot-check.
-
----
-
-## 범위 외
-
-- 비활성(`is_active=false`) 행 제외.
-- T&C / Docs 모듈은 해당 없음.
-- Schedule revision audit 미기록.
-- 롤백이 필요하면 `defect_change_log` 기준으로 역적용 가능 (별도 요청 시).
+- No RLS changes. Access control stays driven entirely by `role`, not `user_type`.
+- No changes to data tables or imports — `user_type` is purely a profile classification.
+- No new master tables for Guest organisations.
