@@ -26,6 +26,8 @@ import {
   WARRANTY_OVERALL_STATUS_COLOR,
   type WarrantyStatusToken,
 } from '@/lib/docs-warranty-status';
+import { useCommonMasters, unionWithLegacy, type MasterOption } from '@/hooks/useCommonMasters';
+import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
 
 interface WarrantyComment {
   id: string;
