@@ -1,7 +1,7 @@
 // Shared types for the unified Docs Import hub (ABD + OMM, extensible to Warranty / Spare Part).
 import type { PendingFieldLog } from '@/lib/import-field-log';
 
-export type DocsSubModule = 'as_built' | 'omm';
+export type DocsSubModule = 'as_built' | 'omm' | 'spare_part';
 
 export type DocsFileStatus = 'pending' | 'parsing' | 'ready' | 'processing' | 'done' | 'failed';
 
