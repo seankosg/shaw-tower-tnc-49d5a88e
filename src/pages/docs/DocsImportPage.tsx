@@ -7,6 +7,7 @@ import { DocsImportShell } from '@/components/docs/import/DocsImportShell';
 import { useAbdImport } from '@/contexts/docs-import/AbdImportContext';
 import { useOmmImport } from '@/contexts/docs-import/OmmImportContext';
 import { useWarrantyImport } from '@/contexts/docs-import/WarrantyImportContext';
+import { useSparePartImport } from '@/contexts/docs-import/SparePartImportContext';
 
 type SubKey = 'abd' | 'omm' | 'warranty' | 'spare_part';
 
@@ -34,8 +35,9 @@ export default function DocsImportPage() {
   const abd = useAbdImport();
   const omm = useOmmImport();
   const warranty = useWarrantyImport();
+  const sparePart = useSparePartImport();
 
-  const anyRunning = abd.isRunning || omm.isRunning || warranty.isRunning;
+  const anyRunning = abd.isRunning || omm.isRunning || warranty.isRunning || sparePart.isRunning;
 
   const handleTabChange = (val: string) => {
     if (!VALID.includes(val as SubKey)) return;
@@ -48,7 +50,8 @@ export default function DocsImportPage() {
     abdFiles: abd.files.length,
     ommFiles: omm.files.length,
     warrantyFiles: warranty.files.length,
-  }), [abd.files.length, omm.files.length, warranty.files.length]);
+    sparePartFiles: sparePart.files.length,
+  }), [abd.files.length, omm.files.length, warranty.files.length, sparePart.files.length]);
 
   return (
     <div className="space-y-4 p-6">
@@ -70,8 +73,8 @@ export default function DocsImportPage() {
           <TabsTrigger value="warranty">
             Warranty{fileBadge(summary.warrantyFiles, warranty.isRunning)}
           </TabsTrigger>
-          <TabsTrigger value="spare_part" disabled>
-            Spare Part <Badge variant="outline" className="ml-2 h-4 px-1.5 text-[10px]">Coming soon</Badge>
+          <TabsTrigger value="spare_part">
+            Spare Part{fileBadge(summary.sparePartFiles, sparePart.isRunning)}
           </TabsTrigger>
         </TabsList>
 
@@ -105,9 +108,12 @@ export default function DocsImportPage() {
         </TabsContent>
 
         <TabsContent value="spare_part" className="mt-4">
-          <div className="rounded border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
-            Spare Part import is being prepared in the next phase.
-          </div>
+          <DocsImportShell
+            title="Spare Part — Spares Provision Register"
+            description="Upload Spare Stock Quantities Summary Excel. Category / parent / child rows are detected automatically; rows are upserted by a stable composite identifier (category.parent.child)."
+            importer={sparePart as any}
+            externallyBusy={abd.isRunning || omm.isRunning || warranty.isRunning}
+          />
         </TabsContent>
       </Tabs>
 

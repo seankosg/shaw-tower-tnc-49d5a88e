@@ -5,6 +5,7 @@ import type { DocsSubModule } from '@/contexts/docs-import/types';
 export const DOCS_SYSTEM_REQUIRED_FIELDS: Record<DocsSubModule, { field: string; label: string }> = {
   as_built: { field: 'document_no', label: 'Document No' },
   omm: { field: 'sn', label: 'SN' },
+  spare_part: { field: 'sn', label: 'S/N' },
 };
 
 export interface DocsHeaderValidation {

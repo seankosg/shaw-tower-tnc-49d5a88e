@@ -14,6 +14,7 @@ import {
 } from '@/lib/docs-import-logging';
 import type { ParsedDocsRow } from '@/lib/docs-import-parser';
 import type { ParsedOmmRow } from '@/lib/docs-omm-import-parser';
+import type { ParsedSparePartRow } from '@/lib/docs-spare-part-import-parser';
 import type {
   DocsRejectSample,
   ImporterAdapter,
@@ -576,8 +577,255 @@ export const ommAdapter: ImporterAdapter<ParsedOmmRow> = {
   },
 };
 
-export function adapterFor(subModule: 'as_built' | 'omm'): ImporterAdapter<any> {
-  return subModule === 'as_built' ? abdAdapter : ommAdapter;
+// ============================================================================
+// SPARE PART
+// ============================================================================
+
+const SPARE_PART_TRACKED_FIELDS = [
+  'category', 'parent_item', 'spec_ref', 'material',
+  'spares_requirements', 'unit', 'spares_quantity', 'storage_area_required',
+  'status', 'remarks',
+  'subcontractor_name', 'team', 'trade', 'hdec_pic_name', 'hdec_eng_name',
+];
+
+async function loadExistingSpareParts(projectId: string): Promise<Map<string, { id: string; raw_payload: any; [k: string]: any }>> {
+  const map = new Map<string, { id: string; raw_payload: any; [k: string]: any }>();
+  const cols = ['id', 'sn', 'raw_payload', ...SPARE_PART_TRACKED_FIELDS]
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .join(', ');
+  let from = 0;
+  const PAGE = 1000;
+  while (true) {
+    const { data, error } = await (supabase as any)
+      .from('docs_spare_part')
+      .select(cols)
+      .eq('project_id', projectId)
+      .eq('is_active', true)
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+    for (const row of data) {
+      if (row.sn) map.set(String(row.sn), row);
+    }
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return map;
+}
+
+
+export const sparePartAdapter: ImporterAdapter<ParsedSparePartRow> = {
+  subModule: 'spare_part',
+  keyFieldLabel: 'S/N',
+  dataDateRequired: false,
+  rawDataPath: '/docs/spare-part',
+  parseFile: async (file, sheets, options) => {
+    const { parseSparePartExcel } = await import('@/lib/docs-spare-part-import-parser');
+    const r = await parseSparePartExcel(file, sheets, options);
+    return { rows: r.rows, unknownHeaders: r.unknownHeaders, excludedFields: r.excludedFields };
+  },
+  getSheetNames: async (file) => {
+    const { getSparePartExcelSheetNames } = await import('@/lib/docs-spare-part-import-parser');
+    return getSparePartExcelSheetNames(file);
+  },
+  getHeaderInfo: async (file, sheets) => {
+    const { getSparePartHeaderInfo } = await import('@/lib/docs-spare-part-import-parser');
+    return getSparePartHeaderInfo(file, sheets);
+  },
+  getRowKey: (row) => row.sn ?? null,
+  upsertWorker: async (ctx, rows, onProgress) => {
+    const orgMaps = await buildOrgResolver();
+    const existingBySn = await loadExistingSpareParts(ctx.projectId);
+    const counters = { inserted: 0, updated: 0, skipped: 0, rejected: 0, unmatchedOrgs: new Set<string>() };
+    const outcomes: ImportRowOutcome[] = [];
+    const rejectSamples: DocsRejectSample[] = [];
+    const excludedFields = ctx.excludedFields ?? new Set<string>();
+
+    const INSERT_CHUNK = 200;
+    const UPDATE_CONCURRENCY = 8;
+    type InsertItem = { row: ParsedSparePartRow; payload: Record<string, unknown> };
+    type UpdateItem = { row: ParsedSparePartRow; payload: Record<string, unknown>; existingId: string; prev: any };
+    const insertItems: InsertItem[] = [];
+    const updateItems: UpdateItem[] = [];
+
+    for (const row of rows) {
+      const subId = resolveSubcontractorId(row.subcontractor_name, orgMaps);
+      if (row.subcontractor_name && !subId) counters.unmatchedOrgs.add(normalizeOrgKey(row.subcontractor_name));
+
+      const fieldLogs: PendingFieldLog[] = [];
+      const pushLog = (args: Parameters<typeof buildFieldLog>[1]) => fieldLogs.push(buildFieldLog('docs', args));
+
+      const sn = row.sn ? String(row.sn).trim() : '';
+      // Need at least one of material / spares_requirements / spares_quantity.
+      if (!sn || (!row.material && !row.spares_requirements && !row.spares_quantity && !row.parent_item)) {
+        counters.skipped++;
+        pushLog({ rawRowNo: row.rawRowNo, field: '__row__', outcome: 'skipped_empty',
+          raw: null, code: 'empty_row', detail: 'Row has no spare-part data' });
+        outcomes.push({
+          rawRowNo: row.rawRowNo, key: sn || null, action: 'skipped',
+          reasonCode: 'empty_row', reasonDetail: 'Row has no spare-part data', fieldLogs,
+        });
+        continue;
+      }
+
+      const existing = existingBySn.get(sn);
+      const payload: Record<string, unknown> = {
+        project_id: ctx.projectId,
+        sn,
+        category: row.category,
+        parent_item: row.parent_item,
+        spec_ref: row.spec_ref,
+        material: row.material,
+        spares_requirements: row.spares_requirements,
+        unit: row.unit,
+        spares_quantity: row.spares_quantity,
+        storage_area_required: row.storage_area_required,
+        status: row.status,
+        remarks: row.remarks,
+        subcontractor_name: row.subcontractor_name,
+        team: row.team,
+        trade: row.trade,
+        hdec_pic_name: row.hdec_pic_name,
+        hdec_eng_name: row.hdec_eng_name,
+        sheet_name: row.sheetName,
+        row_no: row.rawRowNo,
+        raw_payload: row.raw_payload,
+        source_upload_id: ctx.batchId,
+        data_source_type: 'excel_import',
+        updated_by: ctx.userId,
+      };
+
+      if (existing) {
+        updateItems.push({ row, payload, existingId: existing.id, prev: existing });
+      } else {
+        insertItems.push({ row, payload });
+      }
+    }
+
+    const buildOutcomeForUpdate = (it: UpdateItem, recordId: string) => {
+      const fieldLogs: PendingFieldLog[] = [];
+      const changeLog: ImportRowOutcome['changeLog'] = [];
+      const push = (args: Parameters<typeof buildFieldLog>[1]) => fieldLogs.push(buildFieldLog('docs', args));
+      for (const fname of SPARE_PART_TRACKED_FIELDS) {
+        if (excludedFields.has(fname)) continue;
+        const incoming = (it.payload as any)[fname];
+        const previous = (it.prev as any)[fname] ?? null;
+        const cls = classifyChange(incoming, previous);
+        if (cls === 'empty') continue;
+        if (cls === 'unchanged') {
+          push({ rawRowNo: it.row.rawRowNo, field: fname, outcome: 'unchanged', raw: incoming, applied: incoming, previous });
+        } else {
+          push({ rawRowNo: it.row.rawRowNo, field: fname, outcome: 'applied', raw: incoming, applied: incoming, previous });
+          changeLog.push({ field: fname, oldValue: stringify(previous), newValue: stringify(incoming) });
+        }
+      }
+      outcomes.push({ rawRowNo: it.row.rawRowNo, key: it.row.sn, action: 'updated', recordId, fieldLogs, changeLog });
+    };
+
+    const buildOutcomeForInsert = (it: InsertItem, recordId: string | null) => {
+      const fieldLogs: PendingFieldLog[] = [];
+      const changeLog: ImportRowOutcome['changeLog'] = [];
+      const push = (args: Parameters<typeof buildFieldLog>[1]) => fieldLogs.push(buildFieldLog('docs', args));
+      for (const fname of SPARE_PART_TRACKED_FIELDS) {
+        const incoming = (it.payload as any)[fname];
+        if (incoming === null || incoming === undefined || incoming === '') continue;
+        push({ rawRowNo: it.row.rawRowNo, field: fname, outcome: 'applied', raw: incoming, applied: incoming });
+        changeLog.push({ field: fname, oldValue: null, newValue: stringify(incoming) });
+      }
+      outcomes.push({ rawRowNo: it.row.rawRowNo, key: it.row.sn, action: 'inserted', recordId, fieldLogs, changeLog });
+    };
+
+    const recordRejection = (row: ParsedSparePartRow, err: any) => {
+      counters.rejected++;
+      const e = fmtSupabaseError(err);
+      const detail = [e.code, e.message, e.details, e.hint].filter(Boolean).join(' | ');
+      const fieldLogs: PendingFieldLog[] = [];
+      fieldLogs.push(buildFieldLog('docs', {
+        rawRowNo: row.rawRowNo, field: '__row__', outcome: 'rejected_invalid',
+        raw: row.sn, code: e.code ?? 'db_error', detail,
+      }));
+      outcomes.push({
+        rawRowNo: row.rawRowNo, key: row.sn, action: 'rejected',
+        reasonCode: e.code ?? 'db_error', reasonDetail: detail, fieldLogs,
+      });
+      if (rejectSamples.length < 5) {
+        rejectSamples.push({ rawRowNo: row.rawRowNo, key: row.sn, reasonCode: e.code, reasonDetail: detail });
+      }
+    };
+
+    const totalWriteRows = insertItems.length + updateItems.length;
+    let processed = 0;
+    const tick = (n: number) => {
+      processed += n;
+      if (processed % 50 === 0 || processed >= totalWriteRows) {
+        onProgress(processed, Math.max(totalWriteRows, 1));
+      }
+    };
+
+    for (let i = 0; i < insertItems.length; i += INSERT_CHUNK) {
+      const slice = insertItems.slice(i, i + INSERT_CHUNK);
+      const payloads = slice.map((it) => it.payload);
+      const { data, error } = await (supabase as any)
+        .from('docs_spare_part').insert(payloads).select('id, sn');
+      if (error) {
+        for (const it of slice) {
+          const { data: ins, error: e2 } = await (supabase as any)
+            .from('docs_spare_part').insert(it.payload).select('id').single();
+          if (e2) { recordRejection(it.row, e2); continue; }
+          counters.inserted++;
+          buildOutcomeForInsert(it, ins?.id ?? null);
+        }
+      } else {
+        const idBySn = new Map<string, string>();
+        for (const r of (data ?? [])) idBySn.set(String(r.sn), r.id);
+        for (const it of slice) {
+          counters.inserted++;
+          buildOutcomeForInsert(it, idBySn.get(String(it.row.sn)) ?? null);
+        }
+      }
+      tick(slice.length);
+    }
+
+    const sanitizeUpdatePayload = (it: UpdateItem): Record<string, unknown> => {
+      const out: Record<string, unknown> = { ...it.payload };
+      for (const f of excludedFields) delete out[f];
+      const prevRaw = (it.prev?.raw_payload && typeof it.prev.raw_payload === 'object') ? it.prev.raw_payload : {};
+      const incomingRaw = (it.payload.raw_payload && typeof it.payload.raw_payload === 'object')
+        ? (it.payload.raw_payload as Record<string, unknown>) : {};
+      out.raw_payload = { ...prevRaw, ...incomingRaw };
+      return out;
+    };
+
+    for (let i = 0; i < updateItems.length; i += UPDATE_CONCURRENCY) {
+      const chunk = updateItems.slice(i, i + UPDATE_CONCURRENCY);
+      const results = await Promise.all(
+        chunk.map((it) =>
+          (supabase as any).from('docs_spare_part').update(sanitizeUpdatePayload(it)).eq('id', it.existingId)
+            .then((r: any) => ({ it, error: r.error }))
+            .catch((err: any) => ({ it, error: err })),
+        ),
+      );
+      for (const { it, error } of results) {
+        if (error) { recordRejection(it.row, error); continue; }
+        counters.updated++;
+        buildOutcomeForUpdate(it, it.existingId);
+      }
+      tick(chunk.length);
+    }
+
+    onProgress(Math.max(totalWriteRows, 1), Math.max(totalWriteRows, 1));
+    await persistUnmatchedOrgs(
+      counters.unmatchedOrgs,
+      rows.map((r) => ({ organisation_raw: r.subcontractor_name })),
+    );
+    return { outcomes, counters, rejectSamples };
+  },
+};
+
+export function adapterFor(subModule: 'as_built' | 'omm' | 'spare_part'): ImporterAdapter<any> {
+  if (subModule === 'as_built') return abdAdapter;
+  if (subModule === 'omm') return ommAdapter;
+  return sparePartAdapter;
 }
 
 export type { WorkerContext };
