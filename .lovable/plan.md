@@ -1,26 +1,21 @@
-## 목표
-Warranty raw data의 comment(`warranty_threads`)에서 `created_at`을 comment 내용에서 파싱된 `thread_date`로 보정 (1회성 마이그레이션).
+## 문제
+이전 마이그레이션은 `warranty_threads`만 보정했지만, 화면(상세페이지 Comments)은 `warranty_comments` 테이블을 표시. 두 테이블이 분리되어 있어 댓글 작성일이 그대로 남아있음.
 
-## 범위
-- 테이블: `warranty_threads`
-- 조건: `created_at >= '2026-05-01'` AND `thread_date IS NOT NULL`
-- 그 외(2026-05-01 이전 생성, 또는 `thread_date` 없음)는 건드리지 않음
+## 매핑 방식
+`warranty_comments.message` 끝에 `<!-- migrated_from_thread:<thread_id> -->` 마커가 포함되어 있어, 이를 통해 원본 thread의 `thread_date`로 보정 가능.
 
-## SQL
+## SQL (1회성)
 ```sql
-UPDATE public.warranty_threads
-SET created_at = (thread_date::timestamp AT TIME ZONE 'UTC'),
-    updated_at = (thread_date::timestamp AT TIME ZONE 'UTC')
-WHERE created_at >= '2026-05-01'
-  AND thread_date IS NOT NULL;
+UPDATE public.warranty_comments AS c
+SET created_at = (t.thread_date::timestamp AT TIME ZONE 'UTC'),
+    updated_at = (t.thread_date::timestamp AT TIME ZONE 'UTC')
+FROM public.warranty_threads AS t
+WHERE c.created_at >= '2026-05-01'
+  AND t.thread_date IS NOT NULL
+  AND c.message ~ ('migrated_from_thread:' || t.id::text);
 ```
-- 시각은 해당 날짜 00:00 UTC로 설정
-- `updated_at`도 함께 맞춤
 
 ## 범위 외
-- `warranty_items` 등 다른 테이블 변경 없음
-- 스키마/코드/RLS 변경 없음
-- 이후 import 동작 변경 없음 (1회성)
-
-## 확인
-시간대를 Asia/Singapore 등으로 바꿔야 하면 알려주세요. 기본은 00:00 UTC입니다.
+- 마커가 없거나 `thread_date`가 없는 댓글은 그대로
+- `warranty_threads`는 이전에 이미 보정 완료
+- 코드 변경 없음
