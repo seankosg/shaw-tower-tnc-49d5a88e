@@ -913,7 +913,7 @@ export default function DocsWarrantyRawDataPage() {
 
   // ── Table ──
   const table = useReactTable({
-    data: filteredBaseData,
+    data: tableData,
     columns,
     state: {
       sorting: sorting.length ? sorting : DEFAULT_SORTING,
@@ -954,7 +954,7 @@ export default function DocsWarrantyRawDataPage() {
   const selectedRows = useMemo(
     () => table.getSelectedRowModel().rows.map((r) => r.original),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rowSelection, filteredBaseData],
+    [rowSelection, tableData],
   );
 
   // ── Bulk fields ──
