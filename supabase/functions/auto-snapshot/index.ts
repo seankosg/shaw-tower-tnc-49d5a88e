@@ -159,10 +159,21 @@ Deno.serve(async (req) => {
     const progress = await loadProgress(adminClient, folder);
     const tables = stages[stage];
 
+    const skipped: string[] = [];
+    const processed: string[] = [];
     for (const t of tables) {
+      if (Object.prototype.hasOwnProperty.call(progress.manifest, t)) {
+        skipped.push(t);
+        continue;
+      }
       progress.manifest[t] = await uploadTable(adminClient, folder, t);
+      processed.push(t);
+      // Persist after each table so partial-failure retries also skip done work.
+      await saveProgress(adminClient, progress);
     }
-    progress.completed_stages = stage + 1;
+    if (stage + 1 > progress.completed_stages) {
+      progress.completed_stages = stage + 1;
+    }
     await saveProgress(adminClient, progress);
 
     const isLast = stage + 1 >= totalStages;
