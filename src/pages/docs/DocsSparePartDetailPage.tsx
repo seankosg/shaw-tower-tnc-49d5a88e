@@ -92,18 +92,18 @@ export default function DocsSparePartDetailPage() {
     return () => window.clearTimeout(t);
   }, [row, location.hash]);
 
-  useEffect(() => {
-    (async () => {
-      const [subRes, picRes, engRes] = await Promise.all([
-        (supabase as any).from('subcontractor_master').select('name').eq('is_active', true).order('name'),
-        (supabase as any).from('hdec_pic_master').select('name').eq('is_active', true).order('name'),
-        (supabase as any).from('hdec_eng_master').select('name').eq('is_active', true).order('name'),
-      ]);
-      setSubOptions((subRes.data ?? []) as SuggestOption[]);
-      setPicOptions((picRes.data ?? []) as SuggestOption[]);
-      setEngOptions((engRes.data ?? []) as SuggestOption[]);
-    })();
-  }, []);
+  const subOptions = useMemo(
+    () => unionWithLegacy(masters.subcontractorOptions, [row?.subcontractor_name]),
+    [masters.subcontractorOptions, row?.subcontractor_name],
+  );
+  const picOptions = useMemo(
+    () => unionWithLegacy(masters.hdecPicOptions, [row?.hdec_pic_name]),
+    [masters.hdecPicOptions, row?.hdec_pic_name],
+  );
+  const engOptions = useMemo(
+    () => unionWithLegacy(masters.hdecEngOptions, [row?.hdec_eng_name]),
+    [masters.hdecEngOptions, row?.hdec_eng_name],
+  );
 
   const save = async (field: string, value: any) => {
     if (!id || !row) return;
