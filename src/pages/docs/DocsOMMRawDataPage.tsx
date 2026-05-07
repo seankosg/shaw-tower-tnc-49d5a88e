@@ -671,6 +671,20 @@ export default function DocsOMMRawDataPage() {
     return next;
   }, [rows, mismatchOnly, resubFilter]);
 
+  // ── Dashboard URL filter (from Executive Dashboard) ───────────────────────
+  const dashboardParams = useMemo(() => readDashboardFilterParams(searchParams), [searchParams]);
+  const tableData = useMemo(() => {
+    if (!hasAnyDashboardFilter(dashboardParams)) return filteredBaseData;
+    const ids = computeDashboardFilteredIds('omm', filteredBaseData, dashboardParams);
+    if (!ids) return filteredBaseData;
+    return filteredBaseData.filter((r) => ids.has(r.id));
+  }, [filteredBaseData, dashboardParams]);
+  const clearDashboardFilter = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    ['status', 'overdue', 'stage', 'team'].forEach((k) => next.delete(k));
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   // ── Option fields for multi-select filters ────────────────────────────────
   const masters = useCommonMasters();
   const optionFields = useMemo(() => {
