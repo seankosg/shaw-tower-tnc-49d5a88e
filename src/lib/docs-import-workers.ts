@@ -613,7 +613,6 @@ async function loadExistingSpareParts(projectId: string): Promise<Map<string, { 
   return map;
 }
 
-import type { ParsedSparePartRow } from '@/lib/docs-spare-part-import-parser';
 
 export const sparePartAdapter: ImporterAdapter<ParsedSparePartRow> = {
   subModule: 'spare_part',
