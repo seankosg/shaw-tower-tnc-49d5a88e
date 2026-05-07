@@ -515,7 +515,7 @@ function ColumnFilterDropdown({ column }: { column: any }) {
 // ────────────────────────────────────────────────────────────────────────────
 export default function DocsOMMRawDataPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, profile } = useAuth() as any;
