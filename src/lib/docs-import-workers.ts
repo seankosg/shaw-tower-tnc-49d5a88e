@@ -14,6 +14,7 @@ import {
 } from '@/lib/docs-import-logging';
 import type { ParsedDocsRow } from '@/lib/docs-import-parser';
 import type { ParsedOmmRow } from '@/lib/docs-omm-import-parser';
+import type { ParsedSparePartRow } from '@/lib/docs-spare-part-import-parser';
 import type {
   DocsRejectSample,
   ImporterAdapter,
