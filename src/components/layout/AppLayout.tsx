@@ -204,6 +204,7 @@ export function AppLayout() {
           <div className="ml-auto flex items-center gap-2">
             <GlobalImportIndicator />
             <GlobalDefectImportIndicator />
+            <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">© {new Date().getFullYear()} Sean B. KO. All rights reserved.</span>
             <BuildInfoChip />
             <AccountMenu />
           </div>
