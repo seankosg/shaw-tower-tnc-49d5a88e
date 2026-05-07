@@ -780,7 +780,7 @@ export default function DocsRawDataPage() {
   }, [sortFieldNames]);
 
   const table = useReactTable({
-    data: augmentedItems,
+    data: dashboardItems,
     columns,
     state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
@@ -809,7 +809,7 @@ export default function DocsRawDataPage() {
 
   const selectedRows = useMemo(
     () => table.getSelectedRowModel().rows.map((r) => r.original),
-    [rowSelection, augmentedItems],
+    [rowSelection, dashboardItems],
   );
 
   const bulkFields = useMemo<BulkEditableField[]>(() => [
