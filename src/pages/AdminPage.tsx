@@ -947,6 +947,12 @@ function EditUserDialog({
               </div>
             </>
           )}
+          {userType === 'guest' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-guest-org">Organisation (optional)</Label>
+              <Input id="edit-guest-org" value={subconName} onChange={(e) => setSubconName(e.target.value)} placeholder="e.g. Client team, Inspector firm" />
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Team (optional)</Label>
             <Select value={team || '__none'} onValueChange={setTeam}>
