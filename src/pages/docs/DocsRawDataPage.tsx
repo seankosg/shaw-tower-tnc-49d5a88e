@@ -48,6 +48,12 @@ import { computeOverallStatus, computeIsClosed } from '@/lib/docs-status';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
+import { DocsDashboardFilterBanner } from '@/components/docs/DocsDashboardFilterBanner';
+import {
+  readDashboardFilterParams,
+  computeDashboardFilteredIds,
+  hasAnyDashboardFilter,
+} from '@/lib/docs-dashboard-filter';
 import type { BulkEditableField } from '@/lib/bulk-edit';
 import { ALL_TEAMS, TEAM_LABELS, formatTeamLabel } from '@/types/enums';
 
