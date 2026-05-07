@@ -42,9 +42,7 @@ export default function DocsSparePartDetailPage() {
   const [saving, setSaving] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
 
-  const [subOptions, setSubOptions] = useState<SuggestOption[]>([]);
-  const [picOptions, setPicOptions] = useState<SuggestOption[]>([]);
-  const [engOptions, setEngOptions] = useState<SuggestOption[]>([]);
+  const masters = useCommonMasters();
 
   const isPrivileged = roles.some((r) => ['admin', 'superuser', 'senior_user', 'user'].includes(r));
   const isDSuper = roles.includes('d_superuser');
