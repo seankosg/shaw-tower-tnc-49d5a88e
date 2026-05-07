@@ -1573,7 +1573,7 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
           both header and body cells, guaranteeing alignment. */}
       <div
         ref={tableRef}
-        className="min-w-0 flex-1 overflow-auto scrollbar-hide"
+        className="min-w-0 flex-1 overflow-auto [scrollbar-gutter:stable]"
       >
         <Table style={{ width: totalWidth, tableLayout: 'fixed' }}>
           <TableHeader className="bg-background">
