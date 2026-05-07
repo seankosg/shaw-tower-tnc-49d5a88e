@@ -59,6 +59,12 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import { NumberRangeDropdown, numberRangeFilterFn } from '@/components/raw-data/NumberRangeDropdown';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
+import { DocsDashboardFilterBanner } from '@/components/docs/DocsDashboardFilterBanner';
+import {
+  readDashboardFilterParams,
+  computeDashboardFilteredIds,
+  hasAnyDashboardFilter,
+} from '@/lib/docs-dashboard-filter';
 import { WarrantyBulkActionBar, type WarrantyBulkField } from '@/components/raw-data/WarrantyBulkActionBar';
 import { exportWarrantyToExcel, type WarrantyExportFormat } from '@/lib/warranty-excel-export';
 import {
