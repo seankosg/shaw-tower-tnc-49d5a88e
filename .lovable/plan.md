@@ -1,51 +1,53 @@
-# Spare Part Detail Page
+## 목표
 
-OMM Detail 패턴을 그대로 미러링하여 `docs_spare_part` 행 1개를 상세 조회/편집하는 페이지를 추가합니다. Raw Data 페이지에서 행을 클릭하면 진입합니다.
+OMM / Warranty / Spare Part 상세 페이지의 다음 필드를 **마스터 기반 풀다운(Select)** 으로 통일합니다.
 
-## 추가할 파일
+- `subcontractor_name` → `subcontractor_master` (active sub/subsub)
+- `hdec_pic_name` → `hdec_pic_master` (active)
+- `hdec_eng_name` → `profiles` (active)
+- `team` → 공통 enum (`Mech / Elec / Arch / Supp / Design`)
 
-1. **`src/pages/docs/DocsSparePartDetailPage.tsx`** — `DocsOMMDetailPage`를 베이스로 작성
-   - URL: `/docs/spare-part/:id`
-   - 헤더: Category · Parent Item · S/N · Status 배지, "Back to Raw Data" + "Comments" 버튼
-   - **Overview 카드**: Category, S/N, Parent Item, Material, Spec Ref, Status (badge)
-   - **Spare Requirements 카드**: Spares Requirements, Unit, Spares Quantity, Storage Area Required
-   - **Assignment 카드**: Subcontractor, HDEC PIC, HDEC Eng, Trade, Team
-   - **Notes 카드**: Remarks (textarea)
-   - **Comments 카드**: `<SparePartComments sparePartId={id} />` (#comments 앵커)
-   - 각 필드는 OMM Detail과 동일한 inline edit + Save/Cancel + 권한 체크 + `docs_change_log`에 변경 이력 기록 (sub_module='spare_part')
-   - row_version 낙관적 잠금 사용
+모두 `src/hooks/useCommonMasters.ts` (60초 캐시 + `unionWithLegacy`) 를 단일 소스로 사용합니다.
 
-2. **`src/components/comments/SparePartComments.tsx`** — `OmmComments.tsx`를 미러링
-   - 새 테이블 `spare_part_comments`, `spare_part_comment_reads` 사용
-   - 멘션, 답글, 편집/삭제, 읽음 처리, RecipientSelector 통합
+## 현재 상태
 
-## 수정할 파일
+| 페이지 | sub/pic/eng | team |
+|---|---|---|
+| OMM Detail | `SuggestField` (자유 입력 + 제안) — 자체 fetch | `Select` ✓ |
+| Spare Part Detail | `SuggestField` (자유 입력 + 제안) — 자체 fetch | `Select` ✓ |
+| Warranty Detail | 일반 `Input` (자유 입력) | 일반 `Input` |
 
-3. **`src/App.tsx`** — 라우트 추가
-   ```
-   <Route path="/docs/spare-part/:id" element={<DocsSparePartDetailPage />} />
-   ```
+세 페이지 모두 `subcontractor_master / hdec_pic_master / profiles` 를 직접 조회하거나 입력에 자유 텍스트를 허용 → 마스터에 없는 값이 들어갈 수 있음.
 
-4. **`src/pages/docs/DocsSparePartRawDataPage.tsx`**
-   - `<TableRow>`에 `onClick={() => navigate('/docs/spare-part/' + r.id)}` + `cursor-pointer hover:bg-muted/50` 추가
-   - `useNavigate` import
+## 변경 사항
 
-## DB 마이그레이션
+### 1. 공통 hook 도입
+세 상세 페이지에서 자체 fetch 코드를 제거하고 `useCommonMasters()` 로 교체:
+- `subcontractorOptions`, `hdecPicOptions`, `hdecEngOptions`, `teamOptions` 사용
+- 기존 행 값이 마스터에 없을 경우 `unionWithLegacy(master, [row.value])` 로 머지하여 `(legacy)` 표시 → 데이터 손실 없이 표시/저장 가능
 
-5. 새 테이블 2개 (omm 패턴 1:1 복제)
-   - **`spare_part_comments`** — `spare_part_id uuid → docs_spare_part(id) ON DELETE CASCADE`, `author_user_id`, `parent_comment_id`, `message`, `recipients text[]`, `type`, `edited`, timestamps
-   - **`spare_part_comment_reads`** — `user_id`, `spare_part_id`, `last_read_at`
-   - RLS: omm_comments / omm_comment_reads 와 동일 정책 (read=any authenticated, insert/update/delete=author 또는 admin/superuser)
-   - 인덱스: `idx_spare_part_comments_sp(spare_part_id)`
+### 2. FieldEditor 변경
+- **`subcontractor_name` / `hdec_pic_name` / `hdec_eng_name`**: `SuggestField` 또는 `Input` 제거 → `Select` 로 통일
+  - `__none__` (—) 옵션 포함하여 비우기 가능
+  - 옵션은 마스터 + legacy(현재 값이 마스터에 없을 때만)
+- **`team` (Warranty 만)**: `Input` → `Select` (`teamOptions`)
 
-## 범위 외 (이번 작업에 포함 안 함)
+### 3. 영향 범위 (UI/표현 계층만)
 
-- Bulk action, Excel export, Raw Data 페이지 정렬/필터 강화
-- Cycle progress, Stage funnel, Dashboard 위젯
-- 알림(notification) 연동 — 추후 다른 모듈과 함께 일괄
+| 파일 | 변경 |
+|---|---|
+| `src/pages/docs/DocsOMMDetailPage.tsx` | 자체 마스터 fetch 제거 → `useCommonMasters`. `SuggestField` → `Select`. |
+| `src/pages/docs/DocsSparePartDetailPage.tsx` | 동일 |
+| `src/pages/docs/DocsWarrantyDetailPage.tsx` | sub/pic/eng/team 4개 필드를 `Select` 로 (마스터 연결) |
 
-## 기술 메모
+### 4. 변경하지 않는 것
+- DB 스키마, RLS, 마스터 테이블 자체, Raw Data 페이지 인라인 편집/Bulk 액션 (다른 작업에서 처리)
+- Import 흐름의 마스터 자동 생성 로직
+- 권한 체크(`canEditRow`) — 기존 그대로 사용
+- 변경 로그(`docs_change_log`) 작성 로직
 
-- 권한: `can_write_for_team(uid, team)` 또는 `has_any_role(['admin','superuser','senior_user','user'])` — 기존 docs_spare_part RLS와 동일
-- 변경 이력: `docs_change_log` (sub_module='spare_part', record_id=spare_part.id) — 기존 OMM 코드 재사용
-- 타입: `supabase as any` 캐스트 사용 (자동 생성 타입은 마이그레이션 후 갱신됨)
+## 기술 노트
+
+- `useCommonMasters` 는 60초 모듈 캐시 + 단일 inflight 보장 → 페이지 전환 시 중복 호출 없음.
+- legacy 옵션은 표시용 라벨만 `"<value> (legacy)"` 로 변경되고 저장 값은 원본 그대로 유지.
+- 마스터 옵션이 비어있는 동안(`loading`) `Select` 는 현재 값(있다면)만 노출하고 비활성 상태로 표시.
