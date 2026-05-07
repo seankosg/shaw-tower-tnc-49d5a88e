@@ -844,6 +844,8 @@ function EditUserDialog({
     } else if (userType === 'hdec' || userType === 'pm_pd') {
       payloadHdecPicName = hdecPicName || null;
       payloadHdecEngName = hdecEngName || null;
+    } else if (userType === 'guest') {
+      payloadSubconName = subconName.trim() || null;
     }
 
     setSaving(true);
