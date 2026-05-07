@@ -108,9 +108,12 @@ export default function DocsImportPage() {
         </TabsContent>
 
         <TabsContent value="spare_part" className="mt-4">
-          <div className="rounded border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
-            Spare Part import is being prepared in the next phase.
-          </div>
+          <DocsImportShell
+            title="Spare Part — Spares Provision Register"
+            description="Upload Spare Stock Quantities Summary Excel. Category / parent / child rows are detected automatically; rows are upserted by a stable composite identifier (category.parent.child)."
+            importer={sparePart as any}
+            externallyBusy={abd.isRunning || omm.isRunning || warranty.isRunning}
+          />
         </TabsContent>
       </Tabs>
 
