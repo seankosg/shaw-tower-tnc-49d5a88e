@@ -40,8 +40,6 @@ export interface DocsStageRecord {
   is_done: boolean;
   /** true when planned < today and not done */
   is_overdue: boolean;
-  /** true when not overdue but planned within at-risk threshold */
-  is_at_risk: boolean;
   /** positive number of days overdue (0 if not overdue) */
   delay_days: number;
 
