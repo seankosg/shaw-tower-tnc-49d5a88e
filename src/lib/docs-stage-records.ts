@@ -87,8 +87,14 @@ export const ALL_STAGE_DEFS: Record<DocModule, StageDefinition[]> = {
 
 export const MODULE_LABEL: Record<DocModule, string> = {
   abd: 'As-Built Drawings',
-  omm: 'OMM Manuals',
+  omm: 'Operation & Maintenance Manual',
   warranty: 'Warranty Deeds',
+};
+
+export const MODULE_RAW_ROUTE: Record<DocModule, string> = {
+  abd: '/docs/abd',
+  omm: '/docs/omm',
+  warranty: '/docs/warranty',
 };
 
 function safeDate(d: string | null | undefined): Date | null {
