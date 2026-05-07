@@ -1191,6 +1191,8 @@ export default function DocsOMMRawDataPage() {
         </div>
       </div>
 
+      <DocsDashboardFilterBanner module="omm" params={dashboardParams} onClear={clearDashboardFilter} />
+
       {/* Active filter chips */}
       {columnFilterChips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
