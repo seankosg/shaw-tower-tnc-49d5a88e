@@ -1145,7 +1145,7 @@ function DocsRawTableView({
   return (
     <div className="flex max-h-[calc(100vh-220px)] flex-col overflow-hidden rounded-md border bg-background">
       <TopHorizontalScrollbar targetRef={tableRef} width={totalWidth} frozenWidth={frozenWidth} />
-      <div ref={tableRef} className="min-w-0 flex-1 overflow-auto scrollbar-hide">
+      <div ref={tableRef} className="min-w-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
         <Table style={{ width: totalWidth, tableLayout: 'fixed' }}>
           <TableHeader className="bg-background">
             <TableRow className="border-b bg-background [&>th]:sticky [&>th]:top-0 [&>th]:z-[2] [&>th]:bg-background">

@@ -1,21 +1,33 @@
-## 문제
-이전 마이그레이션은 `warranty_threads`만 보정했지만, 화면(상세페이지 Comments)은 `warranty_comments` 테이블을 표시. 두 테이블이 분리되어 있어 댓글 작성일이 그대로 남아있음.
+## 확인 결과
+Raw Data 테이블들에는 내부 세로 스크롤 자체는 있습니다. 다만 공통으로 `scrollbar-hide` 클래스가 적용되어 있어서 **스크롤은 되지만 스크롤바는 보이지 않게** 되어 있습니다.
 
-## 매핑 방식
-`warranty_comments.message` 끝에 `<!-- migrated_from_thread:<thread_id> -->` 마커가 포함되어 있어, 이를 통해 원본 thread의 `thread_date`로 보정 가능.
+### 영향 받는 페이지
+- `src/pages/SubtestList.tsx:2018`
+- `src/pages/DefectRawDataPage.tsx:1576`
+- `src/pages/docs/DocsRawDataPage.tsx:1148`
+- `src/pages/docs/DocsOMMRawDataPage.tsx:1450`
+- `src/pages/docs/DocsWarrantyRawDataPage.tsx:1320`
 
-## SQL (1회성)
-```sql
-UPDATE public.warranty_comments AS c
-SET created_at = (t.thread_date::timestamp AT TIME ZONE 'UTC'),
-    updated_at = (t.thread_date::timestamp AT TIME ZONE 'UTC')
-FROM public.warranty_threads AS t
-WHERE c.created_at >= '2026-05-01'
-  AND t.thread_date IS NOT NULL
-  AND c.message ~ ('migrated_from_thread:' || t.id::text);
+### 숨김 원인
+`src/index.css:121-126`
+```css
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
 ```
 
-## 범위 외
-- 마커가 없거나 `thread_date`가 없는 댓글은 그대로
-- `warranty_threads`는 이전에 이미 보정 완료
-- 코드 변경 없음
+## 수정 계획
+1. Raw Data 테이블 스크롤 컨테이너들에서 `scrollbar-hide` 제거
+2. 세로 스크롤바가 항상 자리 차지를 하도록 `scrollbar-gutter: stable` 적용 검토
+3. 각 Raw Data 페이지에서 테이블 내부 세로 스크롤바가 실제로 보이는지 확인
+
+## 기술 메모
+- 현재 구조는 `max-h-[calc(100vh-...)] + overflow-auto`라서 내부 스크롤은 정상입니다.
+- 문제는 기능 부재가 아니라 **의도된 숨김 스타일**입니다.
+- Spare Part Raw Data는 별도 구조라 이번 이슈와는 조금 다르게 동작합니다.
+
+승인해주시면 스크롤바가 실제로 보이도록 반영하겠습니다.
