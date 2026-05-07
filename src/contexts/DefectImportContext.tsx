@@ -796,9 +796,50 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         actual_progress_pct: row.actual_progress_pct ?? null,
         actual_completion_date: row.actual_completion_date ?? null,
       };
+      // Snapshot Excel-explicit actual_start_date too (before blank-preservation), for the
+      // "impute actual_start from actual_completion" policy below.
+      const excelExplicitActualStart = row.actual_start_date ?? null;
 
       // Apply blank-preservation for general data fields (description, dates, PIC, etc.)
       preserveExistingForBlank(row, existing);
+
+      // Policy: when actual_completion_date is explicitly present (Excel or pre-existing DB)
+      // but actual_start_date is missing in BOTH Excel and DB, impute start = completion.
+      // Rationale: a completed-but-unstarted row is meaningless. We only impute when the
+      // completion comes from an explicit source (not from reconcileClosureCompletion's
+      // auto-fill in this same pass) — that runs AFTER this block, so excelExplicit +
+      // existing covers only "real" completions.
+      // Imputed rows are tracked so we (c) exclude their actual_start_date entry from
+      // schedule revision audits.
+      const explicitCompletion =
+        excelExplicit.actual_completion_date ?? existing?.actual_completion_date ?? null;
+      const startStillBlank = isBlankValue(row.actual_start_date);
+      const excelHadStart = !isBlankValue(excelExplicitActualStart);
+      const dbHadStart = !!existing?.actual_start_date;
+      let actualStartImputedFromCompletion = false;
+      if (
+        explicitCompletion &&
+        startStillBlank &&
+        !excelHadStart &&
+        !dbHadStart
+      ) {
+        row.actual_start_date = explicitCompletion;
+        actualStartImputedFromCompletion = true;
+        fl(row.rawRowNo, 'actual_start_date', 'auto_filled', {
+          applied: explicitCompletion,
+          previous: null,
+          code: 'actual_start_imputed_from_completion',
+          detail: `actual_start_date was empty; imputed from actual_completion_date (${explicitCompletion}).`,
+        });
+        pendingLogs.push({
+          upload_id: uploadId,
+          raw_row_no: row.rawRowNo,
+          issue_no: row.issue_no,
+          action_taken: existing ? 'updated' : 'inserted',
+          reason_code: 'actual_start_imputed_from_completion',
+          reason_detail: `actual_start_date imputed from actual_completion_date (${explicitCompletion}).`,
+        });
+      }
 
       // Recompute planned_progress_pct from (possibly preserved) planned dates.
       // If still not computable, fall back to existing DB value rather than overwriting with null.
