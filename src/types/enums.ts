@@ -1,5 +1,5 @@
 export type AppRole = 'guest' | 'super_guest' | 'user' | 'senior_user' | 'd_superuser' | 'superuser' | 'admin';
-export type UserType = 'subcontractor' | 'subsub' | 'hdec' | 'pm_pd' | 'admin';
+export type UserType = 'subcontractor' | 'subsub' | 'hdec' | 'pm_pd' | 'admin' | 'guest';
 export type TcStatus = 'Planned' | 'WIP' | 'Done' | 'Hold';
 export type DataSource = 'legacy_import_inherited' | 'app_direct_input' | 'mobile_input' | 'standard_import' | 'admin_edit';
 export type ChangeSource = 'app_direct_input' | 'mobile_input' | 'excel_import' | 'admin_edit';
