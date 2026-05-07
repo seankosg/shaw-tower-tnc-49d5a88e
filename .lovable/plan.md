@@ -1,53 +1,127 @@
-## 목표
+# Document Executive Dashboard — 개정안
 
-OMM / Warranty / Spare Part 상세 페이지의 다음 필드를 **마스터 기반 풀다운(Select)** 으로 통일합니다.
+사용자 피드백 반영:
+- ❌ Plan vs Actual 테이블 / S-Curve 제거
+- ✅ Overdue 상세 항목 리스트가 핵심
+- ✅ 각 stage별 "총 N건 중 M건 완료" 진도 표시
 
-- `subcontractor_name` → `subcontractor_master` (active sub/subsub)
-- `hdec_pic_name` → `hdec_pic_master` (active)
-- `hdec_eng_name` → `profiles` (active)
-- `team` → 공통 enum (`Mech / Elec / Arch / Supp / Design`)
+기존 `dashboard-utils.isOverdue` / `isAtRisk` / `useAtRiskThreshold`는 그대로 재사용 (계산 일관성 유지).
 
-모두 `src/hooks/useCommonMasters.ts` (60초 캐시 + `unionWithLegacy`) 를 단일 소스로 사용합니다.
+## 1. 라우팅
+기존 `/docs/dashboard` 페이지를 신규 **Document Executive Dashboard**로 전면 교체. 사이드바 "Docs Management" 메뉴 구조 유지 (Dashboard / ABD / OMM / Spare Part / Warranty / Import / Export).
 
-## 현재 상태
+## 2. Stage Normalization
+신규 헬퍼 `src/lib/docs-stage-records.ts`: 각 문서 행을 stage-record 배열로 펼쳐 모든 모듈에 공통 로직 적용.
 
-| 페이지 | sub/pic/eng | team |
-|---|---|---|
-| OMM Detail | `SuggestField` (자유 입력 + 제안) — 자체 fetch | `Select` ✓ |
-| Spare Part Detail | `SuggestField` (자유 입력 + 제안) — 자체 fetch | `Select` ✓ |
-| Warranty Detail | 일반 `Input` (자유 입력) | 일반 `Input` |
+```ts
+interface DocsStageRecord {
+  item_id: string;
+  document_type: 'abd' | 'omm' | 'warranty';
+  document_no: string;
+  title: string;
+  category / trade / team / subcontractor / hdec_pic / hdec_eng;
+  current_stage: string;       // 행 단위 현재 stage
+  stage_key: string;           // ex sub1_submission
+  stage_label: string;
+  planned_date / actual_date;
+  is_done / is_overdue / is_at_risk / delay_days;
+}
+```
 
-세 페이지 모두 `subcontractor_master / hdec_pic_master / profiles` 를 직접 조회하거나 입력에 자유 텍스트를 허용 → 마스터에 없는 값이 들어갈 수 있음.
+Stage 매핑:
+- **ABD (7)**: sub1_sub, sub1_review, sub2_sub, sub2_review, sub3_sub, sub3_review, approval
+- **OMM (5)**: draft_sub, draft_review, final_sub, final_review, completed
+- **Warranty (5)**: acra, draft, subcon_sign, hdec_sign, final (`classifyWarrantyStageState` 재사용)
 
-## 변경 사항
+## 3. 페이지 구성
 
-### 1. 공통 hook 도입
-세 상세 페이지에서 자체 fetch 코드를 제거하고 `useCommonMasters()` 로 교체:
-- `subcontractorOptions`, `hdecPicOptions`, `hdecEngOptions`, `teamOptions` 사용
-- 기존 행 값이 마스터에 없을 경우 `unionWithLegacy(master, [row.value])` 로 머지하여 `(legacy)` 표시 → 데이터 손실 없이 표시/저장 가능
+### 3-1. Header
+- 타이틀 "Document Executive Dashboard"
+- Data Date / MC D-Day
+- 필터: Document Type / Trade / Team / Subcontractor / HDEC PIC / HDEC ENG / Current Stage / **Overdue Only** / **At-Risk Only**
+- Export to Excel
 
-### 2. FieldEditor 변경
-- **`subcontractor_name` / `hdec_pic_name` / `hdec_eng_name`**: `SuggestField` 또는 `Input` 제거 → `Select` 로 통일
-  - `__none__` (—) 옵션 포함하여 비우기 가능
-  - 옵션은 마스터 + legacy(현재 값이 마스터에 없을 때만)
-- **`team` (Warranty 만)**: `Input` → `Select` (`teamOptions`)
+### 3-2. Top KPI Cards (6개)
+Total / Completed / Remaining / Progress % / **Overdue** / **At-Risk** — `DefectKpiCard` 재사용.
 
-### 3. 영향 범위 (UI/표현 계층만)
+### 3-3. Document Type Summary Cards (3개)
+ABD / OMM / Warranty 각각: Total · Completed · Remaining · Progress % · Overdue · At-Risk. 클릭 → Doc Type 필터 적용.
 
-| 파일 | 변경 |
+### 3-4. Stage Progress Strip ★ (사용자 핵심 요구)
+**각 stage별 카드 — "총 N건 중 M건 완료" + 진도 바 + Overdue 배지**
+
+- All Documents 뷰: 모듈별 grouped 카드 (ABD/OMM/Warranty)
+- 모듈 선택 뷰: 해당 모듈 모든 stage 카드
+  - 예) ABD 뷰 → 1st Sub `120/150 (80%)`, 1st Review `100/150 (67%)`, 2nd Sub `60/120 (50%)` … Approved `45/150 (30%)`
+  - 각 카드: Total Applicable / Done / Remaining / Progress % / **Overdue stage count** (빨강 배지)
+  - 카드 클릭 → 하단 Action List가 해당 stage로 필터
+
+`DefectStageProgress` 패턴 재사용.
+
+### 3-5. Large Alert Cards (4개)
+1. **DOCUMENT OVERDUE** — overdue stage ≥1개 보유 unique 문서 수 (빨강)
+2. **TOTAL STAGE OVERDUE** — overdue stage occurrence 합계 (빨강)
+3. **DOCUMENT AT RISK** — at-risk stage 보유 문서 수 (앰버)
+4. **TOTAL STAGE AT RISK** — at-risk occurrence 합계 (앰버)
+
+각 카드 "View" → Action List 자동 필터.
+
+### 3-6. ★ Overdue Detail List (핵심 신규 섹션)
+대시보드의 메인 콘텐츠. T&C/Defect 대시보드에는 없는 SHAW Docs 전용 강조.
+
+**컬럼**: Doc Type / Doc No / Title / Trade / Team / Subcontractor / HDEC PIC / HDEC ENG / **Current Stage** / **Overdue Stage(s)** / Planned / Actual(공란) / **Delay Days** (정렬 기본) / Risk / Remarks
+
+**기본 정렬**: Delay Days desc → 가장 심각한 지연부터.
+**서브 탭**:
+1. Document-level Overdue (행 1개 = 문서 1개, 가장 심한 지연 stage 표시)
+2. Stage-level Overdue (행 1개 = stage 1개, 모든 overdue stage 노출)
+3. At-Risk (단계 ≤ atRiskDays threshold)
+
+**기능**: Search / Sort / Stage 필터 / Doc Type 필터 / Excel Export / 행 클릭 → Detail 페이지(기존 라우트).
+
+### 3-7. Charts (간소화 — 3개)
+1. **Stage Progress by Module** — 모듈별 stage 진도 horizontal bar (각 stage별 % 표시)
+2. **Overdue by Responsible Party** — horizontal bar, 토글 (HDEC PIC / Subcontractor / HDEC ENG / Team)
+3. **Aging Analysis** — overdue stage의 Aging bucket (0–3 / 4–7 / 8–14 / 15–30 / 30+)
+
+(트렌드/S-Curve는 별도 모듈 페이지로 미루고 Executive Dashboard에서는 제외)
+
+### 3-8. Warranty Comments Spotlight (직전 요구 유지)
+3분할 카드:
+1. Recent Comments (7일)
+2. Important / Pinned (`type IN ('issue','blocker')`)
+3. Unanswered Threads (>3일)
+→ 클릭 시 Detail 페이지 코멘트 탭 점프.
+
+### 3-9. Data Quality Cards
+컴팩트 경고 배지: Missing Planned / Actual on Completed / Subcontractor / HDEC PIC / HDEC ENG / Status / Transmittal No(ABD) / Warranty Years(Warranty).
+
+## 4. 재사용 매핑
+
+| 기능 | 재사용 |
 |---|---|
-| `src/pages/docs/DocsOMMDetailPage.tsx` | 자체 마스터 fetch 제거 → `useCommonMasters`. `SuggestField` → `Select`. |
-| `src/pages/docs/DocsSparePartDetailPage.tsx` | 동일 |
-| `src/pages/docs/DocsWarrantyDetailPage.tsx` | sub/pic/eng/team 4개 필드를 `Select` 로 (마스터 연결) |
+| Overdue 판정 | `dashboard-utils.isOverdue` (stage-record 적용) |
+| At-Risk 판정 | `dashboard-utils.isAtRisk` + `useAtRiskThreshold` |
+| KPI Card | `DefectKpiCard` |
+| Stage Progress 카드 | `DefectStageProgress` 패턴 |
+| Aging | Defect Dashboard의 aging 계산 |
+| Excel | `docs-excel-export` 확장 |
+| Comments | `WarrantyComments` / `OmmComments` / `comment-threads` |
 
-### 4. 변경하지 않는 것
-- DB 스키마, RLS, 마스터 테이블 자체, Raw Data 페이지 인라인 편집/Bulk 액션 (다른 작업에서 처리)
-- Import 흐름의 마스터 자동 생성 로직
-- 권한 체크(`canEditRow`) — 기존 그대로 사용
-- 변경 로그(`docs_change_log`) 작성 로직
+## 5. 작업 순서
 
-## 기술 노트
+1. `docs-stage-records.ts` (normalization + 단위 테스트)
+2. `DocsExecutiveDashboardPage.tsx` 신규 — 위 섹션 조립
+3. Stage Progress 카드, Overdue Detail Table 컴포넌트 추출
+4. Charts (recharts 재사용)
+5. Excel export 확장
+6. `App.tsx` 라우트 교체
+7. T&C/Defect Dashboard 회귀 점검
 
-- `useCommonMasters` 는 60초 모듈 캐시 + 단일 inflight 보장 → 페이지 전환 시 중복 호출 없음.
-- legacy 옵션은 표시용 라벨만 `"<value> (legacy)"` 로 변경되고 저장 값은 원본 그대로 유지.
-- 마스터 옵션이 비어있는 동안(`loading`) `Select` 는 현재 값(있다면)만 노출하고 비활성 상태로 표시.
+## 6. 확인 사항
+
+1. **Spare Part 모듈 포함 여부?** — Lovable Prompt에는 ABD/OMM/Warranty 3종만 명시. 현 사이드바엔 Spare Part 있음. **3종만 포함(권장) vs 4종 모두?**
+2. **Warranty stage**: 첨부 프롬프트는 4단계(Draft/Subcon/HDEC/Final). 실제 스키마는 ACRA 포함 5단계. **5단계 그대로 사용 OK?**
+3. **Important Comment 플래그**: Phase 1 = `type IN ('issue','blocker')` 활용 vs 신규 `is_important boolean` 컬럼 추가?
+
+승인 시 위 순서대로 구현합니다.
