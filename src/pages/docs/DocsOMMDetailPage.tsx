@@ -90,8 +90,8 @@ export default function DocsOMMDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
-  const [comments, setComments] = useState<any[]>([]);
-  const [newComment, setNewComment] = useState('');
+  // Comments handled by <OmmComments />
+
   const [subOptions, setSubOptions] = useState<SuggestOption[]>([]);
   const [picOptions, setPicOptions] = useState<SuggestOption[]>([]);
   const [engOptions, setEngOptions] = useState<SuggestOption[]>([]);
