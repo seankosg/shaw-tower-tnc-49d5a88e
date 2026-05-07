@@ -1,52 +1,97 @@
-## 현재 자동 백업 시스템 동작 분석
+## 전수 백업 시스템 구축 (Full DB + Storage 이중화)
 
-### 동작 방식 (현재 구현)
-- **스케줄**: `pg_cron` 작업 `daily-auto-snapshot`
-  - `cron schedule: 50 15 * * *` (UTC) → **싱가포르 시간(SGT) 매일 23:50** 1회 실행
-- **트리거**: `cron.schedule`가 `net.http_post`로 Edge Function `auto-snapshot` 호출
-- **로직** (`supabase/functions/auto-snapshot/index.ts`)
-  1. service role로 `subtests` 테이블 전체를 1000행 페이지네이션으로 읽음
-  2. JSON 배열로 묶어 `database_snapshots` 테이블에 한 행으로 저장
-     - `snapshot_name`: `Auto YYYY-MM-DD 23:50`
-     - `snapshot_type`: `auto`
-     - `snapshot_data`: 전체 행(jsonb), `row_count`: 행수
-- **복원** (`restore-snapshot`): 관리자 인증 후 `subtests` **전체 삭제 → 배치 INSERT**로 되돌림
+### 사용자 결정사항
+- **범위**: 모든 비즈니스 + 인증/권한 메타 (auth.users 비밀번호 해시 제외)
+- **저장**: DB(`database_snapshots`)와 Storage(`db-backups` 버킷)에 동일 데이터 이중 저장
+- **보존**: 무제한 (자동 삭제 없음)
+- **복원**: 전체 교체 (모든 대상 테이블 wipe → insert)
 
-### 결론: "완벽한 백업"인가? — **아니오**
+### 1. Storage 버킷 생성 (마이그레이션)
+- `db-backups` private 버킷 생성
+- `storage.objects` RLS: Admin/Superuser만 SELECT/INSERT/DELETE
+- Service role은 Edge Function에서 자동 우회
 
-현재 자동 백업은 **`subtests` 테이블 1개만** 대상으로 하는 부분 스냅샷입니다. 다음은 모두 **백업되지 않습니다**:
+### 2. `database_snapshots` 컬럼 추가 (마이그레이션)
+- `storage_path text` — Storage 객체 경로 (예: `auto/2026-05-07_2350.json.gz`)
+- `manifest jsonb` — `{ table_name: row_count }` 요약. 기존 `snapshot_data` jsonb는 호환 유지 (앞으로는 manifest만 채우고 snapshot_data는 NULL 허용)
+- `snapshot_data` NOT NULL 제거하고 nullable로 변경
 
-#### 백업되지 않는 데이터
-- T&C: `tests`, `system_master`, `projects`
-- Defect 모듈 전체: `defect_items`, `defect_comments`, `defect_change_log`, `defect_daily_snapshots`, `defect_schedule_change_audit`, `defect_upload_batches`, `defect_upload_row_logs`, 분류/매핑 마스터(`defect_classification_rules`, `defect_classification_alias`, `defect_subcontractor_workscope`, `defect_work_types`, `defect_discipline_fallback`), `defect_field_config`, `defect_comment_reads`
-- Docs 모듈 전체: `docs_drawings`, `docs_omm`, `docs_spare_part`, `docs_field_config`, `docs_org_alias`, `docs_upload_batches`, `docs_upload_row_logs`, `docs_change_log`, 그리고 `warranty_*`(threads, comments, items 등)
-- 사용자/권한: `profiles`, `user_roles`, `permissions`
-- 설정: `app_settings`, `field_config`, `custom_field_definitions`, `hdec_eng_master`, `hdec_pic_master`, subcontractors 등 마스터
-- 감사 로그: `event_log`, 각종 `*_change_log`, `*_audit`
-- **Storage 파일** (업로드 원본 파일)
-- **인증 데이터** (`auth.users`, 비밀번호 해시 등)
-- **DB 로직**: 함수, 트리거, RLS 정책, enum 등 (이건 마이그레이션 파일로만 관리됨)
+### 3. 복원 도우미 RPC (마이그레이션)
+- `public.restore_truncate_all()` SECURITY DEFINER
+  - admin/superuser 체크
+  - `SET LOCAL session_replication_role = replica` (트리거/FK 비활성)
+  - 백업 대상 테이블 순서대로 `TRUNCATE ... CASCADE`
+- `public.restore_insert_rows(_table text, _rows jsonb)` SECURITY DEFINER
+  - admin/superuser 체크
+  - `INSERT INTO {table} SELECT * FROM jsonb_populate_recordset(null::{table}, _rows)`
+  - 트리거 비활성 모드에서 호출
 
-#### 그 밖의 한계
-- 복원 함수(`restore-snapshot`)도 **`subtests`만 복구**
-- 스냅샷이 단일 jsonb 컬럼에 저장되어 데이터가 커질수록 비효율적이며, 단일 행 크기 한계 위험
-- Lovable Cloud(Supabase) 자체의 PITR/일일 백업은 별도이며, 이 앱 차원에서는 활용/노출되어 있지 않음
+### 4. `auto-snapshot` Edge Function 전면 재작성
+- service role로 백업 대상 테이블 목록(아래) 순회
+- 각 테이블 페이지네이션(1000행)으로 전체 SELECT
+- `{ version: 2, generated_at, tables: { name: rows[] } }` JSON 빌드
+- `db-backups` 버킷에 `auto/YYYY-MM-DD_HHMM.json` 업로드 (gzip은 Storage가 자동 처리하지 않으므로 plain JSON)
+- 동일 데이터(또는 manifest만)를 `database_snapshots` insert
+- 매일 SGT 23:50 cron 그대로 사용
 
-### 현재 보장되는 범위 요약
-| 항목 | 자동 백업 여부 |
-|---|---|
-| `subtests` 테이블 | 매일 1회 (SGT 23:50) |
-| 그 외 모든 비즈니스 테이블 | 없음 |
-| Storage 파일 | 없음 |
-| 인증/권한 | 없음 |
-| DB 로직(함수/트리거/RLS) | 없음 (마이그레이션 파일 의존) |
+### 5. `restore-snapshot` Edge Function 재작성
+- admin/superuser 인증
+- `snapshot_id` 받아 → `storage_path`로 Storage에서 JSON 다운로드
+- `restore_truncate_all()` 호출
+- 의존성 순서로 `restore_insert_rows(table, rows)` 반복 호출
+- 에러 시 결과 리포트, 부분 성공도 응답
 
-### 권장 개선 방향 (다음 단계로 진행 가능)
-1. **다중 테이블 백업으로 확장**: `auto-snapshot`이 모든 비즈니스 테이블을 묶어 저장하도록 변경 (테이블별 배열 또는 별도 행)
-2. **`restore-snapshot` 일반화**: 스냅샷 페이로드의 테이블 키를 순회하며 복원
-3. **저장 방식 개편**: jsonb 단일 행 대신 Storage 버킷에 JSON 파일로 업로드(크기/성능 안전)
-4. **보존 정책**: 일/주/월 단위 보관 기간과 자동 정리 룰
-5. **무결성**: 외래 키 의존 테이블의 복원 순서 정의 + 트랜잭션/배치 처리
-6. (선택) Lovable Cloud의 PITR/네이티브 백업 활용 안내
+### 6. 수동 백업 트리거 (옵션)
+- 기존 Admin UI의 "Manual Snapshot" 버튼이 새 Edge Function `manual-snapshot` 호출하도록 갱신 (또는 `auto-snapshot`에 `mode=manual` 파라미터 추가)
 
-원하시면 위 방향으로 확장 백업 시스템을 설계해서 다음 계획을 잡아 드리겠습니다.
+### 7. Admin UI 업데이트
+- `database_snapshots` 목록에 storage_path / manifest 표시
+- 복원 시 "전체 교체" 경고 다이얼로그 강화 (현재는 subtests만)
+- 다운로드 버튼: `db-backups` 버킷 signed URL 발급
+
+---
+
+### 백업 대상 테이블 (의존성 순서: 부모 → 자식)
+**1단계 (마스터/설정)**
+projects, hdec_eng_master, hdec_pic_master, subcontractor_master, subcontractor_info_master, system_master, system_alias_map, app_settings, field_config, defect_field_config, docs_field_config, custom_field_definitions, defect_classification_rules, defect_classification_alias, defect_subcontractor_workscope, defect_work_types, defect_discipline_fallback, docs_org_alias, import_header_mappings, subcontractor_issue_counters
+
+**2단계 (사용자/권한)**
+profiles, user_roles, user_system_permissions
+
+**3단계 (업로드 헤더)**
+upload_batches, defect_upload_batches, docs_upload_batches, warranty_upload_batches
+
+**4단계 (코어 비즈니스)**
+tests, subtests, defect_items, docs_drawings, docs_omm, docs_spare_part, warranty_items, warranty_threads
+
+**5단계 (자식/이력/감사)**
+subtest_comments, subtest_comment_reads, subtest_change_log, schedule_change_audit,
+defect_comments, defect_comment_reads, defect_change_log, defect_schedule_change_audit, defect_daily_snapshots, sc_no_history,
+docs_change_log, omm_comments,
+warranty_comments, warranty_change_log,
+upload_row_logs, defect_upload_row_logs, docs_upload_row_logs, warranty_upload_row_logs,
+import_field_logs, event_log
+
+**제외**
+- `database_snapshots` (자기 자신 — 무한 루프 방지)
+- `auth.*` 스키마 (관리 불가)
+- `storage.*` 스키마
+
+---
+
+### 기술 메모
+- jsonb_populate_recordset로 generated/identity 컬럼 충돌 시: 컬럼 화이트리스트 동적 SELECT로 변경
+- 한 백업 파일이 100MB 넘을 경우 대비, Edge Function memory 한계(150MB)에서 테이블별로 순차 스트리밍 고려 (1차 구현은 단일 JSON, 추후 분할 옵션)
+- `event_log`/`*_change_log`는 매일 누적되므로 백업 크기 모니터링 필요
+- `restore_truncate_all`은 transaction 내에서 `session_replication_role = replica` 적용해야 트리거 비활성 효과
+- 보존 무제한이지만 Admin UI에서 수동 삭제 버튼은 제공
+
+---
+
+### 진행 순서 (이 turn에 모두 실행)
+1. 마이그레이션 1건: 버킷 + 정책 + 컬럼 추가 + RPC
+2. `auto-snapshot/index.ts` 재작성
+3. `restore-snapshot/index.ts` 재작성
+4. Admin UI 미세 수정 (다음 메시지에서 필요 시)
+
+진행하겠습니다.
