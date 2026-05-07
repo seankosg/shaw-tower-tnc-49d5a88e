@@ -26,15 +26,12 @@ async function fetchAll<T = any>(builder: () => any): Promise<T[]> {
 export interface ExecDashboardSnapshot {
   records: DocsStageRecord[];
   asOf: Date;
-  atRiskDays: number;
 }
 
 export async function loadExecutiveDashboard(opts: {
   asOf?: Date;
-  atRiskDays: number;
 }): Promise<ExecDashboardSnapshot> {
   const asOf = asOfStartOfDay(opts.asOf);
-  const atRiskDays = opts.atRiskDays;
 
   const [abdRows, ommRows, warrantyRows] = await Promise.all([
     fetchAll(() =>
@@ -80,10 +77,10 @@ export async function loadExecutiveDashboard(opts: {
   ]);
 
   const records = [
-    ...buildAbdStageRecords(abdRows, asOf, atRiskDays),
-    ...buildOmmStageRecords(ommRows, asOf, atRiskDays),
-    ...buildWarrantyStageRecords(warrantyRows, asOf, atRiskDays),
+    ...buildAbdStageRecords(abdRows, asOf),
+    ...buildOmmStageRecords(ommRows, asOf),
+    ...buildWarrantyStageRecords(warrantyRows, asOf),
   ];
 
-  return { records, asOf, atRiskDays };
+  return { records, asOf };
 }
