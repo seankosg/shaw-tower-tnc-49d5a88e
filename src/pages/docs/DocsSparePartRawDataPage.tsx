@@ -87,7 +87,11 @@ export default function DocsSparePartRawDataPage() {
                   {rows.map((r) => {
                     const norm = normalizeSparePartStatus(r.status);
                     return (
-                      <TableRow key={r.id}>
+                      <TableRow
+                        key={r.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => navigate(`/docs/spare-part/${r.id}`)}
+                      >
                         <TableCell>{r.category ?? ''}</TableCell>
                         <TableCell>{r.sn ?? ''}</TableCell>
                         <TableCell>{r.parent_item ?? ''}</TableCell>
