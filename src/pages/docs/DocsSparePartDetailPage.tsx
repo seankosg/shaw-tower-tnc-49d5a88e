@@ -10,7 +10,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SuggestField } from '@/components/ui/suggest-field';
 import { ArrowLeft, Loader2, MessageSquare } from 'lucide-react';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
@@ -21,8 +20,7 @@ import {
   normalizeSparePartStatus,
 } from '@/lib/docs-spare-part-status';
 import { SparePartComments } from '@/components/comments/SparePartComments';
-
-type SuggestOption = { name: string };
+import { useCommonMasters, unionWithLegacy, type MasterOption } from '@/hooks/useCommonMasters';
 
 const OVERVIEW_FIELDS = ['category', 'sn', 'parent_item', 'material', 'spec_ref', 'status'] as const;
 const REQUIREMENTS_FIELDS = ['spares_requirements', 'unit', 'spares_quantity', 'storage_area_required'] as const;
