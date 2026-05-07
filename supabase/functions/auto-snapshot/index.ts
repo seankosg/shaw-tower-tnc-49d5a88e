@@ -46,12 +46,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Pull every table in parallel (small ones) but cap to avoid memory spikes.
+    // Fetch all tables in parallel to stay within Edge Function CPU budget
     const tables: Record<string, any[]> = {};
     const manifest: Record<string, number> = {};
-
-    for (const t of BACKUP_TABLES) {
-      const rows = await fetchAllRows(adminClient, t);
+    const results = await Promise.all(
+      BACKUP_TABLES.map(async (t) => [t, await fetchAllRows(adminClient, t)] as const),
+    );
+    for (const [t, rows] of results) {
       tables[t] = rows;
       manifest[t] = rows.length;
     }
