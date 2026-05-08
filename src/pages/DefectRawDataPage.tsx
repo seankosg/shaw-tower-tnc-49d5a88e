@@ -1023,9 +1023,9 @@ export default function DefectRawDataPage() {
   );
 
   const columnVisibility = useMemo<VisibilityState>(() => {
-    const visibility: VisibilityState = { __select: true };
+    const visibility: VisibilityState = { __select: true, is_critical: true };
     for (const id of allColumnIds) {
-      if (id === '__select') continue;
+      if (id === '__select' || id === 'is_critical') continue;
       if (id === 'issue_no' || id === 'stage_progress') visibility[id] = true;
       else visibility[id] = isFieldVisible(id);
     }
@@ -1033,7 +1033,7 @@ export default function DefectRawDataPage() {
   }, [allColumnIds, isFieldVisible]);
 
   const columnOrder = useMemo(() => {
-    const PINNED_FRONT = ['__select', 'issue_no', 'stage_progress'];
+    const PINNED_FRONT = ['__select', 'is_critical', 'issue_no', 'stage_progress'];
     const remaining = allColumnIds.filter((id) => !PINNED_FRONT.includes(id));
     return [...PINNED_FRONT, ...sortFieldNames(remaining)];
   }, [allColumnIds, sortFieldNames]);
