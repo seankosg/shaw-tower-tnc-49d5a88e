@@ -26,6 +26,8 @@ async function fetchAll<T = any>(builder: () => any): Promise<T[]> {
 export interface ExecDashboardSnapshot {
   records: DocsStageRecord[];
   asOf: Date;
+  /** Raw ABD rows (active, sub_module='as_built') for SSOT bucket distribution */
+  abdRows: any[];
 }
 
 export async function loadExecutiveDashboard(opts: {
@@ -82,5 +84,5 @@ export async function loadExecutiveDashboard(opts: {
     ...buildWarrantyStageRecords(warrantyRows, asOf),
   ];
 
-  return { records, asOf };
+  return { records, asOf, abdRows };
 }
