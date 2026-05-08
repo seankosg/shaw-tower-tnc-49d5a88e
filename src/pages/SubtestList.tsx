@@ -46,6 +46,7 @@ import {
 } from '@/lib/stage-metrics';
 import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
+import { CriticalPendingBar } from '@/components/raw-data/CriticalPendingBar';
 import type { BulkEditableField } from '@/lib/bulk-edit';
 import { META_FIELD_NAMES, type CommentSummary, EMPTY_SUMMARY, isMetaField } from '@/lib/meta-fields';
 import { MetaCell } from '@/components/raw-data/MetaCell';
@@ -592,6 +593,7 @@ export default function SubtestList() {
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
   const [dataDate, setDataDate] = useState<string | null>(null);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [criticalPending, setCriticalPending] = useState<Map<string, boolean>>(new Map());
   const [commentSummary, setCommentSummary] = useState<Record<string, CommentSummary>>({});
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportMode, setExportMode] = useState<'single' | 'per-subcon'>('single');
@@ -962,23 +964,26 @@ export default function SubtestList() {
       },
       accessorFn: (r) => (r.is_critical ? 'true' : 'false'),
       cell: ({ row }) => {
-        const checked = !!row.original.is_critical;
+        const id = row.original.id;
+        const original = !!row.original.is_critical;
+        const pendingVal = criticalPending.get(id);
+        const checked = pendingVal !== undefined ? pendingVal : original;
+        const isPending = pendingVal !== undefined && pendingVal !== original;
         return (
           <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
             <Checkbox
               checked={checked}
-              onCheckedChange={async (c) => {
+              onCheckedChange={(c) => {
                 const next = !!c;
-                const id = row.original.id;
-                setData((prev) => prev.map((r) => (r.id === id ? { ...r, is_critical: next } : r)));
-                const { error } = await supabase.from('subtests').update({ is_critical: next } as any).eq('id', id);
-                if (error) {
-                  setData((prev) => prev.map((r) => (r.id === id ? { ...r, is_critical: !next } : r)));
-                  toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
-                }
+                setCriticalPending((prev) => {
+                  const map = new Map(prev);
+                  if (next === original) map.delete(id);
+                  else map.set(id, next);
+                  return map;
+                });
               }}
               aria-label="Mark as critical"
-              className="h-3.5 w-3.5"
+              className={`h-3.5 w-3.5 ${isPending ? 'ring-2 ring-amber-500/70 ring-offset-1 rounded-sm' : ''}`}
             />
           </span>
         );
@@ -1885,6 +1890,15 @@ export default function SubtestList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <CriticalPendingBar
+        pending={criticalPending}
+        table="subtests"
+        onApplied={(applied) => {
+          setData((prev) => prev.map((r) => (applied.has(r.id) ? { ...r, is_critical: applied.get(r.id)! } : r)));
+          setCriticalPending(new Map());
+        }}
+        onDiscard={() => setCriticalPending(new Map())}
+      />
     </div>
   );
 }

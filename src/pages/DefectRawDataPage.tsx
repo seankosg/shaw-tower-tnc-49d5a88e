@@ -46,6 +46,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
+import { CriticalPendingBar } from '@/components/raw-data/CriticalPendingBar';
 import type { BulkEditableField } from '@/lib/bulk-edit';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
 import { inferFilterType } from '@/lib/field-filter-type';
@@ -407,6 +408,7 @@ export default function DefectRawDataPage() {
   const [exportBusy, setExportBusy] = useState(false);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [criticalPending, setCriticalPending] = useState<Map<string, boolean>>(new Map());
   const [commentSummary, setCommentSummary] = useState<Record<string, CommentSummary>>({});
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -792,23 +794,26 @@ export default function DefectRawDataPage() {
       },
       accessorFn: (r) => ((r as any).is_critical ? 'true' : 'false'),
       cell: ({ row }) => {
-        const checked = !!(row.original as any).is_critical;
+        const id = row.original.id;
+        const original = !!(row.original as any).is_critical;
+        const pendingVal = criticalPending.get(id);
+        const checked = pendingVal !== undefined ? pendingVal : original;
+        const isPending = pendingVal !== undefined && pendingVal !== original;
         return (
           <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
             <Checkbox
               checked={checked}
-              onCheckedChange={async (c) => {
+              onCheckedChange={(c) => {
                 const next = !!c;
-                const id = row.original.id;
-                setItems((prev) => prev.map((r) => (r.id === id ? ({ ...r, is_critical: next } as any) : r)));
-                const { error } = await (supabase as any).from('defect_items').update({ is_critical: next }).eq('id', id);
-                if (error) {
-                  setItems((prev) => prev.map((r) => (r.id === id ? ({ ...r, is_critical: !next } as any) : r)));
-                  toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
-                }
+                setCriticalPending((prev) => {
+                  const map = new Map(prev);
+                  if (next === original) map.delete(id);
+                  else map.set(id, next);
+                  return map;
+                });
               }}
               aria-label="Mark as critical"
-              className="h-3.5 w-3.5"
+              className={`h-3.5 w-3.5 ${isPending ? 'ring-2 ring-amber-500/70 ring-offset-1 rounded-sm' : ''}`}
             />
           </span>
         );
@@ -1453,6 +1458,15 @@ export default function DefectRawDataPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <CriticalPendingBar
+        pending={criticalPending}
+        table="defect_items"
+        onApplied={(applied) => {
+          setItems((prev) => prev.map((r) => (applied.has(r.id) ? ({ ...r, is_critical: applied.get(r.id)! } as any) : r)));
+          setCriticalPending(new Map());
+        }}
+        onDiscard={() => setCriticalPending(new Map())}
+      />
     </div>
   );
 }
