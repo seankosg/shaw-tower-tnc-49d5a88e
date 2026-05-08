@@ -625,7 +625,7 @@ export default function SubtestList() {
   const SUBTEST_DRILLDOWN_PARAMS = [
     'source', 'q',
     // urlMap keys (column-equality drill-downs)
-    'system', 'subcon', 'subsub', 'hdec_pic', 'team',
+    'system', 'subcon', 'subsub', 'hdec_pic', 'team', 'critical',
     'pred_status', 't1_status', 't2_status',
     // date / delay / unplanned cell drill-downs
     'pred_planned_to', 't1_planned_to', 't2_planned_to',
