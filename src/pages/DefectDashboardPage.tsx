@@ -165,6 +165,18 @@ export default function DefectDashboardPage() {
   const todayLabel = formatDdMmm(today);
   const filteredItems = useMemo(() => teamFilter.length === 0 ? items : items.filter((item) => item.team && teamFilter.includes(item.team)), [items, teamFilter]);
 
+  const criticalDefects = useMemo(
+    () => filteredItems.filter((it: any) => it.is_critical).map((it: any) => ({
+      id: it.id,
+      primary: it.issue_no,
+      secondary: it.area_level,
+      team: it.team ?? null,
+      subcontractor: it.subcontractor_name,
+      status: it.closure_status || it.completion_status || it.status || '—',
+    })),
+    [filteredItems],
+  );
+
   const kpis = useMemo(() => {
     const total = filteredItems.length;
     const actualDone = filteredItems.filter(isActualComplete).length;
