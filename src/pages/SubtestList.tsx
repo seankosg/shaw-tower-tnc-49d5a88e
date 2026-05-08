@@ -944,6 +944,45 @@ export default function SubtestList() {
         </span>
       ),
     },
+    {
+      id: 'is_critical',
+      accessorKey: 'is_critical',
+      header: 'Critical',
+      size: 70,
+      enableSorting: true,
+      enableColumnFilter: true,
+      filterFn: multiSelectFilterFn,
+      meta: {
+        filterType: 'multi-select',
+        filterOptions: [
+          { value: 'true', label: 'Critical' },
+          { value: 'false', label: 'Non-critical' },
+        ],
+      },
+      accessorFn: (r) => (r.is_critical ? 'true' : 'false'),
+      cell: ({ row }) => {
+        const checked = !!row.original.is_critical;
+        return (
+          <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+            <Checkbox
+              checked={checked}
+              onCheckedChange={async (c) => {
+                const next = !!c;
+                const id = row.original.id;
+                setData((prev) => prev.map((r) => (r.id === id ? { ...r, is_critical: next } : r)));
+                const { error } = await supabase.from('subtests').update({ is_critical: next } as any).eq('id', id);
+                if (error) {
+                  setData((prev) => prev.map((r) => (r.id === id ? { ...r, is_critical: !next } : r)));
+                  toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
+                }
+              }}
+              aria-label="Mark as critical"
+              className="h-3.5 w-3.5"
+            />
+          </span>
+        );
+      },
+    },
     { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn,
       meta: { filterType: 'text' },
       cell: ({ row, getValue }) => {
