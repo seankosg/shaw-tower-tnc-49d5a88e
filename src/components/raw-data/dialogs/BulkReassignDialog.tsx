@@ -59,12 +59,23 @@ export function BulkReassignDialog({ open, onOpenChange, entity, fields, ids, ed
     if (!user || changes.length === 0) return;
     setBusy(true);
     try {
-      const r = await applyBulkReassign({ entity, ids: editableIds, changes, userId: user.id });
+      const batches = chunkArray(editableIds, BULK_CHUNK_ROWS);
+      let succeeded = 0;
+      let failed = 0;
+      for (let i = 0; i < batches.length; i++) {
+        if (batches.length > 1) {
+          toast({ title: `Reassigning… (batch ${i + 1}/${batches.length})`, description: `${succeeded} updated so far.` });
+        }
+        // eslint-disable-next-line no-await-in-loop
+        const r = await applyBulkReassign({ entity, ids: batches[i], changes, userId: user.id });
+        succeeded += r.succeeded;
+        failed += r.failed;
+      }
       const fieldList = changes.map((c) => c.field).join(', ');
       toast({
         title: 'Reassignment applied',
-        description: `Updated ${fieldList} on up to ${r.succeeded} rows${r.failed ? ` · ${r.failed} blocked` : ''}${skipped ? ` · ${skipped} skipped (no permission)` : ''}.`,
-        variant: r.failed > 0 && r.succeeded === 0 ? 'destructive' : 'default',
+        description: `Updated ${fieldList} on up to ${succeeded} rows${failed ? ` · ${failed} blocked` : ''}${skipped ? ` · ${skipped} skipped (no permission)` : ''}.`,
+        variant: failed > 0 && succeeded === 0 ? 'destructive' : 'default',
       });
       onOpenChange(false);
       onDone();
