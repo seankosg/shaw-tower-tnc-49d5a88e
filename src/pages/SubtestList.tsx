@@ -693,7 +693,7 @@ export default function SubtestList() {
       const v = searchParams.get(param);
       if (v) {
         if (col === 'system_code' || col === 'team' || col === 'pred_status' || col === 't1_status' || col === 't2_status'
-          || col === 'subcontractor_name' || col === 'subsub_name' || col === 'hdec_pic_name') {
+          || col === 'subcontractor_name' || col === 'subsub_name' || col === 'hdec_pic_name' || col === 'is_critical') {
           next.push({ id: col, value: [v] });
         } else {
           next.push({ id: col, value: v });
