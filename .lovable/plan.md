@@ -1,49 +1,50 @@
-# OMM Dashboard & Training Column Rework
+## 문제
 
-## 1. OMM Stage Cards (4 stages)
+ABD Import 후 로그상 876행이 정상 처리됐지만 Raw Data에 보이지 않습니다.
 
-Replace current 5-stage `OMM_STAGE_DEFS` in `src/lib/docs-executive-dashboard-data.ts` with exactly these 4 stages:
+**원인**: 이전에 숨김 처리(soft-delete, `is_active=false`)된 행들이 reimport 시에도 `is_active=false` 상태 그대로 유지됨. Raw Data 조회는 `is_active=true` 필터를 사용하므로 가시성 회복 안 됨.
 
-| Key | Card Title | Done condition | Planned date source |
-|---|---|---|---|
-| `omm.draft_submission` | Draft Submission | `draft_actual_date` exists | `draft_planned_date` |
-| `omm.draft_approval` | Draft Approval | `draft_response_status` upper === `'A'` | `draft_planned_date` |
-| `omm.final_submission` | Final Submission | `final_actual_date` exists | `final_planned_date` |
-| `omm.final_approval` | Final Approval | `final_response_status` upper === `'A'` | `final_response_planned_date ?? final_planned_date` |
+검증:
+- 최신 배치의 876행 모두 `is_active=false`
+- 데이터 자체는 갱신됨 (change log 기록됨)
+- `loadExistingDrawings()`가 `is_active` 필터 없이 매칭하여 비활성 행도 UPDATE 대상에 포함
 
-Remove `draft_review`, `final_review`, `completed` keys. Update `buildOmmStageRecords()` accordingly.
+## 해결 방향
 
-## 2. OD chip on every stage card
+**Reimport는 데이터 복원 의도** → UPDATE 시 자동으로 `is_active=true`로 되살림.
+ABD뿐 아니라 OMM / Warranty / Spare Part adapter 모두 같은 패턴이므로 동시에 보정해 향후 재발 방지.
 
-In `StageCard` (DocsExecutiveDashboardPage.tsx), add a top-right chip showing `OD {overdue}/{remaining}` where:
-- `overdue` = planned date ≤ today AND not done
-- `remaining` = not done (regardless of planned)
+## 변경 파일
 
-Apply to ABD, OMM, Warranty, Spare Part stage cards (all that use `StageCard`). Card click navigates to Raw Data with `?stage=<key>&overdue=1` to filter to overdue items only.
+### 1. `src/lib/docs-import-workers.ts`
+모든 4개 adapter (`abdAdapter`, `ommAdapter`, `warrantyAdapter`, `sparePartAdapter`)의 payload 빌드 부분에 다음 추가:
+```ts
+is_active: true,
+```
+- INSERT 시: 기본값과 동일 → 무해
+- UPDATE 시: 숨김 처리된 행을 자동 복원
+- `*_TRACKED_FIELDS`에는 추가하지 않음 (audit 노이즈 방지)
 
-## 3. Training column
+### 2. `src/contexts/docs-import/createDocsImportProvider.tsx` 결과 화면 메시지
+import 결과 패널에 "Reactivated rows" 카운터를 안내 (선택). 핵심은 #1.
 
-- `useDocsFieldConfig.ts` default label: `training_required: 'Training Required'` → `'Training'`.
-- `DocsOMMRawDataPage.tsx` header label override → `'Training'`.
-- `DocsOMMDetailPage.tsx` `TRAINING_OPTIONS`: `['Yes','No','N/A']` → `['Done','Not Yet','N/S']`. Editable per RSC permissions (existing gate).
-- Data migration on `docs_omm.training_required`:
-  - `'Yes'` → `'Done'`
-  - `'No'` → `'Not Yet'`
-  - `'N/A'` → `'N/S'`
-  - other / null untouched
-- Update `docs_field_config` row for `training_required` display_name to `'Training'` (only if currently the default).
+### 3. 데이터 백필 (1회성 SQL)
+이번 사용자가 reimport한 ABD 행들의 가시성 즉시 회복:
+```sql
+UPDATE public.docs_drawings d
+SET is_active = true, updated_at = now()
+FROM public.docs_upload_batches b
+WHERE d.source_upload_id = b.id
+  AND b.uploaded_file_name LIKE 'SHAW_Drawings_reimport%'
+  AND d.is_active = false;
+```
+영향: 약 1,455행 (876 + 579)
 
-## 4. Out of scope
+### 4. 메모리 기록 (재발 방지 룰)
+`mem://features/business-rules`에 다음 규칙 추가:
+> Docs/OMM/Warranty/SparePart import의 UPDATE 분기는 항상 `is_active=true`를 명시적으로 설정한다 (reimport = 복원 의도). 신규 import worker 추가 시 동일 규칙 적용.
 
-- Critical Board redesign (separate plan, still pending approval).
-- ABD/Warranty stage card semantics (only OD chip + click filter added).
-- Training auto-normalization at import time.
-
-## Files to touch
-
-- `src/lib/docs-executive-dashboard-data.ts` — stage defs + record builder
-- `src/pages/docs/DocsExecutiveDashboardPage.tsx` — StageCard OD chip + click handler
-- `src/hooks/useDocsFieldConfig.ts` — label default
-- `src/pages/docs/DocsOMMRawDataPage.tsx` — header label, query param filter (`overdue=1`)
-- `src/pages/docs/DocsOMMDetailPage.tsx` — TRAINING_OPTIONS
-- migration: update `docs_omm.training_required` values + `docs_field_config` row
+## 변경하지 않는 것
+- `is_active` 자체 컬럼 / Bulk Soft Delete 기능 / RLS 정책
+- 컬럼 매핑 / 검증 로직
+- INSERT 분기 (이미 DB 기본값 `true`)
