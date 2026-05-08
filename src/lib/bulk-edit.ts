@@ -52,7 +52,16 @@ export interface BulkUpdateResult {
 }
 
 const CHUNK_SIZE = 100;
-export const BULK_EDIT_MAX_ROWS = 500;
+/** Per-batch size for auto-chunked bulk actions (Apply/Critical/Duplicate/Reassign). */
+export const BULK_CHUNK_ROWS = 500;
+/** Deprecated alias kept for backward compatibility. */
+export const BULK_EDIT_MAX_ROWS = BULK_CHUNK_ROWS;
+
+export function chunkArray<T>(arr: T[], size = BULK_CHUNK_ROWS): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
