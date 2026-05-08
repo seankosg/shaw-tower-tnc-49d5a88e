@@ -1,44 +1,51 @@
-## Goal
+## 문제
 
-Show on each Critical Issue Board row: **Registered At** (date+time when marked critical from Raw Data), **Team**, and **Registered By** (user name).
+ABD(Docs Drawings) Raw Data 페이지에서 행을 선택하면 BulkActionBar가 항상 **Editable 0**으로 표시되고, 그 결과 다음 버튼들이 모두 비활성화됨:
+- Apply (벌크 편집)
+- Register to Critical Issue Board
+- Duplicate
+- Reassign
+- Hide rows (soft delete)
+- Delete permanently
 
-## Database changes
+(Export .xlsx, Copy as TSV는 권한과 무관하게 동작 중)
 
-Add tracking columns to both `subtests` and `defect_items`:
-- `critical_marked_at timestamptz` — set when `is_critical` flips false→true
-- `critical_marked_by uuid` — user who registered
-- `critical_marked_by_name text` — denormalized snapshot of profiles.full_name (avoids extra joins, survives user renames)
+## 원인
 
-Implementation:
-- Add columns via migration.
-- Add a BEFORE UPDATE trigger on each table: when `NEW.is_critical = true AND OLD.is_critical IS DISTINCT FROM true`, set `critical_marked_at = now()`, `critical_marked_by = auth.uid()`, and look up the name from `profiles`. When flipped back to false, clear the three fields.
-- Also handle INSERT (for the rare case a row is inserted with `is_critical = true`).
-- Existing rows already marked critical: leave fields NULL — UI will show "—" for them. (User confirmed it's OK; tracking starts going forward.)
+`src/lib/bulk-actions.ts`의 `getEditableScopeMap()` 중 `entity === 'drawing'` 분기가 권한 판정을 너무 좁게 함:
+- `admin`, `superuser` → `full`
+- `d_superuser` + 팀 일치 → `team`
+- 그 외 모두 → `none`
 
-## Frontend changes
+그러나 실제 `docs_drawings` RLS UPDATE 정책은 다음을 허용함:
+```
+admin | superuser | senior_user | user
+  OR  d_superuser AND user_team_matches(team)
+```
 
-`src/components/dashboard/CriticalItemsPanel.tsx`:
-- Extend `CriticalRowItem` with `team`, `registered_at`, `registered_by_name`.
-- Add three columns to the table: **Team**, **Registered At** (formatted `YYYY-MM-DD HH:mm`), **Registered By**.
-- Keep grouping (By Team / By Subcontractor) as-is per user preference (per-row Team always visible; no team summary row removal).
+즉 `senior_user`, `user` 역할(현재 활성 사용자 108명 중 82명)이 DB에서는 수정 가능한데 UI가 "권한 없음"으로 잘못 판정 → 모든 벌크 버튼이 비활성화됨.
 
-`src/pages/DashboardPage.tsx` (subtests):
-- Extend the select to include `critical_marked_at, critical_marked_by_name` (team is already selected).
-- Pass them through in the `criticalItems` mapping.
+## 수정 내용
 
-`src/pages/DefectDashboardPage.tsx` (defects):
-- Same: include the new fields in the source query and map them into the panel items.
+`src/lib/bulk-actions.ts`의 drawing 분기 권한 판정을 RLS와 일치시킴:
+- `admin`, `superuser`, `senior_user`, `user` → 모든 선택 행에 대해 `full`
+- `d_superuser` + 프로필 활성 + 팀 일치 → `team` (기존 그대로)
+- 그 외 (`guest`, `super_guest`, 역할 없음) → `none`
+- 비활성 프로필(`is_active = false`)은 비-admin 역할에 대해 `none` 처리
 
-`src/components/raw-data/CriticalPendingBar.tsx`:
-- No change needed — the trigger handles metadata server-side when `is_critical` is updated.
+## 변경 파일
 
-## Display format
+- `src/lib/bulk-actions.ts` 한 곳만 수정. 다른 파일 변경 없음.
 
-- Registered At: `2026-05-08 14:32` (local time, 24h).
-- Registered By: profile full_name, fallback to "—".
-- Team: existing enum value, fallback "—".
+## 검증 방법
 
-## Out of scope
+- `user` 역할 계정으로 로그인 → ABD 행 선택 시 "Editable N"이 N으로 표시되고 Apply / Duplicate / Reassign / Critical 버튼 활성화
+- `d_superuser` 계정 → 본인 팀 행만 editable로 카운트(기존 동작 유지)
+- `guest` 계정 → editable 0 유지, 버튼 비활성화 유지
+- Title/Remarks 필드 벌크 편집 → 성공, `docs_change_log`에 기록됨
+- Delete permanently → 기존대로 admin/superuser만 활성
 
-- Backfilling historical critical registrations (no source of truth).
-- Editing/overriding the registration metadata from UI.
+## 범위 외
+
+- DB / RLS 변경 없음
+- Subtest, Defect 벌크 흐름은 별도 RPC 사용 중이며 이미 정상 → 손대지 않음
