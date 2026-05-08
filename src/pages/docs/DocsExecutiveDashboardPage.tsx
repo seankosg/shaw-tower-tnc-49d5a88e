@@ -239,7 +239,7 @@ function ModuleSection({
             sublabel={`${pct}% complete`}
             accent={accent}
             tone="green"
-            onClick={() => onNavigate(module, { status: 'completed' })}
+            onClick={() => onNavigate(module, isAbd ? { bucket: 'done' } : { status: 'completed' })}
           >
             <Progress value={pct} className="mt-2 h-1.5" />
           </SummaryTile>
