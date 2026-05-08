@@ -53,6 +53,7 @@ export interface DefectItem {
   updated_at: string;
   created_at?: string;
   row_version: number;
+  is_critical?: boolean;
 }
 
 export const DEFECT_RESPONSIBILITY_FIELDS = ['subcontractor_name', 'subsub_name', 'hdec_pic_name'] as const;

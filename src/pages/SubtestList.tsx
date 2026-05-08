@@ -93,6 +93,7 @@ interface SubtestRow {
   mos_sequence: number | null;
   updated_by: string | null;
   source_upload_id: string | null;
+  is_critical?: boolean;
 }
 
 // ---- Filter functions ----
@@ -624,7 +625,7 @@ export default function SubtestList() {
   const SUBTEST_DRILLDOWN_PARAMS = [
     'source', 'q',
     // urlMap keys (column-equality drill-downs)
-    'system', 'subcon', 'subsub', 'hdec_pic', 'team',
+    'system', 'subcon', 'subsub', 'hdec_pic', 'team', 'critical',
     'pred_status', 't1_status', 't2_status',
     // date / delay / unplanned cell drill-downs
     'pred_planned_to', 't1_planned_to', 't2_planned_to',
@@ -679,6 +680,7 @@ export default function SubtestList() {
       pred_status: 'pred_status',
       t1_status: 't1_status',
       t2_status: 't2_status',
+      critical: 'is_critical',
     };
     // Merge: keep saved column filters except those that the URL is going to override.
     // (When isDrilldown, baseFilters is already empty so this is a no-op filter.)
@@ -691,7 +693,7 @@ export default function SubtestList() {
       const v = searchParams.get(param);
       if (v) {
         if (col === 'system_code' || col === 'team' || col === 'pred_status' || col === 't1_status' || col === 't2_status'
-          || col === 'subcontractor_name' || col === 'subsub_name' || col === 'hdec_pic_name') {
+          || col === 'subcontractor_name' || col === 'subsub_name' || col === 'hdec_pic_name' || col === 'is_critical') {
           next.push({ id: col, value: [v] });
         } else {
           next.push({ id: col, value: v });
@@ -851,7 +853,7 @@ export default function SubtestList() {
     while (hasMore) {
       const { data } = await supabase
         .from('subtests')
-        .select('id, subtest_id, item_no, mos_code, mos_sequence, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, team, updated_at, updated_by, source_upload_id, system_id, r1_status, r1_target_submission_date, r1_actual_submission_date, r1_report_ref, r2_status, r2_target_submission_date, r2_actual_submission_date, r2_target_approval_date, r2_actual_approval_date, aconex_ref_no, remarks, punchlist_comments, system_master!inner(system_code)' as any)
+        .select('id, subtest_id, item_no, mos_code, mos_sequence, level, equipment, description, t1_planned_date, t1_actual_date, t1_status, t2_planned_date, t2_actual_date, t2_status, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, team, updated_at, updated_by, source_upload_id, system_id, r1_status, r1_target_submission_date, r1_actual_submission_date, r1_report_ref, r2_status, r2_target_submission_date, r2_actual_submission_date, r2_target_approval_date, r2_actual_approval_date, aconex_ref_no, remarks, punchlist_comments, is_critical, system_master!inner(system_code)' as any)
         .eq('is_active', true)
         .order('updated_at', { ascending: false })
         .range(from, from + PAGE_SIZE - 1);
@@ -942,6 +944,45 @@ export default function SubtestList() {
           />
         </span>
       ),
+    },
+    {
+      id: 'is_critical',
+      accessorKey: 'is_critical',
+      header: 'Critical',
+      size: 70,
+      enableSorting: true,
+      enableColumnFilter: true,
+      filterFn: multiSelectFilterFn,
+      meta: {
+        filterType: 'multi-select',
+        filterOptions: [
+          { value: 'true', label: 'Critical' },
+          { value: 'false', label: 'Non-critical' },
+        ],
+      },
+      accessorFn: (r) => (r.is_critical ? 'true' : 'false'),
+      cell: ({ row }) => {
+        const checked = !!row.original.is_critical;
+        return (
+          <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+            <Checkbox
+              checked={checked}
+              onCheckedChange={async (c) => {
+                const next = !!c;
+                const id = row.original.id;
+                setData((prev) => prev.map((r) => (r.id === id ? { ...r, is_critical: next } : r)));
+                const { error } = await supabase.from('subtests').update({ is_critical: next } as any).eq('id', id);
+                if (error) {
+                  setData((prev) => prev.map((r) => (r.id === id ? { ...r, is_critical: !next } : r)));
+                  toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
+                }
+              }}
+              aria-label="Mark as critical"
+              className="h-3.5 w-3.5"
+            />
+          </span>
+        );
+      },
     },
     { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn,
       meta: { filterType: 'text' },

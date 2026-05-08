@@ -458,6 +458,7 @@ export type Database = {
           hdec_pic_name: string | null
           id: string
           is_active: boolean
+          is_critical: boolean
           issue_no: string
           main_trade: string | null
           planned_closure_date: string | null
@@ -506,6 +507,7 @@ export type Database = {
           hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
+          is_critical?: boolean
           issue_no: string
           main_trade?: string | null
           planned_closure_date?: string | null
@@ -554,6 +556,7 @@ export type Database = {
           hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
+          is_critical?: boolean
           issue_no?: string
           main_trade?: string | null
           planned_closure_date?: string | null
@@ -2361,6 +2364,7 @@ export type Database = {
           hdec_pic_name: string | null
           id: string
           is_active: boolean
+          is_critical: boolean
           item_no: string
           level: string | null
           mos_code: string
@@ -2407,6 +2411,7 @@ export type Database = {
           hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
+          is_critical?: boolean
           item_no: string
           level?: string | null
           mos_code: string
@@ -2453,6 +2458,7 @@ export type Database = {
           hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
+          is_critical?: boolean
           item_no?: string
           level?: string | null
           mos_code?: string

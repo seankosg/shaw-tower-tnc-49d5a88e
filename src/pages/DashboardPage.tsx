@@ -39,6 +39,7 @@ import {
 } from '@/lib/dashboard-utils';
 import { isStageDone } from '@/lib/stage-metrics';
 import { RecentSubtestComments } from '@/components/dashboard/RecentSubtestComments';
+import { CriticalItemsPanel } from '@/components/dashboard/CriticalItemsPanel';
 
 const STATUS_COLORS: Record<string, string> = {
   Done: 'hsl(142, 71%, 45%)',
@@ -82,7 +83,7 @@ export default function DashboardPage() {
       while (true) {
         const { data } = await supabase
           .from('subtests')
-          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, team, r1_status, r1_target_submission_date, r1_actual_submission_date, r2_status, r2_target_submission_date, r2_actual_submission_date, r2_target_approval_date, r2_actual_approval_date' as any)
+          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, team, r1_status, r1_target_submission_date, r1_actual_submission_date, r2_status, r2_target_submission_date, r2_actual_submission_date, r2_target_approval_date, r2_actual_approval_date, is_critical' as any)
           .eq('is_active', true)
           .range(from, from + PAGE - 1);
         if (!data || data.length === 0) break;
@@ -123,6 +124,27 @@ export default function DashboardPage() {
   const filteredSubtests = useMemo(
     () => teamFilter === 'all' ? subtests : subtests.filter(s => s.team === teamFilter),
     [subtests, teamFilter],
+  );
+
+  const criticalItems = useMemo(
+    () =>
+      filteredSubtests
+        .filter((s) => s.is_critical)
+        .map((s) => {
+          const t2Done = s.t2_status === 'Done';
+          const t1Done = s.t1_status === 'Done';
+          const status = t2Done ? 'T2 Done' : t1Done ? 'T1 Done' : (s.t1_status || s.pred_status || 'Planned');
+          return {
+            id: s.id,
+            primary: s.item_no,
+            secondary: s.mos_code,
+            system: sysCodeById.get(s.system_id) ?? '—',
+            team: s.team ?? null,
+            subcontractor: s.subcontractor_name,
+            status,
+          };
+        }),
+    [filteredSubtests, sysCodeById],
   );
 
   // ───── Top KPIs
@@ -574,63 +596,16 @@ export default function DashboardPage() {
       {/* ─── Recent Comments Feed ─── */}
       <RecentSubtestComments />
 
-      {/* ─── Bottom split ─── */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-              Top 10 Overdue Subtests
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {topOverdue.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">No overdue subtests 🎉</p>
-            ) : (
-              <div className="overflow-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>System</TableHead>
-                      <TableHead>Item No</TableHead>
-                      <TableHead>MOS</TableHead>
-                      <TableHead>Subcon</TableHead>
-                      <TableHead className="text-right">Days Late</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {topOverdue.map(({ s, delay }) => (
-                      <TableRow
-                        key={s.id}
-                        className="cursor-pointer"
-                        onClick={() => navigate(`/subtests/${s.id}`)}
-                      >
-                        <TableCell className="font-medium">{sysCodeById.get(s.system_id) ?? '—'}</TableCell>
-                        <TableCell>{s.item_no}</TableCell>
-                        <TableCell className="text-xs">{s.mos_code}</TableCell>
-                        <TableCell className="text-xs truncate max-w-[120px]">{s.subcontractor_name ?? '—'}</TableCell>
-                        <TableCell className="text-right font-semibold text-destructive">+{delay}d</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Status Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-2">
-              <PieBlock title="T1" data={t1Pie} chartConfig={chartConfig} onSliceClick={(name) => goSubtests({ t1_status: name })} />
-              <PieBlock title="T2" data={t2Pie} chartConfig={chartConfig} onSliceClick={(name) => goSubtests({ t2_status: name })} />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* ─── Critical Items (full width) ─── */}
+      <CriticalItemsPanel
+        title="Critical Subtests"
+        items={criticalItems}
+        rowHref={(id) => `/subtests/${id}`}
+        rawDataHref="/subtests"
+        primaryLabel="Item No"
+        secondaryLabel="MOS"
+        showSystem
+      />
 
     </div>
   );

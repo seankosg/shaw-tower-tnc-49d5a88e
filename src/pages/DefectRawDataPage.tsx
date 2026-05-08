@@ -526,7 +526,7 @@ export default function DefectRawDataPage() {
     'team', 'subcontractor', 'subsub', 'hdecPic', 'hdecEng',
     'level', 'mainTrade', 'subTrade', 'workType', 'classificationSource',
     'status', 'closureStatus', 'issueNo', 'subcontractorIssueNo',
-    'dateStart', 'dateEnd', 'dateField',
+    'dateStart', 'dateEnd', 'dateField', 'critical',
   ];
 
   useEffect(() => {
@@ -571,6 +571,7 @@ export default function DefectRawDataPage() {
       closureStatus: 'closure_status',
       issueNo: 'issue_no',
       subcontractorIssueNo: 'subcontractor_issue_no',
+      critical: 'is_critical',
     };
     // Merge: keep saved column filters except those that the URL is going to override.
     // Previously, the presence of ANY URL filter wiped all saved column filters.
@@ -774,6 +775,46 @@ export default function DefectRawDataPage() {
       meta: { isSelectColumn: true },
     };
 
+    const criticalColumn: ColumnDef<DefectRawRow> = {
+      id: 'is_critical',
+      accessorKey: 'is_critical',
+      header: 'Critical',
+      size: 70,
+      enableSorting: true,
+      enableColumnFilter: true,
+      filterFn: multiSelectFilterFn,
+      meta: {
+        filterType: 'multi-select',
+        filterOptions: [
+          { value: 'true', label: 'Critical' },
+          { value: 'false', label: 'Non-critical' },
+        ],
+      },
+      accessorFn: (r) => ((r as any).is_critical ? 'true' : 'false'),
+      cell: ({ row }) => {
+        const checked = !!(row.original as any).is_critical;
+        return (
+          <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+            <Checkbox
+              checked={checked}
+              onCheckedChange={async (c) => {
+                const next = !!c;
+                const id = row.original.id;
+                setItems((prev) => prev.map((r) => (r.id === id ? ({ ...r, is_critical: next } as any) : r)));
+                const { error } = await (supabase as any).from('defect_items').update({ is_critical: next }).eq('id', id);
+                if (error) {
+                  setItems((prev) => prev.map((r) => (r.id === id ? ({ ...r, is_critical: !next } as any) : r)));
+                  toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
+                }
+              }}
+              aria-label="Mark as critical"
+              className="h-3.5 w-3.5"
+            />
+          </span>
+        );
+      },
+    };
+
     const dataColumns: ColumnDef<DefectRawRow>[] = DEFECT_RAW_FIELDS.map((field) => {
       // ─── Virtual Stage Progress column (Start → Completion → Closure pip pipeline) ───
       if (field === 'stage_progress') {
@@ -973,7 +1014,7 @@ export default function DefectRawDataPage() {
         } as ColumnDef<DefectRawRow>;
       });
 
-    return [selectColumn, ...dataColumns, ...dynamicColumns];
+    return [selectColumn, criticalColumn, ...dataColumns, ...dynamicColumns];
   }, [getLabel, optionFields, commentSummary, navigate, dataDate, fieldConfigRows, items]);
 
   // List of all column ids actually present in the table (static + dynamic)
@@ -983,9 +1024,9 @@ export default function DefectRawDataPage() {
   );
 
   const columnVisibility = useMemo<VisibilityState>(() => {
-    const visibility: VisibilityState = { __select: true };
+    const visibility: VisibilityState = { __select: true, is_critical: true };
     for (const id of allColumnIds) {
-      if (id === '__select') continue;
+      if (id === '__select' || id === 'is_critical') continue;
       if (id === 'issue_no' || id === 'stage_progress') visibility[id] = true;
       else visibility[id] = isFieldVisible(id);
     }
@@ -993,7 +1034,7 @@ export default function DefectRawDataPage() {
   }, [allColumnIds, isFieldVisible]);
 
   const columnOrder = useMemo(() => {
-    const PINNED_FRONT = ['__select', 'issue_no', 'stage_progress'];
+    const PINNED_FRONT = ['__select', 'is_critical', 'issue_no', 'stage_progress'];
     const remaining = allColumnIds.filter((id) => !PINNED_FRONT.includes(id));
     return [...PINNED_FRONT, ...sortFieldNames(remaining)];
   }, [allColumnIds, sortFieldNames]);
