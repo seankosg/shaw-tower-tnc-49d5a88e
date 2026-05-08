@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   applyBulkDuplicate, type BulkEntity, type DuplicateOptions,
 } from '@/lib/bulk-actions';
+import { BULK_CHUNK_ROWS, chunkArray } from '@/lib/bulk-edit';
 
 interface Props {
   open: boolean;
