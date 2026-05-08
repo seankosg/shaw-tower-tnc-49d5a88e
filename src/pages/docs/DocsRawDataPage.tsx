@@ -538,12 +538,12 @@ export default function DocsRawDataPage() {
   }, [augmentedItems, dashboardParams]);
   const clearDashboardFilter = useCallback(() => {
     const next = new URLSearchParams(searchParams);
-    ['status', 'overdue', 'stage', 'team', 'trade'].forEach((k) => next.delete(k));
+    ['status', 'overdue', 'stage', 'team', 'trade', 'bucket'].forEach((k) => next.delete(k));
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
   // ─── State persistence (localStorage) ───
-  const DOCS_DRILLDOWN_PARAMS = ['status', 'overdue', 'stage', 'team', 'trade', 'q'];
+  const DOCS_DRILLDOWN_PARAMS = ['status', 'overdue', 'stage', 'team', 'trade', 'q', 'bucket'];
   useEffect(() => {
     setStateLoaded(false);
     const isDrilldown = DOCS_DRILLDOWN_PARAMS.some((p) => searchParams.has(p));
