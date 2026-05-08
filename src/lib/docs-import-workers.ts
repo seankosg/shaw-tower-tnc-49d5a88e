@@ -176,6 +176,9 @@ export const abdAdapter: ImporterAdapter<ParsedDocsRow> = {
         source_upload_id: ctx.batchId,
         data_source_type: 'excel_import',
         updated_by: ctx.userId,
+        // Reimport = restore intent: revive any soft-deleted row so it
+        // becomes visible again in Raw Data after a successful update.
+        is_active: true,
       };
 
       if (existing) {
