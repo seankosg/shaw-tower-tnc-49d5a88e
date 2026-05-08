@@ -56,28 +56,25 @@ export async function getEditableScopeMap(
     return out;
   }
 
-  const fnName = entity === 'subtest' ? 'get_subtest_edit_scope' : 'get_defect_edit_scope';
-  const idArg = entity === 'subtest' ? '_subtest_id' : '_defect_id';
-
-  // Limit fan-out to ~16 parallel RPCs at a time
-  const CONC = 16;
-  let i = 0;
-  while (i < ids.length) {
-    const slice = ids.slice(i, i + CONC);
+  // Batched RPC: one round-trip per chunk of ids (vs. one per row previously).
+  const fnName = entity === 'subtest' ? 'get_subtest_edit_scope_bulk' : 'get_defect_edit_scope_bulk';
+  const CHUNK = 500;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
     // eslint-disable-next-line no-await-in-loop
-    const results = await Promise.all(
-      slice.map((id) =>
-        (supabase as any).rpc(fnName, { _user_id: userId, [idArg]: id }),
-      ),
-    );
-    slice.forEach((id, idx) => {
-      const { data, error } = results[idx];
-      const scope: EditableScope = error ? 'none' : (data as EditableScope) ?? 'none';
+    const { data, error } = await (supabase as any).rpc(fnName, { _user_id: userId, _ids: slice });
+    const byId = new Map<string, EditableScope>();
+    if (!error) {
+      for (const row of (data as any[]) ?? []) {
+        byId.set(row.id, (row.scope as EditableScope) ?? 'none');
+      }
+    }
+    for (const id of slice) {
+      const scope: EditableScope = byId.get(id) ?? 'none';
       out.byId[id] = scope;
       if (scope === 'none') out.skippedIds.push(id);
       else out.editableIds.push(id);
-    });
-    i += CONC;
+    }
   }
   return out;
 }

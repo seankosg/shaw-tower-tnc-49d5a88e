@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   applyBulkDuplicate, type BulkEntity, type DuplicateOptions,
 } from '@/lib/bulk-actions';
+import { BULK_CHUNK_ROWS, chunkArray } from '@/lib/bulk-edit';
 
 interface Props {
   open: boolean;
@@ -38,11 +39,22 @@ export function BulkDuplicateDialog({ open, onOpenChange, entity, rows, editable
     if (!user) return;
     setBusy(true);
     try {
-      const r = await applyBulkDuplicate({ entity, rows: editableRows, options: opts, userId: user.id });
+      const batches = chunkArray(editableRows, BULK_CHUNK_ROWS);
+      let succeeded = 0;
+      let failed = 0;
+      for (let i = 0; i < batches.length; i++) {
+        if (batches.length > 1) {
+          toast({ title: `Duplicating… (batch ${i + 1}/${batches.length})`, description: `${succeeded} created so far.` });
+        }
+        // eslint-disable-next-line no-await-in-loop
+        const r = await applyBulkDuplicate({ entity, rows: batches[i], options: opts, userId: user.id });
+        succeeded += r.succeeded;
+        failed += r.failed;
+      }
       toast({
         title: 'Duplicate complete',
-        description: `${r.succeeded} new row${r.succeeded === 1 ? '' : 's'} created${r.failed ? ` · ${r.failed} failed` : ''}${skipped ? ` · ${skipped} skipped (no permission)` : ''}.`,
-        variant: r.failed > 0 && r.succeeded === 0 ? 'destructive' : 'default',
+        description: `${succeeded} new row${succeeded === 1 ? '' : 's'} created${failed ? ` · ${failed} failed` : ''}${skipped ? ` · ${skipped} skipped (no permission)` : ''}.`,
+        variant: failed > 0 && succeeded === 0 ? 'destructive' : 'default',
       });
       onOpenChange(false);
       onDone();

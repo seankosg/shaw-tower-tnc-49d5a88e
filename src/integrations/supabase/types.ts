@@ -3481,6 +3481,13 @@ export type Database = {
         Args: { _defect_id: string; _user_id: string }
         Returns: string
       }
+      get_defect_edit_scope_bulk: {
+        Args: { _ids: string[]; _user_id: string }
+        Returns: {
+          id: string
+          scope: string
+        }[]
+      }
       get_subtest_comment_summary: {
         Args: { _subtest_ids: string[] }
         Returns: {
@@ -3496,6 +3503,13 @@ export type Database = {
       get_subtest_edit_scope: {
         Args: { _subtest_id: string; _user_id: string }
         Returns: string
+      }
+      get_subtest_edit_scope_bulk: {
+        Args: { _ids: string[]; _user_id: string }
+        Returns: {
+          id: string
+          scope: string
+        }[]
       }
       get_user_team: {
         Args: { _user_id: string }

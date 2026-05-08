@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import {
-  applyBulkUpdate, BULK_EDIT_MAX_ROWS, type BulkEditableField, type BulkUpdateRequest,
+  applyBulkUpdate, BULK_CHUNK_ROWS, chunkArray, type BulkEditableField, type BulkUpdateRequest,
 } from '@/lib/bulk-edit';
 import {
   copyRowsAsTsv, exportSelectedToXlsx, getEditableScopeMap,
@@ -88,7 +88,8 @@ export function BulkActionBar<TRow extends { id: string }>({
   const [isAdmin, setIsAdmin] = useState(false);
 
   const count = selectedRows.length;
-  const overLimit = count > BULK_EDIT_MAX_ROWS;
+  const chunkCount = Math.max(1, Math.ceil(count / BULK_CHUNK_ROWS));
+  const willChunk = count > BULK_CHUNK_ROWS;
   const editableCount = editableIds.length;
   const skippedCount = Math.max(0, count - editableCount);
 
@@ -167,18 +168,28 @@ export function BulkActionBar<TRow extends { id: string }>({
 
     setSubmitting(true);
     try {
-      const result = await applyBulkUpdate({
-        table, ids: selectedRows.map((r) => r.id), field: field.field, value: computedValue,
-        userId: user.id, changeSource: 'bulk_edit',
-      });
-      const blocked = result.failed;
-      const ok = result.succeeded;
+      const allIds = selectedRows.map((r) => r.id);
+      const batches = chunkArray(allIds, BULK_CHUNK_ROWS);
+      let ok = 0;
+      let blocked = 0;
+      for (let i = 0; i < batches.length; i++) {
+        if (batches.length > 1) {
+          toast({ title: `Applying… (batch ${i + 1}/${batches.length})`, description: `${ok} updated so far.` });
+        }
+        // eslint-disable-next-line no-await-in-loop
+        const result = await applyBulkUpdate({
+          table, ids: batches[i], field: field.field, value: computedValue,
+          userId: user.id, changeSource: 'bulk_edit',
+        });
+        ok += result.succeeded;
+        blocked += result.failed;
+      }
       toast({
         title: blocked > 0 ? 'Partially applied' : 'Bulk edit applied',
         description: `${ok} updated${blocked > 0 ? `, ${blocked} blocked by permission` : ''}.`,
         variant: blocked > 0 && ok === 0 ? 'destructive' : 'default',
       });
-      onApplied({ field: field.field, value: computedValue, ids: selectedRows.map((r) => r.id) });
+      onApplied({ field: field.field, value: computedValue, ids: allIds });
       setConfirmOpen(false);
       reset();
     } catch (err) {
@@ -239,9 +250,9 @@ export function BulkActionBar<TRow extends { id: string }>({
                 </>
               )}
             </span>
-            {overLimit && (
-              <span className="text-xs text-destructive">
-                Max {BULK_EDIT_MAX_ROWS} rows. Refine your selection.
+            {willChunk && (
+              <span className="text-xs text-muted-foreground">
+                · Will run in {chunkCount} batches of {BULK_CHUNK_ROWS}
               </span>
             )}
           </div>
@@ -294,7 +305,7 @@ export function BulkActionBar<TRow extends { id: string }>({
 
             <Button
               size="sm"
-              disabled={!field || overLimit || (valueIsEmpty && !setBlank) || (field?.inputType === 'select' && valueIsUnset && !setBlank)}
+              disabled={!field || submitting || (valueIsEmpty && !setBlank) || (field?.inputType === 'select' && valueIsUnset && !setBlank)}
               onClick={() => setConfirmOpen(true)}
             >
               Apply
@@ -308,19 +319,34 @@ export function BulkActionBar<TRow extends { id: string }>({
                 size="sm"
                 variant="outline"
                 className="h-8 font-bold text-destructive hover:text-destructive"
-                disabled={editableCount === 0 || overLimit || submitting}
+                disabled={editableCount === 0 || submitting}
                 onClick={async () => {
                   if (!user) return;
                   setSubmitting(true);
                   try {
-                    const { error } = await (supabase as any)
-                      .from(table)
-                      .update({ is_critical: true })
-                      .in('id', editableIds);
-                    if (error) throw error;
+                    const batches = chunkArray(editableIds, BULK_CHUNK_ROWS);
+                    let ok = 0;
+                    let failed = 0;
+                    for (let i = 0; i < batches.length; i++) {
+                      const slice = batches[i];
+                      if (batches.length > 1) {
+                        toast({ title: `Registering… (batch ${i + 1}/${batches.length})`, description: `${ok} done so far.` });
+                      }
+                      // eslint-disable-next-line no-await-in-loop
+                      const { data, error } = await (supabase as any)
+                        .from(table)
+                        .update({ is_critical: true })
+                        .in('id', slice)
+                        .select('id');
+                      if (error) { failed += slice.length; continue; }
+                      const n = (data ?? []).length;
+                      ok += n;
+                      failed += slice.length - n;
+                    }
                     toast({
                       title: 'Registered to Critical Issue Board',
-                      description: `${editableCount} item${editableCount === 1 ? '' : 's'} registered${skippedCount > 0 ? `, ${skippedCount} skipped (no permission)` : ''}.`,
+                      description: `${ok} item${ok === 1 ? '' : 's'} registered${failed > 0 ? `, ${failed} blocked` : ''}${skippedCount > 0 ? `, ${skippedCount} skipped (no permission)` : ''}.`,
+                      variant: failed > 0 && ok === 0 ? 'destructive' : 'default',
                     });
                     onApplied({ field: 'is_critical', value: 'true', ids: editableIds });
                     onMutated?.();
@@ -340,7 +366,7 @@ export function BulkActionBar<TRow extends { id: string }>({
               size="sm"
               variant="outline"
               className="h-8"
-              disabled={editableCount === 0 || overLimit}
+              disabled={editableCount === 0 || submitting}
               onClick={() => setDuplicateOpen(true)}
             >
               <Copy className="mr-1.5 h-3.5 w-3.5" /> Duplicate
@@ -350,7 +376,7 @@ export function BulkActionBar<TRow extends { id: string }>({
               size="sm"
               variant="outline"
               className="h-8"
-              disabled={editableCount === 0 || overLimit || reassignFields.length === 0}
+              disabled={editableCount === 0 || submitting || reassignFields.length === 0}
               onClick={() => setReassignOpen(true)}
             >
               <Users className="mr-1.5 h-3.5 w-3.5" /> Reassign
