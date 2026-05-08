@@ -62,11 +62,23 @@ export function computeDashboardFilteredIds(
     byItem.set(r.item_id, arr);
   }
 
+  // For ABD trade filter, build id -> trade map from raw rows
+  const tradeById = new Map<string, string>();
+  if (module === 'abd' && params.trade) {
+    for (const r of rows) {
+      const t = resolveTrade(r as any);
+      tradeById.set(r.id, t === '—' ? '' : (t as string));
+    }
+  }
+
   const out = new Set<string>();
   for (const [id, recs] of byItem) {
     if (params.team) {
       const teamMatch = recs.some((r: any) => (r.team ?? '') === params.team);
       if (!teamMatch) continue;
+    }
+    if (module === 'abd' && params.trade) {
+      if ((tradeById.get(id) ?? '') !== params.trade) continue;
     }
     if (params.status === 'completed') {
       const ok = recs.some((r: any) => r.stage_key === lastKey && r.is_done);
@@ -79,9 +91,6 @@ export function computeDashboardFilteredIds(
     if (params.stage) {
       const stageRec = recs.find((r: any) => r.stage_key === params.stage);
       if (!stageRec) continue;
-      // For a stage filter, show rows where the stage is NOT yet done
-      // (i.e. work outstanding for that stage) — matches the dashboard
-      // intent of "remaining in stage X". Done items aren't actionable.
       if (stageRec.is_done) continue;
     }
     out.add(id);
@@ -98,5 +107,6 @@ export function dashboardFilterLabel(module: DocModule, p: DashboardFilterParams
     parts.push(`Stage: ${def?.label ?? p.stage}`);
   }
   if (p.team) parts.push(`Team: ${p.team}`);
+  if (p.trade) parts.push(`Trade: ${p.trade}`);
   return parts.length ? parts.join(' · ') : null;
 }
