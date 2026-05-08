@@ -168,18 +168,28 @@ export function BulkActionBar<TRow extends { id: string }>({
 
     setSubmitting(true);
     try {
-      const result = await applyBulkUpdate({
-        table, ids: selectedRows.map((r) => r.id), field: field.field, value: computedValue,
-        userId: user.id, changeSource: 'bulk_edit',
-      });
-      const blocked = result.failed;
-      const ok = result.succeeded;
+      const allIds = selectedRows.map((r) => r.id);
+      const batches = chunkArray(allIds, BULK_CHUNK_ROWS);
+      let ok = 0;
+      let blocked = 0;
+      for (let i = 0; i < batches.length; i++) {
+        if (batches.length > 1) {
+          toast({ title: `Applying… (batch ${i + 1}/${batches.length})`, description: `${ok} updated so far.` });
+        }
+        // eslint-disable-next-line no-await-in-loop
+        const result = await applyBulkUpdate({
+          table, ids: batches[i], field: field.field, value: computedValue,
+          userId: user.id, changeSource: 'bulk_edit',
+        });
+        ok += result.succeeded;
+        blocked += result.failed;
+      }
       toast({
         title: blocked > 0 ? 'Partially applied' : 'Bulk edit applied',
         description: `${ok} updated${blocked > 0 ? `, ${blocked} blocked by permission` : ''}.`,
         variant: blocked > 0 && ok === 0 ? 'destructive' : 'default',
       });
-      onApplied({ field: field.field, value: computedValue, ids: selectedRows.map((r) => r.id) });
+      onApplied({ field: field.field, value: computedValue, ids: allIds });
       setConfirmOpen(false);
       reset();
     } catch (err) {
