@@ -404,3 +404,153 @@ function StageCard({
     </button>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// ABD-only: 3 main buckets + 3 sub-cards inside Submission Required
+function AbdBucketGrid({
+  dist, accent, tradeFilter, onNavigate,
+}: {
+  dist: AbdBucketDistribution;
+  accent: Accent;
+  tradeFilter: string | null;
+  onNavigate: (params: Record<string, string>) => void;
+}) {
+  const total = dist.total || 1;
+  const baseParams: Record<string, string> = tradeFilter ? { trade: tradeFilter } : {};
+  const pct = (n: number) => Math.round((n / total) * 100);
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-3">
+      <BucketCard
+        label="Approved"
+        value={dist.approved}
+        pct={pct(dist.approved)}
+        tone="green"
+        accent={accent}
+        onClick={() => onNavigate({ ...baseParams, bucket: 'approved' })}
+      />
+      <BucketCard
+        label="Under Review"
+        value={dist.under_review}
+        pct={pct(dist.under_review)}
+        tone="amber"
+        accent={accent}
+        onClick={() => onNavigate({ ...baseParams, bucket: 'under_review' })}
+      />
+      <SubmissionRequiredCard
+        dist={dist.submission_required}
+        totalAll={total}
+        accent={accent}
+        baseParams={baseParams}
+        onNavigate={onNavigate}
+      />
+    </div>
+  );
+}
+
+function BucketCard({
+  label, value, pct, tone, accent, onClick,
+}: {
+  label: string;
+  value: number;
+  pct: number;
+  tone: 'green' | 'amber' | 'sky';
+  accent: Accent;
+  onClick: () => void;
+}) {
+  const valueClass =
+    tone === 'green' ? 'text-emerald-600 dark:text-emerald-400'
+    : tone === 'amber' ? 'text-amber-600 dark:text-amber-400'
+    : 'text-sky-600 dark:text-sky-400';
+  const barClass =
+    tone === 'green' ? 'bg-emerald-500'
+    : tone === 'amber' ? 'bg-amber-500'
+    : 'bg-sky-500';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'group relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-card p-4 text-left transition',
+        'hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2',
+        accent.ring,
+      )}
+    >
+      <span className={cn('absolute inset-y-0 left-0 w-1', barClass)} />
+      <div className="pl-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="flex items-baseline justify-between gap-2 pl-1">
+        <span className={cn('text-3xl font-semibold tabular-nums leading-none', valueClass)}>
+          {value.toLocaleString()}
+        </span>
+        <span className="text-xs text-muted-foreground tabular-nums">{pct}%</span>
+      </div>
+      <Progress value={pct} className="h-1.5" />
+    </button>
+  );
+}
+
+function SubmissionRequiredCard({
+  dist, totalAll, accent, baseParams, onNavigate,
+}: {
+  dist: AbdBucketDistribution['submission_required'];
+  totalAll: number;
+  accent: Accent;
+  baseParams: Record<string, string>;
+  onNavigate: (params: Record<string, string>) => void;
+}) {
+  const pct = totalAll ? Math.round((dist.total / totalAll) * 100) : 0;
+  const subItems: { label: string; value: number; bucket: string }[] = [
+    { label: '1st', value: dist.sub1, bucket: 'sub1_required' },
+    { label: '2nd', value: dist.sub2, bucket: 'sub2_required' },
+    { label: '3rd', value: dist.sub3, bucket: 'sub3_required' },
+  ];
+  return (
+    <div
+      className={cn(
+        'relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-card p-4',
+        'focus-visible:ring-2',
+        accent.ring,
+      )}
+    >
+      <span className="absolute inset-y-0 left-0 w-1 bg-sky-500" />
+      <button
+        type="button"
+        onClick={() => onNavigate({ ...baseParams, bucket: 'submission_required' })}
+        className="group flex flex-col gap-2 text-left transition hover:opacity-90 focus-visible:outline-none"
+      >
+        <div className="pl-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Submission Required
+        </div>
+        <div className="flex items-baseline justify-between gap-2 pl-1">
+          <span className="text-3xl font-semibold tabular-nums leading-none text-sky-600 dark:text-sky-400">
+            {dist.total.toLocaleString()}
+          </span>
+          <span className="text-xs text-muted-foreground tabular-nums">{pct}%</span>
+        </div>
+        <Progress value={pct} className="h-1.5" />
+      </button>
+      <div className="mt-2 grid grid-cols-3 gap-1.5 pl-1">
+        {subItems.map((s) => (
+          <button
+            key={s.bucket}
+            type="button"
+            onClick={() => onNavigate({ ...baseParams, bucket: s.bucket })}
+            className={cn(
+              'group flex flex-col items-start rounded-md border bg-muted/30 px-2 py-1.5 text-left transition',
+              'hover:-translate-y-0.5 hover:shadow-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2',
+              accent.ring,
+            )}
+            title={`${s.label} Submission Required`}
+          >
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {s.label}
+            </span>
+            <span className="text-base font-semibold tabular-nums text-foreground">
+              {s.value.toLocaleString()}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
