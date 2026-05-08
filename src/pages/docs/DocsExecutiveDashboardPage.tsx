@@ -239,12 +239,18 @@ function ModuleSection({
                 Completion and overdue counts per stage. Click a stage to view items.
               </p>
             </div>
-            <Tabs value={team} onValueChange={setTeam}>
-              <TabsList className="h-8">
-                <TabsTrigger value="__all__" className="h-7 px-3 text-xs">All Teams</TabsTrigger>
-                {teams.map((t) => (
-                  <TabsTrigger key={t} value={t} className="h-7 px-3 text-xs">{t}</TabsTrigger>
-                ))}
+            <Tabs value={tab} onValueChange={setTab}>
+              <TabsList className="h-8 flex flex-wrap gap-0.5">
+                <TabsTrigger value="__all__" className="h-7 px-3 text-xs">All</TabsTrigger>
+                {isAbd
+                  ? trades.map((t) => (
+                      <TabsTrigger key={t} value={t} className="h-7 px-2 text-xs">
+                        {TRADE_SHORT[t]}
+                      </TabsTrigger>
+                    ))
+                  : teams.map((t) => (
+                      <TabsTrigger key={t} value={t} className="h-7 px-3 text-xs">{t}</TabsTrigger>
+                    ))}
               </TabsList>
             </Tabs>
           </div>
@@ -259,7 +265,10 @@ function ModuleSection({
             )}
             {stages.map((s) => {
               const params: Record<string, string> = { stage: s.stage_key };
-              if (team !== '__all__') params.team = team;
+              if (tab !== '__all__') {
+                if (isAbd) params.trade = tab;
+                else params.team = tab;
+              }
               return (
                 <StageCard
                   key={s.stage_key}
