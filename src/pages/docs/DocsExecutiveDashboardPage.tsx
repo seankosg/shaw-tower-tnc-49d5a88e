@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 import { resolveTrade, TRADE_OPTIONS, type TradeCategory } from '@/lib/docs-trade';
 import {
   loadExecutiveDashboard, type ExecDashboardSnapshot,
