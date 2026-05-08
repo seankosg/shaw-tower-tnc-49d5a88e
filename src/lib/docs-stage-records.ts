@@ -65,10 +65,9 @@ export const ABD_STAGE_DEFS: StageDefinition[] = [
 
 export const OMM_STAGE_DEFS: StageDefinition[] = [
   { key: 'omm.draft_submission', label: 'Draft Submission', order: 1 },
-  { key: 'omm.draft_review',     label: 'Draft Review',     order: 2 },
+  { key: 'omm.draft_approval',   label: 'Draft Approval',   order: 2 },
   { key: 'omm.final_submission', label: 'Final Submission', order: 3 },
-  { key: 'omm.final_review',     label: 'Final Review',     order: 4 },
-  { key: 'omm.completed',        label: 'Completed',        order: 5 },
+  { key: 'omm.final_approval',   label: 'Final Approval',   order: 4 },
 ];
 
 export const WARRANTY_STAGE_DEFS: StageDefinition[] = [
