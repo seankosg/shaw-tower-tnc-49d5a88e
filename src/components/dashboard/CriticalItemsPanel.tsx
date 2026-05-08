@@ -139,6 +139,9 @@ export function CriticalItemsPanel({
                   {showTradeColumns && <TableHead>Work Type</TableHead>}
                   <TableHead>{groupBy === 'team' ? 'Subcontractor' : 'Team'}</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Team</TableHead>
+                  <TableHead>Registered At</TableHead>
+                  <TableHead>Registered By</TableHead>
                   {user && <TableHead className="w-[44px]" />}
                 </TableRow>
               </TableHeader>
