@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import {
-  applyBulkUpdate, BULK_EDIT_MAX_ROWS, type BulkEditableField, type BulkUpdateRequest,
+  applyBulkUpdate, BULK_CHUNK_ROWS, chunkArray, type BulkEditableField, type BulkUpdateRequest,
 } from '@/lib/bulk-edit';
 import {
   copyRowsAsTsv, exportSelectedToXlsx, getEditableScopeMap,
