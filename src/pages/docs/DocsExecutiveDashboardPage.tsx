@@ -370,16 +370,18 @@ function SummaryTile({
 }
 
 function StageCard({
-  label, total, done, overdue, accent, onClick,
+  label, total, done, overdue, remaining, accent, onClick,
 }: {
   label: string;
   total: number;
   done: number;
   overdue: number;
+  remaining?: number;
   accent: Accent;
   onClick?: () => void;
 }) {
   const pct = total ? Math.round((done / total) * 100) : 0;
+  const rem = remaining ?? Math.max(0, total - done);
   return (
     <button
       type="button"
@@ -392,13 +394,20 @@ function StageCard({
     >
       {/* left accent bar */}
       <span className={cn('absolute inset-y-0 left-0 w-1', accent.bar)} />
-      <div className="flex items-start justify-between gap-2 pl-1">
-        <span className="text-xs font-medium leading-tight text-foreground">{label}</span>
-        {overdue > 0 && (
-          <Badge variant="destructive" className="h-5 shrink-0 px-1.5 text-[10px]">
-            {overdue} overdue
-          </Badge>
+      {/* OD chip top-right */}
+      <span
+        className={cn(
+          'absolute right-2 top-2 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+          overdue > 0
+            ? 'bg-destructive/10 text-destructive'
+            : 'bg-muted text-muted-foreground',
         )}
+        title={`Overdue ${overdue} / Remaining ${rem}`}
+      >
+        OD {overdue}/{rem}
+      </span>
+      <div className="flex items-start justify-between gap-2 pl-1 pr-14">
+        <span className="text-xs font-medium leading-tight text-foreground">{label}</span>
       </div>
       <div className="flex items-baseline justify-between gap-2 pl-1">
         <div className="flex items-baseline gap-1">
