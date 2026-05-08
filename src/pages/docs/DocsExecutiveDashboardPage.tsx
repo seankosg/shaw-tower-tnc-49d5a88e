@@ -105,10 +105,11 @@ export default function DocsExecutiveDashboardPage() {
 
 // ─────────────────────────────────────────────────────────────────────
 function ModuleSection({
-  module, records, onNavigate,
+  module, records, abdRows, onNavigate,
 }: {
   module: DocModule;
   records: DocsStageRecord[];
+  abdRows: any[];
   onNavigate: (m: DocModule, params?: Record<string, string>) => void;
 }) {
   const Icon = MODULE_ICON[module];
