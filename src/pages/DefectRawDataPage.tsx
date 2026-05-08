@@ -1013,7 +1013,7 @@ export default function DefectRawDataPage() {
         } as ColumnDef<DefectRawRow>;
       });
 
-    return [selectColumn, ...dataColumns, ...dynamicColumns];
+    return [selectColumn, criticalColumn, ...dataColumns, ...dynamicColumns];
   }, [getLabel, optionFields, commentSummary, navigate, dataDate, fieldConfigRows, items]);
 
   // List of all column ids actually present in the table (static + dynamic)
