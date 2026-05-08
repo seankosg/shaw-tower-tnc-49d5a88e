@@ -27,6 +27,7 @@ import { MECHANICAL_COMPLETION_DDAY } from '@/lib/constants';
 import { formatDdMmm } from '@/lib/format';
 import { exportDefectPlanActualToExcel } from '@/lib/defect-dashboard-excel-export';
 import { RecentDefectComments } from '@/components/dashboard/RecentDefectComments';
+import { CriticalItemsPanel } from '@/components/dashboard/CriticalItemsPanel';
 import {
   NONE_LABEL,
   aggregateDefectPlanActualByGroup,
