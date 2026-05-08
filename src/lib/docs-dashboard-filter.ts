@@ -123,6 +123,7 @@ export function computeDashboardFilteredIds(
 const ABD_BUCKET_LABEL: Record<string, string> = {
   approved: 'Approved',
   under_review: 'Under Review',
+  done: 'Done (Approved + Under Review)',
   submission_required: 'Submission Required',
   sub1_required: '1st Submission Required',
   sub2_required: '2nd Submission Required',
