@@ -142,6 +142,8 @@ export default function DashboardPage() {
             team: s.team ?? null,
             subcontractor: s.subcontractor_name,
             status,
+            registered_at: (s as any).critical_marked_at ?? null,
+            registered_by_name: (s as any).critical_marked_by_name ?? null,
           };
         }),
     [filteredSubtests, sysCodeById],
