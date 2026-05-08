@@ -34,6 +34,7 @@ export interface SubtestForDashboard {
   pred_actual_date?: string | null;
   predecessor_status_raw?: string | null;
   team?: string | null;
+  is_critical?: boolean;
   // R1 — Subcontractor → HDEC
   r1_status?: ReportStatus | null;
   r1_target_submission_date?: string | null;
