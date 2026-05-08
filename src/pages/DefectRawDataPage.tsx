@@ -774,6 +774,46 @@ export default function DefectRawDataPage() {
       meta: { isSelectColumn: true },
     };
 
+    const criticalColumn: ColumnDef<DefectRawRow> = {
+      id: 'is_critical',
+      accessorKey: 'is_critical',
+      header: 'Critical',
+      size: 70,
+      enableSorting: true,
+      enableColumnFilter: true,
+      filterFn: multiSelectFilterFn,
+      meta: {
+        filterType: 'multi-select',
+        filterOptions: [
+          { value: 'true', label: 'Critical' },
+          { value: 'false', label: 'Non-critical' },
+        ],
+      },
+      accessorFn: (r) => ((r as any).is_critical ? 'true' : 'false'),
+      cell: ({ row }) => {
+        const checked = !!(row.original as any).is_critical;
+        return (
+          <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+            <Checkbox
+              checked={checked}
+              onCheckedChange={async (c) => {
+                const next = !!c;
+                const id = row.original.id;
+                setItems((prev) => prev.map((r) => (r.id === id ? ({ ...r, is_critical: next } as any) : r)));
+                const { error } = await (supabase as any).from('defect_items').update({ is_critical: next }).eq('id', id);
+                if (error) {
+                  setItems((prev) => prev.map((r) => (r.id === id ? ({ ...r, is_critical: !next } as any) : r)));
+                  toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
+                }
+              }}
+              aria-label="Mark as critical"
+              className="h-3.5 w-3.5"
+            />
+          </span>
+        );
+      },
+    };
+
     const dataColumns: ColumnDef<DefectRawRow>[] = DEFECT_RAW_FIELDS.map((field) => {
       // ─── Virtual Stage Progress column (Start → Completion → Closure pip pipeline) ───
       if (field === 'stage_progress') {
