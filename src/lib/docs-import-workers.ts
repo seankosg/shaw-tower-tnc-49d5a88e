@@ -698,6 +698,8 @@ export const sparePartAdapter: ImporterAdapter<ParsedSparePartRow> = {
         source_upload_id: ctx.batchId,
         data_source_type: 'excel_import',
         updated_by: ctx.userId,
+        // Reimport = restore intent (see ABD adapter).
+        is_active: true,
       };
 
       if (existing) {
