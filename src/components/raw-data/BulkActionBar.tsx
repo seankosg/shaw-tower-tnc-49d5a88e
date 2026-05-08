@@ -356,7 +356,7 @@ export function BulkActionBar<TRow extends { id: string }>({
               size="sm"
               variant="outline"
               className="h-8"
-              disabled={editableCount === 0 || overLimit}
+              disabled={editableCount === 0 || submitting}
               onClick={() => setDuplicateOpen(true)}
             >
               <Copy className="mr-1.5 h-3.5 w-3.5" /> Duplicate
@@ -366,7 +366,7 @@ export function BulkActionBar<TRow extends { id: string }>({
               size="sm"
               variant="outline"
               className="h-8"
-              disabled={editableCount === 0 || overLimit || reassignFields.length === 0}
+              disabled={editableCount === 0 || submitting || reassignFields.length === 0}
               onClick={() => setReassignOpen(true)}
             >
               <Users className="mr-1.5 h-3.5 w-3.5" /> Reassign
