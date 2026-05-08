@@ -240,9 +240,9 @@ export function BulkActionBar<TRow extends { id: string }>({
                 </>
               )}
             </span>
-            {overLimit && (
-              <span className="text-xs text-destructive">
-                Max {BULK_EDIT_MAX_ROWS} rows. Refine your selection.
+            {willChunk && (
+              <span className="text-xs text-muted-foreground">
+                · Will run in {chunkCount} batches of {BULK_CHUNK_ROWS}
               </span>
             )}
           </div>
