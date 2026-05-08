@@ -102,7 +102,8 @@ export function CriticalItemsPanel({
   }
 
   const tradeColCount = showTradeColumns ? 3 : 0;
-  const totalCols = 2 + (secondaryLabel ? 1 : 0) + (showSystem ? 1 : 0) + tradeColCount + 2 + (user ? 1 : 0);
+  // group + primary + (secondary?) + (system?) + trade(0|3) + other-group + status + team + registered-at + registered-by + (action?)
+  const totalCols = 2 + (secondaryLabel ? 1 : 0) + (showSystem ? 1 : 0) + tradeColCount + 2 + 3 + (user ? 1 : 0);
 
   return (
     <Card>
