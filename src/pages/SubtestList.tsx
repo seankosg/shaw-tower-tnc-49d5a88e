@@ -46,6 +46,7 @@ import {
 } from '@/lib/stage-metrics';
 import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
+import { CriticalPendingBar } from '@/components/raw-data/CriticalPendingBar';
 import type { BulkEditableField } from '@/lib/bulk-edit';
 import { META_FIELD_NAMES, type CommentSummary, EMPTY_SUMMARY, isMetaField } from '@/lib/meta-fields';
 import { MetaCell } from '@/components/raw-data/MetaCell';
