@@ -1458,6 +1458,15 @@ export default function DefectRawDataPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <CriticalPendingBar
+        pending={criticalPending}
+        table="defect_items"
+        onApplied={(applied) => {
+          setItems((prev) => prev.map((r) => (applied.has(r.id) ? ({ ...r, is_critical: applied.get(r.id)! } as any) : r)));
+          setCriticalPending(new Map());
+        }}
+        onDiscard={() => setCriticalPending(new Map())}
+      />
     </div>
   );
 }
