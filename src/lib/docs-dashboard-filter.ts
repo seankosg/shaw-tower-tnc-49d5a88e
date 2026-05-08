@@ -10,12 +10,14 @@ import {
   buildAbdStageRecords, buildOmmStageRecords, buildWarrantyStageRecords,
   asOfStartOfDay, ALL_STAGE_DEFS, type DocModule,
 } from '@/lib/docs-stage-records';
+import { resolveTrade } from '@/lib/docs-trade';
 
 export interface DashboardFilterParams {
   status?: string | null;   // 'completed'
   overdue?: string | null;  // '1'
   stage?: string | null;    // stage_key (eg 'abd.sub1_submission')
   team?: string | null;
+  trade?: string | null;    // ABD only — TradeCategory string
 }
 
 export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterParams {
@@ -24,11 +26,12 @@ export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterP
     overdue: sp.get('overdue'),
     stage: sp.get('stage'),
     team: sp.get('team'),
+    trade: sp.get('trade'),
   };
 }
 
 export function hasAnyDashboardFilter(p: DashboardFilterParams): boolean {
-  return !!(p.status || p.overdue || p.stage || p.team);
+  return !!(p.status || p.overdue || p.stage || p.team || p.trade);
 }
 
 const BUILDERS: Record<DocModule, (rows: any[], asOf: Date) => any[]> = {
