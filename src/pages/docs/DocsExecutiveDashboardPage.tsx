@@ -19,8 +19,8 @@ import {
 } from '@/lib/docs-executive-dashboard-data';
 import {
   ALL_STAGE_DEFS, MODULE_LABEL, MODULE_RAW_ROUTE,
-  computeStageProgress, summariseByItem,
-  type DocModule, type DocsStageRecord,
+  computeStageProgress, summariseByItem, computeAbdBucketDistribution,
+  type DocModule, type DocsStageRecord, type AbdBucketDistribution,
 } from '@/lib/docs-stage-records';
 
 const MODULE_ICON: Record<DocModule, typeof FileText> = {
