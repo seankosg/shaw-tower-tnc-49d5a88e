@@ -592,6 +592,7 @@ export default function SubtestList() {
   const [systems, setSystems] = useState<{ id: string; system_code: string }[]>([]);
   const [dataDate, setDataDate] = useState<string | null>(null);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [criticalPending, setCriticalPending] = useState<Map<string, boolean>>(new Map());
   const [commentSummary, setCommentSummary] = useState<Record<string, CommentSummary>>({});
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportMode, setExportMode] = useState<'single' | 'per-subcon'>('single');
