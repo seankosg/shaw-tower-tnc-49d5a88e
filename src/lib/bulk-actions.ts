@@ -34,10 +34,14 @@ export async function getEditableScopeMap(
       (supabase as any).from('docs_drawings').select('id, team').in('id', ids),
     ]);
     const roles = new Set<string>(((roleRows as any[]) ?? []).map((r) => r.role));
-    const isFull = roles.has('admin') || roles.has('superuser');
+    const isAdminFull = roles.has('admin') || roles.has('superuser');
+    const profileActive = (profileRow as any)?.is_active !== false;
+    // Mirror docs_drawings RLS UPDATE policy: admin/superuser/senior_user/user have full
+    // edit on every row; d_superuser is restricted to own-team rows.
+    const isFull = isAdminFull
+      || (profileActive && (roles.has('senior_user') || roles.has('user')));
     const isDSuper = roles.has('d_superuser');
     const userTeam = (profileRow as any)?.team ?? null;
-    const profileActive = (profileRow as any)?.is_active !== false;
     const teamById = new Map<string, string | null>(
       ((drawingRows as any[]) ?? []).map((r) => [r.id, r.team ?? null]),
     );
