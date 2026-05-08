@@ -8,7 +8,7 @@
 
 import {
   buildAbdStageRecords, buildOmmStageRecords, buildWarrantyStageRecords,
-  asOfStartOfDay, ALL_STAGE_DEFS, type DocModule,
+  asOfStartOfDay, ALL_STAGE_DEFS, classifyAbdRowBucket, type DocModule,
 } from '@/lib/docs-stage-records';
 import { resolveTrade } from '@/lib/docs-trade';
 
@@ -18,6 +18,8 @@ export interface DashboardFilterParams {
   stage?: string | null;    // stage_key (eg 'abd.sub1_submission')
   team?: string | null;
   trade?: string | null;    // ABD only — TradeCategory string
+  /** ABD bucket: approved | under_review | submission_required | sub1_required | sub2_required | sub3_required */
+  bucket?: string | null;
 }
 
 export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterParams {
@@ -27,11 +29,12 @@ export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterP
     stage: sp.get('stage'),
     team: sp.get('team'),
     trade: sp.get('trade'),
+    bucket: sp.get('bucket'),
   };
 }
 
 export function hasAnyDashboardFilter(p: DashboardFilterParams): boolean {
-  return !!(p.status || p.overdue || p.stage || p.team || p.trade);
+  return !!(p.status || p.overdue || p.stage || p.team || p.trade || p.bucket);
 }
 
 const BUILDERS: Record<DocModule, (rows: any[], asOf: Date) => any[]> = {
@@ -71,6 +74,14 @@ export function computeDashboardFilteredIds(
     }
   }
 
+  // For ABD bucket filter, build id -> bucket map from raw rows (SSOT)
+  const bucketById = new Map<string, string>();
+  if (module === 'abd' && params.bucket) {
+    for (const r of rows) {
+      bucketById.set(r.id, classifyAbdRowBucket(r));
+    }
+  }
+
   const out = new Set<string>();
   for (const [id, recs] of byItem) {
     if (params.team) {
@@ -79,6 +90,15 @@ export function computeDashboardFilteredIds(
     }
     if (module === 'abd' && params.trade) {
       if ((tradeById.get(id) ?? '') !== params.trade) continue;
+    }
+    if (module === 'abd' && params.bucket) {
+      const b = bucketById.get(id) ?? '';
+      const want = params.bucket;
+      if (want === 'submission_required') {
+        if (b !== 'sub1_required' && b !== 'sub2_required' && b !== 'sub3_required') continue;
+      } else if (b !== want) {
+        continue;
+      }
     }
     if (params.status === 'completed') {
       const ok = recs.some((r: any) => r.stage_key === lastKey && r.is_done);
@@ -98,6 +118,15 @@ export function computeDashboardFilteredIds(
   return out;
 }
 
+const ABD_BUCKET_LABEL: Record<string, string> = {
+  approved: 'Approved',
+  under_review: 'Under Review',
+  submission_required: 'Submission Required',
+  sub1_required: '1st Submission Required',
+  sub2_required: '2nd Submission Required',
+  sub3_required: '3rd Submission Required',
+};
+
 export function dashboardFilterLabel(module: DocModule, p: DashboardFilterParams): string | null {
   const parts: string[] = [];
   if (p.status === 'completed') parts.push('Completed');
@@ -106,6 +135,7 @@ export function dashboardFilterLabel(module: DocModule, p: DashboardFilterParams
     const def = ALL_STAGE_DEFS[module].find((d) => d.key === p.stage);
     parts.push(`Stage: ${def?.label ?? p.stage}`);
   }
+  if (p.bucket) parts.push(ABD_BUCKET_LABEL[p.bucket] ?? p.bucket);
   if (p.team) parts.push(`Team: ${p.team}`);
   if (p.trade) parts.push(`Trade: ${p.trade}`);
   return parts.length ? parts.join(' · ') : null;

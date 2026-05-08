@@ -1,52 +1,71 @@
-## 진단
+## 목표
 
-대시보드 카드/스테이지 클릭 → Raw Data로 이동할 때 `?status=`, `?overdue=`, `?stage=`, `?team=`, `?trade=` 같은 drill-down URL 파라미터가 붙음. Raw Data는 이를 받아서 `dashboardItems` / `tableData`로 행을 좁히지만, **localStorage에 저장된 column filters / sorting / global search가 그대로 살아있어서** 두 필터가 AND로 합쳐짐.
+ABD 대시보드 Stage Progress를 **`computeOverallStatus`(SSOT)** 기반의 **상호배타 3대 버킷 + Submission Required 내 3개 서브카드**로 재구성. 합계 = `is_active=true` 도면 총수(3,791)와 일치.
 
-→ 사용자 체감: "대시보드 숫자(예: Done 120건)와 Raw Data 결과(예: 17건)가 안 맞음", "기존 필터가 리셋되지 않고 합쳐짐".
+## 버킷 구조
 
-T&C(`SubtestList.tsx` L622~712)는 이미 `SUBTEST_DRILLDOWN_PARAMS` 배열로 drill-down URL 파라미터 진입을 감지해 저장된 column filters/sorting/global을 폐기하는 로직이 있음. ABD/OMM/Warranty Raw Data에는 동일 로직이 없음.
-
-## 변경 (3개 파일)
-
-각 페이지 내 localStorage 복원 useEffect를 다음 패턴으로 정렬 (T&C와 동치):
-
-```ts
-const DOCS_DRILLDOWN_PARAMS = [
-  'status','overdue','stage','team','trade','q',
-  // OMM/Warranty 전용 추가: 'mismatch','resub'
-];
-const isDrilldown = DOCS_DRILLDOWN_PARAMS.some(p => searchParams.has(p));
-
-// localStorage 읽은 후:
-if (!isDrilldown) {
-  // 기존처럼 sorting/columnFilters/globalFilter 복원
-} else {
-  // sorting=DEFAULT, columnFilters=[], globalFilter='' 강제
-  // columnSizing은 유지 (UX)
-}
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│ ABD Stage Distribution                              Total: 3,791     │
+├──────────────┬───────────────┬───────────────────────────────────────┤
+│  Approved    │ Under Review  │ Submission Required                   │
+│    258       │    1,630      │    1,903                              │
+│   6.8%       │   43.0%       │   50.2%                               │
+│              │               │ ┌─────────┬─────────┬─────────┐       │
+│              │               │ │ 1st     │ 2nd     │ 3rd     │       │
+│              │               │ │ 1,889   │   14    │    0    │       │
+│              │               │ └─────────┴─────────┴─────────┘       │
+└──────────────┴───────────────┴───────────────────────────────────────┘
 ```
 
-### 1) `src/pages/docs/DocsRawDataPage.tsx`
-- 파라미터 목록: `status, overdue, stage, team, trade, q`
-- 545~572 줄 useEffect 안에서 isDrilldown 분기 추가
-- deps에 이미 `searchParams` 포함되어 있어 OK
+## 버킷 정의 (Raw Data Current Status SSOT)
 
-### 2) `src/pages/docs/DocsOMMRawDataPage.tsx`
-- 파라미터 목록: `status, overdue, stage, team, q, mismatch, resub`
-- 587~626 줄 useEffect 안에서 isDrilldown 분기 추가
-- deps에 `searchParams` 추가 필요 (현재 `[storageKey]`만 있음 → `[storageKey, searchParams]`)
-- isDrilldown일 때 mismatchOnly/resubFilter는 URL 값으로만 결정 (이미 처리되고 있음)
+| 카드 | 정의 | 데이터 |
+|---|---|---|
+| **Approved** | sub1/2/3 어느 cycle이든 approval_status='A' | 258 |
+| **Under Review** | (Approved 아님) 가장 최근 제출 후 응답 대기 — 1차+2차+3차 합산 | 1,630 |
+| **Submission Required (총)** | (Approved/UR 아님) 제출 필요한 상태 합산 | 1,903 |
+| └ 1st | sub1 미제출 | 1,889 |
+| └ 2nd | sub1=B/C, sub2 미제출 | 14 |
+| └ 3rd | sub2=B/C, sub3 미제출 | 0 |
 
-### 3) `src/pages/docs/DocsWarrantyRawDataPage.tsx`
-- 파라미터 목록: `status, overdue, stage, team, q` (+ Warranty가 mismatch/resub 사용 시 추가)
-- L576 부근 동일 패턴, deps에 `searchParams` 보장
+검증: 258 + 1,630 + 1,903 = **3,791** ✓ / 1,889 + 14 + 0 = 1,903 ✓
 
-## 동작 결과
-- 대시보드 카드/스테이지 클릭 → Raw Data 진입 시 column filter/sort/global search가 깨끗이 초기화되고 URL drill-down 필터만 작용
-- 사용자가 직접 Raw Data로 들어오면(URL 파라미터 없음) 기존처럼 저장된 필터 복원
-- "Clear" 버튼으로 dashboard 필터 제거 후엔 그 시점 컬럼 필터를 그대로 사용 (현재 동작 유지)
+## 변경 사항
+
+### 1. `src/lib/docs-stage-records.ts`
+- 새 함수 `computeAbdBucketDistribution(rows, dataDate)` 추가
+  - `is_active=true` 도면만 대상
+  - `computeOverallStatus` + `computeNextActiveCycle` (`docs-status.ts`) 사용 → SSOT
+  - 반환:
+    ```ts
+    {
+      total: number,
+      approved: number,
+      under_review: number,
+      submission_required: { total: number, sub1: number, sub2: number, sub3: number }
+    }
+    ```
+- 기존 `computeStageProgress`(7-stage milestone)는 유지
+
+### 2. `src/components/docs/DocsModuleFocusCard.tsx` (또는 신규 컴포넌트)
+- ABD 모듈 카드의 Stage Progress 섹션을 위 3-버킷 + 3-서브카드 레이아웃으로 교체
+- 메인 카드 3개: Approved / Under Review / Submission Required(합산)
+- Submission Required 카드 내부 우측/하단에 작은 1st·2nd·3rd 서브카드
+- 각 카드/서브카드 클릭 시 Raw Data로 이동:
+  - Approved → `?status=A`
+  - Under Review → `?status=Under Review`
+  - Submission Required (총) → `?stage=submission_required`
+  - 1st/2nd/3rd → `?stage=1st_submission` / `2nd_submission` / `3rd_submission`
+
+### 3. `src/pages/docs/DocsRawDataPage.tsx`
+- URL `stage` 파라미터 매핑 확장:
+  - `submission_required` → overall_status ∈ {Planned, S.Delayed, WIP, B, C} & 다음 미제출 cycle 존재
+  - `1st_submission` → sub1 미제출
+  - `2nd_submission` → sub1=B/C & sub2 미제출
+  - `3rd_submission` → sub2=B/C & sub3 미제출
+- `DOCS_DRILLDOWN_PARAMS`에 `stage` 이미 포함 (변경 없음)
 
 ## 범위 외
-- 대시보드 카드의 숫자 산식 변경 없음 (이미 `summariseByItem`/`computeStageProgress` 사용 — Raw Data와 동일 데이터 소스)
-- 모바일/Defect/T&C 변경 없음
-- DB / 권한 변경 없음
+- OMM, Warranty, Spare Part 카드 (별도 작업)
+- KPI strip / Attention / Submission Trend 섹션 변경 없음

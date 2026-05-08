@@ -19,8 +19,8 @@ import {
 } from '@/lib/docs-executive-dashboard-data';
 import {
   ALL_STAGE_DEFS, MODULE_LABEL, MODULE_RAW_ROUTE,
-  computeStageProgress, summariseByItem,
-  type DocModule, type DocsStageRecord,
+  computeStageProgress, summariseByItem, computeAbdBucketDistribution,
+  type DocModule, type DocsStageRecord, type AbdBucketDistribution,
 } from '@/lib/docs-stage-records';
 
 const MODULE_ICON: Record<DocModule, typeof FileText> = {
@@ -63,6 +63,7 @@ export default function DocsExecutiveDashboardPage() {
   }, [asOf]);
 
   const records = snap?.records ?? [];
+  const abdRows = snap?.abdRows ?? [];
 
   const goRaw = (m: DocModule, params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
@@ -96,7 +97,7 @@ export default function DocsExecutiveDashboardPage() {
       {loading && !snap && <p className="text-sm text-muted-foreground">Loading…</p>}
 
       {MODULES.map((m) => (
-        <ModuleSection key={m} module={m} records={records} onNavigate={goRaw} />
+        <ModuleSection key={m} module={m} records={records} abdRows={abdRows} onNavigate={goRaw} />
       ))}
     </div>
   );
@@ -104,10 +105,11 @@ export default function DocsExecutiveDashboardPage() {
 
 // ─────────────────────────────────────────────────────────────────────
 function ModuleSection({
-  module, records, onNavigate,
+  module, records, abdRows, onNavigate,
 }: {
   module: DocModule;
   records: DocsStageRecord[];
+  abdRows: any[];
   onNavigate: (m: DocModule, params?: Record<string, string>) => void;
 }) {
   const Icon = MODULE_ICON[module];
@@ -164,6 +166,21 @@ function ModuleSection({
   const pct = total ? Math.round((done / total) * 100) : 0;
 
   const stages = useMemo(() => computeStageProgress(filteredRecords), [filteredRecords]);
+
+  // ABD-only bucket distribution (SSOT — matches Raw Data Current Status)
+  const abdRowsForTab = useMemo(() => {
+    if (!isAbd) return [] as any[];
+    if (tab === '__all__') return abdRows;
+    return abdRows.filter((row) => {
+      const t = resolveTrade(row as any);
+      const norm = t === '—' ? 'Other' : (t as string);
+      return norm === tab;
+    });
+  }, [abdRows, isAbd, tab]);
+  const abdBuckets: AbdBucketDistribution = useMemo(
+    () => computeAbdBucketDistribution(abdRowsForTab),
+    [abdRowsForTab],
+  );
 
   // Short trade labels for the tab list
   const TRADE_SHORT: Record<TradeCategory, string> = {
@@ -234,9 +251,13 @@ function ModuleSection({
         <div>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="text-sm font-semibold">Stage Progress</h3>
+              <h3 className="text-sm font-semibold">
+                {isAbd ? 'Stage Distribution' : 'Stage Progress'}
+              </h3>
               <p className="text-xs text-muted-foreground">
-                Completion and overdue counts per stage. Click a stage to view items.
+                {isAbd
+                  ? 'Mutually-exclusive buckets — sum equals total. Click a bucket to view items.'
+                  : 'Completion and overdue counts per stage. Click a stage to view items.'}
               </p>
             </div>
             <Tabs value={tab} onValueChange={setTab}>
@@ -255,33 +276,41 @@ function ModuleSection({
             </Tabs>
           </div>
 
-          <div className={cn(
-            'grid gap-3',
-            stages.length <= 5 ? 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5'
-                                : 'sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7',
-          )}>
-            {stages.length === 0 && (
-              <p className="col-span-full py-6 text-center text-sm text-muted-foreground">No data.</p>
-            )}
-            {stages.map((s) => {
-              const params: Record<string, string> = { stage: s.stage_key };
-              if (tab !== '__all__') {
-                if (isAbd) params.trade = tab;
-                else params.team = tab;
-              }
-              return (
-                <StageCard
-                  key={s.stage_key}
-                  label={s.stage_label}
-                  total={s.total}
-                  done={s.done}
-                  overdue={s.overdue}
-                  accent={accent}
-                  onClick={() => onNavigate(module, params)}
-                />
-              );
-            })}
-          </div>
+          {isAbd ? (
+            <AbdBucketGrid
+              dist={abdBuckets}
+              accent={accent}
+              tradeFilter={tab === '__all__' ? null : tab}
+              onNavigate={(params) => onNavigate(module, params)}
+            />
+          ) : (
+            <div className={cn(
+              'grid gap-3',
+              stages.length <= 5 ? 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5'
+                                  : 'sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7',
+            )}>
+              {stages.length === 0 && (
+                <p className="col-span-full py-6 text-center text-sm text-muted-foreground">No data.</p>
+              )}
+              {stages.map((s) => {
+                const params: Record<string, string> = { stage: s.stage_key };
+                if (tab !== '__all__') {
+                  params.team = tab;
+                }
+                return (
+                  <StageCard
+                    key={s.stage_key}
+                    label={s.stage_label}
+                    total={s.total}
+                    done={s.done}
+                    overdue={s.overdue}
+                    accent={accent}
+                    onClick={() => onNavigate(module, params)}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -373,5 +402,155 @@ function StageCard({
       </div>
       <Progress value={pct} className="h-1.5" />
     </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ABD-only: 3 main buckets + 3 sub-cards inside Submission Required
+function AbdBucketGrid({
+  dist, accent, tradeFilter, onNavigate,
+}: {
+  dist: AbdBucketDistribution;
+  accent: Accent;
+  tradeFilter: string | null;
+  onNavigate: (params: Record<string, string>) => void;
+}) {
+  const total = dist.total || 1;
+  const baseParams: Record<string, string> = tradeFilter ? { trade: tradeFilter } : {};
+  const pct = (n: number) => Math.round((n / total) * 100);
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-3">
+      <BucketCard
+        label="Approved"
+        value={dist.approved}
+        pct={pct(dist.approved)}
+        tone="green"
+        accent={accent}
+        onClick={() => onNavigate({ ...baseParams, bucket: 'approved' })}
+      />
+      <BucketCard
+        label="Under Review"
+        value={dist.under_review}
+        pct={pct(dist.under_review)}
+        tone="amber"
+        accent={accent}
+        onClick={() => onNavigate({ ...baseParams, bucket: 'under_review' })}
+      />
+      <SubmissionRequiredCard
+        dist={dist.submission_required}
+        totalAll={total}
+        accent={accent}
+        baseParams={baseParams}
+        onNavigate={onNavigate}
+      />
+    </div>
+  );
+}
+
+function BucketCard({
+  label, value, pct, tone, accent, onClick,
+}: {
+  label: string;
+  value: number;
+  pct: number;
+  tone: 'green' | 'amber' | 'sky';
+  accent: Accent;
+  onClick: () => void;
+}) {
+  const valueClass =
+    tone === 'green' ? 'text-emerald-600 dark:text-emerald-400'
+    : tone === 'amber' ? 'text-amber-600 dark:text-amber-400'
+    : 'text-sky-600 dark:text-sky-400';
+  const barClass =
+    tone === 'green' ? 'bg-emerald-500'
+    : tone === 'amber' ? 'bg-amber-500'
+    : 'bg-sky-500';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'group relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-card p-4 text-left transition',
+        'hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2',
+        accent.ring,
+      )}
+    >
+      <span className={cn('absolute inset-y-0 left-0 w-1', barClass)} />
+      <div className="pl-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="flex items-baseline justify-between gap-2 pl-1">
+        <span className={cn('text-3xl font-semibold tabular-nums leading-none', valueClass)}>
+          {value.toLocaleString()}
+        </span>
+        <span className="text-xs text-muted-foreground tabular-nums">{pct}%</span>
+      </div>
+      <Progress value={pct} className="h-1.5" />
+    </button>
+  );
+}
+
+function SubmissionRequiredCard({
+  dist, totalAll, accent, baseParams, onNavigate,
+}: {
+  dist: AbdBucketDistribution['submission_required'];
+  totalAll: number;
+  accent: Accent;
+  baseParams: Record<string, string>;
+  onNavigate: (params: Record<string, string>) => void;
+}) {
+  const pct = totalAll ? Math.round((dist.total / totalAll) * 100) : 0;
+  const subItems: { label: string; value: number; bucket: string }[] = [
+    { label: '1st', value: dist.sub1, bucket: 'sub1_required' },
+    { label: '2nd', value: dist.sub2, bucket: 'sub2_required' },
+    { label: '3rd', value: dist.sub3, bucket: 'sub3_required' },
+  ];
+  return (
+    <div
+      className={cn(
+        'relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-card p-4',
+        'focus-visible:ring-2',
+        accent.ring,
+      )}
+    >
+      <span className="absolute inset-y-0 left-0 w-1 bg-sky-500" />
+      <button
+        type="button"
+        onClick={() => onNavigate({ ...baseParams, bucket: 'submission_required' })}
+        className="group flex flex-col gap-2 text-left transition hover:opacity-90 focus-visible:outline-none"
+      >
+        <div className="pl-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Submission Required
+        </div>
+        <div className="flex items-baseline justify-between gap-2 pl-1">
+          <span className="text-3xl font-semibold tabular-nums leading-none text-sky-600 dark:text-sky-400">
+            {dist.total.toLocaleString()}
+          </span>
+          <span className="text-xs text-muted-foreground tabular-nums">{pct}%</span>
+        </div>
+        <Progress value={pct} className="h-1.5" />
+      </button>
+      <div className="mt-2 grid grid-cols-3 gap-1.5 pl-1">
+        {subItems.map((s) => (
+          <button
+            key={s.bucket}
+            type="button"
+            onClick={() => onNavigate({ ...baseParams, bucket: s.bucket })}
+            className={cn(
+              'group flex flex-col items-start rounded-md border bg-muted/30 px-2 py-1.5 text-left transition',
+              'hover:-translate-y-0.5 hover:shadow-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2',
+              accent.ring,
+            )}
+            title={`${s.label} Submission Required`}
+          >
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {s.label}
+            </span>
+            <span className="text-base font-semibold tabular-nums text-foreground">
+              {s.value.toLocaleString()}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
