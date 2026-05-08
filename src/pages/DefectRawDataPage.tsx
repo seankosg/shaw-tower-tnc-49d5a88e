@@ -1701,6 +1701,15 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
           </TableBody>
         </Table>
       </div>
+      <CriticalPendingBar
+        pending={criticalPending}
+        table="defect_items"
+        onApplied={(applied) => {
+          setItems((prev) => prev.map((r) => (applied.has(r.id) ? ({ ...r, is_critical: applied.get(r.id)! } as any) : r)));
+          setCriticalPending(new Map());
+        }}
+        onDiscard={() => setCriticalPending(new Map())}
+      />
     </div>
   );
 }
