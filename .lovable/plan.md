@@ -1,34 +1,62 @@
-## 변경 범위
-ABD 섹션의 Stage Progress 탭만 팀 → 트레이드 기준으로 교체합니다. OMM, Warranty는 현재의 팀 탭을 유지합니다.
+## 목표
+T&C(Subtests)와 Defects의 Raw Data 첫 컬럼에 `Critical` 체크박스를 추가하고, 체크된 항목을 각 Dashboard 하단(Top 10 Overdue + Status Distribution 자리)에 가로 폭 전체로 표시. 팀/협력업체 필터와 연동.
 
-## 수정 파일
+## 1) DB 스키마 변경 (migration)
 
-### 1) `src/pages/docs/DocsExecutiveDashboardPage.tsx`
-`ModuleSection` 컴포넌트에 모듈별 분기 추가:
+- `subtests` 테이블: `is_critical BOOLEAN NOT NULL DEFAULT false` 컬럼 추가
+- `defects` 테이블: `is_critical BOOLEAN NOT NULL DEFAULT false` 컬럼 추가
+- 두 테이블에 부분 인덱스: `WHERE is_critical = true`
+- RLS는 기존 정책이 모든 컬럼에 자동 적용되므로 추가 정책 불필요. 단 D.Super User 등 기존 UPDATE 권한 정책으로 토글 가능 여부 확인됨(기존 UPDATE 정책 그대로 사용).
 
-- ABD인 경우:
-  - `@/lib/docs-trade`의 `resolveTrade({ trade, sheet_name })`로 각 record의 트레이드 도출
-    - ABD record는 `sheet_name` 필드가 없으므로 `document_no`를 폴백으로 사용 (`resolveTrade({ trade: r.trade, sheet_name: r.document_no })`)
-  - 탭 목록은 실제 데이터에 등장하는 트레이드만 `TRADE_OPTIONS` 순서로 노출
-  - `teamRecords` 대신 트레이드 필터된 `tradeRecords`로 stage 계산
-  - StageCard 클릭 시 URL 파라미터 `team` 대신 `trade=<TradeCategory>` 전달
-  - 라벨: All / Arch / Struct / Mech / Elec / Plumb / Fire / HVAC / Civil / Land / Int / Other (짧은 표기)
-  - `TabsList`는 모바일 대응 위해 `flex-wrap`
-- OMM, Warranty: 현재 팀 탭 로직 그대로 유지
+## 2) Raw Data 첫 컬럼 추가
 
-`DocsStageRecord` 타입에 `trade` 정보가 없으면 ABD record 빌드 시 trade를 함께 채워주는 보조가 필요. 가장 단순한 방법은 dashboard에서 다시 raw rows를 매핑하는 대신, `docs-stage-records.ts`에서 ABD 빌드 시 `trade`/`document_no`를 record에 보존하는 것 → 현재 record에 이미 `team`이 있으므로 `trade` 필드(또는 도출용 raw 필드) 추가가 필요한지 파일 확인 후 결정. 없다면 `buildAbdStageRecords`에서 `trade`(raw값) 및 `document_no`를 record에 포함하도록 가벼운 확장.
+### Subtests Raw Data (`src/pages/SubtestList.tsx` 또는 해당 raw-data 페이지)
+- 컬럼 정의 배열의 맨 앞에 `critical` 체크박스 컬럼 삽입
+  - 헤더: "Critical"
+  - 셀: `<Checkbox checked={row.is_critical} onCheckedChange={...}>` → `supabase.from('subtests').update({ is_critical }).eq('id', row.id)` 호출 후 로컬 상태 갱신
+  - 너비 고정(56px), pinned 아닌 일반 컬럼
+- 기존 컬럼 필터 시스템에 `is_critical` boolean 필터 추가(All / Critical only / Non-critical)
 
-### 2) `src/lib/docs-stage-records.ts` (필요 시)
-`DocsStageRecord` 인터페이스에 ABD용 옵션 필드 `trade?: string | null`, `document_no?: string | null` 추가하고, `buildAbdStageRecords`에서 채워줌. OMM/Warranty는 그대로.
+### Defects Raw Data (`src/pages/DefectRawDataPage.tsx`)
+- 동일 패턴으로 첫 컬럼 추가, `defects` 테이블 update
 
-### 3) `src/lib/docs-dashboard-filter.ts`
-`DashboardFilterParams`에 `trade?: string | null` 추가, `readDashboardFilterParams`/`hasAnyDashboardFilter`/라벨 처리 확장. ABD 모듈에 한해 `resolveTrade`로 매칭 필터 적용.
+## 3) Dashboard 하단 섹션 교체
 
-### 4) `src/pages/docs/DocsRawDataPage.tsx`
-대시보드 파라미터 처리 목록(`team`, `stage`, `status`, `overdue`)에 `trade` 추가하여 초기 필터로 적용 및 URL strip 로직 포함.
+### `src/pages/DashboardPage.tsx` (T&C Dashboard)
+- 라인 578~633의 `grid lg:grid-cols-2` 블록(Top 10 Overdue Subtests + Status Distribution) 삭제
+- 그 자리에 가로 풀폭 `<CriticalSubtestsPanel />` 카드 삽입
+
+### `src/pages/DefectDashboardPage.tsx` (Defect Dashboard)
+- 라인 599~602의 동일 grid 블록 삭제
+- 그 자리에 가로 풀폭 `<CriticalDefectsPanel />` 카드 삽입
+
+## 4) Critical 패널 컴포넌트 (신규)
+
+`src/components/dashboard/CriticalSubtestsPanel.tsx`
+`src/components/dashboard/CriticalDefectsPanel.tsx`
+
+각 패널 구성:
+- 헤더: "Critical Items" + 총 개수 배지 + "Open in Raw Data" 버튼(`?critical=1` 파라미터로 이동)
+- 필터 toolbar:
+  - Group by: Team / Subcontractor (Tabs)
+  - Team 멀티 셀렉트 / Subcontractor 멀티 셀렉트 (기존 raw-data 필터 옵션 재사용)
+- 본문: 그룹화된 테이블
+  - 그룹별 카운트 헤더(예: `Team A · 5 items`)
+  - 행: 핵심 식별자(System/Item No/MOS or Issue No/Level) + Subcontractor + 상태 + Days Late + 행 클릭 시 상세 페이지 이동
+- 데이터 소스: 이미 Dashboard에서 로딩한 `subtests`/`defects` 배열을 prop으로 받아 `is_critical = true` 필터링(추가 fetch 불필요)
+- 빈 상태: "No critical items"
+
+## 5) Raw Data ↔ Dashboard 연동
+
+- Critical 패널의 행/그룹 클릭 → Raw Data 페이지로 이동 시 `?critical=1&team=...` 또는 `?critical=1&subcontractor=...` 쿼리 추가
+- Raw Data 페이지가 마운트 시 `critical=1`이면 `is_critical` 컬럼 필터를 "Critical only"로 초기화. `team`/`subcontractor` 파라미터도 기존 dashboard-param 처리 로직에 추가
 
 ## 범위 외
-- 데이터베이스 변경 없음
-- OMM / Warranty 섹션 변경 없음
-- Module Summary 카드(Total/Done/Overdue) 변경 없음 — 현재대로 모듈 전체 기준 유지
-- Raw Data 페이지의 trade 컬럼 자체 필터 UI 변경 없음 (대시보드에서 넘긴 trade 파라미터를 초기값으로만 사용)
+- snapshot/import 파이프라인은 손대지 않음 (`is_critical`은 사용자 토글 전용, 기본값 false)
+- 일괄 편집 바(BulkEditBar)에는 추가하지 않음 — 추후 요청 시
+- Excel export 컬럼 추가 여부는 현재 요청에 없으므로 보류
+
+## 기술 노트
+- `Checkbox` 셀의 onClick 이벤트는 `e.stopPropagation()`로 행 네비게이션과 분리
+- 권한이 없는 사용자(예: guest)는 체크박스 disabled 처리
+- 패널 카드는 `lg:grid-cols-1` 단일 폭, 내부 그룹은 모바일에서 collapsible accordion 고려(우선 단순 테이블 구현, 모바일은 `overflow-auto`)
