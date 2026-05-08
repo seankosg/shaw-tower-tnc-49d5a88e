@@ -538,7 +538,7 @@ export default function DocsRawDataPage() {
   }, [augmentedItems, dashboardParams]);
   const clearDashboardFilter = useCallback(() => {
     const next = new URLSearchParams(searchParams);
-    ['status', 'overdue', 'stage', 'team'].forEach((k) => next.delete(k));
+    ['status', 'overdue', 'stage', 'team', 'trade'].forEach((k) => next.delete(k));
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 

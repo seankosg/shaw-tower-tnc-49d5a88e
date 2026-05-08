@@ -13,6 +13,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { resolveTrade, TRADE_OPTIONS, type TradeCategory } from '@/lib/docs-trade';
 import {
   loadExecutiveDashboard, type ExecDashboardSnapshot,
 } from '@/lib/docs-executive-dashboard-data';
@@ -112,33 +113,73 @@ function ModuleSection({
   const Icon = MODULE_ICON[module];
   const accent = MODULE_ACCENT[module];
 
+  const isAbd = module === 'abd';
+
   const moduleRecords = useMemo(
     () => records.filter((r) => r.document_type === module),
     [records, module],
   );
 
+  // Compute trade per record for ABD (uses document_no as sheet_name fallback)
+  const recordTrade = useMemo(() => {
+    if (!isAbd) return new Map<DocsStageRecord, string>();
+    const m = new Map<DocsStageRecord, string>();
+    for (const r of moduleRecords) {
+      const t = resolveTrade({ trade: r.trade, sheet_name: r.document_no });
+      m.set(r, t === '—' ? 'Other' : (t as string));
+    }
+    return m;
+  }, [moduleRecords, isAbd]);
+
+  // Tab options
   const teams = useMemo(() => uniqSorted(moduleRecords.map((r) => r.team)), [moduleRecords]);
-  const [team, setTeam] = useState<string>('__all__');
+  const trades = useMemo(() => {
+    if (!isAbd) return [] as TradeCategory[];
+    const present = new Set<string>();
+    for (const v of recordTrade.values()) present.add(v);
+    return TRADE_OPTIONS.filter((t) => present.has(t));
+  }, [recordTrade, isAbd]);
 
-  // Reset team if currently selected team disappears
+  const [tab, setTab] = useState<string>('__all__');
+
+  // Reset tab if currently selected value disappears
   useEffect(() => {
-    if (team !== '__all__' && !teams.includes(team)) setTeam('__all__');
-  }, [teams, team]);
+    if (tab === '__all__') return;
+    const valid = isAbd ? trades.includes(tab as TradeCategory) : teams.includes(tab);
+    if (!valid) setTab('__all__');
+  }, [teams, trades, tab, isAbd]);
 
-  // Team-filtered records — used for stage strip
-  const teamRecords = useMemo(
-    () => team === '__all__' ? moduleRecords : moduleRecords.filter((r) => (r.team ?? '') === team),
-    [moduleRecords, team],
-  );
+  // Filtered records — used for stage strip
+  const filteredRecords = useMemo(() => {
+    if (tab === '__all__') return moduleRecords;
+    if (isAbd) return moduleRecords.filter((r) => recordTrade.get(r) === tab);
+    return moduleRecords.filter((r) => (r.team ?? '') === tab);
+  }, [moduleRecords, tab, isAbd, recordTrade]);
 
-  // Module-level totals: NOT affected by team tab — module card shows project-wide totals
+  // Module-level totals: NOT affected by tab — shows project-wide totals
   const itemSummaries = useMemo(() => summariseByItem(moduleRecords), [moduleRecords]);
   const total = itemSummaries.length;
   const done = itemSummaries.filter((i) => i.is_completed).length;
   const overdue = itemSummaries.filter((i) => i.is_overdue).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
 
-  const stages = useMemo(() => computeStageProgress(teamRecords), [teamRecords]);
+  const stages = useMemo(() => computeStageProgress(filteredRecords), [filteredRecords]);
+
+  // Short trade labels for the tab list
+  const TRADE_SHORT: Record<TradeCategory, string> = {
+    'Architecture': 'Arch',
+    'Structure': 'Struct',
+    'Mechanical': 'Mech',
+    'Electrical': 'Elec',
+    'Plumbing': 'Plumb',
+    'Fire Protection': 'Fire',
+    'HVAC': 'HVAC',
+    'Civil': 'Civil',
+    'Landscape': 'Land',
+    'Interior': 'Int',
+    'Other': 'Other',
+  };
+
 
   return (
     <Card className="overflow-hidden">
@@ -198,12 +239,18 @@ function ModuleSection({
                 Completion and overdue counts per stage. Click a stage to view items.
               </p>
             </div>
-            <Tabs value={team} onValueChange={setTeam}>
-              <TabsList className="h-8">
-                <TabsTrigger value="__all__" className="h-7 px-3 text-xs">All Teams</TabsTrigger>
-                {teams.map((t) => (
-                  <TabsTrigger key={t} value={t} className="h-7 px-3 text-xs">{t}</TabsTrigger>
-                ))}
+            <Tabs value={tab} onValueChange={setTab}>
+              <TabsList className="h-8 flex flex-wrap gap-0.5">
+                <TabsTrigger value="__all__" className="h-7 px-3 text-xs">All</TabsTrigger>
+                {isAbd
+                  ? trades.map((t) => (
+                      <TabsTrigger key={t} value={t} className="h-7 px-2 text-xs">
+                        {TRADE_SHORT[t]}
+                      </TabsTrigger>
+                    ))
+                  : teams.map((t) => (
+                      <TabsTrigger key={t} value={t} className="h-7 px-3 text-xs">{t}</TabsTrigger>
+                    ))}
               </TabsList>
             </Tabs>
           </div>
@@ -218,7 +265,10 @@ function ModuleSection({
             )}
             {stages.map((s) => {
               const params: Record<string, string> = { stage: s.stage_key };
-              if (team !== '__all__') params.team = team;
+              if (tab !== '__all__') {
+                if (isAbd) params.trade = tab;
+                else params.team = tab;
+              }
               return (
                 <StageCard
                   key={s.stage_key}
