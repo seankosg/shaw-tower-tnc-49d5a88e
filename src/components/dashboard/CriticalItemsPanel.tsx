@@ -24,6 +24,16 @@ export interface CriticalRowItem {
   main_trade?: string | null;
   sub_trade?: string | null;
   work_type?: string | null;
+  registered_at?: string | null;
+  registered_by_name?: string | null;
+}
+
+function formatRegisteredAt(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 interface Props {
