@@ -251,9 +251,13 @@ function ModuleSection({
         <div>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="text-sm font-semibold">Stage Progress</h3>
+              <h3 className="text-sm font-semibold">
+                {isAbd ? 'Stage Distribution' : 'Stage Progress'}
+              </h3>
               <p className="text-xs text-muted-foreground">
-                Completion and overdue counts per stage. Click a stage to view items.
+                {isAbd
+                  ? 'Mutually-exclusive buckets — sum equals total. Click a bucket to view items.'
+                  : 'Completion and overdue counts per stage. Click a stage to view items.'}
               </p>
             </div>
             <Tabs value={tab} onValueChange={setTab}>
@@ -272,33 +276,41 @@ function ModuleSection({
             </Tabs>
           </div>
 
-          <div className={cn(
-            'grid gap-3',
-            stages.length <= 5 ? 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5'
-                                : 'sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7',
-          )}>
-            {stages.length === 0 && (
-              <p className="col-span-full py-6 text-center text-sm text-muted-foreground">No data.</p>
-            )}
-            {stages.map((s) => {
-              const params: Record<string, string> = { stage: s.stage_key };
-              if (tab !== '__all__') {
-                if (isAbd) params.trade = tab;
-                else params.team = tab;
-              }
-              return (
-                <StageCard
-                  key={s.stage_key}
-                  label={s.stage_label}
-                  total={s.total}
-                  done={s.done}
-                  overdue={s.overdue}
-                  accent={accent}
-                  onClick={() => onNavigate(module, params)}
-                />
-              );
-            })}
-          </div>
+          {isAbd ? (
+            <AbdBucketGrid
+              dist={abdBuckets}
+              accent={accent}
+              tradeFilter={tab === '__all__' ? null : tab}
+              onNavigate={(params) => onNavigate(module, params)}
+            />
+          ) : (
+            <div className={cn(
+              'grid gap-3',
+              stages.length <= 5 ? 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5'
+                                  : 'sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7',
+            )}>
+              {stages.length === 0 && (
+                <p className="col-span-full py-6 text-center text-sm text-muted-foreground">No data.</p>
+              )}
+              {stages.map((s) => {
+                const params: Record<string, string> = { stage: s.stage_key };
+                if (tab !== '__all__') {
+                  params.team = tab;
+                }
+                return (
+                  <StageCard
+                    key={s.stage_key}
+                    label={s.stage_label}
+                    total={s.total}
+                    done={s.done}
+                    overdue={s.overdue}
+                    accent={accent}
+                    onClick={() => onNavigate(module, params)}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
