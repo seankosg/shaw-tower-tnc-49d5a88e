@@ -300,7 +300,7 @@ function ModuleSection({
                 <p className="col-span-full py-6 text-center text-sm text-muted-foreground">No data.</p>
               )}
               {stages.map((s) => {
-                const params: Record<string, string> = { stage: s.stage_key };
+                const params: Record<string, string> = { stage: s.stage_key, overdue: '1' };
                 if (tab !== '__all__') {
                   params.team = tab;
                 }
@@ -311,6 +311,7 @@ function ModuleSection({
                     total={s.total}
                     done={s.done}
                     overdue={s.overdue}
+                    remaining={s.remaining}
                     accent={accent}
                     onClick={() => onNavigate(module, params)}
                   />
