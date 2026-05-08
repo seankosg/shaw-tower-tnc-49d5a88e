@@ -126,6 +126,27 @@ export default function DashboardPage() {
     [subtests, teamFilter],
   );
 
+  const criticalItems = useMemo(
+    () =>
+      filteredSubtests
+        .filter((s) => s.is_critical)
+        .map((s) => {
+          const t2Done = s.t2_status === 'Done';
+          const t1Done = s.t1_status === 'Done';
+          const status = t2Done ? 'T2 Done' : t1Done ? 'T1 Done' : (s.t1_status || s.pred_status || 'Planned');
+          return {
+            id: s.id,
+            primary: s.item_no,
+            secondary: s.mos_code,
+            system: sysCodeById.get(s.system_id) ?? '—',
+            team: s.team ?? null,
+            subcontractor: s.subcontractor_name,
+            status,
+          };
+        }),
+    [filteredSubtests, sysCodeById],
+  );
+
   // ───── Top KPIs
   const kpis = useMemo(() => {
     const total = filteredSubtests.length;
