@@ -109,7 +109,6 @@ export function CriticalItemsPanel({
               <TabsTrigger value="subcontractor" className="text-xs">By Subcontractor</TabsTrigger>
             </TabsList>
           </Tabs>
-          <Button size="sm" variant="outline" onClick={() => goRaw()}>Open in Raw Data</Button>
         </div>
       </CardHeader>
       <CardContent>
