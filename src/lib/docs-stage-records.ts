@@ -394,3 +394,66 @@ export function computeStageProgress(records: DocsStageRecord[]): StageProgress[
 export function asOfStartOfDay(d?: Date): Date {
   return startOfDay(d ?? new Date());
 }
+
+// ─── ABD bucket distribution (Raw Data Current Status SSOT) ──────────────
+// Buckets are mutually exclusive; sum equals total active ABD rows.
+export type AbdBucket = 'approved' | 'under_review' | 'sub1_required' | 'sub2_required' | 'sub3_required';
+
+export interface AbdBucketDistribution {
+  total: number;
+  approved: number;
+  under_review: number;
+  submission_required: {
+    total: number;
+    sub1: number;
+    sub2: number;
+    sub3: number;
+  };
+}
+
+/** Classify a single ABD row into one of the 5 mutually-exclusive buckets. */
+export function classifyAbdRowBucket(row: any): AbdBucket {
+  const norm = (v: any) => String(v ?? '').trim().toUpperCase();
+  const s1 = norm(row.sub1_approval_status);
+  const s2 = norm(row.sub2_approval_status);
+  const s3 = norm(row.sub3_approval_status);
+  // Approved: any cycle has status 'A'
+  if (s1 === 'A' || s2 === 'A' || s3 === 'A') return 'approved';
+  // Under Review: most-advanced submitted cycle has no B/C decision yet
+  if (row.sub3_submission_date && s3 !== 'B' && s3 !== 'C') return 'under_review';
+  if (s2 === 'B' || s2 === 'C') {
+    if (!row.sub3_submission_date) return 'sub3_required';
+  }
+  if (row.sub2_submission_date && s2 !== 'B' && s2 !== 'C') return 'under_review';
+  if (s1 === 'B' || s1 === 'C') {
+    if (!row.sub2_submission_date) return 'sub2_required';
+  }
+  if (row.sub1_submission_date && s1 !== 'B' && s1 !== 'C') return 'under_review';
+  return 'sub1_required';
+}
+
+export function computeAbdBucketDistribution(rows: any[]): AbdBucketDistribution {
+  const dist: AbdBucketDistribution = {
+    total: 0,
+    approved: 0,
+    under_review: 0,
+    submission_required: { total: 0, sub1: 0, sub2: 0, sub3: 0 },
+  };
+  for (const row of rows) {
+    dist.total++;
+    const b = classifyAbdRowBucket(row);
+    if (b === 'approved') dist.approved++;
+    else if (b === 'under_review') dist.under_review++;
+    else if (b === 'sub1_required') {
+      dist.submission_required.sub1++;
+      dist.submission_required.total++;
+    } else if (b === 'sub2_required') {
+      dist.submission_required.sub2++;
+      dist.submission_required.total++;
+    } else if (b === 'sub3_required') {
+      dist.submission_required.sub3++;
+      dist.submission_required.total++;
+    }
+  }
+  return dist;
+}
