@@ -571,6 +571,7 @@ export default function DefectRawDataPage() {
       closureStatus: 'closure_status',
       issueNo: 'issue_no',
       subcontractorIssueNo: 'subcontractor_issue_no',
+      critical: 'is_critical',
     };
     // Merge: keep saved column filters except those that the URL is going to override.
     // Previously, the presence of ANY URL filter wiped all saved column filters.
