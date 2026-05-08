@@ -99,8 +99,8 @@ export function CriticalItemsPanel({
               </TableHeader>
               <TableBody>
                 {grouped.map(([groupKey, rows]) => (
-                  <>
-                    <TableRow key={`grp-${groupKey}`} className="bg-muted/40 hover:bg-muted/40">
+                  <Fragment key={`grp-${groupKey}`}>
+                    <TableRow className="bg-muted/40 hover:bg-muted/40">
                       <TableCell
                         colSpan={2 + (secondaryLabel ? 1 : 0) + (showSystem ? 1 : 0) + 2}
                         className="py-1.5 text-xs font-semibold cursor-pointer"
@@ -128,7 +128,7 @@ export function CriticalItemsPanel({
                         <TableCell className="text-xs">{r.status || '—'}</TableCell>
                       </TableRow>
                     ))}
-                  </>
+                  </Fragment>
                 ))}
               </TableBody>
             </Table>
