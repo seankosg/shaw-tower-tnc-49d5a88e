@@ -596,10 +596,14 @@ export default function DefectDashboardPage() {
       <RecentDefectComments />
 
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card><CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><AlertTriangle className="h-4 w-4 text-destructive" />Top 10 Overdue Defects</CardTitle></CardHeader><CardContent>{topOverdue.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No overdue defects</p> : <Table><TableHeader><TableRow><TableHead>Sub Trade</TableHead><TableHead>Issue No</TableHead><TableHead>Level</TableHead><TableHead>Subcontractor</TableHead><TableHead className="text-right">Days Late</TableHead></TableRow></TableHeader><TableBody>{topOverdue.map(({ item, delay }) => <TableRow key={item.id} className="cursor-pointer" onClick={() => navigate(`/defects/${item.id}`)}><TableCell className="font-medium">{item.sub_trade || '—'}</TableCell><TableCell>{item.issue_no}</TableCell><TableCell>{item.area_level || '—'}</TableCell><TableCell className="max-w-[120px] truncate text-xs">{item.subcontractor_name || '—'}</TableCell><TableCell className="text-right font-semibold text-destructive">+{delay}d</TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-base">Status Distribution</CardTitle></CardHeader><CardContent><div className="grid grid-cols-2 gap-2"><PieBlock title="Completion" data={actualPie} onSliceClick={(name) => goRaw(name === 'Complete' ? { actualComplete: 'true' } : {})} /><PieBlock title="Closure" data={closurePie} onSliceClick={(name) => goRaw(name === 'Closed' ? { closureComplete: 'true' } : {})} /></div></CardContent></Card>
-      </div>
+      <CriticalItemsPanel
+        title="Critical Defects"
+        items={criticalDefects}
+        rowHref={(id) => `/defects/${id}`}
+        rawDataHref="/defects"
+        primaryLabel="Issue No"
+        secondaryLabel="Level"
+      />
     </div>
   );
 }
