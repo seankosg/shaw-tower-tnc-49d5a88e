@@ -613,12 +613,13 @@ export default function DefectDashboardPage() {
 
 
       <CriticalItemsPanel
-        title="Critical Defects"
         items={criticalDefects}
         rowHref={(id) => `/defects/${id}`}
         rawDataHref="/defects"
         primaryLabel="Issue No"
         secondaryLabel="Level"
+        showTradeColumns
+        tableName="defect_items"
       />
     </div>
   );
