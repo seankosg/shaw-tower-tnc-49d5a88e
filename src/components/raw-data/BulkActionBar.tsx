@@ -88,7 +88,8 @@ export function BulkActionBar<TRow extends { id: string }>({
   const [isAdmin, setIsAdmin] = useState(false);
 
   const count = selectedRows.length;
-  const overLimit = count > BULK_EDIT_MAX_ROWS;
+  const chunkCount = Math.max(1, Math.ceil(count / BULK_CHUNK_ROWS));
+  const willChunk = count > BULK_CHUNK_ROWS;
   const editableCount = editableIds.length;
   const skippedCount = Math.max(0, count - editableCount);
 
