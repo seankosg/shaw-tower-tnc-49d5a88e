@@ -74,7 +74,7 @@ const NUMBER_FIELDS = new Set<string>([
 ]);
 
 const ABC_FIELDS = new Set<string>(['draft_response_status', 'final_response_status']);
-const TRAINING_OPTIONS = ['Yes', 'No', 'N/A'];
+const TRAINING_OPTIONS = ['Done', 'Not Yet', 'N/S'];
 
 export default function DocsOMMDetailPage() {
   const { id } = useParams<{ id: string }>();

@@ -65,10 +65,9 @@ export const ABD_STAGE_DEFS: StageDefinition[] = [
 
 export const OMM_STAGE_DEFS: StageDefinition[] = [
   { key: 'omm.draft_submission', label: 'Draft Submission', order: 1 },
-  { key: 'omm.draft_review',     label: 'Draft Review',     order: 2 },
+  { key: 'omm.draft_approval',   label: 'Draft Approval',   order: 2 },
   { key: 'omm.final_submission', label: 'Final Submission', order: 3 },
-  { key: 'omm.final_review',     label: 'Final Review',     order: 4 },
-  { key: 'omm.completed',        label: 'Completed',        order: 5 },
+  { key: 'omm.final_approval',   label: 'Final Approval',   order: 4 },
 ];
 
 export const WARRANTY_STAGE_DEFS: StageDefinition[] = [
@@ -212,19 +211,19 @@ export function buildOmmStageRecords(rows: any[], asOf: Date, ): DocsStageRecord
     };
     const current_stage = status;
 
+    const dRes = String(row.draft_response_status ?? '').toUpperCase();
+    const fRes = String(row.final_response_status ?? '').toUpperCase();
     const stages = [
       { def: OMM_STAGE_DEFS[0], planned: row.draft_planned_date, actual: row.draft_actual_date,
         done: !!row.draft_actual_date },
-      { def: OMM_STAGE_DEFS[1], planned: row.draft_planned_date, actual: row.draft_response_date,
-        done: !!row.draft_response_date },
+      { def: OMM_STAGE_DEFS[1], planned: row.draft_planned_date,
+        actual: dRes === 'A' ? (row.draft_response_date ?? null) : null,
+        done: dRes === 'A' },
       { def: OMM_STAGE_DEFS[2], planned: row.final_planned_date, actual: row.final_actual_date,
         done: !!row.final_actual_date },
       { def: OMM_STAGE_DEFS[3], planned: row.final_response_planned_date ?? row.final_planned_date,
-        actual: row.final_response_actual_date,
-        done: !!row.final_response_actual_date },
-      { def: OMM_STAGE_DEFS[4], planned: row.final_response_planned_date ?? row.final_planned_date,
-        actual: status === 'Approved' ? row.final_response_actual_date : null,
-        done: status === 'Approved' },
+        actual: fRes === 'A' ? (row.final_response_actual_date ?? null) : null,
+        done: fRes === 'A' },
     ];
 
     for (const s of stages) {
