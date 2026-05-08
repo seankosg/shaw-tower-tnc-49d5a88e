@@ -963,23 +963,26 @@ export default function SubtestList() {
       },
       accessorFn: (r) => (r.is_critical ? 'true' : 'false'),
       cell: ({ row }) => {
-        const checked = !!row.original.is_critical;
+        const id = row.original.id;
+        const original = !!row.original.is_critical;
+        const pendingVal = criticalPending.get(id);
+        const checked = pendingVal !== undefined ? pendingVal : original;
+        const isPending = pendingVal !== undefined && pendingVal !== original;
         return (
           <span onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
             <Checkbox
               checked={checked}
-              onCheckedChange={async (c) => {
+              onCheckedChange={(c) => {
                 const next = !!c;
-                const id = row.original.id;
-                setData((prev) => prev.map((r) => (r.id === id ? { ...r, is_critical: next } : r)));
-                const { error } = await supabase.from('subtests').update({ is_critical: next } as any).eq('id', id);
-                if (error) {
-                  setData((prev) => prev.map((r) => (r.id === id ? { ...r, is_critical: !next } : r)));
-                  toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
-                }
+                setCriticalPending((prev) => {
+                  const map = new Map(prev);
+                  if (next === original) map.delete(id);
+                  else map.set(id, next);
+                  return map;
+                });
               }}
               aria-label="Mark as critical"
-              className="h-3.5 w-3.5"
+              className={`h-3.5 w-3.5 ${isPending ? 'ring-2 ring-amber-500/70 ring-offset-1 rounded-sm' : ''}`}
             />
           </span>
         );
