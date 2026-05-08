@@ -1069,7 +1069,7 @@ export default function DocsOMMRawDataPage() {
       { field: 'category_group', label: getLabel('category_group') || 'Category', inputType: 'select', group: 'Classification', options: opts('category_group') },
       { field: 'category', label: getLabel('category') || 'Sub-category', inputType: 'select', group: 'Classification', options: opts('category') },
       { field: 'team', label: getLabel('team') || 'Team', inputType: 'select', group: 'Classification', options: opts('team') },
-      { field: 'training_required', label: 'Training Required', inputType: 'select', group: 'Classification', options: opts('training_required') },
+      { field: 'training_required', label: 'Training', inputType: 'select', group: 'Classification', options: opts('training_required') },
       { field: 'subcontractor_name', label: getLabel('subcontractor_name') || 'Subcontractor', inputType: 'select', group: 'Assignment', options: opts('subcontractor_name') },
       { field: 'hdec_pic_name', label: 'HDEC PIC', inputType: 'select', group: 'Assignment', options: opts('hdec_pic_name') },
       { field: 'hdec_eng_name', label: 'HDEC ENG', inputType: 'select', group: 'Assignment', options: opts('hdec_eng_name') },
