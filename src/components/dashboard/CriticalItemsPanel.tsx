@@ -24,6 +24,16 @@ export interface CriticalRowItem {
   main_trade?: string | null;
   sub_trade?: string | null;
   work_type?: string | null;
+  registered_at?: string | null;
+  registered_by_name?: string | null;
+}
+
+function formatRegisteredAt(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 interface Props {
@@ -92,7 +102,8 @@ export function CriticalItemsPanel({
   }
 
   const tradeColCount = showTradeColumns ? 3 : 0;
-  const totalCols = 2 + (secondaryLabel ? 1 : 0) + (showSystem ? 1 : 0) + tradeColCount + 2 + (user ? 1 : 0);
+  // group + primary + (secondary?) + (system?) + trade(0|3) + other-group + status + team + registered-at + registered-by + (action?)
+  const totalCols = 2 + (secondaryLabel ? 1 : 0) + (showSystem ? 1 : 0) + tradeColCount + 2 + 3 + (user ? 1 : 0);
 
   return (
     <Card>
@@ -128,6 +139,9 @@ export function CriticalItemsPanel({
                   {showTradeColumns && <TableHead>Work Type</TableHead>}
                   <TableHead>{groupBy === 'team' ? 'Subcontractor' : 'Team'}</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Team</TableHead>
+                  <TableHead>Registered At</TableHead>
+                  <TableHead>Registered By</TableHead>
                   {user && <TableHead className="w-[44px]" />}
                 </TableRow>
               </TableHeader>
@@ -163,6 +177,9 @@ export function CriticalItemsPanel({
                           {(groupBy === 'team' ? r.subcontractor : r.team) || '—'}
                         </TableCell>
                         <TableCell className="text-xs">{r.status || '—'}</TableCell>
+                        <TableCell className="text-xs">{r.team || '—'}</TableCell>
+                        <TableCell className="text-xs whitespace-nowrap tabular-nums">{formatRegisteredAt(r.registered_at)}</TableCell>
+                        <TableCell className="text-xs">{r.registered_by_name || '—'}</TableCell>
                         {user && (
                           <TableCell className="text-right">
                             <Button

@@ -176,6 +176,8 @@ export default function DefectDashboardPage() {
       main_trade: it.main_trade ?? null,
       sub_trade: it.sub_trade ?? null,
       work_type: it.work_type ?? null,
+      registered_at: it.critical_marked_at ?? null,
+      registered_by_name: it.critical_marked_by_name ?? null,
     })),
     [filteredItems],
   );

@@ -449,6 +449,9 @@ export type Database = {
           closure_status: string | null
           completion_status: string | null
           created_at: string
+          critical_marked_at: string | null
+          critical_marked_by: string | null
+          critical_marked_by_name: string | null
           custom_payload: Json
           data_source_type: string | null
           defect_type: string | null
@@ -498,6 +501,9 @@ export type Database = {
           closure_status?: string | null
           completion_status?: string | null
           created_at?: string
+          critical_marked_at?: string | null
+          critical_marked_by?: string | null
+          critical_marked_by_name?: string | null
           custom_payload?: Json
           data_source_type?: string | null
           defect_type?: string | null
@@ -547,6 +553,9 @@ export type Database = {
           closure_status?: string | null
           completion_status?: string | null
           created_at?: string
+          critical_marked_at?: string | null
+          critical_marked_by?: string | null
+          critical_marked_by_name?: string | null
           custom_payload?: Json
           data_source_type?: string | null
           defect_type?: string | null
@@ -2357,6 +2366,9 @@ export type Database = {
       subtests: {
         Row: {
           aconex_ref_no: string | null
+          critical_marked_at: string | null
+          critical_marked_by: string | null
+          critical_marked_by_name: string | null
           custom_payload: Json
           data_source_type: Database["public"]["Enums"]["data_source"] | null
           description: string | null
@@ -2404,6 +2416,9 @@ export type Database = {
         }
         Insert: {
           aconex_ref_no?: string | null
+          critical_marked_at?: string | null
+          critical_marked_by?: string | null
+          critical_marked_by_name?: string | null
           custom_payload?: Json
           data_source_type?: Database["public"]["Enums"]["data_source"] | null
           description?: string | null
@@ -2451,6 +2466,9 @@ export type Database = {
         }
         Update: {
           aconex_ref_no?: string | null
+          critical_marked_at?: string | null
+          critical_marked_by?: string | null
+          critical_marked_by_name?: string | null
           custom_payload?: Json
           data_source_type?: Database["public"]["Enums"]["data_source"] | null
           description?: string | null
