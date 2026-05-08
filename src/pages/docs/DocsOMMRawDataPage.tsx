@@ -584,30 +584,41 @@ export default function DocsOMMRawDataPage() {
   }, [reload]);
 
   // ── State persistence (localStorage) ──────────────────────────────────────
+  const DOCS_DRILLDOWN_PARAMS = ['status', 'overdue', 'stage', 'team', 'q', 'mismatch', 'resub'];
   useEffect(() => {
     setStateLoaded(false);
+    const isDrilldown = DOCS_DRILLDOWN_PARAMS.some((p) => searchParams.has(p));
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
-        setSorting(
-          Array.isArray(parsed.sorting) && parsed.sorting.length
-            ? parsed.sorting
-            : DEFAULT_SORTING,
-        );
-        setColumnFilters(Array.isArray(parsed.columnFilters) ? parsed.columnFilters : []);
         setColumnSizing(
           parsed.columnSizing && typeof parsed.columnSizing === 'object'
             ? parsed.columnSizing
             : {},
         );
-        if (typeof parsed.globalFilter === 'string') {
-          setGlobalFilter(parsed.globalFilter);
-          setSearchInput(parsed.globalFilter);
+        if (!isDrilldown) {
+          setSorting(
+            Array.isArray(parsed.sorting) && parsed.sorting.length
+              ? parsed.sorting
+              : DEFAULT_SORTING,
+          );
+          setColumnFilters(Array.isArray(parsed.columnFilters) ? parsed.columnFilters : []);
+          if (typeof parsed.globalFilter === 'string') {
+            setGlobalFilter(parsed.globalFilter);
+            setSearchInput(parsed.globalFilter);
+          }
+          if (parsed.mismatchOnly) setMismatchOnly(true);
+          if (parsed.resubFilter === 'only' || parsed.resubFilter === 'hide')
+            setResubFilter(parsed.resubFilter);
+        } else {
+          setSorting(DEFAULT_SORTING);
+          setColumnFilters([]);
+          setGlobalFilter('');
+          setSearchInput('');
+          setMismatchOnly(false);
+          setResubFilter('all');
         }
-        if (parsed.mismatchOnly) setMismatchOnly(true);
-        if (parsed.resubFilter === 'only' || parsed.resubFilter === 'hide')
-          setResubFilter(parsed.resubFilter);
       }
     } catch {
       /* ignore */
@@ -623,7 +634,7 @@ export default function DocsOMMRawDataPage() {
     if (resub === 'only' || resub === 'hide') setResubFilter(resub);
     setStateLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey]);
+  }, [storageKey, searchParams]);
 
   useEffect(() => {
     if (!stateLoaded) return;
