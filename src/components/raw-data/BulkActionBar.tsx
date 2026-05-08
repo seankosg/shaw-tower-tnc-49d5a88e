@@ -295,7 +295,7 @@ export function BulkActionBar<TRow extends { id: string }>({
 
             <Button
               size="sm"
-              disabled={!field || overLimit || (valueIsEmpty && !setBlank) || (field?.inputType === 'select' && valueIsUnset && !setBlank)}
+              disabled={!field || submitting || (valueIsEmpty && !setBlank) || (field?.inputType === 'select' && valueIsUnset && !setBlank)}
               onClick={() => setConfirmOpen(true)}
             >
               Apply
