@@ -161,8 +161,15 @@ function ModuleSection({
   // Module-level totals: NOT affected by tab — shows project-wide totals
   const itemSummaries = useMemo(() => summariseByItem(moduleRecords), [moduleRecords]);
   const total = itemSummaries.length;
-  const done = itemSummaries.filter((i) => i.is_completed).length;
   const overdue = itemSummaries.filter((i) => i.is_overdue).length;
+  // ABD Done = Approved + Under Review (SSOT). Other modules use is_completed.
+  const abdAllBuckets = useMemo(
+    () => (isAbd ? computeAbdBucketDistribution(abdRows) : null),
+    [isAbd, abdRows],
+  );
+  const done = isAbd && abdAllBuckets
+    ? abdAllBuckets.approved + abdAllBuckets.under_review
+    : itemSummaries.filter((i) => i.is_completed).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
 
   const stages = useMemo(() => computeStageProgress(filteredRecords), [filteredRecords]);
@@ -232,7 +239,7 @@ function ModuleSection({
             sublabel={`${pct}% complete`}
             accent={accent}
             tone="green"
-            onClick={() => onNavigate(module, { status: 'completed' })}
+            onClick={() => onNavigate(module, isAbd ? { bucket: 'done' } : { status: 'completed' })}
           >
             <Progress value={pct} className="mt-2 h-1.5" />
           </SummaryTile>
