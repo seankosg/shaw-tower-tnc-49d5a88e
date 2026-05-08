@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { applyBulkReassign, type BulkEntity, type ReassignFieldChange } from '@/lib/bulk-actions';
+import { BULK_CHUNK_ROWS, chunkArray } from '@/lib/bulk-edit';
 import { cn } from '@/lib/utils';
 
 export interface ReassignField {
