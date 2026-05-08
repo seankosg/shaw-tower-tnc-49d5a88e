@@ -407,6 +407,7 @@ export default function DefectRawDataPage() {
   const [exportBusy, setExportBusy] = useState(false);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [criticalPending, setCriticalPending] = useState<Map<string, boolean>>(new Map());
   const [commentSummary, setCommentSummary] = useState<Record<string, CommentSummary>>({});
   const tableRef = useRef<HTMLDivElement>(null);
 
