@@ -1,62 +1,44 @@
 ## 목표
-T&C(Subtests)와 Defects의 Raw Data 첫 컬럼에 `Critical` 체크박스를 추가하고, 체크된 항목을 각 Dashboard 하단(Top 10 Overdue + Status Distribution 자리)에 가로 폭 전체로 표시. 팀/협력업체 필터와 연동.
+1. Raw Data 테이블에서 행을 선택하면 BulkActionBar에 **"Register to Critical Issue Board"** 액션이 활성화되어 선택한 행을 일괄 Critical 등록
+2. 대시보드 하단의 `CriticalItemsPanel` 제목을 **"Critical Issue Board"** 로 변경하고, 권한이 있는 사용자가 보드 안에서 직접 Critical 해제(삭제) 가능
+3. 보드 행에 추가 컬럼: **Main Trade · Sub Trade · Work Type** 표시 (Defect 전용; T&C 측은 해당 필드가 없으므로 표시 생략)
 
-## 1) DB 스키마 변경 (migration)
+## 1) BulkActionBar — Register to Critical 액션 추가
+파일: `src/components/raw-data/BulkActionBar.tsx`
+- `table === 'subtests' | 'defect_items'` 인 경우 보조 액션 영역에 `AlertTriangle` 아이콘 + "Register to Critical Issue Board" 버튼 추가
+- 클릭 시 `editableIds`(권한 있는 row만) 대상으로 `supabase.from(table).update({ is_critical: true }).in('id', editableIds)` 실행
+- 결과 토스트(등록/권한없어 스킵 카운트), `onMutated()` 호출하여 부모 refetch
+- `editableCount === 0` 또는 `overLimit` 시 disabled
+- 이미 모두 `is_critical = true`인 경우는 그래도 멱등 처리(허용)
 
-- `subtests` 테이블: `is_critical BOOLEAN NOT NULL DEFAULT false` 컬럼 추가
-- `defects` 테이블: `is_critical BOOLEAN NOT NULL DEFAULT false` 컬럼 추가
-- 두 테이블에 부분 인덱스: `WHERE is_critical = true`
-- RLS는 기존 정책이 모든 컬럼에 자동 적용되므로 추가 정책 불필요. 단 D.Super User 등 기존 UPDATE 권한 정책으로 토글 가능 여부 확인됨(기존 UPDATE 정책 그대로 사용).
+## 2) Critical Issue Board — 이름 변경 + 삭제(해제) 기능
+파일: `src/components/dashboard/CriticalItemsPanel.tsx`
+- 카드 헤더 타이틀 기본값을 **"Critical Issue Board"** 로 변경. 호출 측(`DashboardPage`, `DefectDashboardPage`)에서 굳이 title prop을 넘기지 않도록 정리
+- 각 행 우측에 휴지통 아이콘 버튼(`Trash2`) 추가:
+  - 클릭 → `e.stopPropagation()` → 확인 토스트 후 `supabase.from(table).update({ is_critical: false }).eq('id', row.id)`
+  - 권한 체크: 클라이언트에서는 `useAuth`로 user 확인 + 행을 가져올 때 권한 결과를 활용. 서버측 RLS(기존 `subtests` / `defect_items` UPDATE 정책 = `can_update_*` / `can_write_for_team` / role allowlist)가 그대로 작동하므로 권한 없는 사용자가 시도하면 RLS 거부 → 토스트로 안내
+  - guest 등 명시적으로 unauthenticated인 경우 버튼 hidden
+- `onMutated?: () => void` prop 추가 → 호출 측에서 dashboard refetch 트리거. 그게 무겁다면 panel 내부에서 prop으로 받은 `items`를 즉시 로컬 필터로 제거하는 optimistic 갱신도 병행
+- 추가 prop `tableName: 'subtests' | 'defect_items'` 로 어떤 테이블을 update 할지 결정
 
-## 2) Raw Data 첫 컬럼 추가
-
-### Subtests Raw Data (`src/pages/SubtestList.tsx` 또는 해당 raw-data 페이지)
-- 컬럼 정의 배열의 맨 앞에 `critical` 체크박스 컬럼 삽입
-  - 헤더: "Critical"
-  - 셀: `<Checkbox checked={row.is_critical} onCheckedChange={...}>` → `supabase.from('subtests').update({ is_critical }).eq('id', row.id)` 호출 후 로컬 상태 갱신
-  - 너비 고정(56px), pinned 아닌 일반 컬럼
-- 기존 컬럼 필터 시스템에 `is_critical` boolean 필터 추가(All / Critical only / Non-critical)
-
-### Defects Raw Data (`src/pages/DefectRawDataPage.tsx`)
-- 동일 패턴으로 첫 컬럼 추가, `defects` 테이블 update
-
-## 3) Dashboard 하단 섹션 교체
-
-### `src/pages/DashboardPage.tsx` (T&C Dashboard)
-- 라인 578~633의 `grid lg:grid-cols-2` 블록(Top 10 Overdue Subtests + Status Distribution) 삭제
-- 그 자리에 가로 풀폭 `<CriticalSubtestsPanel />` 카드 삽입
-
-### `src/pages/DefectDashboardPage.tsx` (Defect Dashboard)
-- 라인 599~602의 동일 grid 블록 삭제
-- 그 자리에 가로 풀폭 `<CriticalDefectsPanel />` 카드 삽입
-
-## 4) Critical 패널 컴포넌트 (신규)
-
-`src/components/dashboard/CriticalSubtestsPanel.tsx`
-`src/components/dashboard/CriticalDefectsPanel.tsx`
-
-각 패널 구성:
-- 헤더: "Critical Items" + 총 개수 배지 + "Open in Raw Data" 버튼(`?critical=1` 파라미터로 이동)
-- 필터 toolbar:
-  - Group by: Team / Subcontractor (Tabs)
-  - Team 멀티 셀렉트 / Subcontractor 멀티 셀렉트 (기존 raw-data 필터 옵션 재사용)
-- 본문: 그룹화된 테이블
-  - 그룹별 카운트 헤더(예: `Team A · 5 items`)
-  - 행: 핵심 식별자(System/Item No/MOS or Issue No/Level) + Subcontractor + 상태 + Days Late + 행 클릭 시 상세 페이지 이동
-- 데이터 소스: 이미 Dashboard에서 로딩한 `subtests`/`defects` 배열을 prop으로 받아 `is_critical = true` 필터링(추가 fetch 불필요)
-- 빈 상태: "No critical items"
-
-## 5) Raw Data ↔ Dashboard 연동
-
-- Critical 패널의 행/그룹 클릭 → Raw Data 페이지로 이동 시 `?critical=1&team=...` 또는 `?critical=1&subcontractor=...` 쿼리 추가
-- Raw Data 페이지가 마운트 시 `critical=1`이면 `is_critical` 컬럼 필터를 "Critical only"로 초기화. `team`/`subcontractor` 파라미터도 기존 dashboard-param 처리 로직에 추가
+## 3) Main Trade / Sub Trade / Work Type 컬럼 추가 (Defect 측)
+파일: `CriticalItemsPanel.tsx`, `DefectDashboardPage.tsx`
+- `CriticalRowItem`에 옵셔널 필드 추가:
+  ```ts
+  main_trade?: string | null;
+  sub_trade?: string | null;
+  work_type?: string | null;
+  ```
+- 패널 props에 `showTradeColumns?: boolean` 플래그 추가 (T&C 패널은 false 유지, Defect 패널만 true)
+- `showTradeColumns=true`일 때 테이블에 다음 3개 컬럼 헤더/셀을 secondary 다음에 삽입: **Main Trade**, **Sub Trade**, **Work Type**
+- `DefectDashboardPage.tsx`에서 `defects` 배열을 `CriticalRowItem`으로 매핑할 때 `main_trade`, `sub_trade`, `work_type` 채워서 전달, `showTradeColumns` props=true 지정
 
 ## 범위 외
-- snapshot/import 파이프라인은 손대지 않음 (`is_critical`은 사용자 토글 전용, 기본값 false)
-- 일괄 편집 바(BulkEditBar)에는 추가하지 않음 — 추후 요청 시
-- Excel export 컬럼 추가 여부는 현재 요청에 없으므로 보류
+- T&C(Subtests)에는 main/sub trade, work_type 컬럼이 없으므로 해당 추가 컬럼은 표시하지 않음
+- BulkActionBar의 "Unregister from Critical" 일괄 해제는 보드 안 개별 삭제로 충분. 향후 요청 시 추가
+- DB 스키마 변경 없음 (기존 `is_critical` 컬럼 재사용)
 
 ## 기술 노트
-- `Checkbox` 셀의 onClick 이벤트는 `e.stopPropagation()`로 행 네비게이션과 분리
-- 권한이 없는 사용자(예: guest)는 체크박스 disabled 처리
-- 패널 카드는 `lg:grid-cols-1` 단일 폭, 내부 그룹은 모바일에서 collapsible accordion 고려(우선 단순 테이블 구현, 모바일은 `overflow-auto`)
+- 등록/해제 후 일관성을 위해 `change_log` 트리거가 있다면 그대로 동작. 따로 audit 작성 코드 추가하지 않음
+- 권한 검사는 모두 RLS에 위임 (낙관적 업데이트 후 에러 시 토스트 + revert)
+- 보드 행 삭제 버튼은 group 헤더 옆이 아닌 각 row 마지막 컬럼에 배치
