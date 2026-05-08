@@ -598,13 +598,13 @@ export default function DashboardPage() {
 
       {/* ─── Critical Items (full width) ─── */}
       <CriticalItemsPanel
-        title="Critical Subtests"
         items={criticalItems}
         rowHref={(id) => `/subtests/${id}`}
         rawDataHref="/subtests"
         primaryLabel="Item No"
         secondaryLabel="MOS"
         showSystem
+        tableName="subtests"
       />
 
     </div>

@@ -173,6 +173,9 @@ export default function DefectDashboardPage() {
       team: it.team ?? null,
       subcontractor: it.subcontractor_name,
       status: it.closure_status || it.completion_status || it.status || '—',
+      main_trade: it.main_trade ?? null,
+      sub_trade: it.sub_trade ?? null,
+      work_type: it.work_type ?? null,
     })),
     [filteredItems],
   );
@@ -610,12 +613,13 @@ export default function DefectDashboardPage() {
 
 
       <CriticalItemsPanel
-        title="Critical Defects"
         items={criticalDefects}
         rowHref={(id) => `/defects/${id}`}
         rawDataHref="/defects"
         primaryLabel="Issue No"
         secondaryLabel="Level"
+        showTradeColumns
+        tableName="defect_items"
       />
     </div>
   );

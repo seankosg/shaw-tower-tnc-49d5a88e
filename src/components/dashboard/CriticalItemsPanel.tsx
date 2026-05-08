@@ -1,11 +1,14 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 type GroupBy = 'team' | 'subcontractor';
 
@@ -18,50 +21,78 @@ export interface CriticalRowItem {
   team?: string | null;
   subcontractor?: string | null;
   status?: string | null;
+  main_trade?: string | null;
+  sub_trade?: string | null;
+  work_type?: string | null;
 }
 
 interface Props {
   title?: string;
   items: CriticalRowItem[];
-  /** path to navigate to when clicking a row, e.g. (id) => `/subtests/${id}` */
   rowHref: (id: string) => string;
-  /** path to raw data page, e.g. '/subtests' or '/defects' */
   rawDataHref: string;
-  /** label for primary id column */
   primaryLabel: string;
-  /** label for secondary column (optional) */
   secondaryLabel?: string;
-  /** include System column */
   showSystem?: boolean;
+  /** Show Main Trade / Sub Trade / Work Type columns */
+  showTradeColumns?: boolean;
+  /** Source table for unregister action */
+  tableName: 'subtests' | 'defect_items';
 }
 
 export function CriticalItemsPanel({
-  title = 'Critical Items',
+  title = 'Critical Issue Board',
   items,
   rowHref,
   rawDataHref,
   primaryLabel,
   secondaryLabel,
   showSystem,
+  showTradeColumns,
+  tableName,
 }: Props) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [groupBy, setGroupBy] = useState<GroupBy>('team');
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  const [pendingId, setPendingId] = useState<string | null>(null);
+
+  const visibleItems = useMemo(() => items.filter((i) => !removedIds.has(i.id)), [items, removedIds]);
 
   const grouped = useMemo(() => {
     const m = new Map<string, CriticalRowItem[]>();
-    for (const it of items) {
+    for (const it of visibleItems) {
       const key = (groupBy === 'team' ? it.team : it.subcontractor) || '(None)';
       const list = m.get(key) ?? [];
       list.push(it);
       m.set(key, list);
     }
     return [...m.entries()].sort((a, b) => b[1].length - a[1].length);
-  }, [items, groupBy]);
+  }, [visibleItems, groupBy]);
 
   const goRaw = (extraQuery: Record<string, string> = {}) => {
     const params = new URLSearchParams({ critical: 'true', ...extraQuery });
     navigate(`${rawDataHref}?${params.toString()}`);
   };
+
+  async function handleUnregister(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!user || pendingId) return;
+    setPendingId(id);
+    try {
+      const { error } = await (supabase as any).from(tableName).update({ is_critical: false }).eq('id', id);
+      if (error) throw error;
+      setRemovedIds((prev) => new Set(prev).add(id));
+      toast.success('Removed from Critical Issue Board');
+    } catch (err: any) {
+      toast.error('Failed to remove', { description: err?.message ?? 'Permission denied' });
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  const tradeColCount = showTradeColumns ? 3 : 0;
+  const totalCols = 2 + (secondaryLabel ? 1 : 0) + (showSystem ? 1 : 0) + tradeColCount + 2 + (user ? 1 : 0);
 
   return (
     <Card>
@@ -69,7 +100,7 @@ export function CriticalItemsPanel({
         <CardTitle className="flex items-center gap-2 text-base">
           <AlertTriangle className="h-4 w-4 text-destructive" />
           {title}
-          <Badge variant="secondary" className="ml-1">{items.length}</Badge>
+          <Badge variant="secondary" className="ml-1">{visibleItems.length}</Badge>
         </CardTitle>
         <div className="flex items-center gap-2">
           <Tabs value={groupBy} onValueChange={(v) => setGroupBy(v as GroupBy)}>
@@ -82,7 +113,7 @@ export function CriticalItemsPanel({
         </div>
       </CardHeader>
       <CardContent>
-        {items.length === 0 ? (
+        {visibleItems.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No critical items marked yet.</p>
         ) : (
           <div className="overflow-auto max-h-[420px]">
@@ -93,8 +124,12 @@ export function CriticalItemsPanel({
                   <TableHead>{primaryLabel}</TableHead>
                   {secondaryLabel && <TableHead>{secondaryLabel}</TableHead>}
                   {showSystem && <TableHead>System</TableHead>}
+                  {showTradeColumns && <TableHead>Main Trade</TableHead>}
+                  {showTradeColumns && <TableHead>Sub Trade</TableHead>}
+                  {showTradeColumns && <TableHead>Work Type</TableHead>}
                   <TableHead>{groupBy === 'team' ? 'Subcontractor' : 'Team'}</TableHead>
                   <TableHead>Status</TableHead>
+                  {user && <TableHead className="w-[44px]" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -102,7 +137,7 @@ export function CriticalItemsPanel({
                   <Fragment key={`grp-${groupKey}`}>
                     <TableRow className="bg-muted/40 hover:bg-muted/40">
                       <TableCell
-                        colSpan={2 + (secondaryLabel ? 1 : 0) + (showSystem ? 1 : 0) + 2}
+                        colSpan={totalCols}
                         className="py-1.5 text-xs font-semibold cursor-pointer"
                         onClick={() =>
                           goRaw({ [groupBy === 'team' ? 'team' : 'subcontractor']: groupKey === '(None)' ? '__EMPTY__' : groupKey })
@@ -122,10 +157,27 @@ export function CriticalItemsPanel({
                         <TableCell className="font-medium">{r.primary}</TableCell>
                         {secondaryLabel && <TableCell className="text-xs">{r.secondary || '—'}</TableCell>}
                         {showSystem && <TableCell className="text-xs">{r.system || '—'}</TableCell>}
+                        {showTradeColumns && <TableCell className="text-xs">{r.main_trade || '—'}</TableCell>}
+                        {showTradeColumns && <TableCell className="text-xs">{r.sub_trade || '—'}</TableCell>}
+                        {showTradeColumns && <TableCell className="text-xs">{r.work_type || '—'}</TableCell>}
                         <TableCell className="text-xs truncate max-w-[180px]">
                           {(groupBy === 'team' ? r.subcontractor : r.team) || '—'}
                         </TableCell>
                         <TableCell className="text-xs">{r.status || '—'}</TableCell>
+                        {user && (
+                          <TableCell className="text-right">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              disabled={pendingId === r.id}
+                              onClick={(e) => handleUnregister(r.id, e)}
+                              title="Remove from Critical Issue Board"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </Fragment>
