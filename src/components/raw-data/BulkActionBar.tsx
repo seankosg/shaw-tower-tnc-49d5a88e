@@ -303,6 +303,39 @@ export function BulkActionBar<TRow extends { id: string }>({
 
           {/* ───── Secondary actions ───── */}
           <div className="flex items-center gap-1.5">
+            {(table === 'subtests' || table === 'defect_items') && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                disabled={editableCount === 0 || overLimit || submitting}
+                onClick={async () => {
+                  if (!user) return;
+                  setSubmitting(true);
+                  try {
+                    const { error } = await (supabase as any)
+                      .from(table)
+                      .update({ is_critical: true })
+                      .in('id', editableIds);
+                    if (error) throw error;
+                    toast({
+                      title: 'Registered to Critical Issue Board',
+                      description: `${editableCount} item${editableCount === 1 ? '' : 's'} registered${skippedCount > 0 ? `, ${skippedCount} skipped (no permission)` : ''}.`,
+                    });
+                    onApplied({ field: 'is_critical', value: 'true', ids: editableIds });
+                    onMutated?.();
+                    onClearSelection();
+                  } catch (err) {
+                    toast({ title: 'Register failed', description: (err as Error).message, variant: 'destructive' });
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+              >
+                <ShieldAlert className="mr-1.5 h-3.5 w-3.5" /> Register to Critical Issue Board
+              </Button>
+            )}
+
             <Button
               size="sm"
               variant="outline"
