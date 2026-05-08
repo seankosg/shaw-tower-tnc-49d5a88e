@@ -1889,6 +1889,15 @@ export default function SubtestList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <CriticalPendingBar
+        pending={criticalPending}
+        table="subtests"
+        onApplied={(applied) => {
+          setData((prev) => prev.map((r) => (applied.has(r.id) ? { ...r, is_critical: applied.get(r.id)! } : r)));
+          setCriticalPending(new Map());
+        }}
+        onDiscard={() => setCriticalPending(new Map())}
+      />
     </div>
   );
 }
