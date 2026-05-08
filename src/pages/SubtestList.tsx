@@ -680,6 +680,7 @@ export default function SubtestList() {
       pred_status: 'pred_status',
       t1_status: 't1_status',
       t2_status: 't2_status',
+      critical: 'is_critical',
     };
     // Merge: keep saved column filters except those that the URL is going to override.
     // (When isDrilldown, baseFilters is already empty so this is a no-op filter.)
