@@ -63,6 +63,7 @@ export default function DocsExecutiveDashboardPage() {
   }, [asOf]);
 
   const records = snap?.records ?? [];
+  const abdRows = snap?.abdRows ?? [];
 
   const goRaw = (m: DocModule, params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
@@ -96,7 +97,7 @@ export default function DocsExecutiveDashboardPage() {
       {loading && !snap && <p className="text-sm text-muted-foreground">Loading…</p>}
 
       {MODULES.map((m) => (
-        <ModuleSection key={m} module={m} records={records} onNavigate={goRaw} />
+        <ModuleSection key={m} module={m} records={records} abdRows={abdRows} onNavigate={goRaw} />
       ))}
     </div>
   );
