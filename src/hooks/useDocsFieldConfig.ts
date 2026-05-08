@@ -68,7 +68,7 @@ export const DOCS_DEFAULT_FIELD_LABELS: Record<string, string> = {
   work_trade_material: 'Work Trade / Material',
   hdec_pic_name: 'HDEC PIC',
   hdec_eng_name: 'HDEC ENG',
-  training_required: 'Training Required',
+  training_required: 'Training',
   instruction_date: 'Instruction Date',
   pdf_required_qty: 'PDF Required',
   pdf_actual_qty: 'PDF Actual',
