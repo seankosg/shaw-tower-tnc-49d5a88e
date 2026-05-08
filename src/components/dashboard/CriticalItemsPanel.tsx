@@ -177,6 +177,9 @@ export function CriticalItemsPanel({
                           {(groupBy === 'team' ? r.subcontractor : r.team) || '—'}
                         </TableCell>
                         <TableCell className="text-xs">{r.status || '—'}</TableCell>
+                        <TableCell className="text-xs">{r.team || '—'}</TableCell>
+                        <TableCell className="text-xs whitespace-nowrap tabular-nums">{formatRegisteredAt(r.registered_at)}</TableCell>
+                        <TableCell className="text-xs">{r.registered_by_name || '—'}</TableCell>
                         {user && (
                           <TableCell className="text-right">
                             <Button
