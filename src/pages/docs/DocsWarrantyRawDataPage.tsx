@@ -564,22 +564,32 @@ export default function DocsWarrantyRawDataPage() {
   }, [rows]);
 
   // ── State persistence ──
+  const DOCS_DRILLDOWN_PARAMS = ['status', 'overdue', 'stage', 'team', 'q', 'resub'];
   useEffect(() => {
     setStateLoaded(false);
+    const isDrilldown = DOCS_DRILLDOWN_PARAMS.some((p) => searchParams.has(p));
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
-        setSorting(
-          Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING,
-        );
-        setColumnFilters(Array.isArray(parsed.columnFilters) ? parsed.columnFilters : []);
         setColumnSizing(parsed.columnSizing && typeof parsed.columnSizing === 'object' ? parsed.columnSizing : {});
-        if (typeof parsed.globalFilter === 'string') {
-          setGlobalFilter(parsed.globalFilter);
-          setSearchInput(parsed.globalFilter);
+        if (!isDrilldown) {
+          setSorting(
+            Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING,
+          );
+          setColumnFilters(Array.isArray(parsed.columnFilters) ? parsed.columnFilters : []);
+          if (typeof parsed.globalFilter === 'string') {
+            setGlobalFilter(parsed.globalFilter);
+            setSearchInput(parsed.globalFilter);
+          }
+          if (parsed.resubFilter === 'only' || parsed.resubFilter === 'hide') setResubFilter(parsed.resubFilter);
+        } else {
+          setSorting(DEFAULT_SORTING);
+          setColumnFilters([]);
+          setGlobalFilter('');
+          setSearchInput('');
+          setResubFilter('all');
         }
-        if (parsed.resubFilter === 'only' || parsed.resubFilter === 'hide') setResubFilter(parsed.resubFilter);
       }
     } catch { /* ignore */ }
     const urlQ = searchParams.get('q');
@@ -591,7 +601,7 @@ export default function DocsWarrantyRawDataPage() {
     if (resub === 'only' || resub === 'hide') setResubFilter(resub);
     setStateLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey]);
+  }, [storageKey, searchParams]);
 
   useEffect(() => {
     if (!stateLoaded) return;

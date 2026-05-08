@@ -543,8 +543,10 @@ export default function DocsRawDataPage() {
   }, [searchParams, setSearchParams]);
 
   // ─── State persistence (localStorage) ───
+  const DOCS_DRILLDOWN_PARAMS = ['status', 'overdue', 'stage', 'team', 'trade', 'q'];
   useEffect(() => {
     setStateLoaded(false);
+    const isDrilldown = DOCS_DRILLDOWN_PARAMS.some((p) => searchParams.has(p));
     let baseFilters: ColumnFiltersState = [];
     let baseSorting: SortingState = DEFAULT_SORTING;
     let baseGlobal = '';
@@ -554,9 +556,11 @@ export default function DocsRawDataPage() {
       if (raw) {
         const parsed = JSON.parse(raw);
         baseSizing = parsed.columnSizing && typeof parsed.columnSizing === 'object' ? parsed.columnSizing : {};
-        baseSorting = Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING;
-        baseFilters = Array.isArray(parsed.columnFilters) ? parsed.columnFilters : [];
-        baseGlobal = typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '';
+        if (!isDrilldown) {
+          baseSorting = Array.isArray(parsed.sorting) && parsed.sorting.length ? parsed.sorting : DEFAULT_SORTING;
+          baseFilters = Array.isArray(parsed.columnFilters) ? parsed.columnFilters : [];
+          baseGlobal = typeof parsed.globalFilter === 'string' ? parsed.globalFilter : '';
+        }
       }
     } catch { /* ignore */ }
 
