@@ -526,7 +526,7 @@ export default function DefectRawDataPage() {
     'team', 'subcontractor', 'subsub', 'hdecPic', 'hdecEng',
     'level', 'mainTrade', 'subTrade', 'workType', 'classificationSource',
     'status', 'closureStatus', 'issueNo', 'subcontractorIssueNo',
-    'dateStart', 'dateEnd', 'dateField',
+    'dateStart', 'dateEnd', 'dateField', 'critical',
   ];
 
   useEffect(() => {
