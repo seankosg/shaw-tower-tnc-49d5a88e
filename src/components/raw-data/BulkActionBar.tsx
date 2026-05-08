@@ -307,7 +307,7 @@ export function BulkActionBar<TRow extends { id: string }>({
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8"
+                className="h-8 font-bold text-destructive hover:text-destructive"
                 disabled={editableCount === 0 || overLimit || submitting}
                 onClick={async () => {
                   if (!user) return;
