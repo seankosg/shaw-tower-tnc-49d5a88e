@@ -167,6 +167,21 @@ function ModuleSection({
 
   const stages = useMemo(() => computeStageProgress(filteredRecords), [filteredRecords]);
 
+  // ABD-only bucket distribution (SSOT — matches Raw Data Current Status)
+  const abdRowsForTab = useMemo(() => {
+    if (!isAbd) return [] as any[];
+    if (tab === '__all__') return abdRows;
+    return abdRows.filter((row) => {
+      const t = resolveTrade(row as any);
+      const norm = t === '—' ? 'Other' : (t as string);
+      return norm === tab;
+    });
+  }, [abdRows, isAbd, tab]);
+  const abdBuckets: AbdBucketDistribution = useMemo(
+    () => computeAbdBucketDistribution(abdRowsForTab),
+    [abdRowsForTab],
+  );
+
   // Short trade labels for the tab list
   const TRADE_SHORT: Record<TradeCategory, string> = {
     'Architecture': 'Arch',
