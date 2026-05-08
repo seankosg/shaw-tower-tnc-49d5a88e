@@ -309,19 +309,34 @@ export function BulkActionBar<TRow extends { id: string }>({
                 size="sm"
                 variant="outline"
                 className="h-8 font-bold text-destructive hover:text-destructive"
-                disabled={editableCount === 0 || overLimit || submitting}
+                disabled={editableCount === 0 || submitting}
                 onClick={async () => {
                   if (!user) return;
                   setSubmitting(true);
                   try {
-                    const { error } = await (supabase as any)
-                      .from(table)
-                      .update({ is_critical: true })
-                      .in('id', editableIds);
-                    if (error) throw error;
+                    const batches = chunkArray(editableIds, BULK_CHUNK_ROWS);
+                    let ok = 0;
+                    let failed = 0;
+                    for (let i = 0; i < batches.length; i++) {
+                      const slice = batches[i];
+                      if (batches.length > 1) {
+                        toast({ title: `Registering… (batch ${i + 1}/${batches.length})`, description: `${ok} done so far.` });
+                      }
+                      // eslint-disable-next-line no-await-in-loop
+                      const { data, error } = await (supabase as any)
+                        .from(table)
+                        .update({ is_critical: true })
+                        .in('id', slice)
+                        .select('id');
+                      if (error) { failed += slice.length; continue; }
+                      const n = (data ?? []).length;
+                      ok += n;
+                      failed += slice.length - n;
+                    }
                     toast({
                       title: 'Registered to Critical Issue Board',
-                      description: `${editableCount} item${editableCount === 1 ? '' : 's'} registered${skippedCount > 0 ? `, ${skippedCount} skipped (no permission)` : ''}.`,
+                      description: `${ok} item${ok === 1 ? '' : 's'} registered${failed > 0 ? `, ${failed} blocked` : ''}${skippedCount > 0 ? `, ${skippedCount} skipped (no permission)` : ''}.`,
+                      variant: failed > 0 && ok === 0 ? 'destructive' : 'default',
                     });
                     onApplied({ field: 'is_critical', value: 'true', ids: editableIds });
                     onMutated?.();
