@@ -134,6 +134,9 @@ export function AllCommentsView({ title, kind }: AllCommentsViewProps) {
         .select('user_id, name, login_id')
         .in('user_id', authorIds);
       setAuthors((profs as AuthorInfo[]) ?? []);
+      setVpAuthorIds(await fetchAdminAuthorIds(authorIds));
+    } else {
+      setVpAuthorIds(new Set());
     }
 
     const parentIds = Array.from(
