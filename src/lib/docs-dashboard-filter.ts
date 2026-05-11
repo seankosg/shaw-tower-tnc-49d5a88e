@@ -154,5 +154,6 @@ export function dashboardFilterLabel(module: DocModule, p: DashboardFilterParams
   if (p.bucket) parts.push(ABD_BUCKET_LABEL[p.bucket] ?? p.bucket);
   if (p.team) parts.push(`Team: ${p.team}`);
   if (p.trade) parts.push(`Trade: ${p.trade}`);
+  if (p.sub1_status) parts.push(`1st Status: ${p.sub1_status}`);
   return parts.length ? parts.join(' · ') : null;
 }
