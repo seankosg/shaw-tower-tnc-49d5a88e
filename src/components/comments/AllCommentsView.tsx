@@ -332,6 +332,9 @@ export function AllCommentsView({ title, kind }: AllCommentsViewProps) {
           >
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="font-medium">{authorName(t.parent.author_user_id)}</span>
+              {vpAuthorIds.has(t.parent.author_user_id) && (
+                <Badge className="h-4 px-1.5 text-[10px] bg-primary text-primary-foreground hover:bg-primary">VP</Badge>
+              )}
               {t.parent.type === 'instruction' && (
                 <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">Instruction</Badge>
               )}
