@@ -51,6 +51,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { getOriginHeaderStyle } from '@/lib/origin-header-style';
 import { formatDdMmm } from '@/lib/format';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
 import { useCommonMasters, unionWithLegacy } from '@/hooks/useCommonMasters';
