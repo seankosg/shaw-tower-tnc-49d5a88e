@@ -349,11 +349,15 @@ export async function loadDashboardData(opts: {
       }
     }
 
-    if (status === 'Draft Under Review' || status === 'Final Under Review') {
+    if (status === 'Sub1 Under Review' || status === 'Sub2 Under Review' || status === 'Sub3 Under Review' || status === 'Final Under Review') {
       const since =
         status === 'Final Under Review'
           ? safeIso(row.final_actual_date)
-          : safeIso(row.draft_actual_date);
+          : status === 'Sub3 Under Review'
+            ? safeIso(row.sub3_actual_date)
+            : status === 'Sub2 Under Review'
+              ? safeIso(row.sub2_actual_date)
+              : safeIso(row.sub1_actual_date);
       const days = since ? differenceInDays(asOf, since) : 0;
       omm.topAwaiting.push({
         id: row.id,
