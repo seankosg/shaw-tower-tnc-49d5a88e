@@ -1,37 +1,41 @@
-## OMM Header Mapping "(unmapped — 40 aliases)" 원인과 해결
+## 확인 결과
+- **현재 Field Config의 origin/source 설정은 Raw Data 컬러 헤더와 실제로 연동되어 있지 않습니다.**
+- Admin의 **Field Config**에서는 `source_origin`을 수정할 수 있고, 훅(`useDocsFieldConfig`, `useDefectFieldConfig`)도 `getSourceOrigin/getSourceLabel`을 제공합니다.
+- 하지만 실제 **Raw Data 테이블 헤더 렌더링**은 모듈별 페이지에서 직접 구현되어 있고, 헤더 배경을 모두 `bg-background` / `hsl(var(--background))`로 고정하고 있습니다.
+  - `DocsRawDataPage`
+  - `DocsOMMRawDataPage`
+  - `DocsWarrantyRawDataPage`
+  - `DefectRawDataPage`
+- 반대로 **import 컬럼 선택 다이얼로그**에서는 이미 `source_origin`을 읽어 HDEC/Aconex/System 배지를 보여주고 있습니다. 즉, **설정값은 저장되지만 Raw Data 헤더에는 안 쓰이는 반쪽 구현**입니다.
 
-### 원인
-`src/pages/admin/HeaderMappingsTab.tsx`의 `DOCS_OMM_FIELDS` 화이트리스트가 **현재 OMM 파서/스키마보다 오래됐습니다.**
+## 왜 모듈마다 같은 확인이 반복되나
+- **공통 규칙이 컴포넌트로 추상화되지 않았기 때문**입니다.
+- Raw Data 헤더 렌더 함수가 모듈마다 각각 복붙 형태로 존재해서, 한 군데 고쳐도 다른 모듈은 그대로 남습니다.
+- 추가로 **T&C 기본 `field_config`는 docs/defect와 달리 `source_origin` 기반 구조가 아예 없습니다.** 그래서 “똑같이” 적용하려면 스키마/관리 UI/훅까지 범위를 명확히 맞춰야 합니다.
 
-Admin UI는 이 화이트리스트에 없는 `target_field`로 매핑된 DB 행들을 모두 "(unmapped)" 그룹에 몰아넣습니다. 즉 매핑 자체는 정상 동작 중이지만 화면에서 "관리 대상이 아닌" 것처럼 보이는 것뿐입니다.
+## 구현 계획
+1. **공통 헤더 origin 스타일 규칙 정리**
+   - `hdec / aconex / system`별 헤더 배경/텍스트/보더 토큰을 하나의 공통 helper 또는 컴포넌트로 분리합니다.
+   - sticky/frozen column 상태에서도 같은 색이 유지되도록 처리합니다.
 
-스크린샷의 40개 unmapped는 전부 **sub1_*/sub2_*/sub3_*** 와 **skip** 으로, 파서는 이미 이 필드에 정상 write 하고 있습니다.
+2. **Raw Data 4개 모듈을 동일 방식으로 연결**
+   - As-Built, OMM, Warranty, Defect의 헤더 렌더러가 `field_name -> source_origin`을 읽어 컬러 헤더를 적용하도록 바꿉니다.
+   - 현재 이미 있는 `getSourceOrigin()`을 그대로 사용해 모듈별 규칙 차이를 없앱니다.
 
-### 누락된 필드 (15 + 1)
-현재 `DOCS_OMM_FIELDS`(102-112행)에 추가해야 할 항목:
+3. **중복 헤더 렌더 코드 공통화**
+   - 모듈별 `renderHeader` 중복을 공통 컴포넌트/유틸로 묶어, 이후에는 한 번 수정하면 전체 모듈에 동일 반영되게 만듭니다.
+   - 정렬 아이콘, 필터 버튼, resize 핸들, sticky shadow는 유지합니다.
 
-```
-sub1_planned_date, sub1_actual_date, sub1_response_date, sub1_response_status,
-sub2_planned_date, sub2_actual_date, sub2_response_planned_date,
-sub2_response_actual_date, sub2_response_status,
-sub3_planned_date, sub3_actual_date, sub3_response_planned_date,
-sub3_response_actual_date, sub3_response_status,
-skip   ← 시스템 컬럼 무시용 pseudo-target (As-Built처럼 별칭 등록 가능하도록)
-```
+4. **적용 범위와 예외 명확화**
+   - docs/defect는 즉시 연동 가능.
+   - T&C Raw Data까지 같은 컬러 헤더를 원하면, 별도로 `field_config`에 origin 개념을 추가하는 후속 작업 계획을 분리합니다.
 
-(legacy `draft_*` 4개와 final_* 5개, instruction_date, current_stage/current_status는 이미 포함되어 있음)
-
-### 변경 사항 (단일 파일, 빌드 모드에서 실행)
-
-**파일:** `src/pages/admin/HeaderMappingsTab.tsx`
-
-1. `DOCS_OMM_FIELDS` 배열에 위 16개 항목 추가 (논리적 순서: sn → 식별/메타 → 수량 → instruction → draft(legacy) → sub1 → sub2 → sub3 → final → PIC/remarks → current_*).
-2. 배열 끝에 `'skip'` 추가 (As-Built/Warranty와 동일 패턴 — DB에 이미 `stage → skip` 행이 있어 자동으로 그룹에 들어감).
-
-### 변경 없음 (사용자 결정 보류 항목)
-- 파서 `FALLBACK_ALIASES` 정리 / DB 죽은 별칭 cleanup / `instruction date` 활성화 충돌 — 이전 검토 보고서의 4가지 결정 항목은 별도 작업으로 분리. 본 변경은 Admin UI 화이트리스트만 최신화.
-
-### 검증
-1. Admin → Header Mappings → Docs → OMM 진입.
-2. "(unmapped — 40 aliases)" 그룹이 사라지고, 각 sub1_*/sub2_*/sub3_* / skip 그룹에 정상 분류되어 "+ Alias" 버튼으로 별칭 추가가 가능해지는지 확인.
-3. 기존 OMM 임포트 동작에는 영향 없음(파서/DB 무변경).
+## 기술 메모
+- 변경 대상은 주로 다음 파일들입니다:
+  - `src/pages/docs/DocsRawDataPage.tsx`
+  - `src/pages/docs/DocsOMMRawDataPage.tsx`
+  - `src/pages/docs/DocsWarrantyRawDataPage.tsx`
+  - `src/pages/DefectRawDataPage.tsx`
+  - 공통화용 신규 컴포넌트 또는 유틸 1개
+- DB 변경 없이 먼저 해결 가능한 범위는 **docs/defect Raw Data 헤더 연동 + 공통화**입니다.
+- T&C까지 완전히 같은 체계로 맞추려면 DB/관리화면 확장이 필요합니다.
