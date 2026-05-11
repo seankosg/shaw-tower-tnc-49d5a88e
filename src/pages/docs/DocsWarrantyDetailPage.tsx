@@ -176,7 +176,8 @@ export default function DocsWarrantyDetailPage() {
 
   const save = async (field: string, value: any) => {
     if (!id || !row) return;
-    if ((row as any)[field] === value) return;
+    const oldValue = (row as any)[field];
+    if (oldValue === value) return;
     setSaving(true);
     const patch: any = { [field]: value, updated_by: user?.id ?? null };
     const { error } = await (supabase as any).from('warranty_items').update(patch).eq('id', id);
@@ -190,6 +191,25 @@ export default function DocsWarrantyDetailPage() {
     }
     toast({ title: 'Saved' });
     setRow({ ...row, [field]: value });
+    // Audit: append to docs_change_log so Change History reflects manual edits.
+    try {
+      await (supabase as any).from('docs_change_log').insert({
+        sub_module: 'warranty',
+        record_id: id,
+        changed_field: field,
+        old_value: oldValue == null ? null : String(oldValue),
+        new_value: value == null ? null : String(value),
+        change_source: 'manual',
+        changed_by: user?.id ?? null,
+      });
+      const logRes = await (supabase as any)
+        .from('docs_change_log')
+        .select('*').eq('record_id', id).eq('sub_module', 'warranty')
+        .order('changed_at', { ascending: false }).limit(50);
+      setLogs(logRes.data ?? []);
+    } catch (e) {
+      console.warn('[warranty] change log insert failed', e);
+    }
   };
 
   const overall = useMemo(() => row ? computeWarrantyOverallStatus(row) : null, [row]);
