@@ -28,6 +28,8 @@ export interface ExecDashboardSnapshot {
   asOf: Date;
   /** Raw ABD rows (active, sub_module='as_built') for SSOT bucket distribution */
   abdRows: any[];
+  /** Raw OMM rows (active) for Sub1 Status bucket distribution */
+  ommRows: any[];
 }
 
 export async function loadExecutiveDashboard(opts: {
@@ -87,5 +89,5 @@ export async function loadExecutiveDashboard(opts: {
     ...buildWarrantyStageRecords(warrantyRows, asOf),
   ];
 
-  return { records, asOf, abdRows };
+  return { records, asOf, abdRows, ommRows };
 }

@@ -8,7 +8,8 @@
 
 import {
   buildAbdStageRecords, buildOmmStageRecords, buildWarrantyStageRecords,
-  asOfStartOfDay, ALL_STAGE_DEFS, classifyAbdRowBucket, type DocModule,
+  asOfStartOfDay, ALL_STAGE_DEFS, classifyAbdRowBucket, classifyOmmSub1Status,
+  type DocModule,
 } from '@/lib/docs-stage-records';
 import { resolveTrade } from '@/lib/docs-trade';
 
@@ -20,6 +21,8 @@ export interface DashboardFilterParams {
   trade?: string | null;    // ABD only — TradeCategory string
   /** ABD bucket: approved | under_review | submission_required | sub1_required | sub2_required | sub3_required */
   bucket?: string | null;
+  /** OMM Sub1 Status bucket: A | B | C | UR | Planned */
+  sub1_status?: string | null;
 }
 
 export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterParams {
@@ -30,11 +33,12 @@ export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterP
     team: sp.get('team'),
     trade: sp.get('trade'),
     bucket: sp.get('bucket'),
+    sub1_status: sp.get('sub1_status'),
   };
 }
 
 export function hasAnyDashboardFilter(p: DashboardFilterParams): boolean {
-  return !!(p.status || p.overdue || p.stage || p.team || p.trade || p.bucket);
+  return !!(p.status || p.overdue || p.stage || p.team || p.trade || p.bucket || p.sub1_status);
 }
 
 const BUILDERS: Record<DocModule, (rows: any[], asOf: Date) => any[]> = {
@@ -82,6 +86,12 @@ export function computeDashboardFilteredIds(
     }
   }
 
+  // For OMM sub1_status filter, build id -> bucket map from raw rows
+  const ommSub1ById = new Map<string, string>();
+  if (module === 'omm' && params.sub1_status) {
+    for (const r of rows) ommSub1ById.set(r.id, classifyOmmSub1Status(r));
+  }
+
   const out = new Set<string>();
   for (const [id, recs] of byItem) {
     if (params.team) {
@@ -101,6 +111,9 @@ export function computeDashboardFilteredIds(
       } else if (b !== want) {
         continue;
       }
+    }
+    if (module === 'omm' && params.sub1_status) {
+      if ((ommSub1ById.get(id) ?? '') !== params.sub1_status) continue;
     }
     if (params.status === 'completed') {
       const ok = recs.some((r: any) => r.stage_key === lastKey && r.is_done);
@@ -141,5 +154,6 @@ export function dashboardFilterLabel(module: DocModule, p: DashboardFilterParams
   if (p.bucket) parts.push(ABD_BUCKET_LABEL[p.bucket] ?? p.bucket);
   if (p.team) parts.push(`Team: ${p.team}`);
   if (p.trade) parts.push(`Trade: ${p.trade}`);
+  if (p.sub1_status) parts.push(`1st Status: ${p.sub1_status}`);
   return parts.length ? parts.join(' · ') : null;
 }

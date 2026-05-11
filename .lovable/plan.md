@@ -1,54 +1,49 @@
-# Defect / Warranty / As-Built import 별칭 정리
+## OMM Stage Progress 카드 UI 개선
 
-OMM 모듈에서 적용한 동일한 패턴을 Defect, Warranty, As-Built 3개 모듈에도 일괄 적용하여, Admin Header Mappings UI에서 모든 별칭을 관리할 수 있도록 하고 파서의 FALLBACK 별칭을 보강합니다.
+### 변경 결과 (5개 카드)
 
-## 목표
+| # | 카드 | 표시 내용 |
+|---|------|-----------|
+| 1 | **1st Status** | A / B / C / UR / Planned 5개 버킷 카운트 (합 = 전체) |
+| 2 | **2nd Submission** | total / done / overdue (기존 형식) |
+| 3 | **2nd Response** | total / done / overdue (기존 2nd Review 카드를 Response로 라벨 변경) |
+| 4 | **Final Submission** | total / done / overdue |
+| 5 | **Final Approval** | total / done / overdue |
 
-1. Admin Header Mappings 탭에서 각 모듈 헤더가 unmapped로 남지 않고, 사용자가 별칭을 자유롭게 매핑 가능
-2. 파서 FALLBACK_ALIASES가 자주 등장하는 헤더 변형(snake_case, Korean 라벨, 줄임말, ordinal 변형)을 충분히 흡수
-3. 의도적으로 무시할 컬럼은 `skip` pseudo-target으로 명시 가능
+삭제: 1st Submission, 3rd Submission, 3rd Review
 
-## 변경 범위
+### 1st Status 버킷 정의
 
-### 1. Admin UI 필드 목록에 `skip` pseudo-target 추가
-**파일:** `src/pages/admin/HeaderMappingsTab.tsx`
-- `DEFECT_FIELDS` 마지막에 `'skip'` 추가
-- `DOCS_AS_BUILT_FIELDS` 마지막에 `'skip'` 추가
-- `DOCS_WARRANTY_FIELDS` 마지막에 `'skip'` 추가
+`omm` 행 1건당 1번만 카운트하여 합 = 전체 OMM 행수가 되도록 함:
 
-OMM과 동일하게 Admin에서 import 시 무시할 컬럼을 지정 가능.
+- **A** — `sub1_response_status === 'A'`
+- **B** — `sub1_response_status === 'B'`
+- **C** — `sub1_response_status === 'C'`
+- **UR** (Under Review) — `sub1_actual_date` 있음 & `sub1_response_status` 비어있음
+- **Planned** — `sub1_actual_date` 없음 (아직 제출 전)
 
-### 2. Defect 파서 FALLBACK_ALIASES 보강
-**파일:** `src/lib/defect-parser.ts` (`FIELD_ALIASES`)
-- snake_case 변형: `issue_no`, `issue_type`, `area_raw`, `area_level`, `area_location`, `subcontractor_name`, `subsub_name`, `planned_start_date` 등 — `toFieldName`이 `_/-`를 공백으로 정규화하므로 일부는 자동 매칭되나, 누락된 형태 점검
-- Korean 라벨: `'호기'`, `'구역'`, `'세부공종'`, `'우선순위'`, `'상태'`, `'비고'`, `'시작일'`, `'완료일'`, `'마감일'` 등 흔히 쓰이는 라벨
-- 줄임말 / 변형: `'iss no'`, `'iss type'`, `'sc'`(subcontractor), `'sub-sub name'`, `'comp date'`, `'closure'`, `'plan start'`, `'plan complete'`
-- 컬럼 무시 후보: `'no'`, `'no.'`, `'s.no'`, `'index'` → `'skip'`
+### 변경 파일
 
-### 3. As-Built (Docs) 파서 FALLBACK_ALIASES 보강
-**파일:** `src/lib/docs-import-parser.ts` (`FIELD_ALIASES`, `SUB_ALIAS`)
-- 도면 변형: `'drawing number'`, `'dwg #'`, `'dwg'`, `'file no'`, `'sheet no'`
-- 단계 라벨 변형: `'1st planned'`, `'1st actual'`, `'1st response'` (현재는 정규식으로 일부 처리되나 단독 라벨도 보강)
-- Korean: `'도면번호'`, `'도면명'`, `'개정'`, `'담당'`, `'비고'`
-- Skip 추가: `'sl no'`, `'index'`, `'#'`
+**1. `src/lib/docs-stage-records.ts`**
+- `OMM_STAGE_DEFS`에서 `omm.sub1_submission`, `omm.sub3_submission`, `omm.sub3_review` 제거
+- `omm.sub1_review` 라벨을 `1st Status`로 변경 (또는 새 키 `omm.sub1_status` 도입)
+- `omm.sub2_review` 라벨을 `2nd Response`로 변경
+- `buildOmmStageRecords` 내 stage 배열에서 삭제된 stage 항목 제거 (sub1_submission, sub3_submission, sub3_review)
+- 새 헬퍼 `computeOmmSub1StatusBuckets(rows)` 추가 → `{A, B, C, UR, Planned, total}` 반환
 
-### 4. Warranty 파서 FALLBACK_ALIASES 보강
-**파일:** `src/lib/docs-warranty-import-parser.ts` (`FALLBACK_ALIASES`)
-- snake_case / 변형: `'item_no'`, `'warranted_item'`, `'warranty period (years)'`, `'warranty years'`
-- 단계 라벨 변형: `'draft planned submission'`, `'draft actual submission'`, `'draft planned response'`, `'draft actual response'`, `'draft status'`, `'subcontractor signing planned'`, `'subcontractor signing actual'`, `'hdec signing planned'`, `'hdec signing actual'`, `'final planned'`, `'final actual'`
-- Korean: `'품목'`, `'카테고리'`, `'팀'`, `'담당자'`, `'엔지니어'`, `'비고'`
-- Skip: `'no'`(이미 있음), `'#'`, `'index'`
+**2. `src/pages/docs/DocsExecutiveDashboardPage.tsx`**
+- OMM 모듈일 때 Stage Progress 그리드를 분기 처리: 첫 번째 슬롯에 새 `Sub1StatusCard` 컴포넌트(5개 버킷 표시), 나머지는 기존 `StageCard`로 2nd Sub / 2nd Response / Final Sub / Final Approval 4개 렌더
+- 그리드 컬럼: 5개로 고정 (`lg:grid-cols-5`)
+- 각 버킷 클릭 시 Raw Data로 이동: A/B/C는 `sub1_response_status` 필터, UR은 `status=Sub1 Under Review`, Planned는 `status=Pending Sub1`
 
-## 기술 메모
+**3. 새 컴포넌트 `src/components/docs/OmmSub1StatusCard.tsx`**
+- 카드 헤더 "1st Status"
+- 5개 미니 칩(A/B/C/UR/Planned) — 각각 카운트 + 클릭 가능
+- 색상: A=emerald, B=rose, C=amber, UR=blue, Planned=muted
+- 합계가 total과 일치하는지 검증 (불일치 시 dev 모드 console.warn)
 
-- 모든 별칭은 lowercase 키로 등록 (정규화 함수 결과와 일치).
-- Defect 파서의 `toFieldName`은 `_/-`를 공백으로 변환 후 lookup → snake_case 헤더는 자동으로 공백형 키와 매칭됨. 별칭은 공백형으로 추가.
-- Warranty 파서는 `lower` (lowercase)와 `norm` (case 보존) 두 단계로 DB lookup → FALLBACK은 lowercase 키만 정의.
-- Korean 라벨은 정규화 함수가 한글을 보존하므로 한글 키 그대로 등록 가능.
-- `skip` pseudo-target은 파서 측에서 이미 처리됨 (Warranty/OMM에 구현 존재). Defect 파서에는 `'skip'` 분기가 없으므로 `toFieldName` 호출부에서 skip 체크 추가 필요.
+### 영향 범위
 
-## 검증 방법
-
-1. Admin → Header Mappings → 각 모듈 탭에서 unmapped 그룹이 비거나 의미 있는 미매핑만 남는지 확인
-2. 샘플 raw 파일을 import 했을 때 신규 별칭이 정상 매핑되는지 콘솔 로그(`import-field-log`)로 확인
-3. `skip` 지정한 컬럼이 raw_payload/audit에서 제외되는지 확인
+- ABD/Warranty 모듈은 영향 없음 (OMM 분기 처리)
+- `summariseByItem`의 `lastKey` 로직은 OMM_STAGE_DEFS 마지막(`final_approval`) 그대로 유지 → 완료 판정 변동 없음
+- OmmCycleProgress 컴포넌트는 별개(행 단위 pip)로 변경 없음

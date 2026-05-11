@@ -65,14 +65,56 @@ export const ABD_STAGE_DEFS: StageDefinition[] = [
 
 export const OMM_STAGE_DEFS: StageDefinition[] = [
   { key: 'omm.sub1_submission', label: '1st Submission', order: 1 },
-  { key: 'omm.sub1_review',     label: '1st Review',     order: 2 },
+  { key: 'omm.sub1_review',     label: '1st Status',     order: 2 },
   { key: 'omm.sub2_submission', label: '2nd Submission', order: 3 },
-  { key: 'omm.sub2_review',     label: '2nd Review',     order: 4 },
+  { key: 'omm.sub2_review',     label: '2nd Response',   order: 4 },
   { key: 'omm.sub3_submission', label: '3rd Submission', order: 5 },
-  { key: 'omm.sub3_review',     label: '3rd Review',     order: 6 },
+  { key: 'omm.sub3_review',     label: '3rd Response',   order: 6 },
   { key: 'omm.final_submission',label: 'Final Submission', order: 7 },
   { key: 'omm.final_approval',  label: 'Final Approval',   order: 8 },
 ];
+
+/**
+ * Visible Stage Progress cards for OMM Executive Dashboard.
+ * Excludes 1st Submission (replaced by Sub1 Status card) and 3rd cycle cards.
+ */
+export const OMM_VISIBLE_STAGE_KEYS = new Set<string>([
+  'omm.sub2_submission',
+  'omm.sub2_review',
+  'omm.final_submission',
+  'omm.final_approval',
+]);
+
+export interface OmmSub1StatusBuckets {
+  A: number;
+  B: number;
+  C: number;
+  UR: number;
+  Planned: number;
+  total: number;
+}
+
+export function computeOmmSub1StatusBuckets(rows: any[]): OmmSub1StatusBuckets {
+  const out: OmmSub1StatusBuckets = { A: 0, B: 0, C: 0, UR: 0, Planned: 0, total: 0 };
+  for (const r of rows) {
+    out.total++;
+    const submitted = !!r?.sub1_actual_date;
+    if (!submitted) { out.Planned++; continue; }
+    const s = String(r?.sub1_response_status ?? '').trim().toUpperCase();
+    if (s === 'A') out.A++;
+    else if (s === 'B') out.B++;
+    else if (s === 'C') out.C++;
+    else out.UR++;
+  }
+  return out;
+}
+
+export function classifyOmmSub1Status(row: any): 'A' | 'B' | 'C' | 'UR' | 'Planned' {
+  if (!row?.sub1_actual_date) return 'Planned';
+  const s = String(row?.sub1_response_status ?? '').trim().toUpperCase();
+  if (s === 'A' || s === 'B' || s === 'C') return s;
+  return 'UR';
+}
 
 export const WARRANTY_STAGE_DEFS: StageDefinition[] = [
   { key: 'warranty.draft',        label: 'Draft',         order: 1 },

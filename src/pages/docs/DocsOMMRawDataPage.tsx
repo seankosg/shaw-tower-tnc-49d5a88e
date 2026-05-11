@@ -615,7 +615,7 @@ export default function DocsOMMRawDataPage() {
   }, [reload]);
 
   // ── State persistence (localStorage) ──────────────────────────────────────
-  const DOCS_DRILLDOWN_PARAMS = ['status', 'overdue', 'stage', 'team', 'q', 'mismatch', 'resub'];
+  const DOCS_DRILLDOWN_PARAMS = ['status', 'overdue', 'stage', 'team', 'q', 'mismatch', 'resub', 'sub1_status'];
   useEffect(() => {
     setStateLoaded(false);
     const isDrilldown = DOCS_DRILLDOWN_PARAMS.some((p) => searchParams.has(p));
