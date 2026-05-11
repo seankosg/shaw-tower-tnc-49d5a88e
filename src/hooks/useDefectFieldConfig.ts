@@ -133,6 +133,7 @@ export function useDefectFieldConfig() {
     fields,
     loading,
     isFieldVisible,
+    isFieldEditable,
     isFieldRequired,
     getLabel,
     getSourceLabel,
