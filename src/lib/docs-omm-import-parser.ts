@@ -392,7 +392,7 @@ export async function parseOmmExcel(
         const v = dataRow[c];
         if (f.endsWith('_date')) struct[f] = normalizeDate(v);
         else if (f.endsWith('_qty')) struct[f] = toIntOrNull(v);
-        else if (f === 'draft_response_status' || f === 'final_response_status') struct[f] = normalizeStatusLetter(v);
+        else if (f.endsWith('_response_status')) struct[f] = normalizeStatusLetter(v);
         else struct[f] = toText(v);
       }
 
