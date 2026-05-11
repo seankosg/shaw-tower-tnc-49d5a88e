@@ -346,7 +346,7 @@ export default function DocsWarrantyDetailPage() {
           <CardTitle className="text-sm">Schedule R (ACRA / Subcontract)</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {SCHEDULE_R_FIELDS.filter(isFieldVisible).map((f) => (
+          {SCHEDULE_R_FIELDS.filter((f) => isFieldVisible(f, roles)).map((f) => (
             <FieldEditor
               key={f} field={f} label={getLabel(f)}
               value={(row as any)[f]}
