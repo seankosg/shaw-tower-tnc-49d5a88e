@@ -125,14 +125,19 @@ export default function DocsDrawingDetailPage() {
   const navigate = useNavigate();
   const { user, roles } = useAuth();
   const { toast } = useToast();
-  const { isFieldVisible, getLabel } = useDocsFieldConfig();
+  const { isFieldVisible: isFieldVisibleRaw, isFieldEditable, getLabel } = useDocsFieldConfig();
   const { dataDate } = useLatestDocsDataDate('as_built');
   const { value: leadDays } = useAppSetting<number>('docs_lead_days_as_built', 30);
 
-  const canEdit = useMemo(
+  const isFieldVisible = (f: string) => isFieldVisibleRaw(f, roles);
+
+  const canEditRow = useMemo(
     () => roles.some((r) => ['admin', 'superuser', 'd_superuser', 'senior_user', 'user'].includes(r)),
     [roles],
   );
+  // Per-field gate — combines row permission + field config `editable_to_roles`
+  const canEdit = canEditRow;
+  const canEditField = (field: string) => canEditRow && isFieldEditable(field, roles);
 
   const [record, setRecord] = useState<DocsDrawing | null>(null);
   const [form, setForm] = useState<Partial<DocsDrawing>>({});
