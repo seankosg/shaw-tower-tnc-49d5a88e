@@ -461,7 +461,7 @@ export default function DocsWarrantyRawDataPage() {
   const { user, profile } = useAuth() as any;
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { fields: fieldConfigRows, getLabel, isFieldVisible, sortFieldNames } = useDocsFieldConfig('warranty');
+  const { fields: fieldConfigRows, getLabel, isFieldVisible, sortFieldNames, getSourceOrigin } = useDocsFieldConfig('warranty');
 
   const storageKey = user?.id
     ? `warranty-raw-data-state:${user.id}`
@@ -1171,6 +1171,7 @@ export default function DocsWarrantyRawDataPage() {
         sorting={sorting.length ? sorting : DEFAULT_SORTING}
         navigate={navigate}
         tableRef={tableRef}
+        getSourceOrigin={getSourceOrigin}
       />
 
       {/* Export dialog */}
@@ -1224,9 +1225,10 @@ interface ViewProps {
   sorting: SortingState;
   navigate: (path: string) => void;
   tableRef: React.RefObject<HTMLDivElement>;
+  getSourceOrigin?: (field: string) => 'hdec' | 'aconex' | 'system';
 }
 
-function WarrantyRawTableView({ table, loading, sorting, navigate, tableRef }: ViewProps) {
+function WarrantyRawTableView({ table, loading, sorting, navigate, tableRef, getSourceOrigin }: ViewProps) {
   const isMobile = useIsMobile();
   const { value: frozenSetting } = useFrozenColumnCount();
   const userFrozenCount = isMobile ? 1 : Math.min(Math.max(Number(frozenSetting) || 1, 1), 4);
@@ -1276,6 +1278,9 @@ function WarrantyRawTableView({ table, loading, sorting, navigate, tableRef }: V
     const isLastSticky = index === frozenCount - 1;
     const headerDef = header.column.columnDef.header;
     const headerText = typeof headerDef === 'string' ? headerDef : header.column.id;
+    const originStyle = getSourceOrigin
+      ? getOriginHeaderStyle(getSourceOrigin(header.column.id))
+      : getOriginHeaderStyle('system');
     return (
       <TableHead
         key={header.id}
@@ -1288,11 +1293,13 @@ function WarrantyRawTableView({ table, loading, sorting, navigate, tableRef }: V
             position: 'sticky',
             left: stickyLefts[index],
             zIndex: 3,
-            background: 'hsl(var(--background))',
+            background: originStyle.stickyBg,
           } : {}),
         }}
         className={cn(
-          'relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background px-3 py-0 text-left text-xs font-medium',
+          'relative h-9 cursor-pointer select-none whitespace-nowrap border-b px-3 py-0 text-left text-xs font-medium',
+          !isSticky && (originStyle.bg || 'bg-background'),
+          originStyle.border,
           isLastSticky && 'shadow-[2px_0_4px_-2px_hsl(var(--border))]',
         )}
         onClick={header.column.getToggleSortingHandler()}
