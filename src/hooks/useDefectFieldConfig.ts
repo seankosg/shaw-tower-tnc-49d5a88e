@@ -90,11 +90,20 @@ export function useDefectFieldConfig() {
 
   const fieldMap = useMemo(() => new Map(fields.map((field) => [field.field_name, field])), [fields]);
 
-  const isFieldVisible = (fieldName: string) => {
+  const isFieldVisible = (fieldName: string, userRoles: AppRole[] = []) => {
     if (fieldName === 'issue_no') return true;
     const field = fieldMap.get(fieldName);
-    return field?.is_enabled ?? true;
+    if (field && field.is_enabled === false) return false;
+    return isAllowedByRoles(field?.visible_to_roles ?? null, userRoles);
   };
+
+  /**
+   * Field-level edit gate based on `editable_to_roles` config.
+   * - If `editable_to_roles` is null/empty → editable by anyone with row write permission (default)
+   * - admin always allowed
+   */
+  const isFieldEditable = (fieldName: string, userRoles: AppRole[]) =>
+    isAllowedByRoles(fieldMap.get(fieldName)?.editable_to_roles ?? null, userRoles);
 
   const isFieldRequired = (fieldName: string) => fieldMap.get(fieldName)?.is_required ?? false;
   const getLabel = (fieldName: string) => fieldMap.get(fieldName)?.display_name || DEFECT_DEFAULT_FIELD_LABELS[fieldName] || fieldName;
