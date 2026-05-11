@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAdminAuthorIds } from '@/lib/comment-author-roles';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -82,6 +83,7 @@ export function SubtestComments({
 
   const [comments, setComments] = useState<SubtestComment[]>([]);
   const [authors, setAuthors] = useState<AuthorInfo[]>([]);
+  const [vpAuthorIds, setVpAuthorIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [commentType, setCommentType] = useState<Exclude<CommentType, 'reply'>>('comment');
@@ -131,6 +133,7 @@ export function SubtestComments({
     const ids = Array.from(new Set(comments.map((c) => c.author_user_id)));
     if (ids.length === 0) {
       setAuthors([]);
+      setVpAuthorIds(new Set());
       return;
     }
     let cancelled = false;
@@ -140,6 +143,8 @@ export function SubtestComments({
         .select('user_id, name, login_id')
         .in('user_id', ids);
       if (!cancelled) setAuthors((data ?? []) as AuthorInfo[]);
+      const vpIds = await fetchAdminAuthorIds(ids);
+      if (!cancelled) setVpAuthorIds(vpIds);
     })();
     return () => { cancelled = true; };
   }, [comments]);
@@ -314,13 +319,16 @@ export function SubtestComments({
       <div
         key={c.id}
         style={indentStyle}
-        className={cn('rounded-md border p-2 space-y-1', typeBadgeStyle(isReplyItem ? 'reply' : c.type))}
+        className={cn('rounded-md border p-2 space-y-1', typeBadgeStyle(isReplyItem ? 'reply' : c.type), vpAuthorIds.has(c.author_user_id) && 'border-l-4 border-l-primary')}
       >
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
             {isReplyItem ? 'reply' : c.type}
           </Badge>
           <span className="text-xs font-medium text-foreground">{getAuthorName(c.author_user_id)}</span>
+          {vpAuthorIds.has(c.author_user_id) && (
+            <Badge className="text-[10px] px-1.5 py-0 h-4 bg-primary text-primary-foreground hover:bg-primary">VP</Badge>
+          )}
           <span className="text-[10px] text-muted-foreground ml-auto">
             {format(new Date(c.created_at), 'MM/dd HH:mm')}
             {c.edited ? ' · edited' : ''}
