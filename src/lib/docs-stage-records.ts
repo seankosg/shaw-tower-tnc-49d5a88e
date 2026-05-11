@@ -71,11 +71,10 @@ export const OMM_STAGE_DEFS: StageDefinition[] = [
 ];
 
 export const WARRANTY_STAGE_DEFS: StageDefinition[] = [
-  { key: 'warranty.acra',         label: 'ACRA',          order: 1 },
-  { key: 'warranty.draft',        label: 'Draft',         order: 2 },
-  { key: 'warranty.subcon_sign',  label: 'Subcon Sign',   order: 3 },
-  { key: 'warranty.hdec_sign',    label: 'HDEC Sign',     order: 4 },
-  { key: 'warranty.final',        label: 'Final',         order: 5 },
+  { key: 'warranty.draft',        label: 'Draft',         order: 1 },
+  { key: 'warranty.subcon_sign',  label: 'Subcon Sign',   order: 2 },
+  { key: 'warranty.hdec_sign',    label: 'HDEC Sign',     order: 3 },
+  { key: 'warranty.final',        label: 'Final',         order: 4 },
 ];
 
 export const ALL_STAGE_DEFS: Record<DocModule, StageDefinition[]> = {
