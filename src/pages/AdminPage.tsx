@@ -291,6 +291,7 @@ function UsersTab() {
       await supabase.from('user_roles').delete().eq('user_id', uid);
     }
     await supabase.from('user_roles').insert({ user_id: uid, role });
+    invalidateAdminRolesCache();
     toast({ title: 'Role updated' });
     load();
   };
