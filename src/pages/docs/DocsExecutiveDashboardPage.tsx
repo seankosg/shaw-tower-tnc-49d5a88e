@@ -306,6 +306,36 @@ function ModuleSection({
               tradeFilter={tab === '__all__' ? null : tab}
               onNavigate={(params) => onNavigate(module, params)}
             />
+          ) : isOmm ? (
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+              <OmmSub1StatusCard
+                buckets={ommSub1Buckets}
+                accent={accent}
+                onBucket={(b) => {
+                  const params: Record<string, string> = { sub1_status: b };
+                  if (tab !== '__all__') params.team = tab;
+                  onNavigate(module, params);
+                }}
+              />
+              {stages
+                .filter((s) => OMM_VISIBLE_STAGE_KEYS.has(s.stage_key))
+                .map((s) => {
+                  const params: Record<string, string> = { stage: s.stage_key, overdue: '1' };
+                  if (tab !== '__all__') params.team = tab;
+                  return (
+                    <StageCard
+                      key={s.stage_key}
+                      label={s.stage_label}
+                      total={s.total}
+                      done={s.done}
+                      overdue={s.overdue}
+                      remaining={s.remaining}
+                      accent={accent}
+                      onClick={() => onNavigate(module, params)}
+                    />
+                  );
+                })}
+            </div>
           ) : (
             <div className={cn(
               'grid gap-3',
