@@ -33,6 +33,7 @@ import { ModuleControlTab } from './admin/ModuleControlTab';
 import HeaderMappingsTab from './admin/HeaderMappingsTab';
 import CustomFieldsTab from './admin/CustomFieldsTab';
 import { loadHeaderMappingsCache } from '@/lib/header-mappings-cache';
+import { invalidateAdminRolesCache } from '@/lib/admin-roles-cache';
 import { UnmappedAliasQueue } from '@/components/admin/UnmappedAliasQueue';
 import { ChevronDown, ChevronRight, Search, AlertTriangle } from 'lucide-react';
 
