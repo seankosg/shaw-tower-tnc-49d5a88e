@@ -355,6 +355,21 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
               recordId = existing.id;
               updated++;
               rowLogs.push({ upload_id: batchId, row_no: row.rawRowNo, item_no: row.item_no, status: 'updated' });
+              // Diff tracked fields → docs_change_log
+              for (const fld of TRACKED_FIELDS) {
+                if (excludedFields.has(fld)) continue;
+                if (!(fld in updatePayload)) continue;
+                const oldV = stringify(existing[fld]);
+                const newV = stringify(updatePayload[fld]);
+                if (oldV !== newV) {
+                  changeLogs.push({
+                    sub_module: 'warranty', record_id: existing.id,
+                    changed_field: fld, old_value: oldV, new_value: newV,
+                    change_source: 'excel_import', upload_id: batchId,
+                    changed_by: user?.id ?? null,
+                  });
+                }
+              }
             } else {
               const { data: ins, error } = await (supabase as any)
                 .from('warranty_items').insert({ ...payload, created_by: user?.id ?? null }).select('id').single();
@@ -362,6 +377,18 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
               recordId = ins?.id ?? null;
               inserted++;
               rowLogs.push({ upload_id: batchId, row_no: row.rawRowNo, item_no: row.item_no, status: 'inserted' });
+              if (recordId) {
+                for (const fld of TRACKED_FIELDS) {
+                  const newV = stringify((payload as any)[fld]);
+                  if (newV == null) continue;
+                  changeLogs.push({
+                    sub_module: 'warranty', record_id: recordId,
+                    changed_field: fld, old_value: null, new_value: newV,
+                    change_source: 'excel_import', upload_id: batchId,
+                    changed_by: user?.id ?? null,
+                  });
+                }
+              }
             }
           } catch (err: any) {
             rejected++;
