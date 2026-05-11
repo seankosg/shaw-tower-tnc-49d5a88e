@@ -112,6 +112,9 @@ export function computeDashboardFilteredIds(
         continue;
       }
     }
+    if (module === 'omm' && params.sub1_status) {
+      if ((ommSub1ById.get(id) ?? '') !== params.sub1_status) continue;
+    }
     if (params.status === 'completed') {
       const ok = recs.some((r: any) => r.stage_key === lastKey && r.is_done);
       if (!ok) continue;
