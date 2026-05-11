@@ -47,6 +47,7 @@ import { DocsCycleProgress } from '@/components/docs/DocsCycleProgress';
 import { computeOverallStatus, computeIsClosed } from '@/lib/docs-status';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { getOriginHeaderStyle } from '@/lib/origin-header-style';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
 import { DocsDashboardFilterBanner } from '@/components/docs/DocsDashboardFilterBanner';
 import {
