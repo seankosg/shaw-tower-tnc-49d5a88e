@@ -467,6 +467,13 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
           await (supabase as any).from('warranty_upload_row_logs').insert(chunk);
         }
 
+        // Persist Change History (docs_change_log) in chunks of 500.
+        for (let i = 0; i < changeLogs.length; i += 500) {
+          const chunk = changeLogs.slice(i, i + 500);
+          const { error: clErr } = await (supabase as any).from('docs_change_log').insert(chunk);
+          if (clErr) console.warn('[warranty-import] docs_change_log insert failed', clErr);
+        }
+
         // Finalize batch counters.
         await (supabase as any).from('warranty_upload_batches').update({
           processed_rows: parsed.length,
