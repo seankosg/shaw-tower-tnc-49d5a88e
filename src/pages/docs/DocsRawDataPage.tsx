@@ -390,7 +390,7 @@ function ColumnFilterDropdown({ column }: { column: any }) {
 export default function DocsRawDataPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, profile } = useAuth();
+  const { user, profile, roles } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isFieldVisible, getLabel, sortFieldNames, fields: fieldConfigRows, getSourceOrigin } = useDocsFieldConfig();
@@ -773,10 +773,11 @@ export default function DocsRawDataPage() {
     for (const f of DOCS_RAW_FIELDS) {
       if (f === 'document_no') v[f] = true;
       else if (f === 'trade' || f === 'risk') v[f] = true; // derived columns always shown by default
-      else v[f] = isFieldVisible(f);
+      else v[f] = isFieldVisible(f, roles);
     }
     return v;
-  }, [isFieldVisible]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFieldVisible, roles]);
 
   const columnOrder = useMemo(() => {
     const PINNED = ['__select', 'cycle_progress', 'document_no'];
