@@ -555,7 +555,7 @@ export default function DocsOMMRawDataPage() {
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, profile } = useAuth() as any;
-  const { fields: fieldConfigRows, isFieldVisible, getLabel, sortFieldNames } = useDocsFieldConfig('omm');
+  const { fields: fieldConfigRows, isFieldVisible, getLabel, sortFieldNames, getSourceOrigin } = useDocsFieldConfig('omm');
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<OmmExportFormat>('view');
   const storageKey = user?.id
