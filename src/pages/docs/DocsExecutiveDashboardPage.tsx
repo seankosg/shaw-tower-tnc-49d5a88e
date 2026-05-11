@@ -20,7 +20,9 @@ import {
 import {
   ALL_STAGE_DEFS, MODULE_LABEL, MODULE_RAW_ROUTE,
   computeStageProgress, summariseByItem, computeAbdBucketDistribution,
+  computeOmmSub1StatusBuckets, OMM_VISIBLE_STAGE_KEYS,
   type DocModule, type DocsStageRecord, type AbdBucketDistribution,
+  type OmmSub1StatusBuckets,
 } from '@/lib/docs-stage-records';
 
 const MODULE_ICON: Record<DocModule, typeof FileText> = {
