@@ -573,7 +573,7 @@ const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
 export default function SubtestList() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, profile } = useAuth();
+  const { user, profile, roles } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const storageKey = user?.id ? `subtest-list-state:${user.id}` : 'subtest-list-state:anon';
@@ -1474,11 +1474,11 @@ export default function SubtestList() {
       if (!id) continue;
       if (id === 'stage_progress') continue;
       const fieldName = columnIdToFieldName[id] ?? id;
-      visibility[id] = isFieldVisible(fieldName);
+      visibility[id] = isFieldVisible(fieldName, roles);
     }
     return visibility;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allColumns, isFieldVisible]);
+  }, [allColumns, isFieldVisible, roles]);
 
   const columnOrder = useMemo<string[]>(() => {
     const allIds = allColumns

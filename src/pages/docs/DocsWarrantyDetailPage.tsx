@@ -298,7 +298,7 @@ export default function DocsWarrantyDetailPage() {
           <CardTitle className="text-sm">Identity</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {IDENTITY_FIELDS.filter(isFieldVisible).map((f) => (
+          {IDENTITY_FIELDS.filter((f) => isFieldVisible(f, roles)).map((f) => (
             <FieldEditor
               key={f} field={f} label={getLabel(f)}
               value={(row as any)[f]}
@@ -318,7 +318,7 @@ export default function DocsWarrantyDetailPage() {
         <CardContent className="space-y-4">
           <WarrantyCycleProgress row={row} />
           {STAGE_GROUPS.map((g) => {
-            const fields = g.fields.filter(isFieldVisible);
+            const fields = g.fields.filter((f) => isFieldVisible(f, roles));
             if (fields.length === 0) return null;
             return (
               <div key={g.title} className="space-y-2 border-t pt-3 first:border-t-0 first:pt-0">
@@ -346,7 +346,7 @@ export default function DocsWarrantyDetailPage() {
           <CardTitle className="text-sm">Schedule R (ACRA / Subcontract)</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {SCHEDULE_R_FIELDS.filter(isFieldVisible).map((f) => (
+          {SCHEDULE_R_FIELDS.filter((f) => isFieldVisible(f, roles)).map((f) => (
             <FieldEditor
               key={f} field={f} label={getLabel(f)}
               value={(row as any)[f]}
@@ -378,7 +378,7 @@ export default function DocsWarrantyDetailPage() {
           />
         </CardContent>
       </Card>
-      {isFieldVisible('remarks') && (
+      {isFieldVisible('remarks', roles) && (
         <Card>
           <CardHeader className="py-3">
             <CardTitle className="text-sm">{getLabel('remarks')}</CardTitle>

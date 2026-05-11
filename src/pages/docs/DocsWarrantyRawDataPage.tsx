@@ -458,7 +458,7 @@ function StatusBadge({ value }: { value: WarrantyStatusToken | null }) {
 // ─── Page ───────────────────────────────────────────────────────────────────
 export default function DocsWarrantyRawDataPage() {
   const navigate = useNavigate();
-  const { user, profile } = useAuth() as any;
+  const { user, profile, roles } = useAuth() as any;
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const { fields: fieldConfigRows, getLabel, isFieldVisible, sortFieldNames, getSourceOrigin } = useDocsFieldConfig('warranty');
@@ -906,11 +906,11 @@ export default function DocsWarrantyRawDataPage() {
     for (const id of ALWAYS_VISIBLE) v[id] = true;
     for (const id of ALL_DATA_FIELDS) {
       if (ALWAYS_VISIBLE.has(id)) continue;
-      v[id] = isFieldVisible(id);
+      v[id] = isFieldVisible(id, roles);
     }
     return v;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFieldVisible]);
+  }, [isFieldVisible, roles]);
 
   // Column order from Field Config sort_order with pinned anchors
   const columnOrder = useMemo(() => {

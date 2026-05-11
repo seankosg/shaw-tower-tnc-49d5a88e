@@ -555,7 +555,7 @@ export default function DocsOMMRawDataPage() {
   
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, profile } = useAuth() as any;
+  const { user, profile, roles } = useAuth() as any;
   const { fields: fieldConfigRows, isFieldVisible, getLabel, sortFieldNames, getSourceOrigin } = useDocsFieldConfig('omm');
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<OmmExportFormat>('view');
@@ -1051,11 +1051,11 @@ export default function DocsOMMRawDataPage() {
     // Data fields follow Field Config (is_enabled)
     for (const id of OMM_DATA_FIELDS) {
       if (ALWAYS_VISIBLE.has(id)) continue;
-      v[id] = isFieldVisible(id);
+      v[id] = isFieldVisible(id, roles);
     }
     return v;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFieldVisible]);
+  }, [isFieldVisible, roles]);
 
   // Column order driven by Field Config sort_order, with fixed pinned/trailing anchors
   const columnOrder = useMemo(() => {

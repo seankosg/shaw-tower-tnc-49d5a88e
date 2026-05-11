@@ -125,14 +125,19 @@ export default function DocsDrawingDetailPage() {
   const navigate = useNavigate();
   const { user, roles } = useAuth();
   const { toast } = useToast();
-  const { isFieldVisible, getLabel } = useDocsFieldConfig();
+  const { isFieldVisible: isFieldVisibleRaw, isFieldEditable, getLabel } = useDocsFieldConfig();
   const { dataDate } = useLatestDocsDataDate('as_built');
   const { value: leadDays } = useAppSetting<number>('docs_lead_days_as_built', 30);
 
-  const canEdit = useMemo(
+  const isFieldVisible = (f: string) => isFieldVisibleRaw(f, roles);
+
+  const canEditRow = useMemo(
     () => roles.some((r) => ['admin', 'superuser', 'd_superuser', 'senior_user', 'user'].includes(r)),
     [roles],
   );
+  // Per-field gate — combines row permission + field config `editable_to_roles`
+  const canEdit = canEditRow;
+  const canEditField = (field: string) => canEditRow && isFieldEditable(field, roles);
 
   const [record, setRecord] = useState<DocsDrawing | null>(null);
   const [form, setForm] = useState<Partial<DocsDrawing>>({});
@@ -385,11 +390,11 @@ export default function DocsDrawingDetailPage() {
           {/* Identification */}
           <Section title="Identification">
             <ReadonlyField label={getLabel('document_no')} value={record.document_no} />
-            <Field label={getLabel('revision')} value={form.revision} disabled={!canEdit} onChange={(v) => updateField('revision', v)} />
-            {isFieldVisible('title') && <Field label={getLabel('title')} value={form.title} disabled={!canEdit} onChange={(v) => updateField('title', v)} />}
-            {isFieldVisible('series') && <Field label={getLabel('series')} value={form.series} disabled={!canEdit} onChange={(v) => updateField('series', v)} />}
-            {isFieldVisible('level_location') && <Field label={getLabel('level_location')} value={form.level_location} disabled={!canEdit} onChange={(v) => updateField('level_location', v)} />}
-            {isFieldVisible('sequential_no') && <Field label={getLabel('sequential_no')} value={form.sequential_no} disabled={!canEdit} onChange={(v) => updateField('sequential_no', v)} />}
+            <Field label={getLabel('revision')} value={form.revision} disabled={!canEditField('revision')} onChange={(v) => updateField('revision', v)} />
+            {isFieldVisible('title') && <Field label={getLabel('title')} value={form.title} disabled={!canEditField('title')} onChange={(v) => updateField('title', v)} />}
+            {isFieldVisible('series') && <Field label={getLabel('series')} value={form.series} disabled={!canEditField('series')} onChange={(v) => updateField('series', v)} />}
+            {isFieldVisible('level_location') && <Field label={getLabel('level_location')} value={form.level_location} disabled={!canEditField('level_location')} onChange={(v) => updateField('level_location', v)} />}
+            {isFieldVisible('sequential_no') && <Field label={getLabel('sequential_no')} value={form.sequential_no} disabled={!canEditField('sequential_no')} onChange={(v) => updateField('sequential_no', v)} />}
           </Section>
 
           {/* Classification */}
@@ -399,85 +404,85 @@ export default function DocsDrawingDetailPage() {
                 label={getLabel('trade')}
                 value={form.trade}
                 options={TRADE_OPTIONS.map((t) => ({ value: t, label: t }))}
-                disabled={!canEdit}
+                disabled={!canEditField('trade')}
                 onChange={(v) => updateField('trade', v)}
               />
             )}
             {isFieldVisible('discipline') && (
-              <SelectField label={getLabel('discipline')} value={form.discipline} options={statusPool.discipline.map((v) => ({ value: v, label: v }))} disabled={!canEdit} onChange={(v) => updateField('discipline', v)} allowFreeText />
+              <SelectField label={getLabel('discipline')} value={form.discipline} options={statusPool.discipline.map((v) => ({ value: v, label: v }))} disabled={!canEditField('discipline')} onChange={(v) => updateField('discipline', v)} allowFreeText />
             )}
             {isFieldVisible('team') && (
               <SelectField
                 label={getLabel('team') || 'Team'}
                 value={form.team}
                 options={ALL_TEAMS.map((t) => ({ value: t, label: TEAM_LABELS[t] }))}
-                disabled={!canEdit}
+                disabled={!canEditField('team')}
                 onChange={(v) => updateField('team', v)}
               />
             )}
-            {isFieldVisible('sheet_name') && <Field label={getLabel('sheet_name')} value={form.sheet_name} disabled={!canEdit} onChange={(v) => updateField('sheet_name', v)} />}
+            {isFieldVisible('sheet_name') && <Field label={getLabel('sheet_name')} value={form.sheet_name} disabled={!canEditField('sheet_name')} onChange={(v) => updateField('sheet_name', v)} />}
             {isFieldVisible('document_type') && (
-              <SelectField label={getLabel('document_type')} value={form.document_type} options={statusPool.document_type.map((v) => ({ value: v, label: v }))} disabled={!canEdit} onChange={(v) => updateField('document_type', v)} allowFreeText />
+              <SelectField label={getLabel('document_type')} value={form.document_type} options={statusPool.document_type.map((v) => ({ value: v, label: v }))} disabled={!canEditField('document_type')} onChange={(v) => updateField('document_type', v)} allowFreeText />
             )}
           </Section>
 
           {/* Cycle / Status */}
           <Section title="Cycle / Status">
             {isFieldVisible('aconex_status') && (
-              <SelectField label={getLabel('aconex_status')} value={form.aconex_status} options={statusPool.aconex_status.map((v) => ({ value: v, label: v }))} disabled={!canEdit} onChange={(v) => updateField('aconex_status', v)} allowFreeText />
+              <SelectField label={getLabel('aconex_status')} value={form.aconex_status} options={statusPool.aconex_status.map((v) => ({ value: v, label: v }))} disabled={!canEditField('aconex_status')} onChange={(v) => updateField('aconex_status', v)} allowFreeText />
             )}
             {isFieldVisible('current_status') && (
-              <SelectField label={getLabel('current_status')} value={form.current_status} options={statusPool.current_status.map((v) => ({ value: v, label: v }))} disabled={!canEdit} onChange={(v) => updateField('current_status', v)} allowFreeText />
+              <SelectField label={getLabel('current_status')} value={form.current_status} options={statusPool.current_status.map((v) => ({ value: v, label: v }))} disabled={!canEditField('current_status')} onChange={(v) => updateField('current_status', v)} allowFreeText />
             )}
             {isFieldVisible('is_submitted') && (
               <SelectField
                 label={getLabel('is_submitted')}
                 value={form.is_submitted == null ? null : (form.is_submitted ? 'true' : 'false')}
                 options={[{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]}
-                disabled={!canEdit}
+                disabled={!canEditField('is_submitted')}
                 onChange={(v) => updateField('is_submitted', (v === 'true') as any)}
                 clearable={false}
               />
             )}
-            {isFieldVisible('transmittal_number') && <Field label={getLabel('transmittal_number')} value={form.transmittal_number} disabled={!canEdit} onChange={(v) => updateField('transmittal_number', v)} />}
-            {isFieldVisible('transmittal_due_date') && <Field type="date" label={getLabel('transmittal_due_date')} value={toDateInput(form.transmittal_due_date)} disabled={!canEdit} onChange={(v) => updateField('transmittal_due_date', v)} />}
+            {isFieldVisible('transmittal_number') && <Field label={getLabel('transmittal_number')} value={form.transmittal_number} disabled={!canEditField('transmittal_number')} onChange={(v) => updateField('transmittal_number', v)} />}
+            {isFieldVisible('transmittal_due_date') && <Field type="date" label={getLabel('transmittal_due_date')} value={toDateInput(form.transmittal_due_date)} disabled={!canEditField('transmittal_due_date')} onChange={(v) => updateField('transmittal_due_date', v)} />}
             <ReadonlyField label={getLabel('days_due')} value={record.days_due} />
           </Section>
 
           {/* Parties */}
           <Section title="Parties">
             {isFieldVisible('organisation_raw') && (
-              <SelectField label={getLabel('organisation_raw')} value={form.organisation_raw} options={statusPool.organisation_raw.map((v) => ({ value: v, label: v }))} disabled={!canEdit} onChange={(v) => updateField('organisation_raw', v)} allowFreeText />
+              <SelectField label={getLabel('organisation_raw')} value={form.organisation_raw} options={statusPool.organisation_raw.map((v) => ({ value: v, label: v }))} disabled={!canEditField('organisation_raw')} onChange={(v) => updateField('organisation_raw', v)} allowFreeText />
             )}
             {isFieldVisible('subcontractor_name') && (
               <SelectField
                 label={getLabel('subcontractor_name')}
                 value={form.subcontractor_id}
                 options={subSelectOptions}
-                disabled={!canEdit}
+                disabled={!canEditField('subcontractor_name')}
                 onChange={(v) => handleSubcontractorChange(v)}
               />
             )}
             {isFieldVisible('hdec_pic_name') && (
-              <SelectField label={getLabel('hdec_pic_name')} value={form.hdec_pic_name} options={statusPool.hdec_pic_name.map((v) => ({ value: v, label: v }))} disabled={!canEdit} onChange={(v) => updateField('hdec_pic_name', v)} allowFreeText />
+              <SelectField label={getLabel('hdec_pic_name')} value={form.hdec_pic_name} options={statusPool.hdec_pic_name.map((v) => ({ value: v, label: v }))} disabled={!canEditField('hdec_pic_name')} onChange={(v) => updateField('hdec_pic_name', v)} allowFreeText />
             )}
             {isFieldVisible('hdec_eng_name') && (
-              <SelectField label={getLabel('hdec_eng_name')} value={form.hdec_eng_name} options={statusPool.hdec_eng_name.map((v) => ({ value: v, label: v }))} disabled={!canEdit} onChange={(v) => updateField('hdec_eng_name', v)} allowFreeText />
+              <SelectField label={getLabel('hdec_eng_name')} value={form.hdec_eng_name} options={statusPool.hdec_eng_name.map((v) => ({ value: v, label: v }))} disabled={!canEditField('hdec_eng_name')} onChange={(v) => updateField('hdec_eng_name', v)} allowFreeText />
             )}
           </Section>
 
           {/* Submission cycles */}
           {[1, 2, 3].map((n) => (
             <Section key={n} title={`Submission ${n}`}>
-              <Field type="date" label={getLabel(`sub${n}_planned_date`)} value={toDateInput((form as any)[`sub${n}_planned_date`])} disabled={!canEdit} onChange={(v) => updateField(`sub${n}_planned_date` as any, v)} />
-              <Field type="date" label={getLabel(`sub${n}_submission_date`)} value={toDateInput((form as any)[`sub${n}_submission_date`])} disabled={!canEdit} onChange={(v) => updateField(`sub${n}_submission_date` as any, v)} />
-              <Field type="date" label={getLabel(`sub${n}_approval_date`)} value={toDateInput((form as any)[`sub${n}_approval_date`])} disabled={!canEdit} onChange={(v) => updateField(`sub${n}_approval_date` as any, v)} />
-              <Field type="date" label={getLabel(`sub${n}_actual_response_date`)} value={toDateInput((form as any)[`sub${n}_actual_response_date`])} disabled={!canEdit} onChange={(v) => updateField(`sub${n}_actual_response_date` as any, v)} />
+              <Field type="date" label={getLabel(`sub${n}_planned_date`)} value={toDateInput((form as any)[`sub${n}_planned_date`])} disabled={!canEditField(`sub${n}_planned_date`)} onChange={(v) => updateField(`sub${n}_planned_date` as any, v)} />
+              <Field type="date" label={getLabel(`sub${n}_submission_date`)} value={toDateInput((form as any)[`sub${n}_submission_date`])} disabled={!canEditField(`sub${n}_submission_date`)} onChange={(v) => updateField(`sub${n}_submission_date` as any, v)} />
+              <Field type="date" label={getLabel(`sub${n}_approval_date`)} value={toDateInput((form as any)[`sub${n}_approval_date`])} disabled={!canEditField(`sub${n}_approval_date`)} onChange={(v) => updateField(`sub${n}_approval_date` as any, v)} />
+              <Field type="date" label={getLabel(`sub${n}_actual_response_date`)} value={toDateInput((form as any)[`sub${n}_actual_response_date`])} disabled={!canEditField(`sub${n}_actual_response_date`)} onChange={(v) => updateField(`sub${n}_actual_response_date` as any, v)} />
               <SelectField
                 label={getLabel(`sub${n}_approval_status`)}
                 value={(form as any)[`sub${n}_approval_status`]}
                 options={APPROVAL_STATUS_OPTIONS.map((s) => ({ value: s, label: s }))}
-                disabled={!canEdit}
+                disabled={!canEditField(`sub${n}_approval_status`)}
                 onChange={(v) => updateField(`sub${n}_approval_status` as any, v)}
               />
             </Section>
@@ -485,8 +490,8 @@ export default function DocsDrawingDetailPage() {
 
           {/* Dates */}
           <Section title="Dates">
-            {isFieldVisible('submitted_date') && <Field type="date" label={getLabel('submitted_date')} value={toDateInput(form.submitted_date)} disabled={!canEdit} onChange={(v) => updateField('submitted_date', v)} />}
-            {isFieldVisible('approved_date') && <Field type="date" label={getLabel('approved_date')} value={toDateInput(form.approved_date)} disabled={!canEdit} onChange={(v) => updateField('approved_date', v)} />}
+            {isFieldVisible('submitted_date') && <Field type="date" label={getLabel('submitted_date')} value={toDateInput(form.submitted_date)} disabled={!canEditField('submitted_date')} onChange={(v) => updateField('submitted_date', v)} />}
+            {isFieldVisible('approved_date') && <Field type="date" label={getLabel('approved_date')} value={toDateInput(form.approved_date)} disabled={!canEditField('approved_date')} onChange={(v) => updateField('approved_date', v)} />}
           </Section>
 
           {/* Remarks */}
@@ -495,7 +500,7 @@ export default function DocsDrawingDetailPage() {
               <label className="text-xs font-medium text-muted-foreground">{getLabel('remarks')}</label>
               <Textarea
                 value={String(form.remarks ?? '')}
-                disabled={!canEdit}
+                disabled={!canEditField('remarks')}
                 onChange={(e) => updateField('remarks', e.target.value)}
                 rows={3}
               />

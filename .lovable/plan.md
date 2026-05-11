@@ -1,55 +1,74 @@
-# Admin(VP) 조회 배치 캐싱 + DOC 모듈 일관성 점검
+## 검토 요약
 
-## 1. 캐시 모듈 신규: `src/lib/admin-roles-cache.ts`
+T&C / Defect / Docs(ABD·OMM·Warranty·SparePart) 3개 계열의 Field Config가 **Visible Roles / Editable Roles**를 동일한 로직으로 적용하고 있는지 점검한 결과, **DB 스키마와 Admin UI는 거의 일관되지만, 런타임 적용(훅·페이지) 단계에서 모듈마다 차이가 큽니다.**
 
-전역 모듈 스코프 캐시 + in-flight 배치를 둬서, 같은 페이지 안에서 8개 코멘트 컴포넌트가 모두 로드되어도 `user_roles` 쿼리는 **세션당 1회**만 실행되도록 합니다.
+### 1. DB 스키마 (`*_field_config` 테이블)
 
-```ts
-// adminIds: Set<string> 전체 admin user id
-let cache: { ids: Set<string>; at: number } | null = null;
-let inflight: Promise<Set<string>> | null = null;
-const TTL_MS = 5 * 60_000; // 5분
+| 테이블 | `visible_to_roles` | `editable_to_roles` |
+|---|---|---|
+| `field_config` (T&C) | ❌ 없음 | ❌ 없음 |
+| `defect_field_config` | ✅ | ✅ |
+| `docs_field_config` (as_built/omm/warranty/spare_part) | ✅ | ✅ |
 
-export async function getAdminUserIds(): Promise<Set<string>>
-export async function isAdminAuthorMap(userIds: string[]): Promise<Set<string>>
-export function invalidateAdminRolesCache(): void
-```
+→ **T&C만 컬럼 자체가 없음.** Defect/Docs는 동일한 컬럼 셋을 보유.
 
-- `getAdminUserIds()`: 캐시 유효(<TTL)면 즉시 반환; 아니면 단일 쿼리 `SELECT user_id FROM user_roles WHERE role='admin'` (전체 admin 수는 매우 적음 → IN 절 없이 전체 페치가 더 효율). 진행 중인 쿼리는 `inflight`로 중복 방지.
-- `isAdminAuthorMap(userIds)`: `getAdminUserIds()`의 결과를 받아 `userIds ∩ adminIds`를 반환 — 컴포넌트별로 받는 함수 시그니처는 그대로 유지.
-- `invalidateAdminRolesCache()`: 관리자 페이지에서 역할 변경 시 호출 가능 (선택).
+### 2. Admin UI (`AdminPage.tsx` → `FieldConfigTable`)
 
-### 기존 헬퍼 변경
-`src/lib/comment-author-roles.ts`의 `fetchAdminAuthorIds`는 내부 구현을 새 캐시 사용으로 교체 (호출부 변경 없음):
+- T&C / Defect / ABD / OMM / Warranty / SparePart **모두 동일한 `FieldConfigTable` 컴포넌트를 사용**, `RoleChecks` 위젯으로 visible/editable 토글 노출.
+- T&C 탭은 컬럼이 DB에 없으므로 토글이 의미 없음(저장돼도 무시됨).
 
-```ts
-export async function fetchAdminAuthorIds(userIds: string[]) {
-  return isAdminAuthorMap(userIds);
-}
-```
+### 3. 런타임 훅 적용
 
-## 2. 캐시 무효화 트리거 (가벼운 안전장치)
+| 훅 | `is_enabled` 반영 | `visible_to_roles` 반영 | `isFieldEditable` 노출 |
+|---|---|---|---|
+| `useFieldConfig` (T&C) | ✅ | — (컬럼 없음) | ❌ |
+| `useDefectFieldConfig` | ✅ | ❌ **무시됨** | ❌ **미구현** |
+| `useDocsFieldConfig` (ABD/OMM/WTY/SP) | ✅ | ❌ **무시됨** | ✅ (단 `editable_to_roles`만, admin은 항상 허용) |
 
-- `src/pages/AdminPage.tsx`(또는 user role 편집 코드 경로)에서 역할 추가/제거 성공 후 `invalidateAdminRolesCache()` 호출. 이미 코멘트 컴포넌트들은 realtime 구독 중이므로 다른 사용자의 권한 변경은 5분 TTL 내에 자연 반영.
+### 4. 페이지 단위 적용
 
-## 3. DOC 모듈 VP 강조 일관성 점검
+| 모듈 | Detail 화면 `isFieldEditable` | Raw Data 컬럼 visibility |
+|---|---|---|
+| T&C (Subtest) | — | `is_enabled`만 |
+| Defect Detail/RawData | ❌ 사용 안 함 | `is_enabled`만 |
+| Docs **OMM** Detail | ✅ 적용 | `is_enabled`만 |
+| Docs **Warranty** Detail | ✅ 적용 | `is_enabled`만 |
+| Docs **SparePart** Detail | ✅ 적용 | `is_enabled`만 |
+| Docs **ABD** (`DocsDrawingDetailPage`) | ❌ 사용 안 함 (`canEdit` 단일 게이트) | — |
 
-현재 적용 완료된 코멘트 컴포넌트:
-- `OmmComments.tsx`, `WarrantyComments.tsx`, `SparePartComments.tsx` ✅
-- `DefectComments.tsx`, `SubtestComments.tsx` ✅
-- `AllCommentsView.tsx`, `RecentDefectComments.tsx`, `RecentSubtestComments.tsx` ✅
+### 5. 결론 — 일관성 있음/없음
 
-DOC 모듈 중 ABD에는 코멘트 테이블이 없어 코멘트 UI가 존재하지 않음 → 변경 대상 외.
+- ✅ **OMM/Warranty/SparePart Detail의 `editable_to_roles`** 만이 실제로 동작하는 영역입니다. 이 3개는 서로 일관됩니다.
+- ❌ **ABD Detail**은 같은 `useDocsFieldConfig`를 쓰지만 `isFieldEditable`을 적용하지 않아 OMM/WTY/SP와 비일관.
+- ❌ **`visible_to_roles`** 는 모든 모듈(Defect/Docs 4종)에서 **저장만 되고 적용되지 않음**. Admin에서 토글해도 효과 없음.
+- ❌ **Defect**은 컬럼·Admin UI는 있으나 훅이 두 권한을 모두 적용하지 않음.
+- ❌ **Raw Data 컬럼 가시성**은 모든 모듈에서 `visible_to_roles`를 무시.
 
-추가로 점검·정리할 항목:
-- 세 DOC 코멘트 컴포넌트(Omm/Warranty/SparePart)의 VP 뱃지·좌측 보더 스타일이 동일 클래스(`border-l-4 border-l-primary` + `bg-primary text-primary-foreground` Badge)인지 grep으로 일괄 확인.
-- 차이가 있을 경우 동일하게 정렬 (현재 패치 스크립트로 일괄 적용했으므로 동일할 것으로 예상; 검증만).
+---
 
-## 4. 비즈니스 로직 영향
+## 정합화 제안 (구현 시 진행할 작업)
 
-없음. 데이터 페치 횟수만 감소(컴포넌트당 1쿼리 → 세션당 1쿼리). 표시·권한 로직 변경 없음.
+T&C는 단순 운영 정책(컬럼 미보유) 유지하고, **Defect / Docs(ABD·OMM·WTY·SP)** 를 동일 로직으로 통일:
 
-## 5. 기대 효과
+1. **`useDocsFieldConfig`에 `visible_to_roles` 적용**
+   - `isFieldVisible(fieldName, userRoles)` 시그니처 확장, `is_enabled && (visible_to_roles 비어있음 || roles 교집합 || admin)` 규칙.
+   - 호출부(OMM/WTY/SP/ABD Detail + 3개 RawData 페이지)에 `roles` 인자 전달.
 
-- 코멘트가 많은 페이지(예: AllCommentsView, Detail 페이지의 코멘트 패널 + Recent 피드 동시)에서 `user_roles` 쿼리 N회 → 1회.
-- 브라우저 세션 내 동일 데이터 재사용으로 네트워크/DB 부하 감소.
+2. **`useDefectFieldConfig`에 동일 규칙 추가**
+   - `isFieldVisible(fieldName, userRoles)` 확장 + `isFieldEditable(fieldName, userRoles)` 신설.
+   - `DefectDetailPage` / `DefectRawDataPage`에 `roles` 인자 전달, 편집 가능 필드 게이트 추가.
+
+3. **ABD Detail(`DocsDrawingDetailPage`)에 `isFieldEditable` 적용**
+   - 기존 `canEdit` × `isFieldEditable(field, roles)` 합성으로 OMM/WTY/SP와 동일 패턴화.
+
+4. **Admin T&C 탭 정리(선택)**
+   - `field_config`는 두 컬럼이 없으므로 T&C 탭에서는 RoleChecks 컬럼을 숨겨 오해 방지.
+   - 또는 `field_config`에 동일 컬럼 추가 + `useFieldConfig` 확장으로 완전 통일(범위 큼).
+
+5. **공통 헬퍼 추출(권장)**
+   - `src/lib/field-role-gate.ts` 같은 공용 함수 `applyRoleGate(cfg, roles, kind)` 로 3개 훅이 같은 규칙을 공유.
+
+### 비즈니스 영향
+- 표시/편집 권한이 실제로 적용되므로, 현재 “저장은 되지만 무시되던” 설정이 **즉시 효력 발생**합니다. 적용 전, 운영중 데이터의 `visible_to_roles` / `editable_to_roles` 값을 점검(대량 NULL이면 영향 없음, 이미 채워진 값이 있다면 사용자 가시성 변동 가능)하는 단계가 선행되어야 합니다.
+
+승인하시면 위 1~3번을 우선 구현(가장 영향이 크고 안전한 범위)하고, 4·5번은 후속 정리로 진행합니다.

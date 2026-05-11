@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { AppRole } from '@/types/enums';
+import { isAllowedByRoles } from '@/lib/field-role-gate';
 
 export interface FieldConfigRow {
   field_name: string;
@@ -7,6 +9,8 @@ export interface FieldConfigRow {
   is_enabled: boolean;
   is_required: boolean;
   sort_order: number;
+  visible_to_roles: AppRole[] | null;
+  editable_to_roles: AppRole[] | null;
 }
 
 /**
@@ -33,7 +37,7 @@ export function useFieldConfig() {
     (async () => {
       const { data } = await supabase
         .from('field_config')
-        .select('field_name, display_name, is_enabled, is_required, sort_order')
+        .select('field_name, display_name, is_enabled, is_required, sort_order, visible_to_roles, editable_to_roles')
         .order('sort_order', { ascending: true });
       if (!cancelled && data) setFields(data as FieldConfigRow[]);
       if (!cancelled) setLoading(false);
@@ -43,24 +47,27 @@ export function useFieldConfig() {
     };
   }, []);
 
-  const enabledMap = new Map<string, boolean>();
-  for (const f of fields) enabledMap.set(f.field_name, f.is_enabled);
+  const fieldMap = new Map<string, FieldConfigRow>();
+  for (const f of fields) fieldMap.set(f.field_name, f);
 
-  const isFieldVisible = (fieldName: string): boolean => {
+  const isFieldVisible = (fieldName: string, userRoles: AppRole[] = []): boolean => {
     if (ALWAYS_VISIBLE_FIELDS.has(fieldName)) return true;
+    const cfg = fieldMap.get(fieldName);
     // Default to visible if no config row exists yet (avoid hiding everything
     // before data loads or for newly added fields).
-    if (!enabledMap.has(fieldName)) return true;
-    return enabledMap.get(fieldName) === true;
+    if (!cfg) return true;
+    if (cfg.is_enabled === false) return false;
+    return isAllowedByRoles(cfg.visible_to_roles ?? null, userRoles);
   };
 
-  const isFieldRequired = (fieldName: string): boolean => {
-    const row = fields.find((f) => f.field_name === fieldName);
-    return row?.is_required ?? false;
-  };
+  const isFieldEditable = (fieldName: string, userRoles: AppRole[]): boolean =>
+    isAllowedByRoles(fieldMap.get(fieldName)?.editable_to_roles ?? null, userRoles);
+
+  const isFieldRequired = (fieldName: string): boolean =>
+    fieldMap.get(fieldName)?.is_required ?? false;
 
   // Field names ordered by sort_order ascending (already sorted from DB).
   const orderedFieldNames: string[] = fields.map((f) => f.field_name);
 
-  return { fields, loading, isFieldVisible, isFieldRequired, orderedFieldNames };
+  return { fields, loading, isFieldVisible, isFieldEditable, isFieldRequired, orderedFieldNames };
 }

@@ -390,7 +390,7 @@ function ColumnFilterDropdown({ column }: { column: any }) {
 export default function DefectRawDataPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, profile } = useAuth();
+  const { user, profile, roles } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const { dataDate } = useLatestDataDate();
@@ -1034,10 +1034,11 @@ export default function DefectRawDataPage() {
     for (const id of allColumnIds) {
       if (id === '__select' || id === 'is_critical') continue;
       if (id === 'issue_no' || id === 'stage_progress') visibility[id] = true;
-      else visibility[id] = isFieldVisible(id);
+      else visibility[id] = isFieldVisible(id, roles);
     }
     return visibility;
-  }, [allColumnIds, isFieldVisible]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allColumnIds, isFieldVisible, roles]);
 
   const columnOrder = useMemo(() => {
     const PINNED_FRONT = ['__select', 'is_critical', 'issue_no', 'stage_progress'];
