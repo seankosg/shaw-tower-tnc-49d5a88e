@@ -318,7 +318,7 @@ export default function DocsWarrantyDetailPage() {
         <CardContent className="space-y-4">
           <WarrantyCycleProgress row={row} />
           {STAGE_GROUPS.map((g) => {
-            const fields = g.fields.filter(isFieldVisible);
+            const fields = g.fields.filter((f) => isFieldVisible(f, roles));
             if (fields.length === 0) return null;
             return (
               <div key={g.title} className="space-y-2 border-t pt-3 first:border-t-0 first:pt-0">
