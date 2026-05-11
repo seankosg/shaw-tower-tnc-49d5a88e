@@ -132,11 +132,14 @@ export default function DocsSparePartDetailPage() {
   };
 
   const visibleSorted = (fields: readonly string[]) =>
-    sortFieldNames(fields.filter((f) => isFieldVisible(f)));
+    sortFieldNames(fields.filter((f) => isFieldVisible(f, roles)));
 
-  const overviewSorted = useMemo(() => visibleSorted(OVERVIEW_FIELDS), [sortFieldNames, isFieldVisible]);
-  const requirementsSorted = useMemo(() => visibleSorted(REQUIREMENTS_FIELDS), [sortFieldNames, isFieldVisible]);
-  const assignmentSorted = useMemo(() => visibleSorted(ASSIGNMENT_FIELDS), [sortFieldNames, isFieldVisible]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const overviewSorted = useMemo(() => visibleSorted(OVERVIEW_FIELDS), [sortFieldNames, isFieldVisible, roles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const requirementsSorted = useMemo(() => visibleSorted(REQUIREMENTS_FIELDS), [sortFieldNames, isFieldVisible, roles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const assignmentSorted = useMemo(() => visibleSorted(ASSIGNMENT_FIELDS), [sortFieldNames, isFieldVisible, roles]);
 
   if (loading) {
     return (
