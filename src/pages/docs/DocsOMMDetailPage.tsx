@@ -235,14 +235,20 @@ export default function DocsOMMDetailPage() {
 
 
   const visibleSorted = (fields: readonly string[]) =>
-    sortFieldNames(fields.filter((f) => isFieldVisible(f)));
+    sortFieldNames(fields.filter((f) => isFieldVisible(f, roles)));
 
-  const identitySorted = useMemo(() => visibleSorted(IDENTITY_FIELDS), [sortFieldNames, isFieldVisible]);
-  const quantitySorted = useMemo(() => visibleSorted(QUANTITY_FIELDS), [sortFieldNames, isFieldVisible]);
-  const sub1Sorted  = useMemo(() => visibleSorted(['instruction_date', ...SUB1_FIELDS]), [sortFieldNames, isFieldVisible]);
-  const sub2Sorted  = useMemo(() => visibleSorted(SUB2_FIELDS),  [sortFieldNames, isFieldVisible]);
-  const sub3Sorted  = useMemo(() => visibleSorted(SUB3_FIELDS),  [sortFieldNames, isFieldVisible]);
-  const finalSorted = useMemo(() => visibleSorted(FINAL_FIELDS), [sortFieldNames, isFieldVisible]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const identitySorted = useMemo(() => visibleSorted(IDENTITY_FIELDS), [sortFieldNames, isFieldVisible, roles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const quantitySorted = useMemo(() => visibleSorted(QUANTITY_FIELDS), [sortFieldNames, isFieldVisible, roles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sub1Sorted  = useMemo(() => visibleSorted(['instruction_date', ...SUB1_FIELDS]), [sortFieldNames, isFieldVisible, roles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sub2Sorted  = useMemo(() => visibleSorted(SUB2_FIELDS),  [sortFieldNames, isFieldVisible, roles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sub3Sorted  = useMemo(() => visibleSorted(SUB3_FIELDS),  [sortFieldNames, isFieldVisible, roles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const finalSorted = useMemo(() => visibleSorted(FINAL_FIELDS), [sortFieldNames, isFieldVisible, roles]);
 
   if (loading) {
     return (
