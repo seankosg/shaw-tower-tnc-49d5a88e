@@ -1104,6 +1104,9 @@ function DocsRawTableView({
     const isLastSticky = index === frozenCount - 1;
     const headerDef = header.column.columnDef.header;
     const headerText = typeof headerDef === 'string' ? headerDef : header.column.id;
+    const originStyle = getSourceOrigin
+      ? getOriginHeaderStyle(getSourceOrigin(header.column.id))
+      : getOriginHeaderStyle('system');
     return (
       <TableHead
         key={header.id}
@@ -1113,10 +1116,12 @@ function DocsRawTableView({
           width: header.getSize(),
           minWidth: header.getSize(),
           maxWidth: header.getSize(),
-          ...(isSticky ? { position: 'sticky', left: stickyLefts[index], zIndex: 3, background: 'hsl(var(--background))' } : {}),
+          ...(isSticky ? { position: 'sticky', left: stickyLefts[index], zIndex: 3, background: originStyle.stickyBg } : {}),
         }}
         className={cn(
-          'relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background px-4 py-0 text-left text-xs font-medium',
+          'relative h-9 cursor-pointer select-none whitespace-nowrap border-b px-4 py-0 text-left text-xs font-medium',
+          !isSticky && (originStyle.bg || 'bg-background'),
+          originStyle.border,
           isLastSticky && 'shadow-[2px_0_4px_-2px_hsl(var(--border))]',
         )}
         onClick={header.column.getToggleSortingHandler()}
