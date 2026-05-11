@@ -66,6 +66,7 @@ export default function DocsExecutiveDashboardPage() {
 
   const records = snap?.records ?? [];
   const abdRows = snap?.abdRows ?? [];
+  const ommRows = snap?.ommRows ?? [];
 
   const goRaw = (m: DocModule, params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
