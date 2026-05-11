@@ -349,7 +349,9 @@ export function OmmBulkActionBar<TRow extends { id: string }>({
                         'pdf_actual_qty',
                         'hardcopy_required_qty',
                         'hardcopy_actual_qty',
-                        'draft_response_status',
+                        'sub1_response_status',
+                        'sub2_response_status',
+                        'sub3_response_status',
                         'final_response_status',
                       ];
                       aoa.push(cols);
