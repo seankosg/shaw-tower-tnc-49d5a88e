@@ -43,6 +43,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { getOriginHeaderStyle } from '@/lib/origin-header-style';
 import { formatDdMmm } from '@/lib/format';
 import { computeOmmCopyAlert, computeOmmStatus } from '@/lib/docs-omm-status';
 import { OmmStatusBadge } from '@/components/docs/OmmStatusBadge';
