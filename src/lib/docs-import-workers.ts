@@ -346,7 +346,12 @@ const OMM_TRACKED_FIELDS = [
   'training_required',
   'pdf_required_qty', 'pdf_actual_qty', 'hardcopy_required_qty', 'hardcopy_actual_qty',
   'instruction_date',
+  // Legacy Draft (deprecated; kept so historical reads/diffs still work)
   'draft_planned_date', 'draft_actual_date', 'draft_response_date', 'draft_response_status',
+  // Sub1 / Sub2 / Sub3 cycles
+  'sub1_planned_date', 'sub1_actual_date', 'sub1_response_date', 'sub1_response_status',
+  'sub2_planned_date', 'sub2_actual_date', 'sub2_response_planned_date', 'sub2_response_actual_date', 'sub2_response_status',
+  'sub3_planned_date', 'sub3_actual_date', 'sub3_response_planned_date', 'sub3_response_actual_date', 'sub3_response_status',
   'final_planned_date', 'final_actual_date',
   'final_response_planned_date', 'final_response_actual_date', 'final_response_status',
   'hdec_pic_name', 'hdec_eng_name', 'remarks',
