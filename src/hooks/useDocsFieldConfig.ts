@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { AppRole } from '@/types/enums';
+import { isAllowedByRoles } from '@/lib/field-role-gate';
 
 export type DocsSubModule = 'as_built' | 'omm' | 'warranty' | 'spare_part';
 
