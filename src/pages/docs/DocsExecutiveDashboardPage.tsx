@@ -617,3 +617,68 @@ function SubmissionRequiredCard({
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// OMM-only: 1st Status card with A / B / C / UR / Planned buckets
+function OmmSub1StatusCard({
+  buckets, accent, onBucket,
+}: {
+  buckets: OmmSub1StatusBuckets;
+  accent: Accent;
+  onBucket: (bucket: 'A' | 'B' | 'C' | 'UR' | 'Planned') => void;
+}) {
+  const items: { key: 'A' | 'B' | 'C' | 'UR' | 'Planned'; label: string; value: number; tone: string }[] = [
+    { key: 'A',       label: 'A',       value: buckets.A,       tone: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20' },
+    { key: 'B',       label: 'B',       value: buckets.B,       tone: 'bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20' },
+    { key: 'C',       label: 'C',       value: buckets.C,       tone: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20' },
+    { key: 'UR',      label: 'UR',      value: buckets.UR,      tone: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20' },
+    { key: 'Planned', label: 'Planned', value: buckets.Planned, tone: 'bg-muted text-muted-foreground hover:bg-muted/80' },
+  ];
+  // Defensive sum-check (dev-only warning)
+  if (process.env.NODE_ENV !== 'production') {
+    const sum = items.reduce((n, it) => n + it.value, 0);
+    if (sum !== buckets.total) {
+      // eslint-disable-next-line no-console
+      console.warn('[OmmSub1StatusCard] bucket sum != total', { sum, total: buckets.total });
+    }
+  }
+  return (
+    <div
+      className={cn(
+        'relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-card p-3.5',
+        'focus-visible:ring-2',
+        accent.ring,
+      )}
+    >
+      <span className={cn('absolute inset-y-0 left-0 w-1', accent.bar)} />
+      <div className="flex items-baseline justify-between gap-2 pl-1 pr-1">
+        <span className="text-xs font-medium leading-tight text-foreground">1st Status</span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          Total {buckets.total.toLocaleString()}
+        </span>
+      </div>
+      <div className="grid grid-cols-5 gap-1 pl-1">
+        {items.map((it) => (
+          <button
+            key={it.key}
+            type="button"
+            onClick={() => onBucket(it.key)}
+            title={`${it.label}: ${it.value}`}
+            className={cn(
+              'flex flex-col items-center justify-center rounded-md px-1 py-1.5 transition focus-visible:outline-none focus-visible:ring-2',
+              accent.ring,
+              it.tone,
+            )}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wide leading-none">
+              {it.label}
+            </span>
+            <span className="mt-1 text-base font-semibold tabular-nums leading-none">
+              {it.value.toLocaleString()}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
