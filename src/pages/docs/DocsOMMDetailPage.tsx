@@ -349,20 +349,31 @@ export default function DocsOMMDetailPage() {
         <CardHeader className="py-3">
           <CardTitle className="text-sm">Workflow</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           <OmmCycleProgress row={row} />
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-2 border-t">
-            {workflowSorted.map((f) => (
-              <FieldEditor
-                key={f}
-                field={f}
-                label={getLabel(f)}
-                value={(row as any)[f]}
-                disabled={!canEditField(f) || saving || (f === 'final_response_status' && (row.draft_response_status ?? '').toUpperCase() !== 'A')}
-                onSave={(v) => save(f, v)}
-              />
-            ))}
-          </div>
+
+          {([
+            { title: '1st Submission', fields: sub1Sorted },
+            { title: '2nd Submission', fields: sub2Sorted },
+            { title: '3rd Submission', fields: sub3Sorted },
+            { title: 'Final',          fields: finalSorted },
+          ] as const).map((section) => section.fields.length === 0 ? null : (
+            <div key={section.title} className="pt-2 border-t">
+              <div className="text-xs font-semibold text-muted-foreground mb-2">{section.title}</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {section.fields.map((f) => (
+                  <FieldEditor
+                    key={f}
+                    field={f}
+                    label={getLabel(f)}
+                    value={(row as any)[f]}
+                    disabled={!canEditField(f) || saving}
+                    onSave={(v) => save(f, v)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
 
