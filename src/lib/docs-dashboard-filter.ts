@@ -86,6 +86,12 @@ export function computeDashboardFilteredIds(
     }
   }
 
+  // For OMM sub1_status filter, build id -> bucket map from raw rows
+  const ommSub1ById = new Map<string, string>();
+  if (module === 'omm' && params.sub1_status) {
+    for (const r of rows) ommSub1ById.set(r.id, classifyOmmSub1Status(r));
+  }
+
   const out = new Set<string>();
   for (const [id, recs] of byItem) {
     if (params.team) {
