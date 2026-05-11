@@ -378,7 +378,7 @@ export default function DocsWarrantyDetailPage() {
           />
         </CardContent>
       </Card>
-      {isFieldVisible('remarks') && (
+      {isFieldVisible('remarks', roles) && (
         <Card>
           <CardHeader className="py-3">
             <CardTitle className="text-sm">{getLabel('remarks')}</CardTitle>
