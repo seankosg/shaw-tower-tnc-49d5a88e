@@ -20,9 +20,9 @@ import {
 import {
   ALL_STAGE_DEFS, MODULE_LABEL, MODULE_RAW_ROUTE,
   computeStageProgress, summariseByItem, computeAbdBucketDistribution,
-  computeOmmSub1StatusBuckets, OMM_VISIBLE_STAGE_KEYS,
+  computeOmmSub1StatusBuckets, computeOmmSub2StatusBuckets, OMM_VISIBLE_STAGE_KEYS,
   type DocModule, type DocsStageRecord, type AbdBucketDistribution,
-  type OmmSub1StatusBuckets,
+  type OmmSub1StatusBuckets, type OmmSub2StatusBuckets, type OmmStatusBucketKey,
 } from '@/lib/docs-stage-records';
 
 const MODULE_ICON: Record<DocModule, typeof FileText> = {
@@ -202,6 +202,10 @@ function ModuleSection({
   }, [ommRows, isOmm, tab]);
   const ommSub1Buckets: OmmSub1StatusBuckets = useMemo(
     () => computeOmmSub1StatusBuckets(ommRowsForTab),
+    [ommRowsForTab],
+  );
+  const ommSub2Buckets: OmmSub2StatusBuckets = useMemo(
+    () => computeOmmSub2StatusBuckets(ommRowsForTab),
     [ommRowsForTab],
   );
 
