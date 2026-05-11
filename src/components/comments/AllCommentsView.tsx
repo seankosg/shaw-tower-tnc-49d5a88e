@@ -315,6 +315,7 @@ export function AllCommentsView({ title, kind }: AllCommentsViewProps) {
         <div
           className={cn(
             'rounded-md border px-3 py-2',
+            vpAuthorIds.has(t.parent.author_user_id) && 'border-l-4 border-l-primary',
             threadUnread && 'border-primary/40 bg-primary/5',
             (noAccess || t.parentMissing) && 'bg-muted/40',
           )}
