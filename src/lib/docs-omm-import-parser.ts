@@ -75,19 +75,27 @@ function normalizeHeader(value: unknown): string {
     .toLowerCase()
     .replace(/\.$/, '')
     .trim();
+  // Strip parenthetical qualifiers: "Readible PDF (Req)" → "readible pdf"
+  s = s.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
   // SHAW abbreviations: "D." / "F." prefix (with or without trailing space) → draft / final
   s = s.replace(/^d\.\s*/, 'draft ').replace(/^f\.\s*/, 'final ');
   // Standalone "d " / "f " prefix when followed by known tokens → draft / final
   s = s.replace(/^d\s+(?=submission|response|actual|planned|respond)/, 'draft ');
   s = s.replace(/^f\s+(?=submission|response|actual|planned|respond)/, 'final ');
-  // SHAW form: "Submission" is implicit; drop the word so canonical aliases match
-  s = s.replace(/\bsubmission\s+/g, '');
+  // Ordinal normalization: keep "1st/2nd/3rd" tokens intact
+  // SHAW form: "Submission" is implicit when not preceded by an ordinal — drop it.
+  // For "1st submission planned" / "2nd submission actual" we KEEP "submission" so
+  // FALLBACK_ALIASES can match the explicit form. Only strip when followed by a
+  // descriptor that is otherwise unambiguous (e.g. "draft submission planned").
+  s = s.replace(/(?<!\b(?:1st|2nd|3rd|sub1|sub2|sub3)\s)\bsubmission\s+/g, '');
   // Variant spellings
   s = s.replace(/\brespond\b/g, 'response');
   s = s.replace(/\btraning\b/g, 'training');
   // Order normalization to canonical "<stage> response <kind> date"
-  s = s.replace(/^(draft|final) actual response date$/, '$1 response actual date');
-  s = s.replace(/^(draft|final) planned response date$/, '$1 response planned date');
+  s = s.replace(/^(draft|final|sub1|sub2|sub3) actual response date$/, '$1 response actual date');
+  s = s.replace(/^(draft|final|sub1|sub2|sub3) planned response date$/, '$1 response planned date');
+  s = s.replace(/^(1st|2nd|3rd) actual response$/, '$1 response actual');
+  s = s.replace(/^(1st|2nd|3rd) planned response$/, '$1 response planned');
   return s.replace(/\s+/g, ' ').trim();
 }
 
