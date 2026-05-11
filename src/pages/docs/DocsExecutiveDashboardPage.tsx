@@ -635,7 +635,7 @@ function OmmSub1StatusCard({
     { key: 'Planned', label: 'Planned', value: buckets.Planned, tone: 'bg-muted text-muted-foreground hover:bg-muted/80' },
   ];
   // Defensive sum-check (dev-only warning)
-  if (process.env.NODE_ENV !== 'production') {
+  if (import.meta.env.DEV) {
     const sum = items.reduce((n, it) => n + it.value, 0);
     if (sum !== buckets.total) {
       // eslint-disable-next-line no-console
