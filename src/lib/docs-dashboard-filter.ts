@@ -8,7 +8,8 @@
 
 import {
   buildAbdStageRecords, buildOmmStageRecords, buildWarrantyStageRecords,
-  asOfStartOfDay, ALL_STAGE_DEFS, classifyAbdRowBucket, classifyOmmSub1Status,
+  asOfStartOfDay, ALL_STAGE_DEFS, classifyAbdRowBucket,
+  classifyOmmSub1Status, classifyOmmSub2Status,
   type DocModule,
 } from '@/lib/docs-stage-records';
 import { resolveTrade } from '@/lib/docs-trade';
@@ -21,8 +22,10 @@ export interface DashboardFilterParams {
   trade?: string | null;    // ABD only — TradeCategory string
   /** ABD bucket: approved | under_review | submission_required | sub1_required | sub2_required | sub3_required */
   bucket?: string | null;
-  /** OMM Sub1 Status bucket: A | B | C | UR | Planned */
+  /** OMM Sub1 Status bucket: A | B | C | UR | TBS */
   sub1_status?: string | null;
+  /** OMM Sub2 Status bucket: A | B | C | UR | TBS */
+  sub2_status?: string | null;
 }
 
 export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterParams {
@@ -34,11 +37,12 @@ export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterP
     trade: sp.get('trade'),
     bucket: sp.get('bucket'),
     sub1_status: sp.get('sub1_status'),
+    sub2_status: sp.get('sub2_status'),
   };
 }
 
 export function hasAnyDashboardFilter(p: DashboardFilterParams): boolean {
-  return !!(p.status || p.overdue || p.stage || p.team || p.trade || p.bucket || p.sub1_status);
+  return !!(p.status || p.overdue || p.stage || p.team || p.trade || p.bucket || p.sub1_status || p.sub2_status);
 }
 
 const BUILDERS: Record<DocModule, (rows: any[], asOf: Date) => any[]> = {
@@ -86,10 +90,14 @@ export function computeDashboardFilteredIds(
     }
   }
 
-  // For OMM sub1_status filter, build id -> bucket map from raw rows
+  // For OMM sub1_status / sub2_status filter, build id -> bucket map from raw rows
   const ommSub1ById = new Map<string, string>();
   if (module === 'omm' && params.sub1_status) {
     for (const r of rows) ommSub1ById.set(r.id, classifyOmmSub1Status(r));
+  }
+  const ommSub2ById = new Map<string, string>();
+  if (module === 'omm' && params.sub2_status) {
+    for (const r of rows) ommSub2ById.set(r.id, classifyOmmSub2Status(r));
   }
 
   const out = new Set<string>();
@@ -114,6 +122,9 @@ export function computeDashboardFilteredIds(
     }
     if (module === 'omm' && params.sub1_status) {
       if ((ommSub1ById.get(id) ?? '') !== params.sub1_status) continue;
+    }
+    if (module === 'omm' && params.sub2_status) {
+      if ((ommSub2ById.get(id) ?? '') !== params.sub2_status) continue;
     }
     if (params.status === 'completed') {
       const ok = recs.some((r: any) => r.stage_key === lastKey && r.is_done);
@@ -155,5 +166,6 @@ export function dashboardFilterLabel(module: DocModule, p: DashboardFilterParams
   if (p.team) parts.push(`Team: ${p.team}`);
   if (p.trade) parts.push(`Trade: ${p.trade}`);
   if (p.sub1_status) parts.push(`1st Status: ${p.sub1_status}`);
+  if (p.sub2_status) parts.push(`2nd Status: ${p.sub2_status}`);
   return parts.length ? parts.join(' · ') : null;
 }
