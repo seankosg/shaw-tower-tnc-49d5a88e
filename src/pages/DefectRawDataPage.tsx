@@ -33,6 +33,7 @@ import { DefectStageProgress, DefectStageProgressLegend } from '@/components/def
 import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { getOriginHeaderStyle } from '@/lib/origin-header-style';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useIsMobile } from '@/hooks/use-mobile';
