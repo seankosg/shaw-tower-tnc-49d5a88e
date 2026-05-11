@@ -333,7 +333,7 @@ export async function loadDashboardData(opts: {
     }
 
     // Stuck — Pending Draft > 14d since instruction_date or created_at
-    if (status === 'Pending Draft') {
+    if (status === 'Pending Sub1') {
       const ref = safeIso(row.instruction_date) ?? safeIso(row.created_at);
       if (ref) {
         const idle = differenceInDays(asOf, ref);
