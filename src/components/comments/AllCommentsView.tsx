@@ -68,6 +68,7 @@ export function AllCommentsView({ title, kind }: AllCommentsViewProps) {
   const [comments, setComments] = useState<AllCommentsRow[]>([]);
   const [supplementalParents, setSupplementalParents] = useState<AllCommentsRow[]>([]);
   const [authors, setAuthors] = useState<AuthorInfo[]>([]);
+  const [vpAuthorIds, setVpAuthorIds] = useState<Set<string>>(new Set());
   const [reads, setReads] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
