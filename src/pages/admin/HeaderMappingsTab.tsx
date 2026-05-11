@@ -82,6 +82,8 @@ const DOCS_AS_BUILT_FIELDS = [
   'sub3_planned_date','sub3_submission_date','sub3_approval_date','sub3_actual_response_date','sub3_approval_status',
   'transmittal_number','transmittal_due_date','days_due',
   'hdec_pic_name','hdec_eng_name','remarks',
+  // Pseudo-target for ignoring system/derived columns on import
+  'skip',
 ] as const;
 
 // Docs / Warranty (List of Warranties workflow — Schedule R + 4 stages + threads)
