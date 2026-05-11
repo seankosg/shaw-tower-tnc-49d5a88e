@@ -105,6 +105,7 @@ export function AllCommentsView({ title, kind }: AllCommentsViewProps) {
         setComments([]);
         setSupplementalParents([]);
         setAuthors([]);
+        setVpAuthorIds(new Set());
       }
       setHasMore(false);
       setLoading(false);
