@@ -245,10 +245,20 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
         if (batchErr || !batch) throw batchErr ?? new Error('Failed to create batch');
         const batchId = batch.id as string;
 
-        // Load existing items for upsert.
+        // Load existing items for upsert (include all tracked fields for change-log diffing).
+        const TRACKED_FIELDS = [
+          'category','warranted_item','team','warranty_period_years','contract_spec_ref',
+          'subcontractor_name','subcontractor_id','hdec_pic_name','hdec_eng_name',
+          'r_works_description','r_acra_reg_no','r_acra_address','r_subcontract_date',
+          'r_brief_description','r_director_1','r_director_2','r_witness','acra_info_status',
+          'draft_planned_date','draft_actual_date','draft_response_planned_date','draft_response_actual_date','draft_status',
+          'subcon_signing_planned_date','subcon_signing_actual_date','subcon_signing_status',
+          'hdec_signing_planned_date','hdec_signing_actual_date','hdec_signing_status',
+          'final_planned_date','final_actual_date','final_status','remarks',
+        ] as const;
         const { data: existingRows } = await (supabase as any)
           .from('warranty_items')
-          .select('id, item_no, draft_status, subcon_signing_status, hdec_signing_status, final_status, raw_payload')
+          .select(['id','item_no','raw_payload', ...TRACKED_FIELDS].join(','))
           .eq('project_id', project.id)
           .eq('is_active', true)
           .is('parent_id', null);
