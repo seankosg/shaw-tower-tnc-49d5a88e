@@ -152,8 +152,10 @@ export async function loadDashboardData(opts: {
         .from('docs_omm')
         .select(
           'id, sn, category, category_group, project_id, ' +
-            'instruction_date, draft_planned_date, draft_actual_date, ' +
-            'draft_response_date, draft_response_status, ' +
+            'instruction_date, ' +
+            'sub1_planned_date, sub1_actual_date, sub1_response_date, sub1_response_status, ' +
+            'sub2_planned_date, sub2_actual_date, sub2_response_planned_date, sub2_response_actual_date, sub2_response_status, ' +
+            'sub3_planned_date, sub3_actual_date, sub3_response_planned_date, sub3_response_actual_date, sub3_response_status, ' +
             'final_planned_date, final_actual_date, ' +
             'final_response_planned_date, final_response_actual_date, final_response_status, ' +
             'pdf_required_qty, pdf_actual_qty, hardcopy_required_qty, hardcopy_actual_qty, ' +
@@ -306,7 +308,7 @@ export async function loadDashboardData(opts: {
     const target =
       safeIso(row.final_response_planned_date) ??
       safeIso(row.final_planned_date) ??
-      safeIso(row.draft_planned_date);
+      safeIso(row.sub1_planned_date);
     let r: RiskLevel = 'green';
     if (!submitted && target) {
       const days = differenceInDays(target, asOf);

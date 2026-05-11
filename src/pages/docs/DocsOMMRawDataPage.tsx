@@ -88,7 +88,9 @@ const MULTI_SELECT_FIELDS = new Set([
   'hdec_pic_name',
   'hdec_eng_name',
   'training_required',
-  'draft_response_status',
+  'sub1_response_status',
+  'sub2_response_status',
+  'sub3_response_status',
   'final_response_status',
   'current_stage',
   'current_status',
@@ -101,9 +103,17 @@ const TEXT_FIELDS = new Set([
 ]);
 const DATE_FIELDS = new Set([
   'instruction_date',
-  'draft_planned_date',
-  'draft_actual_date',
-  'draft_response_date',
+  'sub1_planned_date',
+  'sub1_actual_date',
+  'sub1_response_date',
+  'sub2_planned_date',
+  'sub2_actual_date',
+  'sub2_response_planned_date',
+  'sub2_response_actual_date',
+  'sub3_planned_date',
+  'sub3_actual_date',
+  'sub3_response_planned_date',
+  'sub3_response_actual_date',
   'final_planned_date',
   'final_actual_date',
   'final_response_planned_date',
@@ -135,10 +145,20 @@ const OMM_DATA_FIELDS = [
   'pdf_actual_qty',
   'hardcopy_required_qty',
   'hardcopy_actual_qty',
-  'draft_planned_date',
-  'draft_actual_date',
-  'draft_response_date',
-  'draft_response_status',
+  'sub1_planned_date',
+  'sub1_actual_date',
+  'sub1_response_date',
+  'sub1_response_status',
+  'sub2_planned_date',
+  'sub2_actual_date',
+  'sub2_response_planned_date',
+  'sub2_response_actual_date',
+  'sub2_response_status',
+  'sub3_planned_date',
+  'sub3_actual_date',
+  'sub3_response_planned_date',
+  'sub3_response_actual_date',
+  'sub3_response_status',
   'final_planned_date',
   'final_actual_date',
   'final_response_planned_date',
@@ -182,10 +202,20 @@ interface OMMRow {
   hardcopy_required_qty: number | null;
   hardcopy_actual_qty: number | null;
   instruction_date: string | null;
-  draft_planned_date: string | null;
-  draft_actual_date: string | null;
-  draft_response_date: string | null;
-  draft_response_status: string | null;
+  sub1_planned_date: string | null;
+  sub1_actual_date: string | null;
+  sub1_response_date: string | null;
+  sub1_response_status: string | null;
+  sub2_planned_date: string | null;
+  sub2_actual_date: string | null;
+  sub2_response_planned_date: string | null;
+  sub2_response_actual_date: string | null;
+  sub2_response_status: string | null;
+  sub3_planned_date: string | null;
+  sub3_actual_date: string | null;
+  sub3_response_planned_date: string | null;
+  sub3_response_actual_date: string | null;
+  sub3_response_status: string | null;
   final_planned_date: string | null;
   final_actual_date: string | null;
   final_response_planned_date: string | null;
@@ -713,7 +743,17 @@ export default function DocsOMMRawDataPage() {
       hdec_pic_name: unionWithLegacy(masters.hdecPicOptions, present('hdec_pic_name')),
       hdec_eng_name: unionWithLegacy(masters.hdecEngOptions, present('hdec_eng_name')),
       training_required: opts('training_required'),
-      draft_response_status: [
+      sub1_response_status: [
+        { value: 'A', label: 'A' },
+        { value: 'B', label: 'B' },
+        { value: 'C', label: 'C' },
+      ],
+      sub2_response_status: [
+        { value: 'A', label: 'A' },
+        { value: 'B', label: 'B' },
+        { value: 'C', label: 'C' },
+      ],
+      sub3_response_status: [
         { value: 'A', label: 'A' },
         { value: 'B', label: 'B' },
         { value: 'C', label: 'C' },
@@ -761,10 +801,20 @@ export default function DocsOMMRawDataPage() {
       pdf_actual_qty: 80,
       hardcopy_required_qty: 80,
       hardcopy_actual_qty: 80,
-      draft_planned_date: 110,
-      draft_actual_date: 110,
-      draft_response_date: 110,
-      draft_response_status: 90,
+      sub1_planned_date: 110,
+      sub1_actual_date: 110,
+      sub1_response_date: 110,
+      sub1_response_status: 90,
+      sub2_planned_date: 110,
+      sub2_actual_date: 110,
+      sub2_response_planned_date: 120,
+      sub2_response_actual_date: 120,
+      sub2_response_status: 90,
+      sub3_planned_date: 110,
+      sub3_actual_date: 110,
+      sub3_response_planned_date: 120,
+      sub3_response_actual_date: 120,
+      sub3_response_status: 90,
       final_planned_date: 110,
       final_actual_date: 110,
       final_response_planned_date: 120,
@@ -815,9 +865,13 @@ export default function DocsOMMRawDataPage() {
     };
 
     const OMM_PROGRESS_OPTIONS = [
-      { value: 'Pending Draft', label: 'Pending Draft' },
-      { value: 'Draft Under Review', label: 'Draft Under Review' },
-      { value: 'Pending Final Submission', label: 'Pending Final Submission' },
+      { value: 'Pending Sub1', label: 'Pending Sub1' },
+      { value: 'Sub1 Under Review', label: 'Sub1 Under Review' },
+      { value: 'Pending Sub2', label: 'Pending Sub2' },
+      { value: 'Sub2 Under Review', label: 'Sub2 Under Review' },
+      { value: 'Pending Sub3', label: 'Pending Sub3' },
+      { value: 'Sub3 Under Review', label: 'Sub3 Under Review' },
+      { value: 'Pending Final', label: 'Pending Final' },
       { value: 'Final Under Review', label: 'Final Under Review' },
       { value: 'Approved', label: 'Approved' },
       { value: 'Rejected', label: 'Rejected' },
@@ -947,20 +1001,16 @@ export default function DocsOMMRawDataPage() {
               />
             );
           }
-          if (field === 'draft_response_status') {
+          if (
+            field === 'sub1_response_status' ||
+            field === 'sub2_response_status' ||
+            field === 'sub3_response_status' ||
+            field === 'final_response_status'
+          ) {
             return (
               <ResponseStatusEditor
-                value={r.draft_response_status}
-                onChange={(v) => updateField(r.id, 'draft_response_status', v)}
-              />
-            );
-          }
-          if (field === 'final_response_status') {
-            return (
-              <ResponseStatusEditor
-                value={r.final_response_status}
-                onChange={(v) => updateField(r.id, 'final_response_status', v)}
-                disabled={r.draft_response_status !== 'A'}
+                value={(r as any)[field]}
+                onChange={(v) => updateField(r.id, field as keyof OMMRow, v)}
               />
             );
           }
@@ -1078,38 +1128,64 @@ export default function DocsOMMRawDataPage() {
       { field: 'hardcopy_required_qty', label: 'HC Required', inputType: 'number', group: 'Quantities' },
       { field: 'hardcopy_actual_qty', label: 'HC Actual', inputType: 'number', group: 'Quantities' },
       { field: 'instruction_date', label: 'Instruction Date', inputType: 'date', group: 'Schedule' },
-      { field: 'draft_planned_date', label: 'Draft Planned', inputType: 'date', group: 'Schedule' },
-      { field: 'draft_actual_date', label: 'Draft Actual', inputType: 'date', group: 'Schedule' },
-      { field: 'draft_response_date', label: 'Draft Response Date', inputType: 'date', group: 'Schedule' },
-      { field: 'final_planned_date', label: 'Final Planned', inputType: 'date', group: 'Schedule' },
-      { field: 'final_actual_date', label: 'Final Actual', inputType: 'date', group: 'Schedule' },
-      { field: 'final_response_planned_date', label: 'Final Response Planned', inputType: 'date', group: 'Schedule' },
-      { field: 'final_response_actual_date', label: 'Final Response Actual', inputType: 'date', group: 'Schedule' },
+      { field: 'sub1_planned_date',  label: '1st Planned',           inputType: 'date', group: 'Sub1' },
+      { field: 'sub1_actual_date',   label: '1st Actual',            inputType: 'date', group: 'Sub1' },
+      { field: 'sub1_response_date', label: '1st Response Date',     inputType: 'date', group: 'Sub1' },
       {
-        field: 'draft_response_status',
-        label: 'Draft Response (A/B/C)',
+        field: 'sub1_response_status',
+        label: '1st Response (A/B/C)',
         inputType: 'select',
-        group: 'Response',
+        group: 'Sub1',
         options: [
           { value: 'A', label: 'A — Approved' },
           { value: 'B', label: 'B — Rejected' },
           { value: 'C', label: 'C — Rejected (major)' },
         ],
-        warning:
-          'Setting B/C will trigger automatic resubmission rows for every selected item.',
       },
+      { field: 'sub2_planned_date',           label: '2nd Planned',          inputType: 'date', group: 'Sub2' },
+      { field: 'sub2_actual_date',            label: '2nd Actual',           inputType: 'date', group: 'Sub2' },
+      { field: 'sub2_response_planned_date',  label: '2nd Response Planned', inputType: 'date', group: 'Sub2' },
+      { field: 'sub2_response_actual_date',   label: '2nd Response Actual',  inputType: 'date', group: 'Sub2' },
+      {
+        field: 'sub2_response_status',
+        label: '2nd Response (A/B/C)',
+        inputType: 'select',
+        group: 'Sub2',
+        options: [
+          { value: 'A', label: 'A — Approved' },
+          { value: 'B', label: 'B — Rejected' },
+          { value: 'C', label: 'C — Rejected (major)' },
+        ],
+      },
+      { field: 'sub3_planned_date',           label: '3rd Planned',          inputType: 'date', group: 'Sub3' },
+      { field: 'sub3_actual_date',            label: '3rd Actual',           inputType: 'date', group: 'Sub3' },
+      { field: 'sub3_response_planned_date',  label: '3rd Response Planned', inputType: 'date', group: 'Sub3' },
+      { field: 'sub3_response_actual_date',   label: '3rd Response Actual',  inputType: 'date', group: 'Sub3' },
+      {
+        field: 'sub3_response_status',
+        label: '3rd Response (A/B/C)',
+        inputType: 'select',
+        group: 'Sub3',
+        options: [
+          { value: 'A', label: 'A — Approved' },
+          { value: 'B', label: 'B — Rejected' },
+          { value: 'C', label: 'C — Rejected (major)' },
+        ],
+      },
+      { field: 'final_planned_date',          label: 'Final Planned',          inputType: 'date', group: 'Final' },
+      { field: 'final_actual_date',           label: 'Final Actual',           inputType: 'date', group: 'Final' },
+      { field: 'final_response_planned_date', label: 'Final Response Planned', inputType: 'date', group: 'Final' },
+      { field: 'final_response_actual_date',  label: 'Final Response Actual',  inputType: 'date', group: 'Final' },
       {
         field: 'final_response_status',
         label: 'Final Response (A/B/C)',
         inputType: 'select',
-        group: 'Response',
+        group: 'Final',
         options: [
           { value: 'A', label: 'A — Approved' },
           { value: 'B', label: 'B — Rejected' },
           { value: 'C', label: 'C — Rejected (major)' },
         ],
-        warning:
-          'Setting B/C will trigger automatic resubmission rows for every selected item.',
       },
       { field: 'remarks', label: 'Remarks', inputType: 'text', group: 'Notes' },
     ];

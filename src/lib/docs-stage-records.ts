@@ -64,10 +64,14 @@ export const ABD_STAGE_DEFS: StageDefinition[] = [
 ];
 
 export const OMM_STAGE_DEFS: StageDefinition[] = [
-  { key: 'omm.draft_submission', label: 'Draft Submission', order: 1 },
-  { key: 'omm.draft_approval',   label: 'Draft Approval',   order: 2 },
-  { key: 'omm.final_submission', label: 'Final Submission', order: 3 },
-  { key: 'omm.final_approval',   label: 'Final Approval',   order: 4 },
+  { key: 'omm.sub1_submission', label: '1st Submission', order: 1 },
+  { key: 'omm.sub1_review',     label: '1st Review',     order: 2 },
+  { key: 'omm.sub2_submission', label: '2nd Submission', order: 3 },
+  { key: 'omm.sub2_review',     label: '2nd Review',     order: 4 },
+  { key: 'omm.sub3_submission', label: '3rd Submission', order: 5 },
+  { key: 'omm.sub3_review',     label: '3rd Review',     order: 6 },
+  { key: 'omm.final_submission',label: 'Final Submission', order: 7 },
+  { key: 'omm.final_approval',  label: 'Final Approval',   order: 8 },
 ];
 
 export const WARRANTY_STAGE_DEFS: StageDefinition[] = [
@@ -210,22 +214,38 @@ export function buildOmmStageRecords(rows: any[], asOf: Date, ): DocsStageRecord
     };
     const current_stage = status;
 
-    const dRes = String(row.draft_response_status ?? '').toUpperCase();
-    const fRes = String(row.final_response_status ?? '').toUpperCase();
+    const s1Res = String(row.sub1_response_status ?? '').toUpperCase();
+    const s2Res = String(row.sub2_response_status ?? '').toUpperCase();
+    const s3Res = String(row.sub3_response_status ?? '').toUpperCase();
+    const fRes  = String(row.final_response_status ?? '').toUpperCase();
+    const sub2Applicable = s1Res === 'B' || s1Res === 'C' || !!row.sub2_planned_date || !!row.sub2_actual_date;
+    const sub3Applicable = s2Res === 'B' || s2Res === 'C' || !!row.sub3_planned_date || !!row.sub3_actual_date;
+
     const stages = [
-      { def: OMM_STAGE_DEFS[0], planned: row.draft_planned_date, actual: row.draft_actual_date,
-        done: !!row.draft_actual_date },
-      { def: OMM_STAGE_DEFS[1], planned: row.draft_planned_date,
-        actual: dRes === 'A' ? (row.draft_response_date ?? null) : null,
-        done: dRes === 'A' },
-      { def: OMM_STAGE_DEFS[2], planned: row.final_planned_date, actual: row.final_actual_date,
-        done: !!row.final_actual_date },
-      { def: OMM_STAGE_DEFS[3], planned: row.final_response_planned_date ?? row.final_planned_date,
+      { def: OMM_STAGE_DEFS[0], planned: row.sub1_planned_date, actual: row.sub1_actual_date,
+        done: !!row.sub1_actual_date, applicable: true },
+      { def: OMM_STAGE_DEFS[1], planned: row.sub1_planned_date,
+        actual: s1Res === 'A' ? (row.sub1_response_date ?? null) : null,
+        done: !!s1Res, applicable: !!row.sub1_actual_date },
+      { def: OMM_STAGE_DEFS[2], planned: row.sub2_planned_date, actual: row.sub2_actual_date,
+        done: !!row.sub2_actual_date, applicable: sub2Applicable },
+      { def: OMM_STAGE_DEFS[3], planned: row.sub2_response_planned_date ?? row.sub2_planned_date,
+        actual: s2Res ? (row.sub2_response_actual_date ?? null) : null,
+        done: !!s2Res, applicable: sub2Applicable && !!row.sub2_actual_date },
+      { def: OMM_STAGE_DEFS[4], planned: row.sub3_planned_date, actual: row.sub3_actual_date,
+        done: !!row.sub3_actual_date, applicable: sub3Applicable },
+      { def: OMM_STAGE_DEFS[5], planned: row.sub3_response_planned_date ?? row.sub3_planned_date,
+        actual: s3Res ? (row.sub3_response_actual_date ?? null) : null,
+        done: !!s3Res, applicable: sub3Applicable && !!row.sub3_actual_date },
+      { def: OMM_STAGE_DEFS[6], planned: row.final_planned_date, actual: row.final_actual_date,
+        done: !!row.final_actual_date, applicable: true },
+      { def: OMM_STAGE_DEFS[7], planned: row.final_response_planned_date ?? row.final_planned_date,
         actual: fRes === 'A' ? (row.final_response_actual_date ?? null) : null,
-        done: fRes === 'A' },
+        done: fRes === 'A', applicable: true },
     ];
 
     for (const s of stages) {
+      if ((s as any).applicable === false) continue;
       const cls = classifyStage(s.planned ?? null, s.actual ?? null, s.done, asOf);
       out.push({
         ...base,

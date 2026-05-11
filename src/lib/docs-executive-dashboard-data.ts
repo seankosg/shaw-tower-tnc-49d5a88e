@@ -56,7 +56,10 @@ export async function loadExecutiveDashboard(opts: {
         .select(
           'id, sn, category, work_trade_material, trade, team, ' +
             'subcontractor_name, hdec_pic_name, hdec_eng_name, ' +
-            'instruction_date, draft_planned_date, draft_actual_date, draft_response_date, draft_response_status, ' +
+            'instruction_date, ' +
+            'sub1_planned_date, sub1_actual_date, sub1_response_date, sub1_response_status, ' +
+            'sub2_planned_date, sub2_actual_date, sub2_response_planned_date, sub2_response_actual_date, sub2_response_status, ' +
+            'sub3_planned_date, sub3_actual_date, sub3_response_planned_date, sub3_response_actual_date, sub3_response_status, ' +
             'final_planned_date, final_actual_date, final_response_planned_date, final_response_actual_date, final_response_status',
         )
         .eq('is_active', true),

@@ -100,12 +100,21 @@ export async function applyOmmBulkDuplicate(args: {
   }
 
   const ACTUAL_DATES = [
-    'draft_actual_date',
+    'sub1_actual_date',
+    'sub1_response_date',
+    'sub2_actual_date',
+    'sub2_response_actual_date',
+    'sub3_actual_date',
+    'sub3_response_actual_date',
     'final_actual_date',
     'final_response_actual_date',
-    'draft_response_date',
   ];
-  const RESPONSES = ['draft_response_status', 'final_response_status'];
+  const RESPONSES = [
+    'sub1_response_status',
+    'sub2_response_status',
+    'sub3_response_status',
+    'final_response_status',
+  ];
 
   const inserts: any[] = [];
   for (const row of (src ?? []) as any[]) {
