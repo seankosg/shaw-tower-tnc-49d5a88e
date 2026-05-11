@@ -100,6 +100,8 @@ const DOCS_WARRANTY_FIELDS = [
   // Threads (separate child table — written via thread:<key> pseudo-targets)
   'thread:tread_1','thread:tread_2_1','thread:tread_2_2','thread:tread_2_3',
   'thread:tread_3_1','thread:tread_3_2',
+  // Pseudo-target for ignoring system/derived columns on import
+  'skip',
 ] as const;
 
 // Docs / OMM (operation & maintenance manual workflow)
