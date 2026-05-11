@@ -404,7 +404,7 @@ export default function DocsDrawingDetailPage() {
                 label={getLabel('trade')}
                 value={form.trade}
                 options={TRADE_OPTIONS.map((t) => ({ value: t, label: t }))}
-                disabled={!canEdit}
+                disabled={!canEditField('trade')}
                 onChange={(v) => updateField('trade', v)}
               />
             )}
@@ -416,7 +416,7 @@ export default function DocsDrawingDetailPage() {
                 label={getLabel('team') || 'Team'}
                 value={form.team}
                 options={ALL_TEAMS.map((t) => ({ value: t, label: TEAM_LABELS[t] }))}
-                disabled={!canEdit}
+                disabled={!canEditField('team')}
                 onChange={(v) => updateField('team', v)}
               />
             )}
@@ -439,7 +439,7 @@ export default function DocsDrawingDetailPage() {
                 label={getLabel('is_submitted')}
                 value={form.is_submitted == null ? null : (form.is_submitted ? 'true' : 'false')}
                 options={[{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]}
-                disabled={!canEdit}
+                disabled={!canEditField('is_submitted')}
                 onChange={(v) => updateField('is_submitted', (v === 'true') as any)}
                 clearable={false}
               />
@@ -459,7 +459,7 @@ export default function DocsDrawingDetailPage() {
                 label={getLabel('subcontractor_name')}
                 value={form.subcontractor_id}
                 options={subSelectOptions}
-                disabled={!canEdit}
+                disabled={!canEditField('subcontractor_name')}
                 onChange={(v) => handleSubcontractorChange(v)}
               />
             )}
@@ -474,15 +474,15 @@ export default function DocsDrawingDetailPage() {
           {/* Submission cycles */}
           {[1, 2, 3].map((n) => (
             <Section key={n} title={`Submission ${n}`}>
-              <Field type="date" label={getLabel(`sub${n}_planned_date`)} value={toDateInput((form as any)[`sub${n}_planned_date`])} disabled={!canEdit} onChange={(v) => updateField(`sub${n}_planned_date` as any, v)} />
-              <Field type="date" label={getLabel(`sub${n}_submission_date`)} value={toDateInput((form as any)[`sub${n}_submission_date`])} disabled={!canEdit} onChange={(v) => updateField(`sub${n}_submission_date` as any, v)} />
-              <Field type="date" label={getLabel(`sub${n}_approval_date`)} value={toDateInput((form as any)[`sub${n}_approval_date`])} disabled={!canEdit} onChange={(v) => updateField(`sub${n}_approval_date` as any, v)} />
-              <Field type="date" label={getLabel(`sub${n}_actual_response_date`)} value={toDateInput((form as any)[`sub${n}_actual_response_date`])} disabled={!canEdit} onChange={(v) => updateField(`sub${n}_actual_response_date` as any, v)} />
+              <Field type="date" label={getLabel(`sub${n}_planned_date`)} value={toDateInput((form as any)[`sub${n}_planned_date`])} disabled={!canEditField(`sub${n}_planned_date`)} onChange={(v) => updateField(`sub${n}_planned_date` as any, v)} />
+              <Field type="date" label={getLabel(`sub${n}_submission_date`)} value={toDateInput((form as any)[`sub${n}_submission_date`])} disabled={!canEditField(`sub${n}_submission_date`)} onChange={(v) => updateField(`sub${n}_submission_date` as any, v)} />
+              <Field type="date" label={getLabel(`sub${n}_approval_date`)} value={toDateInput((form as any)[`sub${n}_approval_date`])} disabled={!canEditField(`sub${n}_approval_date`)} onChange={(v) => updateField(`sub${n}_approval_date` as any, v)} />
+              <Field type="date" label={getLabel(`sub${n}_actual_response_date`)} value={toDateInput((form as any)[`sub${n}_actual_response_date`])} disabled={!canEditField(`sub${n}_actual_response_date`)} onChange={(v) => updateField(`sub${n}_actual_response_date` as any, v)} />
               <SelectField
                 label={getLabel(`sub${n}_approval_status`)}
                 value={(form as any)[`sub${n}_approval_status`]}
                 options={APPROVAL_STATUS_OPTIONS.map((s) => ({ value: s, label: s }))}
-                disabled={!canEdit}
+                disabled={!canEditField(`sub${n}_approval_status`)}
                 onChange={(v) => updateField(`sub${n}_approval_status` as any, v)}
               />
             </Section>
@@ -500,7 +500,7 @@ export default function DocsDrawingDetailPage() {
               <label className="text-xs font-medium text-muted-foreground">{getLabel('remarks')}</label>
               <Textarea
                 value={String(form.remarks ?? '')}
-                disabled={!canEdit}
+                disabled={!canEditField('remarks')}
                 onChange={(e) => updateField('remarks', e.target.value)}
                 rows={3}
               />
