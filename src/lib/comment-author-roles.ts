@@ -1,18 +1,10 @@
-import { supabase } from '@/integrations/supabase/client';
+import { isAdminAuthorMap } from '@/lib/admin-roles-cache';
 
 /**
  * Returns the subset of `userIds` that hold the `admin` role.
- * Used to render a "VP" badge + left accent border on admin-authored
- * comments and replies across all modules.
+ * Backed by a session-level cache (see `admin-roles-cache.ts`) so all
+ * comment components share a single `user_roles` fetch.
  */
 export async function fetchAdminAuthorIds(userIds: string[]): Promise<Set<string>> {
-  const ids = Array.from(new Set(userIds.filter(Boolean)));
-  if (ids.length === 0) return new Set();
-  const { data, error } = await supabase
-    .from('user_roles')
-    .select('user_id')
-    .eq('role', 'admin')
-    .in('user_id', ids);
-  if (error || !data) return new Set();
-  return new Set(data.map((r: { user_id: string }) => r.user_id));
+  return isAdminAuthorMap(userIds);
 }

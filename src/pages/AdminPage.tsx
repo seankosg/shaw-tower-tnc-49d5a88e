@@ -33,6 +33,7 @@ import { ModuleControlTab } from './admin/ModuleControlTab';
 import HeaderMappingsTab from './admin/HeaderMappingsTab';
 import CustomFieldsTab from './admin/CustomFieldsTab';
 import { loadHeaderMappingsCache } from '@/lib/header-mappings-cache';
+import { invalidateAdminRolesCache } from '@/lib/admin-roles-cache';
 import { UnmappedAliasQueue } from '@/components/admin/UnmappedAliasQueue';
 import { ChevronDown, ChevronRight, Search, AlertTriangle } from 'lucide-react';
 
@@ -290,6 +291,7 @@ function UsersTab() {
       await supabase.from('user_roles').delete().eq('user_id', uid);
     }
     await supabase.from('user_roles').insert({ user_id: uid, role });
+    invalidateAdminRolesCache();
     toast({ title: 'Role updated' });
     load();
   };
