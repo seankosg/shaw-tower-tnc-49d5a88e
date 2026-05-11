@@ -997,20 +997,16 @@ export default function DocsOMMRawDataPage() {
               />
             );
           }
-          if (field === 'draft_response_status') {
+          if (
+            field === 'sub1_response_status' ||
+            field === 'sub2_response_status' ||
+            field === 'sub3_response_status' ||
+            field === 'final_response_status'
+          ) {
             return (
               <ResponseStatusEditor
-                value={r.draft_response_status}
-                onChange={(v) => updateField(r.id, 'draft_response_status', v)}
-              />
-            );
-          }
-          if (field === 'final_response_status') {
-            return (
-              <ResponseStatusEditor
-                value={r.final_response_status}
-                onChange={(v) => updateField(r.id, 'final_response_status', v)}
-                disabled={r.draft_response_status !== 'A'}
+                value={(r as any)[field]}
+                onChange={(v) => updateField(r.id, field as keyof OMMRow, v)}
               />
             );
           }
