@@ -33,6 +33,7 @@ import { DefectStageProgress, DefectStageProgressLegend } from '@/components/def
 import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { getOriginHeaderStyle } from '@/lib/origin-header-style';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
 import { useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -394,7 +395,7 @@ export default function DefectRawDataPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { dataDate } = useLatestDataDate();
   const storageKey = user?.id ? `defect-raw-data-state:${user.id}` : 'defect-raw-data-state:anon';
-  const { isFieldVisible, getLabel, sortFieldNames, fields: fieldConfigRows } = useDefectFieldConfig();
+  const { isFieldVisible, getLabel, sortFieldNames, fields: fieldConfigRows, getSourceOrigin } = useDefectFieldConfig();
   const [items, setItems] = useState<DefectRawRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [stateLoaded, setStateLoaded] = useState(false);
@@ -1321,7 +1322,7 @@ export default function DefectRawDataPage() {
         onClearSelection={() => setRowSelection({})}
       />
 
-      <DefectRawTableView table={table} loading={loading} sorting={sorting.length ? sorting : DEFAULT_SORTING} autoSizeColumn={autoSizeColumn} navigate={navigate} tableRef={tableRef} dataDate={dataDate} />
+      <DefectRawTableView table={table} loading={loading} sorting={sorting.length ? sorting : DEFAULT_SORTING} autoSizeColumn={autoSizeColumn} navigate={navigate} tableRef={tableRef} dataDate={dataDate} getSourceOrigin={getSourceOrigin} />
 
       <Dialog
         open={exportDialogOpen}
@@ -1479,9 +1480,10 @@ interface DefectRawTableViewProps {
   navigate: (path: string) => void;
   tableRef: React.RefObject<HTMLDivElement>;
   dataDate: string;
+  getSourceOrigin?: (field: string) => 'hdec' | 'aconex' | 'system';
 }
 
-function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate, tableRef, dataDate }: DefectRawTableViewProps) {
+function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate, tableRef, dataDate, getSourceOrigin }: DefectRawTableViewProps) {
   const isMobile = useIsMobile();
   const { value: frozenSetting } = useFrozenColumnCount();
   // +1 for the always-on selection column at the start
@@ -1530,6 +1532,9 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
     const isLastSticky = index === frozenCount - 1;
     const headerDef = header.column.columnDef.header;
     const headerText = typeof headerDef === 'string' ? headerDef : header.column.id;
+    const originStyle = getSourceOrigin
+      ? getOriginHeaderStyle(getSourceOrigin(header.column.id))
+      : getOriginHeaderStyle('system');
     return (
       <TableHead
         key={header.id}
@@ -1544,12 +1549,14 @@ function DefectRawTableView({ table, loading, sorting, autoSizeColumn, navigate,
                 position: 'sticky',
                 left: stickyLefts[index],
                 zIndex: 3,
-                background: 'hsl(var(--background))',
+                background: originStyle.stickyBg,
               }
             : {}),
         }}
         className={cn(
-          'relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background px-4 py-0 text-left text-xs font-medium',
+          'relative h-9 cursor-pointer select-none whitespace-nowrap border-b px-4 py-0 text-left text-xs font-medium',
+          !isSticky && (originStyle.bg || 'bg-background'),
+          originStyle.border,
           isLastSticky && 'shadow-[2px_0_4px_-2px_hsl(var(--border))]',
         )}
         onClick={header.column.getToggleSortingHandler()}
