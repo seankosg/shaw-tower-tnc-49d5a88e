@@ -271,6 +271,12 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
         let threadsInserted = 0, threadsUpdated = 0, subconInfoUpserts = 0;
         const rejectSamples: WarrantyImportFile['rejectSamples'] = [];
         const rowLogs: any[] = [];
+        const changeLogs: any[] = [];
+        const stringify = (v: unknown): string | null => {
+          if (v == null || v === '') return null;
+          if (v instanceof Date) return v.toISOString().slice(0, 10);
+          return String(v);
+        };
 
         const onProgress = (i: number) => {
           const pct = Math.round((i / parsed.length) * 100);
