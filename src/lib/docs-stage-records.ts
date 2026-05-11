@@ -71,11 +71,10 @@ export const OMM_STAGE_DEFS: StageDefinition[] = [
 ];
 
 export const WARRANTY_STAGE_DEFS: StageDefinition[] = [
-  { key: 'warranty.acra',         label: 'ACRA',          order: 1 },
-  { key: 'warranty.draft',        label: 'Draft',         order: 2 },
-  { key: 'warranty.subcon_sign',  label: 'Subcon Sign',   order: 3 },
-  { key: 'warranty.hdec_sign',    label: 'HDEC Sign',     order: 4 },
-  { key: 'warranty.final',        label: 'Final',         order: 5 },
+  { key: 'warranty.draft',        label: 'Draft',         order: 1 },
+  { key: 'warranty.subcon_sign',  label: 'Subcon Sign',   order: 2 },
+  { key: 'warranty.hdec_sign',    label: 'HDEC Sign',     order: 3 },
+  { key: 'warranty.final',        label: 'Final',         order: 4 },
 ];
 
 export const ALL_STAGE_DEFS: Record<DocModule, StageDefinition[]> = {
@@ -264,11 +263,10 @@ export function buildWarrantyStageRecords(rows: any[], asOf: Date, ): DocsStageR
     const current_stage = String(row.current_status ?? row.current_stage ?? 'Pending Draft');
 
     const items = [
-      { def: WARRANTY_STAGE_DEFS[0], planned: null,                            actual: row.r_subcontract_date,         key: 'acra' as const },
-      { def: WARRANTY_STAGE_DEFS[1], planned: row.draft_planned_date,         actual: row.draft_actual_date,          key: 'draft' as const },
-      { def: WARRANTY_STAGE_DEFS[2], planned: row.subcon_signing_planned_date,actual: row.subcon_signing_actual_date, key: 'subcon' as const },
-      { def: WARRANTY_STAGE_DEFS[3], planned: row.hdec_signing_planned_date,  actual: row.hdec_signing_actual_date,   key: 'hdec' as const },
-      { def: WARRANTY_STAGE_DEFS[4], planned: row.final_planned_date,         actual: row.final_actual_date,          key: 'final' as const },
+      { def: WARRANTY_STAGE_DEFS[0], planned: row.draft_planned_date,         actual: row.draft_actual_date,          key: 'draft' as const },
+      { def: WARRANTY_STAGE_DEFS[1], planned: row.subcon_signing_planned_date,actual: row.subcon_signing_actual_date, key: 'subcon' as const },
+      { def: WARRANTY_STAGE_DEFS[2], planned: row.hdec_signing_planned_date,  actual: row.hdec_signing_actual_date,   key: 'hdec' as const },
+      { def: WARRANTY_STAGE_DEFS[3], planned: row.final_planned_date,         actual: row.final_actual_date,          key: 'final' as const },
     ];
 
     for (const s of items) {

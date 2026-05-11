@@ -1,60 +1,47 @@
-## 현황 진단
+## 1. ACRA 카드 제거
 
-Warranty Detail 페이지의 **Change History** 카드는 항상 "No changes logged."만 표시됩니다.
+현재 위치: **Document Executive Dashboard** (`/docs/executive-dashboard`) → Warranty 섹션 → "Stage Progress" 영역.
+(참고: 사용자가 본 `/docs/dashboard`의 Warranty KPI 카드는 placeholder라 stage 카드 자체가 없습니다. ACRA/Draft/Subcon/HDEC/Final 5개 카드가 표시되는 곳은 Executive Dashboard 입니다.)
 
-### 원인
+### 변경 파일
+**`src/lib/docs-stage-records.ts`**
 
-| 위치 | 동작 |
+- `WARRANTY_STAGE_DEFS` 배열(라인 73~79)에서 `'warranty.acra' / ACRA` 항목 1줄 삭제 → 4개 stage(Draft / Subcon Sign / HDEC Sign / Final)만 남김. `order`는 1~4로 재번호.
+- `buildWarrantyStageRecords()`의 `items` 배열(라인 266~272)에서 `acra` 줄 1줄 삭제. 나머지 4줄은 `WARRANTY_STAGE_DEFS[0..3]` 인덱스로 자동 정렬되도록 그대로 유지(순서만 일치하게).
+
+### 영향 범위
+- Executive Dashboard Warranty Stage Progress 카드: 5개 → 4개
+- ABD/OMM 모듈은 영향 없음
+- `r_subcontract_date` 자체는 DB/타 화면에서 계속 사용됨(워런티 전체 status 계산용 `computeWarrantyOverallStatus`에서 'Pending ACRA' 판정에 그대로 사용). 단지 Executive Dashboard의 시각 카드에서만 빠지는 것.
+
+---
+
+## 2. Draft 카드 계산 로직 (현재 코드 기준)
+
+**Draft 카드는 단순히 `draft_status` 값의 갯수를 세지 않습니다.** 워런티 레코드 1행마다 Draft stage 레코드 1건이 생성되고, 4가지 상태(Done/WIP/Planned/Delayed)로 분류됩니다.
+
+분류 규칙 (`classifyWarrantyStageState`, `src/lib/docs-warranty-status.ts`):
+
+| 상태 | 조건 |
 |---|---|
-| `DocsWarrantyDetailPage.tsx` (L153) | `docs_change_log` 테이블을 `sub_module='warranty'` 조건으로 읽음 |
-| Detail의 `save()` (L177~) | `warranty_items` UPDATE만 수행, **docs_change_log INSERT 없음** |
-| `WarrantyImportContext.tsx` | 임포트 시 **로그를 어디에도 쓰지 않음** (OMM/ABD/Spare는 `docs-import-logging.ts`로 기록) |
-| DB | `docs_change_log` 의 `sub_module='warranty'` 행 수 = **0** |
-| DB | 별도 테이블 `warranty_change_log` 도 존재하지만 **0행** (어떤 코드도 쓰지 않음) |
-| DB 트리거 | `trg_warranty_items_event_log` 가 `event_log` 에는 적재 중 — 단, UI는 event_log를 안 읽음 |
+| **Done** | `draft_status` ∈ {A, COMPLETE, OK} (대소문자 무관) |
+| **WIP** | `draft_actual_date`는 있는데 `draft_status`가 비어있거나, `draft_status` ∈ {WIP, UR} |
+| **Delayed (Overdue)** | `draft_planned_date < asOf` 이고 `draft_actual_date` 없음 |
+| **Planned** | 그 외 (planned 일정만 있고 미래 / 둘 다 없음 등) |
 
-즉 OMM·Spare Part와 동일 패턴을 따랐어야 했는데, Warranty만 양쪽(저장·임포트) 다 누락되어 UI가 항상 빈 상태입니다.
+카드에 표시되는 4개 숫자 (`StageProgress`):
+- **Total** = 활성 워런티 행 수 (모든 행이 Draft stage 1건씩 기여)
+- **Done** = 위의 Done 분류 행 수
+- **Overdue** = Delayed(=계획일 지났는데 actual 없음) 행 수
+- **Remaining** = Total − Done
 
-## 수정 계획
+즉 "Draft Status가 'A'인 갯수 = Done", 그리고 별도로 "지연된 행 수 = Overdue"가 함께 표시되는 구조입니다.
 
-OMM Detail (`DocsOMMDetailPage.tsx` L186 패턴)과 동일하게 맞춥니다.
+### 참고: 현재 동작에 대한 의문점
+사용자가 "Draft Status의 갯수냐"고 물으신 의도가 다음 중 어느 것인지에 따라 후속 조치가 달라질 수 있습니다(이번 plan에는 미포함):
 
-### 1) Detail 단일 필드 저장 시 로그 적재
+1. 지금 로직이 맞다 → ACRA 제거만 진행 (이 plan).
+2. Draft = "draft_status A/B/C/UR 등 status 값별 분포"로 보고 싶다 → StageCard를 status-distribution 형태로 별도 변경 필요.
+3. Draft = "draft_actual_date가 입력된 행 수"(=제출된 draft 수)로 정의하고 싶다 → `is_done` 판정 기준 변경 필요.
 
-`src/pages/docs/DocsWarrantyDetailPage.tsx` `save()` 내부에서 update 성공 후:
-
-```ts
-await supabase.from('docs_change_log').insert({
-  sub_module: 'warranty',
-  record_id: id,
-  changed_field: field,
-  old_value: row[field] != null ? String(row[field]) : null,
-  new_value: value != null ? String(value) : null,
-  change_source: 'manual',
-  changed_by: user?.id ?? null,
-});
-```
-저장 후 `setLogs(...)` 갱신 (또는 reload).
-
-### 2) Import 시 로그 적재
-
-`src/contexts/docs-import/WarrantyImportContext.tsx` 의 upsert 경로에서 inserted/updated 결과를 모아 `docs-import-logging.ts` 의 `logChanges` (혹은 동일 형태)를 호출. `sub_module='warranty'`, `record_id=warranty_items.id`, `change_source='import'`, `upload_id=batchId` 로 적재. OMM/ABD가 사용 중인 헬퍼를 그대로 재사용.
-
-### 3) 기존 변경 이력 백필 (선택)
-
-원하시면 `event_log` (table_name='warranty_items') 의 과거 행을 `docs_change_log` 로 1회 마이그레이션. 미진행 시 적용 시점 이후 변경분만 노출됩니다.
-
-### 4) 사용 안 하는 `warranty_change_log` 테이블 처리
-
-코드/트리거 모두 미사용. 삭제하거나 그대로 둘지 확인 필요 (안전하게는 보존).
-
-## 영향 범위
-
-- 프론트 2개 파일 (Detail save, WarrantyImportContext)
-- DB 변경 없음 (백필을 선택할 경우 1회 마이그레이션만)
-- 다른 모듈(OMM/ABD/Spare) 동작에는 영향 없음
-
-## 확인 필요
-
-1. **백필**을 진행할까요? (event_log → docs_change_log, sub_module='warranty')
-2. `warranty_change_log` 빈 테이블을 **삭제**할까요, 보존할까요?
+ACRA 제거 후, Draft 정의를 바꾸고 싶으시면 별도 요청 주세요.
