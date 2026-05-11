@@ -151,11 +151,16 @@ function mapHeader(header: string): string | 'skip' | null {
   const raw = String(header ?? '').trim();
   if (!raw) return 'skip';
   if (raw.startsWith('__')) return 'skip';
-  // DB-driven mapping wins
-  const db = getMappedField('docs', raw, 'warranty');
+  // Reimport system columns (handled separately by import context, not as fields)
+  if (raw === 'ID' || raw === 'Resubmission Seq') return 'skip';
+  const norm = normalizeHeader(raw);
+  const lower = norm.toLowerCase();
+  // DB-driven mapping wins. Try original case first, then lowercase to tolerate
+  // case mismatches between docs_field_config display_name and import_header_mappings alias.
+  const db = getMappedField('docs', norm, 'warranty')
+    ?? getMappedField('docs', lower, 'warranty');
   if (db === 'skip') return 'skip';
   if (db) return db;
-  const lower = raw.toLowerCase();
   // Tread headers (no DB seed for these — fallback)
   if (/^tread\s*\d/i.test(raw)) {
     const key = raw
