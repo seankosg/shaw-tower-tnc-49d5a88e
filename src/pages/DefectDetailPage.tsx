@@ -43,7 +43,7 @@ export default function DefectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
   const { toast } = useToast();
   const { dataDate } = useLatestDataDate();
   const [record, setRecord] = useState<DefectItem | null>(null);
@@ -66,7 +66,8 @@ export default function DefectDetailPage() {
   const [hdecEngOptions, setHdecEngOptions] = useState<HdecMaster[]>([]);
   const [suggestPool, setSuggestPool] = useState<{ area_level: string[]; area_location: string[]; main_trade: string[]; sub_trade: string[]; work_type: string[] }>({ area_level: [], area_location: [], main_trade: [], sub_trade: [], work_type: [] });
   const [commentCount, setCommentCount] = useState(0);
-  const { isFieldVisible, isFieldRequired, getLabel, getRawPayloadFieldsForDisplay } = useDefectFieldConfig();
+  const { isFieldVisible: isFieldVisibleRaw, isFieldRequired, getLabel, getRawPayloadFieldsForDisplay } = useDefectFieldConfig();
+  const isFieldVisible = (f: string) => isFieldVisibleRaw(f, roles);
 
   const loadScHistory = async (defectId: string) => {
     const res = await (supabase as any)
