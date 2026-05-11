@@ -366,9 +366,12 @@ export function AllCommentsView({ title, kind }: AllCommentsViewProps) {
               {visibleReplies.map((r) => {
                 const rUnread = isUnread(r);
                 return (
-                  <div key={r.id} className={cn('rounded px-2 py-1.5 text-xs', rUnread && 'bg-primary/5')}>
+                  <div key={r.id} className={cn('rounded px-2 py-1.5 text-xs', rUnread && 'bg-primary/5', vpAuthorIds.has(r.author_user_id) && 'border-l-4 border-l-primary pl-2')}>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{authorName(r.author_user_id)}</span>
+                      {vpAuthorIds.has(r.author_user_id) && (
+                        <Badge className="h-4 px-1.5 text-[10px] bg-primary text-primary-foreground hover:bg-primary">VP</Badge>
+                      )}
                       <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">Reply</Badge>
                       {r.type === 'instruction' && (
                         <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">Instruction</Badge>
