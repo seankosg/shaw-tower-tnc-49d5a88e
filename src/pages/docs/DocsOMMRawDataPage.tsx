@@ -1378,6 +1378,7 @@ export default function DocsOMMRawDataPage() {
         sorting={sorting.length ? sorting : DEFAULT_SORTING}
         navigate={navigate}
         tableRef={tableRef}
+        getSourceOrigin={getSourceOrigin}
       />
 
       {/* Export dialog */}
@@ -1463,9 +1464,10 @@ interface ViewProps {
   sorting: SortingState;
   navigate: (path: string) => void;
   tableRef: React.RefObject<HTMLDivElement>;
+  getSourceOrigin?: (field: string) => 'hdec' | 'aconex' | 'system';
 }
 
-function OmmRawTableView({ table, loading, sorting, navigate, tableRef }: ViewProps) {
+function OmmRawTableView({ table, loading, sorting, navigate, tableRef, getSourceOrigin }: ViewProps) {
   const isMobile = useIsMobile();
   const { value: frozenSetting } = useFrozenColumnCount();
   const userFrozenCount = isMobile
