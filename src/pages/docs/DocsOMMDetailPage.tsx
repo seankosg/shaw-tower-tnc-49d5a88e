@@ -42,12 +42,30 @@ const QUANTITY_FIELDS = [
   'hardcopy_actual_qty',
 ] as const;
 
-const WORKFLOW_FIELDS = [
-  'instruction_date',
-  'draft_planned_date',
-  'draft_actual_date',
-  'draft_response_date',
-  'draft_response_status',
+const SUB1_FIELDS = [
+  'sub1_planned_date',
+  'sub1_actual_date',
+  'sub1_response_date',
+  'sub1_response_status',
+] as const;
+
+const SUB2_FIELDS = [
+  'sub2_planned_date',
+  'sub2_actual_date',
+  'sub2_response_planned_date',
+  'sub2_response_actual_date',
+  'sub2_response_status',
+] as const;
+
+const SUB3_FIELDS = [
+  'sub3_planned_date',
+  'sub3_actual_date',
+  'sub3_response_planned_date',
+  'sub3_response_actual_date',
+  'sub3_response_status',
+] as const;
+
+const FINAL_FIELDS = [
   'final_planned_date',
   'final_actual_date',
   'final_response_planned_date',
@@ -55,11 +73,27 @@ const WORKFLOW_FIELDS = [
   'final_response_status',
 ] as const;
 
+const WORKFLOW_FIELDS = [
+  'instruction_date',
+  ...SUB1_FIELDS,
+  ...SUB2_FIELDS,
+  ...SUB3_FIELDS,
+  ...FINAL_FIELDS,
+] as const;
+
 const DATE_FIELDS = new Set<string>([
   'instruction_date',
-  'draft_planned_date',
-  'draft_actual_date',
-  'draft_response_date',
+  'sub1_planned_date',
+  'sub1_actual_date',
+  'sub1_response_date',
+  'sub2_planned_date',
+  'sub2_actual_date',
+  'sub2_response_planned_date',
+  'sub2_response_actual_date',
+  'sub3_planned_date',
+  'sub3_actual_date',
+  'sub3_response_planned_date',
+  'sub3_response_actual_date',
   'final_planned_date',
   'final_actual_date',
   'final_response_planned_date',
@@ -73,7 +107,12 @@ const NUMBER_FIELDS = new Set<string>([
   'hardcopy_actual_qty',
 ]);
 
-const ABC_FIELDS = new Set<string>(['draft_response_status', 'final_response_status']);
+const ABC_FIELDS = new Set<string>([
+  'sub1_response_status',
+  'sub2_response_status',
+  'sub3_response_status',
+  'final_response_status',
+]);
 const TRAINING_OPTIONS = ['Done', 'Not Yet', 'N/S'];
 
 export default function DocsOMMDetailPage() {
