@@ -245,10 +245,20 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
         if (batchErr || !batch) throw batchErr ?? new Error('Failed to create batch');
         const batchId = batch.id as string;
 
-        // Load existing items for upsert.
+        // Load existing items for upsert (include all tracked fields for change-log diffing).
+        const TRACKED_FIELDS = [
+          'category','warranted_item','team','warranty_period_years','contract_spec_ref',
+          'subcontractor_name','subcontractor_id','hdec_pic_name','hdec_eng_name',
+          'r_works_description','r_acra_reg_no','r_acra_address','r_subcontract_date',
+          'r_brief_description','r_director_1','r_director_2','r_witness','acra_info_status',
+          'draft_planned_date','draft_actual_date','draft_response_planned_date','draft_response_actual_date','draft_status',
+          'subcon_signing_planned_date','subcon_signing_actual_date','subcon_signing_status',
+          'hdec_signing_planned_date','hdec_signing_actual_date','hdec_signing_status',
+          'final_planned_date','final_actual_date','final_status','remarks',
+        ] as const;
         const { data: existingRows } = await (supabase as any)
           .from('warranty_items')
-          .select('id, item_no, draft_status, subcon_signing_status, hdec_signing_status, final_status, raw_payload')
+          .select(['id','item_no','raw_payload', ...TRACKED_FIELDS].join(','))
           .eq('project_id', project.id)
           .eq('is_active', true)
           .is('parent_id', null);
@@ -261,6 +271,12 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
         let threadsInserted = 0, threadsUpdated = 0, subconInfoUpserts = 0;
         const rejectSamples: WarrantyImportFile['rejectSamples'] = [];
         const rowLogs: any[] = [];
+        const changeLogs: any[] = [];
+        const stringify = (v: unknown): string | null => {
+          if (v == null || v === '') return null;
+          if (v instanceof Date) return v.toISOString().slice(0, 10);
+          return String(v);
+        };
 
         const onProgress = (i: number) => {
           const pct = Math.round((i / parsed.length) * 100);
@@ -339,6 +355,21 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
               recordId = existing.id;
               updated++;
               rowLogs.push({ upload_id: batchId, row_no: row.rawRowNo, item_no: row.item_no, status: 'updated' });
+              // Diff tracked fields → docs_change_log
+              for (const fld of TRACKED_FIELDS) {
+                if (excludedFields.has(fld)) continue;
+                if (!(fld in updatePayload)) continue;
+                const oldV = stringify(existing[fld]);
+                const newV = stringify(updatePayload[fld]);
+                if (oldV !== newV) {
+                  changeLogs.push({
+                    sub_module: 'warranty', record_id: existing.id,
+                    changed_field: fld, old_value: oldV, new_value: newV,
+                    change_source: 'excel_import', upload_id: batchId,
+                    changed_by: user?.id ?? null,
+                  });
+                }
+              }
             } else {
               const { data: ins, error } = await (supabase as any)
                 .from('warranty_items').insert({ ...payload, created_by: user?.id ?? null }).select('id').single();
@@ -346,6 +377,18 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
               recordId = ins?.id ?? null;
               inserted++;
               rowLogs.push({ upload_id: batchId, row_no: row.rawRowNo, item_no: row.item_no, status: 'inserted' });
+              if (recordId) {
+                for (const fld of TRACKED_FIELDS) {
+                  const newV = stringify((payload as any)[fld]);
+                  if (newV == null) continue;
+                  changeLogs.push({
+                    sub_module: 'warranty', record_id: recordId,
+                    changed_field: fld, old_value: null, new_value: newV,
+                    change_source: 'excel_import', upload_id: batchId,
+                    changed_by: user?.id ?? null,
+                  });
+                }
+              }
             }
           } catch (err: any) {
             rejected++;
@@ -422,6 +465,13 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
         for (let i = 0; i < rowLogs.length; i += 200) {
           const chunk = rowLogs.slice(i, i + 200);
           await (supabase as any).from('warranty_upload_row_logs').insert(chunk);
+        }
+
+        // Persist Change History (docs_change_log) in chunks of 500.
+        for (let i = 0; i < changeLogs.length; i += 500) {
+          const chunk = changeLogs.slice(i, i + 500);
+          const { error: clErr } = await (supabase as any).from('docs_change_log').insert(chunk);
+          if (clErr) console.warn('[warranty-import] docs_change_log insert failed', clErr);
         }
 
         // Finalize batch counters.
