@@ -865,9 +865,13 @@ export default function DocsOMMRawDataPage() {
     };
 
     const OMM_PROGRESS_OPTIONS = [
-      { value: 'Pending Draft', label: 'Pending Draft' },
-      { value: 'Draft Under Review', label: 'Draft Under Review' },
-      { value: 'Pending Final Submission', label: 'Pending Final Submission' },
+      { value: 'Pending Sub1', label: 'Pending Sub1' },
+      { value: 'Sub1 Under Review', label: 'Sub1 Under Review' },
+      { value: 'Pending Sub2', label: 'Pending Sub2' },
+      { value: 'Sub2 Under Review', label: 'Sub2 Under Review' },
+      { value: 'Pending Sub3', label: 'Pending Sub3' },
+      { value: 'Sub3 Under Review', label: 'Sub3 Under Review' },
+      { value: 'Pending Final', label: 'Pending Final' },
       { value: 'Final Under Review', label: 'Final Under Review' },
       { value: 'Approved', label: 'Approved' },
       { value: 'Rejected', label: 'Rejected' },
