@@ -265,6 +265,7 @@ export function AllCommentsView({ title, kind }: AllCommentsViewProps) {
         disabled={noAccess}
         className={cn(
           'group block w-full rounded-md border px-3 py-2 text-left transition-colors',
+          vpAuthorIds.has(c.author_user_id) && 'border-l-4 border-l-primary',
           unread && 'border-primary/40 bg-primary/5',
           noAccess && 'cursor-default bg-muted/40',
           !noAccess && 'hover:bg-muted/50',
