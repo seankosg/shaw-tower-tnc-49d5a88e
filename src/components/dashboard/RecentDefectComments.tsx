@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAdminAuthorIds } from '@/lib/comment-author-roles';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -54,6 +55,7 @@ export function RecentDefectComments() {
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [supplementalParents, setSupplementalParents] = useState<CommentRow[]>([]);
   const [authors, setAuthors] = useState<AuthorInfo[]>([]);
+  const [vpAuthorIds, setVpAuthorIds] = useState<Set<string>>(new Set());
   const [reads, setReads] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -140,8 +142,11 @@ export function RecentDefectComments() {
           .select('user_id, name, login_id')
           .in('user_id', allAuthorIds);
         if (!cancelled) setAuthors((profs as AuthorInfo[]) ?? []);
+        const vpIds = await fetchAdminAuthorIds(allAuthorIds);
+        if (!cancelled) setVpAuthorIds(vpIds);
       } else {
         setAuthors([]);
+        setVpAuthorIds(new Set());
       }
 
       const defIds = Array.from(new Set(rows.map((r) => r.defect_id)));
@@ -222,6 +227,7 @@ export function RecentDefectComments() {
           className={cn(
             'rounded-md border px-3 py-2 transition-colors',
             threadUnread && 'border-primary/40 bg-primary/5',
+            vpAuthorIds.has(t.parent.author_user_id) && 'border-l-4 border-l-primary',
             (noAccess || t.parentMissing) && 'bg-muted/40',
           )}
         >
@@ -237,6 +243,9 @@ export function RecentDefectComments() {
           >
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="font-medium">{authorName(t.parent.author_user_id)}</span>
+              {vpAuthorIds.has(t.parent.author_user_id) && (
+                <Badge className="h-4 px-1.5 text-[10px] bg-primary text-primary-foreground hover:bg-primary">VP</Badge>
+              )}
               {t.parent.type === 'instruction' && (
                 <Badge variant="destructive" className="h-4 px-1.5 text-[10px]">
                   Instruction
@@ -285,10 +294,14 @@ export function RecentDefectComments() {
                     className={cn(
                       'rounded px-2 py-1.5 text-xs',
                       rUnread && 'bg-primary/5',
+                      vpAuthorIds.has(r.author_user_id) && 'border-l-4 border-l-primary pl-2',
                     )}
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{authorName(r.author_user_id)}</span>
+                      {vpAuthorIds.has(r.author_user_id) && (
+                        <Badge className="h-4 px-1.5 text-[10px] bg-primary text-primary-foreground hover:bg-primary">VP</Badge>
+                      )}
                       <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
                         Reply
                       </Badge>
