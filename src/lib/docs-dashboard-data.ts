@@ -298,7 +298,7 @@ export async function loadDashboardData(opts: {
 
     bumpStage(omm, status);
 
-    if (status === 'Draft Under Review' || status === 'Final Under Review') {
+    if (status === 'Sub1 Under Review' || status === 'Sub2 Under Review' || status === 'Sub3 Under Review' || status === 'Final Under Review') {
       omm.awaitingResponse++;
     }
 
