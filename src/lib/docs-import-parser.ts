@@ -199,6 +199,29 @@ const FIELD_ALIASES: Record<string, FieldKey | 'skip'> = {
   'risk': 'skip',
   'cycle progress': 'skip',
   'cycle_progress': 'skip',
+  'sl no': 'skip',
+  'sl. no': 'skip',
+  'sl no.': 'skip',
+  'index': 'skip',
+  '#': 'skip',
+  // Drawing-number variants
+  'drawing #': 'document_no',
+  'dwg #': 'document_no',
+  'dwg': 'document_no',
+  'dwg number': 'document_no',
+  'file no': 'document_no',
+  'sheet no': 'document_no',
+  // Korean labels
+  '도면번호': 'document_no',
+  '도면명': 'title',
+  '문서번호': 'document_no',
+  '제목': 'title',
+  '개정': 'revision',
+  '담당': 'hdec_pic_name',
+  '담당자': 'hdec_pic_name',
+  '엔지니어': 'hdec_eng_name',
+  '비고': 'remarks',
+  '협력업체': 'subcontractor_name',
 };
 
 /** Sub-column alias inside Submission group → suffix used to compose field key. */

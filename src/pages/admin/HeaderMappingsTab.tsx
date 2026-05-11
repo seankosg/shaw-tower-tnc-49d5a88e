@@ -68,6 +68,8 @@ const DEFECT_FIELDS = [
   'actual_start_date','actual_completion_date','actual_closure_date',
   'planned_progress_pct','actual_progress_pct','completion_status','closure_status',
   'work_type','subcontractor_issue_no','subcontractor_issue_source',
+  // Pseudo-target for ignoring system/derived columns on import
+  'skip',
 ] as const;
 
 // Docs / As-Built (drawings via Aconex) — v2 schema (3 cycles + actual response + subcontractor)
@@ -80,6 +82,8 @@ const DOCS_AS_BUILT_FIELDS = [
   'sub3_planned_date','sub3_submission_date','sub3_approval_date','sub3_actual_response_date','sub3_approval_status',
   'transmittal_number','transmittal_due_date','days_due',
   'hdec_pic_name','hdec_eng_name','remarks',
+  // Pseudo-target for ignoring system/derived columns on import
+  'skip',
 ] as const;
 
 // Docs / Warranty (List of Warranties workflow — Schedule R + 4 stages + threads)
@@ -96,6 +100,8 @@ const DOCS_WARRANTY_FIELDS = [
   // Threads (separate child table — written via thread:<key> pseudo-targets)
   'thread:tread_1','thread:tread_2_1','thread:tread_2_2','thread:tread_2_3',
   'thread:tread_3_1','thread:tread_3_2',
+  // Pseudo-target for ignoring system/derived columns on import
+  'skip',
 ] as const;
 
 // Docs / OMM (operation & maintenance manual workflow)

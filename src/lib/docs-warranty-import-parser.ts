@@ -140,6 +140,38 @@ const FALLBACK_ALIASES: Record<string, string | 'skip'> = {
   'final actual submission': 'final_actual_date',
   'final status': 'final_status',
   'remarks': 'remarks',
+  // Common variants
+  'item_no': 'item_no',
+  'warranted_item': 'warranted_item',
+  'warranty period (years)': 'warranty_period_years',
+  'warranty years': 'warranty_period_years',
+  'warranty (years)': 'warranty_period_years',
+  // Stage label variants
+  'draft planned submission': 'draft_planned_date',
+  'draft actual submission': 'draft_actual_date',
+  'draft planned response': 'draft_response_planned_date',
+  'draft actual response': 'draft_response_actual_date',
+  'draft status': 'draft_status',
+  'subcontractor signing planned': 'subcon_signing_planned_date',
+  'subcontractor signing actual': 'subcon_signing_actual_date',
+  'subcontractor signing status': 'subcon_signing_status',
+  'hdec signing planned': 'hdec_signing_planned_date',
+  'hdec signing actual': 'hdec_signing_actual_date',
+  'final planned': 'final_planned_date',
+  'final actual': 'final_actual_date',
+  // Korean labels
+  '품목': 'warranted_item',
+  '카테고리': 'category',
+  '팀': 'team',
+  '담당': 'hdec_pic_name',
+  '담당자': 'hdec_pic_name',
+  '엔지니어': 'hdec_eng_name',
+  '협력업체': 'subcontractor_name',
+  '비고': 'remarks',
+  // Skip pure index / system columns
+  '#': 'skip',
+  'index': 'skip',
+  'sl no': 'skip',
 };
 
 /** Resolve a raw header to a canonical field. Returns:
