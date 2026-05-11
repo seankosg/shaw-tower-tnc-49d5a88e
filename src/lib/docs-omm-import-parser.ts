@@ -25,10 +25,26 @@ export interface ParsedOmmRow {
   hardcopy_required_qty: number | null;
   hardcopy_actual_qty: number | null;
   instruction_date: string | null;
+  // DEPRECATED legacy draft fields (kept for backward read; new imports populate sub1_*)
   draft_planned_date: string | null;
   draft_actual_date: string | null;
   draft_response_date: string | null;
   draft_response_status: string | null;
+  // New cycle model: 1st / 2nd / 3rd resubmission
+  sub1_planned_date: string | null;
+  sub1_actual_date: string | null;
+  sub1_response_date: string | null;
+  sub1_response_status: string | null;
+  sub2_planned_date: string | null;
+  sub2_actual_date: string | null;
+  sub2_response_planned_date: string | null;
+  sub2_response_actual_date: string | null;
+  sub2_response_status: string | null;
+  sub3_planned_date: string | null;
+  sub3_actual_date: string | null;
+  sub3_response_planned_date: string | null;
+  sub3_response_actual_date: string | null;
+  sub3_response_status: string | null;
   final_planned_date: string | null;
   final_actual_date: string | null;
   final_response_planned_date: string | null;
@@ -59,19 +75,27 @@ function normalizeHeader(value: unknown): string {
     .toLowerCase()
     .replace(/\.$/, '')
     .trim();
+  // Strip parenthetical qualifiers: "Readible PDF (Req)" → "readible pdf"
+  s = s.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
   // SHAW abbreviations: "D." / "F." prefix (with or without trailing space) → draft / final
   s = s.replace(/^d\.\s*/, 'draft ').replace(/^f\.\s*/, 'final ');
   // Standalone "d " / "f " prefix when followed by known tokens → draft / final
   s = s.replace(/^d\s+(?=submission|response|actual|planned|respond)/, 'draft ');
   s = s.replace(/^f\s+(?=submission|response|actual|planned|respond)/, 'final ');
-  // SHAW form: "Submission" is implicit; drop the word so canonical aliases match
-  s = s.replace(/\bsubmission\s+/g, '');
+  // Ordinal normalization: keep "1st/2nd/3rd" tokens intact
+  // SHAW form: "Submission" is implicit when not preceded by an ordinal — drop it.
+  // For "1st submission planned" / "2nd submission actual" we KEEP "submission" so
+  // FALLBACK_ALIASES can match the explicit form. Only strip when followed by a
+  // descriptor that is otherwise unambiguous (e.g. "draft submission planned").
+  s = s.replace(/(?<!\b(?:1st|2nd|3rd|sub1|sub2|sub3)\s)\bsubmission\s+/g, '');
   // Variant spellings
   s = s.replace(/\brespond\b/g, 'response');
   s = s.replace(/\btraning\b/g, 'training');
   // Order normalization to canonical "<stage> response <kind> date"
-  s = s.replace(/^(draft|final) actual response date$/, '$1 response actual date');
-  s = s.replace(/^(draft|final) planned response date$/, '$1 response planned date');
+  s = s.replace(/^(draft|final|sub1|sub2|sub3) actual response date$/, '$1 response actual date');
+  s = s.replace(/^(draft|final|sub1|sub2|sub3) planned response date$/, '$1 response planned date');
+  s = s.replace(/^(1st|2nd|3rd) actual response$/, '$1 response actual');
+  s = s.replace(/^(1st|2nd|3rd) planned response$/, '$1 response planned');
   return s.replace(/\s+/g, ' ').trim();
 }
 
@@ -139,6 +163,7 @@ const FALLBACK_ALIASES: Record<string, string | 'skip'> = {
   'hc actual qty': 'hardcopy_actual_qty',
   'instruction date': 'instruction_date',
   'instruction': 'instruction_date',
+  // Legacy Draft aliases (kept for backward compatibility — older files only)
   'draft planned date': 'draft_planned_date',
   'draft planned': 'draft_planned_date',
   'draft actual date': 'draft_actual_date',
@@ -146,8 +171,56 @@ const FALLBACK_ALIASES: Record<string, string | 'skip'> = {
   'draft response date': 'draft_response_date',
   'draft response': 'draft_response_date',
   'draft response status': 'draft_response_status',
-  'draft response (a/b/c)': 'draft_response_status',
   'draft response a/b/c': 'draft_response_status',
+  // Sub1 (1st Submission cycle) — 4 fields
+  '1st submission planned': 'sub1_planned_date',
+  '1st planned': 'sub1_planned_date',
+  '1st sub planned': 'sub1_planned_date',
+  'sub1 planned': 'sub1_planned_date',
+  '1st submission actual': 'sub1_actual_date',
+  '1st actual': 'sub1_actual_date',
+  '1st sub actual': 'sub1_actual_date',
+  'sub1 actual': 'sub1_actual_date',
+  '1st response date by pq': 'sub1_response_date',
+  '1st response date': 'sub1_response_date',
+  '1st response': 'sub1_response_date',
+  'sub1 response date': 'sub1_response_date',
+  '1st response status': 'sub1_response_status',
+  'sub1 response status': 'sub1_response_status',
+  // Sub2 (2nd Submission cycle) — 5 fields
+  '2nd submission planned': 'sub2_planned_date',
+  '2nd planned submission': 'sub2_planned_date',
+  '2nd planned': 'sub2_planned_date',
+  'sub2 planned': 'sub2_planned_date',
+  '2nd submission actual': 'sub2_actual_date',
+  '2nd actual submission': 'sub2_actual_date',
+  '2nd actual': 'sub2_actual_date',
+  'sub2 actual': 'sub2_actual_date',
+  '2nd response planned': 'sub2_response_planned_date',
+  '2nd planned response': 'sub2_response_planned_date',
+  'sub2 response planned': 'sub2_response_planned_date',
+  '2nd response actual': 'sub2_response_actual_date',
+  '2nd actual response': 'sub2_response_actual_date',
+  'sub2 response actual': 'sub2_response_actual_date',
+  '2nd response status': 'sub2_response_status',
+  'sub2 response status': 'sub2_response_status',
+  // Sub3 (3rd Submission cycle) — 5 fields
+  '3rd submission planned': 'sub3_planned_date',
+  '3rd planned submission': 'sub3_planned_date',
+  '3rd planned': 'sub3_planned_date',
+  'sub3 planned': 'sub3_planned_date',
+  '3rd submission actual': 'sub3_actual_date',
+  '3rd actual submission': 'sub3_actual_date',
+  '3rd actual': 'sub3_actual_date',
+  'sub3 actual': 'sub3_actual_date',
+  '3rd response planned': 'sub3_response_planned_date',
+  '3rd planned response': 'sub3_response_planned_date',
+  'sub3 response planned': 'sub3_response_planned_date',
+  '3rd response actual': 'sub3_response_actual_date',
+  '3rd actual response': 'sub3_response_actual_date',
+  'sub3 response actual': 'sub3_response_actual_date',
+  '3rd response status': 'sub3_response_status',
+  'sub3 response status': 'sub3_response_status',
   'final planned date': 'final_planned_date',
   'final planned': 'final_planned_date',
   'final actual date': 'final_actual_date',
@@ -174,6 +247,7 @@ const FALLBACK_ALIASES: Record<string, string | 'skip'> = {
   'cycle progress': 'skip',
   'cycle_progress': 'skip',
   'status': 'skip',
+  'stage': 'skip',
   'risk': 'skip',
 };
 
@@ -318,7 +392,7 @@ export async function parseOmmExcel(
         const v = dataRow[c];
         if (f.endsWith('_date')) struct[f] = normalizeDate(v);
         else if (f.endsWith('_qty')) struct[f] = toIntOrNull(v);
-        else if (f === 'draft_response_status' || f === 'final_response_status') struct[f] = normalizeStatusLetter(v);
+        else if (f.endsWith('_response_status')) struct[f] = normalizeStatusLetter(v);
         else struct[f] = toText(v);
       }
 
@@ -351,6 +425,20 @@ export async function parseOmmExcel(
         draft_actual_date: struct.draft_actual_date ?? null,
         draft_response_date: struct.draft_response_date ?? null,
         draft_response_status: struct.draft_response_status ?? null,
+        sub1_planned_date: struct.sub1_planned_date ?? null,
+        sub1_actual_date: struct.sub1_actual_date ?? null,
+        sub1_response_date: struct.sub1_response_date ?? null,
+        sub1_response_status: struct.sub1_response_status ?? null,
+        sub2_planned_date: struct.sub2_planned_date ?? null,
+        sub2_actual_date: struct.sub2_actual_date ?? null,
+        sub2_response_planned_date: struct.sub2_response_planned_date ?? null,
+        sub2_response_actual_date: struct.sub2_response_actual_date ?? null,
+        sub2_response_status: struct.sub2_response_status ?? null,
+        sub3_planned_date: struct.sub3_planned_date ?? null,
+        sub3_actual_date: struct.sub3_actual_date ?? null,
+        sub3_response_planned_date: struct.sub3_response_planned_date ?? null,
+        sub3_response_actual_date: struct.sub3_response_actual_date ?? null,
+        sub3_response_status: struct.sub3_response_status ?? null,
         final_planned_date: struct.final_planned_date ?? null,
         final_actual_date: struct.final_actual_date ?? null,
         final_response_planned_date: struct.final_response_planned_date ?? null,

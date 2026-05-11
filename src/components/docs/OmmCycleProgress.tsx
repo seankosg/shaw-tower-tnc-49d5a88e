@@ -3,28 +3,36 @@ import { cn } from '@/lib/utils';
 import { computeOmmStatus, type OMMStatusInput } from '@/lib/docs-omm-status';
 
 /**
- * Donut-pip lifecycle progress for OMM (matches ABD's DocsCycleProgress style).
- * Five stages: Pending Draft → Draft UR → Pending Final → Final UR → Approved.
- * Rejected (B/C response) renders the active stage in destructive red.
+ * Donut-pip lifecycle progress for OMM. Eight stages reflect the resubmission cycles:
+ *   Sub1 Submission → Sub1 Review → Sub2 Submission → Sub2 Review → Sub3 Submission →
+ *   Sub3 Review → Final Submission → Final Review.
+ * Approved closes all pips green; Rejected (B/C at final) marks the active pip rose.
  */
-const STAGES = ['DS', 'DR', 'FS', 'FR', 'S'] as const;
+const STAGES = ['1S', '1R', '2S', '2R', '3S', '3R', 'FS', 'FR'] as const;
 type Stage = typeof STAGES[number];
 
 const STAGE_TITLES: Record<Stage, string> = {
-  DS: 'Draft Submission',
-  DR: 'Draft Review',
+  '1S': '1st Submission',
+  '1R': '1st Review',
+  '2S': '2nd Submission',
+  '2R': '2nd Review',
+  '3S': '3rd Submission',
+  '3R': '3rd Review',
   FS: 'Final Submission',
   FR: 'Final Review',
-  S: 'Final Status',
 };
 
 function statusToIndex(s: ReturnType<typeof computeOmmStatus>): number {
   switch (s) {
-    case 'Pending Draft': return 0;
-    case 'Draft Under Review': return 1;
-    case 'Pending Final Submission': return 2;
-    case 'Final Under Review': return 3;
-    case 'Approved': return 4;
+    case 'Pending Sub1': return 0;
+    case 'Sub1 Under Review': return 1;
+    case 'Pending Sub2': return 2;
+    case 'Sub2 Under Review': return 3;
+    case 'Pending Sub3': return 4;
+    case 'Sub3 Under Review': return 5;
+    case 'Pending Final': return 6;
+    case 'Final Under Review': return 7;
+    case 'Approved': return 8;
     default: return -1;
   }
 }

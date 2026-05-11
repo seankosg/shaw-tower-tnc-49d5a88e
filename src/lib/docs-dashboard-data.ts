@@ -298,7 +298,7 @@ export async function loadDashboardData(opts: {
 
     bumpStage(omm, status);
 
-    if (status === 'Draft Under Review' || status === 'Final Under Review') {
+    if (status === 'Sub1 Under Review' || status === 'Sub2 Under Review' || status === 'Sub3 Under Review' || status === 'Final Under Review') {
       omm.awaitingResponse++;
     }
 
@@ -333,7 +333,7 @@ export async function loadDashboardData(opts: {
     }
 
     // Stuck — Pending Draft > 14d since instruction_date or created_at
-    if (status === 'Pending Draft') {
+    if (status === 'Pending Sub1') {
       const ref = safeIso(row.instruction_date) ?? safeIso(row.created_at);
       if (ref) {
         const idle = differenceInDays(asOf, ref);
@@ -349,11 +349,15 @@ export async function loadDashboardData(opts: {
       }
     }
 
-    if (status === 'Draft Under Review' || status === 'Final Under Review') {
+    if (status === 'Sub1 Under Review' || status === 'Sub2 Under Review' || status === 'Sub3 Under Review' || status === 'Final Under Review') {
       const since =
         status === 'Final Under Review'
           ? safeIso(row.final_actual_date)
-          : safeIso(row.draft_actual_date);
+          : status === 'Sub3 Under Review'
+            ? safeIso(row.sub3_actual_date)
+            : status === 'Sub2 Under Review'
+              ? safeIso(row.sub2_actual_date)
+              : safeIso(row.sub1_actual_date);
       const days = since ? differenceInDays(asOf, since) : 0;
       omm.topAwaiting.push({
         id: row.id,
@@ -475,9 +479,13 @@ export const MODULE_META: Record<DocsModuleId, { label: string; short: string; r
 
 export const ABD_STAGES = ['Pending', 'Sub1', 'Sub2', 'Sub3', 'Approved'] as const;
 export const OMM_STAGES: OMMStatus[] = [
-  'Pending Draft',
-  'Draft Under Review',
-  'Pending Final Submission',
+  'Pending Sub1',
+  'Sub1 Under Review',
+  'Pending Sub2',
+  'Sub2 Under Review',
+  'Pending Sub3',
+  'Sub3 Under Review',
+  'Pending Final',
   'Final Under Review',
   'Approved',
 ];
