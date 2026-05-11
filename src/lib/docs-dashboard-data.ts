@@ -479,9 +479,13 @@ export const MODULE_META: Record<DocsModuleId, { label: string; short: string; r
 
 export const ABD_STAGES = ['Pending', 'Sub1', 'Sub2', 'Sub3', 'Approved'] as const;
 export const OMM_STAGES: OMMStatus[] = [
-  'Pending Draft',
-  'Draft Under Review',
-  'Pending Final Submission',
+  'Pending Sub1',
+  'Sub1 Under Review',
+  'Pending Sub2',
+  'Sub2 Under Review',
+  'Pending Sub3',
+  'Sub3 Under Review',
+  'Pending Final',
   'Final Under Review',
   'Approved',
 ];
