@@ -76,31 +76,33 @@ export const OMM_STAGE_DEFS: StageDefinition[] = [
 
 /**
  * Visible Stage Progress cards for OMM Executive Dashboard.
- * Excludes 1st Submission (replaced by Sub1 Status card) and 3rd cycle cards.
+ * Excludes 1st Submission (replaced by Sub1 Status card), 2nd Response
+ * (replaced by Sub2 Status card), and 3rd cycle cards.
  */
 export const OMM_VISIBLE_STAGE_KEYS = new Set<string>([
   'omm.sub2_submission',
-  'omm.sub2_review',
   'omm.final_submission',
   'omm.final_approval',
 ]);
 
-export interface OmmSub1StatusBuckets {
+export interface OmmSubStatusBuckets {
   A: number;
   B: number;
   C: number;
   UR: number;
-  Planned: number;
+  TBS: number;
   total: number;
 }
+export type OmmSub1StatusBuckets = OmmSubStatusBuckets;
+export type OmmSub2StatusBuckets = OmmSubStatusBuckets;
+export type OmmStatusBucketKey = 'A' | 'B' | 'C' | 'UR' | 'TBS';
 
-export function computeOmmSub1StatusBuckets(rows: any[]): OmmSub1StatusBuckets {
-  const out: OmmSub1StatusBuckets = { A: 0, B: 0, C: 0, UR: 0, Planned: 0, total: 0 };
+function computeBuckets(rows: any[], actualKey: string, respKey: string): OmmSubStatusBuckets {
+  const out: OmmSubStatusBuckets = { A: 0, B: 0, C: 0, UR: 0, TBS: 0, total: 0 };
   for (const r of rows) {
     out.total++;
-    const submitted = !!r?.sub1_actual_date;
-    if (!submitted) { out.Planned++; continue; }
-    const s = String(r?.sub1_response_status ?? '').trim().toUpperCase();
+    if (!r?.[actualKey]) { out.TBS++; continue; }
+    const s = String(r?.[respKey] ?? '').trim().toUpperCase();
     if (s === 'A') out.A++;
     else if (s === 'B') out.B++;
     else if (s === 'C') out.C++;
@@ -109,11 +111,24 @@ export function computeOmmSub1StatusBuckets(rows: any[]): OmmSub1StatusBuckets {
   return out;
 }
 
-export function classifyOmmSub1Status(row: any): 'A' | 'B' | 'C' | 'UR' | 'Planned' {
-  if (!row?.sub1_actual_date) return 'Planned';
-  const s = String(row?.sub1_response_status ?? '').trim().toUpperCase();
+export function computeOmmSub1StatusBuckets(rows: any[]): OmmSub1StatusBuckets {
+  return computeBuckets(rows, 'sub1_actual_date', 'sub1_response_status');
+}
+export function computeOmmSub2StatusBuckets(rows: any[]): OmmSub2StatusBuckets {
+  return computeBuckets(rows, 'sub2_actual_date', 'sub2_response_status');
+}
+
+function classifyStatus(row: any, actualKey: string, respKey: string): OmmStatusBucketKey {
+  if (!row?.[actualKey]) return 'TBS';
+  const s = String(row?.[respKey] ?? '').trim().toUpperCase();
   if (s === 'A' || s === 'B' || s === 'C') return s;
   return 'UR';
+}
+export function classifyOmmSub1Status(row: any): OmmStatusBucketKey {
+  return classifyStatus(row, 'sub1_actual_date', 'sub1_response_status');
+}
+export function classifyOmmSub2Status(row: any): OmmStatusBucketKey {
+  return classifyStatus(row, 'sub2_actual_date', 'sub2_response_status');
 }
 
 export const WARRANTY_STAGE_DEFS: StageDefinition[] = [

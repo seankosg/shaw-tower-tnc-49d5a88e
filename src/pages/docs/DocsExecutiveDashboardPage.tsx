@@ -20,9 +20,9 @@ import {
 import {
   ALL_STAGE_DEFS, MODULE_LABEL, MODULE_RAW_ROUTE,
   computeStageProgress, summariseByItem, computeAbdBucketDistribution,
-  computeOmmSub1StatusBuckets, OMM_VISIBLE_STAGE_KEYS,
+  computeOmmSub1StatusBuckets, computeOmmSub2StatusBuckets, OMM_VISIBLE_STAGE_KEYS,
   type DocModule, type DocsStageRecord, type AbdBucketDistribution,
-  type OmmSub1StatusBuckets,
+  type OmmSub1StatusBuckets, type OmmSub2StatusBuckets, type OmmStatusBucketKey,
 } from '@/lib/docs-stage-records';
 
 const MODULE_ICON: Record<DocModule, typeof FileText> = {
@@ -204,6 +204,10 @@ function ModuleSection({
     () => computeOmmSub1StatusBuckets(ommRowsForTab),
     [ommRowsForTab],
   );
+  const ommSub2Buckets: OmmSub2StatusBuckets = useMemo(
+    () => computeOmmSub2StatusBuckets(ommRowsForTab),
+    [ommRowsForTab],
+  );
 
   // Short trade labels for the tab list
   const TRADE_SHORT: Record<TradeCategory, string> = {
@@ -307,35 +311,55 @@ function ModuleSection({
               onNavigate={(params) => onNavigate(module, params)}
             />
           ) : isOmm ? (
-            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-              <OmmSub1StatusCard
-                buckets={ommSub1Buckets}
-                accent={accent}
-                onBucket={(b) => {
-                  const params: Record<string, string> = { sub1_status: b };
-                  if (tab !== '__all__') params.team = tab;
-                  onNavigate(module, params);
-                }}
-              />
-              {stages
-                .filter((s) => OMM_VISIBLE_STAGE_KEYS.has(s.stage_key))
-                .map((s) => {
-                  const params: Record<string, string> = { stage: s.stage_key, overdue: '1' };
-                  if (tab !== '__all__') params.team = tab;
-                  return (
-                    <StageCard
-                      key={s.stage_key}
-                      label={s.stage_label}
-                      total={s.total}
-                      done={s.done}
-                      overdue={s.overdue}
-                      remaining={s.remaining}
-                      accent={accent}
-                      onClick={() => onNavigate(module, params)}
-                    />
-                  );
-                })}
-            </div>
+            (() => {
+              const visibleStages = stages.filter((s) => OMM_VISIBLE_STAGE_KEYS.has(s.stage_key));
+              const stageByKey = new Map(visibleStages.map((s) => [s.stage_key, s]));
+              const renderStage = (key: string) => {
+                const s = stageByKey.get(key);
+                if (!s) return null;
+                const params: Record<string, string> = { stage: s.stage_key, overdue: '1' };
+                if (tab !== '__all__') params.team = tab;
+                return (
+                  <StageCard
+                    key={s.stage_key}
+                    label={s.stage_label}
+                    total={s.total}
+                    done={s.done}
+                    overdue={s.overdue}
+                    remaining={s.remaining}
+                    accent={accent}
+                    onClick={() => onNavigate(module, params)}
+                  />
+                );
+              };
+              return (
+                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+                  <OmmSubStatusCard
+                    title="1st Status"
+                    buckets={ommSub1Buckets}
+                    accent={accent}
+                    onBucket={(b) => {
+                      const params: Record<string, string> = { sub1_status: b };
+                      if (tab !== '__all__') params.team = tab;
+                      onNavigate(module, params);
+                    }}
+                  />
+                  {renderStage('omm.sub2_submission')}
+                  <OmmSubStatusCard
+                    title="2nd Status"
+                    buckets={ommSub2Buckets}
+                    accent={accent}
+                    onBucket={(b) => {
+                      const params: Record<string, string> = { sub2_status: b };
+                      if (tab !== '__all__') params.team = tab;
+                      onNavigate(module, params);
+                    }}
+                  />
+                  {renderStage('omm.final_submission')}
+                  {renderStage('omm.final_approval')}
+                </div>
+              );
+            })()
           ) : (
             <div className={cn(
               'grid gap-3',
@@ -619,27 +643,27 @@ function SubmissionRequiredCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// OMM-only: 1st Status card with A / B / C / UR / Planned buckets
-function OmmSub1StatusCard({
-  buckets, accent, onBucket,
+// OMM-only: generic Status card with A / B / C / UR / TBS buckets
+function OmmSubStatusCard({
+  title, buckets, accent, onBucket,
 }: {
+  title: string;
   buckets: OmmSub1StatusBuckets;
   accent: Accent;
-  onBucket: (bucket: 'A' | 'B' | 'C' | 'UR' | 'Planned') => void;
+  onBucket: (bucket: OmmStatusBucketKey) => void;
 }) {
-  const items: { key: 'A' | 'B' | 'C' | 'UR' | 'Planned'; label: string; value: number; tone: string }[] = [
-    { key: 'A',       label: 'A',       value: buckets.A,       tone: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20' },
-    { key: 'B',       label: 'B',       value: buckets.B,       tone: 'bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20' },
-    { key: 'C',       label: 'C',       value: buckets.C,       tone: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20' },
-    { key: 'UR',      label: 'UR',      value: buckets.UR,      tone: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20' },
-    { key: 'Planned', label: 'Planned', value: buckets.Planned, tone: 'bg-muted text-muted-foreground hover:bg-muted/80' },
+  const items: { key: OmmStatusBucketKey; label: string; value: number; tone: string }[] = [
+    { key: 'A',   label: 'A',   value: buckets.A,   tone: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20' },
+    { key: 'B',   label: 'B',   value: buckets.B,   tone: 'bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20' },
+    { key: 'C',   label: 'C',   value: buckets.C,   tone: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20' },
+    { key: 'UR',  label: 'UR',  value: buckets.UR,  tone: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20' },
+    { key: 'TBS', label: 'TBS', value: buckets.TBS, tone: 'bg-muted text-muted-foreground hover:bg-muted/80' },
   ];
-  // Defensive sum-check (dev-only warning)
   if (import.meta.env.DEV) {
     const sum = items.reduce((n, it) => n + it.value, 0);
     if (sum !== buckets.total) {
       // eslint-disable-next-line no-console
-      console.warn('[OmmSub1StatusCard] bucket sum != total', { sum, total: buckets.total });
+      console.warn('[OmmSubStatusCard] bucket sum != total', { title, sum, total: buckets.total });
     }
   }
   return (
@@ -652,7 +676,7 @@ function OmmSub1StatusCard({
     >
       <span className={cn('absolute inset-y-0 left-0 w-1', accent.bar)} />
       <div className="flex items-baseline justify-between gap-2 pl-1 pr-1">
-        <span className="text-xs font-medium leading-tight text-foreground">1st Status</span>
+        <span className="text-xs font-medium leading-tight text-foreground">{title}</span>
         <span className="text-xs text-muted-foreground tabular-nums">
           Total {buckets.total.toLocaleString()}
         </span>
