@@ -108,17 +108,19 @@ export default function DocsExecutiveDashboardPage() {
 
 // ─────────────────────────────────────────────────────────────────────
 function ModuleSection({
-  module, records, abdRows, onNavigate,
+  module, records, abdRows, ommRows, onNavigate,
 }: {
   module: DocModule;
   records: DocsStageRecord[];
   abdRows: any[];
+  ommRows: any[];
   onNavigate: (m: DocModule, params?: Record<string, string>) => void;
 }) {
   const Icon = MODULE_ICON[module];
   const accent = MODULE_ACCENT[module];
 
   const isAbd = module === 'abd';
+  const isOmm = module === 'omm';
 
   const moduleRecords = useMemo(
     () => records.filter((r) => r.document_type === module),
