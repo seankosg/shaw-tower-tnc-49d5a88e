@@ -247,6 +247,7 @@ const FALLBACK_ALIASES: Record<string, string | 'skip'> = {
   'cycle progress': 'skip',
   'cycle_progress': 'skip',
   'status': 'skip',
+  'stage': 'skip',
   'risk': 'skip',
 };
 
