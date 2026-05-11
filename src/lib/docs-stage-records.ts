@@ -263,11 +263,10 @@ export function buildWarrantyStageRecords(rows: any[], asOf: Date, ): DocsStageR
     const current_stage = String(row.current_status ?? row.current_stage ?? 'Pending Draft');
 
     const items = [
-      { def: WARRANTY_STAGE_DEFS[0], planned: null,                            actual: row.r_subcontract_date,         key: 'acra' as const },
-      { def: WARRANTY_STAGE_DEFS[1], planned: row.draft_planned_date,         actual: row.draft_actual_date,          key: 'draft' as const },
-      { def: WARRANTY_STAGE_DEFS[2], planned: row.subcon_signing_planned_date,actual: row.subcon_signing_actual_date, key: 'subcon' as const },
-      { def: WARRANTY_STAGE_DEFS[3], planned: row.hdec_signing_planned_date,  actual: row.hdec_signing_actual_date,   key: 'hdec' as const },
-      { def: WARRANTY_STAGE_DEFS[4], planned: row.final_planned_date,         actual: row.final_actual_date,          key: 'final' as const },
+      { def: WARRANTY_STAGE_DEFS[0], planned: row.draft_planned_date,         actual: row.draft_actual_date,          key: 'draft' as const },
+      { def: WARRANTY_STAGE_DEFS[1], planned: row.subcon_signing_planned_date,actual: row.subcon_signing_actual_date, key: 'subcon' as const },
+      { def: WARRANTY_STAGE_DEFS[2], planned: row.hdec_signing_planned_date,  actual: row.hdec_signing_actual_date,   key: 'hdec' as const },
+      { def: WARRANTY_STAGE_DEFS[3], planned: row.final_planned_date,         actual: row.final_actual_date,          key: 'final' as const },
     ];
 
     for (const s of items) {
