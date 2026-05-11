@@ -239,7 +239,10 @@ export default function DocsOMMDetailPage() {
 
   const identitySorted = useMemo(() => visibleSorted(IDENTITY_FIELDS), [sortFieldNames, isFieldVisible]);
   const quantitySorted = useMemo(() => visibleSorted(QUANTITY_FIELDS), [sortFieldNames, isFieldVisible]);
-  const workflowSorted = useMemo(() => visibleSorted(WORKFLOW_FIELDS), [sortFieldNames, isFieldVisible]);
+  const sub1Sorted  = useMemo(() => visibleSorted(['instruction_date', ...SUB1_FIELDS]), [sortFieldNames, isFieldVisible]);
+  const sub2Sorted  = useMemo(() => visibleSorted(SUB2_FIELDS),  [sortFieldNames, isFieldVisible]);
+  const sub3Sorted  = useMemo(() => visibleSorted(SUB3_FIELDS),  [sortFieldNames, isFieldVisible]);
+  const finalSorted = useMemo(() => visibleSorted(FINAL_FIELDS), [sortFieldNames, isFieldVisible]);
 
   if (loading) {
     return (
