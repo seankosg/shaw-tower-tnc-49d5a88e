@@ -743,7 +743,17 @@ export default function DocsOMMRawDataPage() {
       hdec_pic_name: unionWithLegacy(masters.hdecPicOptions, present('hdec_pic_name')),
       hdec_eng_name: unionWithLegacy(masters.hdecEngOptions, present('hdec_eng_name')),
       training_required: opts('training_required'),
-      draft_response_status: [
+      sub1_response_status: [
+        { value: 'A', label: 'A' },
+        { value: 'B', label: 'B' },
+        { value: 'C', label: 'C' },
+      ],
+      sub2_response_status: [
+        { value: 'A', label: 'A' },
+        { value: 'B', label: 'B' },
+        { value: 'C', label: 'C' },
+      ],
+      sub3_response_status: [
         { value: 'A', label: 'A' },
         { value: 'B', label: 'B' },
         { value: 'C', label: 'C' },
