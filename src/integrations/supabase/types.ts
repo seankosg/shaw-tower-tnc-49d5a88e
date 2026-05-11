@@ -1171,6 +1171,20 @@ export type Database = {
           sheet_name: string | null
           sn: string | null
           source_upload_id: string | null
+          sub1_actual_date: string | null
+          sub1_planned_date: string | null
+          sub1_response_date: string | null
+          sub1_response_status: string | null
+          sub2_actual_date: string | null
+          sub2_planned_date: string | null
+          sub2_response_actual_date: string | null
+          sub2_response_planned_date: string | null
+          sub2_response_status: string | null
+          sub3_actual_date: string | null
+          sub3_planned_date: string | null
+          sub3_response_actual_date: string | null
+          sub3_response_planned_date: string | null
+          sub3_response_status: string | null
           subcontractor_id: string | null
           subcontractor_name: string | null
           team: Database["public"]["Enums"]["team_type"] | null
@@ -1218,6 +1232,20 @@ export type Database = {
           sheet_name?: string | null
           sn?: string | null
           source_upload_id?: string | null
+          sub1_actual_date?: string | null
+          sub1_planned_date?: string | null
+          sub1_response_date?: string | null
+          sub1_response_status?: string | null
+          sub2_actual_date?: string | null
+          sub2_planned_date?: string | null
+          sub2_response_actual_date?: string | null
+          sub2_response_planned_date?: string | null
+          sub2_response_status?: string | null
+          sub3_actual_date?: string | null
+          sub3_planned_date?: string | null
+          sub3_response_actual_date?: string | null
+          sub3_response_planned_date?: string | null
+          sub3_response_status?: string | null
           subcontractor_id?: string | null
           subcontractor_name?: string | null
           team?: Database["public"]["Enums"]["team_type"] | null
@@ -1265,6 +1293,20 @@ export type Database = {
           sheet_name?: string | null
           sn?: string | null
           source_upload_id?: string | null
+          sub1_actual_date?: string | null
+          sub1_planned_date?: string | null
+          sub1_response_date?: string | null
+          sub1_response_status?: string | null
+          sub2_actual_date?: string | null
+          sub2_planned_date?: string | null
+          sub2_response_actual_date?: string | null
+          sub2_response_planned_date?: string | null
+          sub2_response_status?: string | null
+          sub3_actual_date?: string | null
+          sub3_planned_date?: string | null
+          sub3_response_actual_date?: string | null
+          sub3_response_planned_date?: string | null
+          sub3_response_status?: string | null
           subcontractor_id?: string | null
           subcontractor_name?: string | null
           team?: Database["public"]["Enums"]["team_type"] | null
