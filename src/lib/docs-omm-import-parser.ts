@@ -25,10 +25,26 @@ export interface ParsedOmmRow {
   hardcopy_required_qty: number | null;
   hardcopy_actual_qty: number | null;
   instruction_date: string | null;
+  // DEPRECATED legacy draft fields (kept for backward read; new imports populate sub1_*)
   draft_planned_date: string | null;
   draft_actual_date: string | null;
   draft_response_date: string | null;
   draft_response_status: string | null;
+  // New cycle model: 1st / 2nd / 3rd resubmission
+  sub1_planned_date: string | null;
+  sub1_actual_date: string | null;
+  sub1_response_date: string | null;
+  sub1_response_status: string | null;
+  sub2_planned_date: string | null;
+  sub2_actual_date: string | null;
+  sub2_response_planned_date: string | null;
+  sub2_response_actual_date: string | null;
+  sub2_response_status: string | null;
+  sub3_planned_date: string | null;
+  sub3_actual_date: string | null;
+  sub3_response_planned_date: string | null;
+  sub3_response_actual_date: string | null;
+  sub3_response_status: string | null;
   final_planned_date: string | null;
   final_actual_date: string | null;
   final_response_planned_date: string | null;
