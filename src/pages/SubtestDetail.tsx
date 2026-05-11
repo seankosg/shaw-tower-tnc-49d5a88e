@@ -88,8 +88,9 @@ export default function SubtestDetailPage() {
   const location = useLocation();
   
   const { toast } = useToast();
-  const { isAdminOrSuperuser, user } = useAuth();
-  const { isFieldVisible } = useFieldConfig();
+  const { isAdminOrSuperuser, user, roles } = useAuth();
+  const { isFieldVisible: isFieldVisibleRaw } = useFieldConfig();
+  const isFieldVisible = (f: string) => isFieldVisibleRaw(f, roles);
   const { dataDate } = useLatestSubtestDataDate();
   const [record, setRecord] = useState<SubtestDetail | null>(null);
   // Scroll to #comments when arriving from a Raw Data meta column click.
