@@ -308,7 +308,7 @@ export async function loadDashboardData(opts: {
     const target =
       safeIso(row.final_response_planned_date) ??
       safeIso(row.final_planned_date) ??
-      safeIso(row.draft_planned_date);
+      safeIso(row.sub1_planned_date);
     let r: RiskLevel = 'green';
     if (!submitted && target) {
       const days = differenceInDays(target, asOf);
