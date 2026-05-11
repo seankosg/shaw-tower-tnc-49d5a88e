@@ -194,6 +194,17 @@ function ModuleSection({
     [abdRowsForTab],
   );
 
+  // OMM-only: Sub1 Status buckets (A/B/C/UR/Planned) — respects team tab
+  const ommRowsForTab = useMemo(() => {
+    if (!isOmm) return [] as any[];
+    if (tab === '__all__') return ommRows;
+    return ommRows.filter((row) => (row?.team ?? '') === tab);
+  }, [ommRows, isOmm, tab]);
+  const ommSub1Buckets: OmmSub1StatusBuckets = useMemo(
+    () => computeOmmSub1StatusBuckets(ommRowsForTab),
+    [ommRowsForTab],
+  );
+
   // Short trade labels for the tab list
   const TRADE_SHORT: Record<TradeCategory, string> = {
     'Architecture': 'Arch',
