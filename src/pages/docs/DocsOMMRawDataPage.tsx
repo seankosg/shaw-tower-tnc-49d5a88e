@@ -88,7 +88,9 @@ const MULTI_SELECT_FIELDS = new Set([
   'hdec_pic_name',
   'hdec_eng_name',
   'training_required',
-  'draft_response_status',
+  'sub1_response_status',
+  'sub2_response_status',
+  'sub3_response_status',
   'final_response_status',
   'current_stage',
   'current_status',
@@ -101,9 +103,17 @@ const TEXT_FIELDS = new Set([
 ]);
 const DATE_FIELDS = new Set([
   'instruction_date',
-  'draft_planned_date',
-  'draft_actual_date',
-  'draft_response_date',
+  'sub1_planned_date',
+  'sub1_actual_date',
+  'sub1_response_date',
+  'sub2_planned_date',
+  'sub2_actual_date',
+  'sub2_response_planned_date',
+  'sub2_response_actual_date',
+  'sub3_planned_date',
+  'sub3_actual_date',
+  'sub3_response_planned_date',
+  'sub3_response_actual_date',
   'final_planned_date',
   'final_actual_date',
   'final_response_planned_date',
@@ -135,10 +145,20 @@ const OMM_DATA_FIELDS = [
   'pdf_actual_qty',
   'hardcopy_required_qty',
   'hardcopy_actual_qty',
-  'draft_planned_date',
-  'draft_actual_date',
-  'draft_response_date',
-  'draft_response_status',
+  'sub1_planned_date',
+  'sub1_actual_date',
+  'sub1_response_date',
+  'sub1_response_status',
+  'sub2_planned_date',
+  'sub2_actual_date',
+  'sub2_response_planned_date',
+  'sub2_response_actual_date',
+  'sub2_response_status',
+  'sub3_planned_date',
+  'sub3_actual_date',
+  'sub3_response_planned_date',
+  'sub3_response_actual_date',
+  'sub3_response_status',
   'final_planned_date',
   'final_actual_date',
   'final_response_planned_date',
@@ -182,10 +202,20 @@ interface OMMRow {
   hardcopy_required_qty: number | null;
   hardcopy_actual_qty: number | null;
   instruction_date: string | null;
-  draft_planned_date: string | null;
-  draft_actual_date: string | null;
-  draft_response_date: string | null;
-  draft_response_status: string | null;
+  sub1_planned_date: string | null;
+  sub1_actual_date: string | null;
+  sub1_response_date: string | null;
+  sub1_response_status: string | null;
+  sub2_planned_date: string | null;
+  sub2_actual_date: string | null;
+  sub2_response_planned_date: string | null;
+  sub2_response_actual_date: string | null;
+  sub2_response_status: string | null;
+  sub3_planned_date: string | null;
+  sub3_actual_date: string | null;
+  sub3_response_planned_date: string | null;
+  sub3_response_actual_date: string | null;
+  sub3_response_status: string | null;
   final_planned_date: string | null;
   final_actual_date: string | null;
   final_response_planned_date: string | null;
