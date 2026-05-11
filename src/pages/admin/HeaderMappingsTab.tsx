@@ -68,6 +68,8 @@ const DEFECT_FIELDS = [
   'actual_start_date','actual_completion_date','actual_closure_date',
   'planned_progress_pct','actual_progress_pct','completion_status','closure_status',
   'work_type','subcontractor_issue_no','subcontractor_issue_source',
+  // Pseudo-target for ignoring system/derived columns on import
+  'skip',
 ] as const;
 
 // Docs / As-Built (drawings via Aconex) — v2 schema (3 cycles + actual response + subcontractor)
