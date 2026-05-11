@@ -393,7 +393,7 @@ export default function DocsRawDataPage() {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isFieldVisible, getLabel, sortFieldNames, fields: fieldConfigRows } = useDocsFieldConfig();
+  const { isFieldVisible, getLabel, sortFieldNames, fields: fieldConfigRows, getSourceOrigin } = useDocsFieldConfig();
   const { value: leadDays } = useAppSetting<number>('docs_lead_days_as_built', 30);
 
   const storageKey = user?.id ? `docs-raw-data-state:${user.id}` : 'docs-raw-data-state:anon';
@@ -992,6 +992,7 @@ export default function DocsRawDataPage() {
         navigate={navigate}
         tableRef={tableRef}
         location={location}
+        getSourceOrigin={getSourceOrigin}
       />
 
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
@@ -1048,7 +1049,7 @@ export default function DocsRawDataPage() {
 // Inner virtualized table (mirrors DefectRawTableView)
 // ───────────────────────────────────────────────────────────────────────────
 function DocsRawTableView({
-  table, loading, sorting, autoSizeColumn, navigate, tableRef, location,
+  table, loading, sorting, autoSizeColumn, navigate, tableRef, location, getSourceOrigin,
 }: {
   table: ReturnType<typeof useReactTable<DocsRawRow>>;
   loading: boolean;
@@ -1057,6 +1058,7 @@ function DocsRawTableView({
   navigate: (to: string) => void;
   tableRef: React.RefObject<HTMLDivElement>;
   location: { search: string };
+  getSourceOrigin?: (field: string) => 'hdec' | 'aconex' | 'system';
 }) {
   const { value: frozenCountRaw } = useFrozenColumnCount();
   const leafColumns = table.getVisibleLeafColumns();
