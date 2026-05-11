@@ -1,59 +1,55 @@
-# Admin(VP) 코멘트/리플라이 시각적 강조
+# Admin(VP) 조회 배치 캐싱 + DOC 모듈 일관성 점검
 
-Admin 역할 사용자(표시명 **VP**)가 작성한 코멘트와 리플라이를 모든 모듈에서 즉시 식별 가능하도록 강조합니다.
+## 1. 캐시 모듈 신규: `src/lib/admin-roles-cache.ts`
 
-## 적용 대상 컴포넌트
-
-전 모듈 코멘트 컴포넌트:
-- `src/components/comments/OmmComments.tsx`
-- `src/components/comments/WarrantyComments.tsx`
-- `src/components/comments/SparePartComments.tsx`
-- `src/components/defects/DefectComments.tsx`
-- `src/components/defects/SubtestComments.tsx`
-- `src/components/comments/AllCommentsView.tsx`
-- `src/components/dashboard/RecentDefectComments.tsx`
-- `src/components/dashboard/RecentSubtestComments.tsx`
-
-## 동작
-
-각 컴포넌트는 이미 `author_user_id` 목록으로 `profiles`를 조회 중입니다. 동일한 ID 목록으로 `user_roles` 테이블을 추가 조회하여 author가 `admin` 역할을 가졌는지 판정합니다.
-
-```text
-author_user_id 집합 → profiles 조회 (기존)
-                  → user_roles 조회 (신규, role='admin' 필터)
-                  → vpAuthorIds: Set<string>
-```
-
-## 시각적 스타일
-
-`vpAuthorIds`에 포함된 코멘트/리플라이 카드에 다음 적용:
-
-1. **좌측 강조 보더**: 카드에 `border-l-4 border-l-primary` 추가 (기존 `border` 위에 덧붙음)
-2. **VP 뱃지**: 작성자 이름 옆(타입 뱃지와 이름 사이)에 작은 뱃지 추가
-   ```tsx
-   <Badge className="text-[10px] px-1.5 py-0 h-4 bg-primary text-primary-foreground">
-     VP
-   </Badge>
-   ```
-
-기존 type 뱃지/배경(`typeBadgeStyle`)과 들여쓰기는 변경하지 않습니다.
-
-## 공통 헬퍼
-
-중복을 줄이기 위해 `src/lib/comment-author-roles.ts` 신규:
+전역 모듈 스코프 캐시 + in-flight 배치를 둬서, 같은 페이지 안에서 8개 코멘트 컴포넌트가 모두 로드되어도 `user_roles` 쿼리는 **세션당 1회**만 실행되도록 합니다.
 
 ```ts
-export async function fetchAdminAuthorIds(userIds: string[]): Promise<Set<string>>
+// adminIds: Set<string> 전체 admin user id
+let cache: { ids: Set<string>; at: number } | null = null;
+let inflight: Promise<Set<string>> | null = null;
+const TTL_MS = 5 * 60_000; // 5분
+
+export async function getAdminUserIds(): Promise<Set<string>>
+export async function isAdminAuthorMap(userIds: string[]): Promise<Set<string>>
+export function invalidateAdminRolesCache(): void
 ```
 
-`user_roles`에서 `role='admin' AND user_id IN (...)`로 조회 후 Set 반환. 8개 컴포넌트가 동일하게 사용.
+- `getAdminUserIds()`: 캐시 유효(<TTL)면 즉시 반환; 아니면 단일 쿼리 `SELECT user_id FROM user_roles WHERE role='admin'` (전체 admin 수는 매우 적음 → IN 절 없이 전체 페치가 더 효율). 진행 중인 쿼리는 `inflight`로 중복 방지.
+- `isAdminAuthorMap(userIds)`: `getAdminUserIds()`의 결과를 받아 `userIds ∩ adminIds`를 반환 — 컴포넌트별로 받는 함수 시그니처는 그대로 유지.
+- `invalidateAdminRolesCache()`: 관리자 페이지에서 역할 변경 시 호출 가능 (선택).
 
-## 비즈니스 로직 영향
+### 기존 헬퍼 변경
+`src/lib/comment-author-roles.ts`의 `fetchAdminAuthorIds`는 내부 구현을 새 캐시 사용으로 교체 (호출부 변경 없음):
 
-없음. 권한 판정(`canEditOrDelete`, 수정/삭제, 작성 흐름) 변경 없음. 순수 표시 강조만 추가.
+```ts
+export async function fetchAdminAuthorIds(userIds: string[]) {
+  return isAdminAuthorMap(userIds);
+}
+```
 
-## 변경되지 않는 것
+## 2. 캐시 무효화 트리거 (가벼운 안전장치)
 
-- 코멘트 데이터 스키마 (마이그레이션 없음)
-- RLS 정책
-- 타입 뱃지 색상, 들여쓰기, 정렬, 시간 표시
+- `src/pages/AdminPage.tsx`(또는 user role 편집 코드 경로)에서 역할 추가/제거 성공 후 `invalidateAdminRolesCache()` 호출. 이미 코멘트 컴포넌트들은 realtime 구독 중이므로 다른 사용자의 권한 변경은 5분 TTL 내에 자연 반영.
+
+## 3. DOC 모듈 VP 강조 일관성 점검
+
+현재 적용 완료된 코멘트 컴포넌트:
+- `OmmComments.tsx`, `WarrantyComments.tsx`, `SparePartComments.tsx` ✅
+- `DefectComments.tsx`, `SubtestComments.tsx` ✅
+- `AllCommentsView.tsx`, `RecentDefectComments.tsx`, `RecentSubtestComments.tsx` ✅
+
+DOC 모듈 중 ABD에는 코멘트 테이블이 없어 코멘트 UI가 존재하지 않음 → 변경 대상 외.
+
+추가로 점검·정리할 항목:
+- 세 DOC 코멘트 컴포넌트(Omm/Warranty/SparePart)의 VP 뱃지·좌측 보더 스타일이 동일 클래스(`border-l-4 border-l-primary` + `bg-primary text-primary-foreground` Badge)인지 grep으로 일괄 확인.
+- 차이가 있을 경우 동일하게 정렬 (현재 패치 스크립트로 일괄 적용했으므로 동일할 것으로 예상; 검증만).
+
+## 4. 비즈니스 로직 영향
+
+없음. 데이터 페치 횟수만 감소(컴포넌트당 1쿼리 → 세션당 1쿼리). 표시·권한 로직 변경 없음.
+
+## 5. 기대 효과
+
+- 코멘트가 많은 페이지(예: AllCommentsView, Detail 페이지의 코멘트 패널 + Recent 피드 동시)에서 `user_roles` 쿼리 N회 → 1회.
+- 브라우저 세션 내 동일 데이터 재사용으로 네트워크/DB 부하 감소.
