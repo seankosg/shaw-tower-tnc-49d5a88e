@@ -1,90 +1,37 @@
-## OMM Cycle 아이콘 4핍 재설계 (1R / 2R / 3R / FR)
+## OMM Header Mapping "(unmapped — 40 aliases)" 원인과 해결
 
-`src/components/docs/OmmCycleProgress.tsx` 단일 파일 수정. 비즈니스 로직(`docs-omm-status.ts`)은 변경하지 않습니다.
+### 원인
+`src/pages/admin/HeaderMappingsTab.tsx`의 `DOCS_OMM_FIELDS` 화이트리스트가 **현재 OMM 파서/스키마보다 오래됐습니다.**
 
-### 1. 핍 구조 — 8개 → 4개
+Admin UI는 이 화이트리스트에 없는 `target_field`로 매핑된 DB 행들을 모두 "(unmapped)" 그룹에 몰아넣습니다. 즉 매핑 자체는 정상 동작 중이지만 화면에서 "관리 대상이 아닌" 것처럼 보이는 것뿐입니다.
 
-```
-[1R] — [2R] — [3R] — [FR]
-```
+스크린샷의 40개 unmapped는 전부 **sub1_*/sub2_*/sub3_*** 와 **skip** 으로, 파서는 이미 이 필드에 정상 write 하고 있습니다.
 
-각 핍은 해당 cycle의 **전체 진행 상태**를 하나로 표현. Submission 진행 중이든 Response 대기 중이든 active.
-
-### 2. 핍 상태 산출 (cycle별)
-
-`computeOmmStatus(row)` 결과로 active cycle 인덱스 결정:
-- `Pending Sub1` / `Sub1 Under Review` → active = 0 (1R)
-- `Pending Sub2` / `Sub2 Under Review` → active = 1 (2R)
-- `Pending Sub3` / `Sub3 Under Review` → active = 2 (3R)
-- `Pending Final` / `Final Under Review` → active = 3 (FR)
-- `Approved` → 모두 closed
-- `Rejected` → 모두 rejected (4핍 전부 빨강)
-
-핍별 state 결정:
-- `closed` (Approved): 모든 핍 녹색 ✓
-- `rejected` (Rejected): 모든 핍 빨강 ✕
-- `done`: i < activeIdx **AND** 해당 cycle response_status === 'A' 또는 활성 cycle에 도달했음
-- `skipped`: i < activeIdx 이고 해당 cycle을 건너뛴 경우 (예: Sub1 = A → Pending Final이면 1R는 done(녹색 ✓), 2R/3R은 skipped(회색 점선 –))
-- `active`: i === activeIdx (amber)
-- `pending`: i > activeIdx (연한 회색)
-
-Skipped 판정 로직:
-- Sub1 response = 'A' 이고 activeIdx === 3 → 1R = done, 2R/3R = skipped
-- Sub2 response = 'A' 이고 activeIdx === 3 → 1R/2R = done, 3R = skipped
-- Sub3 response = 'A' 이고 activeIdx === 3 → 1R/2R/3R = done
-
-Done 마킹: i < activeIdx 인 cycle 중 response_status === 'A' 인 것만 done. 그 외(B/C로 다음 cycle 진입)는 done이지만 시각적으론 동일 녹색 ✓ 유지 (단계 통과 자체는 완료).
-
-### 3. 핍 글리프 / 색상
-
-| State    | Glyph | 색상                                    |
-|----------|-------|-----------------------------------------|
-| done     | ✓     | bg-emerald-500 / 흰글씨                 |
-| active   | •     | bg-amber-500 / 흰글씨                   |
-| skipped  | –     | bg-muted/40 점선 테두리 / muted-foreground |
-| pending  | ·     | bg-muted / muted-foreground             |
-| closed   | ✓     | bg-emerald-600                          |
-| rejected | ✕     | bg-rose-500 / 흰글씨                    |
-
-핍 라벨(글리프)에서 단계 식별 글자(1R/2R 등)는 제거 — 4개로 줄었으므로 위치만으로 식별 가능. (필요 시 sr-only 라벨로 접근성 확보)
-
-### 4. Tooltip 상세화
-
-각 핍 hover 시 (또는 컨테이너 hover) 4개 cycle 모두 표시:
+### 누락된 필드 (15 + 1)
+현재 `DOCS_OMM_FIELDS`(102-112행)에 추가해야 할 항목:
 
 ```
-Status: Pending Sub2
-
-Cycle 1 (Sub1)         [✓ A]
-  Submit: 12-Mar / 12-Mar
-  Review: 15-Mar / 14-Mar
-Cycle 2 (Sub2)         [• active]
-  Submit: 20-Mar / 20-Mar
-  Review: 25-Mar / —
-Cycle 3 (Sub3)         [· pending]
-  Submit: — / —
-  Review: — / —
-Final                  [· pending]
-  Submit: — / —
-  Review: — / —
+sub1_planned_date, sub1_actual_date, sub1_response_date, sub1_response_status,
+sub2_planned_date, sub2_actual_date, sub2_response_planned_date,
+sub2_response_actual_date, sub2_response_status,
+sub3_planned_date, sub3_actual_date, sub3_response_planned_date,
+sub3_response_actual_date, sub3_response_status,
+skip   ← 시스템 컬럼 무시용 pseudo-target (As-Built처럼 별칭 등록 가능하도록)
 ```
 
-Submission: `subN_planned_date` / `subN_actual_date`
-Review: `subN_response_planned_date` (sub1은 없음 → omit) / `subN_response_actual_date` + status 뱃지
-Final: `final_planned_date` / `final_actual_date`, `final_response_planned_date` / `final_response_actual_date` + status
+(legacy `draft_*` 4개와 final_* 5개, instruction_date, current_stage/current_status는 이미 포함되어 있음)
 
-값 없으면 `—`. Tooltip width `min-w-[280px]`.
+### 변경 사항 (단일 파일, 빌드 모드에서 실행)
 
-### 5. Legend 업데이트
+**파일:** `src/pages/admin/HeaderMappingsTab.tsx`
 
-`OmmCycleProgressLegend`에 5개 항목: Done(✓) / Active(•) / Skipped(–) / Pending(·) / Rejected(✕). Approved는 Done 색상과 동일하므로 별도 표시 생략.
+1. `DOCS_OMM_FIELDS` 배열에 위 16개 항목 추가 (논리적 순서: sn → 식별/메타 → 수량 → instruction → draft(legacy) → sub1 → sub2 → sub3 → final → PIC/remarks → current_*).
+2. 배열 끝에 `'skip'` 추가 (As-Built/Warranty와 동일 패턴 — DB에 이미 `stage → skip` 행이 있어 자동으로 그룹에 들어감).
 
-### 적용 범위
+### 변경 없음 (사용자 결정 보류 항목)
+- 파서 `FALLBACK_ALIASES` 정리 / DB 죽은 별칭 cleanup / `instruction date` 활성화 충돌 — 이전 검토 보고서의 4가지 결정 항목은 별도 작업으로 분리. 본 변경은 Admin UI 화이트리스트만 최신화.
 
-- 컴포넌트가 사용되는 모든 곳에 자동 반영 (Raw Data Cycle 컬럼, Detail 페이지 등)
-- 컴포넌트 props 시그니처는 유지 (`row: OMMStatusInput`)
-
-### 비포함
-
-- `computeOmmStatus` / `computeOmmStage` 등 status 엔진 로직 변경 없음
-- DB 스키마, import 파서, 대시보드 카운터, status 뱃지 변경 없음
+### 검증
+1. Admin → Header Mappings → Docs → OMM 진입.
+2. "(unmapped — 40 aliases)" 그룹이 사라지고, 각 sub1_*/sub2_*/sub3_* / skip 그룹에 정상 분류되어 "+ Alias" 버튼으로 별칭 추가가 가능해지는지 확인.
+3. 기존 OMM 임포트 동작에는 영향 없음(파서/DB 무변경).

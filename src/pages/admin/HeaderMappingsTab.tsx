@@ -104,11 +104,21 @@ const DOCS_OMM_FIELDS = [
   'subcontractor_name','training_required',
   'pdf_required_qty','pdf_actual_qty','hardcopy_required_qty','hardcopy_actual_qty',
   'instruction_date',
+  // Legacy draft cycle (kept for backward read)
   'draft_planned_date','draft_actual_date','draft_response_date','draft_response_status',
+  // Sub1 / Sub2 / Sub3 resubmission cycles
+  'sub1_planned_date','sub1_actual_date','sub1_response_date','sub1_response_status',
+  'sub2_planned_date','sub2_actual_date',
+  'sub2_response_planned_date','sub2_response_actual_date','sub2_response_status',
+  'sub3_planned_date','sub3_actual_date',
+  'sub3_response_planned_date','sub3_response_actual_date','sub3_response_status',
+  // Final
   'final_planned_date','final_actual_date',
   'final_response_planned_date','final_response_actual_date','final_response_status',
   'hdec_pic_name','hdec_eng_name','remarks',
   'current_stage','current_status',
+  // Pseudo-target for ignoring system/derived columns on import
+  'skip',
 ] as const;
 
 // Docs / Spare Part (placeholder — fields to be defined)
