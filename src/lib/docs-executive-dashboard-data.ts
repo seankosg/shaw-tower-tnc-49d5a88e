@@ -89,5 +89,5 @@ export async function loadExecutiveDashboard(opts: {
     ...buildWarrantyStageRecords(warrantyRows, asOf),
   ];
 
-  return { records, asOf, abdRows };
+  return { records, asOf, abdRows, ommRows };
 }
