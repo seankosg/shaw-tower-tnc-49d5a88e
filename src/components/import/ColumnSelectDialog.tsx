@@ -38,8 +38,14 @@ interface ColumnSelectDialogProps {
   defaultExcluded: string[];
   onApply: (excluded: string[]) => void;
   helpers: ColumnSelectHelpers;
-  /** Whether to show "Aconex only" / "HDEC only" quick-filter buttons (Defect-only). */
-  showOriginQuickFilters?: boolean;
+  /** Optional preset buttons that set a baseline selection (user can still toggle further). */
+  presets?: Array<{
+    id: string;
+    label: string;
+    /** Headers to keep selected. Empty/undefined = select all. */
+    matchedHeaders?: string[];
+    className?: string;
+  }>;
 }
 
 function previewValue(v: unknown): string {
@@ -58,7 +64,7 @@ export function ColumnSelectDialog({
   defaultExcluded,
   onApply,
   helpers,
-  showOriginQuickFilters = false,
+  presets,
 }: ColumnSelectDialogProps) {
   const { toFieldName, getRequirement, getSourceLabel, getSourceOrigin, isKnownField, extraWarnings } = helpers;
   const [excluded, setExcluded] = useState<Set<string>>(new Set(defaultExcluded));
@@ -98,14 +104,13 @@ export function ColumnSelectDialog({
 
   const selectAll = () => setExcluded(new Set());
   const deselectAll = () => setExcluded(new Set(headers));
-  const selectByOrigin = (origin: 'hdec' | 'aconex') => {
-    if (!getSourceOrigin) return;
-    const next = new Set<string>();
-    for (const h of headers) {
-      const field = toFieldName(h);
-      if (getSourceOrigin(field) !== origin) next.add(h);
+  const applyPreset = (matched?: string[]) => {
+    if (!matched || matched.length === 0) {
+      setExcluded(new Set());
+      return;
     }
-    setExcluded(next);
+    const allow = new Set(matched);
+    setExcluded(new Set(headers.filter((h) => !allow.has(h))));
   };
   const reset = () => setExcluded(new Set(defaultExcluded));
 
@@ -141,28 +146,18 @@ export function ColumnSelectDialog({
             <Button type="button" size="sm" variant="outline" onClick={deselectAll}>
               Deselect all
             </Button>
-            {showOriginQuickFilters && getSourceOrigin && (
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => selectByOrigin('aconex')}
-                  className="border-emerald-300 text-emerald-900 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-100 dark:hover:bg-emerald-950"
-                >
-                  Aconex only
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => selectByOrigin('hdec')}
-                  className="border-blue-300 text-blue-900 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-100 dark:hover:bg-blue-950"
-                >
-                  HDEC only
-                </Button>
-              </>
-            )}
+            {presets && presets.map((p) => (
+              <Button
+                key={p.id}
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => applyPreset(p.matchedHeaders)}
+                className={p.className}
+              >
+                {p.label}
+              </Button>
+            ))}
             <Button type="button" size="sm" variant="ghost" onClick={reset}>
               Reset
             </Button>

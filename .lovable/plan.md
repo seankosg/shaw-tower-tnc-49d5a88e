@@ -1,74 +1,48 @@
-## 검토 요약
+## Goal
+Defect Import의 ColumnSelectDialog에서 기존 "Aconex only" / "HDEC only" 빠른 필터 버튼을 제거하고, Defect 워크플로에 맞춘 3개의 프리셋 버튼으로 교체한다.
 
-T&C / Defect / Docs(ABD·OMM·Warranty·SparePart) 3개 계열의 Field Config가 **Visible Roles / Editable Roles**를 동일한 로직으로 적용하고 있는지 점검한 결과, **DB 스키마와 Admin UI는 거의 일관되지만, 런타임 적용(훅·페이지) 단계에서 모듈마다 차이가 큽니다.**
+- **New Upload** — 모든 컬럼 선택 (excluded 비움). 신규 등록용.
+- **Update from Aconex** — 다음 컬럼만 기본 선택:
+  - Issue Number (`issue_no`)
+  - Status (`status`)
+  - Closed on / Date Closed (`actual_closure_date`)
+  - Field - Verified by HDEC (헤더 매칭, 미매핑 커스텀 컬럼)
+  - Comments (`aconex_comments`)
+- **HDEC's Update** — 다음 컬럼만 기본 선택:
+  - Issue Number (`issue_no`)
+  - Team (`team`)
+  - Subcontractor (`subcontractor_name`)
+  - Sub-Sub (`subsub_name`)
+  - HDEC PIC (`hdec_pic_name`)
+  - HDEC ENG (`hdec_eng_name`)
+  - Planned Start / Completion / Closure Date (`planned_start_date`, `planned_completion_date`, `planned_closure_date`)
+  - Actual Start / Completion / Closure Date (`actual_start_date`, `actual_completion_date`, `actual_closure_date`)
 
-### 1. DB 스키마 (`*_field_config` 테이블)
+버튼 클릭 시 = 프리셋이 baseline으로 적용되고(나머지는 excluded), 이후 사용자가 체크박스로 자유롭게 추가/해제 가능. (기존 Select all / Deselect all / Reset 버튼은 유지)
 
-| 테이블 | `visible_to_roles` | `editable_to_roles` |
-|---|---|---|
-| `field_config` (T&C) | ❌ 없음 | ❌ 없음 |
-| `defect_field_config` | ✅ | ✅ |
-| `docs_field_config` (as_built/omm/warranty/spare_part) | ✅ | ✅ |
+## UI placement
+현재 버튼 영역(`Select all`, `Deselect all`, …, `Reset`) 의 좌측에 위치한 "Aconex only / HDEC only" 두 개 버튼을 제거하고, 같은 위치에 3개의 프리셋 버튼을 추가한다. 색상은 의미론적 구분을 위해:
+- New Upload — neutral outline
+- Update from Aconex — emerald (Aconex 컬러)
+- HDEC's Update — blue (HDEC 컬러)
 
-→ **T&C만 컬럼 자체가 없음.** Defect/Docs는 동일한 컬럼 셋을 보유.
+## Technical changes
 
-### 2. Admin UI (`AdminPage.tsx` → `FieldConfigTable`)
+1. **`src/components/import/ColumnSelectDialog.tsx`**
+   - 제거: `selectByOrigin`, `showOriginQuickFilters` prop, "Aconex only" / "HDEC only" 버튼.
+   - 추가: 새로운 옵셔널 prop `presets?: Array<{ id: string; label: string; className?: string; matchedHeaders: string[] }>` — 부모(DefectColumnSelect)에서 헤더 단위 프리셋을 주입.
+   - 헤더 표시 영역에 `presets`가 있으면 각 프리셋을 버튼으로 렌더, 클릭 시 `setExcluded(new Set(headers.filter(h => !preset.matchedHeaders.includes(h))))` 적용.
+   - `getSourceLabel` / `getSourceOrigin` 등 origin 배지 로직은 그대로 유지(기존 mapping badge용).
 
-- T&C / Defect / ABD / OMM / Warranty / SparePart **모두 동일한 `FieldConfigTable` 컴포넌트를 사용**, `RoleChecks` 위젯으로 visible/editable 토글 노출.
-- T&C 탭은 컬럼이 DB에 없으므로 토글이 의미 없음(저장돼도 무시됨).
+2. **`src/components/import/DefectColumnSelect.tsx`**
+   - `useMemo`로 3개 프리셋의 `matchedHeaders`를 계산.
+     - field name 기반 매칭(`toFieldName(header)`).
+     - "Field - Verified by HDEC"는 alias map에 없으므로, 미매핑 커스텀 컬럼은 헤더 문자열 정규화(소문자/공백/하이픈 제거) 후 substring 포함 매칭으로 보조 식별: `verified` AND (`hdec` OR `field`).
+   - `<ColumnSelectDialog ... presets={presets}>` 로 전달, 기존 `showOriginQuickFilters` prop 제거.
 
-### 3. 런타임 훅 적용
+3. **다른 호출처 점검** — `DocsColumnSelect.tsx` 등은 origin 빠른 필터를 사용하지 않으므로 영향 없음(소품 자체가 옵셔널이라 무영향).
 
-| 훅 | `is_enabled` 반영 | `visible_to_roles` 반영 | `isFieldEditable` 노출 |
-|---|---|---|---|
-| `useFieldConfig` (T&C) | ✅ | — (컬럼 없음) | ❌ |
-| `useDefectFieldConfig` | ✅ | ❌ **무시됨** | ❌ **미구현** |
-| `useDocsFieldConfig` (ABD/OMM/WTY/SP) | ✅ | ❌ **무시됨** | ✅ (단 `editable_to_roles`만, admin은 항상 허용) |
-
-### 4. 페이지 단위 적용
-
-| 모듈 | Detail 화면 `isFieldEditable` | Raw Data 컬럼 visibility |
-|---|---|---|
-| T&C (Subtest) | — | `is_enabled`만 |
-| Defect Detail/RawData | ❌ 사용 안 함 | `is_enabled`만 |
-| Docs **OMM** Detail | ✅ 적용 | `is_enabled`만 |
-| Docs **Warranty** Detail | ✅ 적용 | `is_enabled`만 |
-| Docs **SparePart** Detail | ✅ 적용 | `is_enabled`만 |
-| Docs **ABD** (`DocsDrawingDetailPage`) | ❌ 사용 안 함 (`canEdit` 단일 게이트) | — |
-
-### 5. 결론 — 일관성 있음/없음
-
-- ✅ **OMM/Warranty/SparePart Detail의 `editable_to_roles`** 만이 실제로 동작하는 영역입니다. 이 3개는 서로 일관됩니다.
-- ❌ **ABD Detail**은 같은 `useDocsFieldConfig`를 쓰지만 `isFieldEditable`을 적용하지 않아 OMM/WTY/SP와 비일관.
-- ❌ **`visible_to_roles`** 는 모든 모듈(Defect/Docs 4종)에서 **저장만 되고 적용되지 않음**. Admin에서 토글해도 효과 없음.
-- ❌ **Defect**은 컬럼·Admin UI는 있으나 훅이 두 권한을 모두 적용하지 않음.
-- ❌ **Raw Data 컬럼 가시성**은 모든 모듈에서 `visible_to_roles`를 무시.
-
----
-
-## 정합화 제안 (구현 시 진행할 작업)
-
-T&C는 단순 운영 정책(컬럼 미보유) 유지하고, **Defect / Docs(ABD·OMM·WTY·SP)** 를 동일 로직으로 통일:
-
-1. **`useDocsFieldConfig`에 `visible_to_roles` 적용**
-   - `isFieldVisible(fieldName, userRoles)` 시그니처 확장, `is_enabled && (visible_to_roles 비어있음 || roles 교집합 || admin)` 규칙.
-   - 호출부(OMM/WTY/SP/ABD Detail + 3개 RawData 페이지)에 `roles` 인자 전달.
-
-2. **`useDefectFieldConfig`에 동일 규칙 추가**
-   - `isFieldVisible(fieldName, userRoles)` 확장 + `isFieldEditable(fieldName, userRoles)` 신설.
-   - `DefectDetailPage` / `DefectRawDataPage`에 `roles` 인자 전달, 편집 가능 필드 게이트 추가.
-
-3. **ABD Detail(`DocsDrawingDetailPage`)에 `isFieldEditable` 적용**
-   - 기존 `canEdit` × `isFieldEditable(field, roles)` 합성으로 OMM/WTY/SP와 동일 패턴화.
-
-4. **Admin T&C 탭 정리(선택)**
-   - `field_config`는 두 컬럼이 없으므로 T&C 탭에서는 RoleChecks 컬럼을 숨겨 오해 방지.
-   - 또는 `field_config`에 동일 컬럼 추가 + `useFieldConfig` 확장으로 완전 통일(범위 큼).
-
-5. **공통 헬퍼 추출(권장)**
-   - `src/lib/field-role-gate.ts` 같은 공용 함수 `applyRoleGate(cfg, roles, kind)` 로 3개 훅이 같은 규칙을 공유.
-
-### 비즈니스 영향
-- 표시/편집 권한이 실제로 적용되므로, 현재 “저장은 되지만 무시되던” 설정이 **즉시 효력 발생**합니다. 적용 전, 운영중 데이터의 `visible_to_roles` / `editable_to_roles` 값을 점검(대량 NULL이면 영향 없음, 이미 채워진 값이 있다면 사용자 가시성 변동 가능)하는 단계가 선행되어야 합니다.
-
-승인하시면 위 1~3번을 우선 구현(가장 영향이 크고 안전한 범위)하고, 4·5번은 후속 정리로 진행합니다.
+## Out of scope
+- 컬럼 선택 후의 import 동작/검증 로직 변경 없음.
+- DB / Field Config / 권한 로직 변경 없음.
+- ABD/OMM/Warranty 프리셋은 이번 작업 범위 아님.
