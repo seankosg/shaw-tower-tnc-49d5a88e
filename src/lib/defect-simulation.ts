@@ -17,6 +17,28 @@ import {
   type DefectScheduleStage,
 } from '@/lib/defect-schedule-utils';
 
+/**
+ * Cascade-aware effective actual date for a stage.
+ * If the stage's own actual date is missing but a later stage's actual date exists,
+ * fall back to the later one (a later stage being done implies the earlier stage
+ * happened no later than that date — safe lower-bound estimate).
+ *
+ *   start      ← actual_start_date ?? actual_completion_date ?? actual_closure_date
+ *   completion ← actual_completion_date ?? actual_closure_date
+ *   closure    ← actual_closure_date
+ */
+function getEffectiveActualDate(item: DefectItem, stage: DefectScheduleStage): string | null {
+  if (stage === 'closure') return getDefectStageActualDate(item, 'closure');
+  if (stage === 'completion') {
+    return getDefectStageActualDate(item, 'completion')
+      ?? getDefectStageActualDate(item, 'closure');
+  }
+  // start
+  return getDefectStageActualDate(item, 'start')
+    ?? getDefectStageActualDate(item, 'completion')
+    ?? getDefectStageActualDate(item, 'closure');
+}
+
 export interface StageSimResult {
   stage: DefectScheduleStage;
   total: number;       // population N (denominator)
