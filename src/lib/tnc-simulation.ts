@@ -1,0 +1,316 @@
+// T&C (Subtest) Simulation utilities — pure functions.
+//
+// Mirror of `defect-simulation.ts`, adapted for T&C subtests with 4 stages:
+//   T1 · T2 · R1 (R1S) · R2A
+//
+// Predicts cumulative quantity-based progress (%) per stage at any target date,
+// combining actual completions to date with planned dates for not-yet-done items.
+
+import type { SubtestForDashboard } from '@/lib/dashboard-utils';
+import {
+  getStageActualDate,
+  getStagePlannedDate,
+  isStageDone,
+} from '@/lib/stage-metrics';
+
+// ───── stages ─────
+
+export type TncSimStage = 't1' | 't2' | 'r1' | 'r2a';
+
+export const ALL_TNC_SIM_STAGES: TncSimStage[] = ['t1', 't2', 'r1', 'r2a'];
+
+export const TNC_SIM_STAGE_LABELS: Record<TncSimStage, string> = {
+  t1: 'T1',
+  t2: 'T2',
+  r1: 'R1S',
+  r2a: 'R2A',
+};
+
+// ───── Delay handling ─────
+
+export type DelayMode = 'optimistic' | 'shift-today' | 'penalty' | 'learned';
+
+export const DELAY_MODE_LABELS: Record<DelayMode, string> = {
+  optimistic: 'Optimistic',
+  'shift-today': 'Shift to today',
+  penalty: 'Penalty (exclude)',
+  learned: 'Learned lag',
+};
+
+export interface SimOptions {
+  mode: DelayMode;
+  /** Reference "today" — typically latest data date from completed batches. */
+  dataDate: string;
+  /** Per-stage average lag in days, used only when mode === 'learned'. */
+  lagDays?: Partial<Record<TncSimStage, number>>;
+}
+
+const MS = 86_400_000;
+
+function isoToUtc(iso: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return NaN;
+  return Date.UTC(+m[1], +m[2] - 1, +m[3]);
+}
+
+function utcToIso(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+function daysBetween(a: string, b: string): number {
+  return Math.round((isoToUtc(b) - isoToUtc(a)) / MS);
+}
+
+export function addDays(iso: string, n: number): string {
+  return utcToIso(isoToUtc(iso) + n * MS);
+}
+
+/**
+ * Compute the effective forecast date for a not-yet-done subtest × stage,
+ * given the chosen delay-handling mode.
+ *
+ * Returns null when the item should be excluded from forecast.
+ */
+function effectiveForecastDate(
+  planned: string | null,
+  dataDate: string,
+  mode: DelayMode,
+  lagDays: number,
+): string | null {
+  if (!planned) return null;
+  const isDelayed = planned < dataDate;
+  if (!isDelayed) return planned;
+  switch (mode) {
+    case 'optimistic':  return planned;
+    case 'shift-today': return dataDate;
+    case 'penalty':     return null;
+    case 'learned':     return addDays(planned, Math.max(0, Math.round(lagDays)));
+  }
+}
+
+/**
+ * Compute average lag (actual − planned, in days) per stage from completed subtests.
+ * Negative lags clamp to 0; stages with sample size < 5 return 0 (insufficient data).
+ */
+export function computeStageLagDays(items: SubtestForDashboard[]): Record<TncSimStage, number> {
+  const out: Record<TncSimStage, number> = { t1: 0, t2: 0, r1: 0, r2a: 0 };
+  for (const st of ALL_TNC_SIM_STAGES) {
+    let sum = 0;
+    let n = 0;
+    for (const it of items) {
+      const planned = getStagePlannedDate(it, st);
+      const actual = getStageActualDate(it, st);
+      if (!planned || !actual || !isStageDone(it, st)) continue;
+      sum += daysBetween(planned, actual);
+      n++;
+    }
+    if (n >= 5) out[st] = Math.max(0, sum / n);
+  }
+  return out;
+}
+
+// ───── Stage simulation result ─────
+
+export interface StageSimResult {
+  stage: TncSimStage;
+  total: number;
+  doneActual: number;
+  forecast: number;       // count whose effective forecast date ≤ target
+  predicted: number;
+  planOnly: number;       // ALL items whose ORIGINAL planned ≤ target (mode-independent)
+  noPlan: number;
+  delayedCount: number;   // not-done items with planned < dataDate (mode-independent)
+  predictedPct: number;
+  planPct: number;
+  actualPct: number;
+  gapPct: number;
+}
+
+export function simulateTncStageAt(
+  items: SubtestForDashboard[],
+  stage: TncSimStage,
+  targetDate: string,
+  opts: SimOptions,
+): StageSimResult {
+  const total = items.length;
+  let doneActual = 0;
+  let forecast = 0;
+  let planOnly = 0;
+  let noPlan = 0;
+  let delayedCount = 0;
+
+  const lag = opts.lagDays?.[stage] ?? 0;
+
+  for (const it of items) {
+    const planned = getStagePlannedDate(it, stage);
+    const actual = getStageActualDate(it, stage);
+    const done = isStageDone(it, stage);
+
+    if (planned && planned <= targetDate) planOnly++;
+
+    if (done && actual && actual <= targetDate) {
+      doneActual++;
+    } else if (!done) {
+      if (planned && planned < opts.dataDate) delayedCount++;
+      if (planned) {
+        const ef = effectiveForecastDate(planned, opts.dataDate, opts.mode, lag);
+        if (ef && ef <= targetDate) forecast++;
+      } else {
+        noPlan++;
+      }
+    }
+  }
+
+  const predicted = doneActual + forecast;
+  const pct = (n: number) => (total ? (n / total) * 100 : 0);
+  return {
+    stage,
+    total,
+    doneActual,
+    forecast,
+    predicted,
+    planOnly,
+    noPlan,
+    delayedCount,
+    predictedPct: round1(pct(predicted)),
+    planPct: round1(pct(planOnly)),
+    actualPct: round1(pct(doneActual)),
+    gapPct: round1(pct(predicted) - pct(planOnly)),
+  };
+}
+
+export function simulateAllTncStages(
+  items: SubtestForDashboard[],
+  targetDate: string,
+  opts: SimOptions,
+  stages: TncSimStage[] = ALL_TNC_SIM_STAGES,
+): Record<TncSimStage, StageSimResult> {
+  const out: Partial<Record<TncSimStage, StageSimResult>> = {};
+  for (const st of stages) out[st] = simulateTncStageAt(items, st, targetDate, opts);
+  return out as Record<TncSimStage, StageSimResult>;
+}
+
+// ───── Time series for line chart ─────
+
+export type SeriesPoint = {
+  date: string;
+} & {
+  [K in TncSimStage as `${K}_plan`]: number;
+} & {
+  [K in TncSimStage as `${K}_actual`]: number | null;
+} & {
+  [K in TncSimStage as `${K}_predicted`]: number | null;
+};
+
+export function buildTncSimulationSeries(
+  items: SubtestForDashboard[],
+  rangeStart: string,
+  rangeEnd: string,
+  asOfDate: string,
+  opts: SimOptions,
+): SeriesPoint[] {
+  const startMs = isoToUtc(rangeStart);
+  const endMs = isoToUtc(rangeEnd);
+  if (!isFinite(startMs) || !isFinite(endMs) || endMs < startMs) return [];
+
+  type Pre = { planned: number | null; effForecast: number | null; actualDone: number | null };
+  const pre: Record<TncSimStage, Pre[]> = { t1: [], t2: [], r1: [], r2a: [] };
+
+  for (const it of items) {
+    for (const st of ALL_TNC_SIM_STAGES) {
+      const p = getStagePlannedDate(it, st);
+      const a = getStageActualDate(it, st);
+      const done = isStageDone(it, st);
+      const lag = opts.lagDays?.[st] ?? 0;
+      const ef = done ? null : effectiveForecastDate(p, opts.dataDate, opts.mode, lag);
+      pre[st].push({
+        planned: p ? isoToUtc(p) : null,
+        effForecast: ef ? isoToUtc(ef) : null,
+        actualDone: done && a ? isoToUtc(a) : null,
+      });
+    }
+  }
+
+  const total = items.length;
+  const points: SeriesPoint[] = [];
+  const asOfMs = isoToUtc(asOfDate);
+
+  for (let cur = startMs; cur <= endMs; cur += MS) {
+    const iso = utcToIso(cur);
+    const isPast = cur <= asOfMs;
+    const calc = (st: TncSimStage) => {
+      let planCount = 0;
+      let actualCount = 0;
+      let predCount = 0;
+      const arr = pre[st];
+      for (const r of arr) {
+        if (r.planned != null && r.planned <= cur) planCount++;
+        const isDone = r.actualDone != null && r.actualDone <= cur;
+        if (isDone) {
+          actualCount++;
+          predCount++;
+        } else if (r.effForecast != null && r.effForecast <= cur) {
+          predCount++;
+        }
+      }
+      const denom = total || 1;
+      return {
+        plan: round1((planCount / denom) * 100),
+        actual: round1((actualCount / denom) * 100),
+        predicted: round1((predCount / denom) * 100),
+      };
+    };
+
+    const point = { date: iso } as SeriesPoint;
+    for (const st of ALL_TNC_SIM_STAGES) {
+      const v = calc(st);
+      (point as any)[`${st}_plan`] = v.plan;
+      (point as any)[`${st}_actual`] = isPast ? v.actual : null;
+      (point as any)[`${st}_predicted`] = isPast ? null : v.predicted;
+    }
+    points.push(point);
+  }
+  return points;
+}
+
+// ───── Group breakdown (by team) ─────
+
+export interface TeamSimRow {
+  team: string;
+  count: number;
+  t1: StageSimResult;
+  t2: StageSimResult;
+  r1: StageSimResult;
+  r2a: StageSimResult;
+}
+
+export function simulateByTeam(
+  items: SubtestForDashboard[],
+  targetDate: string,
+  opts: SimOptions,
+): TeamSimRow[] {
+  const groups = new Map<string, SubtestForDashboard[]>();
+  for (const it of items) {
+    const k = it.team ?? '(None)';
+    const arr = groups.get(k) ?? [];
+    arr.push(it);
+    groups.set(k, arr);
+  }
+  const rows: TeamSimRow[] = [];
+  for (const [team, arr] of groups) {
+    rows.push({
+      team,
+      count: arr.length,
+      t1: simulateTncStageAt(arr, 't1', targetDate, opts),
+      t2: simulateTncStageAt(arr, 't2', targetDate, opts),
+      r1: simulateTncStageAt(arr, 'r1', targetDate, opts),
+      r2a: simulateTncStageAt(arr, 'r2a', targetDate, opts),
+    });
+  }
+  rows.sort((a, b) => a.team.localeCompare(b.team));
+  return rows;
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
