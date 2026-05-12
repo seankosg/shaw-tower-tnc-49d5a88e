@@ -66,7 +66,7 @@ export function simulateDefectStageAt(
 
   for (const it of items) {
     const planned = getDefectStagePlannedDate(it, stage);
-    const actual = getDefectStageActualDate(it, stage);
+    const actual = getEffectiveActualDate(it, stage);
     const done = isDefectStageDone(it, stage);
 
     if (planned && planned <= targetDate) planOnly++;
