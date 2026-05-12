@@ -102,7 +102,7 @@ export default function DefectSimulationPage() {
     };
     setOrDel('team', teamFilter, 'all');
     setOrDel('stages', stages.length === ALL_DEFECT_STAGE_KEYS.length ? '' : stages.join(','), '');
-    setOrDel('range', String(rangeDays), '90');
+    setOrDel('range', String(rangeDays), '7');
     setOrDel('target', targetIso, defaultTarget);
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
   }, [teamFilter, stages, rangeDays, targetIso, defaultTarget, searchParams, setSearchParams]);
