@@ -257,6 +257,19 @@ export default function DefectSimulationPage() {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Delay Handling</span>
+            <Select value={delayMode} onValueChange={(v) => setDelayMode(v as DelayMode)}>
+              <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="optimistic">{DELAY_MODE_LABELS.optimistic}</SelectItem>
+                <SelectItem value="shift-today">{DELAY_MODE_LABELS['shift-today']}</SelectItem>
+                <SelectItem value="penalty">{DELAY_MODE_LABELS.penalty}</SelectItem>
+                <SelectItem value="learned">{DELAY_MODE_LABELS.learned}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
