@@ -73,6 +73,46 @@ export function DefectColumnSelect({
     },
   }), [isReimport, isFieldRequired, getLabel, getSourceLabel, getSourceOrigin]);
 
+  const presets = useMemo(() => {
+    const ACONEX_FIELDS = new Set(['issue_no', 'status', 'actual_closure_date', 'aconex_comments']);
+    const HDEC_FIELDS = new Set([
+      'issue_no', 'team', 'subcontractor_name', 'subsub_name',
+      'hdec_pic_name', 'hdec_eng_name',
+      'planned_start_date', 'planned_completion_date', 'planned_closure_date',
+      'actual_start_date', 'actual_completion_date', 'actual_closure_date',
+    ]);
+    const isVerifiedByHdecHeader = (h: string) => {
+      const n = h.toLowerCase();
+      return n.includes('verified') && (n.includes('hdec') || n.includes('field'));
+    };
+
+    const aconexHeaders = headers.filter((h) => {
+      const f = toFieldName(h);
+      return ACONEX_FIELDS.has(f) || isVerifiedByHdecHeader(h);
+    });
+    const hdecHeaders = headers.filter((h) => HDEC_FIELDS.has(toFieldName(h)));
+
+    return [
+      {
+        id: 'new-upload',
+        label: 'New Upload',
+        matchedHeaders: undefined, // select all
+      },
+      {
+        id: 'update-aconex',
+        label: 'Update from Aconex',
+        matchedHeaders: aconexHeaders,
+        className: 'border-emerald-300 text-emerald-900 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-100 dark:hover:bg-emerald-950',
+      },
+      {
+        id: 'update-hdec',
+        label: "HDEC's Update",
+        matchedHeaders: hdecHeaders,
+        className: 'border-blue-300 text-blue-900 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-100 dark:hover:bg-blue-950',
+      },
+    ];
+  }, [headers]);
+
   return (
     <ColumnSelectDialog
       open={open}
@@ -83,7 +123,7 @@ export function DefectColumnSelect({
       defaultExcluded={defaultExcluded}
       onApply={onApply}
       helpers={helpers}
-      showOriginQuickFilters
+      presets={presets}
     />
   );
 }
