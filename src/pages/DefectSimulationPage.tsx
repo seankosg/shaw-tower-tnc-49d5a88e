@@ -53,30 +53,29 @@ export default function DefectSimulationPage() {
 
   const [items, setItems] = useState<DefectItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastCalcAt, setLastCalcAt] = useState<Date | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      let all: DefectItem[] = [];
-      const PAGE = 1000;
-      for (let from = 0; ; from += PAGE) {
-        const { data } = await (supabase as any)
-          .from('defect_items')
-          .select('*')
-          .eq('is_active', true)
-          .order('issue_no')
-          .range(from, from + PAGE - 1);
-        if (!data?.length) break;
-        all = all.concat(data as DefectItem[]);
-        if (data.length < PAGE) break;
-      }
-      if (!cancelled) {
-        setItems(all);
-        setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+  const loadData = useMemo(() => async () => {
+    setLoading(true);
+    let all: DefectItem[] = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data } = await (supabase as any)
+        .from('defect_items')
+        .select('*')
+        .eq('is_active', true)
+        .order('issue_no')
+        .range(from, from + PAGE - 1);
+      if (!data?.length) break;
+      all = all.concat(data as DefectItem[]);
+      if (data.length < PAGE) break;
+    }
+    setItems(all);
+    setLastCalcAt(new Date());
+    setLoading(false);
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   // ───── Controls ─────
   const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');
