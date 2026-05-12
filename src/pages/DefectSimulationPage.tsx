@@ -351,65 +351,16 @@ export default function DefectSimulationPage() {
           <Card>
             <CardContent className="p-3">
               <div className="mb-2 px-1 text-sm font-medium">Cumulative Progress (%)</div>
-              <div className="h-[360px] w-full">
-                <ResponsiveContainer>
-                  <LineChart data={series} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 11 }}
-                      tickFormatter={(v: string) => v.slice(5)}
-                      minTickGap={20}
-                    />
-                    <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-                    <Tooltip
-                      contentStyle={{ fontSize: 12 }}
-                      formatter={(v: number | null) => v == null ? '—' : `${v.toFixed(1)}%`}
-                    />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <ReferenceLine x={dataDate} stroke="hsl(var(--muted-foreground))" strokeDasharray="2 2" label={{ value: 'Data Date', fontSize: 10, position: 'insideTopRight' }} />
-                    <ReferenceLine x={targetIso} stroke="hsl(var(--primary))" strokeDasharray="3 3" label={{ value: 'Target', fontSize: 10, position: 'insideTopRight' }} />
-                    {stages.map(st => (
-                      <Line
-                        key={`${st}-plan`}
-                        type="monotone"
-                        dataKey={`${st}_plan`}
-                        name={`${DEFECT_STAGE_LABELS[st]} · Plan`}
-                        stroke={STAGE_COLORS[st]}
-                        strokeDasharray="4 3"
-                        dot={false}
-                        strokeWidth={1.5}
-                        connectNulls
-                      />
-                    ))}
-                    {stages.map(st => (
-                      <Line
-                        key={`${st}-actual`}
-                        type="monotone"
-                        dataKey={`${st}_actual`}
-                        name={`${DEFECT_STAGE_LABELS[st]} · Actual`}
-                        stroke={STAGE_COLORS[st]}
-                        dot={false}
-                        strokeWidth={2.5}
-                        connectNulls
-                      />
-                    ))}
-                    {stages.map(st => (
-                      <Line
-                        key={`${st}-pred`}
-                        type="monotone"
-                        dataKey={`${st}_predicted`}
-                        name={`${DEFECT_STAGE_LABELS[st]} · Predicted`}
-                        stroke={STAGE_COLORS[st]}
-                        strokeDasharray="1 3"
-                        dot={false}
-                        strokeWidth={2}
-                        connectNulls
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              <SimulationLineChart
+                data={series}
+                stages={stages.map(st => ({
+                  key: st,
+                  label: DEFECT_STAGE_LABELS[st],
+                  color: STAGE_COLORS[st],
+                }))}
+                dataDate={dataDate}
+                targetIso={targetIso}
+              />
             </CardContent>
           </Card>
 
