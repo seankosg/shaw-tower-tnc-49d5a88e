@@ -27,6 +27,7 @@ import AdminClassificationPage from "./pages/AdminClassificationPage";
 import DefectDashboardPage from "./pages/DefectDashboardPage";
 import DefectProgressPage from "./pages/DefectProgressPage";
 import DefectSimulationPage from "./pages/DefectSimulationPage";
+import TncSimulationPage from "./pages/TncSimulationPage";
 import DefectRawDataPage from "./pages/DefectRawDataPage";
 import DefectDetailPage from "./pages/DefectDetailPage";
 import DefectImportPage from "./pages/DefectImportPage";
