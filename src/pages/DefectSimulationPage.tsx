@@ -112,8 +112,14 @@ export default function DefectSimulationPage() {
     [items, teamFilter],
   );
 
-  const rangeStart = useMemo(() => addDays(dataDate, -14), [dataDate]);
-  const rangeEnd = useMemo(() => addDays(dataDate, rangeDays), [dataDate, rangeDays]);
+  const rangeStart = useMemo(
+    () => (rangeDays >= 0 ? dataDate : addDays(dataDate, rangeDays)),
+    [dataDate, rangeDays],
+  );
+  const rangeEnd = useMemo(
+    () => (rangeDays >= 0 ? addDays(dataDate, rangeDays) : dataDate),
+    [dataDate, rangeDays],
+  );
 
   const series = useMemo(
     () => buildDefectSimulationSeries(filteredItems, rangeStart, rangeEnd, dataDate),
