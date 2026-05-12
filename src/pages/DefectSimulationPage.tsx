@@ -131,19 +131,25 @@ export default function DefectSimulationPage() {
     [dataDate, rangeDays],
   );
 
+  const lagDays = useMemo(() => computeStageLagDays(filteredItems), [filteredItems]);
+  const opts: SimOptions = useMemo(
+    () => ({ mode: delayMode, dataDate, lagDays }),
+    [delayMode, dataDate, lagDays],
+  );
+
   const series = useMemo(
-    () => buildDefectSimulationSeries(filteredItems, rangeStart, rangeEnd, dataDate),
-    [filteredItems, rangeStart, rangeEnd, dataDate],
+    () => buildDefectSimulationSeries(filteredItems, rangeStart, rangeEnd, dataDate, opts),
+    [filteredItems, rangeStart, rangeEnd, dataDate, opts],
   );
 
   const stageResults = useMemo(
-    () => simulateAllDefectStages(filteredItems, targetIso, ALL_DEFECT_STAGE_KEYS),
-    [filteredItems, targetIso],
+    () => simulateAllDefectStages(filteredItems, targetIso, opts, ALL_DEFECT_STAGE_KEYS),
+    [filteredItems, targetIso, opts],
   );
 
   const teamRows = useMemo(
-    () => simulateByTeam(filteredItems, targetIso),
-    [filteredItems, targetIso],
+    () => simulateByTeam(filteredItems, targetIso, opts),
+    [filteredItems, targetIso, opts],
   );
 
   const goRawRemaining = (stage: DefectScheduleStage) => {
