@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, FlaskConical, TrendingUp, AlertTriangle, RefreshCw } from 'lucide-react';
 import { SimulationLineChart } from '@/components/simulation/SimulationLineChart';
+import { ToAchieveBand } from '@/components/simulation/ToAchieveBand';
 
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -327,6 +328,15 @@ export default function DefectSimulationPage() {
                       </span>
                       <span className="text-xs text-muted-foreground">predicted</span>
                     </div>
+                    <ToAchieveBand
+                      doneActual={r.doneActual}
+                      predicted={r.predicted}
+                      actualPct={r.actualPct}
+                      predictedPct={r.predictedPct}
+                      dataDate={dataDate}
+                      targetIso={targetIso}
+                      color={STAGE_COLORS[st]}
+                    />
                     <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                       <Stat label="Done now" value={`${r.actualPct.toFixed(1)}%`} sub={`${r.doneActual}/${r.total}`} />
                       <Stat label="Plan" value={`${r.planPct.toFixed(1)}%`} sub={`${r.planOnly}/${r.total}`} />
