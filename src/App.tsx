@@ -26,6 +26,7 @@ import AdminPage from "./pages/AdminPage";
 import AdminClassificationPage from "./pages/AdminClassificationPage";
 import DefectDashboardPage from "./pages/DefectDashboardPage";
 import DefectProgressPage from "./pages/DefectProgressPage";
+import DefectSimulationPage from "./pages/DefectSimulationPage";
 import DefectRawDataPage from "./pages/DefectRawDataPage";
 import DefectDetailPage from "./pages/DefectDetailPage";
 import DefectImportPage from "./pages/DefectImportPage";
@@ -106,6 +107,7 @@ const App = () => (
                 <Route path="/subtests/:id" element={<SubtestDetail />} />
                 <Route path="/defects/dashboard" element={<DefectDashboardPage />} />
                 <Route path="/defects/progress" element={<DefectProgressPage />} />
+                <Route path="/defects/simulation" element={<DefectSimulationPage />} />
                 <Route path="/defects/schedule-revision" element={<DefectScheduleRevisionPage />} />
                 <Route path="/defects/raw-data" element={<DefectRawDataPage />} />
                 <Route path="/defects/import" element={<DefectImportPage />} />
