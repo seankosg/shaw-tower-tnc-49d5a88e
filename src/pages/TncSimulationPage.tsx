@@ -91,7 +91,7 @@ export default function TncSimulationPage() {
     return 'penalty';
   });
 
-  const defaultTarget = useMemo(() => addDays(dataDate, 30), [dataDate]);
+  const defaultTarget = '2026-05-22';
   const [target, setTarget] = useState<Date>(() => {
     const raw = searchParams.get('target');
     if (raw) return new Date(`${raw}T00:00:00`);
