@@ -2,10 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, FlaskConical, TrendingUp, AlertTriangle, RefreshCw } from 'lucide-react';
-import {
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ReferenceLine,
-} from 'recharts';
+import { SimulationLineChart } from '@/components/simulation/SimulationLineChart';
 
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
