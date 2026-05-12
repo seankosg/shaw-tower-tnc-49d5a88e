@@ -50,6 +50,37 @@ describe('simulateDefectStageAt', () => {
     expect(r.total).toBe(0);
     expect(r.predictedPct).toBe(0);
   });
+
+  it('cascade fallback: completion-done item with no actual_start_date counts in start.doneActual', () => {
+    const items: DefectItem[] = [
+      mk({ id: 'c1', actual_completion_date: '2026-01-10' }),
+    ];
+    const r = simulateDefectStageAt(items, 'start', '2026-02-01');
+    expect(r.doneActual).toBe(1);
+    expect(r.forecast).toBe(0);
+  });
+
+  it('cascade fallback: closure-done item with no start/completion actual counts in both', () => {
+    const items: DefectItem[] = [
+      mk({ id: 'cl1', actual_closure_date: '2026-01-15' }),
+    ];
+    const rs = simulateDefectStageAt(items, 'start', '2026-02-01');
+    const rc = simulateDefectStageAt(items, 'completion', '2026-02-01');
+    const rcl = simulateDefectStageAt(items, 'closure', '2026-02-01');
+    expect(rs.doneActual).toBe(1);
+    expect(rc.doneActual).toBe(1);
+    expect(rcl.doneActual).toBe(1);
+  });
+
+  it('done by progress_pct alone (no actual dates) stays out of doneActual', () => {
+    const items: DefectItem[] = [
+      mk({ id: 'p1', actual_progress_pct: 100, planned_completion_date: '2026-02-20' }),
+    ];
+    const r = simulateDefectStageAt(items, 'completion', '2026-02-01');
+    // done=true but effectiveActual=null → neither doneActual nor forecast
+    expect(r.doneActual).toBe(0);
+    expect(r.forecast).toBe(0);
+  });
 });
 
 describe('buildDefectSimulationSeries', () => {

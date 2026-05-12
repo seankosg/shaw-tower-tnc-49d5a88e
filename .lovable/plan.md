@@ -1,94 +1,66 @@
 ## 목적
 
-Defect Raw Data의 계획(Planned)/실적(Actual) 일자를 바탕으로 임의의 미래(또는 과거) 날짜 D를 입력했을 때, 각 단계(Start / Completion / Closure)의 **수량 기준 누계 진도율(%)** 을 예측하는 "Simulation" 탭을 신규 생성합니다. 본 계획은 **Defect만** 다룹니다 (T&C는 후속 단계).
+Defect Simulation에서 후행 단계(completion/closure)가 done인데 선행 단계(start/completion)의 `actual_<stage>_date`가 비어 있어 doneActual에서 누락되는 회계적 허점을 제거합니다. 단계 간 단조성(Start ≥ Comp ≥ Close)이 자연스럽게 회복됩니다.
 
-## 예측 로직 (단계별, 수량 기준)
+## 변경 범위
 
-대상 모집단: `defect_items` 중 `is_active = true`, 팀 필터 적용 후의 N개 항목.
+`src/lib/defect-simulation.ts` 한 파일과 그 단위 테스트만 수정합니다. UI/페이지/차트 컴포넌트는 입력 시그니처가 동일하므로 변경 없음.
 
-각 단계 stage ∈ {start, completion, closure} 와 시뮬레이션 대상일 D 에 대해:
+## 핵심 로직
 
-```text
-done_actual(D)   = count( actual_<stage>_date IS NOT NULL AND actual_<stage>_date <= D )
-forecast_planned(D) = count( actual_<stage>_date IS NULL  AND planned_<stage>_date IS NOT NULL AND planned_<stage>_date <= D )
-predicted(D)     = done_actual(D) + forecast_planned(D)
-predicted_pct(D) = predicted(D) / N * 100
-```
-
-비교용 보조 지표:
-- `actual_pct(D)` = 실적만 (done_actual / N) — 과거 D에서는 실측, 미래 D에서는 "이미 끝난 것"
-- `plan_pct(D)` = (실적 무관) planned ≤ D 인 모든 항목 / N — 원래 계획상 진도
-- `gap(D)` = predicted_pct − plan_pct (계획 대비 예상 초과/지연)
-
-`planned_<stage>_date`도 없는 항목은 해당 단계에서 영원히 미완료로 간주(분모엔 포함, 분자엔 제외) → 100%에 도달하지 않을 수 있음을 UI에서 명시.
-
-## UI 구성
-
-### 1. 진입
-- 새 사이드바 항목: **Defects → Simulation** (`/defects/simulation`)
-- `DefectProgressPage` 상단에 보조 링크 버튼도 추가
-
-### 2. 컨트롤
-- **Target Date** 단일 날짜 picker (기본 = data date + 30일)
-- **Team 필터** (Progress 페이지와 동일한 셀렉트 재사용)
-- **Stage 다중 선택** (기본: 3개 모두)
-- **Range** (차트 X축 범위) — 기본: data date − 14일 ~ data date + 90일
-
-### 3. 핵심 위젯
-
-**A. Stage 요약 카드 (3개)**  
-각 단계별로:
-- 큰 숫자: `predicted_pct(target)` %
-- 보조: `actual_pct(today)` 현재 실적, `plan_pct(target)` 계획, gap
-- 잔여 항목 수, "no planned date" 항목 수 경고
-
-**B. 누적 진도 라인 차트 (recharts)**  
-X = range 내 일자, Y = % (0–100), 라인 3종 × stage:
-- Plan (계획만) — 점선
-- Actual (현재까지 실적) — data date에서 멈춤
-- Predicted (실적 + 미래 계획) — 미래 구간만 표시
-
-target date에 vertical reference line.
-
-**C. 상세 테이블**  
-행: stage, 열: `Done now`, `Plan @target`, `Predicted @target`, `Gap`, `Remaining`, `No-plan`.  
-셀 클릭 시 `defects/raw-data`로 해당 필터 적용 이동(progress 페이지의 `goRaw` 패턴 재사용).
-
-**D. (옵션) 팀별 분해 테이블** — 팀 × stage `predicted_pct(target)` 매트릭스, 색상 히트맵.
-
-### 4. Export
-Excel 1장: 요약 + 일별 시계열(Plan/Actual/Predicted, stage별 컬럼) + 팀 분해.
-
-## 기술 설계
+각 stage에 대해 사용할 "유효 actual 날짜(effectiveActual)"를 캐스케이드 fallback으로 정의:
 
 ```text
-src/lib/defect-simulation.ts        (pure)
-  - buildDefectStageSeries(items, range, asOfDate) -> { dates, perStage: { plan[], actual[], predicted[] } }
-  - simulateDefectStageAt(items, stage, targetDate, asOfDate) -> { done, forecast, predicted, planOnly, total, noPlan }
-  - simulateAllStages(items, targetDate, asOfDate)
-  - groupByTeam(items, targetDate, asOfDate) -> rows
-
-src/pages/DefectSimulationPage.tsx  (route component)
-src/components/defects/DefectSimulationChart.tsx
-src/components/defects/DefectSimulationSummaryCards.tsx
-src/components/defects/DefectSimulationDetailTable.tsx
-src/lib/defect-simulation-excel-export.ts
-src/test/defect-simulation.test.ts
+effectiveActual(start)      = actual_start_date
+                              ?? actual_completion_date
+                              ?? actual_closure_date
+effectiveActual(completion) = actual_completion_date
+                              ?? actual_closure_date
+effectiveActual(closure)    = actual_closure_date
 ```
 
-기존 자산 재사용:
-- `useLatestDataDate`, `addDays`, `DefectItem` 타입
-- `getDefectStagePlannedDate / getDefectStageActualDate` (stage별 일자 추출)
-- Progress 페이지의 팀 필터 / 데이터 fetch (페이징 1000) 패턴 그대로
+조건은 그대로 유지하되 비교 대상만 effectiveActual로 교체:
 
-라우팅: `App.tsx`에 `<Route path="/defects/simulation" element={<DefectSimulationPage />} />`, 사이드바 `Defects` 그룹에 항목 추가.
+```text
+done   = isDefectStageDone(it, stage)               // 기존 그대로 (cascade-aware)
+ea     = effectiveActual(it, stage)
+doneActual++   if  done && ea && ea <= targetDate
+forecast++     if  !done && planned && planned <= targetDate
+noPlan++       if  !done && !planned
+planOnly++     if  planned && planned <= targetDate  // 변경 없음
+```
 
-## 범위 외 (이번 단계 X)
-- T&C(서브테스트) 시뮬레이션 — 동일 패턴으로 다음 단계에서 추가 예정 (`subtest`의 t1/t2/r1/r2s/r2a 5단계 적용)
-- 시뮬레이션 결과 DB 저장 / 스냅샷
-- 학습 기반(과거 지연율 가중) 예측 — 1차는 "실적 + 계획" 단순 합산만
+근거: completion이 done인 항목은 정의상 start도 done이며, 실제 시작은 늦어도 completion 시점에 일어났습니다. 따라서 actual_start_date가 비어 있을 때 actual_completion_date를 start의 effective actual로 대체하는 것이 안전한 하한 추정입니다.
 
-## 산출 결과 사용자 시나리오
-1. 사용자: Defects → Simulation 진입, Target Date `2026-08-31` 선택
-2. 화면: Completion 78.4% / Closure 65.2% 등 카드 표시, 차트로 추세 확인
-3. 카드의 "Remaining" 클릭 → Raw Data 페이지로 해당 단계 미완료 항목 필터된 상태로 이동
+## 영향
+
+- Start의 doneActual ↑ (누락분 회복) → predicted_pct(start) 약간 ↑
+- Comp의 doneActual ↑ (closure done인데 actual_completion_date 없는 항목 회복) → predicted_pct(comp) 약간 ↑
+- Close는 영향 없음 (fallback 자체가 closure 단일)
+- 단조성: doneActual(start) ≥ doneActual(comp) ≥ doneActual(closure)가 항상 성립
+- planPct는 영향 없음 (planned 일자만 사용)
+
+## 파일 변경
+
+1. **`src/lib/defect-simulation.ts`**
+   - `getEffectiveActualDate(item, stage)` 헬퍼 신설 (파일 내부 함수)
+   - `simulateDefectStageAt`의 actual 비교를 effectiveActual로 교체
+   - `buildDefectSimulationSeries`의 pre-extract 단계에서 `actualDone`을 effectiveActual 기반으로 산출
+   - `simulateByTeam`은 `simulateDefectStageAt`를 그대로 호출하므로 자동 반영
+
+2. **`src/test/defect-simulation.test.ts`**
+   - 신규 케이스 1: `actual_completion_date`만 있고 `actual_start_date` null → start.doneActual에 포함되는지
+   - 신규 케이스 2: `actual_closure_date`만 있고 start/completion null → 두 단계 모두 doneActual에 포함되는지
+   - 신규 케이스 3: completion이 `actual_progress_pct ≥ 100`로 done이지만 actual 일자 전혀 없음 → done이지만 effectiveActual=null이므로 여전히 doneActual에 미포함 (의도된 동작)
+   - 기존 케이스: 결과 변하지 않음을 확인
+
+## 명시적 비범위
+
+- `isDefectStageDone` 자체는 변경하지 않음 (cascade 의미가 이미 정의되어 있고 다른 페이지에서도 사용됨)
+- `actual_progress_pct ≥ 100`만으로 done이고 actual 일자가 전혀 없는 항목은 effectiveActual이 null → 여전히 doneActual에서 제외 (날짜가 없으면 시계열 위치를 알 수 없으므로 안전)
+- DefectProgressPage / 다른 페이지 로직은 변경 없음
+
+## 검증
+
+- `vitest run src/test/defect-simulation.test.ts`
+- /defects/simulation에서 Start vs Comp의 DONE NOW 차이가 줄어들고, "GAP VS PLAN"이 음수에서 0에 더 가깝게 변하는지 육안 확인

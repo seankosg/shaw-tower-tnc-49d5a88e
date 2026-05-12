@@ -17,6 +17,28 @@ import {
   type DefectScheduleStage,
 } from '@/lib/defect-schedule-utils';
 
+/**
+ * Cascade-aware effective actual date for a stage.
+ * If the stage's own actual date is missing but a later stage's actual date exists,
+ * fall back to the later one (a later stage being done implies the earlier stage
+ * happened no later than that date — safe lower-bound estimate).
+ *
+ *   start      ← actual_start_date ?? actual_completion_date ?? actual_closure_date
+ *   completion ← actual_completion_date ?? actual_closure_date
+ *   closure    ← actual_closure_date
+ */
+function getEffectiveActualDate(item: DefectItem, stage: DefectScheduleStage): string | null {
+  if (stage === 'closure') return getDefectStageActualDate(item, 'closure');
+  if (stage === 'completion') {
+    return getDefectStageActualDate(item, 'completion')
+      ?? getDefectStageActualDate(item, 'closure');
+  }
+  // start
+  return getDefectStageActualDate(item, 'start')
+    ?? getDefectStageActualDate(item, 'completion')
+    ?? getDefectStageActualDate(item, 'closure');
+}
+
 export interface StageSimResult {
   stage: DefectScheduleStage;
   total: number;       // population N (denominator)
@@ -44,7 +66,7 @@ export function simulateDefectStageAt(
 
   for (const it of items) {
     const planned = getDefectStagePlannedDate(it, stage);
-    const actual = getDefectStageActualDate(it, stage);
+    const actual = getEffectiveActualDate(it, stage);
     const done = isDefectStageDone(it, stage);
 
     if (planned && planned <= targetDate) planOnly++;
@@ -133,7 +155,7 @@ export function buildDefectSimulationSeries(
   for (const it of items) {
     for (const st of ALL_DEFECT_STAGE_KEYS) {
       const p = getDefectStagePlannedDate(it, st);
-      const a = getDefectStageActualDate(it, st);
+      const a = getEffectiveActualDate(it, st);
       const done = isDefectStageDone(it, st);
       pre[st].push({
         planned: p ? isoToUtc(p) : null,
