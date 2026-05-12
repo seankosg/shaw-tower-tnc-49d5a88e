@@ -78,6 +78,7 @@ export default function DefectSimulationPage() {
 
   // ───── Controls ─────
   const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');
+  const [subcontractorFilter, setSubcontractorFilter] = useState<string>(searchParams.get('sub') || 'all');
   const [stages, setStages] = useState<DefectScheduleStage[]>(() => {
     const raw = searchParams.get('stages');
     if (!raw) return [...ALL_DEFECT_STAGE_KEYS];
