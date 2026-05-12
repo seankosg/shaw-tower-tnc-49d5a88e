@@ -31,8 +31,12 @@ import {
 } from '@/lib/defect-schedule-utils';
 import {
   buildDefectSimulationSeries,
+  computeStageLagDays,
   simulateAllDefectStages,
   simulateByTeam,
+  DELAY_MODE_LABELS,
+  type DelayMode,
+  type SimOptions,
 } from '@/lib/defect-simulation';
 
 const STAGE_COLORS: Record<DefectScheduleStage, string> = {
@@ -84,6 +88,11 @@ export default function DefectSimulationPage() {
     return valid.length ? valid : [...ALL_DEFECT_STAGE_KEYS];
   });
   const [rangeDays, setRangeDays] = useState<number>(Number(searchParams.get('range') || 7));
+  const [delayMode, setDelayMode] = useState<DelayMode>(() => {
+    const raw = searchParams.get('delay');
+    if (raw === 'shift-today' || raw === 'penalty' || raw === 'learned' || raw === 'optimistic') return raw;
+    return 'optimistic';
+  });
 
   const defaultTarget = useMemo(() => addDays(dataDate, 30), [dataDate]);
   const [target, setTarget] = useState<Date>(() => {
@@ -104,8 +113,9 @@ export default function DefectSimulationPage() {
     setOrDel('stages', stages.length === ALL_DEFECT_STAGE_KEYS.length ? '' : stages.join(','), '');
     setOrDel('range', String(rangeDays), '7');
     setOrDel('target', targetIso, defaultTarget);
+    setOrDel('delay', delayMode, 'optimistic');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [teamFilter, stages, rangeDays, targetIso, defaultTarget, searchParams, setSearchParams]);
+  }, [teamFilter, stages, rangeDays, targetIso, defaultTarget, delayMode, searchParams, setSearchParams]);
 
   const filteredItems = useMemo(
     () => teamFilter === 'all' ? items : items.filter(it => it.team === teamFilter),
@@ -121,19 +131,25 @@ export default function DefectSimulationPage() {
     [dataDate, rangeDays],
   );
 
+  const lagDays = useMemo(() => computeStageLagDays(filteredItems), [filteredItems]);
+  const opts: SimOptions = useMemo(
+    () => ({ mode: delayMode, dataDate, lagDays }),
+    [delayMode, dataDate, lagDays],
+  );
+
   const series = useMemo(
-    () => buildDefectSimulationSeries(filteredItems, rangeStart, rangeEnd, dataDate),
-    [filteredItems, rangeStart, rangeEnd, dataDate],
+    () => buildDefectSimulationSeries(filteredItems, rangeStart, rangeEnd, dataDate, opts),
+    [filteredItems, rangeStart, rangeEnd, dataDate, opts],
   );
 
   const stageResults = useMemo(
-    () => simulateAllDefectStages(filteredItems, targetIso, ALL_DEFECT_STAGE_KEYS),
-    [filteredItems, targetIso],
+    () => simulateAllDefectStages(filteredItems, targetIso, opts, ALL_DEFECT_STAGE_KEYS),
+    [filteredItems, targetIso, opts],
   );
 
   const teamRows = useMemo(
-    () => simulateByTeam(filteredItems, targetIso),
-    [filteredItems, targetIso],
+    () => simulateByTeam(filteredItems, targetIso, opts),
+    [filteredItems, targetIso, opts],
   );
 
   const goRawRemaining = (stage: DefectScheduleStage) => {
@@ -241,6 +257,19 @@ export default function DefectSimulationPage() {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Delay Handling</span>
+            <Select value={delayMode} onValueChange={(v) => setDelayMode(v as DelayMode)}>
+              <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="optimistic">{DELAY_MODE_LABELS.optimistic}</SelectItem>
+                <SelectItem value="shift-today">{DELAY_MODE_LABELS['shift-today']}</SelectItem>
+                <SelectItem value="penalty">{DELAY_MODE_LABELS.penalty}</SelectItem>
+                <SelectItem value="learned">{DELAY_MODE_LABELS.learned}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
@@ -283,6 +312,16 @@ export default function DefectSimulationPage() {
                       />
                       <Stat label="Forecast new" value={`${r.forecast}`} sub="not-done · planned ≤ target" />
                     </div>
+                    {r.delayedCount > 0 && (
+                      <div className="mt-2 flex items-center gap-1 rounded-sm bg-rose-50 px-2 py-1 text-[11px] text-rose-700 dark:bg-rose-950/30 dark:text-rose-400">
+                        <AlertTriangle className="h-3 w-3" />
+                        {r.delayedCount} delayed ·{' '}
+                        {delayMode === 'optimistic' && 'kept at original planned date'}
+                        {delayMode === 'shift-today' && `shifted to ${dataDate}`}
+                        {delayMode === 'penalty' && 'excluded from forecast'}
+                        {delayMode === 'learned' && `shifted +${Math.round(lagDays[st] ?? 0)}d (avg lag)`}
+                      </div>
+                    )}
                     {r.noPlan > 0 && (
                       <div className="mt-2 flex items-center gap-1 rounded-sm bg-amber-50 px-2 py-1 text-[11px] text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
                         <AlertTriangle className="h-3 w-3" />

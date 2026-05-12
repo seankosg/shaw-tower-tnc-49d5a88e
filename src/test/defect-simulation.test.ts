@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { simulateDefectStageAt, buildDefectSimulationSeries } from '@/lib/defect-simulation';
+import {
+  simulateDefectStageAt,
+  buildDefectSimulationSeries,
+  type SimOptions,
+} from '@/lib/defect-simulation';
 import type { DefectItem } from '@/lib/defect-utils';
 
 function mk(over: Partial<DefectItem>): DefectItem {
@@ -22,31 +26,29 @@ function mk(over: Partial<DefectItem>): DefectItem {
   };
 }
 
+const optsOpt = (dataDate = '2026-01-01'): SimOptions => ({ mode: 'optimistic', dataDate });
+
 describe('simulateDefectStageAt', () => {
   const items: DefectItem[] = [
-    // already completed before target
     mk({ id: '1', planned_completion_date: '2026-01-05', actual_completion_date: '2026-01-04' }),
-    // planned in future ≤ target → forecast counts
     mk({ id: '2', planned_completion_date: '2026-02-10' }),
-    // planned beyond target → not counted
     mk({ id: '3', planned_completion_date: '2026-04-01' }),
-    // no planned date → noPlan
     mk({ id: '4' }),
   ];
 
   it('counts done + forecast for completion stage at target', () => {
-    const r = simulateDefectStageAt(items, 'completion', '2026-03-01');
+    const r = simulateDefectStageAt(items, 'completion', '2026-03-01', optsOpt());
     expect(r.total).toBe(4);
     expect(r.doneActual).toBe(1);
     expect(r.forecast).toBe(1);
     expect(r.predicted).toBe(2);
-    expect(r.planOnly).toBe(2); // items 1 and 2
+    expect(r.planOnly).toBe(2);
     expect(r.noPlan).toBe(1);
     expect(r.predictedPct).toBe(50);
   });
 
   it('handles empty population safely', () => {
-    const r = simulateDefectStageAt([], 'completion', '2026-03-01');
+    const r = simulateDefectStageAt([], 'completion', '2026-03-01', optsOpt());
     expect(r.total).toBe(0);
     expect(r.predictedPct).toBe(0);
   });
@@ -55,7 +57,7 @@ describe('simulateDefectStageAt', () => {
     const items: DefectItem[] = [
       mk({ id: 'c1', actual_completion_date: '2026-01-10' }),
     ];
-    const r = simulateDefectStageAt(items, 'start', '2026-02-01');
+    const r = simulateDefectStageAt(items, 'start', '2026-02-01', optsOpt());
     expect(r.doneActual).toBe(1);
     expect(r.forecast).toBe(0);
   });
@@ -64,9 +66,9 @@ describe('simulateDefectStageAt', () => {
     const items: DefectItem[] = [
       mk({ id: 'cl1', actual_closure_date: '2026-01-15' }),
     ];
-    const rs = simulateDefectStageAt(items, 'start', '2026-02-01');
-    const rc = simulateDefectStageAt(items, 'completion', '2026-02-01');
-    const rcl = simulateDefectStageAt(items, 'closure', '2026-02-01');
+    const rs = simulateDefectStageAt(items, 'start', '2026-02-01', optsOpt());
+    const rc = simulateDefectStageAt(items, 'completion', '2026-02-01', optsOpt());
+    const rcl = simulateDefectStageAt(items, 'closure', '2026-02-01', optsOpt());
     expect(rs.doneActual).toBe(1);
     expect(rc.doneActual).toBe(1);
     expect(rcl.doneActual).toBe(1);
@@ -76,23 +78,64 @@ describe('simulateDefectStageAt', () => {
     const items: DefectItem[] = [
       mk({ id: 'p1', actual_progress_pct: 100, planned_completion_date: '2026-02-20' }),
     ];
-    const r = simulateDefectStageAt(items, 'completion', '2026-02-01');
-    // done=true but effectiveActual=null → neither doneActual nor forecast
+    const r = simulateDefectStageAt(items, 'completion', '2026-02-01', optsOpt());
     expect(r.doneActual).toBe(0);
     expect(r.forecast).toBe(0);
+  });
+});
+
+describe('Delay handling modes', () => {
+  // 1 delayed item: planned in past, not done
+  const items: DefectItem[] = [
+    mk({ id: 'd1', planned_completion_date: '2026-01-10' }),
+  ];
+  const dataDate = '2026-02-01';
+  const target = '2026-02-15';
+
+  it('A optimistic: delayed item still counted in forecast at original planned date', () => {
+    const r = simulateDefectStageAt(items, 'completion', target, { mode: 'optimistic', dataDate });
+    expect(r.delayedCount).toBe(1);
+    expect(r.forecast).toBe(1);
+  });
+
+  it('B shift-today: delayed item counted in forecast (target ≥ dataDate)', () => {
+    const r = simulateDefectStageAt(items, 'completion', target, { mode: 'shift-today', dataDate });
+    expect(r.delayedCount).toBe(1);
+    expect(r.forecast).toBe(1);
+  });
+
+  it('B shift-today: delayed item NOT counted when target < dataDate', () => {
+    const r = simulateDefectStageAt(items, 'completion', '2026-01-20', { mode: 'shift-today', dataDate });
+    expect(r.forecast).toBe(0);
+  });
+
+  it('C penalty: delayed item excluded from forecast', () => {
+    const r = simulateDefectStageAt(items, 'completion', target, { mode: 'penalty', dataDate });
+    expect(r.delayedCount).toBe(1);
+    expect(r.forecast).toBe(0);
+    expect(r.predicted).toBe(0);
+  });
+
+  it('D learned: lag shifts effective date forward', () => {
+    // lag 10d → ef = 2026-01-10 + 10 = 2026-01-20, target=2026-02-15 → counted
+    const r1 = simulateDefectStageAt(items, 'completion', target,
+      { mode: 'learned', dataDate, lagDays: { completion: 10 } });
+    expect(r1.forecast).toBe(1);
+    // big lag pushes ef beyond target → not counted
+    const r2 = simulateDefectStageAt(items, 'completion', target,
+      { mode: 'learned', dataDate, lagDays: { completion: 90 } });
+    expect(r2.forecast).toBe(0);
   });
 });
 
 describe('buildDefectSimulationSeries', () => {
   it('produces one point per day in range and splits past/future', () => {
     const items = [mk({ planned_completion_date: '2026-01-03', actual_completion_date: '2026-01-02' })];
-    const pts = buildDefectSimulationSeries(items, '2026-01-01', '2026-01-04', '2026-01-02');
+    const pts = buildDefectSimulationSeries(items, '2026-01-01', '2026-01-04', '2026-01-02', optsOpt('2026-01-02'));
     expect(pts.length).toBe(4);
     expect(pts[0].date).toBe('2026-01-01');
-    // past day: actual present, predicted null
     expect(pts[1].completion_actual).toBe(100);
     expect(pts[1].completion_predicted).toBeNull();
-    // future day: predicted present, actual null
     expect(pts[3].completion_predicted).toBe(100);
     expect(pts[3].completion_actual).toBeNull();
   });
