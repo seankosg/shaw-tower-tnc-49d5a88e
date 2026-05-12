@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { useLatestDataDate } from '@/hooks/useLatestDataDate';
+import { useCommonMasters } from '@/hooks/useCommonMasters';
 import { type DefectItem, todayIso } from '@/lib/defect-utils';
 import {
   ALL_DEFECT_STAGE_KEYS,
@@ -47,6 +48,7 @@ export default function DefectSimulationPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const today = useMemo(() => todayIso(), []);
   const { dataDate, source: dataDateSource } = useLatestDataDate();
+  const { subcontractorOptions } = useCommonMasters();
 
   const [items, setItems] = useState<DefectItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,6 +78,7 @@ export default function DefectSimulationPage() {
 
   // ───── Controls ─────
   const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');
+  const [subcontractorFilter, setSubcontractorFilter] = useState<string>(searchParams.get('sub') || 'all');
   const [stages, setStages] = useState<DefectScheduleStage[]>(() => {
     const raw = searchParams.get('stages');
     if (!raw) return [...ALL_DEFECT_STAGE_KEYS];
@@ -106,16 +109,20 @@ export default function DefectSimulationPage() {
       else next.set(k, v);
     };
     setOrDel('team', teamFilter, 'all');
+    setOrDel('sub', subcontractorFilter, 'all');
     setOrDel('stages', stages.length === ALL_DEFECT_STAGE_KEYS.length ? '' : stages.join(','), '');
     setOrDel('range', String(rangeDays), '7');
     setOrDel('target', targetIso, defaultTarget);
     setOrDel('delay', delayMode, 'penalty');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [teamFilter, stages, rangeDays, targetIso, defaultTarget, delayMode, searchParams, setSearchParams]);
+  }, [teamFilter, subcontractorFilter, stages, rangeDays, targetIso, defaultTarget, delayMode, searchParams, setSearchParams]);
 
   const filteredItems = useMemo(
-    () => teamFilter === 'all' ? items : items.filter(it => it.team === teamFilter),
-    [items, teamFilter],
+    () => items.filter(it =>
+      (teamFilter === 'all' || it.team === teamFilter) &&
+      (subcontractorFilter === 'all' || it.subcontractor_name === subcontractorFilter)
+    ),
+    [items, teamFilter, subcontractorFilter],
   );
 
   const rangeStart = useMemo(
@@ -223,6 +230,19 @@ export default function DefectSimulationPage() {
                 <SelectItem value="all">All Teams</SelectItem>
                 {ALL_TEAMS.map(t => (
                   <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Subcontractor</span>
+            <Select value={subcontractorFilter} onValueChange={setSubcontractorFilter}>
+              <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Subcontractors</SelectItem>
+                {subcontractorOptions.map(o => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
