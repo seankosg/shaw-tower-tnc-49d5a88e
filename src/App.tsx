@@ -27,6 +27,7 @@ import AdminClassificationPage from "./pages/AdminClassificationPage";
 import DefectDashboardPage from "./pages/DefectDashboardPage";
 import DefectProgressPage from "./pages/DefectProgressPage";
 import DefectSimulationPage from "./pages/DefectSimulationPage";
+import TncSimulationPage from "./pages/TncSimulationPage";
 import DefectRawDataPage from "./pages/DefectRawDataPage";
 import DefectDetailPage from "./pages/DefectDetailPage";
 import DefectImportPage from "./pages/DefectImportPage";
@@ -104,6 +105,7 @@ const App = () => (
                 <Route path="/tc/import/logs" element={<ImportLogsPage />} />
                 <Route path="/tc/export" element={<ExportPage />} />
                 <Route path="/tc/quick-update" element={<MobileUpdatePage />} />
+                <Route path="/tc/simulation" element={<TncSimulationPage />} />
                 <Route path="/subtests/:id" element={<SubtestDetail />} />
                 <Route path="/defects/dashboard" element={<DefectDashboardPage />} />
                 <Route path="/defects/progress" element={<DefectProgressPage />} />

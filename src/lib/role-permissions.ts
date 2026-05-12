@@ -34,6 +34,7 @@ const ROUTE_MIN_RANK: [RegExp, number][] = [
   [/^\/tc\/dashboard/, 0],   // everyone
   [/^\/tc\/progress/, 0],    // everyone
   [/^\/tc\/schedule-revision/, 2], // user+
+  [/^\/tc\/simulation/, 3], // senior_user+
   [/^\/defects\/import/, 2], // user+
   [/^\/defects\/export/, 2], // user+
   [/^\/defects\/quick-update/, 2], // user+

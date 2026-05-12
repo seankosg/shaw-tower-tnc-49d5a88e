@@ -28,6 +28,7 @@ function safeRoute(basePath: string, roles: AppRole[]): string {
 const mainNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/tc/dashboard' },
   { label: 'Progress',  icon: Calendar,  path: '/tc/progress' },
+  { label: 'Simulation', icon: FlaskConical, path: '/tc/simulation' },
   { label: 'Schedule Revision', icon: CalendarClock, path: '/tc/schedule-revision' },
   { label: 'Raw Data',  icon: Database,  path: '/tc/raw-data' },
   { label: 'Import',    icon: Upload,    path: '/tc/import' },
