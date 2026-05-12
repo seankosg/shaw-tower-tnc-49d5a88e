@@ -155,7 +155,7 @@ export function buildDefectSimulationSeries(
   for (const it of items) {
     for (const st of ALL_DEFECT_STAGE_KEYS) {
       const p = getDefectStagePlannedDate(it, st);
-      const a = getDefectStageActualDate(it, st);
+      const a = getEffectiveActualDate(it, st);
       const done = isDefectStageDone(it, st);
       pre[st].push({
         planned: p ? isoToUtc(p) : null,
