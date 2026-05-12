@@ -48,6 +48,7 @@ export default function DefectSimulationPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const today = useMemo(() => todayIso(), []);
   const { dataDate, source: dataDateSource } = useLatestDataDate();
+  const { subcontractorOptions } = useCommonMasters();
 
   const [items, setItems] = useState<DefectItem[]>([]);
   const [loading, setLoading] = useState(true);
