@@ -214,6 +214,17 @@ export default function DefectProgressPage() {
     navigate(`/defects/raw-data?${sp.toString()}`);
   };
 
+  const groupKeyToParams = (rowKey: string): Record<string, string> => {
+    const parts = rowKey.split(' · ');
+    const out: Record<string, string> = {};
+    groupBy.forEach((dim, i) => {
+      const raw = parts[i];
+      if (raw === undefined) return;
+      out[DEFECT_GROUP_QUERY_PARAM[dim]] = filterValueFor(raw);
+    });
+    return out;
+  };
+
   const handleCellClick = (
     groupKey: string,
     bucketIso: string,
@@ -221,7 +232,7 @@ export default function DefectProgressPage() {
     field: 'planned' | 'actual',
   ) => {
     const params: Record<string, string> = {
-      [DEFECT_GROUP_QUERY_PARAM[primaryGroup]]: filterValueFor(groupKey.split(' · ')[0] ?? groupKey),
+      ...groupKeyToParams(groupKey),
     };
     const dateFrom = bucketIso;
     const dateTo = bucket === 'week' ? addDays(bucketIso, 6) : bucketIso;
@@ -248,7 +259,7 @@ export default function DefectProgressPage() {
   };
 
   const handleGroupClick = (label: string) => {
-    goRaw({ [DEFECT_GROUP_QUERY_PARAM[primaryGroup]]: filterValueFor(label.split(' · ')[0] ?? label) });
+    goRaw(groupKeyToParams(label));
   };
 
   const handleExport = () => {
