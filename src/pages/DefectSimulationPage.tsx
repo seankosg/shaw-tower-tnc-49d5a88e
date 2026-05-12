@@ -31,8 +31,12 @@ import {
 } from '@/lib/defect-schedule-utils';
 import {
   buildDefectSimulationSeries,
+  computeStageLagDays,
   simulateAllDefectStages,
   simulateByTeam,
+  DELAY_MODE_LABELS,
+  type DelayMode,
+  type SimOptions,
 } from '@/lib/defect-simulation';
 
 const STAGE_COLORS: Record<DefectScheduleStage, string> = {
