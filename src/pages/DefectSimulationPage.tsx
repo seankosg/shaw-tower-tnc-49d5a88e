@@ -109,16 +109,20 @@ export default function DefectSimulationPage() {
       else next.set(k, v);
     };
     setOrDel('team', teamFilter, 'all');
+    setOrDel('sub', subcontractorFilter, 'all');
     setOrDel('stages', stages.length === ALL_DEFECT_STAGE_KEYS.length ? '' : stages.join(','), '');
     setOrDel('range', String(rangeDays), '7');
     setOrDel('target', targetIso, defaultTarget);
     setOrDel('delay', delayMode, 'penalty');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [teamFilter, stages, rangeDays, targetIso, defaultTarget, delayMode, searchParams, setSearchParams]);
+  }, [teamFilter, subcontractorFilter, stages, rangeDays, targetIso, defaultTarget, delayMode, searchParams, setSearchParams]);
 
   const filteredItems = useMemo(
-    () => teamFilter === 'all' ? items : items.filter(it => it.team === teamFilter),
-    [items, teamFilter],
+    () => items.filter(it =>
+      (teamFilter === 'all' || it.team === teamFilter) &&
+      (subcontractorFilter === 'all' || it.subcontractor_name === subcontractorFilter)
+    ),
+    [items, teamFilter, subcontractorFilter],
   );
 
   const rangeStart = useMemo(
