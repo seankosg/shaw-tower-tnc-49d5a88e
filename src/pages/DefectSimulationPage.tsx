@@ -91,7 +91,7 @@ export default function DefectSimulationPage() {
   const [delayMode, setDelayMode] = useState<DelayMode>(() => {
     const raw = searchParams.get('delay');
     if (raw === 'shift-today' || raw === 'penalty' || raw === 'learned' || raw === 'optimistic') return raw;
-    return 'optimistic';
+    return 'penalty';
   });
 
   const defaultTarget = useMemo(() => addDays(dataDate, 30), [dataDate]);
