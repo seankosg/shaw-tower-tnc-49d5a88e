@@ -1,55 +1,41 @@
 
-## T&C Simulation Tab — Implementation Plan
+## Recalculate 버튼 — Defect & T&C Simulation
 
-기존 Defect Simulation과 **완전히 동일한 로직·UI**를 T&C(Subtest) 데이터에 맞게 포팅합니다.
+### 현재 동작
+- 두 페이지(`DefectSimulationPage`, `TncSimulationPage`)는 마운트 시 1회 모든 Raw Data를 fetch (페이지네이션 1000행 단위 루프).
+- Raw Data에서 일정을 바꿔도 시뮬 페이지에 머물러 있는 동안엔 반영되지 않음.
 
-### Stages
-- `t1` (T1) · `t2` (T2) · `r1` (R1S) · `r2a` (R2A)
-- 라벨은 기존 `STAGE_LABELS`(schedule-utils.ts) 그대로 사용 (T1 / T2 / R1S / R2A)
-- 날짜·완료 판정은 기존 `stage-metrics.ts`의 `getStagePlannedDate` / `getStageActualDate` / `isStageDone` 재사용
+### 변경 요지
+- 최초 진입 시: **자동 1회 로드** (기존과 동일).
+- 이후: **"Recalculate" 버튼** 으로만 재fetch. 컨트롤(Target/Team/Stages/Range/Delay)은 메모리상에서 즉시 반영 (현재와 동일).
+- "Last calculated" 타임스탬프를 헤더에 표시해 데이터 신선도를 명확히 보여줌.
 
-### 새 파일
+### 구현 (두 페이지 동일 패턴)
 
-#### 1. `src/lib/tnc-simulation.ts` (신규, ~330 줄)
-`defect-simulation.ts`의 1:1 미러. 차이점만:
-- 입력 타입 `SubtestForDashboard` (from `dashboard-utils`)
-- `TncStage = 't1' | 't2' | 'r1' | 'r2a'` + `ALL_TNC_STAGES`
-- `getEffectiveActualDate(s, stage)` — 캐스케이드 없이 단순히 `getStageActualDate` 사용 (T&C는 단계 간 fallback이 의미 없음)
-- `effectiveForecastDate` / `DelayMode` / `DELAY_MODE_LABELS` — 동일
-- `computeStageLagDays` — 4개 stage에 대해 동일한 평균 lag 계산 (sample ≥ 5)
-- `simulateTncStageAt`, `simulateAllTncStages`, `buildTncSimulationSeries`, `simulateByTeam` — 동일 시그니처
-- `SeriesPoint`는 4 stage × {plan, actual, predicted} = 12 필드
+**1. State 추가**
+- `lastCalcAt: Date | null` — fetch 완료 시각.
+- `loading` 은 fetching 상태로 의미 유지.
 
-#### 2. `src/pages/TncSimulationPage.tsx` (신규)
-`DefectSimulationPage.tsx` 1:1 복제 후 변경점:
-- 데이터 로드: `subtests` 테이블 (페이지네이션 동일 패턴), 필요한 컬럼 select
-- `useLatestSubtestDataDate()` 훅 사용
-- Stage 토글: T1/T2/R1S/R2A 4개
-- 차트 라인: stage 4 × {plan, actual/predicted} = 동적 렌더 (기존 코드의 stage map 일반화)
-- Stage 카드: 4개 카드 (그리드 `lg:grid-cols-4`)
-- 팀 브레이크다운 테이블: 4개 stage 컬럼 그룹
-- 행 클릭 → `/tc/raw-data?...` 로 네비게이션 (delayed/remaining 필터 파라미터 동일하게 매핑; team 파라미터만 사용)
-- URL 파라미터: `team`, `stages`, `range`, `target`, `delay` (default `penalty`)
+**2. fetch 로직 분리**
+- 기존 `useEffect` 내부 IIFE를 `loadData()` 함수로 추출.
+- mount 시 1회 호출 + Recalculate 버튼 onClick 에서 호출.
 
-#### 3. `src/test/tnc-simulation.test.ts` (신규)
-`defect-simulation.test.ts` 5개 테스트(A/B/C/D 모드 + lag) 동일 형식으로 4 stage 데이터에 맞춰 작성.
+**3. UI**
+- 툴바 우측 끝에 `Recalculate` 버튼 (`RefreshCw` 아이콘).
+- 클릭 시 spinner (`loading` 동안 disabled + 회전 애니메이션).
+- 헤더 한 줄 추가: `Last calculated: 14:32:05` (없으면 표시 안 함).
 
-### 라우팅 / 사이드바
+**4. 그 외 변경 없음**
+- 시뮬 로직, 차트, 테이블, URL 파라미터, 권한 — 모두 그대로.
 
-#### `src/App.tsx`
-- `<Route path="/tc/simulation" element={<TncSimulationPage />} />` 추가
-
-#### `src/components/layout/AppSidebar.tsx`
-- T&C 메뉴 그룹에 `{ label: 'Simulation', icon: FlaskConical, path: '/tc/simulation' }` 추가
-- Defect와 동일하게 **Senior User 이상**만 노출 (`role-permissions.ts`의 simulation 권한 키 재사용)
-
-### `src/lib/role-permissions.ts`
-- 기존 `defects/simulation` 권한 항목 옆에 `/tc/simulation`도 동일 minRole(`senior_user`)로 등록
-
-### 범위 외
-- Excel export, 차트 비교 라인, 학습 lag 보강 등 — Defect 쪽에도 없으므로 미포함
-- `subtests` 스키마 변경 없음 (읽기 전용)
+### 적용 파일
+- `src/pages/DefectSimulationPage.tsx`
+- `src/pages/TncSimulationPage.tsx`
 
 ### 검증
-- 신규 vitest 케이스 통과
-- 프리뷰에서 `/tc/simulation` 진입 → 4 stage 카드 + 라인 차트 + 팀 테이블 정상 렌더, Delay handling 드롭다운(default Penalty) 동작 확인
+- 프리뷰에서 Raw Data 일정 변경 → 시뮬 페이지로 이동 → 수치 변하지 않음 → Recalculate 클릭 → 갱신되는지 확인.
+- Last calculated 타임스탬프 갱신 확인.
+
+### 범위 외
+- React Query 도입 / staleTime 기반 자동 invalidation — 향후 과제.
+- Realtime 구독 — 비용 대비 효익 낮음.

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, FlaskConical, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Calendar as CalendarIcon, FlaskConical, TrendingUp, AlertTriangle, RefreshCw } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ReferenceLine,
@@ -52,29 +52,28 @@ export default function TncSimulationPage() {
 
   const [items, setItems] = useState<SubtestForDashboard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastCalcAt, setLastCalcAt] = useState<Date | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      let all: SubtestForDashboard[] = [];
-      const PAGE = 1000;
-      for (let from = 0; ; from += PAGE) {
-        const { data } = await (supabase as any)
-          .from('subtests')
-          .select('*')
-          .order('item_no')
-          .range(from, from + PAGE - 1);
-        if (!data?.length) break;
-        all = all.concat(data as SubtestForDashboard[]);
-        if (data.length < PAGE) break;
-      }
-      if (!cancelled) {
-        setItems(all);
-        setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+  const loadData = useMemo(() => async () => {
+    setLoading(true);
+    let all: SubtestForDashboard[] = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data } = await (supabase as any)
+        .from('subtests')
+        .select('*')
+        .order('item_no')
+        .range(from, from + PAGE - 1);
+      if (!data?.length) break;
+      all = all.concat(data as SubtestForDashboard[]);
+      if (data.length < PAGE) break;
+    }
+    setItems(all);
+    setLastCalcAt(new Date());
+    setLoading(false);
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   // ───── Controls ─────
   const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');
@@ -176,12 +175,21 @@ export default function TncSimulationPage() {
             {dataDateSource === 'fallback' && ' (fallback)'} · Target{' '}
             <span className="font-medium">{targetIso}</span> · N ={' '}
             <span className="font-medium">{filteredItems.length}</span>
+            {lastCalcAt && (
+              <> · Last calculated <span className="font-medium">{lastCalcAt.toLocaleTimeString()}</span></>
+            )}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate('/tc/progress')}>
-          <TrendingUp className="mr-1.5 h-4 w-4" />
-          Open Progress
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+            <RefreshCw className={cn('mr-1.5 h-4 w-4', loading && 'animate-spin')} />
+            Recalculate
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/tc/progress')}>
+            <TrendingUp className="mr-1.5 h-4 w-4" />
+            Open Progress
+          </Button>
+        </div>
       </div>
 
       {/* Toolbar */}
