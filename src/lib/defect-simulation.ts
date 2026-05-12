@@ -3,26 +3,85 @@
 // Predicts cumulative quantity-based progress (%) per stage at any target date,
 // combining actual completions to date with planned dates for not-yet-done items.
 //
-// For each item × stage, treat the date "achieved by D" as:
-//   - actual_<stage>_date if the stage is done (cascade-aware via isDefectStageDone) and ≤ D
-//   - else planned_<stage>_date if present and ≤ D (forecast)
-//   - else not counted (item without planned date never contributes)
+// Delay handling: items whose planned date is already past `dataDate` (delayed)
+// are treated according to the chosen `DelayMode`. See effectiveForecastDate().
 
 import type { DefectItem } from '@/lib/defect-utils';
 import {
   ALL_DEFECT_STAGE_KEYS,
+  addDays,
   getDefectStageActualDate,
   getDefectStagePlannedDate,
   isDefectStageDone,
   type DefectScheduleStage,
 } from '@/lib/defect-schedule-utils';
 
+// ───── Delay handling ─────
+
+export type DelayMode = 'optimistic' | 'shift-today' | 'penalty' | 'learned';
+
+export const DELAY_MODE_LABELS: Record<DelayMode, string> = {
+  optimistic: 'Optimistic',
+  'shift-today': 'Shift to today',
+  penalty: 'Penalty (exclude)',
+  learned: 'Learned lag',
+};
+
+export interface SimOptions {
+  mode: DelayMode;
+  /** Reference "today" — typically latest data date from completed batches. */
+  dataDate: string;
+  /** Per-stage average lag in days, used only when mode === 'learned'. */
+  lagDays?: Partial<Record<DefectScheduleStage, number>>;
+}
+
+/**
+ * Compute the effective forecast date for a not-yet-done item × stage,
+ * given the chosen delay-handling mode.
+ *
+ * Returns null when the item should be excluded from forecast.
+ */
+function effectiveForecastDate(
+  planned: string | null,
+  dataDate: string,
+  mode: DelayMode,
+  lagDays: number,
+): string | null {
+  if (!planned) return null;
+  const isDelayed = planned < dataDate;
+  if (!isDelayed) return planned;
+  switch (mode) {
+    case 'optimistic':  return planned;
+    case 'shift-today': return dataDate;
+    case 'penalty':     return null;
+    case 'learned':     return addDays(planned, Math.max(0, Math.round(lagDays)));
+  }
+}
+
+/**
+ * Compute average lag (actual − planned, in days) per stage from completed items.
+ * Negative lags clamp to 0; stages with sample size < 5 return 0 (insufficient data).
+ */
+export function computeStageLagDays(items: DefectItem[]): Record<DefectScheduleStage, number> {
+  const out = { start: 0, completion: 0, closure: 0 } as Record<DefectScheduleStage, number>;
+  for (const st of ALL_DEFECT_STAGE_KEYS) {
+    let sum = 0;
+    let n = 0;
+    for (const it of items) {
+      const planned = getDefectStagePlannedDate(it, st);
+      const actual = getEffectiveActualDate(it, st);
+      if (!planned || !actual || !isDefectStageDone(it, st)) continue;
+      const diff = daysBetween(planned, actual);
+      sum += diff;
+      n++;
+    }
+    if (n >= 5) out[st] = Math.max(0, sum / n);
+  }
+  return out;
+}
+
 /**
  * Cascade-aware effective actual date for a stage.
- * If the stage's own actual date is missing but a later stage's actual date exists,
- * fall back to the later one (a later stage being done implies the earlier stage
- * happened no later than that date — safe lower-bound estimate).
- *
  *   start      ← actual_start_date ?? actual_completion_date ?? actual_closure_date
  *   completion ← actual_completion_date ?? actual_closure_date
  *   closure    ← actual_closure_date
@@ -33,7 +92,6 @@ function getEffectiveActualDate(item: DefectItem, stage: DefectScheduleStage): s
     return getDefectStageActualDate(item, 'completion')
       ?? getDefectStageActualDate(item, 'closure');
   }
-  // start
   return getDefectStageActualDate(item, 'start')
     ?? getDefectStageActualDate(item, 'completion')
     ?? getDefectStageActualDate(item, 'closure');
@@ -41,28 +99,33 @@ function getEffectiveActualDate(item: DefectItem, stage: DefectScheduleStage): s
 
 export interface StageSimResult {
   stage: DefectScheduleStage;
-  total: number;       // population N (denominator)
-  doneActual: number;  // actual completed up to target
-  forecast: number;    // not-done items whose planned ≤ target
-  predicted: number;   // doneActual + forecast
-  planOnly: number;    // ALL items (regardless of actual) whose planned ≤ target
-  noPlan: number;      // not-done items missing planned date (never reaches 100)
+  total: number;
+  doneActual: number;
+  forecast: number;       // count whose effective forecast date ≤ target
+  predicted: number;
+  planOnly: number;       // ALL items whose ORIGINAL planned ≤ target (mode-independent)
+  noPlan: number;
+  delayedCount: number;   // not-done items with planned < dataDate (mode-independent)
   predictedPct: number;
   planPct: number;
-  actualPct: number;   // doneActual / total
-  gapPct: number;      // predictedPct − planPct
+  actualPct: number;
+  gapPct: number;
 }
 
 export function simulateDefectStageAt(
   items: DefectItem[],
   stage: DefectScheduleStage,
   targetDate: string,
+  opts: SimOptions,
 ): StageSimResult {
   const total = items.length;
   let doneActual = 0;
   let forecast = 0;
   let planOnly = 0;
   let noPlan = 0;
+  let delayedCount = 0;
+
+  const lag = opts.lagDays?.[stage] ?? 0;
 
   for (const it of items) {
     const planned = getDefectStagePlannedDate(it, stage);
@@ -74,8 +137,10 @@ export function simulateDefectStageAt(
     if (done && actual && actual <= targetDate) {
       doneActual++;
     } else if (!done) {
+      if (planned && planned < opts.dataDate) delayedCount++;
       if (planned) {
-        if (planned <= targetDate) forecast++;
+        const ef = effectiveForecastDate(planned, opts.dataDate, opts.mode, lag);
+        if (ef && ef <= targetDate) forecast++;
       } else {
         noPlan++;
       }
@@ -92,6 +157,7 @@ export function simulateDefectStageAt(
     predicted,
     planOnly,
     noPlan,
+    delayedCount,
     predictedPct: round1(pct(predicted)),
     planPct: round1(pct(planOnly)),
     actualPct: round1(pct(doneActual)),
@@ -102,18 +168,18 @@ export function simulateDefectStageAt(
 export function simulateAllDefectStages(
   items: DefectItem[],
   targetDate: string,
+  opts: SimOptions,
   stages: DefectScheduleStage[] = ALL_DEFECT_STAGE_KEYS,
 ): Record<DefectScheduleStage, StageSimResult> {
   const out: Partial<Record<DefectScheduleStage, StageSimResult>> = {};
-  for (const st of stages) out[st] = simulateDefectStageAt(items, st, targetDate);
+  for (const st of stages) out[st] = simulateDefectStageAt(items, st, targetDate, opts);
   return out as Record<DefectScheduleStage, StageSimResult>;
 }
 
 // ───── Time series for line chart ─────
 
 export interface SeriesPoint {
-  date: string;          // ISO YYYY-MM-DD
-  /** Cumulative % per stage. Predicted is null for past dates ≤ asOf (== Actual). */
+  date: string;
   start_plan: number;
   start_actual: number | null;
   start_predicted: number | null;
@@ -137,28 +203,36 @@ function utcToIso(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
+function daysBetween(a: string, b: string): number {
+  const am = isoToUtc(a);
+  const bm = isoToUtc(b);
+  return Math.round((bm - am) / MS);
+}
+
 export function buildDefectSimulationSeries(
   items: DefectItem[],
   rangeStart: string,
   rangeEnd: string,
   asOfDate: string,
+  opts: SimOptions,
 ): SeriesPoint[] {
   const startMs = isoToUtc(rangeStart);
   const endMs = isoToUtc(rangeEnd);
   if (!isFinite(startMs) || !isFinite(endMs) || endMs < startMs) return [];
 
-  // Pre-extract per-stage planned/actual dates once (with cascade-aware done check).
-  type Pre = { planned: number | null; actualDone: number | null };
-  const pre: Record<DefectScheduleStage, Pre[]> = {
-    start: [], completion: [], closure: [],
-  };
+  type Pre = { planned: number | null; effForecast: number | null; actualDone: number | null };
+  const pre: Record<DefectScheduleStage, Pre[]> = { start: [], completion: [], closure: [] };
+
   for (const it of items) {
     for (const st of ALL_DEFECT_STAGE_KEYS) {
       const p = getDefectStagePlannedDate(it, st);
       const a = getEffectiveActualDate(it, st);
       const done = isDefectStageDone(it, st);
+      const lag = opts.lagDays?.[st] ?? 0;
+      const ef = done ? null : effectiveForecastDate(p, opts.dataDate, opts.mode, lag);
       pre[st].push({
         planned: p ? isoToUtc(p) : null,
+        effForecast: ef ? isoToUtc(ef) : null,
         actualDone: done && a ? isoToUtc(a) : null,
       });
     }
@@ -182,7 +256,7 @@ export function buildDefectSimulationSeries(
         if (isDone) {
           actualCount++;
           predCount++;
-        } else if (r.planned != null && r.planned <= cur) {
+        } else if (r.effForecast != null && r.effForecast <= cur) {
           predCount++;
         }
       }
@@ -227,6 +301,7 @@ export interface TeamSimRow {
 export function simulateByTeam(
   items: DefectItem[],
   targetDate: string,
+  opts: SimOptions,
 ): TeamSimRow[] {
   const groups = new Map<string, DefectItem[]>();
   for (const it of items) {
@@ -240,9 +315,9 @@ export function simulateByTeam(
     rows.push({
       team,
       count: arr.length,
-      start: simulateDefectStageAt(arr, 'start', targetDate),
-      completion: simulateDefectStageAt(arr, 'completion', targetDate),
-      closure: simulateDefectStageAt(arr, 'closure', targetDate),
+      start: simulateDefectStageAt(arr, 'start', targetDate, opts),
+      completion: simulateDefectStageAt(arr, 'completion', targetDate, opts),
+      closure: simulateDefectStageAt(arr, 'closure', targetDate, opts),
     });
   }
   rows.sort((a, b) => a.team.localeCompare(b.team));
