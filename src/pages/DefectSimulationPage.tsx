@@ -88,6 +88,11 @@ export default function DefectSimulationPage() {
     return valid.length ? valid : [...ALL_DEFECT_STAGE_KEYS];
   });
   const [rangeDays, setRangeDays] = useState<number>(Number(searchParams.get('range') || 7));
+  const [delayMode, setDelayMode] = useState<DelayMode>(() => {
+    const raw = searchParams.get('delay');
+    if (raw === 'shift-today' || raw === 'penalty' || raw === 'learned' || raw === 'optimistic') return raw;
+    return 'optimistic';
+  });
 
   const defaultTarget = useMemo(() => addDays(dataDate, 30), [dataDate]);
   const [target, setTarget] = useState<Date>(() => {
