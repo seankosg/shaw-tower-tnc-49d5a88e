@@ -83,7 +83,7 @@ export default function DefectSimulationPage() {
     const valid = parts.filter(s => (ALL_DEFECT_STAGE_KEYS as string[]).includes(s));
     return valid.length ? valid : [...ALL_DEFECT_STAGE_KEYS];
   });
-  const [rangeDays, setRangeDays] = useState<number>(Number(searchParams.get('range') || 90));
+  const [rangeDays, setRangeDays] = useState<number>(Number(searchParams.get('range') || 7));
 
   const defaultTarget = useMemo(() => addDays(dataDate, 30), [dataDate]);
   const [target, setTarget] = useState<Date>(() => {
@@ -102,7 +102,7 @@ export default function DefectSimulationPage() {
     };
     setOrDel('team', teamFilter, 'all');
     setOrDel('stages', stages.length === ALL_DEFECT_STAGE_KEYS.length ? '' : stages.join(','), '');
-    setOrDel('range', String(rangeDays), '90');
+    setOrDel('range', String(rangeDays), '7');
     setOrDel('target', targetIso, defaultTarget);
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
   }, [teamFilter, stages, rangeDays, targetIso, defaultTarget, searchParams, setSearchParams]);
@@ -112,8 +112,14 @@ export default function DefectSimulationPage() {
     [items, teamFilter],
   );
 
-  const rangeStart = useMemo(() => addDays(dataDate, -14), [dataDate]);
-  const rangeEnd = useMemo(() => addDays(dataDate, rangeDays), [dataDate, rangeDays]);
+  const rangeStart = useMemo(
+    () => (rangeDays >= 0 ? dataDate : addDays(dataDate, rangeDays)),
+    [dataDate, rangeDays],
+  );
+  const rangeEnd = useMemo(
+    () => (rangeDays >= 0 ? addDays(dataDate, rangeDays) : dataDate),
+    [dataDate, rangeDays],
+  );
 
   const series = useMemo(
     () => buildDefectSimulationSeries(filteredItems, rangeStart, rangeEnd, dataDate),
@@ -225,11 +231,13 @@ export default function DefectSimulationPage() {
             <Select value={String(rangeDays)} onValueChange={(v) => setRangeDays(Number(v))}>
               <SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="30">+30 days</SelectItem>
-                <SelectItem value="60">+60 days</SelectItem>
-                <SelectItem value="90">+90 days</SelectItem>
-                <SelectItem value="180">+180 days</SelectItem>
-                <SelectItem value="365">+365 days</SelectItem>
+                <SelectItem value="-14">-14 days</SelectItem>
+                <SelectItem value="-7">-7 days</SelectItem>
+                <SelectItem value="-3">-3 days</SelectItem>
+                <SelectItem value="3">+3 days</SelectItem>
+                <SelectItem value="7">+7 days</SelectItem>
+                <SelectItem value="14">+14 days</SelectItem>
+                <SelectItem value="21">+21 days</SelectItem>
               </SelectContent>
             </Select>
           </div>
