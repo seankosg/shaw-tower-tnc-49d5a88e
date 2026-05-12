@@ -91,7 +91,7 @@ export default function DefectSimulationPage() {
   const [delayMode, setDelayMode] = useState<DelayMode>(() => {
     const raw = searchParams.get('delay');
     if (raw === 'shift-today' || raw === 'penalty' || raw === 'learned' || raw === 'optimistic') return raw;
-    return 'optimistic';
+    return 'penalty';
   });
 
   const defaultTarget = useMemo(() => addDays(dataDate, 30), [dataDate]);
@@ -113,7 +113,7 @@ export default function DefectSimulationPage() {
     setOrDel('stages', stages.length === ALL_DEFECT_STAGE_KEYS.length ? '' : stages.join(','), '');
     setOrDel('range', String(rangeDays), '7');
     setOrDel('target', targetIso, defaultTarget);
-    setOrDel('delay', delayMode, 'optimistic');
+    setOrDel('delay', delayMode, 'penalty');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
   }, [teamFilter, stages, rangeDays, targetIso, defaultTarget, delayMode, searchParams, setSearchParams]);
 
