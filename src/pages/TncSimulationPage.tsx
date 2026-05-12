@@ -175,12 +175,21 @@ export default function TncSimulationPage() {
             {dataDateSource === 'fallback' && ' (fallback)'} · Target{' '}
             <span className="font-medium">{targetIso}</span> · N ={' '}
             <span className="font-medium">{filteredItems.length}</span>
+            {lastCalcAt && (
+              <> · Last calculated <span className="font-medium">{lastCalcAt.toLocaleTimeString()}</span></>
+            )}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate('/tc/progress')}>
-          <TrendingUp className="mr-1.5 h-4 w-4" />
-          Open Progress
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+            <RefreshCw className={cn('mr-1.5 h-4 w-4', loading && 'animate-spin')} />
+            Recalculate
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/tc/progress')}>
+            <TrendingUp className="mr-1.5 h-4 w-4" />
+            Open Progress
+          </Button>
+        </div>
       </div>
 
       {/* Toolbar */}
