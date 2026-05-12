@@ -64,7 +64,7 @@ export function ColumnSelectDialog({
   defaultExcluded,
   onApply,
   helpers,
-  showOriginQuickFilters = false,
+  presets,
 }: ColumnSelectDialogProps) {
   const { toFieldName, getRequirement, getSourceLabel, getSourceOrigin, isKnownField, extraWarnings } = helpers;
   const [excluded, setExcluded] = useState<Set<string>>(new Set(defaultExcluded));
