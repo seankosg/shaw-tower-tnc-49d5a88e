@@ -146,28 +146,18 @@ export function ColumnSelectDialog({
             <Button type="button" size="sm" variant="outline" onClick={deselectAll}>
               Deselect all
             </Button>
-            {showOriginQuickFilters && getSourceOrigin && (
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => selectByOrigin('aconex')}
-                  className="border-emerald-300 text-emerald-900 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-100 dark:hover:bg-emerald-950"
-                >
-                  Aconex only
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => selectByOrigin('hdec')}
-                  className="border-blue-300 text-blue-900 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-100 dark:hover:bg-blue-950"
-                >
-                  HDEC only
-                </Button>
-              </>
-            )}
+            {presets && presets.map((p) => (
+              <Button
+                key={p.id}
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => applyPreset(p.matchedHeaders)}
+                className={p.className}
+              >
+                {p.label}
+              </Button>
+            ))}
             <Button type="button" size="sm" variant="ghost" onClick={reset}>
               Reset
             </Button>
