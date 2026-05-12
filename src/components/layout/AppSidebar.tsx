@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut, ClipboardList, Tags,
-  FileText, FolderKanban, Wrench, ShieldCheck, Package,
+  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -37,6 +37,7 @@ const mainNav = [
 const defectNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/defects/dashboard' },
   { label: 'Progress', icon: Calendar, path: '/defects/progress' },
+  { label: 'Simulation', icon: FlaskConical, path: '/defects/simulation' },
   { label: 'Schedule Revision', icon: CalendarClock, path: '/defects/schedule-revision' },
   { label: 'Raw Data', icon: Database, path: '/defects/raw-data' },
   { label: 'Import', icon: Upload, path: '/defects/import' },
