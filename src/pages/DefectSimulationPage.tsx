@@ -83,7 +83,7 @@ export default function DefectSimulationPage() {
     const valid = parts.filter(s => (ALL_DEFECT_STAGE_KEYS as string[]).includes(s));
     return valid.length ? valid : [...ALL_DEFECT_STAGE_KEYS];
   });
-  const [rangeDays, setRangeDays] = useState<number>(Number(searchParams.get('range') || 90));
+  const [rangeDays, setRangeDays] = useState<number>(Number(searchParams.get('range') || 7));
 
   const defaultTarget = useMemo(() => addDays(dataDate, 30), [dataDate]);
   const [target, setTarget] = useState<Date>(() => {
