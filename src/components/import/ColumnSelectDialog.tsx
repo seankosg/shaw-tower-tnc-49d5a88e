@@ -104,14 +104,13 @@ export function ColumnSelectDialog({
 
   const selectAll = () => setExcluded(new Set());
   const deselectAll = () => setExcluded(new Set(headers));
-  const selectByOrigin = (origin: 'hdec' | 'aconex') => {
-    if (!getSourceOrigin) return;
-    const next = new Set<string>();
-    for (const h of headers) {
-      const field = toFieldName(h);
-      if (getSourceOrigin(field) !== origin) next.add(h);
+  const applyPreset = (matched?: string[]) => {
+    if (!matched || matched.length === 0) {
+      setExcluded(new Set());
+      return;
     }
-    setExcluded(next);
+    const allow = new Set(matched);
+    setExcluded(new Set(headers.filter((h) => !allow.has(h))));
   };
   const reset = () => setExcluded(new Set(defaultExcluded));
 
