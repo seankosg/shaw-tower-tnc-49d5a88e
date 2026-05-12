@@ -259,7 +259,7 @@ export default function DefectProgressPage() {
   };
 
   const handleGroupClick = (label: string) => {
-    goRaw({ [DEFECT_GROUP_QUERY_PARAM[primaryGroup]]: filterValueFor(label.split(' · ')[0] ?? label) });
+    goRaw(groupKeyToParams(label));
   };
 
   const handleExport = () => {
