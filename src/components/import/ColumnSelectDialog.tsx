@@ -38,8 +38,14 @@ interface ColumnSelectDialogProps {
   defaultExcluded: string[];
   onApply: (excluded: string[]) => void;
   helpers: ColumnSelectHelpers;
-  /** Whether to show "Aconex only" / "HDEC only" quick-filter buttons (Defect-only). */
-  showOriginQuickFilters?: boolean;
+  /** Optional preset buttons that set a baseline selection (user can still toggle further). */
+  presets?: Array<{
+    id: string;
+    label: string;
+    /** Headers to keep selected. Empty/undefined = select all. */
+    matchedHeaders?: string[];
+    className?: string;
+  }>;
 }
 
 function previewValue(v: unknown): string {
