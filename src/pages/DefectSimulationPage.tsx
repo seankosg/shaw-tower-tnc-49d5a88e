@@ -236,6 +236,19 @@ export default function DefectSimulationPage() {
           </div>
 
           <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Subcontractor</span>
+            <Select value={subcontractorFilter} onValueChange={setSubcontractorFilter}>
+              <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Subcontractors</SelectItem>
+                {subcontractorOptions.map(o => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">Stages</span>
             <ToggleGroup
               type="multiple"
