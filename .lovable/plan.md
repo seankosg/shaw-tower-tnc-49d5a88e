@@ -1,32 +1,41 @@
-## Defect Simulation – 협력사 풀다운 추가
+## Stage Card에 "To Achieve" 강조 블록 추가
 
-### 변경 파일
-- `src/pages/DefectSimulationPage.tsx` 만 수정
+### 대상
+- `src/pages/DefectSimulationPage.tsx`
+- `src/pages/TncSimulationPage.tsx`
 
-### 구현 내용
+두 페이지의 Stage 카드 내 `Done now` 와 `Plan` Stat 사이에 새 블록 삽입.
 
-1. **데이터 소스**: `useCommonMasters()` 훅의 `subcontractorOptions` 사용 (Master 테이블 `subcontractor_master`의 active 항목만, legacy union 없음)
+### 표시 내용 (To Achieve)
+Data Date 현재 → Target 시점의 Predicted 까지 도달하기 위해 추가로 필요한 양:
 
-2. **상태 추가**:
-   - `subcontractorFilter: string` (`'all' | <name>`)
-   - URL 파라미터 `sub`와 동기화 (기존 `team`/`stages`/`target`/`delay` 패턴과 동일)
+- **Δ Items**: `r.predicted - r.doneActual` (음수면 0으로 clamp)
+- **Δ %**: `r.predictedPct - r.actualPct` (소수 1자리)
+- **Per-day**: `Δ Items / max(1, daysBetween(dataDate, targetIso))` (올림, "/day" 접미)
+  - target ≤ dataDate 인 경우: "—" 표시
 
-3. **UI**: Team Select 옆에 Subcontractor Select 추가
-   - Label: `Subcontractor`
-   - Width: `w-[200px]`
-   - 첫 항목: `All Subcontractors`
-   - 이후 `subcontractorOptions` 정렬 순서대로 렌더
+### 디자인
+- 2열 grid 안에 들어가지 않고, 그 위에 **별도 강조 줄** 로 배치 (col-span-2)
+- 배경: `bg-muted/40`, 좌측 색 바: stage 색
+- 라벨 `To Achieve` (uppercase, 11px)
+- 메인 값: `text-base font-semibold tabular-nums` — 다른 Stat (`font-medium`, 기본 크기) 보다 명확히 큼
+  - 예: `+12 items · +8.4% · ~3 / day`
+- 작은 sub: `from {dataDate} → {targetIso} ({N} days)`
 
-4. **필터 로직**: 기존 `filteredItems` useMemo에 조건 추가
-   ```
-   .filter(it => subcontractorFilter === 'all' 
-     || it.subcontractor_name === subcontractorFilter)
-   ```
-   Team 필터와 AND로 결합. 이후의 series / stageResults / teamRows 모두 자동 반영.
+### 코드 위치
+```
+<Stat Done now />
+<<< 새 To Achieve 블록 (col-span-2) >>>
+<Stat Plan />
+<Stat Gap vs Plan />
+<Stat Forecast new />
+```
+2열 grid 안에서 `<div className="col-span-2 ...">` 로 감싸 한 줄 차지.
 
-5. **헤더 N 카운트**, **Recalculate**, **차트/테이블/팀 분해** 등 나머지는 그대로 유지.
+### 헬퍼
+- 일수 계산: 두 ISO 날짜 차이 = `Math.max(0, Math.round((Date(target) - Date(dataDate)) / 86400000))`
+- 두 페이지 동일 로직이므로 각 파일 내 inline 함수로 처리 (또는 작은 helper). 우선 inline 으로 단순 유지.
 
 ### 범위 외
-- T&C Simulation 페이지는 변경하지 않음
-- 비즈니스 로직 (시뮬레이션 계산) 변경 없음
-- legacy 값(Master에 없는 협력사)은 풀다운에 노출되지 않음 — 사용자 요청대로 Master만
+- 비즈니스 로직 (`stageResults` 계산) 변경 없음
+- 다른 카드/테이블/차트 변경 없음
