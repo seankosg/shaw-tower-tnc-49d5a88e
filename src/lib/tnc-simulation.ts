@@ -337,7 +337,12 @@ export function simulateByTeam(
       r2a: simulateTncStageAt(arr, 'r2a', targetDate, opts),
     });
   }
-  rows.sort((a, b) => a.team.localeCompare(b.team));
+  rows.sort((a, b) => {
+    const aNone = a.team === '(None)';
+    const bNone = b.team === '(None)';
+    if (aNone !== bNone) return aNone ? 1 : -1;
+    return a.team.localeCompare(b.team);
+  });
   return rows;
 }
 
