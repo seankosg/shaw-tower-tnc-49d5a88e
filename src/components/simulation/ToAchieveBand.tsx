@@ -29,15 +29,23 @@ export function ToAchieveBand({
       </div>
       <div className="mt-0.5 text-base font-semibold tabular-nums" style={{ color }}>
         +{deltaItems} items <span className="text-muted-foreground">·</span> +{deltaPct.toFixed(1)}%
-        {perDay !== null && (
+        {perDay !== null ? (
           <>
             {' '}
             <span className="text-muted-foreground">·</span> ~{perDay}/day
           </>
+        ) : (
+          <>
+            {' '}
+            <span className="text-muted-foreground">·</span>{' '}
+            <span className="text-[11px] font-normal text-muted-foreground">target ≤ data date</span>
+          </>
         )}
       </div>
       <div className="text-[10px] text-muted-foreground">
-        from {dataDate} → {targetIso} ({days} {days === 1 ? 'day' : 'days'})
+        {days > 0
+          ? <>from {dataDate} → {targetIso} ({days} {days === 1 ? 'day' : 'days'})</>
+          : <>from {dataDate} → {targetIso} (already past target)</>}
       </div>
     </div>
   );
