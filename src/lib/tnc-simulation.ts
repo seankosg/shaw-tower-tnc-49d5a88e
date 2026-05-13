@@ -239,17 +239,24 @@ export function buildTncSimulationSeries(
   type Pre = { planned: number | null; effForecast: number | null; actualDone: number | null };
   const pre: Record<TncSimStage, Pre[]> = { t1: [], t2: [], r1: [], r2a: [] };
 
+  const dataDateMs = isoToUtc(opts.dataDate);
   for (const it of items) {
     for (const st of ALL_TNC_SIM_STAGES) {
       const p = getStagePlannedDate(it, st);
       const a = getStageActualDate(it, st);
-      const done = isStageDone(it, st);
+      let done = isStageDone(it, st);
+      if (done && opts.enforceSequential) {
+        for (const pr of prerequisiteStages(st)) {
+          if (!isStageDone(it, pr)) { done = false; break; }
+        }
+      }
       const lag = opts.lagDays?.[st] ?? 0;
       const ef = done ? null : effectiveForecastDate(p, opts.dataDate, opts.mode, lag);
       pre[st].push({
         planned: p ? isoToUtc(p) : null,
         effForecast: ef ? isoToUtc(ef) : null,
-        actualDone: done && a ? isoToUtc(a) : null,
+        // B1: status-only done (no actual date) → treat as completed at dataDate.
+        actualDone: done ? (a ? isoToUtc(a) : dataDateMs) : null,
       });
     }
   }
