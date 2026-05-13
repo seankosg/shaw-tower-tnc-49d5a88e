@@ -43,6 +43,19 @@ export interface SimOptions {
   dataDate: string;
   /** Per-stage average lag in days, used only when mode === 'learned'. */
   lagDays?: Partial<Record<TncSimStage, number>>;
+  /**
+   * When true, T2 is only counted as actually done if T1 is also done,
+   * and R2A only if R1 is done. Mirrors the workflow rule and protects
+   * against legacy data where downstream actuals exist without upstream.
+   */
+  enforceSequential?: boolean;
+}
+
+/** Returns the prerequisite stages that must also be `isStageDone` for `stage`. */
+function prerequisiteStages(stage: TncSimStage): TncSimStage[] {
+  if (stage === 't2') return ['t1'];
+  if (stage === 'r2a') return ['r1'];
+  return [];
 }
 
 const MS = 86_400_000;
@@ -141,16 +154,26 @@ export function simulateTncStageAt(
 
   const lag = opts.lagDays?.[stage] ?? 0;
 
+  const prereqs = prerequisiteStages(stage);
+  const isEffectivelyDone = (it: SubtestForDashboard) => {
+    if (!isStageDone(it, stage)) return false;
+    if (!opts.enforceSequential) return true;
+    return prereqs.every(p => isStageDone(it, p));
+  };
+
   for (const it of items) {
     const planned = getStagePlannedDate(it, stage);
     const actual = getStageActualDate(it, stage);
-    const done = isStageDone(it, stage);
+    const done = isEffectivelyDone(it);
 
     if (planned && planned <= targetDate) planOnly++;
 
-    if (done && actual && actual <= targetDate) {
-      doneActual++;
-    } else if (!done) {
+    if (done) {
+      // B1: status indicates done but actual_date may be missing (e.g. R1 'Under Review').
+      // Fall back to dataDate so the row still counts toward "Done now" instead of vanishing.
+      const eff = actual ?? opts.dataDate;
+      if (eff <= targetDate) doneActual++;
+    } else {
       if (planned && planned < opts.dataDate) delayedCount++;
       if (planned) {
         const ef = effectiveForecastDate(planned, opts.dataDate, opts.mode, lag);
