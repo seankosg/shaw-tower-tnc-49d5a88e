@@ -1439,8 +1439,8 @@ export default function SubtestList() {
       }
 
       if (urlDateFrom || urlDateTo) {
-        const stages: Array<'pred' | 't1' | 't2'> = urlStage ? [urlStage] : ['pred', 't1', 't2'];
-        const fieldKey = urlDateField === 'actual' ? 'actual_date' : 'planned_date';
+        const defaultStages: StageKey[] = ['pred', 't1', 't2'];
+        const stages: StageKey[] = urlStage ? [urlStage] : defaultStages;
         let matchAny = false;
         for (const st of stages) {
           const dateVal = urlDateField === 'actual' ? getStageActualDate(r, st) : getStagePlannedDate(r, st);
@@ -1452,6 +1452,14 @@ export default function SubtestList() {
           break;
         }
         if (!matchAny) return false;
+      }
+
+      // Simulation "View remaining" filter
+      if (urlRemainingStage) {
+        const asof = urlRemainingAsOf || delayAsOfDate;
+        const actual = getStageActualDate(r, urlRemainingStage);
+        const completedByAsof = !!actual && actual <= asof;
+        if (completedByAsof) return false;
       }
 
       return true;
