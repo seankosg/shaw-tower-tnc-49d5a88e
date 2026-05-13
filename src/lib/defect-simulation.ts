@@ -134,9 +134,13 @@ export function simulateDefectStageAt(
 
     if (planned && planned <= targetDate) planOnly++;
 
-    if (done && actual && actual <= targetDate) {
-      doneActual++;
-    } else if (!done) {
+    if (done) {
+      // B1 fix: status-only done rows (closure_status='Done' / status='closed' /
+      // progress_pct≥100) have no actual_date — fall back to dataDate so they
+      // are not silently dropped from doneActual.
+      const eff = actual ?? opts.dataDate;
+      if (eff <= targetDate) doneActual++;
+    } else {
       if (planned && planned < opts.dataDate) delayedCount++;
       if (planned) {
         const ef = effectiveForecastDate(planned, opts.dataDate, opts.mode, lag);
@@ -230,10 +234,12 @@ export function buildDefectSimulationSeries(
       const done = isDefectStageDone(it, st);
       const lag = opts.lagDays?.[st] ?? 0;
       const ef = done ? null : effectiveForecastDate(p, opts.dataDate, opts.mode, lag);
+      // B1 fix: done with no actual date → use dataDate as effective completion.
+      const effActual = done ? (a ?? opts.dataDate) : null;
       pre[st].push({
         planned: p ? isoToUtc(p) : null,
         effForecast: ef ? isoToUtc(ef) : null,
-        actualDone: done && a ? isoToUtc(a) : null,
+        actualDone: effActual ? isoToUtc(effActual) : null,
       });
     }
   }
@@ -320,7 +326,12 @@ export function simulateByTeam(
       closure: simulateDefectStageAt(arr, 'closure', targetDate, opts),
     });
   }
-  rows.sort((a, b) => a.team.localeCompare(b.team));
+  rows.sort((a, b) => {
+    const aNone = a.team === '(None)';
+    const bNone = b.team === '(None)';
+    if (aNone !== bNone) return aNone ? 1 : -1;
+    return a.team.localeCompare(b.team);
+  });
   return rows;
 }
 

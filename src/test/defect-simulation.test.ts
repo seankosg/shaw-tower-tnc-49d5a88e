@@ -74,13 +74,30 @@ describe('simulateDefectStageAt', () => {
     expect(rcl.doneActual).toBe(1);
   });
 
-  it('done by progress_pct alone (no actual dates) stays out of doneActual', () => {
+  it('B1 fix: progress_pct=100 with no actual date counts in doneActual at dataDate', () => {
     const items: DefectItem[] = [
       mk({ id: 'p1', actual_progress_pct: 100, planned_completion_date: '2026-02-20' }),
     ];
-    const r = simulateDefectStageAt(items, 'completion', '2026-02-01', optsOpt());
-    expect(r.doneActual).toBe(0);
+    // dataDate=2026-01-01, target=2026-02-01 → eff=dataDate ≤ target → counted
+    const r = simulateDefectStageAt(items, 'completion', '2026-02-01', optsOpt('2026-01-01'));
+    expect(r.doneActual).toBe(1);
     expect(r.forecast).toBe(0);
+  });
+
+  it('B1 fix: closure_status=Done with no actual_closure_date counts in closure.doneActual', () => {
+    const items: DefectItem[] = [
+      mk({ id: 's1', closure_status: 'Done', planned_closure_date: '2026-03-01' }),
+    ];
+    const r = simulateDefectStageAt(items, 'closure', '2026-02-15', optsOpt('2026-02-01'));
+    expect(r.doneActual).toBe(1);
+  });
+
+  it('B1 fix: status=closed with no actual_closure_date counts in closure.doneActual', () => {
+    const items: DefectItem[] = [
+      mk({ id: 's2', status: 'Closed' }),
+    ];
+    const r = simulateDefectStageAt(items, 'closure', '2026-02-15', optsOpt('2026-02-01'));
+    expect(r.doneActual).toBe(1);
   });
 });
 

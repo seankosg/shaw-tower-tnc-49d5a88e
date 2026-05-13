@@ -525,7 +525,7 @@ export default function DefectRawDataPage() {
   // so the user always sees the drill-down's own clean view (sorted by Issue No asc).
   const DRILLDOWN_PARAMS = [
     'source', 'actualComplete', 'closureComplete', 'overdue', 'atRisk',
-    'dueOn', 'unplannedActualOn', 'asOf', 'stage',
+    'dueOn', 'unplannedActualOn', 'asOf', 'stage', 'remaining_stage', 'remaining_asof',
     'team', 'subcontractor', 'subsub', 'hdecPic', 'hdecEng',
     'level', 'mainTrade', 'subTrade', 'workType', 'classificationSource',
     'status', 'closureStatus', 'issueNo', 'subcontractorIssueNo',
@@ -683,6 +683,20 @@ export default function DefectRawDataPage() {
           return isStageDelayedAsOf(item as any, stage, asOfDate);
         }
         return isOverdueDefect(item, asOfDate);
+      });
+    }
+    // Simulation drill-down: "Remaining @ target" = item whose stage actual is missing
+    // OR after the asOf target. Aligned with Simulation card's `total - predicted`.
+    const remainingStage = searchParams.get('remaining_stage') as 'start' | 'completion' | 'closure' | null;
+    const remainingAsof = searchParams.get('remaining_asof');
+    if (remainingStage && remainingAsof) {
+      next = next.filter((item) => {
+        const actual =
+          remainingStage === 'closure' ? item.actual_closure_date :
+          remainingStage === 'completion' ? (item.actual_completion_date ?? item.actual_closure_date) :
+          (item.actual_start_date ?? item.actual_completion_date ?? item.actual_closure_date);
+        if (!actual) return true;
+        return actual > remainingAsof;
       });
     }
     const dueOn = searchParams.get('dueOn');
@@ -1183,6 +1197,12 @@ export default function DefectRawDataPage() {
       const stage = searchParams.get('stage');
       const stageLabel = stage === 'completion' ? 'Completion' : stage === 'closure' ? 'Closure' : stage === 'start' ? 'Start' : null;
       out.push({ label: stageLabel ? `Overdue — ${stageLabel}` : 'Overdue', param: 'overdue', clears: ['overdue', 'stage', 'asOf'] });
+    }
+    const remStage = searchParams.get('remaining_stage');
+    const remAsof = searchParams.get('remaining_asof');
+    if (remStage && remAsof) {
+      const stageLabel = remStage === 'completion' ? 'Completion' : remStage === 'closure' ? 'Closure' : 'Start';
+      out.push({ label: `Remaining — ${stageLabel} @ ${remAsof}`, param: 'remaining_stage', clears: ['remaining_stage', 'remaining_asof'] });
     }
     if (searchParams.get('atRisk') === 'true') {
       const days = searchParams.get('atRiskDays');
