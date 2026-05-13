@@ -1332,9 +1332,13 @@ export default function SubtestList() {
   const urlDateFrom = searchParams.get('date_from');
   const urlDateTo = searchParams.get('date_to');
   const urlDateField = searchParams.get('date_field') as 'planned' | 'actual' | null;
-  const urlStage = searchParams.get('stage') as 'pred' | 't1' | 't2' | null;
+  const urlStage = searchParams.get('stage') as StageKey | null;
   const urlCellStatus = searchParams.get('cell_status') as TcStatus | null;
   const urlAsOf = searchParams.get('as_of');
+  // Simulation "View remaining →" links: show items whose <stage> actual
+  // completion has not been reached by <asof>.
+  const urlRemainingStage = searchParams.get('remaining_stage') as StageKey | null;
+  const urlRemainingAsOf = searchParams.get('remaining_asof');
   const localToday = todayIso();
   const delayAsOfDate = urlAsOf || dataDate || localToday;
 
@@ -1361,7 +1365,7 @@ export default function SubtestList() {
         const overdue = getAnyStageDelayedAsOf(r, OVERDUE_STAGES, delayAsOfDate);
         if (urlStatusFilter === 'overdue' && !overdue) return false;
         // 5-stage workflow: final completion = R2 Approved
-        if (urlStatusFilter === 'remaining' && isStageDone(r, 't2')) return false;
+        if (urlStatusFilter === 'remaining' && isStageDone(r, 'r2a')) return false;
         if (urlStatusFilter === 'at_risk') {
           if (overdue) return false;
           const within = (stage: StageKey) => {
@@ -1435,8 +1439,8 @@ export default function SubtestList() {
       }
 
       if (urlDateFrom || urlDateTo) {
-        const stages: Array<'pred' | 't1' | 't2'> = urlStage ? [urlStage] : ['pred', 't1', 't2'];
-        const fieldKey = urlDateField === 'actual' ? 'actual_date' : 'planned_date';
+        const defaultStages: StageKey[] = ['pred', 't1', 't2'];
+        const stages: StageKey[] = urlStage ? [urlStage] : defaultStages;
         let matchAny = false;
         for (const st of stages) {
           const dateVal = urlDateField === 'actual' ? getStageActualDate(r, st) : getStagePlannedDate(r, st);
@@ -1450,6 +1454,14 @@ export default function SubtestList() {
         if (!matchAny) return false;
       }
 
+      // Simulation "View remaining" filter
+      if (urlRemainingStage) {
+        const asof = urlRemainingAsOf || delayAsOfDate;
+        const actual = getStageActualDate(r, urlRemainingStage);
+        const completedByAsof = !!actual && actual <= asof;
+        if (completedByAsof) return false;
+      }
+
       return true;
     });
   }, [data, urlStatusFilter, urlAtRiskDays, urlScope,
@@ -1461,7 +1473,8 @@ export default function SubtestList() {
       urlR1PlannedOn, urlR2PlannedOn, urlR1ActualOn, urlR2ActualOn,
       urlR1DelayAsOf, urlR2DelayAsOf, urlR1DelayOn, urlR2DelayOn,
       urlR1ActualUnplannedOn, urlR2ActualUnplannedOn,
-      urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, delayAsOfDate, localToday]);
+      urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, delayAsOfDate, localToday,
+      urlRemainingStage, urlRemainingAsOf]);
 
   const columnIdToFieldName: Record<string, string> = {
     system_code: 'system',

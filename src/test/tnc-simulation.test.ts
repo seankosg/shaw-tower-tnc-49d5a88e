@@ -123,3 +123,44 @@ describe('buildTncSimulationSeries', () => {
     expect(pts[3].t2_actual).toBeNull();
   });
 });
+
+describe('B1 — status done without actual date', () => {
+  it('counts R1 Under Review (no actual_submission_date) toward Done now', () => {
+    const items: SubtestForDashboard[] = [
+      mk({ id: '1', r1_status: 'Under Review' as any, r1_target_submission_date: '2026-01-10' }),
+    ];
+    const r = simulateTncStageAt(items, 'r1', '2026-02-01', optsOpt('2026-01-15'));
+    expect(r.doneActual).toBe(1);
+    expect(r.predicted).toBe(1);
+    expect(r.forecast).toBe(0);
+  });
+
+  it('does not count when target < dataDate (effective date = dataDate)', () => {
+    const items: SubtestForDashboard[] = [
+      mk({ id: '1', r1_status: 'Under Review' as any }),
+    ];
+    const r = simulateTncStageAt(items, 'r1', '2026-01-10', optsOpt('2026-01-15'));
+    expect(r.doneActual).toBe(0);
+  });
+});
+
+describe('B3 — sequential guard', () => {
+  const orphanT2 = mk({
+    id: 'orphan',
+    t2_planned_date: '2026-01-05',
+    t2_actual_date: '2026-01-04',
+    t2_status: 'Done' as any,
+    // T1 missing entirely
+  });
+
+  it('default (no enforce): orphan T2 counted as done', () => {
+    const r = simulateTncStageAt([orphanT2], 't2', '2026-02-01', optsOpt());
+    expect(r.doneActual).toBe(1);
+  });
+
+  it('enforceSequential: orphan T2 NOT counted as done', () => {
+    const r = simulateTncStageAt([orphanT2], 't2', '2026-02-01',
+      { ...optsOpt(), enforceSequential: true });
+    expect(r.doneActual).toBe(0);
+  });
+});
