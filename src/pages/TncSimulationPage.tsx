@@ -338,7 +338,7 @@ export default function TncSimulationPage() {
                         value={`${r.gapPct >= 0 ? '+' : ''}${r.gapPct.toFixed(1)}%`}
                         valueClass={r.gapPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}
                       />
-                      <Stat label="Forecast new" value={`${r.forecast}`} sub="not-done · planned ≤ target" />
+                      <Stat label="Forecast new" value={`${r.forecast}`} sub={forecastSubLabel} />
                     </div>
                     {r.delayedCount > 0 && (
                       <div className="mt-2 flex items-center gap-1 rounded-sm bg-rose-50 px-2 py-1 text-[11px] text-rose-700 dark:bg-rose-950/30 dark:text-rose-400">
