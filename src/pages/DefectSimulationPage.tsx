@@ -94,7 +94,7 @@ export default function DefectSimulationPage() {
     return 'penalty';
   });
 
-  const defaultTarget = '2026-05-22';
+  const defaultTarget = useMemo(() => addDays(dataDate, 30), [dataDate]);
   const [target, setTarget] = useState<Date>(() => {
     const raw = searchParams.get('target');
     if (raw) return new Date(`${raw}T00:00:00`);
@@ -135,7 +135,8 @@ export default function DefectSimulationPage() {
     [dataDate, rangeDays],
   );
 
-  const lagDays = useMemo(() => computeStageLagDays(filteredItems), [filteredItems]);
+  // S1 fix: lag computed on full population to avoid n<5 silent downgrade when filtered.
+  const lagDays = useMemo(() => computeStageLagDays(items), [items]);
   const opts: SimOptions = useMemo(
     () => ({ mode: delayMode, dataDate, lagDays }),
     [delayMode, dataDate, lagDays],
@@ -157,15 +158,25 @@ export default function DefectSimulationPage() {
   );
 
   const goRawRemaining = (stage: DefectScheduleStage) => {
+    // B2/B3 fix: use semantic 'remaining' filter (not predicted-done by target),
+    // and forward both team + subcontractor.
     const sp = new URLSearchParams({
       source: 'simulation',
-      stage,
-      asOf: targetIso,
-      overdue: 'true',
+      remaining_stage: stage,
+      remaining_asof: targetIso,
     });
     if (teamFilter !== 'all') sp.set('team', teamFilter);
+    if (subcontractorFilter !== 'all') sp.set('subcontractor', subcontractorFilter);
     navigate(`/defects/raw-data?${sp.toString()}`);
   };
+
+  // B4: forecast-new sub-label varies by mode.
+  const forecastSub = (() => {
+    if (delayMode === 'penalty') return 'not-done · planned ≤ target · excl. delayed';
+    if (delayMode === 'shift-today') return 'not-done · planned (delayed→today) ≤ target';
+    if (delayMode === 'learned') return 'not-done · planned (+avg lag) ≤ target';
+    return 'not-done · planned ≤ target';
+  })();
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -345,7 +356,7 @@ export default function DefectSimulationPage() {
                         value={`${r.gapPct >= 0 ? '+' : ''}${r.gapPct.toFixed(1)}%`}
                         valueClass={r.gapPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}
                       />
-                      <Stat label="Forecast new" value={`${r.forecast}`} sub="not-done · planned ≤ target" />
+                      <Stat label="Forecast new" value={`${r.forecast}`} sub={forecastSub} />
                     </div>
                     {r.delayedCount > 0 && (
                       <div className="mt-2 flex items-center gap-1 rounded-sm bg-rose-50 px-2 py-1 text-[11px] text-rose-700 dark:bg-rose-950/30 dark:text-rose-400">
