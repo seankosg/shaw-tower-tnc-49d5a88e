@@ -89,7 +89,9 @@ export default function TncSimulationPage() {
     return 'penalty';
   });
 
-  const defaultTarget = '2026-05-22';
+  // Default target: 30 days after the data date (recomputed each render so it
+  // tracks new uploads). Overridden by ?target= URL param when present.
+  const defaultTarget = useMemo(() => addDays(dataDate, 30), [dataDate]);
   const [target, setTarget] = useState<Date>(() => {
     const raw = searchParams.get('target');
     if (raw) return new Date(`${raw}T00:00:00`);
@@ -126,9 +128,11 @@ export default function TncSimulationPage() {
     [dataDate, rangeDays],
   );
 
-  const lagDays = useMemo(() => computeStageLagDays(filteredItems), [filteredItems]);
+  // S1: compute lag from the full population (not the team-filtered subset).
+  // Otherwise small teams silently fall below n=5 and learned mode degrades to optimistic.
+  const lagDays = useMemo(() => computeStageLagDays(items), [items]);
   const opts: SimOptions = useMemo(
-    () => ({ mode: delayMode, dataDate, lagDays }),
+    () => ({ mode: delayMode, dataDate, lagDays, enforceSequential: true }),
     [delayMode, dataDate, lagDays],
   );
 
@@ -148,15 +152,26 @@ export default function TncSimulationPage() {
   );
 
   const goRawRemaining = (stage: TncSimStage) => {
+    // B2: route to SubtestList using the new generic "remaining" filter so
+    // it works for all 4 stages (incl. R1/R2A) and means
+    // "stage's actual completion not reached by <asOf>".
     const sp = new URLSearchParams({
       source: 'simulation',
-      stage,
-      asOf: targetIso,
-      overdue: 'true',
+      remaining_stage: stage,
+      remaining_asof: targetIso,
     });
     if (teamFilter !== 'all') sp.set('team', teamFilter);
     navigate(`/tc/raw-data?${sp.toString()}`);
   };
+
+  const forecastSubLabel = (() => {
+    switch (delayMode) {
+      case 'optimistic':  return 'not-done · planned ≤ target';
+      case 'shift-today': return 'not-done · planned (or today) ≤ target';
+      case 'penalty':     return 'not-done · on-time planned ≤ target';
+      case 'learned':     return 'not-done · planned + lag ≤ target';
+    }
+  })();
 
   return (
     <div className="flex flex-col gap-4 p-4">
