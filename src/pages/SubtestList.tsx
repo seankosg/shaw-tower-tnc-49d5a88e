@@ -1332,9 +1332,13 @@ export default function SubtestList() {
   const urlDateFrom = searchParams.get('date_from');
   const urlDateTo = searchParams.get('date_to');
   const urlDateField = searchParams.get('date_field') as 'planned' | 'actual' | null;
-  const urlStage = searchParams.get('stage') as 'pred' | 't1' | 't2' | null;
+  const urlStage = searchParams.get('stage') as StageKey | null;
   const urlCellStatus = searchParams.get('cell_status') as TcStatus | null;
   const urlAsOf = searchParams.get('as_of');
+  // Simulation "View remaining →" links: show items whose <stage> actual
+  // completion has not been reached by <asof>.
+  const urlRemainingStage = searchParams.get('remaining_stage') as StageKey | null;
+  const urlRemainingAsOf = searchParams.get('remaining_asof');
   const localToday = todayIso();
   const delayAsOfDate = urlAsOf || dataDate || localToday;
 
@@ -1361,7 +1365,7 @@ export default function SubtestList() {
         const overdue = getAnyStageDelayedAsOf(r, OVERDUE_STAGES, delayAsOfDate);
         if (urlStatusFilter === 'overdue' && !overdue) return false;
         // 5-stage workflow: final completion = R2 Approved
-        if (urlStatusFilter === 'remaining' && isStageDone(r, 't2')) return false;
+        if (urlStatusFilter === 'remaining' && isStageDone(r, 'r2a')) return false;
         if (urlStatusFilter === 'at_risk') {
           if (overdue) return false;
           const within = (stage: StageKey) => {
