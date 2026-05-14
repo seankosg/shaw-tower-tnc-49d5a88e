@@ -830,6 +830,23 @@ export default function DocsWarrantyRawDataPage() {
       ),
     };
 
+    const deleteColumn: ColumnDef<WarrantyRow> = {
+      id: '__delete',
+      size: 44,
+      enableSorting: false,
+      enableColumnFilter: false,
+      enableResizing: false,
+      header: '',
+      cell: ({ row }) => (
+        <DocsRowDeleteButton
+          table="warranty_items"
+          id={row.original.id}
+          recordLabel={row.original.item_no != null ? String(row.original.item_no) : (row.original.warranted_item ?? null)}
+          onDeleted={() => reload()}
+        />
+      ),
+    };
+
     const dataFields = ALL_DATA_FIELDS as readonly string[];
 
     const dataColumns: ColumnDef<WarrantyRow>[] = dataFields.map((field) => {
