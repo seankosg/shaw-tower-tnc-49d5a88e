@@ -44,7 +44,6 @@ const defectNav = [
   { label: 'Raw Data', icon: Database, path: '/defects/raw-data' },
   { label: 'Import', icon: Upload, path: '/defects/import' },
   { label: 'Export', icon: Download, path: '/defects/export' },
-  { label: 'Defect Classification', icon: Tags, path: '/admin/classification' },
 ];
 
 const docsNav = [
@@ -59,6 +58,7 @@ const docsNav = [
 
 const adminNav = [
   { label: 'Admin', icon: Shield, path: '/admin' },
+  { label: 'Defect Classification', icon: Tags, path: '/admin/classification' },
 ];
 
 export function AppSidebar() {
