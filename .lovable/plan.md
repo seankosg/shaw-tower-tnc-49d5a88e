@@ -1,74 +1,36 @@
 ## 목표
+4개 Docs Raw Data 상세 페이지(Drawing/OMM/Warranty/Spare Part) 헤더에 권한 기반 삭제(soft delete) 버튼을 추가합니다. 라이트 페이지에서 사용 중인 `DocsRowDeleteButton` + `softDeleteDocsRow` 로직을 그대로 재사용합니다.
 
-Docs의 4개 Raw Data 화면(ABD, OMM, Warranty, Spare Part)에서 **개별 행을 삭제**할 수 있도록 합니다. 삭제된 행은 어떤 대시보드/통계/Export/상세 보기에도 다시 나타나지 않습니다.
-
-## 접근 방식: 소프트 삭제
-
-물리 삭제 대신 `is_active = false`로 표시합니다. 4개 테이블 모두 이미 `is_active boolean default true` 컬럼이 있고, RLS도 권한 검사를 갖추고 있어 별도 마이그레이션 없이 가능합니다.
-
-소프트 삭제로 가는 이유:
-- import 워커가 `document_no` / `sn` / `item_no`로 upsert를 하기 때문에 물리 삭제 후 재업로드 시 ID가 달라져 추적이 끊어집니다. 소프트 삭제는 동일 키 재업로드 시 부활(reactivate) 처리할 수 있습니다.
-- comments, change_log 등 외부 참조가 안전합니다.
+## 권한 규칙 (기존 `canEdit` 패턴과 동일)
+- 표시 대상 역할: `admin`, `superuser`, `d_superuser`, `senior_user`, `user`
+- `d_superuser`는 RLS에 의해 본인 team 행만 삭제 가능 (서버 측 강제 — UI에서는 일단 노출, 서버가 거절 시 토스트로 표시)
+- `guest`, `super_guest`에게는 버튼 숨김
 
 ## 변경 사항
 
-### 1. Raw Data 페이지에 삭제 액션 (4개 페이지)
+### 1) 4개 상세 페이지 공통 패턴
+`src/pages/docs/DocsDrawingDetailPage.tsx`, `DocsOMMDetailPage.tsx`, `DocsWarrantyDetailPage.tsx`, `DocsSparePartDetailPage.tsx`
 
-대상:
-- `src/pages/docs/DocsRawDataPage.tsx` (ABD, `docs_drawings`)
-- `src/pages/docs/DocsOMMRawDataPage.tsx` (`docs_omm`)
-- `src/pages/docs/DocsWarrantyRawDataPage.tsx` (`warranty_items`)
-- `src/pages/docs/DocsSparePartRawDataPage.tsx` (`docs_spare_part`)
+각 페이지 헤더 바(현재 Back 버튼 ↔ Save 버튼 영역)에 다음 추가:
+- `DocsRowDeleteButton` 컴포넌트를 Save 버튼 옆에 배치
+- `canDelete` (= 기존 `canEditRow`와 동일 역할 집합) 가 true 일 때만 렌더
+- props:
+  - `table`: 페이지별 테이블명 (`docs_drawings` / `docs_omm` / `warranty_items` / `docs_spare_part`)
+  - `id`: 현재 record id
+  - `recordLabel`: 페이지별 식별자 (Drawing=`document_no`, OMM=`document_no`, Warranty=`sn` 또는 `item_no`, Spare Part=`item_no`)
+  - `onDeleted`: 삭제 성공 시 `navigate(-1)` 또는 해당 Raw Data 목록으로 이동 + toast (이미 컴포넌트 내부에서 toast 처리됨)
 
-각 행의 액션 영역에 **Trash 아이콘 버튼**을 추가합니다.
-- 클릭 시 `AlertDialog`로 확인 ("Delete this row? This will hide it from all dashboards, exports, and reports. The row can be restored only by an admin.")
-- 확인 시 `update({ is_active: false, updated_by: user.id })` 실행
-- 성공 시 toast + 행을 즉시 목록에서 제거 (낙관적 업데이트)
-- 실패 시 toast 에러
+### 2) `DocsRowDeleteButton` 소폭 보강 (선택)
+- 상세 페이지에서는 아이콘만이 아닌 라벨 포함 변형이 더 자연스러움 → `variant?: 'icon' | 'button'` prop 추가, 기본은 기존 `icon` 유지하여 목록 사용처는 무변경. `'button'` 모드는 `Trash2` + "Delete" 라벨 + `variant="destructive"` outline 스타일.
 
-권한:
-- 기존 RLS의 UPDATE 권한과 동일하게 `admin / superuser / senior_user / user`는 전체 가능, `d_superuser`는 본인 팀 행만 가능
-- 클라이언트에서도 `useAuth`의 roles로 버튼 표시/비표시 (권한 없는 사용자는 버튼 숨김)
+### 3) 동작
+- 삭제 확인 다이얼로그는 기존 컴포넌트 그대로 사용 (영문 문구 유지 — 프로젝트 UI 라벨 규칙)
+- 성공 시:
+  - toast 노출
+  - 상세 페이지 닫기: `if (window.history.length > 1) navigate(-1); else navigate('/docs/<list>')`
+- 실패 시: 토스트로 사유 노출, 페이지 유지
 
-bulk 삭제는 이번 작업에서 제외 (필요 시 후속). 한 번에 한 행만 삭제.
-
-### 2. 모든 읽기 경로에 `is_active = true` 필터 보장 — 감사 및 보강
-
-이미 다음 경로는 `is_active=true` 필터가 있음:
-- 4개 Raw Data 페이지 본문 쿼리
-- `src/lib/docs-dashboard-data.ts` (Docs Dashboard)
-
-확인/보강 필요:
-- `src/lib/docs-executive-dashboard-data.ts` — `docs_drawings`, `docs_omm`, `warranty_items` 3개 쿼리
-- `src/pages/docs/DocsExportPage.tsx` — Export 쿼리 (XLSX 내보내기에서 삭제 행이 빠져야 함)
-- `src/lib/bulk-edit.ts`, `src/lib/bulk-actions.ts`, `src/lib/omm-bulk-actions.ts`, `src/lib/warranty-bulk-actions.ts` — 일괄편집 대상
-- `src/pages/docs/DocsAbdDetailPage.tsx`, `DocsOMMDetailPage.tsx`, `DocsWarrantyDetailPage.tsx`, `DocsSparePartDetailPage.tsx`, `DocsDrawingDetailPage.tsx` — 직접 ID 조회 시 `.eq('is_active', true)` 추가하여 삭제된 행은 404 처리
-- import 워커(`docs-import-workers.ts`, `WarrantyImportContext.tsx`)의 중복 검사 쿼리 — 여기는 **`is_active` 필터를 걸지 않음**(중복키 부활 위해 일부러). upsert 시 매칭되면 `is_active = true`로 자동 복구.
-
-### 3. 상세 페이지 직접 진입 차단
-
-소프트 삭제된 행의 상세 URL(예: `/docs/omm/<id>`)로 접근 시 "This record has been deleted" 메시지 + 목록으로 돌아가기 버튼 노출.
-
-### 4. (참고) "숨기기" 기능 검토
-
-코드베이스에는 `is_active=false` 토글 외에 별도 'Hide row' UI가 없습니다. 사용자가 언급한 "숨기기"는 아마 댓글 필터의 'Hide resubmissions' 또는 통계에서 사라지지 않는 과거 동작을 가리키는 것으로 보입니다. 위 2번 감사로 모든 통계/Export/대시보드에서 누락 없이 제외되도록 합니다.
-
-## 작업 파일 요약
-
-수정:
-- `src/pages/docs/DocsRawDataPage.tsx` — 행 삭제 버튼 + handler
-- `src/pages/docs/DocsOMMRawDataPage.tsx` — 행 삭제 버튼 + handler
-- `src/pages/docs/DocsWarrantyRawDataPage.tsx` — 행 삭제 버튼 + handler
-- `src/pages/docs/DocsSparePartRawDataPage.tsx` — 행 삭제 버튼 + handler
-- `src/lib/docs-executive-dashboard-data.ts` — `is_active=true` 필터 추가/검증
-- `src/pages/docs/DocsExportPage.tsx` — 같은 필터
-- 4개 상세 페이지 — 진입 시 deleted 처리 + 직접 fetch에 `is_active` 필터 추가
-- (선택) 새 헬퍼 `src/lib/docs-soft-delete.ts` — `softDeleteDocsRow(table, id, userId)` 단일 함수로 4개 페이지가 공유
-
-마이그레이션: 없음 (스키마 그대로 활용).
-
-## 사용자 확인 요청
-
-1. **소프트 삭제 방식**으로 진행해도 될까요? (위 사유로 권장)
-2. 삭제 가능 권한을 **현재 UPDATE 권한과 동일** (admin/superuser/senior/user/본인팀 d_superuser)하게 해도 될까요? 아니면 더 좁혀(예: admin/superuser만) 갈까요?
-3. 삭제된 행을 **복구하는 UI**(Admin 화면의 "Deleted records" 탭)는 이번 범위에 포함할까요, 아니면 후속 작업으로 미룰까요?
+## 영향 범위
+- 추가 마이그레이션 없음 (RLS/`is_active` 컬럼 기 적용)
+- 통계/대시보드/엑스포트는 직전 작업에서 `is_active=true` 필터가 이미 들어갔거나 본 작업 범위 외 (이번 PR에서는 detail UI 만 변경)
+- 데이터 로직 변경 없음, 순수 UI/권한 게이팅
