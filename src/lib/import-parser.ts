@@ -620,6 +620,7 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
     if (!item_no || !mos_code) continue;
 
     const pred = parsePredecessor(row.predecessor_status_raw);
+    const dp = pickSubtestDates(row);
     result.push({
       raw_row_no: parseInt(row.__row_no) || 0,
       raw_system_name: system,
@@ -630,9 +631,9 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
       description: row.description?.trim() || null,
       mos_code,
       subtest_id: row.subtest_id?.trim() || `${item_no}-${mos_code}`,
-      t1_planned_date: normalizeDate(row.t1_planned_date),
+      t1_planned_date: dp.dates.t1_planned_date,
       t1_status: normalizeStatus(row.t1_status),
-      t2_planned_date: normalizeDate(row.t2_planned_date),
+      t2_planned_date: dp.dates.t2_planned_date,
       t2_status: normalizeStatus(row.t2_status),
       predecessor_status_raw: pred.raw,
       pred_status: pred.status,
@@ -652,14 +653,15 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
           aconex_ref_no: aconexExplicit ?? r2.ref,
         };
       })(),
-      r1_target_submission_date: normalizeDate(row.r1_target_submission_date),
-      r1_actual_submission_date: normalizeDate(row.r1_actual_submission_date),
-      r2_target_submission_date: normalizeDate(row.r2_target_submission_date),
-      r2_actual_submission_date: normalizeDate(row.r2_actual_submission_date),
-      r2_target_approval_date: normalizeDate(row.r2_target_approval_date),
-      r2_actual_approval_date: normalizeDate(row.r2_actual_approval_date),
+      r1_target_submission_date: dp.dates.r1_target_submission_date,
+      r1_actual_submission_date: dp.dates.r1_actual_submission_date,
+      r2_target_submission_date: dp.dates.r2_target_submission_date,
+      r2_actual_submission_date: dp.dates.r2_actual_submission_date,
+      r2_target_approval_date: dp.dates.r2_target_approval_date,
+      r2_actual_approval_date: dp.dates.r2_actual_approval_date,
       remarks: row.remarks?.trim() || null,
       punchlist_comments: row.punchlist_comments?.trim() || null,
+      _dateWarnings: dp.warnings.length ? dp.warnings : undefined,
       ...extractCustomFields(row),
     });
   }
