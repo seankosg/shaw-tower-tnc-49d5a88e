@@ -25,6 +25,7 @@ import { TC_STATUS_OPTIONS, DATA_SOURCE_LABELS, ALL_TEAMS, TEAM_LABELS, REPORT_S
 import { cn } from '@/lib/utils';
 import { formatDdMmm } from '@/lib/format';
 import { getSubtestCache, setSubtestCache } from '@/lib/subtest-cache';
+import { compareItemNo } from '@/lib/item-no-sort';
 import { exportSubtestsToExcel, exportSubtestsToExcelBySubcontractor, exportSubtestsToZipBySubcontractor } from '@/lib/excel-export';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
