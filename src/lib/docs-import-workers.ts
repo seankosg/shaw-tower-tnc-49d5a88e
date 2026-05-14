@@ -606,6 +606,7 @@ export const ommAdapter: ImporterAdapter<ParsedOmmRow> = {
 // ============================================================================
 
 const SPARE_PART_TRACKED_FIELDS = [
+  'item_no',
   'level', 'sn_outline', 'category', 'sub_category', 'parent_item', 'spec_ref', 'material',
   'location', 'floor_level', 'item_type', 'specification', 'size',
   'spares_requirements', 'unit', 'spares_quantity', 'storage_area_required',
@@ -701,6 +702,7 @@ export const sparePartAdapter: ImporterAdapter<ParsedSparePartRow> = {
       const payload: Record<string, unknown> = {
         project_id: ctx.projectId,
         sn,
+        item_no: row.item_no,
         level: row.level,
         sn_outline: row.sn_outline,
         category: row.category,

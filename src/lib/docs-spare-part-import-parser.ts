@@ -26,6 +26,8 @@ export interface ParsedSparePartRow {
   sheetName: string;
   /** Stable identifier used for upsert. */
   sn: string;
+  /** Original system row index column (Excel "Item NO"). */
+  item_no: number | null;
   raw_sn: string | null;
   level: string | null;             // 'leaf' | 'parent' | 'sub-category' | 'category' | null
   sn_outline: string | null;
@@ -120,6 +122,9 @@ const FALLBACK_ALIASES: Record<string, string | 'skip'> = {
   'sn outline': 'sn_outline',
   'no': 'skip',
   'no.': 'skip',
+  'item no': 'item_no',
+  'item no.': 'item_no',
+  'item number': 'item_no',
   // Hierarchy
   'level': 'level',
   'category': 'category',
@@ -443,10 +448,14 @@ export async function parseSparePartExcel(
 
       const team = normalizeTeamValue(struct.team ?? null);
 
+      const itemNoRaw = struct.item_no != null ? String(struct.item_no).trim() : '';
+      const itemNoNum = itemNoRaw && /^-?\d+$/.test(itemNoRaw) ? Number(itemNoRaw) : null;
+
       rows.push({
         rawRowNo: r + 1,
         sheetName,
         sn,
+        item_no: itemNoNum,
         raw_sn: rawSn,
         level: struct.level ?? (kind === 'data' ? null : kind),
         sn_outline: struct.sn_outline ?? null,

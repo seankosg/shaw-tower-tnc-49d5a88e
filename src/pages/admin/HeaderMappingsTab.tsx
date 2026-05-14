@@ -130,7 +130,7 @@ const DOCS_OMM_FIELDS = [
 // Docs / Spare Part — full whitelist matching docs_spare_part columns
 const DOCS_SPARE_PART_FIELDS = [
   // Identification
-  'sn','sn_outline','category','sub_category','parent_item',
+  'item_no','sn','sn_outline','category','sub_category','parent_item',
   // Item spec
   'material','spec_ref','specification','size',
   'level','floor_level','location','item_type',
