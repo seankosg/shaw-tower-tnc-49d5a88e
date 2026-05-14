@@ -78,6 +78,7 @@ export default function PhotoOcrPanel({ disabled }: { disabled?: boolean }) {
   const [parseProgress, setParseProgress] = useState({ done: 0, total: 0 });
   const [applyProgress, setApplyProgress] = useState({ done: 0, total: 0 });
   const [summary, setSummary] = useState<{ updated: number; skipped: number; notFound: number; failed: number; rejectedBlocks: number } | null>(null);
+  const [previewItem, setPreviewItem] = useState<ReviewItem | null>(null);
 
   const addFiles = useCallback(async (incoming: File[]) => {
     const accepted = incoming.filter((f) => /^image\/(jpeg|jpg|png|webp)$/i.test(f.type));
