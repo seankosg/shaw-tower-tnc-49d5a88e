@@ -63,7 +63,7 @@ export function decideUpdate(
   return {
     kind: 'update',
     payload: {
-      actual_start_date: existing.actual_start_date ?? dataDate, // keep prior actual_start if any
+      actual_start_date: dataDate, // Photo OCR always sets start = data date
       actual_completion_date: dataDate,
       aconex_comments: mergeAconexComment(existing.aconex_comments, dataDate),
     },
