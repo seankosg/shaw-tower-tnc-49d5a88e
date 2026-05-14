@@ -143,8 +143,43 @@ function classifyStatus(
   return 'UR';
 }
 
+/**
+ * Determines which cycle a row is *currently* in. Each row is in exactly one
+ * cycle, so dashboard cards driven by this function never double-count rows.
+ *
+ * Mirrors the branching of `computeOmmStatus` in `docs-omm-status.ts`:
+ * receiving an A/B/C response on a cycle closes that cycle and advances the
+ * row to the next stage (A → Final, B/C → next sub).
+ */
+export type OmmCurrentCycle = 'sub1' | 'sub2' | 'sub3' | 'final' | 'closed' | 'rejected';
+
+const upper = (v: any) => String(v ?? '').trim().toUpperCase();
+
+export function currentOmmCycle(row: any): OmmCurrentCycle {
+  const fRes = upper(row?.final_response_status);
+  if (fRes === 'A') return 'closed';
+  if (fRes === 'B' || fRes === 'C') return 'rejected';
+  if (row?.final_actual_date || row?.final_planned_date) return 'final';
+
+  const s3Res = upper(row?.sub3_response_status);
+  if (s3Res === 'A' || s3Res === 'B' || s3Res === 'C') return 'final';
+  if (row?.sub3_actual_date || row?.sub3_planned_date) return 'sub3';
+
+  const s2Res = upper(row?.sub2_response_status);
+  if (s2Res === 'A') return 'final';
+  if (s2Res === 'B' || s2Res === 'C') return 'sub3';
+  if (row?.sub2_actual_date || row?.sub2_planned_date) return 'sub2';
+
+  const s1Res = upper(row?.sub1_response_status);
+  if (s1Res === 'A') return 'final';
+  if (s1Res === 'B' || s1Res === 'C') return 'sub2';
+
+  return 'sub1';
+}
+
 function computeBuckets(
   rows: any[],
+  cycleFilter: OmmCurrentCycle,
   actualKey: string,
   respKey: string,
   respDateKey: string,
@@ -152,6 +187,7 @@ function computeBuckets(
 ): OmmSubStatusBuckets {
   const out: OmmSubStatusBuckets = { A: 0, B: 0, C: 0, UR: 0, TBS: 0, total: 0 };
   for (const r of rows) {
+    if (currentOmmCycle(r) !== cycleFilter) continue;
     out.total++;
     const bucket = classifyStatus(r, actualKey, respKey, respDateKey, nextSignalKeys);
     out[bucket]++;
@@ -160,16 +196,22 @@ function computeBuckets(
 }
 
 export function computeOmmSub1StatusBuckets(rows: any[]): OmmSub1StatusBuckets {
-  return computeBuckets(rows, 'sub1_actual_date', 'sub1_response_status', 'sub1_response_date', SUB1_NEXT_SIGNALS);
+  return computeBuckets(rows, 'sub1', 'sub1_actual_date', 'sub1_response_status', 'sub1_response_date', SUB1_NEXT_SIGNALS);
 }
 export function computeOmmSub2StatusBuckets(rows: any[]): OmmSub2StatusBuckets {
-  return computeBuckets(rows, 'sub2_actual_date', 'sub2_response_status', 'sub2_response_actual_date', SUB2_NEXT_SIGNALS);
+  return computeBuckets(rows, 'sub2', 'sub2_actual_date', 'sub2_response_status', 'sub2_response_actual_date', SUB2_NEXT_SIGNALS);
 }
 
-export function classifyOmmSub1Status(row: any): OmmStatusBucketKey {
+/**
+ * Returns null when the row is not currently in the Sub1 cycle, so dashboard
+ * filter / drill-down logic can exclude it from the Sub1 Status bucket.
+ */
+export function classifyOmmSub1Status(row: any): OmmStatusBucketKey | null {
+  if (currentOmmCycle(row) !== 'sub1') return null;
   return classifyStatus(row, 'sub1_actual_date', 'sub1_response_status', 'sub1_response_date', SUB1_NEXT_SIGNALS);
 }
-export function classifyOmmSub2Status(row: any): OmmStatusBucketKey {
+export function classifyOmmSub2Status(row: any): OmmStatusBucketKey | null {
+  if (currentOmmCycle(row) !== 'sub2') return null;
   return classifyStatus(row, 'sub2_actual_date', 'sub2_response_status', 'sub2_response_actual_date', SUB2_NEXT_SIGNALS);
 }
 
