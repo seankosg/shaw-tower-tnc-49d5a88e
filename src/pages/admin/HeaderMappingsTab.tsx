@@ -127,11 +127,27 @@ const DOCS_OMM_FIELDS = [
   'skip',
 ] as const;
 
-// Docs / Spare Part (placeholder — fields to be defined)
+// Docs / Spare Part — full whitelist matching docs_spare_part columns
 const DOCS_SPARE_PART_FIELDS = [
-  'sn','category','parent_item','material','spec_ref',
+  // Identification
+  'sn','sn_outline','category','sub_category','parent_item',
+  // Item spec
+  'material','spec_ref','specification','size',
+  'level','floor_level','location','item_type',
+  // Spare requirements
   'spares_requirements','unit','spares_quantity','storage_area_required',
-  'subcontractor_name','hdec_pic_name','hdec_eng_name','status','remarks',
+  // Procurement / dates
+  'material_lead_time',
+  'planned_confirm_date','actual_confirm_date',
+  'direction_to_subcon_date','eta_date',
+  'planned_po_date','actual_po_date','po_status',
+  'planned_delivery_date','actual_delivery_date',
+  // Assignment
+  'team','trade','subcontractor_name','hdec_pic_name','hdec_eng_name',
+  // Status / notes
+  'status','remarks',
+  // Pseudo-target for ignoring system/derived columns on import
+  'skip',
 ] as const;
 
 // Docs sub-modules registry — add new sub-modules here to auto-register a tab.
