@@ -130,7 +130,7 @@ export function exportScheduleToExcel(
   const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
   const fileTs = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
 
-  const ALL_STAGES: ScheduleStage[] = ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'];
+  const ALL_STAGES: ScheduleStage[] = ['pred', 't1', 't2', 'r1', 'r2s'];
   const stagesSelected: ScheduleStage[] =
     stageFilter === 'all'
       ? ALL_STAGES
