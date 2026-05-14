@@ -1456,7 +1456,7 @@ export default function DefectRawDataPage() {
         pending={criticalPending}
         table="defect_items"
         onApplied={(applied) => {
-          setItems((prev) => prev.map((r) => (applied.has(r.id) ? ({ ...r, is_critical: applied.get(r.id)! } as any) : r)));
+          applied.forEach((val, id) => patchDefectCacheLocal([id], { is_critical: val } as any));
           setCriticalPending(new Map());
         }}
         onDiscard={() => setCriticalPending(new Map())}
