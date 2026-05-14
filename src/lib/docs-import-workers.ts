@@ -681,8 +681,13 @@ export const sparePartAdapter: ImporterAdapter<ParsedSparePartRow> = {
       const pushLog = (args: Parameters<typeof buildFieldLog>[1]) => fieldLogs.push(buildFieldLog('docs', args));
 
       const sn = row.sn ? String(row.sn).trim() : '';
-      // Need at least one of material / spares_requirements / spares_quantity.
-      if (!sn || (!row.material && !row.spares_requirements && !row.spares_quantity && !row.parent_item)) {
+      // Need at least one piece of meaningful content. Category/parent/subcategory
+      // header rows are accepted on their own (they carry context).
+      const hasContent =
+        row.material || row.spares_requirements || row.spares_quantity ||
+        row.parent_item || row.sub_category ||
+        row.level === 'category' || row.level === 'parent' || row.level === 'subcategory';
+      if (!sn || !hasContent) {
         counters.skipped++;
         pushLog({ rawRowNo: row.rawRowNo, field: '__row__', outcome: 'skipped_empty',
           raw: null, code: 'empty_row', detail: 'Row has no spare-part data' });
@@ -697,8 +702,11 @@ export const sparePartAdapter: ImporterAdapter<ParsedSparePartRow> = {
       const payload: Record<string, unknown> = {
         project_id: ctx.projectId,
         sn,
+        sn_outline: row.sn_outline,
+        level: row.level,
         category: row.category,
         parent_item: row.parent_item,
+        sub_category: row.sub_category,
         spec_ref: row.spec_ref,
         material: row.material,
         spares_requirements: row.spares_requirements,
