@@ -150,21 +150,29 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'tool_args_unparseable', detail: String(e) }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Light post-processing: strip non-digits from issue_no, drop empties, clamp confidence.
+    // Light post-processing: strip non-digits from issue_no, drop empties, clamp confidence,
+    // clamp caption_y_normalized to [0,1], and sort top-to-bottom.
     const cleanGroups: OcrGroup[] = (parsed.groups || [])
       .map((g) => {
         const digits = String(g.issue_no ?? '').replace(/\D+/g, '').replace(/^0+(\d)/, '$1');
+        const rawY = (g as any).caption_y_normalized;
+        const y = typeof rawY === 'number' && isFinite(rawY) ? Math.max(0, Math.min(1, rawY)) : null;
         return {
           issue_no: digits,
           caption_raw: String(g.caption_raw ?? ''),
           sender: g.sender ?? null,
           timestamp_text: g.timestamp_text ?? null,
           confidence: Math.max(0, Math.min(1, Number(g.confidence ?? 0))),
-          bbox_normalized: g.bbox_normalized ?? null,
+          caption_y_normalized: y,
           notes: g.notes ?? null,
         } satisfies OcrGroup;
       })
-      .filter((g) => g.issue_no.length > 0);
+      .filter((g) => g.issue_no.length > 0)
+      .sort((a, b) => {
+        const ay = a.caption_y_normalized ?? Number.POSITIVE_INFINITY;
+        const by = b.caption_y_normalized ?? Number.POSITIVE_INFINITY;
+        return ay - by;
+      });
 
     return new Response(JSON.stringify({
       groups: cleanGroups,
