@@ -289,6 +289,15 @@ export default function DocsOMMDetailPage() {
         <Button variant="outline" size="sm" onClick={() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' })}>
           <MessageSquare className="h-4 w-4 mr-1" /> Comments
         </Button>
+        {canEditRow && (
+          <DocsRowDeleteButton
+            variant="button"
+            table="docs_omm"
+            id={row.id}
+            recordLabel={row.sn ?? row.document_no ?? null}
+            onDeleted={() => navigate('/docs/omm')}
+          />
+        )}
       </div>
 
       {readOnlyReason && (
