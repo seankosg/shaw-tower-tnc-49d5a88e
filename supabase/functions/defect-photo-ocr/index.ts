@@ -50,17 +50,7 @@ const EXTRACT_TOOL = {
               sender: { type: 'string' },
               timestamp_text: { type: 'string' },
               confidence: { type: 'number' },
-              bbox_normalized: {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                  x: { type: 'number' },
-                  y: { type: 'number' },
-                  w: { type: 'number' },
-                  h: { type: 'number' },
-                },
-                required: ['x', 'y', 'w', 'h'],
-              },
+              caption_y_normalized: { type: 'number', description: 'Vertical center (0..1) of the numeric caption text.' },
               notes: { type: 'string' },
             },
             required: ['issue_no', 'caption_raw', 'confidence'],
