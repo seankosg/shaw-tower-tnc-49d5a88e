@@ -458,13 +458,20 @@ export default function PhotoOcrPanel({ disabled }: { disabled?: boolean }) {
               const style = decisionStyles[it.decision];
               return (
                 <div key={it.rowKey} className={`flex items-start gap-3 rounded-md border p-2 ${it.excluded ? 'opacity-50' : ''}`}>
-                  {it.cropDataUrl ? (
-                    <img src={it.cropDataUrl} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
-                  ) : (
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
-                      <Eye className="h-5 w-5" />
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setPreviewItem(it)}
+                    className="h-16 w-16 shrink-0 overflow-hidden rounded ring-1 ring-border hover:ring-primary"
+                    title="Click to view full screenshot"
+                  >
+                    {it.cropDataUrl ? (
+                      <img src={it.cropDataUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
+                        <Eye className="h-5 w-5" />
+                      </div>
+                    )}
+                  </button>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[10px] text-muted-foreground">Issue No:</span>
