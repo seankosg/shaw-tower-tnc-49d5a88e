@@ -118,6 +118,9 @@ function summarizeSort<TRow>(table: Table<TRow>, fieldConfig: FieldConfigRow[]):
 const DATE_COLUMN_IDS = new Set([
   't1_planned_date', 't1_actual_date',
   't2_planned_date', 't2_actual_date',
+  'r1_target_submission_date', 'r1_actual_submission_date',
+  'r2_target_submission_date', 'r2_actual_submission_date',
+  'r2_target_approval_date', 'r2_actual_approval_date',
 ]);
 
 function formatCellValue<TRow>(row: Row<TRow>, col: Column<TRow, unknown>): string {
