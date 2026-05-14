@@ -341,6 +341,16 @@ export default function DefectSimulationPage() {
                       <span className="text-xs text-muted-foreground">predicted</span>
                     </div>
                     <QtyVsPlanBanner count={r.behindNowCount} pct={r.behindNowPct} dataDate={dataDate} />
+                    {r.delayedCount > 0 && (
+                      <div className="mt-2 flex items-center gap-1 rounded-sm bg-rose-50 px-2 py-1 text-[11px] text-rose-700 dark:bg-rose-950/30 dark:text-rose-400">
+                        <AlertTriangle className="h-3 w-3" />
+                        {r.delayedCount} delayed ·{' '}
+                        {delayMode === 'optimistic' && 'kept at original planned date'}
+                        {delayMode === 'shift-today' && `shifted to ${dataDate}`}
+                        {delayMode === 'penalty' && 'excluded from forecast'}
+                        {delayMode === 'learned' && `shifted +${Math.round(lagDays[st] ?? 0)}d (avg lag)`}
+                      </div>
+                    )}
                     <ToAchieveBand
                       doneActual={r.doneActual}
                       predicted={r.predicted}
@@ -362,16 +372,6 @@ export default function DefectSimulationPage() {
                       />
                       <Stat label="Forecast new" value={`${r.forecast}`} sub={forecastSub} />
                     </div>
-                    {r.delayedCount > 0 && (
-                      <div className="mt-2 flex items-center gap-1 rounded-sm bg-rose-50 px-2 py-1 text-[11px] text-rose-700 dark:bg-rose-950/30 dark:text-rose-400">
-                        <AlertTriangle className="h-3 w-3" />
-                        {r.delayedCount} delayed ·{' '}
-                        {delayMode === 'optimistic' && 'kept at original planned date'}
-                        {delayMode === 'shift-today' && `shifted to ${dataDate}`}
-                        {delayMode === 'penalty' && 'excluded from forecast'}
-                        {delayMode === 'learned' && `shifted +${Math.round(lagDays[st] ?? 0)}d (avg lag)`}
-                      </div>
-                    )}
                     {r.noPlan > 0 && (
                       <div className="mt-2 flex items-center gap-1 rounded-sm bg-amber-50 px-2 py-1 text-[11px] text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
                         <AlertTriangle className="h-3 w-3" />
