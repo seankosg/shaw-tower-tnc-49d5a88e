@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { SPARE_PART_STATUS_BADGE_VARIANT, normalizeSparePartStatus } from '@/lib/docs-spare-part-status';
+import { DocsRowDeleteButton } from '@/components/docs/DocsRowDeleteButton';
 
 interface SparePartRow {
   id: string;
