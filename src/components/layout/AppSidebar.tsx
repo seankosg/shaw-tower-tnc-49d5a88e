@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut, ClipboardList, Tags,
-  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical,
+  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical, Loader2,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { APP_NAME } from '@/lib/constants';
 import { useAuth } from '@/contexts/AuthContext';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
+import { usePhotoOcr } from '@/contexts/PhotoOcrContext';
 import { canAccessRoute, filterNavItems } from '@/lib/role-permissions';
 import { getRememberedRoute } from '@/hooks/useRouteMemory';
 import type { AppRole } from '@/types/enums';
