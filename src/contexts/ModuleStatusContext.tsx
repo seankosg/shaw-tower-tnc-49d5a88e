@@ -45,7 +45,7 @@ function serializeStatus(s: ModuleStatus): Record<string, unknown> {
 export function ModuleStatusProvider({ children }: { children: ReactNode }) {
   const [tnc, setTnc] = useState<ModuleStatus>(DEFAULT_STATUS);
   const [defect, setDefect] = useState<ModuleStatus>(DEFAULT_STATUS);
-  const [docs, setDocs] = useState<ModuleStatus>(DEFAULT_DOCS_STATUS);
+  const [docs, setDocs] = useState<ModuleStatus>(DEFAULT_STATUS);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
