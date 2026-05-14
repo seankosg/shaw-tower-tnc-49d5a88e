@@ -228,6 +228,33 @@ export async function callPhotoOcr(imageDataUrl: string): Promise<OcrEdgeRespons
   return data as OcrEdgeResponse;
 }
 
+export interface OcrCropResponse {
+  issue_no: string;
+  caption_raw: string;
+  confidence: number;
+  model: string;
+}
+
+/** Pass-2 OCR: re-OCR a single cropped photo group to verify its issue_no. */
+export async function callPhotoOcrCrop(imageDataUrl: string): Promise<OcrCropResponse> {
+  const { data, error } = await supabase.functions.invoke('defect-photo-ocr-crop', {
+    body: { image_data_url: imageDataUrl },
+  });
+  if (error) throw error;
+  return data as OcrCropResponse;
+}
+
+/** Convenience: pull the caption bbox/center from an OcrGroup into the shape computeGroupBands accepts. */
+export function captionLocOf(g: OcrGroup): CaptionLoc {
+  if (typeof g.caption_y_top === 'number' && typeof g.caption_y_bottom === 'number') {
+    return { y_top: g.caption_y_top, y_bottom: g.caption_y_bottom };
+  }
+  if (typeof g.caption_y_normalized === 'number') {
+    return { y_center: g.caption_y_normalized };
+  }
+  return null;
+}
+
 export async function fetchActiveProjectId(): Promise<string | null> {
   const { data } = await (supabase as any)
     .from('projects')
