@@ -1,66 +1,33 @@
-## 문제 진단
+## 목표
+Photo OCR 업로드/Parse/Apply 진행 중에 사이드바 다른 메뉴로 이동했다가 `/defects/import`로 돌아와도, 진행 중인 작업과 화면 상태(파일 목록·썸네일·진행률·리뷰 테이블·Summary)가 그대로 유지되도록 한다.
 
-- OCR이 읽어내는 issue_no 자체는 정확합니다 (사용자 확인). 어긋나는 건 **각 review row 옆의 thumbnail crop**입니다.
-- 현재 `cropFromDataUrl()`는 모델이 반환한 `bbox_normalized`(group 전체 영역)를 그대로 사용합니다.
-- WhatsApp UI에서 한 그룹 = 헤더(보낸사람) + 사진 콜라주 + 캡션 + 시간 입니다. Gemini가 이 4개 요소가 모두 들어간 박스를 group마다 반환하는데, **두 번째 그룹부터는 박스가 위쪽 그룹의 캡션 영역까지 침범**하는 식으로 한 칸씩 밀리고 있습니다. 이는 비전 모델의 bbox 좌표 정확도 한계(특히 세로로 긴 스크린샷)에서 흔한 현상입니다.
-- 결국 "번호는 맞는데 썸네일은 다음 그룹의 사진을 보여주는" 형태가 됩니다.
+## 원인
+현재 `PhotoOcrPanel.tsx`가 모든 상태(`files`, `reviewItems`, `parseProgress`, `applyProgress`, `summary`, `dataDate`, `phase`, `previewItem`)를 컴포넌트 로컬 `useState`로 보관한다. 라우트를 떠나면 컴포넌트가 언마운트되며 상태가 소실되고, 진행 중이던 `for` 루프는 더 이상 UI에 반영되지 않는다.
 
-## 해결 방향
+## 변경 사항
 
-bbox에 의존하지 않고, **OCR 결과를 위→아래 순서로 신뢰**하되 client에서 직접 썸네일 영역을 결정합니다.
+### 1. 새 파일: `src/contexts/PhotoOcrContext.tsx`
+- `PhotoOcrProvider`가 기존 `PhotoOcrPanel`의 모든 state를 끌어올려 보관
+  - `dataDate, phase, files, reviewItems, parseProgress, applyProgress, summary, previewItem`
+- 실행 함수도 컨텍스트로 이전: `addFiles, removeFile, clearAll, runParse, reMatchOne, updateItem, runApply, setDataDate, setPreviewItem`
+- `runParse`/`runApply`의 비동기 루프는 컨텍스트 내부에서 setter를 호출 → Provider가 마운트된 상태이면 패널이 사라져도 진행 계속
+- `usePhotoOcr()` 훅 export
 
-### 1) Edge function — bbox 대신 caption_y_normalized 만 받기
+### 2. `src/App.tsx`
+- 81번 라인의 `<DefectImportProvider>` 안쪽에 `<PhotoOcrProvider>` 래핑 추가 (인증된 사용자 전체 트리에서 살아있도록)
 
-`supabase/functions/defect-photo-ocr/index.ts` 시스템 프롬프트와 tool schema 변경:
+### 3. `src/components/import/PhotoOcrPanel.tsx`
+- 모든 `useState` 제거 → `usePhotoOcr()` 훅에서 값/액션 구독
+- JSX/UI는 그대로 유지 (시각적 변경 없음)
+- `inputRef`만 컴포넌트 로컬 유지
 
-- 출력에서 `bbox_normalized` 제거.
-- 새 필드 `caption_y_normalized: number (0..1)` — **숫자 캡션 텍스트의 세로 중심 위치**만 추정해서 반환 (모델이 가장 정확하게 짚을 수 있는 단일 좌표).
-- groups 배열은 반드시 **세로 순서(위→아래)**로 정렬된 상태로 반환하도록 명시.
+### 4. `src/components/layout/AppSidebar.tsx`
+- `usePhotoOcr()`로 phase 구독, `phase === 'parsing' | 'applying'`이면 "Defect Import" 메뉴 옆에 작은 spinner + `done/total` 배지 표시 → 백그라운드 작업이 돌고 있음을 시각화
 
-이 한 점만 받으면 클라이언트가 인접 그룹과의 중간선을 이용해 안정적으로 그룹 영역을 산출할 수 있습니다.
+### 5. 테스트: `src/test/photo-ocr-context.test.ts` (신규)
+- Provider 단독으로 `runParse` 호출 후 컨슈머를 언마운트해도 진행이 끝까지 가는지 확인 (`callPhotoOcr`/`fetchExistingDefects` mock)
 
-### 2) Client — caption y 사이의 중간선으로 그룹 band 자동 산출
-
-`src/lib/defect-photo-ocr.ts`에 새 헬퍼:
-
-```text
-computeGroupBands(captionYs: number[], imageHeightPx, padTop=0.06, padBottom=0.02)
-  -> Array<{ yTop, yBottom }>  // normalized
-```
-
-규칙:
-- `top[i]`  = (`captionY[i-1]` + `captionY[i]`) / 2  (첫 그룹은 max(0, captionY[0]-0.18))
-- `bottom[i]` = (`captionY[i]` + `captionY[i+1]`) / 2  (마지막 그룹은 min(1, captionY[i]+0.04))
-- 결과는 인접 그룹 간 영역이 **겹치지 않게** 자동 분할되므로, 모델 bbox가 한 칸 밀려도 영향 없음.
-
-`cropFromDataUrl`은 그대로 두고 위 band의 `{ x:0, y:yTop, w:1, h:yBottom-yTop }`을 넘겨 잘라냅니다.
-
-### 3) PhotoOcrPanel — 새 좌표 시스템 사용
-
-`src/components/import/PhotoOcrPanel.tsx`:
-- `OcrGroup` 타입의 `bbox_normalized` 자리에 `caption_y_normalized?: number` 사용 (또는 둘 다 받되 caption_y 우선).
-- parse 후, **파일 단위로** 그 파일의 모든 group의 caption_y 배열을 모아 `computeGroupBands(...)`로 band 계산 → 각 ReviewItem의 cropDataUrl 생성.
-- caption_y가 없는 group(구버전 응답)에는 전체 이미지 썸네일을 보여줍니다 (현재처럼 빈 영역 X).
-
-### 4) UX 안전망 — 썸네일 클릭 시 전체 스크린샷 미리보기
-
-크롭 정확도가 100%일 수 없으므로, 썸네일을 클릭하면 dialog로 **원본 스크린샷 전체**를 띄우고 해당 caption_y 위치에 가로 강조선을 표시합니다. 이렇게 하면 사용자가 "이 번호가 진짜로 이 사진의 캡션이 맞는지" 한 번에 확인할 수 있어 실수가 차단됩니다. (shadcn `Dialog` 재사용)
-
-### 5) 테스트
-
-`src/test/defect-photo-ocr.test.ts`에 `computeGroupBands` 단위 테스트 4개 추가:
-- 1개 group → top/bottom이 0~1 안에서 caption 주변으로 잡힘
-- 3개 group → 인접 band가 겹치지 않고, midline 계산이 정확
-- caption_y가 정렬되지 않은 입력 → 자동 정렬 후 계산
-- 동일 caption_y 두 개의 엣지 케이스 → 0 두께 band 방지(min height 적용)
-
-빌드(`tsc --noEmit`) + 기존 테스트 + 신규 테스트 전부 통과 확인.
-
-## 변경 파일 요약
-
-- `supabase/functions/defect-photo-ocr/index.ts` — schema/prompt에서 bbox 제거, caption_y_normalized 추가, "groups를 위→아래 순서로" 명시
-- `src/lib/defect-photo-ocr.ts` — `OcrGroup` 타입 갱신, `computeGroupBands()` 추가
-- `src/components/import/PhotoOcrPanel.tsx` — band 기반 크롭, 썸네일 클릭 시 원본 dialog
-- `src/test/defect-photo-ocr.test.ts` — `computeGroupBands` 테스트 추가
-
-DB 스키마 / 권한 / 매칭 로직은 변경 없습니다. 사진은 여전히 메모리에서만 처리되고 저장되지 않습니다.
+## 한계 (사용자에게 안내)
+- 라우트 이동(앱 내 SPA 네비게이션)은 OK.
+- 브라우저 새로고침/탭 닫기/다른 사이트 이동 시에는 메모리에 있던 사진이 사라져 작업이 중단됨. `beforeunload` 핸들러로 확인 다이얼로그를 띄워 실수 방지.
+- 실제 DB 백그라운드 잡으로 만들려면 별도 워커/서버사이드 작업이 필요(이번 범위 외).
