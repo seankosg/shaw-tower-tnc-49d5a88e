@@ -86,6 +86,7 @@ export const DOCS_DEFAULT_FIELD_LABELS: Record<string, string> = {
   final_response_status: 'Final Response Status',
   current_stage: 'Stage',
   // Spare Part labels
+  item_no: 'Item No',
   level: 'Level',
   sn_outline: 'S/N Outline',
   sub_category: 'Sub-category',
