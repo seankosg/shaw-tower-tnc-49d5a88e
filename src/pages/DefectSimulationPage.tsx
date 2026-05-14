@@ -21,11 +21,10 @@ import { cn } from '@/lib/utils';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { useLatestDataDate } from '@/hooks/useLatestDataDate';
 import { useCommonMasters } from '@/hooks/useCommonMasters';
-import { type DefectItem, todayIso } from '@/lib/defect-utils';
+import { type DefectItem } from '@/lib/defect-utils';
 import {
   ALL_DEFECT_STAGE_KEYS,
   DEFECT_STAGE_LABELS,
-  addDays,
   type DefectScheduleStage,
 } from '@/lib/defect-schedule-utils';
 import {
