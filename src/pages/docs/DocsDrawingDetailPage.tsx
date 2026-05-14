@@ -18,6 +18,7 @@ import { computeRisk } from '@/lib/docs-risk';
 import { computeOverallStatus, computeIsClosed, clearCyclesAfterClosure, applyCycleAutoFill, CYCLE_DATA_FIELDS } from '@/lib/docs-status';
 import { TRADE_OPTIONS, resolveTrade } from '@/lib/docs-trade';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
+import { DocsRowDeleteButton } from '@/components/docs/DocsRowDeleteButton';
 import { formatDateTimeDdMmmYyyy, formatDdMmmYyyy } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
