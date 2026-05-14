@@ -104,12 +104,16 @@ export interface StageSimResult {
   forecast: number;       // count whose effective forecast date ≤ target
   predicted: number;
   planOnly: number;       // ALL items whose ORIGINAL planned ≤ target (mode-independent)
+  planAtDataDate: number; // ALL items whose ORIGINAL planned ≤ dataDate
   noPlan: number;
   delayedCount: number;   // not-done items with planned < dataDate (mode-independent)
   predictedPct: number;
   planPct: number;
+  planAtDataDatePct: number;
   actualPct: number;
-  gapPct: number;
+  gapPct: number;          // predicted − plan @ target
+  behindNowPct: number;    // actual − planAtDataDate (negative = behind)
+  behindNowCount: number;  // doneActual − planAtDataDate
 }
 
 export function simulateDefectStageAt(
@@ -122,6 +126,7 @@ export function simulateDefectStageAt(
   let doneActual = 0;
   let forecast = 0;
   let planOnly = 0;
+  let planAtDataDate = 0;
   let noPlan = 0;
   let delayedCount = 0;
 
@@ -133,6 +138,7 @@ export function simulateDefectStageAt(
     const done = isDefectStageDone(it, stage);
 
     if (planned && planned <= targetDate) planOnly++;
+    if (planned && planned <= opts.dataDate) planAtDataDate++;
 
     if (done) {
       // B1 fix: status-only done rows (closure_status='Done' / status='closed' /
@@ -160,12 +166,16 @@ export function simulateDefectStageAt(
     forecast,
     predicted,
     planOnly,
+    planAtDataDate,
     noPlan,
     delayedCount,
     predictedPct: round1(pct(predicted)),
     planPct: round1(pct(planOnly)),
+    planAtDataDatePct: round1(pct(planAtDataDate)),
     actualPct: round1(pct(doneActual)),
     gapPct: round1(pct(predicted) - pct(planOnly)),
+    behindNowPct: round1(pct(doneActual) - pct(planAtDataDate)),
+    behindNowCount: doneActual - planAtDataDate,
   };
 }
 
