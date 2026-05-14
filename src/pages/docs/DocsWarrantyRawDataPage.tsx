@@ -911,12 +911,12 @@ export default function DocsWarrantyRawDataPage() {
       };
     });
 
-    return [selectColumn, expandColumn, cycleColumn, ...dataColumns, statusColumn, openColumn];
-  }, [getLabel, navigate, childCounts, collapsedParents, toggleParent, commentCounts]);
+    return [selectColumn, expandColumn, cycleColumn, ...dataColumns, statusColumn, openColumn, deleteColumn];
+  }, [getLabel, navigate, childCounts, collapsedParents, toggleParent, commentCounts, reload]);
 
   // ── Visibility from Field Config (always show anchors) ──
   const ALWAYS_VISIBLE = useMemo(() => new Set([
-    '__select', '__expand', '__open', 'item_no', 'cycle_progress', 'current_status',
+    '__select', '__expand', '__open', '__delete', 'item_no', 'cycle_progress', 'current_status',
   ]), []);
 
   const columnVisibility = useMemo<VisibilityState>(() => {
@@ -933,7 +933,7 @@ export default function DocsWarrantyRawDataPage() {
   // Column order from Field Config sort_order with pinned anchors
   const columnOrder = useMemo(() => {
     const PINNED = ['__select', '__expand', 'cycle_progress', 'item_no'];
-    const TRAILING = ['current_status', '__open'];
+    const TRAILING = ['current_status', '__open', '__delete'];
     const remaining = (ALL_DATA_FIELDS as readonly string[]).filter(
       (f) => !PINNED.includes(f) && !TRAILING.includes(f),
     );
