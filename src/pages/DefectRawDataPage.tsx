@@ -430,38 +430,8 @@ export default function DefectRawDataPage() {
   };
 
   const reload = useCallback(async () => {
-    setLoading(true);
-    let allRows: DefectRawRow[] = [];
-    const pageSize = 1000;
-    let from = 0;
-    let hasMore = true;
-    while (hasMore) {
-      const { data } = await (supabase as any)
-        .from('defect_items')
-        .select('*')
-        .eq('is_active', true)
-        .order('issue_no', { ascending: true })
-        .range(from, from + pageSize - 1);
-      if (data?.length) {
-        allRows = allRows.concat(data as DefectRawRow[]);
-        from += pageSize;
-        hasMore = data.length === pageSize;
-      } else {
-        hasMore = false;
-      }
-    }
-    setItems(allRows);
-    setLoading(false);
+    refreshDefectCache();
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      await reload();
-      if (cancelled) return;
-    })();
-    return () => { cancelled = true; };
-  }, [reload]);
 
   // Load comment summary (count + unread) for visible defects, and refresh on realtime changes
   useEffect(() => {
