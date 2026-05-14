@@ -20,7 +20,6 @@ import {
 import { cn } from '@/lib/utils';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { useLatestSubtestDataDate } from '@/hooks/useLatestSubtestDataDate';
-import { todayIso } from '@/lib/stage-metrics';
 import type { SubtestForDashboard } from '@/lib/dashboard-utils';
 import {
   ALL_TNC_SIM_STAGES,
