@@ -7,6 +7,7 @@ import { ToAchieveBand } from '@/components/simulation/ToAchieveBand';
 import { QtyVsPlanBanner } from '@/components/simulation/QtyVsPlanBanner';
 
 import { supabase } from '@/integrations/supabase/client';
+import { useDefectCache, refreshDefectCache } from '@/lib/defect-cache';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
