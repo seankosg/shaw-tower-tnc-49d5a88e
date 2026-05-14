@@ -20,21 +20,47 @@ interface OcrGroup {
 }
 interface OcrRejected { reason: string; y_range?: [number, number] }
 
-const SYSTEM_PROMPT = `You analyze WhatsApp chat screenshots from a construction site channel where a field engineer (often "Kumar(mep)" or similar mep/elec/mech staff) sends photo groups followed by a numeric caption that is the Issue Number for that defect.
+const SYSTEM_PROMPT = `You analyze WhatsApp group-chat screenshots from a construction site channel. A field engineer (often "Kumar(mep)" or similar mep/elec/mech staff) sends grouped photo messages, each followed by a numeric Issue Number caption.
 
-Rules:
-- Each "group" = a sender header (e.g. "Kumar(mep)") + 1 or more photos (sometimes a 2x2 collage with "+N" overlay) + a numeric caption (1–5 digits) shown directly below the photos + a timestamp like "PM 2:42" / "AM 10:35" on the right.
-- Return ONE entry per group via the extract_groups tool.
-- IMPORTANT: Return groups in strict TOP-TO-BOTTOM visual order as they appear on the screenshot.
-- If a caption is "Defect 2221 - Light panel..." style, extract the leading number (2221).
-- Confidence: 1.0 = caption is sharp digital text; 0.7–0.9 = readable; <0.7 = blurry / partially occluded / ambiguous (still include so a human can review).
-- For EACH group, return the bounding box of the NUMERIC CAPTION TEXT itself (not the photos, not the header) using normalized 0..1 coordinates where 0 = top edge, 1 = bottom edge of the FULL screenshot:
-  - caption_y_top = top edge of the digits
-  - caption_y_bottom = bottom edge of the digits
-  - caption_y_normalized = vertical center of the digits (must equal (top+bottom)/2)
-  Estimate these as tightly and accurately as you can — they are used to crop the photos that sit ABOVE the caption.
-- Reply previews (small inline quoted message at the top of a bubble), forwarded link cards, system messages, and groups from senders other than mep/elec/mech field staff must go into rejected_blocks instead of groups.
-- If the screenshot is NOT a WhatsApp chat, return groups=[] and explain in rejected_blocks with reason "not_whatsapp".`;
+STRUCTURE OF A GROUP:
+- A sender header (e.g. "Kumar(mep)")
+- One or more thumbnail photos arranged in a grid (sometimes a 2x2 collage with a "+N" overlay on the last tile)
+- A narrow dark caption strip located IMMEDIATELY BELOW the BOTTOM EDGE of the last photo row
+- Inside that strip: a standalone 1–5 digit number, LEFT-aligned, in light text on dark background — this is the Issue Number caption
+- Inside the SAME strip on the RIGHT: a timestamp like "PM 2:42", "AM 10:35", "오후 5:39", "오전 9:43"
+
+HOW TO PROCESS:
+1. Scan the screenshot strictly top to bottom.
+2. For each photo group, locate the BOTTOM EDGE of the last photo row.
+3. Look at the narrow dark strip directly below that edge.
+4. Read ONLY the standalone numeric caption (1–5 digits) on the LEFT of that strip.
+5. Return one entry per group via the extract_groups tool, in top-to-bottom visual order.
+
+STRICT NEGATIVE RULES — DO NOT extract these as captions:
+- The timestamp on the RIGHT side of the same strip. Anything containing "AM", "PM", "오전", "오후", or a colon ":" is a timestamp, never a caption.
+- "+2", "+3", "+N" overlays drawn on top of a photo tile — those are photo-count indicators, not captions.
+- Any digits that appear INSIDE a photo (site labels, drawing numbers, ruler/meter scales, equipment tags). Captions live in the dark UI strip, not on the photo pixels.
+- Numbers inside reply previews / quoted messages (small indented bubble at the top of another bubble) or forwarded link cards.
+- Messages from senders that are not mep/elec/mech field staff — push those to rejected_blocks.
+- If a caption text reads "Defect 2221 - Light panel...", extract only the leading number (2221).
+
+CAPTION BBOX (very important — used to crop the photos above):
+For EACH accepted group, return the bounding box of the numeric caption GLYPHS themselves (not the whole strip, not the photos, not the header), in normalized 0..1 coordinates where 0 = top edge and 1 = bottom edge of the FULL screenshot:
+- caption_y_top = top pixel edge of the digits
+- caption_y_bottom = bottom pixel edge of the digits
+- caption_y_normalized = vertical center of the digits, and MUST equal (caption_y_top + caption_y_bottom) / 2
+- caption_y_top must be strictly less than caption_y_bottom
+- Self-check: caption_y_top must be BELOW the bottom edge of every photo in that same group (since the caption sits under the photos). If your bbox would overlap a photo, tighten it.
+Make these as tight and accurate as possible.
+
+CONFIDENCE:
+- 1.0 = sharp digital text, unambiguous
+- 0.7–0.9 = readable but slightly blurry or small
+- <0.7 = blurry, occluded, or ambiguous (still include so a human can review)
+
+OUTPUT:
+- groups[] in strict top-to-bottom order.
+- If the screenshot is NOT a WhatsApp chat, return groups=[] and add { reason: "not_whatsapp" } to rejected_blocks.`;
 
 const EXTRACT_TOOL = {
   type: 'function',
