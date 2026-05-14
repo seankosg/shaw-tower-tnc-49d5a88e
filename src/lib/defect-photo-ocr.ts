@@ -257,7 +257,7 @@ export async function applyOnePhotoOcrUpdate(args: {
   }
 
   const finalPayload = {
-    actual_start_date: fresh.actual_start_date ?? dataDate,
+    actual_start_date: dataDate,
     actual_completion_date: dataDate,
     aconex_comments: mergeAconexComment(fresh.aconex_comments, dataDate),
     updated_by: userId,
