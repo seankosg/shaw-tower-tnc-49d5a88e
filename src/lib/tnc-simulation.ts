@@ -129,8 +129,6 @@ export function simulateTncStageAt(
   let noPlan = 0;
   let delayedCount = 0;
 
-  const lag = opts.lagDays?.[stage] ?? 0;
-
   const prereqs = prerequisiteStages(stage);
   const isEffectivelyDone = (it: SubtestForDashboard) => {
     if (!isStageDone(it, stage)) return false;
@@ -154,7 +152,7 @@ export function simulateTncStageAt(
     } else {
       if (planned && planned < opts.dataDate) delayedCount++;
       if (planned) {
-        const ef = effectiveForecastDate(planned, opts.dataDate, opts.mode, lag);
+        const ef = effectiveForecastDate(planned, opts.dataDate, opts.mode);
         if (ef && ef <= targetDate) forecast++;
       } else {
         noPlan++;
