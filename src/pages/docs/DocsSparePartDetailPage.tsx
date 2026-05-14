@@ -241,6 +241,24 @@ export default function DocsSparePartDetailPage() {
         </CardContent>
       </Card>
 
+      {itemSpecSorted.length > 0 && (
+        <Card>
+          <CardHeader className="py-3"><CardTitle className="text-sm">Item Specification</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {itemSpecSorted.map((f) => (
+              <FieldEditor
+                key={f}
+                field={f}
+                label={getLabel(f)}
+                value={row[f]}
+                disabled={!canEditField(f) || saving}
+                onSave={(v) => save(f, v)}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="py-3"><CardTitle className="text-sm">Spare Requirements</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -256,6 +274,24 @@ export default function DocsSparePartDetailPage() {
           ))}
         </CardContent>
       </Card>
+
+      {procurementSorted.length > 0 && (
+        <Card>
+          <CardHeader className="py-3"><CardTitle className="text-sm">Procurement</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {procurementSorted.map((f) => (
+              <FieldEditor
+                key={f}
+                field={f}
+                label={getLabel(f)}
+                value={row[f]}
+                disabled={!canEditField(f) || saving}
+                onSave={(v) => save(f, v)}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="py-3"><CardTitle className="text-sm">Assignment</CardTitle></CardHeader>
