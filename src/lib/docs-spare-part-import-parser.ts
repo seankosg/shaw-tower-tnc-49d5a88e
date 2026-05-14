@@ -448,10 +448,14 @@ export async function parseSparePartExcel(
 
       const team = normalizeTeamValue(struct.team ?? null);
 
+      const itemNoRaw = struct.item_no != null ? String(struct.item_no).trim() : '';
+      const itemNoNum = itemNoRaw && /^-?\d+$/.test(itemNoRaw) ? Number(itemNoRaw) : null;
+
       rows.push({
         rawRowNo: r + 1,
         sheetName,
         sn,
+        item_no: itemNoNum,
         raw_sn: rawSn,
         level: struct.level ?? (kind === 'data' ? null : kind),
         sn_outline: struct.sn_outline ?? null,
