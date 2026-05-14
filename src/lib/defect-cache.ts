@@ -253,6 +253,35 @@ function bindRealtime() {
     .subscribe();
 }
 
+/** Optimistic local patch: apply a partial change to N rows and emit. Realtime will reconcile. */
+export function patchDefectCacheLocal(ids: string[], patch: Partial<CachedDefect>) {
+  let changed = false;
+  for (const id of ids) {
+    const row = state.byId.get(id);
+    if (row) {
+      state.byId.set(id, { ...row, ...patch });
+      changed = true;
+    }
+  }
+  if (changed) {
+    rebuildList();
+    emit();
+  }
+}
+
+/** Trigger an incremental refresh on demand (e.g., after a bulk write). */
+export function refreshDefectCache() {
+  if (state.refreshing || !state.initialLoaded) return;
+  state.refreshing = true;
+  emit();
+  fetchIncremental()
+    .catch(() => undefined)
+    .finally(() => {
+      state.refreshing = false;
+      emit();
+    });
+}
+
 export function getDefectCacheSnapshot() {
   return {
     items: state.list,
