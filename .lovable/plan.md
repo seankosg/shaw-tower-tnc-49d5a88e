@@ -1,58 +1,42 @@
-## 목표
-Spare Part Raw Data 페이지를 Defect Raw Data와 동등한 수준으로 풀포팅. TanStack Table 기반 가상화 테이블, 컬럼 단위 필터/표시·숨김/리사이즈/고정, URL 쿼리 동기화, 행 선택 + Bulk Edit, Subcontractor별 Excel/ZIP 분리 내보내기, Critical Pending 배너, 코멘트 메타 셀까지 모두 적용.
+## 원인
 
-## 구현 범위 (Spare Part 도메인에 맞게 조정)
+`src/contexts/ModuleStatusContext.tsx`에서 docs 모듈만 초기 기본값이 `enabled: false`(“준비 중”)로 잡혀 있습니다.
 
-### 1. 도메인 어댑터 신규 작성
-- `src/lib/spare-part-cache.ts` — `useSparePartCache`, `refreshSparePartCache`, `patchSparePartCacheLocal` (defect-cache 동일 패턴, `docs_spare_part` 대상).
-- `src/lib/spare-part-utils.ts` — `SparePartItem` 타입, `formatPct`, `isOverdueSparePart`(planned_delivery_date < asOf && !actual_delivery_date), `RAW_SEARCH_FIELDS`, `SPARE_PART_RAW_FIELDS`.
-- `src/lib/spare-part-status-utils.ts` — `isProcurementDelayedAsOf`, `isDeliveryComplete`, `isAtRisk` 등 PO/ETA/Delivery 기반 상태 헬퍼.
-- `src/lib/spare-part-excel-export.ts` 확장 — `exportSparePartRawToExcel`, `exportSparePartRawToExcelBySubcontractor`, `exportSparePartRawToZipBySubcontractor` 추가 (8개 date 컬럼은 `excel-date-cell` 유지).
+```ts
+const DEFAULT_STATUS = { enabled: true };
+const DEFAULT_DOCS_STATUS = { enabled: false, reason: '준비 중' };  // ← docs만 false
+```
 
-### 2. Bulk Edit 통합
-- `src/lib/bulk-edit.ts`에 spare_part 도메인 추가: 편집 가능 필드 = `status`, `po_status`, `subcontractor_name`, `hdec_pic_name`, `hdec_eng_name`, `team`, `trade`, `material_lead_time`, 8개 date 컬럼, `remarks`.
-- `BulkEditBar` 재사용 (props로 도메인/필드 메타 주입). 도메인 분기 필요 시 컴포넌트 내부에 `domain: 'defect' | 'spare_part'` 추가.
+`AppSidebar`의 그룹 가시성 규칙은:
 
-### 3. Stage / Progress 시각화
-- Spare Part는 Defect의 T1/T2 단계가 없으므로 `DefectStageProgress` 대신 신규 `SparePartProcurementProgress` 컴포넌트 작성:
-  - 단계: Confirm → Direction → PO → ETA → Delivery (planned vs actual 비교).
-  - 동일한 칩/툴팁/컬러 토큰 스타일 사용.
+```ts
+const showDocsGroup = isAdmin || docs.enabled;
+```
 
-### 4. RawDataPage 본체 (`src/pages/docs/DocsSparePartRawDataPage.tsx`) 재작성
-- TanStack Table + virtualizer (`useReactTable`, `useVirtualizer`).
-- ColumnDef 35개 (SystemMeta 5 포함). text/select/date/percent 필터 함수 재사용 (defect와 동일 함수 추출 또는 복사).
-- URL `useSearchParams` 동기화: `q`, `cols`, `sort`, `f.<field>`, `selection`, `source`, `overdue`, `asOf`.
-- Frozen column 수 = `useFrozenColumnCount()` 재사용.
-- `CriticalPendingBar` — Spare Part 기준: ETA 지연 또는 Actual PO 미입력 + Planned PO 경과 항목 카운트.
-- `TopHorizontalScrollbar`, MetaCell, 행 선택 체크박스, hover 액션 그대로.
-- 모바일 레이아웃: 기존 카드 리스트 폴백 유지(`useIsMobile`).
-- 권한 게이트: D.Super User 팀 제한, 일반 사용자 read-only Bulk 비활성.
+따라서 admin이 아닌 사용자(Senior User 포함)는 **`app_settings`에서 실제 값(`enabled:true`)이 도착하기 전까지** Docs Management 그룹이 숨겨집니다. T&C/Defect는 기본값이 `true`라 같은 타이밍 이슈가 없어서 보이고, Docs만 안 보이는 현상이 발생합니다.
 
-### 5. 필터 칩 / 검색 / 내보내기 다이얼로그
-- `buildColumnFilterChips` 재사용 (필드 라벨은 `useDocsFieldConfig`에서).
-- Export 다이얼로그: All / By Subcontractor (Single sheet | Multi-sheet | ZIP, ZIP_THRESHOLD=7) 옵션 → 신규 export 함수 호출.
+추가로 어떤 사용자 세션에서 `app_settings` 첫 fetch가 지연/실패하면 docs 그룹은 영구적으로 숨겨진 상태로 남습니다. DB는 이미 `module_docs_status = {"enabled": true}`이며 RLS도 authenticated 전체 SELECT를 허용합니다. 즉 데이터 문제가 아니라 **클라이언트 기본값 문제**입니다.
 
-### 6. 상세/디테일 연동
-- 행 클릭 시 `/docs/spare-part/:id` 그대로 유지. `?from=raw-data&q=...` 쿼리 보존.
+## 수정 계획
 
-## 작업 순서 (예상 파일)
-1. `src/lib/spare-part-cache.ts` (신규)
-2. `src/lib/spare-part-utils.ts` (신규)
-3. `src/lib/spare-part-status-utils.ts` (신규)
-4. `src/lib/spare-part-excel-export.ts` (확장)
-5. `src/lib/bulk-edit.ts` (도메인 추가)
-6. `src/components/raw-data/BulkEditBar.tsx` (도메인 분기)
-7. `src/components/spare-parts/SparePartProcurementProgress.tsx` (신규)
-8. `src/pages/docs/DocsSparePartRawDataPage.tsx` (전면 재작성, ~1200줄 예상)
+`src/contexts/ModuleStatusContext.tsx` 한 파일 수정:
 
-## 기술 메모
-- 가상화 테이블 행 높이: 36px (Defect와 동일).
-- Date 컬럼 export 시 `setDateCell` + `DATE_NUMFMT` 유지 (이미 적용됨).
-- Spare Part는 stage_progress 컬럼이 DB에 없으므로 진행률 컬럼은 procurement progress 계산값(0~100%, planned step 대비 actual 단계 수).
-- `import_header_mappings` 시드는 이미 완료. 추가 작업 불필요.
-- 작업량이 매우 크므로 각 파일은 독립적으로 작성하고, 마지막에 RawDataPage에서 통합. 빌드/타입 에러는 단계별로 수정.
+1. `DEFAULT_DOCS_STATUS`를 제거하고 docs 초기 상태를 `DEFAULT_STATUS`(`enabled: true`)로 통일.
+   - Docs Management는 이미 운영 중이므로 “준비 중” 기본값은 시대에 안 맞음.
+   - admin이 일시정지(`enabled:false`)하면 `app_settings` 값이 즉시 반영되어 그룹이 사라지는 동작은 그대로 유지.
 
-## 사용자 확인 사항
-- Procurement Progress의 단계 정의(Confirm→Direction→PO→ETA→Delivery)가 적절한지.
-- Bulk Edit에서 date 8개 모두 일괄 수정 허용 여부 (잘못 수정 위험 큼 → 기본 OFF, 명시적 활성 필요?).
-- Critical Pending 정의: 기본은 ETA 지연 + Planned PO 경과 미입력. 다른 기준 원하면 알려주세요.
+```ts
+const [docs, setDocs] = useState<ModuleStatus>(DEFAULT_STATUS);
+```
+
+## 검증
+
+- Supp 팀 Senior User 로그인 시 사이드바에 “Docs Management” 그룹이 즉시 표시되는지 미리보기로 확인.
+- Admin이 Module Control에서 Docs를 Pause하면 비-admin 사용자에게서 그룹이 사라지고, Resume 시 다시 보이는지 확인.
+- 다른 그룹(T&C, Defect) 가시성에 영향 없는지 확인.
+
+## 영향 범위
+
+- 변경 파일: `src/contexts/ModuleStatusContext.tsx` (1줄 수준)
+- DB/RLS/마이그레이션 변경 없음
+- 권한 체계(`role-permissions.ts`) 변경 없음

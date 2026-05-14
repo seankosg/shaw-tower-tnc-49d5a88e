@@ -15,7 +15,6 @@ const KEY_MAP: Record<ModuleKey, string> = {
 };
 
 const DEFAULT_STATUS: ModuleStatus = { enabled: true };
-const DEFAULT_DOCS_STATUS: ModuleStatus = { enabled: false, reason: '준비 중' };
 
 function parseValue(v: unknown): ModuleStatus {
   if (!v || typeof v !== 'object') return DEFAULT_STATUS;
@@ -46,7 +45,7 @@ function serializeStatus(s: ModuleStatus): Record<string, unknown> {
 export function ModuleStatusProvider({ children }: { children: ReactNode }) {
   const [tnc, setTnc] = useState<ModuleStatus>(DEFAULT_STATUS);
   const [defect, setDefect] = useState<ModuleStatus>(DEFAULT_STATUS);
-  const [docs, setDocs] = useState<ModuleStatus>(DEFAULT_DOCS_STATUS);
+  const [docs, setDocs] = useState<ModuleStatus>(DEFAULT_STATUS);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
