@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { Calendar as CalendarIcon, FlaskConical, TrendingUp, AlertTriangle, RefreshCw } from 'lucide-react';
 import { SimulationLineChart } from '@/components/simulation/SimulationLineChart';
 import { ToAchieveBand } from '@/components/simulation/ToAchieveBand';
+import { QtyVsPlanBanner } from '@/components/simulation/QtyVsPlanBanner';
 
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
