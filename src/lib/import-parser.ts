@@ -617,7 +617,8 @@ function extractCustomFields(row: Record<string, string>): {
 // ── Legacy parse: 1 row → multiple subtests (MOS-1~5) ────────────────
 export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
   const result: ParsedSubtest[] = [];
-  for (const row of rows) {
+  const carried = applyItemNoCarryForward(rows);
+  for (const row of carried) {
     const system = (row.system || '').trim();
     const item_no = (row.item_no || '').trim();
     if (!item_no) continue;
