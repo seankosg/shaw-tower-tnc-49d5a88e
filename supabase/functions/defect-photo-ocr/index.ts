@@ -14,6 +14,8 @@ interface OcrGroup {
   timestamp_text: string | null;
   confidence: number;
   caption_y_normalized: number | null;
+  caption_y_top: number | null;
+  caption_y_bottom: number | null;
   notes?: string | null;
 }
 interface OcrRejected { reason: string; y_range?: [number, number] }
@@ -26,7 +28,11 @@ Rules:
 - IMPORTANT: Return groups in strict TOP-TO-BOTTOM visual order as they appear on the screenshot.
 - If a caption is "Defect 2221 - Light panel..." style, extract the leading number (2221).
 - Confidence: 1.0 = caption is sharp digital text; 0.7–0.9 = readable; <0.7 = blurry / partially occluded / ambiguous (still include so a human can review).
-- caption_y_normalized: the vertical center of the NUMERIC CAPTION TEXT itself (not the photos, not the header) in 0..1 coordinates of the screenshot. 0 = top edge, 1 = bottom edge. Estimate as accurately as you can — this is the single most important coordinate.
+- For EACH group, return the bounding box of the NUMERIC CAPTION TEXT itself (not the photos, not the header) using normalized 0..1 coordinates where 0 = top edge, 1 = bottom edge of the FULL screenshot:
+  - caption_y_top = top edge of the digits
+  - caption_y_bottom = bottom edge of the digits
+  - caption_y_normalized = vertical center of the digits (must equal (top+bottom)/2)
+  Estimate these as tightly and accurately as you can — they are used to crop the photos that sit ABOVE the caption.
 - Reply previews (small inline quoted message at the top of a bubble), forwarded link cards, system messages, and groups from senders other than mep/elec/mech field staff must go into rejected_blocks instead of groups.
 - If the screenshot is NOT a WhatsApp chat, return groups=[] and explain in rejected_blocks with reason "not_whatsapp".`;
 
@@ -51,6 +57,8 @@ const EXTRACT_TOOL = {
               timestamp_text: { type: 'string' },
               confidence: { type: 'number' },
               caption_y_normalized: { type: 'number', description: 'Vertical center (0..1) of the numeric caption text.' },
+              caption_y_top: { type: 'number', description: 'Top edge (0..1) of the numeric caption text.' },
+              caption_y_bottom: { type: 'number', description: 'Bottom edge (0..1) of the numeric caption text.' },
               notes: { type: 'string' },
             },
             required: ['issue_no', 'caption_raw', 'confidence'],
