@@ -128,7 +128,7 @@ export function ScheduleMatrix({
   }, [todayBucketIdx, data.buckets.length, cellWidth]);
 
 
-  const ALL_STAGES: ScheduleStage[] = ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'];
+  const ALL_STAGES: ScheduleStage[] = ['pred', 't1', 't2', 'r1', 'r2s'];
   const stagesToShow: ScheduleStage[] =
     stageFilter === 'all'
       ? ALL_STAGES
@@ -293,7 +293,6 @@ export function ScheduleMatrix({
                           st === 't2' && 'bg-primary/30 text-primary',
                           st === 'r1' && 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
                           st === 'r2s' && 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-400',
-                          st === 'r2a' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
                         )}>
                           {STAGE_LABELS[st]}
                         </span>

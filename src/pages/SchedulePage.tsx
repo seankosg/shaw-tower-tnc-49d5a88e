@@ -297,7 +297,7 @@ export default function SchedulePage() {
     params.date_field = field;
 
     // Stage scope (sub-row click) and matching status
-    if (stage === 't1' || stage === 't2' || stage === 'pred' || stage === 'r1' || stage === 'r2s' || stage === 'r2a') {
+    if (stage === 't1' || stage === 't2' || stage === 'pred' || stage === 'r1' || stage === 'r2s') {
       params.stage = stage;
     }
     // Plan counts by planned_date regardless of status. Actual implies completed actual_date.
@@ -492,7 +492,6 @@ export default function SchedulePage() {
                 <ToggleGroupItem value="t2" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">T2</ToggleGroupItem>
                 <ToggleGroupItem value="r1" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">R1S</ToggleGroupItem>
                 <ToggleGroupItem value="r2s" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">R2S</ToggleGroupItem>
-                <ToggleGroupItem value="r2a" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">R2A</ToggleGroupItem>
               </ToggleGroup>
             </div>
           </ToolbarGroup>
