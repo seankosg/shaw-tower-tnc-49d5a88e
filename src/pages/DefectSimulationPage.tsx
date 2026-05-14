@@ -357,11 +357,6 @@ export default function DefectSimulationPage() {
                             {delayMode === 'penalty' && 'excluded from forecast'}
                             {delayMode === 'learned' && `shifted +${Math.round(lagDays[st] ?? 0)}d (avg lag)`}
                           </div>
-                          {includesDelayed && (
-                            <div className="pl-4 text-[10px] opacity-80">
-                              incl. {r.delayedCount} delayed item{r.delayedCount === 1 ? '' : 's'} in daily target
-                            </div>
-                          )}
                           {recoverPerDay !== null && (
                             <div className="pl-4 text-[10px] opacity-90">
                               excl. {r.delayedCount} delayed · to recover: ~{recoverPerDay}/day
