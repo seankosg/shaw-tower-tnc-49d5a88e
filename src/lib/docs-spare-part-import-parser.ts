@@ -3,34 +3,28 @@ import { getMappedField } from '@/lib/header-mappings-cache';
 import { normalizeTeamValue } from '@/types/enums';
 
 /**
- * Spare Part Excel parser — supports 4-level hierarchy:
- *   Category (A)  →  Parent (A-1)  →  Sub-category (A-1-a)  →  Leaf (A-1-a-1)
+ * Spare Part Excel parser.
+ * Workbook layout (Spare_Stock_Quantities_Summary):
+ *   - Header row: S/N | MATERIAL | SPARES REQUIREMENTS | Unit | Spares Quantity |
+ *                 Required Area for Storage | Status | Remarks
+ *   - Category rows (e.g. "A | Architectural") — set the rolling category context.
+ *   - Parent rows (S/N = numeric) — carry the parent item label + spec_ref.
+ *   - Child rows (S/N = "a)", "b)", ...) — actual spare-part entries.
  *
- * Workbook variants encountered:
- *   - Single S/N column (legacy 3-level): A, 1, "a)", text
- *   - Two S/N columns (Spare_Stock_..._breakdown): S/N #1 (free-form outline)
- *     + S/N #2 (hierarchical id like "A-1-a-1")
- *
- * S/N #2 pattern is used as the canonical, idempotent identifier when present;
- * we fall back to legacy heuristics on the first S/N column otherwise.
+ * We persist every parent + child row, building a synthetic stable `sn` so
+ * repeated imports upsert by the same identity.
  */
-
-export type SparePartLevel = 'category' | 'parent' | 'subcategory' | 'leaf';
 
 export interface ParsedSparePartRow {
   rawRowNo: number;
   sheetName: string;
-  /** Canonical stable identifier (S/N #2 when present, else synthetic). */
+  /** Synthetic stable identifier (e.g. "A.1" or "A.1.a"). Used as the DB key. */
   sn: string;
-  /** Free-form S/N #1 outline when workbook provides it. */
-  sn_outline: string | null;
-  /** Original cell content of the canonical S/N column. */
+  /** Raw S/N text from the workbook (1, "a)", ...) — kept for reference. */
   raw_sn: string | null;
-  level: SparePartLevel;
-  category: string | null;
-  parent_item: string | null;
-  sub_category: string | null;
-  spec_ref: string | null;
+  category: string | null;            // e.g. "A - Architectural"
+  parent_item: string | null;         // e.g. "Tiling"
+  spec_ref: string | null;            // e.g. "LLA-PM-LST-05-05-v02"
   material: string | null;
   spares_requirements: string | null;
   unit: string | null;
@@ -71,28 +65,15 @@ function toText(value: unknown): string | null {
 }
 
 const FALLBACK_ALIASES: Record<string, string | 'skip'> = {
-  // S/N columns — #2 (hierarchical) is canonical, #1 is the outline
   's/n': 'sn',
   'sn': 'sn',
   's. no': 'sn',
   's. no.': 'sn',
-  's/n #2': 'sn',
-  's/n#2': 'sn',
-  's/n 2': 'sn',
-  's/n no.2': 'sn',
-  's/n #1': 'sn_outline',
-  's/n#1': 'sn_outline',
-  's/n 1': 'sn_outline',
-  's/n no.1': 'sn_outline',
   'no': 'skip',
   'no.': 'skip',
   'category': 'category',
-  'sub-category': 'sub_category',
-  'sub category': 'sub_category',
-  'subcategory': 'sub_category',
   'material': 'material',
   'parent item': 'parent_item',
-  'parent': 'parent_item',
   'spec ref': 'spec_ref',
   'spares requirements': 'spares_requirements',
   'spare requirements': 'spares_requirements',
@@ -205,6 +186,8 @@ export async function getSparePartHeaderInfo(
       }
     }
   }
+  // Ensure the system-required `sn` slot is always present so validation passes
+  // even when the workbook header label is non-standard.
   const hasSn = Object.values(fieldByHeader).some((f) => f === 'sn');
   if (!hasSn) {
     fieldByHeader['__synthetic_sn__'] = 'sn';
@@ -212,24 +195,20 @@ export async function getSparePartHeaderInfo(
   return { headers: headerOrder, samples, fieldByHeader };
 }
 
-/** Classify by hierarchical S/N #2 pattern (preferred), fallback to legacy single-column heuristic. */
-function classifyByHierId(snHier: string | null): SparePartLevel | null {
-  if (!snHier) return null;
-  const t = snHier.replace(/\s+/g, '');
-  if (/^[A-Za-z]$/.test(t)) return 'category';
-  if (/^[A-Za-z]-\d+$/.test(t)) return 'parent';
-  if (/^[A-Za-z]-\d+-[a-z]$/i.test(t)) return 'subcategory';
-  if (/^[A-Za-z]-\d+-[a-z]-\d+$/i.test(t)) return 'leaf';
-  return null;
-}
+/** Parses a row's first cell to detect category (single capital letter A/B/C/D...),
+ *  parent (numeric), or child (lowercase letter optionally with `)`). */
+type RowKind = 'category' | 'parent' | 'child' | 'data';
 
-function classifyLegacy(snCell: unknown, materialCell: unknown): SparePartLevel | 'data' {
+function classifyRow(snCell: unknown, materialCell: unknown): RowKind {
   const sn = toText(snCell);
   const mat = toText(materialCell);
   if (!sn && !mat) return 'data';
   if (sn) {
+    // Category: single uppercase letter (A, B, ...)
     if (/^[A-Z]$/.test(sn)) return 'category';
-    if (/^[a-z]\)?$/i.test(sn) && /^[a-z]/.test(sn)) return 'leaf'; // legacy "child" → leaf
+    // Child: lowercase letter w/ optional trailing punctuation
+    if (/^[a-z]\)?$/i.test(sn) && /^[a-z]/.test(sn)) return 'child';
+    // Parent: pure integer
     if (/^\d+\.?$/.test(sn.replace(/\s/g, ''))) return 'parent';
   }
   return 'data';
@@ -270,24 +249,23 @@ export async function parseSparePartExcel(
       if (c.raw && (!c.field || c.field === null)) unknown.add(c.raw);
     }
 
+    // Build a column-index lookup by canonical field name for direct access.
     const colByField = new Map<string, number>();
     for (let i = 0; i < detected.cols.length; i++) {
       const c = detected.cols[i];
       if (c.field && c.field !== 'skip' && !colByField.has(c.field)) colByField.set(c.field, i);
     }
 
-    let currentCategory: string | null = null;       // e.g. "A - Architectural"
-    let currentCategoryLetter: string | null = null; // e.g. "A"
-    let currentParentNum: string | null = null;      // e.g. "1"
+    let currentCategory: string | null = null;
+    let currentParentLetter: string | null = null;
     let currentParentName: string | null = null;
     let currentParentSpec: string | null = null;
-    let currentSubLetter: string | null = null;      // e.g. "a"
-    let currentSubName: string | null = null;        // e.g. "Natural Stone"
     let count = 0;
 
     for (let r = detected.idx + 1; r < matrix.length; r++) {
       const dataRow = matrix[r] ?? [];
 
+      // Capture original cell payload by header label.
       const payload: Record<string, unknown> = {};
       for (let c = 0; c < detected.cols.length; c++) {
         const col = detected.cols[c];
@@ -295,18 +273,33 @@ export async function parseSparePartExcel(
       }
 
       const snIdx = colByField.get('sn') ?? 0;
-      const snOutlineIdx = colByField.get('sn_outline');
       const matIdx = colByField.get('material') ?? 1;
-
-      const snHier = toText(dataRow[snIdx]);
-      const snOutline = snOutlineIdx != null ? toText(dataRow[snOutlineIdx]) : null;
+      const snCell = dataRow[snIdx];
       const matCell = dataRow[matIdx];
 
-      // Prefer hierarchical pattern; fall back to legacy single-column heuristic.
-      const level: SparePartLevel | 'data' =
-        classifyByHierId(snHier) ?? classifyLegacy(dataRow[snIdx], matCell);
+      const kind = classifyRow(snCell, matCell);
 
-      // Build struct from mapped columns (excluding user-excluded).
+      if (kind === 'category') {
+        const letter = toText(snCell);
+        const name = toText(matCell);
+        currentCategory = letter && name ? `${letter} - ${name}` : (letter ?? name ?? null);
+        currentParentLetter = null;
+        currentParentName = null;
+        currentParentSpec = null;
+        continue;
+      }
+
+      if (kind === 'parent') {
+        const num = toText(snCell)?.replace(/\D/g, '') ?? null;
+        const ext = extractSpecRef(toText(matCell));
+        currentParentLetter = num;
+        currentParentName = ext.name;
+        currentParentSpec = ext.specRef;
+        // Parent rows are also imported (some workbooks carry data on the parent
+        // row directly when there's no sub-list). Fall through.
+      }
+
+      // Build struct from mapped columns (only those not user-excluded).
       const struct: Record<string, any> = {};
       for (let c = 0; c < detected.cols.length; c++) {
         const col = detected.cols[c];
@@ -319,109 +312,50 @@ export async function parseSparePartExcel(
         struct[col.field] = toText(dataRow[c]);
       }
 
+      // Skip blank data rows.
+      const rawSn = toText(snCell);
       const material = struct.material ?? toText(matCell);
+      const reqs = struct.spares_requirements;
+      const qty = struct.spares_quantity;
+      if (kind !== 'parent' && !rawSn && !material && !reqs && !qty) continue;
 
-      // ---- Update rolling context based on detected level ----
-      if (level === 'category') {
-        const letter = (snHier ?? toText(dataRow[snIdx]) ?? '').replace(/\s/g, '').toUpperCase();
-        const name = material;
-        currentCategoryLetter = letter || null;
-        currentCategory = letter && name ? `${letter} - ${name}` : (letter || name || null);
-        currentParentNum = null;
-        currentParentName = null;
-        currentParentSpec = null;
-        currentSubLetter = null;
-        currentSubName = null;
-      } else if (level === 'parent') {
-        // Hierarchical: A-1 → letter=A, num=1. Legacy: snHier numeric-only.
-        const t = (snHier ?? '').replace(/\s/g, '');
-        const m = t.match(/^([A-Za-z])-(\d+)$/);
-        if (m) {
-          currentCategoryLetter = m[1].toUpperCase();
-          currentParentNum = m[2];
-        } else {
-          currentParentNum = (toText(dataRow[snIdx]) ?? '').replace(/\D/g, '') || null;
-        }
-        const ext = extractSpecRef(material);
-        currentParentName = ext.name;
-        currentParentSpec = ext.specRef;
-        currentSubLetter = null;
-        currentSubName = null;
-      } else if (level === 'subcategory') {
-        const t = (snHier ?? '').replace(/\s/g, '');
-        const m = t.match(/^([A-Za-z])-(\d+)-([a-z])$/i);
-        if (m) {
-          currentCategoryLetter = m[1].toUpperCase();
-          currentParentNum = m[2];
-          currentSubLetter = m[3].toLowerCase();
-        }
-        currentSubName = material;
-      } else if (level === 'leaf') {
-        const t = (snHier ?? '').replace(/\s/g, '');
-        const m = t.match(/^([A-Za-z])-(\d+)-([a-z])-(\d+)$/i);
-        if (m) {
-          currentCategoryLetter = m[1].toUpperCase();
-          currentParentNum = m[2];
-          currentSubLetter = m[3].toLowerCase();
-        }
-      }
-
-      // Skip blank rows that don't even have category context.
-      if (level === 'data') {
-        const reqs = struct.spares_requirements;
-        const qty = struct.spares_quantity;
-        if (!snHier && !snOutline && !material && !reqs && !qty) continue;
-      }
-
-      // ---- Build canonical sn ----
-      let canonicalSn: string;
-      if (snHier) {
-        canonicalSn = snHier.replace(/\s/g, '');
+      // Synthetic stable identifier — used for idempotent upsert.
+      const catLetter = currentCategory?.split(' - ')[0]?.trim() || 'X';
+      let synthSn: string;
+      if (kind === 'parent') {
+        synthSn = `${catLetter}.${currentParentLetter ?? 'P'}`;
+      } else if (kind === 'child') {
+        const childLetter = (rawSn ?? '').replace(/[^a-zA-Z]/g, '');
+        synthSn = `${catLetter}.${currentParentLetter ?? 'X'}.${childLetter || (r + 1)}`;
       } else {
-        // Legacy fallback path
-        const catL = currentCategoryLetter || 'X';
-        const parN = currentParentNum || 'X';
-        if (level === 'category') canonicalSn = catL;
-        else if (level === 'parent') canonicalSn = `${catL}-${parN}`;
-        else if (level === 'subcategory') canonicalSn = `${catL}-${parN}-${currentSubLetter || 'x'}`;
-        else if (level === 'leaf') {
-          // Use legacy child letter from S/N #1 if available
-          const childLetter = (toText(dataRow[snIdx]) ?? '').replace(/[^a-zA-Z]/g, '').toLowerCase();
-          canonicalSn = `${catL}-${parN}-${childLetter || 'x'}-${r + 1}`;
-        } else {
-          canonicalSn = `${catL}-${parN}-row${r + 1}`;
-        }
+        // Free-form row: use raw row number as last-resort discriminator.
+        synthSn = `${catLetter}.${currentParentLetter ?? 'X'}.row${r + 1}`;
       }
 
-      const finalLevel: SparePartLevel = level === 'data' ? 'leaf' : level;
-      const team = normalizeTeamValue(struct.team ?? null);
+      // For parent rows, prefer the extracted parent name as material if no
+      // standalone material text exists.
+      const materialFinal = kind === 'parent' && !material ? currentParentName : material;
 
-      const materialFinal =
-        finalLevel === 'parent' && !material ? currentParentName :
-        finalLevel === 'subcategory' && !material ? currentSubName :
-        material;
+      const team = normalizeTeamValue(struct.team ?? null);
 
       rows.push({
         rawRowNo: r + 1,
         sheetName,
-        sn: canonicalSn,
-        sn_outline: snOutline ?? (snOutlineIdx == null ? toText(dataRow[snIdx]) : null),
-        raw_sn: snHier,
-        level: finalLevel,
+        sn: synthSn,
+        raw_sn: rawSn,
         category: currentCategory,
         parent_item: currentParentName,
-        sub_category: currentSubName,
         spec_ref: struct.spec_ref ?? currentParentSpec,
         material: materialFinal,
-        spares_requirements: struct.spares_requirements ?? null,
+        spares_requirements: reqs,
         unit: struct.unit ?? null,
-        spares_quantity: struct.spares_quantity ?? null,
+        spares_quantity: qty,
         storage_area_required: struct.storage_area_required ?? null,
         status: struct.status ?? null,
         remarks: struct.remarks ?? null,
         subcontractor_name: struct.subcontractor_name ?? null,
         team,
-        trade: struct.trade ?? (currentCategory ? currentCategory.split(' - ')[1] ?? null : null),
+        trade: struct.trade ?? null,
         hdec_pic_name: struct.hdec_pic_name ?? null,
         hdec_eng_name: struct.hdec_eng_name ?? null,
         raw_payload: payload,
