@@ -525,6 +525,32 @@ export default function PhotoOcrPanel({ disabled }: { disabled?: boolean }) {
           </CardContent>
         </Card>
       )}
+
+      {/* Full-screenshot preview dialog with caption-y highlight */}
+      <Dialog open={!!previewItem} onOpenChange={(o) => !o && setPreviewItem(null)}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              Issue {previewItem?.editedIssueNo} — {previewItem?.fileName}
+            </DialogTitle>
+          </DialogHeader>
+          {previewItem && (() => {
+            const file = files.find((f) => f.id === previewItem.fileId);
+            const y = previewItem.group.caption_y_normalized;
+            return (
+              <div className="relative w-full">
+                {file && <img src={file.fullDataUrl} alt="" className="block w-full rounded" />}
+                {y !== null && y !== undefined && (
+                  <div
+                    className="pointer-events-none absolute inset-x-0 border-y-2 border-primary bg-primary/15"
+                    style={{ top: `${y * 100}%`, height: '4%', transform: 'translateY(-50%)' }}
+                  />
+                )}
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
