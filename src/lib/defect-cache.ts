@@ -200,22 +200,30 @@ async function fetchIncremental() {
   }
 }
 
-async function refetchOne(id: string) {
+async function refetchMany(ids: string[]) {
+  if (ids.length === 0) return;
   const cols = state.heavyLoaded
     ? `${SLIM_SELECT}, ${HEAVY_COLUMNS.join(', ')}`
     : SLIM_SELECT;
-  const { data, error } = await (supabase as any)
-    .from('defect_items')
-    .select(cols)
-    .eq('id', id)
-    .maybeSingle();
-  if (error || !data) {
-    state.byId.delete(id);
-  } else if (!data.is_active) {
-    state.byId.delete(id);
-    trackUpdated([data]);
-  } else {
-    mergeRows([data]);
+  const chunkSize = 500;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    const { data, error } = await (supabase as any)
+      .from('defect_items')
+      .select(cols)
+      .in('id', chunk);
+    if (error || !data) continue;
+    const rows = data as any[];
+    const seen = new Set<string>();
+    for (const r of rows) {
+      seen.add(r.id);
+      if (!r.is_active) state.byId.delete(r.id);
+    }
+    // Any id we asked about but didn't get back means it was hard-deleted.
+    for (const id of chunk) if (!seen.has(id)) state.byId.delete(id);
+    const active = rows.filter((r) => r.is_active);
+    if (active.length) mergeRows(active);
+    else { trackUpdated(rows); rebuildList(); }
   }
   rebuildList();
   emit();
@@ -224,13 +232,16 @@ async function refetchOne(id: string) {
 function bindRealtime() {
   if (state.channelBound) return;
   state.channelBound = true;
-  const handle: Record<string, number> = {};
-  const debouncedRefetch = (id: string) => {
-    if (handle[id]) window.clearTimeout(handle[id]);
-    handle[id] = window.setTimeout(() => {
-      delete handle[id];
-      refetchOne(id);
-    }, 200);
+  const pending = new Set<string>();
+  let flushHandle: number | undefined;
+  const scheduleFlush = () => {
+    if (flushHandle != null) return;
+    flushHandle = window.setTimeout(() => {
+      flushHandle = undefined;
+      const ids = Array.from(pending);
+      pending.clear();
+      refetchMany(ids);
+    }, 400);
   };
 
   supabase
@@ -247,7 +258,8 @@ function bindRealtime() {
           emit();
           return;
         }
-        debouncedRefetch(id);
+        pending.add(id);
+        scheduleFlush();
       },
     )
     .subscribe();
