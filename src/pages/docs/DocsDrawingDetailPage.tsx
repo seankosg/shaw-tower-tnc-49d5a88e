@@ -360,12 +360,23 @@ export default function DocsDrawingDetailPage() {
         <Button variant="outline" size="sm" onClick={() => { if (window.history.length > 1) navigate(-1); else navigate('/docs/raw-data'); }}>
           <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
         </Button>
-        {canEdit && (
-          <Button onClick={handleSave} disabled={saving}>
-            <Save className="mr-1.5 h-4 w-4" />
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <DocsRowDeleteButton
+              variant="button"
+              table="docs_drawings"
+              id={record.id}
+              recordLabel={record.document_no ?? null}
+              onDeleted={() => { if (window.history.length > 1) navigate(-1); else navigate('/docs/raw-data'); }}
+            />
+          )}
+          {canEdit && (
+            <Button onClick={handleSave} disabled={saving}>
+              <Save className="mr-1.5 h-4 w-4" />
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Item Detail Card */}
