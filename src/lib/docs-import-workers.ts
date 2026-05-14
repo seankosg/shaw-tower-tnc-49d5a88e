@@ -606,9 +606,14 @@ export const ommAdapter: ImporterAdapter<ParsedOmmRow> = {
 // ============================================================================
 
 const SPARE_PART_TRACKED_FIELDS = [
-  'category', 'parent_item', 'spec_ref', 'material',
+  'level', 'sn_outline', 'category', 'sub_category', 'parent_item', 'spec_ref', 'material',
+  'location', 'floor_level', 'item_type', 'specification', 'size',
   'spares_requirements', 'unit', 'spares_quantity', 'storage_area_required',
   'status', 'remarks',
+  'material_lead_time',
+  'planned_confirm_date', 'actual_confirm_date', 'direction_to_subcon_date',
+  'eta_date', 'planned_po_date', 'actual_po_date', 'po_status',
+  'planned_delivery_date', 'actual_delivery_date',
   'subcontractor_name', 'team', 'trade', 'hdec_pic_name', 'hdec_eng_name',
 ];
 
