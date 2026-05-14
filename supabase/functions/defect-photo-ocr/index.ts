@@ -160,18 +160,30 @@ Deno.serve(async (req) => {
 
     // Light post-processing: strip non-digits from issue_no, drop empties, clamp confidence,
     // clamp caption_y_normalized to [0,1], and sort top-to-bottom.
+    const clamp01 = (n: unknown): number | null => (typeof n === 'number' && isFinite(n) ? Math.max(0, Math.min(1, n)) : null);
     const cleanGroups: OcrGroup[] = (parsed.groups || [])
       .map((g) => {
         const digits = String(g.issue_no ?? '').replace(/\D+/g, '').replace(/^0+(\d)/, '$1');
-        const rawY = (g as any).caption_y_normalized;
-        const y = typeof rawY === 'number' && isFinite(rawY) ? Math.max(0, Math.min(1, rawY)) : null;
+        let yTop = clamp01((g as any).caption_y_top);
+        let yBottom = clamp01((g as any).caption_y_bottom);
+        let yCenter = clamp01((g as any).caption_y_normalized);
+        // Derive missing fields from whichever the model returned.
+        if (yTop !== null && yBottom !== null && yTop > yBottom) [yTop, yBottom] = [yBottom, yTop];
+        if (yCenter === null && yTop !== null && yBottom !== null) yCenter = (yTop + yBottom) / 2;
+        if ((yTop === null || yBottom === null) && yCenter !== null) {
+          const halfHeight = 0.012;
+          if (yTop === null) yTop = Math.max(0, yCenter - halfHeight);
+          if (yBottom === null) yBottom = Math.min(1, yCenter + halfHeight);
+        }
         return {
           issue_no: digits,
           caption_raw: String(g.caption_raw ?? ''),
           sender: g.sender ?? null,
           timestamp_text: g.timestamp_text ?? null,
           confidence: Math.max(0, Math.min(1, Number(g.confidence ?? 0))),
-          caption_y_normalized: y,
+          caption_y_normalized: yCenter,
+          caption_y_top: yTop,
+          caption_y_bottom: yBottom,
           notes: g.notes ?? null,
         } satisfies OcrGroup;
       })
