@@ -259,6 +259,15 @@ export default function DocsWarrantyDetailPage() {
           <MessageSquare className="h-4 w-4 mr-1" /> Comments
           {commentCount > 0 && <Badge variant="secondary" className="ml-2 h-4 px-1.5 text-[10px]">{commentCount}</Badge>}
         </Button>
+        {canEditRow && (
+          <DocsRowDeleteButton
+            variant="button"
+            table="warranty_items"
+            id={row.id}
+            recordLabel={row.sn ?? (row.item_no != null ? `#${row.item_no}` : null)}
+            onDeleted={() => navigate('/docs/warranty')}
+          />
+        )}
       </div>
 
       {!canEditRow && (
