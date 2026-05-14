@@ -121,7 +121,7 @@ export function computeGroupBands(locs: Array<CaptionLoc>): GroupBand[] {
   const gap = 0.012;
   const maxPhotoHeight = 0.4;
   const minHeight = 0.05;
-  const halfHeight = 0.012; // approx half-height of caption text when only center Y known
+  const halfHeight = 0; // bare-number/center input is treated as a point caption (back-compat)
 
   const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
   const norm = (loc: CaptionLoc): { top: number; bottom: number } | null => {
@@ -129,7 +129,7 @@ export function computeGroupBands(locs: Array<CaptionLoc>): GroupBand[] {
     if (typeof loc === 'number') {
       if (!isFinite(loc)) return null;
       const c = clamp01(loc);
-      return { top: clamp01(c - halfHeight), bottom: clamp01(c + halfHeight) };
+      return { top: c, bottom: c };
     }
     if ('y_top' in loc && 'y_bottom' in loc && isFinite(loc.y_top) && isFinite(loc.y_bottom)) {
       let t = clamp01(loc.y_top); let b = clamp01(loc.y_bottom);
