@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { invalidateDefectCache } from '@/lib/defect-cache';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { daysDiff, getDefectExcelHeaders, getDefectExcelSheetNames, parseDefectExcel, type ParsedDefectRow } from '@/lib/defect-parser';
