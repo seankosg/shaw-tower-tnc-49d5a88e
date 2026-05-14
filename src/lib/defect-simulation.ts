@@ -233,8 +233,7 @@ export function buildDefectSimulationSeries(
       const p = getDefectStagePlannedDate(it, st);
       const a = getEffectiveActualDate(it, st);
       const done = isDefectStageDone(it, st);
-      const lag = opts.lagDays?.[st] ?? 0;
-      const ef = done ? null : effectiveForecastDate(p, opts.dataDate, opts.mode, lag);
+      const ef = done ? null : effectiveForecastDate(p, opts.dataDate, opts.mode);
       // B1 fix: done with no actual date → use dataDate as effective completion.
       const effActual = done ? (a ?? opts.dataDate) : null;
       pre[st].push({
