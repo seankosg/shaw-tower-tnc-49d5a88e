@@ -231,6 +231,7 @@ export async function callPhotoOcr(imageDataUrl: string): Promise<OcrEdgeRespons
 export interface OcrCropResponse {
   issue_no: string;
   caption_raw: string;
+  caption_visible?: boolean;
   confidence: number;
   model: string;
 }
@@ -242,6 +243,43 @@ export async function callPhotoOcrCrop(imageDataUrl: string): Promise<OcrCropRes
   });
   if (error) throw error;
   return data as OcrCropResponse;
+}
+
+/**
+ * Decide whether the Pass-2 (crop) OCR result should overwrite the Pass-1 result.
+ * Conservative by design: a wrong Pass-2 (e.g. it read "+5" overlay or an in-photo
+ * label like "17") must NOT overwrite a correct Pass-1 like "2513".
+ *
+ * Rules:
+ *  - Pass-2 must have a non-empty issue_no AND caption_visible AND non-empty caption_raw.
+ *  - Pass-2 confidence must be >= 0.8.
+ *  - If Pass-1 is empty: adopt Pass-2.
+ *  - If Pass-1 == Pass-2: keep (no change needed); return false (nothing to overwrite).
+ *  - If lengths differ: only adopt Pass-2 when its number is at LEAST as long as Pass-1
+ *    AND Pass-2 confidence beats Pass-1 by >= 0.1. This blocks short hallucinations
+ *    (e.g. "5", "17", "153") from overwriting longer legitimate caption numbers.
+ *  - If same length but different digits: require Pass-2 confidence > Pass-1 by >= 0.15.
+ */
+export function shouldAdoptPass2(
+  pass1: { issue_no: string; confidence: number },
+  pass2: { issue_no: string; caption_raw: string; caption_visible?: boolean; confidence: number },
+): boolean {
+  const p2 = (pass2.issue_no ?? '').trim();
+  if (!p2) return false;
+  if (pass2.caption_visible === false) return false;
+  if (!pass2.caption_raw || pass2.caption_raw.trim().length === 0) return false;
+  if (pass2.confidence < 0.8) return false;
+
+  const p1 = (pass1.issue_no ?? '').trim();
+  if (!p1) return true;
+  if (p1 === p2) return false;
+
+  if (p2.length < p1.length) return false;
+  if (p2.length > p1.length) {
+    return pass2.confidence >= pass1.confidence + 0.1;
+  }
+  // Same length, different digits — require a clear confidence margin.
+  return pass2.confidence >= pass1.confidence + 0.15;
 }
 
 /** Convenience: pull the caption bbox/center from an OcrGroup into the shape computeGroupBands accepts. */

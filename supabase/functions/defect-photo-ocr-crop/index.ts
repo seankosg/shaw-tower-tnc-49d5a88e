@@ -7,14 +7,23 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SYSTEM_PROMPT = `You are given ONE cropped section of a WhatsApp chat screenshot containing a single photo (or photo collage) followed by a numeric caption (1–5 digits) that is the Issue Number.
+const SYSTEM_PROMPT = `You are given ONE cropped section of a WhatsApp chat screenshot. It usually contains a single photo (or photo collage) followed by a numeric Issue Number caption in a narrow dark UI strip directly under the photos.
+
+Your ONLY target: a standalone 1–5 digit number that appears LEFT-aligned inside that narrow dark caption strip below the photo grid. The caption strip is part of the WhatsApp message UI (dark bubble background), NOT part of the photo pixels.
 
 Return exactly ONE entry via the extract_one tool:
-- issue_no: the numeric caption (digits only, leading zeros stripped). If a caption is "Defect 2221 - ..." style, extract the leading number (2221).
-- caption_raw: the full caption text as shown.
-- confidence: 1.0 = sharp digital text; 0.7–0.9 = readable; <0.7 = blurry / partial / ambiguous.
+- issue_no: digits only, leading zeros stripped. If the caption reads "Defect 2221 - ...", extract only "2221".
+- caption_raw: the full caption text exactly as shown in that strip (must be non-empty when issue_no is non-empty).
+- caption_visible: true ONLY if you can clearly see the dark caption strip with a left-aligned number under the photos in this crop. false otherwise.
+- confidence: 1.0 = sharp digital text in caption strip; 0.7–0.9 = readable but small/blurry; <0.7 = ambiguous.
 
-If you cannot find a numeric caption at all, return issue_no="" with confidence=0.`;
+STRICT NEGATIVE RULES — these are NEVER the issue number:
+- "+2", "+3", "+N" overlays drawn on top of a photo tile (photo-count badge, large white text on the photo).
+- Any digits printed INSIDE a photo: equipment labels, drawing numbers, ruler marks, panel tags, pipe IDs (e.g. "ECD-...", numbers stamped on devices).
+- The right-aligned timestamp on the same strip (anything with "AM", "PM", "오전", "오후", or ":").
+- Numbers in the sender header or in a quoted reply preview.
+
+If the crop does NOT clearly show a dark caption strip with a left-aligned standalone number under the photos, you MUST return issue_no="", caption_raw="", caption_visible=false, confidence=0. Do NOT guess from photo content. Do NOT read "+5" overlays. Do NOT read labels printed on equipment.`;
 
 const EXTRACT_ONE_TOOL = {
   type: 'function',
@@ -25,8 +34,9 @@ const EXTRACT_ONE_TOOL = {
       type: 'object',
       additionalProperties: false,
       properties: {
-        issue_no: { type: 'string', description: 'Numeric only, leading zeros stripped. Empty string if none found.' },
-        caption_raw: { type: 'string' },
+        issue_no: { type: 'string', description: 'Numeric only, leading zeros stripped. Empty string if no caption strip is clearly visible.' },
+        caption_raw: { type: 'string', description: 'Full caption text exactly as shown in the dark strip. Empty string if no caption visible.' },
+        caption_visible: { type: 'boolean', description: 'True only if the dark caption strip with a left-aligned number under the photos is clearly visible in this crop.' },
         confidence: { type: 'number' },
       },
       required: ['issue_no', 'confidence'],
@@ -102,7 +112,7 @@ Deno.serve(async (req) => {
     if (!toolCall || toolCall?.function?.name !== 'extract_one') {
       return new Response(JSON.stringify({ error: 'no_tool_call', raw_text: choice?.content ?? null }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-    let parsed: { issue_no: string; caption_raw?: string; confidence: number };
+    let parsed: { issue_no: string; caption_raw?: string; caption_visible?: boolean; confidence: number };
     try {
       parsed = JSON.parse(toolCall.function.arguments ?? '{}');
     } catch (e) {
@@ -110,9 +120,12 @@ Deno.serve(async (req) => {
     }
 
     const digits = String(parsed.issue_no ?? '').replace(/\D+/g, '').replace(/^0+(\d)/, '$1');
+    const captionRaw = String(parsed.caption_raw ?? '');
+    const captionVisible = Boolean(parsed.caption_visible);
     return new Response(JSON.stringify({
       issue_no: digits,
-      caption_raw: String(parsed.caption_raw ?? ''),
+      caption_raw: captionRaw,
+      caption_visible: captionVisible,
       confidence: Math.max(0, Math.min(1, Number(parsed.confidence ?? 0))),
       model,
     }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
