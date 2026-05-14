@@ -96,6 +96,16 @@ export default function DefectImportPage() {
         </Button>
       </div>
 
+      <Tabs defaultValue="excel">
+        <TabsList>
+          <TabsTrigger value="excel"><FileSpreadsheetIcon className="mr-1.5 h-3.5 w-3.5" />Excel Import</TabsTrigger>
+          <TabsTrigger value="photo"><Camera className="mr-1.5 h-3.5 w-3.5" />Photo OCR</TabsTrigger>
+        </TabsList>
+        <TabsContent value="photo" className="mt-4">
+          <PhotoOcrPanel disabled={modulePaused} />
+        </TabsContent>
+        <TabsContent value="excel" className="mt-4 space-y-4">
+
       {moduleActuallyPaused && (
         <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
           <Lock className="mt-0.5 h-4 w-4 shrink-0" />
@@ -337,6 +347,8 @@ export default function DefectImportPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
