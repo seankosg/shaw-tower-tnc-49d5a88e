@@ -508,6 +508,88 @@ export function getExcelSheetNames(file: ArrayBuffer): string[] {
   return wb.SheetNames ?? [];
 }
 
+// ── Item No carry-forward (parent → /Level child rows) ──────────────
+// When a row has empty item_no but Level is filled, treat it as a
+// "level breakdown" child of the most recent parent row that *did* have
+// an item_no. We assign `${parent}/${normalizedLevel}` as the child's
+// item_no so the (item_no, mos_code) unique key holds.
+//
+// Rules:
+//  - Only identity / context fields (system, team, mos_code, equipment,
+//    subcontractor, sub-sub, HDEC PIC) are carried forward when the
+//    child cell is empty. Description is NOT carried forward (each level
+//    typically has its own "_Level N" suffix in the source data).
+//  - Progress/report fields (T1/T2/R1/R2 status & dates, predecessor,
+//    aconex_ref, remarks, punchlist) are NEVER carried forward — child
+//    rows start in Pending state and are filled as work progresses.
+//  - If a row has no item_no AND no level, it is left untouched (will
+//    be skipped downstream as before).
+//  - If a row has no item_no AND a level, but no parent has been seen
+//    yet, it is also left untouched (also skipped downstream).
+const CARRY_FORWARD_FIELDS = [
+  'system', 'team', 'mos_code', 'equipment',
+  'subcontractor_name', 'subsub_name', 'hdec_pic_name',
+] as const;
+
+function normalizeLevelForItemNo(level: string): string {
+  // Trim, collapse internal whitespace, keep original casing for the
+  // common pattern (L2, L32, RF, B1, etc.).
+  const t = String(level).trim().replace(/\s+/g, '');
+  return t;
+}
+
+export function applyItemNoCarryForward(
+  rows: Record<string, string>[],
+): Record<string, string>[] {
+  let parent: Record<string, string> | null = null;
+  const out: Record<string, string>[] = [];
+  for (const raw of rows) {
+    const row = { ...raw };
+    const itemNo = (row.item_no || '').trim();
+    const level = (row.level || '').trim();
+
+    if (itemNo) {
+      // This is a parent (or standalone) row.
+      parent = row;
+      out.push(row);
+      continue;
+    }
+
+    // Empty item_no.
+    if (!level || !parent) {
+      // Nothing we can do — leave as-is (downstream will skip).
+      out.push(row);
+      continue;
+    }
+
+    // Child row: assign synthesized item_no.
+    const parentItem = (parent.item_no || '').trim();
+    const normLevel = normalizeLevelForItemNo(level);
+    if (!parentItem || !normLevel) {
+      out.push(row);
+      continue;
+    }
+    row.item_no = `${parentItem}/${normLevel}`;
+
+    // Carry forward identity/context fields when the child cell is empty.
+    for (const f of CARRY_FORWARD_FIELDS) {
+      const cur = (row[f] || '').trim();
+      if (!cur) {
+        const inherited = (parent[f] || '').trim();
+        if (inherited) row[f] = inherited;
+      }
+    }
+
+    // If a downstream parser auto-builds subtest_id from item_no + mos_code,
+    // make sure any pre-existing subtest_id from the parent is NOT inherited
+    // here (we want each child to get its own ID). The carry-forward list
+    // above already excludes subtest_id, so nothing else to do.
+
+    out.push(row);
+  }
+  return out;
+}
+
 // ── Custom field extraction (target_field = "custom:<field_name>") ───
 function extractCustomFields(row: Record<string, string>): {
   custom_payload: Record<string, string | number | boolean | null>;
