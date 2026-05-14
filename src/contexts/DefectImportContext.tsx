@@ -1082,6 +1082,11 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       delete payload.rawRowNo;
       delete payload.id;
       delete payload.custom_field_errors;
+      // Strip any internal underscore-prefixed keys (e.g. _dateWarnings) that the
+      // parser attaches for in-app use only. Leaving them in causes PGRST204.
+      for (const k of Object.keys(payload)) {
+        if (k.startsWith('_')) delete payload[k];
+      }
 
       // Merge custom_payload with existing values (do not overwrite the whole JSONB).
       const newCustom = (row.custom_payload && Object.keys(row.custom_payload).length > 0)
