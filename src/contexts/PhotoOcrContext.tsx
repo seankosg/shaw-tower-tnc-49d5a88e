@@ -15,6 +15,7 @@ import {
   applyOnePhotoOcrUpdate,
   createPhotoOcrBatch,
   finalizePhotoOcrBatch,
+  shouldAdoptPass2,
   type DecisionKind,
   type ExistingDefectMin,
   type OcrGroup,
@@ -251,31 +252,42 @@ export function PhotoOcrProvider({ children }: { children: ReactNode }) {
           if (cropUrl) {
             try {
               const verify = await callPhotoOcrCrop(cropUrl);
-              if (verify.issue_no && verify.issue_no.length > 0) {
-                const pass1 = items[i].group.issue_no;
-                const pass1Conf = items[i].group.confidence;
-                const better = verify.confidence >= pass1Conf || pass1 !== verify.issue_no;
-                if (better) {
-                  // Adopt Pass-2 result; keep bbox & sender for downstream display.
-                  const newGroup: OcrGroup = {
-                    ...items[i].group,
-                    issue_no: verify.issue_no,
-                    caption_raw: verify.caption_raw || items[i].group.caption_raw,
-                    confidence: Math.max(pass1Conf, verify.confidence),
-                    notes: pass1 !== verify.issue_no
-                      ? `pass1=${pass1 || '-'} → pass2=${verify.issue_no}`
-                      : items[i].group.notes ?? null,
-                  };
-                  items[i].group = newGroup;
-                  items[i].editedIssueNo = verify.issue_no;
-                  // Refresh existing/decision against the corrected number.
-                  const map = await fetchExistingDefects(projectId, [verify.issue_no]);
-                  const ex = map.get(verify.issue_no) ?? null;
-                  const d = decideUpdate(ex, dataDate, newGroup.confidence);
-                  items[i].existing = ex;
-                  items[i].decision = d.kind;
-                  items[i].decisionReason = d.reason ?? '';
-                }
+              const pass1 = items[i].group.issue_no;
+              const pass1Conf = items[i].group.confidence;
+              const adopt = shouldAdoptPass2(
+                { issue_no: pass1, confidence: pass1Conf },
+                {
+                  issue_no: verify.issue_no,
+                  caption_raw: verify.caption_raw,
+                  caption_visible: verify.caption_visible,
+                  confidence: verify.confidence,
+                },
+              );
+              if (adopt) {
+                const newGroup: OcrGroup = {
+                  ...items[i].group,
+                  issue_no: verify.issue_no,
+                  caption_raw: verify.caption_raw || items[i].group.caption_raw,
+                  confidence: Math.max(pass1Conf, verify.confidence),
+                  notes: pass1 !== verify.issue_no
+                    ? `pass1=${pass1 || '-'} → pass2=${verify.issue_no}`
+                    : items[i].group.notes ?? null,
+                };
+                items[i].group = newGroup;
+                items[i].editedIssueNo = verify.issue_no;
+                // Refresh existing/decision against the corrected number.
+                const map = await fetchExistingDefects(projectId, [verify.issue_no]);
+                const ex = map.get(verify.issue_no) ?? null;
+                const d = decideUpdate(ex, dataDate, newGroup.confidence);
+                items[i].existing = ex;
+                items[i].decision = d.kind;
+                items[i].decisionReason = d.reason ?? '';
+              } else if (verify.issue_no && verify.issue_no !== pass1) {
+                // Record the disagreement for traceability without overwriting Pass-1.
+                items[i].group = {
+                  ...items[i].group,
+                  notes: `pass2 disagreed (${verify.issue_no}, conf ${(verify.confidence * 100).toFixed(0)}%, caption_visible=${verify.caption_visible ?? 'n/a'}) — kept pass1=${pass1 || '-'}`,
+                };
               }
             } catch (e) {
               // Non-fatal: keep Pass-1 result.
