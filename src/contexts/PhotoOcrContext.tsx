@@ -4,6 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import {
   callPhotoOcr,
+  callPhotoOcrCrop,
+  captionLocOf,
   compressForOcr,
   cropFromDataUrl,
   computeGroupBands,
