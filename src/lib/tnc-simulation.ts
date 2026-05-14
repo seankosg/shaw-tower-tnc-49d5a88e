@@ -131,12 +131,16 @@ export interface StageSimResult {
   forecast: number;       // count whose effective forecast date ≤ target
   predicted: number;
   planOnly: number;       // ALL items whose ORIGINAL planned ≤ target (mode-independent)
+  planAtDataDate: number; // ALL items whose ORIGINAL planned ≤ dataDate (i.e. should be done by now)
   noPlan: number;
   delayedCount: number;   // not-done items with planned < dataDate (mode-independent)
   predictedPct: number;
   planPct: number;
+  planAtDataDatePct: number;
   actualPct: number;
-  gapPct: number;
+  gapPct: number;          // predicted − plan @ target
+  behindNowPct: number;    // actual − planAtDataDate (negative = behind)
+  behindNowCount: number;  // doneActual − planAtDataDate
 }
 
 export function simulateTncStageAt(
