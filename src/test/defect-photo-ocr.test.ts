@@ -34,10 +34,10 @@ describe('decideUpdate', () => {
   it('needs_review when confidence below threshold', () => {
     expect(decideUpdate(base, '2026-05-14', 0.5).kind).toBe('needs_review');
   });
-  it('update keeps existing actual_start when present', () => {
+  it('update always overwrites actual_start with dataDate (Photo OCR policy)', () => {
     const r = decideUpdate({ ...base, actual_start_date: '2026-05-01' }, '2026-05-14', 0.9);
     expect(r.kind).toBe('update');
-    expect(r.payload?.actual_start_date).toBe('2026-05-01');
+    expect(r.payload?.actual_start_date).toBe('2026-05-14');
     expect(r.payload?.actual_completion_date).toBe('2026-05-14');
     expect(r.payload?.aconex_comments).toBe(VERIFIED_BY_HDEC);
   });
