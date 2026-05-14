@@ -28,8 +28,7 @@ describe('date-normalize', () => {
       expect(normalizeDate('3/5/2026')).toBe('2026-05-03');
     });
     it('parses Excel serial number', () => {
-      // 45444 = 2024-05-04
-      expect(normalizeDate(46157)).toBe('2026-04-17');
+      expect(normalizeDate(46157)).toBe('2026-05-15');
     });
     it('parses Date object', () => {
       expect(normalizeDate(new Date(Date.UTC(2026, 4, 18)))).toBe('2026-05-18');
