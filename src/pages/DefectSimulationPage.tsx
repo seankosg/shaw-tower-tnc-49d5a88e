@@ -31,7 +31,6 @@ import {
 } from '@/lib/defect-schedule-utils';
 import {
   buildDefectSimulationSeries,
-  computeStageLagDays,
   simulateAllDefectStages,
   simulateByTeam,
   DELAY_MODE_LABELS,
