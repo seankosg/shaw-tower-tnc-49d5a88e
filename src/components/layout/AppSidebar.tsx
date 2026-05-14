@@ -66,6 +66,13 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { profile, roles, signOut, isAdmin } = useAuth();
   const { tnc, defect, docs } = useModuleStatus();
+  const { phase: ocrPhase, parseProgress, applyProgress } = usePhotoOcr();
+  const ocrBusy = ocrPhase === 'parsing' || ocrPhase === 'applying';
+  const ocrLabel = ocrPhase === 'parsing'
+    ? `OCR ${parseProgress.done}/${parseProgress.total}`
+    : ocrPhase === 'applying'
+      ? `Apply ${applyProgress.done}/${applyProgress.total}`
+      : '';
   const userName = profile?.name || profile?.login_id || 'User';
 
   const visibleMain = filterNavItems(mainNav, roles);
