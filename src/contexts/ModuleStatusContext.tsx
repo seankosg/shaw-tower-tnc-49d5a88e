@@ -15,7 +15,6 @@ const KEY_MAP: Record<ModuleKey, string> = {
 };
 
 const DEFAULT_STATUS: ModuleStatus = { enabled: true };
-const DEFAULT_DOCS_STATUS: ModuleStatus = { enabled: false, reason: '준비 중' };
 
 function parseValue(v: unknown): ModuleStatus {
   if (!v || typeof v !== 'object') return DEFAULT_STATUS;
