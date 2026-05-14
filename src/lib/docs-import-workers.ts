@@ -702,6 +702,7 @@ export const sparePartAdapter: ImporterAdapter<ParsedSparePartRow> = {
       const payload: Record<string, unknown> = {
         project_id: ctx.projectId,
         sn,
+        item_no: row.item_no,
         level: row.level,
         sn_outline: row.sn_outline,
         category: row.category,
