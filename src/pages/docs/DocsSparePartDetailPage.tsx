@@ -150,7 +150,11 @@ export default function DocsSparePartDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const overviewSorted = useMemo(() => visibleSorted(OVERVIEW_FIELDS), [sortFieldNames, isFieldVisible, roles]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  const itemSpecSorted = useMemo(() => visibleSorted(ITEM_SPEC_FIELDS), [sortFieldNames, isFieldVisible, roles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const requirementsSorted = useMemo(() => visibleSorted(REQUIREMENTS_FIELDS), [sortFieldNames, isFieldVisible, roles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const procurementSorted = useMemo(() => visibleSorted(PROCUREMENT_FIELDS), [sortFieldNames, isFieldVisible, roles]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const assignmentSorted = useMemo(() => visibleSorted(ASSIGNMENT_FIELDS), [sortFieldNames, isFieldVisible, roles]);
 
