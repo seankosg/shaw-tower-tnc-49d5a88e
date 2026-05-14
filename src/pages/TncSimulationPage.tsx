@@ -20,7 +20,6 @@ import {
 import { cn } from '@/lib/utils';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { useLatestSubtestDataDate } from '@/hooks/useLatestSubtestDataDate';
-import { todayIso } from '@/lib/stage-metrics';
 import type { SubtestForDashboard } from '@/lib/dashboard-utils';
 import {
   ALL_TNC_SIM_STAGES,
@@ -89,9 +88,9 @@ export default function TncSimulationPage() {
     return 'penalty';
   });
 
-  // Default target: 30 days after the data date (recomputed each render so it
-  // tracks new uploads). Overridden by ?target= URL param when present.
-  const defaultTarget = useMemo(() => addDays(dataDate, 30), [dataDate]);
+  // Default target: fixed to 2026-05-22 regardless of data date.
+  // Overridden by ?target= URL param when present.
+  const defaultTarget = '2026-05-22';
   const [target, setTarget] = useState<Date>(() => {
     const raw = searchParams.get('target');
     if (raw) return new Date(`${raw}T00:00:00`);
