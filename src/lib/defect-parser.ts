@@ -577,6 +577,8 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
     const explicitLocation = toText(getMapped(raw, 'area_location'));
     const reconciledArea = reconcileAreaFields(parsedArea, explicitLevel, explicitLocation);
     const status = toText(getMapped(raw, 'status'));
+    const dp = pickDefectDates((key) => getMapped(raw, key));
+    const explicitClosure = dp.dates.planned_closure_date;
 
     return {
       rawRowNo: index + headerRowIdx + 2,
@@ -600,17 +602,16 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
       subsub_name: toText(getMapped(raw, 'subsub_name')),
       hdec_pic_name: toText(getMapped(raw, 'hdec_pic_name')),
       hdec_eng_name: toText(getMapped(raw, 'hdec_eng_name')),
-      planned_start_date: normalizeDate(getMapped(raw, 'planned_start_date')),
-      planned_completion_date: normalizeDate(getMapped(raw, 'planned_completion_date')),
-      planned_closure_date: (() => {
-        const explicit = normalizeDate(getMapped(raw, 'planned_closure_date'));
-        if (explicit) return explicit;
-        const completion = normalizeDate(getMapped(raw, 'planned_completion_date'));
-        return completion ? addBusinessDaysNoSunday(completion, 4) : null;
-      })(),
-      actual_start_date: normalizeDate(getMapped(raw, 'actual_start_date')),
-      actual_completion_date: normalizeDate(getMapped(raw, 'actual_completion_date')),
-      actual_closure_date: normalizeDate(getMapped(raw, 'actual_closure_date')),
+      planned_start_date: dp.dates.planned_start_date,
+      planned_completion_date: dp.dates.planned_completion_date,
+      planned_closure_date:
+        explicitClosure
+          ?? (dp.dates.planned_completion_date
+                ? addBusinessDaysNoSunday(dp.dates.planned_completion_date, 4)
+                : null),
+      actual_start_date: dp.dates.actual_start_date,
+      actual_completion_date: dp.dates.actual_completion_date,
+      actual_closure_date: dp.dates.actual_closure_date,
       planned_progress_pct: normalizePct(getMapped(raw, 'planned_progress_pct')),
       actual_progress_pct: normalizePct(getMapped(raw, 'actual_progress_pct')),
       completion_status: toText(getMapped(raw, 'completion_status')),
@@ -620,6 +621,7 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
       aconex_comments: toText(getMapped(raw, 'aconex_comments')),
       work_type: toText(getMapped(raw, 'work_type')),
       raw_payload: raw,
+      _dateWarnings: dp.warnings.length ? dp.warnings : undefined,
       ...extractDefectCustomFields(raw),
     };
   });
