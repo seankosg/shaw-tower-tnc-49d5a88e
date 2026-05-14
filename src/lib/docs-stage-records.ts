@@ -97,38 +97,80 @@ export type OmmSub1StatusBuckets = OmmSubStatusBuckets;
 export type OmmSub2StatusBuckets = OmmSubStatusBuckets;
 export type OmmStatusBucketKey = 'A' | 'B' | 'C' | 'UR' | 'TBS';
 
-function computeBuckets(rows: any[], actualKey: string, respKey: string): OmmSubStatusBuckets {
+/**
+ * "Submission이 실제로 일어났을 신호"가 있는지 판단.
+ * sub1_actual_date 컬럼이 비어 있어도 다음 중 하나라도 참이면 제출이 있었다고 본다:
+ *   - 응답 상태(A/B/C)가 부여됨
+ *   - 응답 일자가 기록됨
+ *   - 후속 사이클(다음 단계)의 planned/actual 일자가 존재
+ */
+function hasImplicitSubmission(
+  row: any,
+  respKey: string,
+  respDateKey: string,
+  nextSignalKeys: string[],
+): boolean {
+  const s = String(row?.[respKey] ?? '').trim().toUpperCase();
+  if (s === 'A' || s === 'B' || s === 'C') return true;
+  if (row?.[respDateKey]) return true;
+  for (const k of nextSignalKeys) {
+    if (row?.[k]) return true;
+  }
+  return false;
+}
+
+const SUB1_NEXT_SIGNALS = ['sub2_planned_date', 'sub2_actual_date'];
+const SUB2_NEXT_SIGNALS = [
+  'sub3_planned_date',
+  'sub3_actual_date',
+  'final_planned_date',
+  'final_actual_date',
+];
+
+function classifyStatus(
+  row: any,
+  actualKey: string,
+  respKey: string,
+  respDateKey: string,
+  nextSignalKeys: string[],
+): OmmStatusBucketKey {
+  const hasActual = !!row?.[actualKey];
+  if (!hasActual && !hasImplicitSubmission(row, respKey, respDateKey, nextSignalKeys)) {
+    return 'TBS';
+  }
+  const s = String(row?.[respKey] ?? '').trim().toUpperCase();
+  if (s === 'A' || s === 'B' || s === 'C') return s;
+  return 'UR';
+}
+
+function computeBuckets(
+  rows: any[],
+  actualKey: string,
+  respKey: string,
+  respDateKey: string,
+  nextSignalKeys: string[],
+): OmmSubStatusBuckets {
   const out: OmmSubStatusBuckets = { A: 0, B: 0, C: 0, UR: 0, TBS: 0, total: 0 };
   for (const r of rows) {
     out.total++;
-    if (!r?.[actualKey]) { out.TBS++; continue; }
-    const s = String(r?.[respKey] ?? '').trim().toUpperCase();
-    if (s === 'A') out.A++;
-    else if (s === 'B') out.B++;
-    else if (s === 'C') out.C++;
-    else out.UR++;
+    const bucket = classifyStatus(r, actualKey, respKey, respDateKey, nextSignalKeys);
+    out[bucket]++;
   }
   return out;
 }
 
 export function computeOmmSub1StatusBuckets(rows: any[]): OmmSub1StatusBuckets {
-  return computeBuckets(rows, 'sub1_actual_date', 'sub1_response_status');
+  return computeBuckets(rows, 'sub1_actual_date', 'sub1_response_status', 'sub1_response_date', SUB1_NEXT_SIGNALS);
 }
 export function computeOmmSub2StatusBuckets(rows: any[]): OmmSub2StatusBuckets {
-  return computeBuckets(rows, 'sub2_actual_date', 'sub2_response_status');
+  return computeBuckets(rows, 'sub2_actual_date', 'sub2_response_status', 'sub2_response_actual_date', SUB2_NEXT_SIGNALS);
 }
 
-function classifyStatus(row: any, actualKey: string, respKey: string): OmmStatusBucketKey {
-  if (!row?.[actualKey]) return 'TBS';
-  const s = String(row?.[respKey] ?? '').trim().toUpperCase();
-  if (s === 'A' || s === 'B' || s === 'C') return s;
-  return 'UR';
-}
 export function classifyOmmSub1Status(row: any): OmmStatusBucketKey {
-  return classifyStatus(row, 'sub1_actual_date', 'sub1_response_status');
+  return classifyStatus(row, 'sub1_actual_date', 'sub1_response_status', 'sub1_response_date', SUB1_NEXT_SIGNALS);
 }
 export function classifyOmmSub2Status(row: any): OmmStatusBucketKey {
-  return classifyStatus(row, 'sub2_actual_date', 'sub2_response_status');
+  return classifyStatus(row, 'sub2_actual_date', 'sub2_response_status', 'sub2_response_actual_date', SUB2_NEXT_SIGNALS);
 }
 
 export const WARRANTY_STAGE_DEFS: StageDefinition[] = [
