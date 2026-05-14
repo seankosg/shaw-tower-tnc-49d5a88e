@@ -17,6 +17,7 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronRight, Download, ExternalLink, Filter, MessageSquare, Search, Upload } from 'lucide-react';
+import { DocsRowDeleteButton } from '@/components/docs/DocsRowDeleteButton';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
