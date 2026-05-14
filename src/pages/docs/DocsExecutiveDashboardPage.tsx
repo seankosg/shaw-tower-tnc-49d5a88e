@@ -676,9 +676,14 @@ function OmmSubStatusCard({
     >
       <span className={cn('absolute inset-y-0 left-0 w-1', accent.bar)} />
       <div className="flex items-baseline justify-between gap-2 pl-1 pr-1">
-        <span className="text-xs font-medium leading-tight text-foreground">{title}</span>
+        <span
+          className="text-xs font-medium leading-tight text-foreground"
+          title="Items currently in this cycle (each row counted in exactly one Status card)"
+        >
+          {title}
+        </span>
         <span className="text-xs text-muted-foreground tabular-nums">
-          Total {buckets.total.toLocaleString()}
+          In cycle {buckets.total.toLocaleString()}
         </span>
       </div>
       <div className="grid grid-cols-5 gap-1 pl-1">
