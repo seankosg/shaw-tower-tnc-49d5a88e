@@ -27,7 +27,6 @@ import {
   TNC_SIM_STAGE_LABELS,
   addDays,
   buildTncSimulationSeries,
-  computeStageLagDays,
   simulateAllTncStages,
   simulateByTeam,
   DELAY_MODE_LABELS,
@@ -327,9 +326,7 @@ export default function TncSimulationPage() {
                             <AlertTriangle className="h-3 w-3" />
                             {r.delayedCount} delayed ·{' '}
                             {delayMode === 'optimistic' && 'to be done before target date'}
-                            {delayMode === 'shift-today' && `shifted to ${dataDate}`}
                             {delayMode === 'penalty' && 'excluded from forecast'}
-                            {delayMode === 'learned' && `shifted +${Math.round(lagDays[st] ?? 0)}d (avg lag)`}
                           </div>
                           {recoverPerDay !== null && (
                             <div className="pl-4 text-[10px] opacity-90">
