@@ -340,25 +340,7 @@ export default function DefectSimulationPage() {
                       </span>
                       <span className="text-xs text-muted-foreground">predicted</span>
                     </div>
-                    {r.behindNowPct < 0 ? (
-                      <div className="mt-2 rounded-md border-l-4 border-rose-500 bg-rose-50 px-2.5 py-1.5 dark:bg-rose-950/40">
-                        <div className="text-[10px] font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">
-                          Behind Plan Now
-                        </div>
-                        <div className="mt-0.5 flex items-baseline gap-2">
-                          <span className="text-lg font-bold tabular-nums text-rose-700 dark:text-rose-300">
-                            {r.behindNowPct.toFixed(1)}%
-                          </span>
-                          <span className="text-xs font-medium text-rose-700/80 dark:text-rose-300/80">
-                            {r.behindNowCount} item{Math.abs(r.behindNowCount) === 1 ? '' : 's'} short of plan @ {dataDate}
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-2 inline-flex items-center gap-1 rounded-sm bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
-                        On track vs plan @ {dataDate} (+{r.behindNowPct.toFixed(1)}%)
-                      </div>
-                    )}
+                    <QtyVsPlanBanner count={r.behindNowCount} pct={r.behindNowPct} dataDate={dataDate} />
                     <ToAchieveBand
                       doneActual={r.doneActual}
                       predicted={r.predicted}
