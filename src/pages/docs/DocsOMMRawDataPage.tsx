@@ -1048,13 +1048,14 @@ export default function DocsOMMRawDataPage() {
       };
     });
 
-    return [selectColumn, cycleColumn, ...dataColumns, statusColumn, openColumn];
-  }, [getLabel, optionFields, navigate, updateField]);
+    return [selectColumn, cycleColumn, ...dataColumns, statusColumn, openColumn, deleteColumn];
+  }, [getLabel, optionFields, navigate, updateField, reload]);
 
   // ── Visibility from Field Config (always show anchors) ────────────────────
   const ALWAYS_VISIBLE = new Set([
     '__select',
     '__open',
+    '__delete',
     'sn',
     'cycle_progress',
     'current_status',
@@ -1078,7 +1079,7 @@ export default function DocsOMMRawDataPage() {
   // Column order driven by Field Config sort_order, with fixed pinned/trailing anchors
   const columnOrder = useMemo(() => {
     const PINNED = ['__select', 'cycle_progress', 'sn'];
-    const TRAILING = ['current_status', '__open'];
+    const TRAILING = ['current_status', '__open', '__delete'];
     const remaining = (OMM_DATA_FIELDS as readonly string[]).filter(
       (f) => !PINNED.includes(f) && !TRAILING.includes(f),
     );
