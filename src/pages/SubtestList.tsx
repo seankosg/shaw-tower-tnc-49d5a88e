@@ -991,6 +991,7 @@ export default function SubtestList() {
       },
     },
     { accessorKey: 'item_no', header: 'Item No', size: 100, filterFn: textFilterFn,
+      sortingFn: (a, b) => compareItemNo(a.getValue('item_no'), b.getValue('item_no')),
       meta: { filterType: 'text' },
       cell: ({ row, getValue }) => {
         const value = getValue() as any;
