@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decideUpdate, mergeAconexComment, VERIFIED_BY_HDEC, type ExistingDefectMin } from '@/lib/defect-photo-ocr';
+import { decideUpdate, mergeAconexComment, computeGroupBands, VERIFIED_BY_HDEC, type ExistingDefectMin } from '@/lib/defect-photo-ocr';
 
 const base: ExistingDefectMin = {
   id: 'x', issue_no: '5426', team: 'Elec',
