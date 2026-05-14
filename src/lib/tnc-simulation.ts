@@ -230,8 +230,7 @@ export function buildTncSimulationSeries(
           if (!isStageDone(it, pr)) { done = false; break; }
         }
       }
-      const lag = opts.lagDays?.[st] ?? 0;
-      const ef = done ? null : effectiveForecastDate(p, opts.dataDate, opts.mode, lag);
+      const ef = done ? null : effectiveForecastDate(p, opts.dataDate, opts.mode);
       pre[st].push({
         planned: p ? isoToUtc(p) : null,
         effForecast: ef ? isoToUtc(ef) : null,
