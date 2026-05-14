@@ -399,14 +399,14 @@ function TextFilterDropdown({ column }: { column: any }) {
 // ---- Stage Progress per-stage filter ----------------------------------------
 type StageProgressState = 'Done' | 'WIP' | 'Planned' | 'Delayed';
 const STAGE_PROGRESS_STATES: StageProgressState[] = ['Done', 'WIP', 'Planned', 'Delayed'];
-const STAGE_FILTER_KEYS = ['pred', 't1', 't2', 'r1', 'r2a'] as const;
+const STAGE_FILTER_KEYS = ['pred', 't1', 't2', 'r1', 'r2s'] as const;
 type StageFilterKey = typeof STAGE_FILTER_KEYS[number];
 const STAGE_FILTER_LABELS: Record<StageFilterKey, string> = {
   pred: 'Predecessor',
   t1: 'T1',
   t2: 'T2',
   r1: 'R1',
-  r2a: 'R2A',
+  r2s: 'R2S',
 };
 
 export type StageProgressFilter = Partial<Record<StageFilterKey, StageProgressState[]>>;
@@ -432,7 +432,7 @@ function classifyStageState(
     : row.r2_status;
   if (status === 'Hold') return 'Delayed';
   if (status === 'WIP') return 'WIP';
-  if (stage === 'r2a' && (status === 'Submitted' || status === 'Under Review')) return 'WIP';
+  // r2s milestone is submission, so 'Submitted'/'Under Review' already classified Done by isStageDone above.
   return 'Planned';
 }
 
@@ -1018,13 +1018,13 @@ export default function SubtestList() {
     },
     (() => {
       const asOfDate = dataDate ?? new Date().toISOString().slice(0, 10);
-      // Sortable bitmask: pred=1, t1=2, t2=4, r1=8, r2a=16 (more progress = larger).
+      // Sortable bitmask: pred=1, t1=2, t2=4, r1=8, r2s=16 (more progress = larger).
       const progressBitmask = (r: any): number =>
         (isStageDone(r, 'pred') ? 1 : 0)
         + (isStageDone(r, 't1') ? 2 : 0)
         + (isStageDone(r, 't2') ? 4 : 0)
         + (isStageDone(r, 'r1') ? 8 : 0)
-        + (isStageDone(r, 'r2a') ? 16 : 0);
+        + (isStageDone(r, 'r2s') ? 16 : 0);
       return {
         id: 'stage_progress',
         header: 'Progress',
@@ -1054,6 +1054,8 @@ export default function SubtestList() {
             r1ActualSubmissionDate={row.original.r1_actual_submission_date}
             r1TargetSubmissionDate={row.original.r1_target_submission_date}
             r2Status={row.original.r2_status}
+            r2ActualSubmissionDate={row.original.r2_actual_submission_date}
+            r2TargetSubmissionDate={row.original.r2_target_submission_date}
             r2ActualApprovalDate={row.original.r2_actual_approval_date}
             r2TargetApprovalDate={row.original.r2_target_approval_date}
             asOfDate={dataDate}
@@ -1355,17 +1357,17 @@ export default function SubtestList() {
 
     // Overdue / At-Risk stage scope:
     //  - default: Pred/T1/T2 (matches Dashboard 1-tier KPI Overdue card)
-    //  - scope=all: Pred/T1/T2/R1/R2 (matches Dashboard 3-tier alert banner)
+    //  - scope=all: Pred/T1/T2/R1/R2S (matches Dashboard 3-tier alert banner)
     const OVERDUE_STAGES: StageKey[] = urlScope === 'all'
-      ? ['pred', 't1', 't2', 'r1', 'r2s', 'r2a']
+      ? ['pred', 't1', 't2', 'r1', 'r2s']
       : ['pred', 't1', 't2'];
 
     return data.filter(r => {
       if (urlStatusFilter) {
         const overdue = getAnyStageDelayedAsOf(r, OVERDUE_STAGES, delayAsOfDate);
         if (urlStatusFilter === 'overdue' && !overdue) return false;
-        // 5-stage workflow: final completion = R2 Approved
-        if (urlStatusFilter === 'remaining' && isStageDone(r, 'r2a')) return false;
+        // 5-stage workflow: final completion = R2 Submitted
+        if (urlStatusFilter === 'remaining' && isStageDone(r, 'r2s')) return false;
         if (urlStatusFilter === 'at_risk') {
           if (overdue) return false;
           const within = (stage: StageKey) => {
@@ -1419,22 +1421,22 @@ export default function SubtestList() {
         if (!(a === urlR1ActualUnplannedOn && p !== urlR1ActualUnplannedOn)) return false;
       }
 
-      // R2 cell-link filters (planned = r2_target_approval_date, actual = r2_actual_approval_date)
+      // R2 cell-link filters (planned = r2_target_submission_date, actual = r2_actual_submission_date)
       if (urlR2PlannedTo) {
-        const p = getStagePlannedDate(r, 'r2a');
+        const p = getStagePlannedDate(r, 'r2s');
         if (!(p && p <= urlR2PlannedTo)) return false;
       }
       if (urlR2ActualTo) {
-        const a = getStageActualDate(r, 'r2a');
+        const a = getStageActualDate(r, 'r2s');
         if (!(a && a <= urlR2ActualTo)) return false;
       }
-      if (urlR2PlannedOn && getStagePlannedDate(r, 'r2a') !== urlR2PlannedOn) return false;
-      if (urlR2ActualOn && getStageActualDate(r, 'r2a') !== urlR2ActualOn) return false;
-      if (urlR2DelayAsOf && !isStageDelayedAsOf(r, 'r2a', urlR2DelayAsOf)) return false;
-      if (urlR2DelayOn && !(getStagePlannedDate(r, 'r2a') === urlR2DelayOn && !isStageDone(r, 'r2a'))) return false;
+      if (urlR2PlannedOn && getStagePlannedDate(r, 'r2s') !== urlR2PlannedOn) return false;
+      if (urlR2ActualOn && getStageActualDate(r, 'r2s') !== urlR2ActualOn) return false;
+      if (urlR2DelayAsOf && !isStageDelayedAsOf(r, 'r2s', urlR2DelayAsOf)) return false;
+      if (urlR2DelayOn && !(getStagePlannedDate(r, 'r2s') === urlR2DelayOn && !isStageDone(r, 'r2s'))) return false;
       if (urlR2ActualUnplannedOn) {
-        const a = getStageActualDate(r, 'r2a');
-        const p = getStagePlannedDate(r, 'r2a');
+        const a = getStageActualDate(r, 'r2s');
+        const p = getStagePlannedDate(r, 'r2s');
         if (!(a === urlR2ActualUnplannedOn && p !== urlR2ActualUnplannedOn)) return false;
       }
 
@@ -1982,7 +1984,7 @@ function SubtestTableView({
   const renderRowBgClass = (r: SubtestRow) => {
     // Match active Overdue scope (Pred/T1/T2 default, or all 5 stages when scope=all).
     const stages: StageKey[] = overdueScope === 'all'
-      ? ['pred', 't1', 't2', 'r1', 'r2s', 'r2a']
+      ? ['pred', 't1', 't2', 'r1', 'r2s']
       : ['pred', 't1', 't2'];
     const delayed = getAnyStageDelayedAsOf(r, stages, delayAsOfDate);
     const t2Done = isStageDone(r, 't2');

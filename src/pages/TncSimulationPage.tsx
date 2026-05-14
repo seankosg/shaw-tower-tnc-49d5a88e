@@ -39,8 +39,14 @@ const STAGE_COLORS: Record<TncSimStage, string> = {
   t1: 'hsl(var(--chart-1, 215 90% 55%))',
   t2: 'hsl(var(--chart-2, 142 70% 45%))',
   r1: 'hsl(var(--chart-3, 25 90% 55%))',
-  r2a: 'hsl(var(--chart-4, 280 70% 55%))',
+  r2s: 'hsl(var(--chart-4, 280 70% 55%))',
 };
+
+// Legacy URL params used 'r2a' before R2S replaced it as the key milestone.
+function migrateLegacyStage(s: string): TncSimStage | null {
+  const v = s === 'r2a' ? 'r2s' : s;
+  return (ALL_TNC_SIM_STAGES as string[]).includes(v) ? (v as TncSimStage) : null;
+}
 
 export default function TncSimulationPage() {
   const navigate = useNavigate();
@@ -77,9 +83,9 @@ export default function TncSimulationPage() {
   const [stages, setStages] = useState<TncSimStage[]>(() => {
     const raw = searchParams.get('stages');
     if (!raw) return [...ALL_TNC_SIM_STAGES];
-    const parts = raw.split(',').filter(Boolean) as TncSimStage[];
-    const valid = parts.filter(s => (ALL_TNC_SIM_STAGES as string[]).includes(s));
-    return valid.length ? valid : [...ALL_TNC_SIM_STAGES];
+    const parts = raw.split(',').filter(Boolean);
+    const valid = parts.map(migrateLegacyStage).filter((s): s is TncSimStage => s != null);
+    return valid.length ? ALL_TNC_SIM_STAGES.filter(k => valid.includes(k)) : [...ALL_TNC_SIM_STAGES];
   });
   const [rangeDays, setRangeDays] = useState<number>(Number(searchParams.get('range') || 7));
   const [delayMode, setDelayMode] = useState<DelayMode>(() => {
@@ -149,7 +155,7 @@ export default function TncSimulationPage() {
 
   const goRawRemaining = (stage: TncSimStage) => {
     // B2: route to SubtestList using the new generic "remaining" filter so
-    // it works for all 4 stages (incl. R1/R2A) and means
+    // it works for all 4 stages (incl. R1/R2S) and means
     // "stage's actual completion not reached by <asOf>".
     const sp = new URLSearchParams({
       source: 'simulation',

@@ -85,9 +85,10 @@ export function maxDelayDays(s: SubtestForDashboard, today: string): number {
  * All workflow stages — used by the dedicated all-stage Overdue / At-Risk
  * alert banner (Tier 3) which intentionally surfaces R1/R2 report delays
  * alongside Pred/T1/T2 execution delays.
- * R2 is split into Submission (r2s) and Approval (r2a) milestones.
+ * R2 = R2 Submission (r2s) — the active key milestone. R2 Approval (r2a)
+ * is hidden from UI per business decision; data is still captured.
  */
-const ALL_STAGES: StageKey[] = ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'];
+const ALL_STAGES: StageKey[] = ['pred', 't1', 't2', 'r1', 'r2s'];
 
 /** True if any of the 5 stages has planned date on/before as-of date and not Done. */
 export function isOverdueAllStages(s: SubtestForDashboard, asOfDate: string): boolean {
@@ -108,14 +109,12 @@ export function isAtRiskAllStages(s: SubtestForDashboard, today: string, thresho
 
 /**
  * Stages used for "stage occurrence" sum displayed in the Tier 3 banner.
- * Matches the 5 Tier 2 stage cards: Pred / T1 / T2 / R1 (Submission) / R2 (Approval).
- * R2 Submission (r2s) is intentionally excluded so the sum equals
- * the sum of OD badges shown on the Tier 2 cards.
+ * Matches the 5 Tier 2 stage cards: Pred / T1 / T2 / R1S / R2S.
  */
-const OCCURRENCE_STAGES: StageKey[] = ['pred', 't1', 't2', 'r1', 'r2a'];
+const OCCURRENCE_STAGES: StageKey[] = ['pred', 't1', 't2', 'r1', 'r2s'];
 
 /**
- * Sum of overdue counts across the 5 Tier-2 stages (Pred/T1/T2/R1S/R2A).
+ * Sum of overdue counts across the 5 Tier-2 stages (Pred/T1/T2/R1S/R2S).
  * A single subtest can contribute multiple times if multiple stages are overdue.
  * This equals the sum of OD badges shown on Tier 2 stage cards.
  */
@@ -323,8 +322,8 @@ export function aggregatePlanActualByGroup(
       t1: calc('t1'),
       t2: calc('t2'),
       r1: calc('r1'),
-      // r2 entry uses the final approval milestone (r2a) for back-compat.
-      r2: calc('r2a'),
+      // r2 entry uses the submission milestone (r2s) — active key indicator.
+      r2: calc('r2s'),
     });
   }
   // default sort: most-delayed (largest negative cumulative variance T2 then T1) first

@@ -142,7 +142,10 @@ export function getMaxDelayDaysAsOf(row: StageMetricRow, stages: StageKey[], asO
   return stages.reduce((worst, stage) => Math.max(worst, getStageDelayDaysAsOf(row, stage, asOfDate)), 0);
 }
 
-export const ALL_STAGE_KEYS: StageKey[] = ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'];
+// NOTE: 'r2a' (R2 Approval) is intentionally excluded from the public stage list.
+// R2S (R2 Submission) is the active key milestone. The r2a stage helpers above
+// remain functional for legacy URL params and one-off look-ups; keep them as-is.
+export const ALL_STAGE_KEYS: StageKey[] = ['pred', 't1', 't2', 'r1', 'r2s'];
 
 export type StageFilterInput = 'all' | StageKey | StageKey[];
 

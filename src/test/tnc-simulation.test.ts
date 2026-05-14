@@ -65,22 +65,22 @@ describe('simulateTncStageAt — T1', () => {
   });
 });
 
-describe('Delay handling modes — R2A', () => {
+describe('Delay handling modes — R2S', () => {
   // 1 delayed item: planned in past, not done
   const items: SubtestForDashboard[] = [
-    mk({ id: 'd1', r2_target_approval_date: '2026-01-10' }),
+    mk({ id: 'd1', r2_target_submission_date: '2026-01-10' }),
   ];
   const dataDate = '2026-02-01';
   const target = '2026-02-15';
 
   it('A optimistic: delayed item still counted in forecast at original planned date', () => {
-    const r = simulateTncStageAt(items, 'r2a', target, { mode: 'optimistic', dataDate });
+    const r = simulateTncStageAt(items, 'r2s', target, { mode: 'optimistic', dataDate });
     expect(r.delayedCount).toBe(1);
     expect(r.forecast).toBe(1);
   });
 
   it('C penalty: delayed item excluded from forecast', () => {
-    const r = simulateTncStageAt(items, 'r2a', target, { mode: 'penalty', dataDate });
+    const r = simulateTncStageAt(items, 'r2s', target, { mode: 'penalty', dataDate });
     expect(r.delayedCount).toBe(1);
     expect(r.forecast).toBe(0);
     expect(r.predicted).toBe(0);
