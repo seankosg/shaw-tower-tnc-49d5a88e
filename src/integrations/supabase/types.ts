@@ -1369,6 +1369,7 @@ export type Database = {
           hdec_pic_name: string | null
           id: string
           is_active: boolean
+          item_no: number | null
           item_type: string | null
           level: string | null
           location: string | null
@@ -1418,6 +1419,7 @@ export type Database = {
           hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
+          item_no?: number | null
           item_type?: string | null
           level?: string | null
           location?: string | null
@@ -1467,6 +1469,7 @@ export type Database = {
           hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
+          item_no?: number | null
           item_type?: string | null
           level?: string | null
           location?: string | null
