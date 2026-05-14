@@ -15,13 +15,13 @@ function classifyStage(
   if (isStageDone(row, stage)) return 'done';
   if (isStageDelayedAsOf(row, stage, asOfDate)) return 'hold';
   if (status === 'Hold') return 'hold';
-  // For T&C stages, 'WIP' literal exists; for Report stages, treat 'Submitted'/'Under Review' (non-done) as WIP
+  // For T&C stages, 'WIP' literal exists; for Report stages, treat 'Submitted'/'Under Review' (non-done) as WIP.
+  // For r2s the milestone IS submission, so 'Submitted'/'Under Review' map to done via isStageDone above.
   if (status === 'WIP') return 'wip';
-  if (stage === 'r2a' && (status === 'Submitted' || status === 'Under Review')) return 'wip';
   if (status === 'Planned') return 'planned';
   // Planned date present but not yet done → planned
   if (stage === 'r1' && row.r1_target_submission_date) return 'planned';
-  if (stage === 'r2a' && row.r2_target_approval_date) return 'planned';
+  if (stage === 'r2s' && row.r2_target_submission_date) return 'planned';
   return 'empty';
 }
 
@@ -64,8 +64,11 @@ export interface StageProgressProps {
   r1Status?: ReportStatus | null;
   r1ActualSubmissionDate?: string | null;
   r1TargetSubmissionDate?: string | null;
-  // R2A — Client approval of HDEC report
+  // R2S — HDEC → Client report submission (active key milestone)
   r2Status?: ReportStatus | null;
+  r2ActualSubmissionDate?: string | null;
+  r2TargetSubmissionDate?: string | null;
+  // R2A approval dates retained on the row for legacy data, but no longer surfaced.
   r2ActualApprovalDate?: string | null;
   r2TargetApprovalDate?: string | null;
   asOfDate?: string | null;
@@ -86,6 +89,8 @@ export function StageProgress({
   r1ActualSubmissionDate = null,
   r1TargetSubmissionDate = null,
   r2Status = null,
+  r2ActualSubmissionDate = null,
+  r2TargetSubmissionDate = null,
   r2ActualApprovalDate = null,
   r2TargetApprovalDate = null,
   asOfDate = null,
@@ -106,6 +111,8 @@ export function StageProgress({
     r1_target_submission_date: r1TargetSubmissionDate,
     r1_actual_submission_date: r1ActualSubmissionDate,
     r2_status: r2Status,
+    r2_target_submission_date: r2TargetSubmissionDate,
+    r2_actual_submission_date: r2ActualSubmissionDate,
     r2_target_approval_date: r2TargetApprovalDate,
     r2_actual_approval_date: r2ActualApprovalDate,
   };
@@ -113,7 +120,7 @@ export function StageProgress({
   const t1 = classifyStage(row, 't1', t1Status, delayAsOfDate);
   const t2 = classifyStage(row, 't2', t2Status, delayAsOfDate);
   const r1 = classifyStage(row, 'r1', r1Status, delayAsOfDate);
-  const r2a = classifyStage(row, 'r2a', r2Status, delayAsOfDate);
+  const r2s = classifyStage(row, 'r2s', r2Status, delayAsOfDate);
 
   const stateLabel = (s: StageState) =>
     s === 'done' ? 'Done' : s === 'wip' ? 'WIP' : s === 'hold' ? 'Delay' : s === 'planned' ? 'Planned' : '—';
@@ -135,7 +142,7 @@ export function StageProgress({
           <Connector />
           <Pip state={r1} label={`R1: ${stateLabel(r1)}`} />
           <Connector />
-          <Pip state={r2a} label={`R2A: ${stateLabel(r2a)}`} />
+          <Pip state={r2s} label={`R2S: ${stateLabel(r2s)}`} />
         </span>
       </TooltipTrigger>
       <TooltipContent side="right" className="text-xs">
@@ -162,11 +169,11 @@ export function StageProgress({
             ) : null}
           </div>
           <div>
-            <span className="font-medium">R2A (Client Apv.):</span> {stateLabel(r2a)}
-            {r2ActualApprovalDate ? (
-              <span className="text-muted-foreground"> · {formatDdMmm(r2ActualApprovalDate)}</span>
-            ) : r2TargetApprovalDate ? (
-              <span className="text-muted-foreground"> (plan {formatDdMmm(r2TargetApprovalDate)})</span>
+            <span className="font-medium">R2S (HDEC→Client):</span> {stateLabel(r2s)}
+            {r2ActualSubmissionDate ? (
+              <span className="text-muted-foreground"> · {formatDdMmm(r2ActualSubmissionDate)}</span>
+            ) : r2TargetSubmissionDate ? (
+              <span className="text-muted-foreground"> (plan {formatDdMmm(r2TargetSubmissionDate)})</span>
             ) : null}
           </div>
         </div>
@@ -183,7 +190,7 @@ export function StageProgressLegend() {
       <span className="inline-flex items-center gap-1"><Pip state="wip" label="WIP" /> WIP</span>
       <span className="inline-flex items-center gap-1"><Pip state="planned" label="Planned" /> Planned</span>
       <span className="inline-flex items-center gap-1"><Pip state="hold" label="Delay" /> Delay</span>
-      <span className="ml-2">Stages: Pred → T1 → T2 → R1 → R2A</span>
+      <span className="ml-2">Stages: Pred → T1 → T2 → R1 → R2S</span>
     </div>
   );
 }

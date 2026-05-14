@@ -53,13 +53,13 @@ export function formatColumnFilterChip<TData>(
       t1?: string[];
       t2?: string[];
       r1?: string[];
-      r2a?: string[];
+      r2s?: string[];
     };
 
-    // Stage-progress (T&C Progress column): keys pred/t1/t2/r1/r2a
-    const STAGE_KEYS: Array<'pred' | 't1' | 't2' | 'r1' | 'r2a'> = ['pred', 't1', 't2', 'r1', 'r2a'];
+    // Stage-progress (T&C Progress column): keys pred/t1/t2/r1/r2s
+    const STAGE_KEYS: Array<'pred' | 't1' | 't2' | 'r1' | 'r2s'> = ['pred', 't1', 't2', 'r1', 'r2s'];
     const STAGE_LABEL: Record<string, string> = {
-      pred: 'Pred', t1: 'T1', t2: 'T2', r1: 'R1', r2a: 'R2A',
+      pred: 'Pred', t1: 'T1', t2: 'T2', r1: 'R1', r2s: 'R2S',
     };
     const stagesPresent = STAGE_KEYS.filter((k) => Array.isArray(v[k]) && v[k]!.length > 0);
     if (stagesPresent.length > 0) {
