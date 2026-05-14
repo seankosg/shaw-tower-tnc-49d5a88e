@@ -414,6 +414,24 @@ function FieldEditor({ field, label, value, disabled, onSave, subOptions, picOpt
       </div>
     );
   }
+  if (DATE_FIELDS.has(field)) {
+    return (
+      <div>
+        <Label className="text-xs">{label}</Label>
+        <Input
+          className="h-8"
+          type="date"
+          defaultValue={value ? String(value).slice(0, 10) : ''}
+          disabled={disabled}
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            const cur = value ? String(value).slice(0, 10) : '';
+            if (v !== cur) onSave(v || null);
+          }}
+        />
+      </div>
+    );
+  }
   if (field === 'team') {
     return (
       <div>
