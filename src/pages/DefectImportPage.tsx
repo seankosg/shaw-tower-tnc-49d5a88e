@@ -7,11 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle, Settings2, Lock } from 'lucide-react';
+import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle, Settings2, Lock, FileSpreadsheet as FileSpreadsheetIcon, Camera } from 'lucide-react';
 import { useDefectImport, type DefectFileStatus } from '@/contexts/DefectImportContext';
 import { DefectColumnSelect } from '@/components/import/DefectColumnSelect';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { useAuth } from '@/contexts/AuthContext';
+import PhotoOcrPanel from '@/components/import/PhotoOcrPanel';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 // Re-export pure helpers so existing tests/imports keep working
 export { compareIssueNoAsc, detectIssueNoSortDirection, buildSubcontractorIssueAssignments } from '@/contexts/DefectImportContext';
@@ -93,6 +95,16 @@ export default function DefectImportPage() {
           View Import Logs
         </Button>
       </div>
+
+      <Tabs defaultValue="excel">
+        <TabsList>
+          <TabsTrigger value="excel"><FileSpreadsheetIcon className="mr-1.5 h-3.5 w-3.5" />Excel Import</TabsTrigger>
+          <TabsTrigger value="photo"><Camera className="mr-1.5 h-3.5 w-3.5" />Photo OCR</TabsTrigger>
+        </TabsList>
+        <TabsContent value="photo" className="mt-4">
+          <PhotoOcrPanel disabled={modulePaused} />
+        </TabsContent>
+        <TabsContent value="excel" className="mt-4 space-y-4">
 
       {moduleActuallyPaused && (
         <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
@@ -335,6 +347,8 @@ export default function DefectImportPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
