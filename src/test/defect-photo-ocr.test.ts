@@ -46,3 +46,38 @@ describe('decideUpdate', () => {
     expect(r.payload?.actual_start_date).toBe('2026-05-14');
   });
 });
+
+describe('computeGroupBands', () => {
+  it('single group → band centered on caption_y', () => {
+    const bands = computeGroupBands([0.5]);
+    expect(bands).toHaveLength(1);
+    expect(bands[0].yTop).toBeCloseTo(0.32, 5); // 0.5 - 0.18
+    expect(bands[0].yBottom).toBeCloseTo(0.54, 5); // 0.5 + 0.04
+  });
+
+  it('three groups → adjacent bands meet at midpoints, non-overlapping', () => {
+    const bands = computeGroupBands([0.2, 0.5, 0.8]);
+    expect(bands[0].yTop).toBeCloseTo(0.02, 5); // max(0, 0.2-0.18)
+    expect(bands[0].yBottom).toBeCloseTo(0.35, 5); // mid(0.2,0.5)
+    expect(bands[1].yTop).toBeCloseTo(0.35, 5);
+    expect(bands[1].yBottom).toBeCloseTo(0.65, 5); // mid(0.5,0.8)
+    expect(bands[2].yTop).toBeCloseTo(0.65, 5);
+    expect(bands[2].yBottom).toBeCloseTo(0.84, 5); // 0.8+0.04
+  });
+
+  it('out-of-order input → bands sorted top-to-bottom but mapped back to original index', () => {
+    const bands = computeGroupBands([0.8, 0.2, 0.5]);
+    // Original index 1 had y=0.2 → first band
+    expect(bands[1].yTop).toBeCloseTo(0.02, 5);
+    expect(bands[1].yBottom).toBeCloseTo(0.35, 5);
+    // Original index 0 had y=0.8 → last band
+    expect(bands[0].yTop).toBeCloseTo(0.65, 5);
+  });
+
+  it('coincident captions → minimum band height enforced', () => {
+    const bands = computeGroupBands([0.5, 0.5]);
+    for (const b of bands) {
+      expect(b.yBottom - b.yTop).toBeGreaterThanOrEqual(0.04);
+    }
+  });
+});
