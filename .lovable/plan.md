@@ -1,82 +1,45 @@
-## 배경 / 문제
+## Spare Part Import 개선 계획 (옵션 D)
 
-현재 OMM Executive Dashboard의 **1st Status** 카드와 **2nd Status** 카드는 각각 모든 row를 독립적으로 분류합니다.
+업로드된 `Spare_Stock_Quantities_Summary_breakdown_260512.xlsx`는 4단계 계층(Category → Parent → Sub-category → Leaf)에 S/N #1, S/N #2 두 컬럼을 가지고 있습니다. 현재 파서는 3단계 가정으로 동작해 leaf 행이 데이터 행으로 잘못 분류되고, 재업로드 시 중복이 발생합니다. 아래와 같이 수정합니다.
 
-예) Sub1 제출 완료 + Sub1 응답 미수신 + Sub2 미제출인 row는
-- 1st Status → **UR** 로 카운트
-- 2nd Status → **TBS** 로 카운트
+### 1. DB 스키마 변경 (`docs_spare_part`)
+- `sub_category text` 컬럼 추가 — Sub-category 행(예: `Natural Stone`, `Ceramic Tiles`) 명을 leaf 행에 함께 저장
+- `level text` 컬럼 추가 — `category` | `parent` | `subcategory` | `leaf` 4가지 값 중 하나
+- `sn_outline text` 컬럼 추가 — S/N #1(자유 형식) 원본 보존, 기존 `sn`은 S/N #2(`A-1-a-1`)로 매핑
 
-→ 같은 row가 두 카드에 모두 잡혀 **두 카드의 합계가 전체 row 수의 2배**가 됩니다. 사용자가 원하는 정책은 "row 1개 = 집계 1회"입니다.
+### 2. 파서 (`src/lib/docs-spare-part-import-parser.ts`)
+- `FALLBACK_ALIASES` 확장: `'s/n #2' → sn`, `'s/n #1' → sn_outline`
+- 4단계 분류기 신설 — S/N #2 패턴 우선 사용
+  - `^[A-Z]$` → `category`
+  - `^[A-Z]-\d+$` → `parent`
+  - `^[A-Z]-\d+-[a-z]$` → `subcategory`
+  - `^[A-Z]-\d+-[a-z]-\d+$` → `leaf`
+  - 패턴이 없으면 S/N #1 fallback (기존 휴리스틱)
+- 컨텍스트 스택 유지 — leaf 행에 `category`, `parent_item`, `sub_category` 자동 채움
+- 안정 synthSn — S/N #2 값을 그대로 `sn`으로 사용해 재업로드 시 idempotent
+- `Category` 컬럼 → `trade` fallback 매핑
 
-## 목표 정책
+### 3. Import 페이지 (`src/pages/docs/DocsSparePartImportPage.tsx`)
+- 미리보기에 `level`, `sub_category`, `sn_outline` 컬럼 표시
+- `d_superuser`이면서 `team`이 비어있는 경우 경고
 
-각 row는 **현재 활성 cycle**의 카드에만 1회 카운트되어야 합니다.
+### 4. Raw Data 페이지 (`src/pages/docs/DocsSparePartRawDataPage.tsx`)
+- `level` 필터(All / Leaf only / Parent / Sub-category / Category) 추가, 기본값 Leaf only
+- 컬럼: `S/N` (S/N #2), `S/N Outline` (S/N #1), `Level`, `Category`, `Parent`, `Sub-category`, `Material`, ... 순으로 정리
+- 합계 행(Parent/Subcategory)은 Leaf only 모드에서 자동 숨김
 
-활성 cycle 정의 (기존 `computeOmmStatus` 파이프라인을 재사용):
+### 5. Field config / 상세 페이지
+- `docs_field_config`(sub_module=spare_part) seed: `sub_category`, `level`, `sn_outline` 노출
+- `DocsSparePartDetailPage.tsx`에 신규 필드 표시·편집
 
-| 데이터 상태 | 활성 단계 | 어디에 카운트 |
-|---|---|---|
-| 아무 데이터 없음 / sub1 제출 전 | **Sub1** | 1st Status (TBS) |
-| sub1_actual 있음, response 미정 | **Sub1** | 1st Status (UR) |
-| sub1 response = A/B/C 받음 → 다음 사이클로 진행 | **Sub2 이상** | 1st Status에서는 빠짐 |
-| sub2 단계 진행 중 | **Sub2** | 2nd Status (TBS/UR) |
-| sub2 response 받음 | **Sub3 / Final** | 2nd Status에서는 빠짐 |
-| sub3 / final 단계 | **Sub3 / Final** | 해당 Stage 카드 |
-| final response = A | **Closed** | Approved 카드 |
-| final response = B/C | **Rejected** | (전체 카운트 외 별도 표시) |
+### 검증
+- 재업로드 시 동일 `sn`(=S/N #2)으로 upsert → 중복 0
+- 203행이 정확히 import됨 (Category 2 + Parent 13 + Sub-category 59 + Leaf 129)
+- Leaf 합계가 상위 Sub-category 합계와 일치하는지 샘플 확인
 
-핵심: "**A/B/C 응답을 받은 cycle은 종결되었으므로 다음 cycle로 넘어간 것**"으로 보고 이전 카드에서는 빼는 정책. 이렇게 하면 모든 카드의 합 = row 총수가 보장됩니다.
-
-## 변경 범위
-
-### 1. `src/lib/docs-stage-records.ts`
-
-- **추가**: `currentOmmCycle(row): 'sub1' | 'sub2' | 'sub3' | 'final' | 'closed' | 'rejected'` 함수.
-  - 로직은 `computeOmmStatus`와 동일 분기를 사용해 활성 cycle 1개를 반환.
-- **수정**: `classifyOmmSub1Status(row)` — `currentOmmCycle(row) !== 'sub1'`이면 `null`(집계 제외) 반환.
-- **수정**: `classifyOmmSub2Status(row)` — `currentOmmCycle(row) !== 'sub2'`이면 `null` 반환.
-- **수정**: `computeOmmSub1StatusBuckets` / `computeOmmSub2StatusBuckets` — `null` 반환 시 카운트 스킵 (total에도 포함되지 않음). 결과적으로 카드의 `total`은 "현재 그 단계에 머물러 있는 row 수"가 됨.
-
-### 2. `src/lib/docs-dashboard-filter.ts`
-
-- `params.sub1_status` 필터: 활성 cycle이 sub1인 row만 매칭하도록 가드 추가.
-- `params.sub2_status` 필터: 활성 cycle이 sub2인 row만 매칭하도록 가드 추가.
-- 이렇게 해야 카드의 숫자와 클릭 후 Raw Data에 보이는 row 수가 일치함.
-
-### 3. `src/pages/docs/DocsExecutiveDashboardPage.tsx`
-
-- **카드 부제 / 툴팁 추가**: 두 Status 카드에 "Items currently in this cycle" 같은 한 줄 설명을 붙여 활성 단계 한정 의미를 명시.
-- 기존 dev-mode warning(`bucket sum != total`)은 그대로 유지 (변경 후에도 sum==total이 보장됨).
-
-### 4. 검증 — 합계 일관성
-
-다음 등식이 모든 team 탭 / All 탭에서 성립해야 함:
-
-```text
-1st Status.total
-+ 2nd Status.total
-+ Sub3 단계 row 수 (Stage Progress의 Sub3 카드 total)
-+ Final 단계 row 수 (Final Submission + Final Approval 중복 없는 합)
-+ Approved row 수
-+ Rejected row 수
-= 전체 OMM row 수
-```
-
-수동 점검 + 기존 dev console warning으로 확인.
-
-### 5. 영향 받지 않는 부분
-
-- ABD / Warranty 카드: 변경 없음.
-- OMM 상세 페이지(`computeOmmStatus`, `OmmCycleProgress`): 변경 없음. 각 row 자체의 cycle별 history는 그대로 표시됨.
-- Raw Data 테이블의 컬럼 표시(`sub1_response_status` 등): 변경 없음. 분류는 카드 / 필터 레벨에만 적용.
-
-## 변경되지 않는 점 (의도적)
-
-- 1st Status 카드의 **A 버킷은 보통 0**이 됩니다. (A를 받은 순간 다음 cycle로 넘어가므로). 이는 정책의 자연스러운 결과이며, "1st cycle에 머물러 있는 항목 중 A인 것"이라는 의미가 보존됨.
-- 만약 "history 기준 A/B/C 누적 통계"가 별도로 필요하면 추후 별도 카드로 추가하면 됨 (이번 작업 범위 외).
-
-## 영향 파일
-
-- `src/lib/docs-stage-records.ts` (수정 + 함수 추가)
-- `src/lib/docs-dashboard-filter.ts` (수정)
-- `src/pages/docs/DocsExecutiveDashboardPage.tsx` (카드 설명 문구만 소폭)
+### 변경 파일
+- 신규 마이그레이션 (sub_category, level, sn_outline 컬럼 + field_config seed)
+- `src/lib/docs-spare-part-import-parser.ts`
+- `src/pages/docs/DocsSparePartImportPage.tsx`
+- `src/pages/docs/DocsSparePartRawDataPage.tsx`
+- `src/pages/docs/DocsSparePartDetailPage.tsx`
