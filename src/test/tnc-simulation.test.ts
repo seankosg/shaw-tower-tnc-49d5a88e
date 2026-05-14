@@ -79,31 +79,11 @@ describe('Delay handling modes — R2A', () => {
     expect(r.forecast).toBe(1);
   });
 
-  it('B shift-today: delayed item counted in forecast (target ≥ dataDate)', () => {
-    const r = simulateTncStageAt(items, 'r2a', target, { mode: 'shift-today', dataDate });
-    expect(r.delayedCount).toBe(1);
-    expect(r.forecast).toBe(1);
-  });
-
-  it('B shift-today: delayed item NOT counted when target < dataDate', () => {
-    const r = simulateTncStageAt(items, 'r2a', '2026-01-20', { mode: 'shift-today', dataDate });
-    expect(r.forecast).toBe(0);
-  });
-
   it('C penalty: delayed item excluded from forecast', () => {
     const r = simulateTncStageAt(items, 'r2a', target, { mode: 'penalty', dataDate });
     expect(r.delayedCount).toBe(1);
     expect(r.forecast).toBe(0);
     expect(r.predicted).toBe(0);
-  });
-
-  it('D learned: lag shifts effective date forward', () => {
-    const r1 = simulateTncStageAt(items, 'r2a', target,
-      { mode: 'learned', dataDate, lagDays: { r2a: 10 } });
-    expect(r1.forecast).toBe(1);
-    const r2 = simulateTncStageAt(items, 'r2a', target,
-      { mode: 'learned', dataDate, lagDays: { r2a: 90 } });
-    expect(r2.forecast).toBe(0);
   });
 });
 

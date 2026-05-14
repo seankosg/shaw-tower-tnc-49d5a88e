@@ -28,21 +28,17 @@ export const TNC_SIM_STAGE_LABELS: Record<TncSimStage, string> = {
 
 // ───── Delay handling ─────
 
-export type DelayMode = 'optimistic' | 'shift-today' | 'penalty' | 'learned';
+export type DelayMode = 'optimistic' | 'penalty';
 
 export const DELAY_MODE_LABELS: Record<DelayMode, string> = {
-  optimistic: 'Optimistic',
-  'shift-today': 'Shift to today',
-  penalty: 'Penalty (exclude)',
-  learned: 'Learned lag',
+  optimistic: 'Best Case',
+  penalty: 'Worst Case',
 };
 
 export interface SimOptions {
   mode: DelayMode;
   /** Reference "today" — typically latest data date from completed batches. */
   dataDate: string;
-  /** Per-stage average lag in days, used only when mode === 'learned'. */
-  lagDays?: Partial<Record<TncSimStage, number>>;
   /**
    * When true, T2 is only counted as actually done if T1 is also done,
    * and R2A only if R1 is done. Mirrors the workflow rule and protects
@@ -88,38 +84,14 @@ function effectiveForecastDate(
   planned: string | null,
   dataDate: string,
   mode: DelayMode,
-  lagDays: number,
 ): string | null {
   if (!planned) return null;
   const isDelayed = planned < dataDate;
   if (!isDelayed) return planned;
   switch (mode) {
     case 'optimistic':  return planned;
-    case 'shift-today': return dataDate;
     case 'penalty':     return null;
-    case 'learned':     return addDays(planned, Math.max(0, Math.round(lagDays)));
   }
-}
-
-/**
- * Compute average lag (actual − planned, in days) per stage from completed subtests.
- * Negative lags clamp to 0; stages with sample size < 5 return 0 (insufficient data).
- */
-export function computeStageLagDays(items: SubtestForDashboard[]): Record<TncSimStage, number> {
-  const out: Record<TncSimStage, number> = { t1: 0, t2: 0, r1: 0, r2a: 0 };
-  for (const st of ALL_TNC_SIM_STAGES) {
-    let sum = 0;
-    let n = 0;
-    for (const it of items) {
-      const planned = getStagePlannedDate(it, st);
-      const actual = getStageActualDate(it, st);
-      if (!planned || !actual || !isStageDone(it, st)) continue;
-      sum += daysBetween(planned, actual);
-      n++;
-    }
-    if (n >= 5) out[st] = Math.max(0, sum / n);
-  }
-  return out;
 }
 
 // ───── Stage simulation result ─────
@@ -157,8 +129,6 @@ export function simulateTncStageAt(
   let noPlan = 0;
   let delayedCount = 0;
 
-  const lag = opts.lagDays?.[stage] ?? 0;
-
   const prereqs = prerequisiteStages(stage);
   const isEffectivelyDone = (it: SubtestForDashboard) => {
     if (!isStageDone(it, stage)) return false;
@@ -182,7 +152,7 @@ export function simulateTncStageAt(
     } else {
       if (planned && planned < opts.dataDate) delayedCount++;
       if (planned) {
-        const ef = effectiveForecastDate(planned, opts.dataDate, opts.mode, lag);
+        const ef = effectiveForecastDate(planned, opts.dataDate, opts.mode);
         if (ef && ef <= targetDate) forecast++;
       } else {
         noPlan++;
@@ -260,8 +230,7 @@ export function buildTncSimulationSeries(
           if (!isStageDone(it, pr)) { done = false; break; }
         }
       }
-      const lag = opts.lagDays?.[st] ?? 0;
-      const ef = done ? null : effectiveForecastDate(p, opts.dataDate, opts.mode, lag);
+      const ef = done ? null : effectiveForecastDate(p, opts.dataDate, opts.mode);
       pre[st].push({
         planned: p ? isoToUtc(p) : null,
         effForecast: ef ? isoToUtc(ef) : null,

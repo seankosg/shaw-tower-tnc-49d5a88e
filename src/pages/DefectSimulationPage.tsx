@@ -31,7 +31,6 @@ import {
 } from '@/lib/defect-schedule-utils';
 import {
   buildDefectSimulationSeries,
-  computeStageLagDays,
   simulateAllDefectStages,
   simulateByTeam,
   DELAY_MODE_LABELS,
@@ -91,7 +90,7 @@ export default function DefectSimulationPage() {
   const [rangeDays, setRangeDays] = useState<number>(Number(searchParams.get('range') || 7));
   const [delayMode, setDelayMode] = useState<DelayMode>(() => {
     const raw = searchParams.get('delay');
-    if (raw === 'shift-today' || raw === 'penalty' || raw === 'learned' || raw === 'optimistic') return raw;
+    if (raw === 'penalty' || raw === 'optimistic') return raw;
     return 'penalty';
   });
 
@@ -136,11 +135,9 @@ export default function DefectSimulationPage() {
     [dataDate, rangeDays],
   );
 
-  // S1 fix: lag computed on full population to avoid n<5 silent downgrade when filtered.
-  const lagDays = useMemo(() => computeStageLagDays(items), [items]);
   const opts: SimOptions = useMemo(
-    () => ({ mode: delayMode, dataDate, lagDays }),
-    [delayMode, dataDate, lagDays],
+    () => ({ mode: delayMode, dataDate }),
+    [delayMode, dataDate],
   );
 
   const series = useMemo(
@@ -174,8 +171,6 @@ export default function DefectSimulationPage() {
   // B4: forecast-new sub-label varies by mode.
   const forecastSub = (() => {
     if (delayMode === 'penalty') return 'not-done · planned ≤ target · excl. delayed';
-    if (delayMode === 'shift-today') return 'not-done · planned (delayed→today) ≤ target';
-    if (delayMode === 'learned') return 'not-done · planned (+avg lag) ≤ target';
     return 'not-done · planned ≤ target';
   })();
 
@@ -302,9 +297,7 @@ export default function DefectSimulationPage() {
               <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="optimistic">{DELAY_MODE_LABELS.optimistic}</SelectItem>
-                <SelectItem value="shift-today">{DELAY_MODE_LABELS['shift-today']}</SelectItem>
                 <SelectItem value="penalty">{DELAY_MODE_LABELS.penalty}</SelectItem>
-                <SelectItem value="learned">{DELAY_MODE_LABELS.learned}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -353,9 +346,7 @@ export default function DefectSimulationPage() {
                             <AlertTriangle className="h-3 w-3" />
                             {r.delayedCount} delayed ·{' '}
                             {delayMode === 'optimistic' && 'to be done before target date'}
-                            {delayMode === 'shift-today' && `shifted to ${dataDate}`}
                             {delayMode === 'penalty' && 'excluded from forecast'}
-                            {delayMode === 'learned' && `shifted +${Math.round(lagDays[st] ?? 0)}d (avg lag)`}
                           </div>
                           {recoverPerDay !== null && (
                             <div className="pl-4 text-[10px] opacity-90">
