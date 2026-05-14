@@ -1355,29 +1355,44 @@ export type Database = {
       }
       docs_spare_part: {
         Row: {
+          actual_confirm_date: string | null
+          actual_delivery_date: string | null
+          actual_po_date: string | null
           category: string | null
           created_at: string
           custom_payload: Json
           data_source_type: string | null
+          direction_to_subcon_date: string | null
+          eta_date: string | null
+          floor_level: string | null
           hdec_eng_name: string | null
           hdec_pic_name: string | null
           id: string
           is_active: boolean
+          item_type: string | null
           level: string | null
+          location: string | null
           material: string | null
+          material_lead_time: string | null
           parent_item: string | null
+          planned_confirm_date: string | null
+          planned_delivery_date: string | null
+          planned_po_date: string | null
+          po_status: string | null
           project_id: string
           raw_payload: Json
           remarks: string | null
           row_no: number | null
           row_version: number
           sheet_name: string | null
+          size: string | null
           sn: string | null
           sn_outline: string | null
           source_upload_id: string | null
           spares_quantity: string | null
           spares_requirements: string | null
           spec_ref: string | null
+          specification: string | null
           status: string | null
           storage_area_required: string | null
           sub_category: string | null
@@ -1389,29 +1404,44 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          actual_confirm_date?: string | null
+          actual_delivery_date?: string | null
+          actual_po_date?: string | null
           category?: string | null
           created_at?: string
           custom_payload?: Json
           data_source_type?: string | null
+          direction_to_subcon_date?: string | null
+          eta_date?: string | null
+          floor_level?: string | null
           hdec_eng_name?: string | null
           hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
+          item_type?: string | null
           level?: string | null
+          location?: string | null
           material?: string | null
+          material_lead_time?: string | null
           parent_item?: string | null
+          planned_confirm_date?: string | null
+          planned_delivery_date?: string | null
+          planned_po_date?: string | null
+          po_status?: string | null
           project_id: string
           raw_payload?: Json
           remarks?: string | null
           row_no?: number | null
           row_version?: number
           sheet_name?: string | null
+          size?: string | null
           sn?: string | null
           sn_outline?: string | null
           source_upload_id?: string | null
           spares_quantity?: string | null
           spares_requirements?: string | null
           spec_ref?: string | null
+          specification?: string | null
           status?: string | null
           storage_area_required?: string | null
           sub_category?: string | null
@@ -1423,29 +1453,44 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          actual_confirm_date?: string | null
+          actual_delivery_date?: string | null
+          actual_po_date?: string | null
           category?: string | null
           created_at?: string
           custom_payload?: Json
           data_source_type?: string | null
+          direction_to_subcon_date?: string | null
+          eta_date?: string | null
+          floor_level?: string | null
           hdec_eng_name?: string | null
           hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
+          item_type?: string | null
           level?: string | null
+          location?: string | null
           material?: string | null
+          material_lead_time?: string | null
           parent_item?: string | null
+          planned_confirm_date?: string | null
+          planned_delivery_date?: string | null
+          planned_po_date?: string | null
+          po_status?: string | null
           project_id?: string
           raw_payload?: Json
           remarks?: string | null
           row_no?: number | null
           row_version?: number
           sheet_name?: string | null
+          size?: string | null
           sn?: string | null
           sn_outline?: string | null
           source_upload_id?: string | null
           spares_quantity?: string | null
           spares_requirements?: string | null
           spec_ref?: string | null
+          specification?: string | null
           status?: string | null
           storage_area_required?: string | null
           sub_category?: string | null
