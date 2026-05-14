@@ -696,7 +696,8 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
 // ── Standard parse: 1 row = 1 subtest ────────────────────────────────
 export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
   const result: ParsedSubtest[] = [];
-  for (const row of rows) {
+  const carried = applyItemNoCarryForward(rows);
+  for (const row of carried) {
     const system = (row.system || '').trim();
     const item_no = (row.item_no || '').trim();
     const mos_code = (row.mos_code || '').trim();
