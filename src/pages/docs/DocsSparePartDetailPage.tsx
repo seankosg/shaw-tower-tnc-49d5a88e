@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Loader2, MessageSquare } from 'lucide-react';
+import { DocsRowDeleteButton } from '@/components/docs/DocsRowDeleteButton';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
@@ -188,6 +189,15 @@ export default function DocsSparePartDetailPage() {
         <Button variant="outline" size="sm" onClick={() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' })}>
           <MessageSquare className="h-4 w-4 mr-1" /> Comments
         </Button>
+        {canEditRow && (
+          <DocsRowDeleteButton
+            variant="button"
+            table="docs_spare_part"
+            id={row.id}
+            recordLabel={row.sn ?? (row.item_no != null ? `#${row.item_no}` : null)}
+            onDeleted={() => navigate('/docs/spare-part')}
+          />
+        )}
       </div>
 
       {readOnlyReason && (

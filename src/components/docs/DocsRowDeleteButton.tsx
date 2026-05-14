@@ -17,6 +17,8 @@ interface Props {
   onDeleted?: (id: string) => void;
   /** Hide button entirely when role can't delete. Default: always show, server enforces. */
   disabled?: boolean;
+  /** 'icon' (default, for table rows) or 'button' (with label, for detail page headers). */
+  variant?: 'icon' | 'button';
 }
 
 /**
@@ -24,7 +26,7 @@ interface Props {
  * Performs a soft delete (is_active=false). The row stays in the database
  * but is filtered out of every list, dashboard, statistic, and export.
  */
-export function DocsRowDeleteButton({ table, id, recordLabel, onDeleted, disabled }: Props) {
+export function DocsRowDeleteButton({ table, id, recordLabel, onDeleted, disabled, variant = 'icon' }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -49,19 +51,31 @@ export function DocsRowDeleteButton({ table, id, recordLabel, onDeleted, disable
 
   return (
     <>
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-        title="Delete row"
-        disabled={disabled}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen(true);
-        }}
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </Button>
+      {variant === 'icon' ? (
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+          title="Delete row"
+          disabled={disabled}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-destructive border-destructive/40 hover:bg-destructive hover:text-destructive-foreground"
+          disabled={disabled}
+          onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+        >
+          <Trash2 className="mr-1.5 h-4 w-4" /> Delete
+        </Button>
+      )}
 
       <AlertDialog open={open} onOpenChange={(o) => !busy && setOpen(o)}>
         <AlertDialogContent onClick={(e) => e.stopPropagation()}>
