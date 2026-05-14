@@ -29,25 +29,21 @@ export default function DocsSparePartRawDataPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const { data, error } = await (supabase as any)
-        .from('docs_spare_part')
-        .select('*')
-        .eq('is_active', true)
-        .order('category', { ascending: true })
-        .order('sn', { ascending: true })
-        .limit(2000);
-      if (!cancelled) {
-        if (error) toast({ title: 'Load failed', description: error.message, variant: 'destructive' });
-        setRows((data ?? []) as SparePartRow[]);
-        setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+  const reload = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await (supabase as any)
+      .from('docs_spare_part')
+      .select('*')
+      .eq('is_active', true)
+      .order('category', { ascending: true })
+      .order('sn', { ascending: true })
+      .limit(2000);
+    if (error) toast({ title: 'Load failed', description: error.message, variant: 'destructive' });
+    setRows((data ?? []) as SparePartRow[]);
+    setLoading(false);
   }, [toast]);
+
+  useEffect(() => { void reload(); }, [reload]);
 
   return (
     <div className="space-y-4">
