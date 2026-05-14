@@ -85,7 +85,7 @@ export default function TncSimulationPage() {
   const [rangeDays, setRangeDays] = useState<number>(Number(searchParams.get('range') || 7));
   const [delayMode, setDelayMode] = useState<DelayMode>(() => {
     const raw = searchParams.get('delay');
-    if (raw === 'shift-today' || raw === 'penalty' || raw === 'learned' || raw === 'optimistic') return raw;
+    if (raw === 'penalty' || raw === 'optimistic') return raw;
     return 'penalty';
   });
 
@@ -128,12 +128,9 @@ export default function TncSimulationPage() {
     [dataDate, rangeDays],
   );
 
-  // S1: compute lag from the full population (not the team-filtered subset).
-  // Otherwise small teams silently fall below n=5 and learned mode degrades to optimistic.
-  const lagDays = useMemo(() => computeStageLagDays(items), [items]);
   const opts: SimOptions = useMemo(
-    () => ({ mode: delayMode, dataDate, lagDays, enforceSequential: true }),
-    [delayMode, dataDate, lagDays],
+    () => ({ mode: delayMode, dataDate, enforceSequential: true }),
+    [delayMode, dataDate],
   );
 
   const series = useMemo(
@@ -167,9 +164,7 @@ export default function TncSimulationPage() {
   const forecastSubLabel = (() => {
     switch (delayMode) {
       case 'optimistic':  return 'not-done · planned ≤ target';
-      case 'shift-today': return 'not-done · planned (or today) ≤ target';
       case 'penalty':     return 'not-done · on-time planned ≤ target';
-      case 'learned':     return 'not-done · planned + lag ≤ target';
     }
   })();
 
@@ -283,9 +278,7 @@ export default function TncSimulationPage() {
               <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="optimistic">{DELAY_MODE_LABELS.optimistic}</SelectItem>
-                <SelectItem value="shift-today">{DELAY_MODE_LABELS['shift-today']}</SelectItem>
                 <SelectItem value="penalty">{DELAY_MODE_LABELS.penalty}</SelectItem>
-                <SelectItem value="learned">{DELAY_MODE_LABELS.learned}</SelectItem>
               </SelectContent>
             </Select>
           </div>
