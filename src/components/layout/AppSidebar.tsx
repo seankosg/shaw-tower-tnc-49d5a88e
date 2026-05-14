@@ -169,7 +169,13 @@ export function AppSidebar() {
                       tooltip={item.label}
                     >
                       <item.icon className="h-4 w-4" />
-                      <span>{item.label}</span>
+                      <span className="flex-1">{item.label}</span>
+                      {ocrBusy && item.path === '/defects/import' && (
+                        <Badge variant="outline" className="ml-auto gap-1 border-primary/40 bg-primary/10 px-1.5 py-0 text-[9px] text-primary">
+                          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                          {ocrLabel}
+                        </Badge>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
