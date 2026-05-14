@@ -153,6 +153,7 @@ export function simulateTncStageAt(
   let doneActual = 0;
   let forecast = 0;
   let planOnly = 0;
+  let planAtDataDate = 0;
   let noPlan = 0;
   let delayedCount = 0;
 
@@ -171,6 +172,7 @@ export function simulateTncStageAt(
     const done = isEffectivelyDone(it);
 
     if (planned && planned <= targetDate) planOnly++;
+    if (planned && planned <= opts.dataDate) planAtDataDate++;
 
     if (done) {
       // B1: status indicates done but actual_date may be missing (e.g. R1 'Under Review').
@@ -197,12 +199,16 @@ export function simulateTncStageAt(
     forecast,
     predicted,
     planOnly,
+    planAtDataDate,
     noPlan,
     delayedCount,
     predictedPct: round1(pct(predicted)),
     planPct: round1(pct(planOnly)),
+    planAtDataDatePct: round1(pct(planAtDataDate)),
     actualPct: round1(pct(doneActual)),
     gapPct: round1(pct(predicted) - pct(planOnly)),
+    behindNowPct: round1(pct(doneActual) - pct(planAtDataDate)),
+    behindNowCount: doneActual - planAtDataDate,
   };
 }
 
