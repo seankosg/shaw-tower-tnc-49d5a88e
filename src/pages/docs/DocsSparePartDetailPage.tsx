@@ -23,7 +23,7 @@ import {
 import { SparePartComments } from '@/components/comments/SparePartComments';
 import { useCommonMasters, unionWithLegacy, type MasterOption } from '@/hooks/useCommonMasters';
 
-const OVERVIEW_FIELDS = ['category', 'sn', 'parent_item', 'material', 'spec_ref', 'status'] as const;
+const OVERVIEW_FIELDS = ['sn', 'sn_outline', 'level', 'category', 'parent_item', 'sub_category', 'material', 'spec_ref', 'status'] as const;
 const REQUIREMENTS_FIELDS = ['spares_requirements', 'unit', 'spares_quantity', 'storage_area_required'] as const;
 const ASSIGNMENT_FIELDS = ['team', 'trade', 'subcontractor_name', 'hdec_pic_name', 'hdec_eng_name'] as const;
 
