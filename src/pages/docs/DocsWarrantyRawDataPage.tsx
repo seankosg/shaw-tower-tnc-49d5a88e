@@ -17,6 +17,7 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronRight, Download, ExternalLink, Filter, MessageSquare, Search, Upload } from 'lucide-react';
+import { DocsRowDeleteButton } from '@/components/docs/DocsRowDeleteButton';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -829,6 +830,23 @@ export default function DocsWarrantyRawDataPage() {
       ),
     };
 
+    const deleteColumn: ColumnDef<WarrantyRow> = {
+      id: '__delete',
+      size: 44,
+      enableSorting: false,
+      enableColumnFilter: false,
+      enableResizing: false,
+      header: '',
+      cell: ({ row }) => (
+        <DocsRowDeleteButton
+          table="warranty_items"
+          id={row.original.id}
+          recordLabel={row.original.item_no != null ? String(row.original.item_no) : (row.original.warranted_item ?? null)}
+          onDeleted={() => reload()}
+        />
+      ),
+    };
+
     const dataFields = ALL_DATA_FIELDS as readonly string[];
 
     const dataColumns: ColumnDef<WarrantyRow>[] = dataFields.map((field) => {
@@ -893,12 +911,12 @@ export default function DocsWarrantyRawDataPage() {
       };
     });
 
-    return [selectColumn, expandColumn, cycleColumn, ...dataColumns, statusColumn, openColumn];
-  }, [getLabel, navigate, childCounts, collapsedParents, toggleParent, commentCounts]);
+    return [selectColumn, expandColumn, cycleColumn, ...dataColumns, statusColumn, openColumn, deleteColumn];
+  }, [getLabel, navigate, childCounts, collapsedParents, toggleParent, commentCounts, reload]);
 
   // ── Visibility from Field Config (always show anchors) ──
   const ALWAYS_VISIBLE = useMemo(() => new Set([
-    '__select', '__expand', '__open', 'item_no', 'cycle_progress', 'current_status',
+    '__select', '__expand', '__open', '__delete', 'item_no', 'cycle_progress', 'current_status',
   ]), []);
 
   const columnVisibility = useMemo<VisibilityState>(() => {
@@ -915,7 +933,7 @@ export default function DocsWarrantyRawDataPage() {
   // Column order from Field Config sort_order with pinned anchors
   const columnOrder = useMemo(() => {
     const PINNED = ['__select', '__expand', 'cycle_progress', 'item_no'];
-    const TRAILING = ['current_status', '__open'];
+    const TRAILING = ['current_status', '__open', '__delete'];
     const remaining = (ALL_DATA_FIELDS as readonly string[]).filter(
       (f) => !PINNED.includes(f) && !TRAILING.includes(f),
     );

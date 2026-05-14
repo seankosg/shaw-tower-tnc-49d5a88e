@@ -17,6 +17,7 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Download, ExternalLink, Filter, Search, Upload } from 'lucide-react';
+import { DocsRowDeleteButton } from '@/components/docs/DocsRowDeleteButton';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -929,6 +930,23 @@ export default function DocsOMMRawDataPage() {
       ),
     };
 
+    const deleteColumn: ColumnDef<OMMRow> = {
+      id: '__delete',
+      size: 44,
+      enableSorting: false,
+      enableColumnFilter: false,
+      enableResizing: false,
+      header: '',
+      cell: ({ row }) => (
+        <DocsRowDeleteButton
+          table="docs_omm"
+          id={row.original.id}
+          recordLabel={row.original.sn ?? row.original.category ?? null}
+          onDeleted={() => reload()}
+        />
+      ),
+    };
+
     // Build a column for each known data field (Field Config drives order/visibility separately)
     const dataFields = OMM_DATA_FIELDS as readonly string[];
 
@@ -1030,13 +1048,14 @@ export default function DocsOMMRawDataPage() {
       };
     });
 
-    return [selectColumn, cycleColumn, ...dataColumns, statusColumn, openColumn];
-  }, [getLabel, optionFields, navigate, updateField]);
+    return [selectColumn, cycleColumn, ...dataColumns, statusColumn, openColumn, deleteColumn];
+  }, [getLabel, optionFields, navigate, updateField, reload]);
 
   // ── Visibility from Field Config (always show anchors) ────────────────────
   const ALWAYS_VISIBLE = new Set([
     '__select',
     '__open',
+    '__delete',
     'sn',
     'cycle_progress',
     'current_status',
@@ -1060,7 +1079,7 @@ export default function DocsOMMRawDataPage() {
   // Column order driven by Field Config sort_order, with fixed pinned/trailing anchors
   const columnOrder = useMemo(() => {
     const PINNED = ['__select', 'cycle_progress', 'sn'];
-    const TRAILING = ['current_status', '__open'];
+    const TRAILING = ['current_status', '__open', '__delete'];
     const remaining = (OMM_DATA_FIELDS as readonly string[]).filter(
       (f) => !PINNED.includes(f) && !TRAILING.includes(f),
     );

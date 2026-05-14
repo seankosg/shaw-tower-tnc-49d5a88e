@@ -17,6 +17,7 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Download, Filter, Search, Upload } from 'lucide-react';
+import { DocsRowDeleteButton } from '@/components/docs/DocsRowDeleteButton';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -765,11 +766,28 @@ export default function DocsRawDataPage() {
       return base;
     });
 
-    return [selectColumn, ...dataColumns];
-  }, [getLabel, optionFields, dataDate]);
+    const deleteColumn: ColumnDef<DocsRawRow> = {
+      id: '__delete',
+      size: 44,
+      enableSorting: false,
+      enableColumnFilter: false,
+      enableResizing: false,
+      header: '',
+      cell: ({ row }) => (
+        <DocsRowDeleteButton
+          table="docs_drawings"
+          id={row.original.id}
+          recordLabel={row.original.document_no ?? row.original.title ?? null}
+          onDeleted={() => reload()}
+        />
+      ),
+    };
+
+    return [selectColumn, ...dataColumns, deleteColumn];
+  }, [getLabel, optionFields, dataDate, reload]);
 
   const columnVisibility = useMemo<VisibilityState>(() => {
-    const v: VisibilityState = { __select: true };
+    const v: VisibilityState = { __select: true, __delete: true };
     for (const f of DOCS_RAW_FIELDS) {
       if (f === 'document_no') v[f] = true;
       else if (f === 'trade' || f === 'risk') v[f] = true; // derived columns always shown by default
@@ -781,8 +799,9 @@ export default function DocsRawDataPage() {
 
   const columnOrder = useMemo(() => {
     const PINNED = ['__select', 'cycle_progress', 'document_no'];
+    const TRAILING = ['__delete'];
     const remaining = (DOCS_RAW_FIELDS as readonly string[]).filter((id) => !PINNED.includes(id));
-    return [...PINNED, ...sortFieldNames(remaining)];
+    return [...PINNED, ...sortFieldNames(remaining), ...TRAILING];
   }, [sortFieldNames]);
 
   const table = useReactTable({
