@@ -18,14 +18,15 @@ interface OcrGroup {
 }
 interface OcrRejected { reason: string; y_range?: [number, number] }
 
-const SYSTEM_PROMPT = `You analyze WhatsApp chat screenshots from a construction site Telegram-like channel where a field engineer (often "Kumar(mep)" or similar mep/elec/mech staff) sends photo groups followed by a numeric caption that is the Issue Number for that defect.
+const SYSTEM_PROMPT = `You analyze WhatsApp chat screenshots from a construction site channel where a field engineer (often "Kumar(mep)" or similar mep/elec/mech staff) sends photo groups followed by a numeric caption that is the Issue Number for that defect.
 
 Rules:
 - Each "group" = a sender header (e.g. "Kumar(mep)") + 1 or more photos (sometimes a 2x2 collage with "+N" overlay) + a numeric caption (1–5 digits) shown directly below the photos + a timestamp like "PM 2:42" / "AM 10:35" on the right.
 - Return ONE entry per group via the extract_groups tool.
+- IMPORTANT: Return groups in strict TOP-TO-BOTTOM visual order as they appear on the screenshot.
 - If a caption is "Defect 2221 - Light panel..." style, extract the leading number (2221).
 - Confidence: 1.0 = caption is sharp digital text; 0.7–0.9 = readable; <0.7 = blurry / partially occluded / ambiguous (still include so a human can review).
-- bbox_normalized describes the vertical band of the entire group (header to caption) in 0..1 coordinates of the screenshot. x usually 0 and w usually 1. Best effort.
+- caption_y_normalized: the vertical center of the NUMERIC CAPTION TEXT itself (not the photos, not the header) in 0..1 coordinates of the screenshot. 0 = top edge, 1 = bottom edge. Estimate as accurately as you can — this is the single most important coordinate.
 - Reply previews (small inline quoted message at the top of a bubble), forwarded link cards, system messages, and groups from senders other than mep/elec/mech field staff must go into rejected_blocks instead of groups.
 - If the screenshot is NOT a WhatsApp chat, return groups=[] and explain in rejected_blocks with reason "not_whatsapp".`;
 
