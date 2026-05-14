@@ -111,7 +111,6 @@ export const DOCS_DEFAULT_FIELD_LABELS: Record<string, string> = {
   po_status: 'PO Status',
   planned_delivery_date: 'Planned Delivery Date',
   actual_delivery_date: 'Actual Delivery Date',
-  subcontractor_name: 'Subcontractor',
   status: 'Status',
 };
 
