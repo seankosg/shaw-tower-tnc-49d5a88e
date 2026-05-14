@@ -18,21 +18,17 @@ import {
 
 // ───── Delay handling ─────
 
-export type DelayMode = 'optimistic' | 'shift-today' | 'penalty' | 'learned';
+export type DelayMode = 'optimistic' | 'penalty';
 
 export const DELAY_MODE_LABELS: Record<DelayMode, string> = {
-  optimistic: 'Optimistic',
-  'shift-today': 'Shift to today',
-  penalty: 'Penalty (exclude)',
-  learned: 'Learned lag',
+  optimistic: 'Best Case',
+  penalty: 'Worst Case',
 };
 
 export interface SimOptions {
   mode: DelayMode;
   /** Reference "today" — typically latest data date from completed batches. */
   dataDate: string;
-  /** Per-stage average lag in days, used only when mode === 'learned'. */
-  lagDays?: Partial<Record<DefectScheduleStage, number>>;
 }
 
 /**
@@ -45,16 +41,13 @@ function effectiveForecastDate(
   planned: string | null,
   dataDate: string,
   mode: DelayMode,
-  lagDays: number,
 ): string | null {
   if (!planned) return null;
   const isDelayed = planned < dataDate;
   if (!isDelayed) return planned;
   switch (mode) {
     case 'optimistic':  return planned;
-    case 'shift-today': return dataDate;
     case 'penalty':     return null;
-    case 'learned':     return addDays(planned, Math.max(0, Math.round(lagDays)));
   }
 }
 
