@@ -6,7 +6,7 @@ import { SimulationLineChart } from '@/components/simulation/SimulationLineChart
 import { ToAchieveBand } from '@/components/simulation/ToAchieveBand';
 import { QtyVsPlanBanner } from '@/components/simulation/QtyVsPlanBanner';
 
-import { supabase } from '@/integrations/supabase/client';
+import { useDefectCache, refreshDefectCache } from '@/lib/defect-cache';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
@@ -51,31 +51,13 @@ export default function DefectSimulationPage() {
   const { dataDate, source: dataDateSource } = useLatestDataDate();
   const { subcontractorOptions } = useCommonMasters();
 
-  const [items, setItems] = useState<DefectItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { items: cachedItems, initialLoaded } = useDefectCache();
+  const items = cachedItems as unknown as DefectItem[];
+  const loading = !initialLoaded;
   const [lastCalcAt, setLastCalcAt] = useState<Date | null>(null);
 
-  const loadData = useMemo(() => async () => {
-    setLoading(true);
-    let all: DefectItem[] = [];
-    const PAGE = 1000;
-    for (let from = 0; ; from += PAGE) {
-      const { data } = await (supabase as any)
-        .from('defect_items')
-        .select('*')
-        .eq('is_active', true)
-        .order('issue_no')
-        .range(from, from + PAGE - 1);
-      if (!data?.length) break;
-      all = all.concat(data as DefectItem[]);
-      if (data.length < PAGE) break;
-    }
-    setItems(all);
-    setLastCalcAt(new Date());
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { if (initialLoaded) setLastCalcAt(new Date()); }, [initialLoaded, items.length]);
+  const loadData = () => { refreshDefectCache(); setLastCalcAt(new Date()); };
 
   // ───── Controls ─────
   const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');

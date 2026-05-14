@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useDefectCache, ensureHeavyLoaded } from '@/lib/defect-cache';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,27 +20,16 @@ const EMPTY_FILTERS: DefectExportFilters = {
 };
 
 export default function DefectExportPage() {
-  const [items, setItems] = useState<DefectItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { items: cachedItems, initialLoaded, heavyLoaded } = useDefectCache({ withHeavy: true });
+  const items = cachedItems as unknown as DefectItem[];
+  const loading = !initialLoaded || !heavyLoaded;
   const [filters, setFilters] = useState<DefectExportFilters>(EMPTY_FILTERS);
   const [columnMode, setColumnMode] = useState<DefectColumnMode>('visible');
   const { toast } = useToast();
   const { fields } = useDefectFieldConfig();
   const { dataDate, source: dataDateSource } = useLatestDataDate();
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const { data, error } = await (supabase as any).from('defect_items').select('*').eq('is_active', true).order('issue_no').limit(5000);
-      if (!cancelled) {
-        if (error) toast({ title: 'Load failed', description: error.message, variant: 'destructive' });
-        setItems(data ?? []);
-        setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [toast]);
+  useEffect(() => { ensureHeavyLoaded().catch(() => undefined); }, []);
 
   const setFilter = <K extends keyof DefectExportFilters>(key: K, value: DefectExportFilters[K]) => setFilters((current) => ({ ...current, [key]: value }));
   const unique = (field: keyof DefectItem) => [...new Set(items.map((item) => String(item[field] ?? '')).filter(Boolean))].sort();

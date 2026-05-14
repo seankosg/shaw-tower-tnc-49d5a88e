@@ -20,6 +20,7 @@ import { Download, Filter, MessageSquare, Search, Upload, X } from 'lucide-react
 import { META_FIELD_NAMES, type CommentSummary, EMPTY_SUMMARY, isMetaField } from '@/lib/meta-fields';
 import { MetaCell } from '@/components/raw-data/MetaCell';
 import { supabase } from '@/integrations/supabase/client';
+import { useDefectCache, refreshDefectCache, patchDefectCacheLocal } from '@/lib/defect-cache';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -396,8 +397,9 @@ export default function DefectRawDataPage() {
   const { dataDate } = useLatestDataDate();
   const storageKey = user?.id ? `defect-raw-data-state:${user.id}` : 'defect-raw-data-state:anon';
   const { isFieldVisible, getLabel, sortFieldNames, fields: fieldConfigRows, getSourceOrigin } = useDefectFieldConfig();
-  const [items, setItems] = useState<DefectRawRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { items: cachedItems, initialLoaded } = useDefectCache();
+  const items = cachedItems as DefectRawRow[];
+  const loading = !initialLoaded;
   const [stateLoaded, setStateLoaded] = useState(false);
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
   const [searchInput, setSearchInput] = useState('');
@@ -429,65 +431,24 @@ export default function DefectRawDataPage() {
   };
 
   const reload = useCallback(async () => {
-    setLoading(true);
-    let allRows: DefectRawRow[] = [];
-    const pageSize = 1000;
-    let from = 0;
-    let hasMore = true;
-    while (hasMore) {
-      const { data } = await (supabase as any)
-        .from('defect_items')
-        .select('*')
-        .eq('is_active', true)
-        .order('issue_no', { ascending: true })
-        .range(from, from + pageSize - 1);
-      if (data?.length) {
-        allRows = allRows.concat(data as DefectRawRow[]);
-        from += pageSize;
-        hasMore = data.length === pageSize;
-      } else {
-        hasMore = false;
-      }
-    }
-    setItems(allRows);
-    setLoading(false);
+    refreshDefectCache();
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      await reload();
-      if (cancelled) return;
-    })();
-    return () => { cancelled = true; };
-  }, [reload]);
+  // Load comment summary once for all defects, then patch incrementally on Realtime events.
+  const itemIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => { itemIdsRef.current = new Set(items.map((i) => i.id)); }, [items]);
 
-  // Load comment summary (count + unread) for visible defects, and refresh on realtime changes
   useEffect(() => {
-    if (!user || items.length === 0) {
-      setCommentSummary({});
-      return;
-    }
+    if (!user) { setCommentSummary({}); return; }
     let cancelled = false;
-    let timer: number | undefined;
+    const pendingIds = new Set<string>();
+    let flushTimer: number | undefined;
 
-    const refresh = async () => {
-      const ids = items.map((i) => i.id);
-      const chunkSize = 500;
-      const next: Record<string, CommentSummary> = {};
-      for (let i = 0; i < ids.length; i += chunkSize) {
-        const chunk = ids.slice(i, i + chunkSize);
-        const { data, error } = await (supabase as any).rpc('get_defect_comment_summary', { _defect_ids: chunk });
-        if (error || !data) continue;
-        for (const row of data as Array<{
-          defect_id: string;
-          comment_count: number;
-          has_unread: boolean;
-          instruction_count: number;
-          comment_count_only: number;
-          reply_count: number;
-          last_activity_at: string | null;
-        }>) {
+    const applyRows = (rows: any[]) => {
+      if (!rows.length) return;
+      setCommentSummary((prev) => {
+        const next = { ...prev };
+        for (const row of rows) {
           next[row.defect_id] = {
             count: row.comment_count,
             hasUnread: row.has_unread,
@@ -497,28 +458,55 @@ export default function DefectRawDataPage() {
             lastActivityAt: row.last_activity_at ?? null,
           };
         }
+        return next;
+      });
+    };
+
+    const fetchForIds = async (ids: string[]) => {
+      const chunkSize = 500;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const { data, error } = await (supabase as any).rpc('get_defect_comment_summary', { _defect_ids: chunk });
+        if (error || !data || cancelled) continue;
+        applyRows(data as any[]);
       }
-      if (!cancelled) setCommentSummary(next);
     };
 
-    const debouncedRefresh = () => {
-      if (timer) window.clearTimeout(timer);
-      timer = window.setTimeout(refresh, 400);
+    // Initial load: wait until items have arrived, then fetch for all ids exactly once.
+    let initialized = false;
+    const runInitial = () => {
+      if (initialized) return;
+      const ids = Array.from(itemIdsRef.current);
+      if (ids.length === 0) return;
+      initialized = true;
+      fetchForIds(ids);
     };
+    runInitial();
+    const initInterval = window.setInterval(runInitial, 500);
 
-    refresh();
+    const flushPending = () => {
+      flushTimer = undefined;
+      const ids = Array.from(pendingIds).filter((id) => itemIdsRef.current.has(id));
+      pendingIds.clear();
+      if (ids.length) fetchForIds(ids);
+    };
 
     const channel = supabase
       .channel('defect-comments-summary')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'defect_comments' }, debouncedRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'defect_comments' }, (payload: any) => {
+        const id = payload?.new?.defect_id ?? payload?.old?.defect_id;
+        if (id) pendingIds.add(id);
+        if (flushTimer == null) flushTimer = window.setTimeout(flushPending, 600);
+      })
       .subscribe();
 
     return () => {
       cancelled = true;
-      if (timer) window.clearTimeout(timer);
+      window.clearInterval(initInterval);
+      if (flushTimer) window.clearTimeout(flushTimer);
       supabase.removeChannel(channel);
     };
-  }, [user, items]);
+  }, [user]);
 
   // URL params that indicate the user arrived from a Dashboard drill-down.
   // When ANY of these are present we ignore the localStorage-saved sort/column-filter state,
@@ -1133,7 +1121,7 @@ export default function DefectRawDataPage() {
 
   const handleBulkApplied = useCallback(({ field, value, ids }: { field: string; value: string | number | null; ids: string[] }) => {
     // Optimistically apply changes locally so the table reflects updates without a full refetch
-    setItems((prev) => prev.map((row) => (ids.includes(row.id) ? ({ ...row, [field]: value as any }) : row)));
+    patchDefectCacheLocal(ids, { [field]: value } as any);
     setRowSelection({});
   }, []);
 
@@ -1484,7 +1472,7 @@ export default function DefectRawDataPage() {
         pending={criticalPending}
         table="defect_items"
         onApplied={(applied) => {
-          setItems((prev) => prev.map((r) => (applied.has(r.id) ? ({ ...r, is_critical: applied.get(r.id)! } as any) : r)));
+          applied.forEach((val, id) => patchDefectCacheLocal([id], { is_critical: val } as any));
           setCriticalPending(new Map());
         }}
         onDiscard={() => setCriticalPending(new Map())}

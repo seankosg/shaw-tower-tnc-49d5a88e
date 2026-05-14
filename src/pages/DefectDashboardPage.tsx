@@ -6,6 +6,7 @@ import { AlertCircle, AlertTriangle, CalendarIcon, CheckCircle2, ChevronDown, Ch
 import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { supabase } from '@/integrations/supabase/client';
+import { useDefectCache } from '@/lib/defect-cache';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,8 +98,9 @@ export default function DefectDashboardPage() {
   const { toast } = useToast();
   const { profile, roles } = useAuth();
   const scurveChartRef = useRef<HTMLDivElement | null>(null);
-  const [items, setItems] = useState<DefectForDashboard[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { items: cachedItems, initialLoaded } = useDefectCache();
+  const items = cachedItems as unknown as DefectForDashboard[];
+  const loading = !initialLoaded;
   useMainScrollRestoration(!loading);
   const [dataDate, setDataDate] = useState(todayIso());
   const [teamFilter, setTeamFilter] = useState<string[]>(() => {
@@ -139,24 +141,18 @@ export default function DefectDashboardPage() {
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      setLoading(true);
-      let all: DefectForDashboard[] = [];
-      const PAGE = 1000;
-      for (let from = 0; ; from += PAGE) {
-        const { data } = await (supabase as any).from('defect_items').select('*').eq('is_active', true).order('issue_no').range(from, from + PAGE - 1);
-        if (!data?.length) break;
-        all = all.concat(data as DefectForDashboard[]);
-        if (data.length < PAGE) break;
-      }
-      const latestImport = await (supabase as any).from('defect_upload_batches').select('data_date').eq('status', 'completed').not('data_date', 'is', null).order('data_date', { ascending: false }).order('uploaded_at', { ascending: false }).limit(1).maybeSingle();
-      if (!cancelled) {
-        setItems(all);
-        if (latestImport.data?.data_date) setDataDate(latestImport.data.data_date);
-        setLoading(false);
-      }
-    }
-    load();
+    (async () => {
+      const latestImport = await (supabase as any)
+        .from('defect_upload_batches')
+        .select('data_date')
+        .eq('status', 'completed')
+        .not('data_date', 'is', null)
+        .order('data_date', { ascending: false })
+        .order('uploaded_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled && latestImport.data?.data_date) setDataDate(latestImport.data.data_date);
+    })();
     return () => { cancelled = true; };
   }, []);
 
