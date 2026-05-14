@@ -44,7 +44,16 @@ const defectNav = [
   { label: 'Raw Data', icon: Database, path: '/defects/raw-data' },
   { label: 'Import', icon: Upload, path: '/defects/import' },
   { label: 'Export', icon: Download, path: '/defects/export' },
-  { label: 'Export',    icon: Download,  path: '/defects/export' },
+];
+
+const docsNav = [
+  { label: 'Dashboard', icon: BarChart3, path: '/docs/dashboard' },
+  { label: 'Raw Data ABD', icon: FileText, path: '/docs/abd' },
+  { label: 'Raw Data OMM', icon: FolderKanban, path: '/docs/omm' },
+  { label: 'Raw Data Warranty', icon: ShieldCheck, path: '/docs/warranty' },
+  { label: 'Raw Data Spare Part', icon: Package, path: '/docs/spare-part' },
+  { label: 'Import', icon: Upload, path: '/docs/import' },
+  { label: 'Export', icon: Download, path: '/docs/export' },
 ];
 
 const adminNav = [
