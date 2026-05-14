@@ -218,10 +218,28 @@ export function createDocsImportProvider<TRow>(
           // Idempotent + cached; failures are non-blocking. Per-row events are
           // collected here so we can show a detailed report after import.
           if (ensurer) {
+            // Track subcontractor names attempted in this run (idempotent).
+            // Re-uses the ensurer's internal cache; only triggers backend on
+            // never-before-seen names.
             for (const r of parsed) {
-              const row = r as { hdec_pic_name?: string | null; hdec_eng_name?: string | null; rawRowNo?: number | null };
+              const row = r as {
+                hdec_pic_name?: string | null;
+                hdec_eng_name?: string | null;
+                subcontractor_name?: string | null;
+                rawRowNo?: number | null;
+              };
               const picName = row.hdec_pic_name?.trim() || null;
               const engName = row.hdec_eng_name?.trim() || null;
+              const subName = row.subcontractor_name?.trim() || null;
+              if (!picName && !engName && !subName) continue;
+              // Subcontractor auto-create runs on every row (cheap; ensurer
+              // skips already-known names internally). It does not produce
+              // per-row autoRegistered entries today — kept simple to mirror
+              // Defect Management.
+              if (subName) {
+                try { await ensurer.ensureForRow({ subcontractor_name: subName }); }
+                catch (err) { console.warn('[docs-import] subcontractor ensure failed', err); }
+              }
               if (!picName && !engName) continue;
 
               const isNewPic = !!picName && !attemptedPic.has(nameKey(picName));

@@ -23,12 +23,24 @@ import {
 import { SparePartComments } from '@/components/comments/SparePartComments';
 import { useCommonMasters, unionWithLegacy, type MasterOption } from '@/hooks/useCommonMasters';
 
-const OVERVIEW_FIELDS = ['category', 'sn', 'parent_item', 'material', 'spec_ref', 'status'] as const;
+const OVERVIEW_FIELDS = ['category', 'sn', 'parent_item', 'sub_category', 'material', 'spec_ref', 'status'] as const;
+const ITEM_SPEC_FIELDS = ['location', 'floor_level', 'item_type', 'specification', 'size'] as const;
 const REQUIREMENTS_FIELDS = ['spares_requirements', 'unit', 'spares_quantity', 'storage_area_required'] as const;
+const PROCUREMENT_FIELDS = [
+  'material_lead_time',
+  'planned_confirm_date', 'actual_confirm_date',
+  'direction_to_subcon_date', 'eta_date',
+  'planned_po_date', 'actual_po_date', 'po_status',
+  'planned_delivery_date', 'actual_delivery_date',
+] as const;
 const ASSIGNMENT_FIELDS = ['team', 'trade', 'subcontractor_name', 'hdec_pic_name', 'hdec_eng_name'] as const;
 
 const CATEGORY_FIELDS = new Set<string>(['category']);
 const STATUS_FIELDS = new Set<string>(['status']);
+const DATE_FIELDS = new Set<string>([
+  'planned_confirm_date', 'actual_confirm_date', 'direction_to_subcon_date', 'eta_date',
+  'planned_po_date', 'actual_po_date', 'planned_delivery_date', 'actual_delivery_date',
+]);
 
 export default function DocsSparePartDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -138,7 +150,11 @@ export default function DocsSparePartDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const overviewSorted = useMemo(() => visibleSorted(OVERVIEW_FIELDS), [sortFieldNames, isFieldVisible, roles]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  const itemSpecSorted = useMemo(() => visibleSorted(ITEM_SPEC_FIELDS), [sortFieldNames, isFieldVisible, roles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const requirementsSorted = useMemo(() => visibleSorted(REQUIREMENTS_FIELDS), [sortFieldNames, isFieldVisible, roles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const procurementSorted = useMemo(() => visibleSorted(PROCUREMENT_FIELDS), [sortFieldNames, isFieldVisible, roles]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const assignmentSorted = useMemo(() => visibleSorted(ASSIGNMENT_FIELDS), [sortFieldNames, isFieldVisible, roles]);
 
@@ -225,6 +241,24 @@ export default function DocsSparePartDetailPage() {
         </CardContent>
       </Card>
 
+      {itemSpecSorted.length > 0 && (
+        <Card>
+          <CardHeader className="py-3"><CardTitle className="text-sm">Item Specification</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {itemSpecSorted.map((f) => (
+              <FieldEditor
+                key={f}
+                field={f}
+                label={getLabel(f)}
+                value={row[f]}
+                disabled={!canEditField(f) || saving}
+                onSave={(v) => save(f, v)}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="py-3"><CardTitle className="text-sm">Spare Requirements</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -240,6 +274,24 @@ export default function DocsSparePartDetailPage() {
           ))}
         </CardContent>
       </Card>
+
+      {procurementSorted.length > 0 && (
+        <Card>
+          <CardHeader className="py-3"><CardTitle className="text-sm">Procurement</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {procurementSorted.map((f) => (
+              <FieldEditor
+                key={f}
+                field={f}
+                label={getLabel(f)}
+                value={row[f]}
+                disabled={!canEditField(f) || saving}
+                onSave={(v) => save(f, v)}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="py-3"><CardTitle className="text-sm">Assignment</CardTitle></CardHeader>
@@ -357,6 +409,24 @@ function FieldEditor({ field, label, value, disabled, onSave, subOptions, picOpt
           onBlur={(e) => {
             const v = e.target.value.trim();
             if (v !== (value ?? '')) onSave(v || null);
+          }}
+        />
+      </div>
+    );
+  }
+  if (DATE_FIELDS.has(field)) {
+    return (
+      <div>
+        <Label className="text-xs">{label}</Label>
+        <Input
+          className="h-8"
+          type="date"
+          defaultValue={value ? String(value).slice(0, 10) : ''}
+          disabled={disabled}
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            const cur = value ? String(value).slice(0, 10) : '';
+            if (v !== cur) onSave(v || null);
           }}
         />
       </div>
