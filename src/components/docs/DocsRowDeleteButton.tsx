@@ -17,6 +17,8 @@ interface Props {
   onDeleted?: (id: string) => void;
   /** Hide button entirely when role can't delete. Default: always show, server enforces. */
   disabled?: boolean;
+  /** 'icon' (default, for table rows) or 'button' (with label, for detail page headers). */
+  variant?: 'icon' | 'button';
 }
 
 /**
