@@ -1105,7 +1105,7 @@ export default function DefectRawDataPage() {
 
   const handleBulkApplied = useCallback(({ field, value, ids }: { field: string; value: string | number | null; ids: string[] }) => {
     // Optimistically apply changes locally so the table reflects updates without a full refetch
-    setItems((prev) => prev.map((row) => (ids.includes(row.id) ? ({ ...row, [field]: value as any }) : row)));
+    patchDefectCacheLocal(ids, { [field]: value } as any);
     setRowSelection({});
   }, []);
 
