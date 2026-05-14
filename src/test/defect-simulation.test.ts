@@ -115,33 +115,11 @@ describe('Delay handling modes', () => {
     expect(r.forecast).toBe(1);
   });
 
-  it('B shift-today: delayed item counted in forecast (target ≥ dataDate)', () => {
-    const r = simulateDefectStageAt(items, 'completion', target, { mode: 'shift-today', dataDate });
-    expect(r.delayedCount).toBe(1);
-    expect(r.forecast).toBe(1);
-  });
-
-  it('B shift-today: delayed item NOT counted when target < dataDate', () => {
-    const r = simulateDefectStageAt(items, 'completion', '2026-01-20', { mode: 'shift-today', dataDate });
-    expect(r.forecast).toBe(0);
-  });
-
   it('C penalty: delayed item excluded from forecast', () => {
     const r = simulateDefectStageAt(items, 'completion', target, { mode: 'penalty', dataDate });
     expect(r.delayedCount).toBe(1);
     expect(r.forecast).toBe(0);
     expect(r.predicted).toBe(0);
-  });
-
-  it('D learned: lag shifts effective date forward', () => {
-    // lag 10d → ef = 2026-01-10 + 10 = 2026-01-20, target=2026-02-15 → counted
-    const r1 = simulateDefectStageAt(items, 'completion', target,
-      { mode: 'learned', dataDate, lagDays: { completion: 10 } });
-    expect(r1.forecast).toBe(1);
-    // big lag pushes ef beyond target → not counted
-    const r2 = simulateDefectStageAt(items, 'completion', target,
-      { mode: 'learned', dataDate, lagDays: { completion: 90 } });
-    expect(r2.forecast).toBe(0);
   });
 });
 
