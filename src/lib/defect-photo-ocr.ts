@@ -97,21 +97,24 @@ export interface GroupBand {
 }
 
 /**
- * Given the caption-y of every group in a single screenshot (top-to-bottom order, 0..1),
- * compute non-overlapping vertical bands that each fully contain one group.
+ * Photos sit ABOVE their numeric caption in WhatsApp screenshots. So each band's
+ * bottom edge is just above the caption text, and the top edge extends upward
+ * until it hits the previous caption (or a max photo-height).
  *
- * - top[i]    = midpoint(captionY[i-1], captionY[i])  (first group: max(0, captionY[0] - 0.18))
- * - bottom[i] = midpoint(captionY[i], captionY[i+1])  (last group:  min(1, captionY[i] + 0.04))
- * - guarantees a minimum band height so coincident captions don't produce zero-height crops.
+ * - yBottom[i] = captionY[i] - gap                                 (just above the number)
+ * - yTop[i]    = max(prevCaptionY + gap, yBottom - maxPhotoHeight) (just below the previous number, or up to maxPhotoHeight)
+ * - For the first group, yTop = max(0, yBottom - maxPhotoHeight).
+ * - Enforces a minimum band height so coincident captions still produce a usable crop.
  */
 export function computeGroupBands(captionYs: Array<number | null | undefined>): GroupBand[] {
-  const minHeight = 0.04;
-  // Pair each input with its original index so callers can map results back 1:1.
+  const gap = 0.012;          // skip the caption text itself (text height ~0.02)
+  const maxPhotoHeight = 0.4; // a single photo block rarely exceeds 40% of a tall screenshot
+  const minHeight = 0.05;
+
   const indexed = captionYs.map((y, i) => ({
     i,
     y: typeof y === 'number' && isFinite(y) ? Math.max(0, Math.min(1, y)) : null,
   }));
-  // Sort the ones with a valid y top-to-bottom; null-y entries get a fallback band later.
   const valid = indexed.filter((p) => p.y !== null) as { i: number; y: number }[];
   valid.sort((a, b) => a.y - b.y);
 
@@ -120,13 +123,11 @@ export function computeGroupBands(captionYs: Array<number | null | undefined>): 
   for (let k = 0; k < valid.length; k += 1) {
     const cur = valid[k];
     const prevY = k > 0 ? valid[k - 1].y : null;
-    const nextY = k < valid.length - 1 ? valid[k + 1].y : null;
-    let yTop = prevY === null ? Math.max(0, cur.y - 0.18) : (prevY + cur.y) / 2;
-    let yBottom = nextY === null ? Math.min(1, cur.y + 0.04) : (cur.y + nextY) / 2;
+    const yBottom = Math.max(0, Math.min(1, cur.y - gap));
+    const lowerBoundFromPrev = prevY === null ? 0 : prevY + gap;
+    let yTop = Math.max(lowerBoundFromPrev, yBottom - maxPhotoHeight, 0);
     if (yBottom - yTop < minHeight) {
-      const center = (yTop + yBottom) / 2;
-      yTop = Math.max(0, center - minHeight / 2);
-      yBottom = Math.min(1, center + minHeight / 2);
+      yTop = Math.max(0, yBottom - minHeight);
     }
     bandsByIndex[cur.i] = { yTop, yBottom };
   }
