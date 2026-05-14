@@ -123,8 +123,6 @@ export function simulateDefectStageAt(
   let noPlan = 0;
   let delayedCount = 0;
 
-  const lag = opts.lagDays?.[stage] ?? 0;
-
   for (const it of items) {
     const planned = getDefectStagePlannedDate(it, stage);
     const actual = getEffectiveActualDate(it, stage);
@@ -142,7 +140,7 @@ export function simulateDefectStageAt(
     } else {
       if (planned && planned < opts.dataDate) delayedCount++;
       if (planned) {
-        const ef = effectiveForecastDate(planned, opts.dataDate, opts.mode, lag);
+        const ef = effectiveForecastDate(planned, opts.dataDate, opts.mode);
         if (ef && ef <= targetDate) forecast++;
       } else {
         noPlan++;
