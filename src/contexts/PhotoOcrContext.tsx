@@ -8,6 +8,7 @@ import {
   captionLocOf,
   compressForOcr,
   cropFromDataUrl,
+  canvasSegmentBands,
   computeGroupBands,
   decideUpdate,
   fetchActiveProjectId,
@@ -18,6 +19,7 @@ import {
   shouldAdoptPass2,
   type DecisionKind,
   type ExistingDefectMin,
+  type GroupBand,
   type OcrGroup,
 } from '@/lib/defect-photo-ocr';
 
@@ -237,7 +239,45 @@ export function PhotoOcrProvider({ children }: { children: ReactNode }) {
       for (const [fileId, items] of byFile.entries()) {
         const file = results.find((f) => f.id === fileId);
         if (!file) continue;
-        const bands = computeGroupBands(items.map((it) => captionLocOf(it.group)));
+        // ── Crop each group ─────────────────────────────────────────────────
+        // Strategy: try canvas brightness-scanning first (deterministic, pixel-
+        // accurate). If the segment count matches the group count, use those
+        // bands directly. Otherwise fall back to AI-reported bbox coordinates
+        // via computeGroupBands() so nothing silently breaks.
+        let bands: GroupBand[];
+        let cropSource = 'ai-bbox'; // for debug tracing
+        try {
+          const canvasBands = await canvasSegmentBands(file.fullDataUrl);
+          if (canvasBands.length === items.length) {
+            bands = canvasBands;
+            cropSource = 'canvas';
+          } else if (canvasBands.length > items.length) {
+            // Canvas found MORE bands than Pass-1 groups (e.g. noise / non-message
+            // areas detected). Match each Pass-1 group to the nearest canvas band
+            // by its caption_y_normalized, then deduplicate.
+            const used = new Set<number>();
+            bands = items.map((it) => {
+              const cy = it.group.caption_y_normalized ?? 0.5;
+              let best = -1;
+              let bestDist = Infinity;
+              for (let bi = 0; bi < canvasBands.length; bi++) {
+                if (used.has(bi)) continue;
+                const mid = (canvasBands[bi].yTop + canvasBands[bi].yBottom) / 2;
+                const dist = Math.abs(mid - cy);
+                if (dist < bestDist) { bestDist = dist; best = bi; }
+              }
+              if (best >= 0) { used.add(best); return canvasBands[best]; }
+              return computeGroupBands([captionLocOf(it.group)])[0];
+            });
+            cropSource = 'canvas-matched';
+          } else {
+            // Canvas found FEWER bands — fall back to AI-reported coords.
+            bands = computeGroupBands(items.map((it) => captionLocOf(it.group)));
+          }
+        } catch {
+          bands = computeGroupBands(items.map((it) => captionLocOf(it.group)));
+        }
+        console.debug(`[PhotoOCR] file=${file.file.name} groups=${items.length} bands=${bands.length} source=${cropSource}`);
         for (let i = 0; i < items.length; i += 1) {
           const band = bands[i];
           let cropUrl: string | null = null;

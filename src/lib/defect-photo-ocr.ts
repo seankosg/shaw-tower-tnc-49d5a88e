@@ -164,6 +164,102 @@ export function computeGroupBands(locs: Array<CaptionLoc>): GroupBand[] {
   return bandsByIndex;
 }
 
+/**
+ * Canvas-based segmentation — detects WhatsApp/Telegram message group
+ * boundaries by scanning pixel-row brightness instead of relying on
+ * AI-reported bounding box coordinates.
+ *
+ * Strategy:
+ *   • Rows with average brightness < DARK_THRESHOLD = dark background gaps
+ *   • Consecutive bright rows = one photo-group + its caption strip
+ *   • CAPTION_PAD extra rows after each bright cluster capture the
+ *     numeric caption text that sits in the narrow dark strip below photos
+ *
+ * Returns GroupBand[] sorted top-to-bottom, in normalized 0..1 y-coordinates.
+ * If count matches expectedCount the caller can use them 1-to-1; otherwise
+ * fall back to computeGroupBands().
+ */
+export async function canvasSegmentBands(
+  dataUrl: string,
+): Promise<GroupBand[]> {
+  const img = new Image();
+  await new Promise<void>((res, rej) => {
+    img.onload = () => res();
+    img.onerror = () => rej(new Error('canvasSegmentBands: image decode failed'));
+    img.src = dataUrl;
+  });
+
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  if (W === 0 || H === 0) return [];
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return [];
+  ctx.drawImage(img, 0, 0);
+  const px = ctx.getImageData(0, 0, W, H).data;
+
+  // Per-row luminance (ITU-R BT.601)
+  const lum: number[] = new Array(H);
+  for (let y = 0; y < H; y++) {
+    let s = 0;
+    const base = y * W * 4;
+    for (let x = 0; x < W; x++) {
+      const i = base + x * 4;
+      s += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    }
+    lum[y] = s / W;
+  }
+
+  // 5-row moving average to smooth noise
+  const sm: number[] = lum.map((_, y) => {
+    const lo = Math.max(0, y - 2);
+    const hi = Math.min(H - 1, y + 2);
+    let s = 0;
+    for (let r = lo; r <= hi; r++) s += lum[r];
+    return s / (hi - lo + 1);
+  });
+
+  // Telegram / WhatsApp dark background ≈ luminance < 45
+  const DARK = 45;
+  // Minimum consecutive dark rows to count as a separator between groups
+  const MIN_DARK_SEP = 8;
+  // Extra rows below each bright cluster to include the caption strip
+  const CAPTION_PAD = 42;
+  // Minimum segment height (px) — filters out tiny noise segments
+  const MIN_SEG_H = 50;
+
+  const raw: { y1: number; y2: number }[] = [];
+  let inBright = false;
+  let segStart = 0;
+  let darkRun = 0;
+
+  for (let y = 0; y <= H; y++) {
+    const isDark = y === H || sm[y] < DARK;
+    if (isDark) {
+      darkRun++;
+      if (inBright && darkRun >= MIN_DARK_SEP) {
+        // End of bright cluster: include caption pad but cap at image height
+        raw.push({ y1: segStart, y2: Math.min(H, y + CAPTION_PAD) });
+        inBright = false;
+      }
+    } else {
+      darkRun = 0;
+      if (!inBright) {
+        // Small lead-in to avoid clipping the top of sender headers
+        segStart = Math.max(0, y - 5);
+        inBright = true;
+      }
+    }
+  }
+
+  return raw
+    .filter((s) => s.y2 - s.y1 >= MIN_SEG_H)
+    .map((s) => ({ yTop: s.y1 / H, yBottom: s.y2 / H }));
+}
+
 export async function fileToDataUrl(file: File): Promise<string> {
   return await new Promise((resolve, reject) => {
     const reader = new FileReader();
