@@ -1228,6 +1228,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       }
     }
     setIsRunning(false);
+    invalidateDefectCache();
     toast({ title: 'Defect import complete' });
   };
 
