@@ -370,6 +370,12 @@ export default function DefectSimulationPage() {
                         </div>
                       );
                     })()}
+                    {r.noPlan > 0 && (
+                      <div className="mt-2 flex items-center gap-1 rounded-sm bg-amber-50 px-2 py-1 text-[11px] text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+                        <AlertTriangle className="h-3 w-3" />
+                        {r.noPlan} item(s) without planned date — never reaches 100%
+                      </div>
+                    )}
                     <ToAchieveBand
                       doneActual={r.doneActual}
                       predicted={r.predicted}
@@ -389,12 +395,6 @@ export default function DefectSimulationPage() {
                       />
                       <Stat label="Forecast new" value={`${r.forecast}`} sub={forecastSub} />
                     </div>
-                    {r.noPlan > 0 && (
-                      <div className="mt-2 flex items-center gap-1 rounded-sm bg-amber-50 px-2 py-1 text-[11px] text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
-                        <AlertTriangle className="h-3 w-3" />
-                        {r.noPlan} item(s) without planned date — never reaches 100%
-                      </div>
-                    )}
                     <Button
                       size="sm"
                       variant="ghost"
