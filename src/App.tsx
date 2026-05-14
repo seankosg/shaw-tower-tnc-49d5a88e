@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ImportProvider } from "@/contexts/ImportContext";
 import { DefectImportProvider } from "@/contexts/DefectImportContext";
+import { PhotoOcrProvider } from "@/contexts/PhotoOcrContext";
 import { DocsImportProviders } from "@/contexts/docs-import/DocsImportProviders";
 import { ModuleStatusProvider } from "@/contexts/ModuleStatusContext";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -79,6 +80,7 @@ const App = () => (
       <ModuleStatusProvider>
       <ImportProvider>
         <DefectImportProvider>
+        <PhotoOcrProvider>
         <DocsImportProviders>
         <TooltipProvider>
           <Toaster />
@@ -151,6 +153,7 @@ const App = () => (
           </BrowserRouter>
         </TooltipProvider>
         </DocsImportProviders>
+        </PhotoOcrProvider>
         </DefectImportProvider>
       </ImportProvider>
       </ModuleStatusProvider>

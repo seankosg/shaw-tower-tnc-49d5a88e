@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut, ClipboardList, Tags,
-  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical,
+  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical, Loader2,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { APP_NAME } from '@/lib/constants';
 import { useAuth } from '@/contexts/AuthContext';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
+import { usePhotoOcr } from '@/contexts/PhotoOcrContext';
 import { canAccessRoute, filterNavItems } from '@/lib/role-permissions';
 import { getRememberedRoute } from '@/hooks/useRouteMemory';
 import type { AppRole } from '@/types/enums';
@@ -65,6 +66,13 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { profile, roles, signOut, isAdmin } = useAuth();
   const { tnc, defect, docs } = useModuleStatus();
+  const { phase: ocrPhase, parseProgress, applyProgress } = usePhotoOcr();
+  const ocrBusy = ocrPhase === 'parsing' || ocrPhase === 'applying';
+  const ocrLabel = ocrPhase === 'parsing'
+    ? `OCR ${parseProgress.done}/${parseProgress.total}`
+    : ocrPhase === 'applying'
+      ? `Apply ${applyProgress.done}/${applyProgress.total}`
+      : '';
   const userName = profile?.name || profile?.login_id || 'User';
 
   const visibleMain = filterNavItems(mainNav, roles);
@@ -161,7 +169,13 @@ export function AppSidebar() {
                       tooltip={item.label}
                     >
                       <item.icon className="h-4 w-4" />
-                      <span>{item.label}</span>
+                      <span className="flex-1">{item.label}</span>
+                      {ocrBusy && item.path === '/defects/import' && (
+                        <Badge variant="outline" className="ml-auto gap-1 border-primary/40 bg-primary/10 px-1.5 py-0 text-[9px] text-primary">
+                          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                          {ocrLabel}
+                        </Badge>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
