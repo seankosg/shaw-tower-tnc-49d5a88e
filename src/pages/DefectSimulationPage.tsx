@@ -341,16 +341,35 @@ export default function DefectSimulationPage() {
                       <span className="text-xs text-muted-foreground">predicted</span>
                     </div>
                     <QtyVsPlanBanner count={r.behindNowCount} pct={r.behindNowPct} dataDate={dataDate} />
-                    {r.delayedCount > 0 && (
-                      <div className="mt-2 flex items-center gap-1 rounded-sm bg-rose-50 px-2 py-1 text-[11px] text-rose-700 dark:bg-rose-950/30 dark:text-rose-400">
-                        <AlertTriangle className="h-3 w-3" />
-                        {r.delayedCount} delayed ·{' '}
-                        {delayMode === 'optimistic' && 'kept at original planned date'}
-                        {delayMode === 'shift-today' && `shifted to ${dataDate}`}
-                        {delayMode === 'penalty' && 'excluded from forecast'}
-                        {delayMode === 'learned' && `shifted +${Math.round(lagDays[st] ?? 0)}d (avg lag)`}
-                      </div>
-                    )}
+                    {r.delayedCount > 0 && (() => {
+                      const days = Math.max(0, Math.round((Date.parse(targetIso) - Date.parse(dataDate)) / 86400000));
+                      const includesDelayed = delayMode !== 'penalty';
+                      const recoverPerDay = delayMode === 'penalty' && days > 0
+                        ? Math.ceil((Math.max(0, r.predicted - r.doneActual) + r.delayedCount) / days)
+                        : null;
+                      return (
+                        <div className="mt-2 rounded-sm bg-rose-50 px-2 py-1 text-[11px] text-rose-700 dark:bg-rose-950/30 dark:text-rose-400">
+                          <div className="flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            {r.delayedCount} delayed ·{' '}
+                            {delayMode === 'optimistic' && 'kept at original planned date'}
+                            {delayMode === 'shift-today' && `shifted to ${dataDate}`}
+                            {delayMode === 'penalty' && 'excluded from forecast'}
+                            {delayMode === 'learned' && `shifted +${Math.round(lagDays[st] ?? 0)}d (avg lag)`}
+                          </div>
+                          {includesDelayed && (
+                            <div className="pl-4 text-[10px] opacity-80">
+                              incl. {r.delayedCount} delayed item{r.delayedCount === 1 ? '' : 's'} in daily target
+                            </div>
+                          )}
+                          {recoverPerDay !== null && (
+                            <div className="pl-4 text-[10px] opacity-90">
+                              excl. {r.delayedCount} delayed · to recover: ~{recoverPerDay}/day
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <ToAchieveBand
                       doneActual={r.doneActual}
                       predicted={r.predicted}
@@ -359,8 +378,6 @@ export default function DefectSimulationPage() {
                       dataDate={dataDate}
                       targetIso={targetIso}
                       color={STAGE_COLORS[st]}
-                      delayMode={delayMode}
-                      delayedCount={r.delayedCount}
                     />
                     <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                       <Stat label="Done now" value={`${r.actualPct.toFixed(1)}%`} sub={`${r.doneActual}/${r.total}`} />
