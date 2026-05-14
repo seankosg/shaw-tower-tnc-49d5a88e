@@ -60,17 +60,17 @@ describe('computeGroupBands', () => {
     expect(bands[0].yBottom).toBeCloseTo(0.188, 5);
     expect(bands[0].yTop).toBeCloseTo(0, 5);
     expect(bands[1].yBottom).toBeCloseTo(0.488, 5);
-    // prev caption bottom = 0.212, plus gap 0.012 = 0.224
-    expect(bands[1].yTop).toBeCloseTo(0.224, 5);
+    // bare-number caption is treated as a point: prev bottom=0.2, +gap=0.212
+    expect(bands[1].yTop).toBeCloseTo(0.212, 5);
     expect(bands[2].yBottom).toBeCloseTo(0.788, 5);
-    expect(bands[2].yTop).toBeCloseTo(0.524, 5);
+    expect(bands[2].yTop).toBeCloseTo(0.512, 5);
   });
 
   it('out-of-order input → bands sorted top-to-bottom but mapped back to original index', () => {
     const bands = computeGroupBands([0.8, 0.2, 0.5]);
     expect(bands[1].yBottom).toBeCloseTo(0.188, 5);
     expect(bands[0].yBottom).toBeCloseTo(0.788, 5);
-    expect(bands[0].yTop).toBeCloseTo(0.524, 5);
+    expect(bands[0].yTop).toBeCloseTo(0.512, 5);
   });
 
   it('coincident captions → minimum band height enforced', () => {
