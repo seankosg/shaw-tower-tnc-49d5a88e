@@ -1363,6 +1363,7 @@ export type Database = {
           hdec_pic_name: string | null
           id: string
           is_active: boolean
+          level: string | null
           material: string | null
           parent_item: string | null
           project_id: string
@@ -1372,12 +1373,14 @@ export type Database = {
           row_version: number
           sheet_name: string | null
           sn: string | null
+          sn_outline: string | null
           source_upload_id: string | null
           spares_quantity: string | null
           spares_requirements: string | null
           spec_ref: string | null
           status: string | null
           storage_area_required: string | null
+          sub_category: string | null
           subcontractor_name: string | null
           team: Database["public"]["Enums"]["team_type"] | null
           trade: string | null
@@ -1394,6 +1397,7 @@ export type Database = {
           hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
+          level?: string | null
           material?: string | null
           parent_item?: string | null
           project_id: string
@@ -1403,12 +1407,14 @@ export type Database = {
           row_version?: number
           sheet_name?: string | null
           sn?: string | null
+          sn_outline?: string | null
           source_upload_id?: string | null
           spares_quantity?: string | null
           spares_requirements?: string | null
           spec_ref?: string | null
           status?: string | null
           storage_area_required?: string | null
+          sub_category?: string | null
           subcontractor_name?: string | null
           team?: Database["public"]["Enums"]["team_type"] | null
           trade?: string | null
@@ -1425,6 +1431,7 @@ export type Database = {
           hdec_pic_name?: string | null
           id?: string
           is_active?: boolean
+          level?: string | null
           material?: string | null
           parent_item?: string | null
           project_id?: string
@@ -1434,12 +1441,14 @@ export type Database = {
           row_version?: number
           sheet_name?: string | null
           sn?: string | null
+          sn_outline?: string | null
           source_upload_id?: string | null
           spares_quantity?: string | null
           spares_requirements?: string | null
           spec_ref?: string | null
           status?: string | null
           storage_area_required?: string | null
+          sub_category?: string | null
           subcontractor_name?: string | null
           team?: Database["public"]["Enums"]["team_type"] | null
           trade?: string | null
