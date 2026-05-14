@@ -153,6 +153,7 @@ const App = () => (
           </BrowserRouter>
         </TooltipProvider>
         </DocsImportProviders>
+        </PhotoOcrProvider>
         </DefectImportProvider>
       </ImportProvider>
       </ModuleStatusProvider>
