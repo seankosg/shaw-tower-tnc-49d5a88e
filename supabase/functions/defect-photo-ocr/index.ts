@@ -13,19 +13,20 @@ interface OcrGroup {
   sender: string | null;
   timestamp_text: string | null;
   confidence: number;
-  bbox_normalized: { x: number; y: number; w: number; h: number } | null;
+  caption_y_normalized: number | null;
   notes?: string | null;
 }
 interface OcrRejected { reason: string; y_range?: [number, number] }
 
-const SYSTEM_PROMPT = `You analyze WhatsApp chat screenshots from a construction site Telegram-like channel where a field engineer (often "Kumar(mep)" or similar mep/elec/mech staff) sends photo groups followed by a numeric caption that is the Issue Number for that defect.
+const SYSTEM_PROMPT = `You analyze WhatsApp chat screenshots from a construction site channel where a field engineer (often "Kumar(mep)" or similar mep/elec/mech staff) sends photo groups followed by a numeric caption that is the Issue Number for that defect.
 
 Rules:
 - Each "group" = a sender header (e.g. "Kumar(mep)") + 1 or more photos (sometimes a 2x2 collage with "+N" overlay) + a numeric caption (1–5 digits) shown directly below the photos + a timestamp like "PM 2:42" / "AM 10:35" on the right.
 - Return ONE entry per group via the extract_groups tool.
+- IMPORTANT: Return groups in strict TOP-TO-BOTTOM visual order as they appear on the screenshot.
 - If a caption is "Defect 2221 - Light panel..." style, extract the leading number (2221).
 - Confidence: 1.0 = caption is sharp digital text; 0.7–0.9 = readable; <0.7 = blurry / partially occluded / ambiguous (still include so a human can review).
-- bbox_normalized describes the vertical band of the entire group (header to caption) in 0..1 coordinates of the screenshot. x usually 0 and w usually 1. Best effort.
+- caption_y_normalized: the vertical center of the NUMERIC CAPTION TEXT itself (not the photos, not the header) in 0..1 coordinates of the screenshot. 0 = top edge, 1 = bottom edge. Estimate as accurately as you can — this is the single most important coordinate.
 - Reply previews (small inline quoted message at the top of a bubble), forwarded link cards, system messages, and groups from senders other than mep/elec/mech field staff must go into rejected_blocks instead of groups.
 - If the screenshot is NOT a WhatsApp chat, return groups=[] and explain in rejected_blocks with reason "not_whatsapp".`;
 
@@ -49,17 +50,7 @@ const EXTRACT_TOOL = {
               sender: { type: 'string' },
               timestamp_text: { type: 'string' },
               confidence: { type: 'number' },
-              bbox_normalized: {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                  x: { type: 'number' },
-                  y: { type: 'number' },
-                  w: { type: 'number' },
-                  h: { type: 'number' },
-                },
-                required: ['x', 'y', 'w', 'h'],
-              },
+              caption_y_normalized: { type: 'number', description: 'Vertical center (0..1) of the numeric caption text.' },
               notes: { type: 'string' },
             },
             required: ['issue_no', 'caption_raw', 'confidence'],
@@ -159,21 +150,29 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'tool_args_unparseable', detail: String(e) }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Light post-processing: strip non-digits from issue_no, drop empties, clamp confidence.
+    // Light post-processing: strip non-digits from issue_no, drop empties, clamp confidence,
+    // clamp caption_y_normalized to [0,1], and sort top-to-bottom.
     const cleanGroups: OcrGroup[] = (parsed.groups || [])
       .map((g) => {
         const digits = String(g.issue_no ?? '').replace(/\D+/g, '').replace(/^0+(\d)/, '$1');
+        const rawY = (g as any).caption_y_normalized;
+        const y = typeof rawY === 'number' && isFinite(rawY) ? Math.max(0, Math.min(1, rawY)) : null;
         return {
           issue_no: digits,
           caption_raw: String(g.caption_raw ?? ''),
           sender: g.sender ?? null,
           timestamp_text: g.timestamp_text ?? null,
           confidence: Math.max(0, Math.min(1, Number(g.confidence ?? 0))),
-          bbox_normalized: g.bbox_normalized ?? null,
+          caption_y_normalized: y,
           notes: g.notes ?? null,
         } satisfies OcrGroup;
       })
-      .filter((g) => g.issue_no.length > 0);
+      .filter((g) => g.issue_no.length > 0)
+      .sort((a, b) => {
+        const ay = a.caption_y_normalized ?? Number.POSITIVE_INFINITY;
+        const by = b.caption_y_normalized ?? Number.POSITIVE_INFINITY;
+        return ay - by;
+      });
 
     return new Response(JSON.stringify({
       groups: cleanGroups,

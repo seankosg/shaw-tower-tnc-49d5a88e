@@ -11,6 +11,7 @@ import {
   callPhotoOcr,
   compressForOcr,
   cropFromDataUrl,
+  computeGroupBands,
   decideUpdate,
   fetchActiveProjectId,
   fetchExistingDefects,
@@ -21,6 +22,7 @@ import {
   type ExistingDefectMin,
   type OcrGroup,
 } from '@/lib/defect-photo-ocr';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 
 type Phase = 'upload' | 'parsing' | 'review' | 'applying' | 'done';
@@ -76,6 +78,7 @@ export default function PhotoOcrPanel({ disabled }: { disabled?: boolean }) {
   const [parseProgress, setParseProgress] = useState({ done: 0, total: 0 });
   const [applyProgress, setApplyProgress] = useState({ done: 0, total: 0 });
   const [summary, setSummary] = useState<{ updated: number; skipped: number; notFound: number; failed: number; rejectedBlocks: number } | null>(null);
+  const [previewItem, setPreviewItem] = useState<ReviewItem | null>(null);
 
   const addFiles = useCallback(async (incoming: File[]) => {
     const accepted = incoming.filter((f) => /^image\/(jpeg|jpg|png|webp)$/i.test(f.type));
@@ -188,11 +191,24 @@ export default function PhotoOcrPanel({ disabled }: { disabled?: boolean }) {
         const d = decideUpdate(ex, dataDate, item.group.confidence);
         return { ...item, existing: ex, decision: d.kind, decisionReason: d.reason ?? '' } satisfies ReviewItem;
       });
-      // Lazy-build crops (best-effort).
+      // Build per-file group bands from caption_y, then crop each band.
+      const byFile = new Map<string, ReviewItem[]>();
       for (const it of matched) {
-        const file = results.find((f) => f.id === it.fileId);
-        if (file && it.group.bbox_normalized) {
-          try { it.cropDataUrl = await cropFromDataUrl(file.fullDataUrl, it.group.bbox_normalized); } catch { /* ignore */ }
+        const arr = byFile.get(it.fileId) ?? [];
+        arr.push(it);
+        byFile.set(it.fileId, arr);
+      }
+      for (const [fileId, items] of byFile.entries()) {
+        const file = results.find((f) => f.id === fileId);
+        if (!file) continue;
+        const bands = computeGroupBands(items.map((it) => it.group.caption_y_normalized));
+        for (let i = 0; i < items.length; i += 1) {
+          const band = bands[i];
+          try {
+            items[i].cropDataUrl = await cropFromDataUrl(file.fullDataUrl, {
+              x: 0, y: band.yTop, w: 1, h: Math.max(0.01, band.yBottom - band.yTop),
+            });
+          } catch { /* ignore */ }
         }
       }
       setReviewItems(matched);
@@ -442,13 +458,20 @@ export default function PhotoOcrPanel({ disabled }: { disabled?: boolean }) {
               const style = decisionStyles[it.decision];
               return (
                 <div key={it.rowKey} className={`flex items-start gap-3 rounded-md border p-2 ${it.excluded ? 'opacity-50' : ''}`}>
-                  {it.cropDataUrl ? (
-                    <img src={it.cropDataUrl} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
-                  ) : (
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
-                      <Eye className="h-5 w-5" />
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setPreviewItem(it)}
+                    className="h-16 w-16 shrink-0 overflow-hidden rounded ring-1 ring-border hover:ring-primary"
+                    title="Click to view full screenshot"
+                  >
+                    {it.cropDataUrl ? (
+                      <img src={it.cropDataUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
+                        <Eye className="h-5 w-5" />
+                      </div>
+                    )}
+                  </button>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[10px] text-muted-foreground">Issue No:</span>
@@ -502,6 +525,32 @@ export default function PhotoOcrPanel({ disabled }: { disabled?: boolean }) {
           </CardContent>
         </Card>
       )}
+
+      {/* Full-screenshot preview dialog with caption-y highlight */}
+      <Dialog open={!!previewItem} onOpenChange={(o) => !o && setPreviewItem(null)}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              Issue {previewItem?.editedIssueNo} — {previewItem?.fileName}
+            </DialogTitle>
+          </DialogHeader>
+          {previewItem && (() => {
+            const file = files.find((f) => f.id === previewItem.fileId);
+            const y = previewItem.group.caption_y_normalized;
+            return (
+              <div className="relative w-full">
+                {file && <img src={file.fullDataUrl} alt="" className="block w-full rounded" />}
+                {y !== null && y !== undefined && (
+                  <div
+                    className="pointer-events-none absolute inset-x-0 border-y-2 border-primary bg-primary/15"
+                    style={{ top: `${y * 100}%`, height: '4%', transform: 'translateY(-50%)' }}
+                  />
+                )}
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

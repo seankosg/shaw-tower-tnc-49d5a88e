@@ -80,7 +80,8 @@ export interface OcrGroup {
   sender: string | null;
   timestamp_text: string | null;
   confidence: number;
-  bbox_normalized: { x: number; y: number; w: number; h: number } | null;
+  /** Vertical center (0..1) of the numeric caption text. May be null on older responses. */
+  caption_y_normalized: number | null;
   notes?: string | null;
 }
 
@@ -88,6 +89,48 @@ export interface OcrEdgeResponse {
   groups: OcrGroup[];
   rejected_blocks: { reason: string; y_range?: [number, number] }[];
   model: string;
+}
+
+export interface GroupBand {
+  yTop: number;
+  yBottom: number;
+}
+
+/**
+ * Given the caption-y of every group in a single screenshot (top-to-bottom order, 0..1),
+ * compute non-overlapping vertical bands that each fully contain one group.
+ *
+ * - top[i]    = midpoint(captionY[i-1], captionY[i])  (first group: max(0, captionY[0] - 0.18))
+ * - bottom[i] = midpoint(captionY[i], captionY[i+1])  (last group:  min(1, captionY[i] + 0.04))
+ * - guarantees a minimum band height so coincident captions don't produce zero-height crops.
+ */
+export function computeGroupBands(captionYs: Array<number | null | undefined>): GroupBand[] {
+  const minHeight = 0.04;
+  // Pair each input with its original index so callers can map results back 1:1.
+  const indexed = captionYs.map((y, i) => ({
+    i,
+    y: typeof y === 'number' && isFinite(y) ? Math.max(0, Math.min(1, y)) : null,
+  }));
+  // Sort the ones with a valid y top-to-bottom; null-y entries get a fallback band later.
+  const valid = indexed.filter((p) => p.y !== null) as { i: number; y: number }[];
+  valid.sort((a, b) => a.y - b.y);
+
+  const bandsByIndex: GroupBand[] = new Array(captionYs.length).fill(null).map(() => ({ yTop: 0, yBottom: 1 }));
+
+  for (let k = 0; k < valid.length; k += 1) {
+    const cur = valid[k];
+    const prevY = k > 0 ? valid[k - 1].y : null;
+    const nextY = k < valid.length - 1 ? valid[k + 1].y : null;
+    let yTop = prevY === null ? Math.max(0, cur.y - 0.18) : (prevY + cur.y) / 2;
+    let yBottom = nextY === null ? Math.min(1, cur.y + 0.04) : (cur.y + nextY) / 2;
+    if (yBottom - yTop < minHeight) {
+      const center = (yTop + yBottom) / 2;
+      yTop = Math.max(0, center - minHeight / 2);
+      yBottom = Math.min(1, center + minHeight / 2);
+    }
+    bandsByIndex[cur.i] = { yTop, yBottom };
+  }
+  return bandsByIndex;
 }
 
 export async function fileToDataUrl(file: File): Promise<string> {
