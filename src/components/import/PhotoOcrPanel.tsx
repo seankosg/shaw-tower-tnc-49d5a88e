@@ -11,6 +11,7 @@ import {
   callPhotoOcr,
   compressForOcr,
   cropFromDataUrl,
+  computeGroupBands,
   decideUpdate,
   fetchActiveProjectId,
   fetchExistingDefects,
@@ -21,6 +22,7 @@ import {
   type ExistingDefectMin,
   type OcrGroup,
 } from '@/lib/defect-photo-ocr';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 
 type Phase = 'upload' | 'parsing' | 'review' | 'applying' | 'done';
