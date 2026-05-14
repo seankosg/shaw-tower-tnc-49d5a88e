@@ -123,10 +123,12 @@ export function computeDashboardFilteredIds(
       }
     }
     if (module === 'omm' && params.sub1_status) {
-      if ((ommSub1ById.get(id) ?? '') !== params.sub1_status) continue;
+      const v = ommSub1ById.get(id);
+      if (v == null || v !== params.sub1_status) continue;
     }
     if (module === 'omm' && params.sub2_status) {
-      if ((ommSub2ById.get(id) ?? '') !== params.sub2_status) continue;
+      const v = ommSub2ById.get(id);
+      if (v == null || v !== params.sub2_status) continue;
     }
     if (params.status === 'completed') {
       const ok = recs.some((r: any) => r.stage_key === lastKey && r.is_done);
