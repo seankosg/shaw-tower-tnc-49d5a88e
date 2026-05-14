@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Loader2, MessageSquare } from 'lucide-react';
+import { DocsRowDeleteButton } from '@/components/docs/DocsRowDeleteButton';
 import { formatDateTimeDdMmmYyyy } from '@/lib/format';
 import { OmmStatusBadge } from '@/components/docs/OmmStatusBadge';
 import { OmmCopyQuantityCell } from '@/components/docs/OmmCopyQuantityCell';
