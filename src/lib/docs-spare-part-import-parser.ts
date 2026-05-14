@@ -26,6 +26,8 @@ export interface ParsedSparePartRow {
   sheetName: string;
   /** Stable identifier used for upsert. */
   sn: string;
+  /** Original system row index column (Excel "Item NO"). */
+  item_no: number | null;
   raw_sn: string | null;
   level: string | null;             // 'leaf' | 'parent' | 'sub-category' | 'category' | null
   sn_outline: string | null;
