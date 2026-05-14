@@ -929,6 +929,23 @@ export default function DocsOMMRawDataPage() {
       ),
     };
 
+    const deleteColumn: ColumnDef<OMMRow> = {
+      id: '__delete',
+      size: 44,
+      enableSorting: false,
+      enableColumnFilter: false,
+      enableResizing: false,
+      header: '',
+      cell: ({ row }) => (
+        <DocsRowDeleteButton
+          table="docs_omm"
+          id={row.original.id}
+          recordLabel={row.original.sn ?? row.original.category ?? null}
+          onDeleted={() => reload()}
+        />
+      ),
+    };
+
     // Build a column for each known data field (Field Config drives order/visibility separately)
     const dataFields = OMM_DATA_FIELDS as readonly string[];
 
