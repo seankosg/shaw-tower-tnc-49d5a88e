@@ -59,6 +59,8 @@ export interface ParsedDefectRow {
   raw_payload: Record<string, unknown>;
   custom_payload: Record<string, string | number | boolean | null>;
   custom_field_errors: Array<{ field_name: string; raw: string; reason: string }>;
+  /** Date cells that contained text but couldn't be parsed (for field log warnings). */
+  _dateWarnings?: Array<{ field: string; raw: string }>;
 }
 
 export interface ParseDefectResult {
