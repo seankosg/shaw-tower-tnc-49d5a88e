@@ -215,6 +215,29 @@ import { normalizeDate as _normalizeDate, parseDate as _parseDate } from '@/lib/
 export const normalizeDate = _normalizeDate;
 export const parseDate = _parseDate;
 
+const DEFECT_DATE_FIELDS = [
+  'planned_start_date', 'planned_completion_date', 'planned_closure_date',
+  'actual_start_date', 'actual_completion_date', 'actual_closure_date',
+] as const;
+
+/**
+ * Parse all known date fields from a raw defect row, collecting unparseable
+ * cells as warnings for downstream field-log emission.
+ */
+function pickDefectDates(getMappedFn: (key: string) => unknown) {
+  const out: Record<string, string | null> = {};
+  const warnings: Array<{ field: string; raw: string }> = [];
+  for (const f of DEFECT_DATE_FIELDS) {
+    const r = _parseDate(getMappedFn(f));
+    out[f] = r.date;
+    if (r.mode === 'unparseable' && r.raw) {
+      warnings.push({ field: f, raw: r.raw });
+    }
+  }
+  return { dates: out, warnings };
+}
+
+
 
 function normalizePct(value: unknown): number | null {
   const text = toText(value);
