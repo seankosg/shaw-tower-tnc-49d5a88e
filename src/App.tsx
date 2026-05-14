@@ -80,6 +80,7 @@ const App = () => (
       <ModuleStatusProvider>
       <ImportProvider>
         <DefectImportProvider>
+        <PhotoOcrProvider>
         <DocsImportProviders>
         <TooltipProvider>
           <Toaster />
