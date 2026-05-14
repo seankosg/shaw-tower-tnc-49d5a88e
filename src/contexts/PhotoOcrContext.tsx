@@ -236,14 +236,52 @@ export function PhotoOcrProvider({ children }: { children: ReactNode }) {
       for (const [fileId, items] of byFile.entries()) {
         const file = results.find((f) => f.id === fileId);
         if (!file) continue;
-        const bands = computeGroupBands(items.map((it) => it.group.caption_y_normalized));
+        const bands = computeGroupBands(items.map((it) => captionLocOf(it.group)));
         for (let i = 0; i < items.length; i += 1) {
           const band = bands[i];
+          let cropUrl: string | null = null;
           try {
-            items[i].cropDataUrl = await cropFromDataUrl(file.fullDataUrl, {
+            cropUrl = await cropFromDataUrl(file.fullDataUrl, {
               x: 0, y: band.yTop, w: 1, h: Math.max(0.01, band.yBottom - band.yTop),
             });
-          } catch { /* ignore */ }
+            items[i].cropDataUrl = cropUrl;
+          } catch { /* ignore crop errors */ }
+
+          // Pass 2 — re-OCR each crop to verify the issue_no.
+          if (cropUrl) {
+            try {
+              const verify = await callPhotoOcrCrop(cropUrl);
+              if (verify.issue_no && verify.issue_no.length > 0) {
+                const pass1 = items[i].group.issue_no;
+                const pass1Conf = items[i].group.confidence;
+                const better = verify.confidence >= pass1Conf || pass1 !== verify.issue_no;
+                if (better) {
+                  // Adopt Pass-2 result; keep bbox & sender for downstream display.
+                  const newGroup: OcrGroup = {
+                    ...items[i].group,
+                    issue_no: verify.issue_no,
+                    caption_raw: verify.caption_raw || items[i].group.caption_raw,
+                    confidence: Math.max(pass1Conf, verify.confidence),
+                    notes: pass1 !== verify.issue_no
+                      ? `pass1=${pass1 || '-'} → pass2=${verify.issue_no}`
+                      : items[i].group.notes ?? null,
+                  };
+                  items[i].group = newGroup;
+                  items[i].editedIssueNo = verify.issue_no;
+                  // Refresh existing/decision against the corrected number.
+                  const map = await fetchExistingDefects(projectId, [verify.issue_no]);
+                  const ex = map.get(verify.issue_no) ?? null;
+                  const d = decideUpdate(ex, dataDate, newGroup.confidence);
+                  items[i].existing = ex;
+                  items[i].decision = d.kind;
+                  items[i].decisionReason = d.reason ?? '';
+                }
+              }
+            } catch (e) {
+              // Non-fatal: keep Pass-1 result.
+              console.warn('Pass2 crop OCR failed', e);
+            }
+          }
         }
       }
       setReviewItems(matched);
