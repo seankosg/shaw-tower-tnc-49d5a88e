@@ -526,29 +526,25 @@ export default function PhotoOcrPanel({ disabled }: { disabled?: boolean }) {
         </Card>
       )}
 
-      {/* Full-screenshot preview dialog with caption-y highlight */}
+      {/* Cropped photo preview dialog */}
       <Dialog open={!!previewItem} onOpenChange={(o) => !o && setPreviewItem(null)}>
-        <DialogContent className="max-h-[90vh] max-w-3xl overflow-auto">
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-auto">
           <DialogHeader>
             <DialogTitle className="text-sm">
               Issue {previewItem?.editedIssueNo} — {previewItem?.fileName}
             </DialogTitle>
           </DialogHeader>
-          {previewItem && (() => {
-            const file = files.find((f) => f.id === previewItem.fileId);
-            const y = previewItem.group.caption_y_normalized;
-            return (
-              <div className="relative w-full">
-                {file && <img src={file.fullDataUrl} alt="" className="block w-full rounded" />}
-                {y !== null && y !== undefined && (
-                  <div
-                    className="pointer-events-none absolute inset-x-0 border-y-2 border-primary bg-primary/15"
-                    style={{ top: `${y * 100}%`, height: '4%', transform: 'translateY(-50%)' }}
-                  />
-                )}
-              </div>
-            );
-          })()}
+          {previewItem && (
+            <div className="w-full">
+              {previewItem.cropDataUrl ? (
+                <img src={previewItem.cropDataUrl} alt="" className="block w-full rounded" />
+              ) : (
+                <div className="flex h-40 items-center justify-center rounded bg-muted text-xs text-muted-foreground">
+                  No crop available
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
