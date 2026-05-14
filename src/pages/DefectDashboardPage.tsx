@@ -97,8 +97,9 @@ export default function DefectDashboardPage() {
   const { toast } = useToast();
   const { profile, roles } = useAuth();
   const scurveChartRef = useRef<HTMLDivElement | null>(null);
-  const [items, setItems] = useState<DefectForDashboard[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { items: cachedItems, initialLoaded } = useDefectCache();
+  const items = cachedItems as unknown as DefectForDashboard[];
+  const loading = !initialLoaded;
   useMainScrollRestoration(!loading);
   const [dataDate, setDataDate] = useState(todayIso());
   const [teamFilter, setTeamFilter] = useState<string[]>(() => {
