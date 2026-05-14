@@ -82,6 +82,10 @@ export interface OcrGroup {
   confidence: number;
   /** Vertical center (0..1) of the numeric caption text. May be null on older responses. */
   caption_y_normalized: number | null;
+  /** Top edge (0..1) of the numeric caption bbox. May be null on older responses. */
+  caption_y_top?: number | null;
+  /** Bottom edge (0..1) of the numeric caption bbox. May be null on older responses. */
+  caption_y_bottom?: number | null;
   notes?: string | null;
 }
 
@@ -96,35 +100,61 @@ export interface GroupBand {
   yBottom: number;
 }
 
+/** Input shape accepted by computeGroupBands — either a bbox or just a center Y. */
+export type CaptionLoc =
+  | { y_top: number; y_bottom: number }
+  | { y_center: number }
+  | number   // backwards-compat: a bare center Y
+  | null
+  | undefined;
+
 /**
  * Photos sit ABOVE their numeric caption in WhatsApp screenshots. So each band's
  * bottom edge is just above the caption text, and the top edge extends upward
  * until it hits the previous caption (or a max photo-height).
  *
- * - yBottom[i] = captionY[i] - gap                                 (just above the number)
- * - yTop[i]    = max(prevCaptionY + gap, yBottom - maxPhotoHeight) (just below the previous number, or up to maxPhotoHeight)
- * - For the first group, yTop = max(0, yBottom - maxPhotoHeight).
+ * - yBottom[i] = captionTop[i] - gap                                (just above the digits)
+ * - yTop[i]    = max(prevCaptionBottom + gap, yBottom - maxPhotoHeight)
  * - Enforces a minimum band height so coincident captions still produce a usable crop.
  */
-export function computeGroupBands(captionYs: Array<number | null | undefined>): GroupBand[] {
-  const gap = 0.012;          // skip the caption text itself (text height ~0.02)
-  const maxPhotoHeight = 0.4; // a single photo block rarely exceeds 40% of a tall screenshot
+export function computeGroupBands(locs: Array<CaptionLoc>): GroupBand[] {
+  const gap = 0.012;
+  const maxPhotoHeight = 0.4;
   const minHeight = 0.05;
+  const halfHeight = 0.012; // approx half-height of caption text when only center Y known
 
-  const indexed = captionYs.map((y, i) => ({
-    i,
-    y: typeof y === 'number' && isFinite(y) ? Math.max(0, Math.min(1, y)) : null,
-  }));
-  const valid = indexed.filter((p) => p.y !== null) as { i: number; y: number }[];
-  valid.sort((a, b) => a.y - b.y);
+  const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+  const norm = (loc: CaptionLoc): { top: number; bottom: number } | null => {
+    if (loc == null) return null;
+    if (typeof loc === 'number') {
+      if (!isFinite(loc)) return null;
+      const c = clamp01(loc);
+      return { top: clamp01(c - halfHeight), bottom: clamp01(c + halfHeight) };
+    }
+    if ('y_top' in loc && 'y_bottom' in loc && isFinite(loc.y_top) && isFinite(loc.y_bottom)) {
+      let t = clamp01(loc.y_top); let b = clamp01(loc.y_bottom);
+      if (t > b) [t, b] = [b, t];
+      return { top: t, bottom: b };
+    }
+    if ('y_center' in loc && isFinite(loc.y_center)) {
+      const c = clamp01(loc.y_center);
+      return { top: clamp01(c - halfHeight), bottom: clamp01(c + halfHeight) };
+    }
+    return null;
+  };
 
-  const bandsByIndex: GroupBand[] = new Array(captionYs.length).fill(null).map(() => ({ yTop: 0, yBottom: 1 }));
+  const indexed = locs.map((loc, i) => ({ i, b: norm(loc) }));
+  const valid = indexed.filter((p) => p.b !== null) as { i: number; b: { top: number; bottom: number } }[];
+  // Sort by caption top so adjacency is computed top-to-bottom on the screenshot.
+  valid.sort((a, b) => a.b.top - b.b.top);
+
+  const bandsByIndex: GroupBand[] = new Array(locs.length).fill(null).map(() => ({ yTop: 0, yBottom: 1 }));
 
   for (let k = 0; k < valid.length; k += 1) {
     const cur = valid[k];
-    const prevY = k > 0 ? valid[k - 1].y : null;
-    const yBottom = Math.max(0, Math.min(1, cur.y - gap));
-    const lowerBoundFromPrev = prevY === null ? 0 : prevY + gap;
+    const prev = k > 0 ? valid[k - 1] : null;
+    const yBottom = Math.max(0, Math.min(1, cur.b.top - gap));
+    const lowerBoundFromPrev = prev === null ? 0 : prev.b.bottom + gap;
     let yTop = Math.max(lowerBoundFromPrev, yBottom - maxPhotoHeight, 0);
     if (yBottom - yTop < minHeight) {
       yTop = Math.max(0, yBottom - minHeight);
