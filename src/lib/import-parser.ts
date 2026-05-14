@@ -149,6 +149,30 @@ import { normalizeDate as _normalizeDate, parseDate } from '@/lib/date-normalize
 const normalizeDate = _normalizeDate;
 export { parseDate };
 
+const SUBTEST_DATE_FIELDS = [
+  't1_planned_date', 't2_planned_date',
+  'r1_target_submission_date', 'r1_actual_submission_date',
+  'r2_target_submission_date', 'r2_actual_submission_date',
+  'r2_target_approval_date', 'r2_actual_approval_date',
+] as const;
+
+/**
+ * Parse all known date fields from a raw row, collecting any unparseable
+ * cells as warnings for downstream field-log emission.
+ */
+function pickSubtestDates(row: Record<string, any>) {
+  const out: Record<string, string | null> = {};
+  const warnings: Array<{ field: string; raw: string }> = [];
+  for (const f of SUBTEST_DATE_FIELDS) {
+    const r = parseDate(row[f]);
+    out[f] = r.date;
+    if (r.mode === 'unparseable' && r.raw) {
+      warnings.push({ field: f, raw: r.raw });
+    }
+  }
+  return { dates: out, warnings };
+}
+
 
 function normalizeStatus(val: any): string | null {
   if (val == null || val === '') return null;
