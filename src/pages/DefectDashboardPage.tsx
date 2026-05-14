@@ -6,6 +6,7 @@ import { AlertCircle, AlertTriangle, CalendarIcon, CheckCircle2, ChevronDown, Ch
 import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { supabase } from '@/integrations/supabase/client';
+import { useDefectCache } from '@/lib/defect-cache';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
