@@ -434,32 +434,21 @@ export default function DefectRawDataPage() {
     refreshDefectCache();
   }, []);
 
-  // Load comment summary (count + unread) for visible defects, and refresh on realtime changes
-  useEffect(() => {
-    if (!user || items.length === 0) {
-      setCommentSummary({});
-      return;
-    }
-    let cancelled = false;
-    let timer: number | undefined;
+  // Load comment summary once for all defects, then patch incrementally on Realtime events.
+  const itemIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => { itemIdsRef.current = new Set(items.map((i) => i.id)); }, [items]);
 
-    const refresh = async () => {
-      const ids = items.map((i) => i.id);
-      const chunkSize = 500;
-      const next: Record<string, CommentSummary> = {};
-      for (let i = 0; i < ids.length; i += chunkSize) {
-        const chunk = ids.slice(i, i + chunkSize);
-        const { data, error } = await (supabase as any).rpc('get_defect_comment_summary', { _defect_ids: chunk });
-        if (error || !data) continue;
-        for (const row of data as Array<{
-          defect_id: string;
-          comment_count: number;
-          has_unread: boolean;
-          instruction_count: number;
-          comment_count_only: number;
-          reply_count: number;
-          last_activity_at: string | null;
-        }>) {
+  useEffect(() => {
+    if (!user) { setCommentSummary({}); return; }
+    let cancelled = false;
+    const pendingIds = new Set<string>();
+    let flushTimer: number | undefined;
+
+    const applyRows = (rows: any[]) => {
+      if (!rows.length) return;
+      setCommentSummary((prev) => {
+        const next = { ...prev };
+        for (const row of rows) {
           next[row.defect_id] = {
             count: row.comment_count,
             hasUnread: row.has_unread,
@@ -469,28 +458,55 @@ export default function DefectRawDataPage() {
             lastActivityAt: row.last_activity_at ?? null,
           };
         }
+        return next;
+      });
+    };
+
+    const fetchForIds = async (ids: string[]) => {
+      const chunkSize = 500;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const { data, error } = await (supabase as any).rpc('get_defect_comment_summary', { _defect_ids: chunk });
+        if (error || !data || cancelled) continue;
+        applyRows(data as any[]);
       }
-      if (!cancelled) setCommentSummary(next);
     };
 
-    const debouncedRefresh = () => {
-      if (timer) window.clearTimeout(timer);
-      timer = window.setTimeout(refresh, 400);
+    // Initial load: wait until items have arrived, then fetch for all ids exactly once.
+    let initialized = false;
+    const runInitial = () => {
+      if (initialized) return;
+      const ids = Array.from(itemIdsRef.current);
+      if (ids.length === 0) return;
+      initialized = true;
+      fetchForIds(ids);
     };
+    runInitial();
+    const initInterval = window.setInterval(runInitial, 500);
 
-    refresh();
+    const flushPending = () => {
+      flushTimer = undefined;
+      const ids = Array.from(pendingIds).filter((id) => itemIdsRef.current.has(id));
+      pendingIds.clear();
+      if (ids.length) fetchForIds(ids);
+    };
 
     const channel = supabase
       .channel('defect-comments-summary')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'defect_comments' }, debouncedRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'defect_comments' }, (payload: any) => {
+        const id = payload?.new?.defect_id ?? payload?.old?.defect_id;
+        if (id) pendingIds.add(id);
+        if (flushTimer == null) flushTimer = window.setTimeout(flushPending, 600);
+      })
       .subscribe();
 
     return () => {
       cancelled = true;
-      if (timer) window.clearTimeout(timer);
+      window.clearInterval(initInterval);
+      if (flushTimer) window.clearTimeout(flushTimer);
       supabase.removeChannel(channel);
     };
-  }, [user, items]);
+  }, [user]);
 
   // URL params that indicate the user arrived from a Dashboard drill-down.
   // When ANY of these are present we ignore the localStorage-saved sort/column-filter state,
