@@ -109,27 +109,9 @@ export default function DefectProgressPage() {
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
   }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, searchParams, setSearchParams]);
 
-  const [items, setItems] = useState<DefectItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      let all: DefectItem[] = [];
-      const PAGE = 1000;
-      for (let from = 0; ; from += PAGE) {
-        const { data } = await (supabase as any).from('defect_items').select('*').eq('is_active', true).order('issue_no').range(from, from + PAGE - 1);
-        if (!data?.length) break;
-        all = all.concat(data as DefectItem[]);
-        if (data.length < PAGE) break;
-      }
-      if (!cancelled) {
-        setItems(all);
-        setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  const { items: cachedItems, initialLoaded } = useDefectCache();
+  const items = cachedItems as unknown as DefectItem[];
+  const loading = !initialLoaded;
 
   const { dataDate, source: dataDateSource } = useLatestDataDate();
   const asOfDate = asOfMode === 'dataDate' ? dataDate : today;
