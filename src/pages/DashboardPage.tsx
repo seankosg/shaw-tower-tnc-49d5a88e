@@ -169,8 +169,8 @@ export default function DashboardPage() {
     const overdueOccurrencesAll = countOverdueStageOccurrences(filteredSubtests, dataDate);
     const atRiskOccurrencesAll = countAtRiskStageOccurrences(filteredSubtests, today, atRiskDays);
 
-    // Stage-specific. R2 here = R2 Approval milestone (r2a).
-    const stageStat = (stage: 'pred' | 't1' | 't2' | 'r1' | 'r2a', plannedField: keyof SubtestForDashboard) => {
+    // Stage-specific. R2 here = R2 Submission milestone (r2s).
+    const stageStat = (stage: 'pred' | 't1' | 't2' | 'r1' | 'r2s', plannedField: keyof SubtestForDashboard) => {
       const done = filteredSubtests.filter(s => isStageDone(s, stage)).length;
       const overdue = filteredSubtests.filter(s => {
         const planned = s[plannedField] as string | null | undefined;
@@ -184,7 +184,7 @@ export default function DashboardPage() {
     const t1 = stageStat('t1', 't1_planned_date');
     const t2 = stageStat('t2', 't2_planned_date');
     const r1 = stageStat('r1', 'r1_target_submission_date');
-    const r2 = stageStat('r2a', 'r2_target_approval_date');
+    const r2 = stageStat('r2s', 'r2_target_submission_date');
 
     return {
       systemCount, total, totalDone, remaining, progressPct, overdueCount, atRiskCount,
@@ -401,7 +401,7 @@ export default function DashboardPage() {
         <StageCard stage="T1" total={kpis.total} done={kpis.t1Done} remaining={kpis.total - kpis.t1Done} pct={kpis.t1Pct} overdue={kpis.t1Overdue} onClick={() => goSubtests({ t1_delay_asof: dataDate })} />
         <StageCard stage="T2" total={kpis.total} done={kpis.t2Done} remaining={kpis.total - kpis.t2Done} pct={kpis.t2Pct} overdue={kpis.t2Overdue} onClick={() => goSubtests({ t2_delay_asof: dataDate })} />
         <StageCard stage="R1S" total={kpis.total} done={kpis.r1Done} remaining={kpis.total - kpis.r1Done} pct={kpis.r1Pct} overdue={kpis.r1Overdue} onClick={() => goSubtests({ r1_delay_asof: dataDate })} />
-        <StageCard stage="R2A" total={kpis.total} done={kpis.r2Done} remaining={kpis.total - kpis.r2Done} pct={kpis.r2Pct} overdue={kpis.r2Overdue} onClick={() => goSubtests({ r2_delay_asof: dataDate })} />
+        <StageCard stage="R2S" total={kpis.total} done={kpis.r2Done} remaining={kpis.total - kpis.r2Done} pct={kpis.r2Pct} overdue={kpis.r2Overdue} onClick={() => goSubtests({ r2_delay_asof: dataDate })} />
       </div>
 
 
@@ -1072,7 +1072,7 @@ function PlanActualTable({
                 actualUnplannedOn: 'r1_actual_unplanned_on',
               },
               {
-                stage: 'r2', label: 'R2A', metrics: r.r2,
+                stage: 'r2', label: 'R2S', metrics: r.r2,
                 planTo: 'r2_planned_to',
                 actualTo: 'r2_actual_to',
                 planOn: 'r2_planned_on',

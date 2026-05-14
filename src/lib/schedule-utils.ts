@@ -177,7 +177,7 @@ export function aggregateSchedule(
     };
 
     for (const s of items) {
-      for (const st of ['pred', 't1', 't2', 'r1', 'r2s', 'r2a'] as ScheduleStage[]) {
+      for (const st of ['pred', 't1', 't2', 'r1', 'r2s'] as ScheduleStage[]) {
         const { plan, actual } = getStageDates(s, st);
         if (plan) {
           const b = bucketize(plan, opts.bucket);
@@ -270,8 +270,8 @@ export function findCritical(
   const highRisk: CriticalItem[] = [];
   const t1Bottleneck: CriticalItem[] = [];
   // Stages monitored for High Risk (Pred is excluded — critical card surfaces actionable test/report milestones).
-  // Includes both R2 milestones (Submission and Approval).
-  const RISK_STAGES: ScheduleStage[] = ['t1', 't2', 'r1', 'r2s', 'r2a'];
+  // R2 = R2 Submission (r2s) — the active key milestone.
+  const RISK_STAGES: ScheduleStage[] = ['t1', 't2', 'r1', 'r2s'];
 
   for (const s of subs) {
     const groupLabel = getGroupKey(s, groupBy, sysCodeById);
