@@ -7,11 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle, Settings2, Lock } from 'lucide-react';
+import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, AlertTriangle, Settings2, Lock, FileSpreadsheet as FileSpreadsheetIcon, Camera } from 'lucide-react';
 import { useDefectImport, type DefectFileStatus } from '@/contexts/DefectImportContext';
 import { DefectColumnSelect } from '@/components/import/DefectColumnSelect';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { useAuth } from '@/contexts/AuthContext';
+import PhotoOcrPanel from '@/components/import/PhotoOcrPanel';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 // Re-export pure helpers so existing tests/imports keep working
 export { compareIssueNoAsc, detectIssueNoSortDirection, buildSubcontractorIssueAssignments } from '@/contexts/DefectImportContext';
