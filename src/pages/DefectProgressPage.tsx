@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { AlertTriangle, Calendar as CalendarIcon, CalendarSearch, ChevronsLeft, ChevronsRight, Download, TrendingUp } from 'lucide-react';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
-import { supabase } from '@/integrations/supabase/client';
 import { useDefectCache } from '@/lib/defect-cache';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
