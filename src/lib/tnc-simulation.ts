@@ -1,7 +1,7 @@
 // T&C (Subtest) Simulation utilities — pure functions.
 //
 // Mirror of `defect-simulation.ts`, adapted for T&C subtests with 4 stages:
-//   T1 · T2 · R1 (R1S) · R2A
+//   T1 · T2 · R1 (R1S) · R2S
 //
 // Predicts cumulative quantity-based progress (%) per stage at any target date,
 // combining actual completions to date with planned dates for not-yet-done items.
@@ -15,15 +15,15 @@ import {
 
 // ───── stages ─────
 
-export type TncSimStage = 't1' | 't2' | 'r1' | 'r2a';
+export type TncSimStage = 't1' | 't2' | 'r1' | 'r2s';
 
-export const ALL_TNC_SIM_STAGES: TncSimStage[] = ['t1', 't2', 'r1', 'r2a'];
+export const ALL_TNC_SIM_STAGES: TncSimStage[] = ['t1', 't2', 'r1', 'r2s'];
 
 export const TNC_SIM_STAGE_LABELS: Record<TncSimStage, string> = {
   t1: 'T1',
   t2: 'T2',
   r1: 'R1S',
-  r2a: 'R2A',
+  r2s: 'R2S',
 };
 
 // ───── Delay handling ─────
@@ -41,7 +41,7 @@ export interface SimOptions {
   dataDate: string;
   /**
    * When true, T2 is only counted as actually done if T1 is also done,
-   * and R2A only if R1 is done. Mirrors the workflow rule and protects
+   * and R2S only if R1 is done. Mirrors the workflow rule and protects
    * against legacy data where downstream actuals exist without upstream.
    */
   enforceSequential?: boolean;
@@ -50,7 +50,7 @@ export interface SimOptions {
 /** Returns the prerequisite stages that must also be `isStageDone` for `stage`. */
 function prerequisiteStages(stage: TncSimStage): TncSimStage[] {
   if (stage === 't2') return ['t1'];
-  if (stage === 'r2a') return ['r1'];
+  if (stage === 'r2s') return ['r1'];
   return [];
 }
 
@@ -217,7 +217,7 @@ export function buildTncSimulationSeries(
   if (!isFinite(startMs) || !isFinite(endMs) || endMs < startMs) return [];
 
   type Pre = { planned: number | null; effForecast: number | null; actualDone: number | null };
-  const pre: Record<TncSimStage, Pre[]> = { t1: [], t2: [], r1: [], r2a: [] };
+  const pre: Record<TncSimStage, Pre[]> = { t1: [], t2: [], r1: [], r2s: [] };
 
   const dataDateMs = isoToUtc(opts.dataDate);
   for (const it of items) {
@@ -290,7 +290,7 @@ export interface TeamSimRow {
   t1: StageSimResult;
   t2: StageSimResult;
   r1: StageSimResult;
-  r2a: StageSimResult;
+  r2s: StageSimResult;
 }
 
 export function simulateByTeam(
@@ -313,7 +313,7 @@ export function simulateByTeam(
       t1: simulateTncStageAt(arr, 't1', targetDate, opts),
       t2: simulateTncStageAt(arr, 't2', targetDate, opts),
       r1: simulateTncStageAt(arr, 'r1', targetDate, opts),
-      r2a: simulateTncStageAt(arr, 'r2a', targetDate, opts),
+      r2s: simulateTncStageAt(arr, 'r2s', targetDate, opts),
     });
   }
   rows.sort((a, b) => {
