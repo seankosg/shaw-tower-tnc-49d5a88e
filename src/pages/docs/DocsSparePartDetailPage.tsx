@@ -23,12 +23,24 @@ import {
 import { SparePartComments } from '@/components/comments/SparePartComments';
 import { useCommonMasters, unionWithLegacy, type MasterOption } from '@/hooks/useCommonMasters';
 
-const OVERVIEW_FIELDS = ['category', 'sn', 'parent_item', 'material', 'spec_ref', 'status'] as const;
+const OVERVIEW_FIELDS = ['category', 'sn', 'parent_item', 'sub_category', 'material', 'spec_ref', 'status'] as const;
+const ITEM_SPEC_FIELDS = ['location', 'floor_level', 'item_type', 'specification', 'size'] as const;
 const REQUIREMENTS_FIELDS = ['spares_requirements', 'unit', 'spares_quantity', 'storage_area_required'] as const;
+const PROCUREMENT_FIELDS = [
+  'material_lead_time',
+  'planned_confirm_date', 'actual_confirm_date',
+  'direction_to_subcon_date', 'eta_date',
+  'planned_po_date', 'actual_po_date', 'po_status',
+  'planned_delivery_date', 'actual_delivery_date',
+] as const;
 const ASSIGNMENT_FIELDS = ['team', 'trade', 'subcontractor_name', 'hdec_pic_name', 'hdec_eng_name'] as const;
 
 const CATEGORY_FIELDS = new Set<string>(['category']);
 const STATUS_FIELDS = new Set<string>(['status']);
+const DATE_FIELDS = new Set<string>([
+  'planned_confirm_date', 'actual_confirm_date', 'direction_to_subcon_date', 'eta_date',
+  'planned_po_date', 'actual_po_date', 'planned_delivery_date', 'actual_delivery_date',
+]);
 
 export default function DocsSparePartDetailPage() {
   const { id } = useParams<{ id: string }>();
