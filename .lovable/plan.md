@@ -1,47 +1,54 @@
-# Photo OCR 숫자 오인식 수정 계획
+# 수정 코드 검토 결과
 
-현재 문제는 같은 원본 이미지에서도 `2513 / 2098`이 아니라 `5 / 17`처럼 다른 숫자로 바뀌는 점입니다.
-원인은 OCR 모델 자체만이 아니라, **Pass-2 검증용 crop가 캡션 strip 없이 사진 영역만 잘리는 경우에도 그 결과를 최종 issue 번호로 덮어쓰는 구조**에 있습니다. 이때 `+5` 오버레이나 사진 내부 표기(예: `...17`)가 issue 번호로 잘못 채택됩니다.
+업로드된 `photo-ocr-merged.zip`의 6개 파일을 현재 프로젝트와 비교한 결과입니다.
 
-## 작업 내용
+## 비교 요약
 
-1. **Pass-2 crop 검증 강화**
-   - crop 안에 실제 WhatsApp caption strip이 포함됐는지 확인하는 방어 로직을 추가합니다.
-   - 캡션 후보가 crop의 하단부, 좌측 정렬 위치, dark strip 위에 있는 경우만 유효 후보로 취급합니다.
-   - 이 조건을 만족하지 않으면 Pass-2 결과는 폐기하고 Pass-1 값을 유지합니다.
+| 파일 | 상태 |
+|---|---|
+| `PhotoOcrPanel.tsx` | 동일 (변경 없음) |
+| `defect-photo-ocr.test.ts` | 동일 |
+| `edge/defect-photo-ocr.ts` | 동일 |
+| `edge/defect-photo-ocr-crop.ts` | 동일 |
+| **`defect-photo-ocr.ts` (lib)** | **변경 — `canvasSegmentBands()` 신규 추가** |
+| **`PhotoOcrContext.tsx`** | **변경 — crop 로직을 canvas 우선 → AI bbox fallback 으로 교체** |
 
-2. **Pass-2 덮어쓰기 정책 수정**
-   - 지금은 `verify.confidence >= pass1Conf || pass1 !== verify.issue_no` 조건 때문에 숫자가 다르기만 해도 쉽게 덮어씁니다.
-   - 이를 `Pass-2가 더 강한 근거를 가질 때만` 덮어쓰도록 바꿉니다.
-   - 예: caption_raw 존재, 길이 규칙 일치, 금지 패턴 미포함, crop 검증 통과 등 복수 조건이 맞을 때만 교체합니다.
+실제 적용해야 할 파일은 **2개**뿐입니다.
 
-3. **Pass-2 OCR 프롬프트 보강**
-   - `+N` 오버레이, 사진 내부 숫자, 배관/자재 라벨, 타임스탬프를 절대 issue 번호로 읽지 않도록 crop 전용 프롬프트를 강화합니다.
-   - 숫자는 반드시 `photo grid 바로 아래 dark strip의 left-aligned caption`일 때만 허용하도록 명시합니다.
+## 변경 내용 요약
 
-4. **후처리 교차검증 추가**
-   - Pass-1과 Pass-2 결과가 다르면 자동 채택하지 않고 교차검증합니다.
-   - Pass-2 숫자가 너무 짧거나(예: `5`, `17`) caption strip 근거가 없으면 원래 값을 유지하고 `notes`에 불일치 사유를 남깁니다.
-   - 필요하면 낮은 신뢰도로 `needs_review`로 보내도록 조정합니다.
+1. **`src/lib/defect-photo-ocr.ts`**
+   - `canvasSegmentBands(dataUrl)` 추가
+   - 캔버스에 이미지를 그려 행별 휘도(luminance)를 측정
+   - 어두운 배경(메시지 사이 간격) ↔ 밝은 영역(사진 그룹)을 픽셀 단위로 자름
+   - 각 밝은 클러스터 아래 `CAPTION_PAD = 42px`를 추가해 caption strip을 포함
+   - 결과: `GroupBand[]` (0..1 정규화)
 
-5. **회귀 테스트 추가**
-   - 현재 샘플 구조를 반영한 테스트를 추가해 `+5` 오버레이와 사진 내부 `17`류 숫자가 issue 번호로 채택되지 않도록 검증합니다.
-   - `2513`, `2098` 같은 실제 caption 패턴은 유지되는지 확인합니다.
+2. **`src/contexts/PhotoOcrContext.tsx`**
+   - 기존: 무조건 `computeGroupBands()` (AI bbox 기반)
+   - 변경: `canvasSegmentBands()` 먼저 시도 → 개수 일치하면 사용, 더 많으면 caption_y로 매칭, 적거나 실패하면 기존 AI bbox로 fallback
+   - `console.debug`로 어떤 경로(canvas / canvas-matched / ai-bbox)가 쓰였는지 출력
 
-## 예상 결과
+## 안전성 검토
 
-- 같은 이미지를 여러 번 넣어도 결과가 들쭉날쭉 바뀌는 현상이 크게 줄어듭니다.
-- 잘못된 crop에서 나온 `5`, `17`, `153` 같은 숫자가 최종 값으로 덮어써지는 문제를 막습니다.
-- 애매한 경우는 잘못 확정하지 않고 review로 남기게 됩니다.
+- **타입/Export**: `GroupBand`는 이미 `defect-photo-ocr.ts`에서 export 중 → import 가능
+- **순수 추가**: 기존 함수 시그니처/동작 변경 없음 → 다른 호출자에 영향 없음
+- **테스트 호환성**: `canvasSegmentBands`는 브라우저 API(`Image`, `document.createElement('canvas')`)를 사용하지만 함수 본문은 호출 시에만 실행. 기존 테스트는 호출하지 않으므로 jsdom에서 import만 해도 안전
+- **Edge Function 영향 없음**: 두 edge function은 변경 사항 없으므로 재배포 불필요
+- **Fallback 안전망**: try/catch로 감싸져 있어 canvas가 실패해도 기존 AI bbox 경로로 자동 복구
+- **CORS**: data URL이라 `getImageData()` 캔버스 오염 문제 없음
 
-## 기술 메모
+## 잠재적 주의점 (블로커는 아님)
 
-- 수정 대상 중심 파일:
-  - `src/contexts/PhotoOcrContext.tsx`
-  - `src/lib/defect-photo-ocr.ts`
-  - `supabase/functions/defect-photo-ocr-crop/index.ts`
-  - 필요 시 `supabase/functions/defect-photo-ocr/index.ts`
-- 핵심 위험 지점:
-  - crop band가 caption strip을 충분히 포함하지 못함
-  - Pass-2 결과를 너무 공격적으로 채택함
-  - crop 전용 OCR이 사진 내부 숫자를 caption으로 환각함
+- 큰 스크린샷(예: 1080×4000)에서 픽셀 루프가 메인 스레드를 잠시 점유할 수 있습니다 (~수백 ms). 모바일에서 체감되면 추후 webworker로 옮기는 안을 고려할 수 있습니다.
+- `DARK = 45`, `MIN_DARK_SEP = 8`, `CAPTION_PAD = 42` 값은 WhatsApp/Telegram 다크 테마 기준입니다. 라이트 테마 스크린샷에서는 canvas 경로가 매칭에 실패하고 AI bbox fallback으로 떨어집니다 (정상 동작).
+
+## 적용 계획
+
+1. `src/lib/defect-photo-ocr.ts` 에 `canvasSegmentBands` 함수 추가 (line 165 부근, `computeGroupBands` 바로 아래)
+2. `src/contexts/PhotoOcrContext.tsx`
+   - import 구문에 `canvasSegmentBands`, `type GroupBand` 추가
+   - crop 루프 시작 부분의 `const bands = computeGroupBands(...)` 한 줄을 신규 try/canvas/fallback 블록으로 교체
+3. 빌드/타입체크는 자동 수행됨. 별도 마이그레이션·시크릿·재배포 불필요.
+
+→ **결론: 적용에 문제 없습니다.** Implement 버튼을 눌러 진행하시면 위 2개 파일만 수정합니다.
