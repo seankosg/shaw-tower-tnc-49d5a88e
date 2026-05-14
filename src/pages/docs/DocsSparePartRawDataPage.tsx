@@ -11,15 +11,37 @@ import { DocsRowDeleteButton } from '@/components/docs/DocsRowDeleteButton';
 interface SparePartRow {
   id: string;
   sn: string | null;
+  level: string | null;
   category: string | null;
+  sub_category: string | null;
   parent_item: string | null;
   material: string | null;
   spec_ref: string | null;
+  location: string | null;
+  floor_level: string | null;
+  item_type: string | null;
+  specification: string | null;
+  size: string | null;
   spares_requirements: string | null;
   unit: string | null;
   spares_quantity: string | null;
   storage_area_required: string | null;
   status: string | null;
+  po_status: string | null;
+  material_lead_time: string | null;
+  planned_confirm_date: string | null;
+  actual_confirm_date: string | null;
+  direction_to_subcon_date: string | null;
+  eta_date: string | null;
+  planned_po_date: string | null;
+  actual_po_date: string | null;
+  planned_delivery_date: string | null;
+  actual_delivery_date: string | null;
+  subcontractor_name: string | null;
+  hdec_pic_name: string | null;
+  hdec_eng_name: string | null;
+  team: string | null;
+  trade: string | null;
   remarks: string | null;
 }
 
