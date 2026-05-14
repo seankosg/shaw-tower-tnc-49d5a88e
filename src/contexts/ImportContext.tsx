@@ -359,6 +359,18 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
       fieldLogs.push(buildFieldLog('tnc', { rawRowNo, field, outcome, ...opts }));
     };
 
+    // Emit warnings for date cells that contained text but couldn't be parsed.
+    for (const row of parsed) {
+      if (!row._dateWarnings?.length) continue;
+      for (const w of row._dateWarnings) {
+        fl(row.raw_row_no ?? null, w.field, 'rejected_invalid', {
+          raw: w.raw,
+          code: 'unparseable_date',
+          detail: `Could not parse "${w.raw}" as a date`,
+        });
+      }
+    }
+
     // -------- BULK MASTER PRE-CREATION --------
     // Scan parsed rows once, find all subcontractor / subsub / hdec_pic names that
     // do not yet exist, insert them in a single batch, then fire all
