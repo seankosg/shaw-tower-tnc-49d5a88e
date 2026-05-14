@@ -122,6 +122,9 @@ const FALLBACK_ALIASES: Record<string, string | 'skip'> = {
   'sn outline': 'sn_outline',
   'no': 'skip',
   'no.': 'skip',
+  'item no': 'item_no',
+  'item no.': 'item_no',
+  'item number': 'item_no',
   // Hierarchy
   'level': 'level',
   'category': 'category',
