@@ -333,7 +333,7 @@ export default function TncSimulationPage() {
                           <div className="flex items-center gap-1">
                             <AlertTriangle className="h-3 w-3" />
                             {r.delayedCount} delayed ·{' '}
-                            {delayMode === 'optimistic' && 'kept at original planned date'}
+                            {delayMode === 'optimistic' && 'to be done before target date'}
                             {delayMode === 'shift-today' && `shifted to ${dataDate}`}
                             {delayMode === 'penalty' && 'excluded from forecast'}
                             {delayMode === 'learned' && `shifted +${Math.round(lagDays[st] ?? 0)}d (avg lag)`}
