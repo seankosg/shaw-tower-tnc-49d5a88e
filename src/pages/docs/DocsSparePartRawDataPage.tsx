@@ -136,7 +136,7 @@ export default function DocsSparePartRawDataPage() {
       const headerRow = cols.map(([, l]) => l);
       const aoa: any[][] = [
         ['SHAW Spare Parts — Raw Data Export'],
-        [`Exported: ${ts}  by  ${profile?.full_name ?? '—'}`],
+        [`Exported: ${ts}  by  ${profile?.name ?? '—'}`],
         ['Source: Spare Parts (direct)'],
         [`Search: ${search.trim() ? `"${search.trim()}"` : '(none)'}`],
         ['Filters: (none)'],
@@ -152,7 +152,7 @@ export default function DocsSparePartRawDataPage() {
       const ws = XLSX.utils.aoa_to_sheet(aoa);
 
       const colCount = headerRow.length;
-      const merges: XLSX.Range[] = [];
+      const merges: any[] = [];
       for (let r = 0; r < 6; r++) merges.push({ s: { r, c: 0 }, e: { r, c: colCount - 1 } });
       ws['!merges'] = merges;
       ws['!cols'] = cols.map(([k]) => ({ wch: k === 'material' || k === 'specification' ? 32 : DATE_KEYS.has(k as string) ? 12 : 16 }));
