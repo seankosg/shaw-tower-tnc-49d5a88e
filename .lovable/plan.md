@@ -1,86 +1,71 @@
-# Photo OCR 2-Pass 크롭 개선 계획
+## 확인 결과
 
-## 배경 / 문제
+`/docs/omm?sub1_status=TBS`에서 보이는 Item No. **10, 11, 13, 32**는 모두 같은 패턴입니다 (DB 조회 결과):
 
-현재 흐름은 **1패스**입니다.
-- 풀 스크린샷을 `defect-photo-ocr` 엣지 함수에 넘겨, 그룹별 `issue_no` + `caption_y_normalized`를 받음
-- 클라이언트에서 `computeGroupBands()`로 caption Y 위·아래 일정 범위를 사진 영역으로 추정해 크롭
-- 크롭한 썸네일은 검토용으로만 사용하고, **재OCR은 하지 않음**
+| sn | sub1_actual_date | sub1_response_status | sub2_planned_date | sub2_actual_date |
+|----|-------|------|------|------|
+| 10 | (없음) | **C** | 2026-05-15 | 2026-05-12 |
+| 11 | (없음) | **C** | 2026-05-15 | 2026-05-12 |
+| 13 | (없음) | **C** | 2026-05-13 | 2026-05-13 |
+| 32 | (없음) | **C** | 2026-05-15 | 2026-05-12 |
 
-문제: Vision 모델이 caption Y를 0.02~0.05 정도만 어긋나게 추정해도 사진이 절반쯤 잘리거나 옆 그룹 사진이 섞입니다. 실제로 이번에 개선했음에도 여전히 어긋나는 케이스가 보고되었습니다.
+→ 1st Status가 'C'로 부여돼 있고 2nd 제출까지 완료됐는데, `sub1_actual_date` 값이 비어있다는 이유 하나만으로 **TBS(To Be Submitted)** 로 분류되고 있습니다. 사용자 지적이 맞습니다.
 
-## 제안 — 2패스 구조
+## 원인
 
-```text
-[Pass 1]  풀 이미지 → "캡션 번호 위치만" 정밀 탐지
-                ↓
-            번호별 (issue_no, y_top, y_bottom) 목록
-                ↓
-       클라이언트에서 각 번호 위쪽 영역을 크롭
-                ↓
-[Pass 2]  크롭별로 다시 OCR → issue_no 재확인 + confidence 갱신
-                ↓
-          최종 reviewItems (이전과 동일한 UI/적용 흐름)
+`src/lib/docs-stage-records.ts`의 `classifyStatus` / `computeBuckets` 로직:
+
+```ts
+if (!r?.[actualKey]) { out.TBS++; continue; }   // sub1_actual_date 없으면 무조건 TBS
 ```
 
-이로써:
-- Pass 1은 "텍스트 검출"에 집중 → 좌표 정확도 ↑
-- Pass 2는 좁은 영역에서 한 그룹만 다루므로 issue_no 신뢰도 ↑
-- 크롭 좌표가 OCR이 실제로 본 번호의 bbox에 anchored 되므로 어긋남 최소화
+→ response_status(A/B/C)나 후속 단계(sub2 planned/actual) 신호를 무시하고 actual_date 단일 컬럼만 봄.
 
-## 변경 사항
+## 변경 계획
 
-### 1. 엣지 함수 `supabase/functions/defect-photo-ocr/index.ts`
-- 시스템 프롬프트와 tool schema를 **번호 캡션 bbox 검출 전용**으로 교체
-  - 반환: `captions: [{ issue_no, y_top, y_bottom, x_left, x_right, confidence, sender?, timestamp_text? }]`
-  - 기존 `caption_y_normalized` 단일값 대신 **상·하단 Y**를 받아 크롭 정밀도 확보
-- 응답 정렬/클램프 로직은 유지
+`src/lib/docs-stage-records.ts`의 1st/2nd Status 분류 함수를 보정합니다. **TBS로 분류하기 전에 "실제로는 제출이 일어났을 가능성"이 있는지 확인**하고, 그런 경우는 response_status로 분류합니다.
 
-### 2. 신규 엣지 함수 `supabase/functions/defect-photo-ocr-crop/index.ts`
-- 입력: 단일 크롭 이미지 (data URL)
-- 출력: `{ issue_no, caption_raw, confidence }` (단일 그룹 가정)
-- Pass 1과 동일한 Lovable AI Gateway 호출, 단 프롬프트/스키마는 "이 한 장에서 가장 큰 숫자 캡션 하나만" 추출하도록 단순화
-- 동일한 인증/CORS/에러 패턴 (429/402 surface)
+### 1. `classifyStatus` 시그니처 확장
 
-### 3. `src/lib/defect-photo-ocr.ts`
-- `OcrGroup` 필드를 `caption_y_normalized` → `{ y_top, y_bottom, x_left?, x_right? }`로 확장 (기존 필드는 호환을 위해 옵셔널 유지)
-- `computeGroupBands()` 재작성:
-  - 입력이 `{ y_top, y_bottom }[]`일 때는 그 bbox 위쪽으로 maxPhotoHeight 만큼 사진 영역으로 잡고, 위쪽은 직전 캡션의 `y_bottom + gap`까지만 확장
-  - 입력이 단일 Y만 있을 때는 현재 로직으로 fallback
-- `callPhotoOcrCrop(dataUrl)` 헬퍼 추가 → 새 엣지 함수 호출
-- 단위 테스트(`src/test/defect-photo-ocr.test.ts`)에 bbox 입력 케이스 추가
+각 단계별로 "다음 단계가 진행됐는지" 신호를 받도록 헬퍼를 분기합니다:
 
-### 4. `src/contexts/PhotoOcrContext.tsx` — `runParse` 흐름
-1. `compressForOcr(file)` → 풀 이미지 dataURL
-2. `callPhotoOcr(full)` → Pass 1 캡션 목록
-3. `computeGroupBands(captions)` → 그룹별 사진 bbox
-4. 각 bbox에 대해 `cropFromDataUrl(full, bbox)` → 크롭 dataURL
-5. `callPhotoOcrCrop(crop)` 직렬 호출 (Pass 2)
-   - 결과의 issue_no가 Pass 1과 다르면 confidence 더 높은 쪽 채택, 노트로 표시
-   - confidence는 Pass 2 값으로 갱신
-6. 기존 reviewItem과 동일한 형태로 state 업데이트
-- 기존 `parseProgress`는 (file, step) 단위로 표시되도록 단계 표기 보강 ("OCR 3/12 · crop 2/4")
-- 백그라운드 유지·sidebar 배지·beforeunload 가드 등 전 작업물 그대로 유지
+- **Sub1 status 분류 보정 조건** — `sub1_actual_date`가 비어 있어도 다음 중 하나라도 참이면 TBS로 보지 않음:
+  - `sub1_response_status` ∈ {A, B, C}  (1st 응답이 부여됨 → 제출은 있었음)
+  - `sub1_response_date`가 있음
+  - `sub2_planned_date` 또는 `sub2_actual_date`가 있음 (다음 사이클로 진행됨 → 1st 제출은 묵시적으로 완료)
 
-### 5. UI `src/components/import/PhotoOcrPanel.tsx`
-- 변경 없음 (썸네일은 이미 크롭된 사진을 보여주고 있어 그대로)
+  → 이 경우 `sub1_response_status`(A/B/C)로 분류, 응답 상태도 비어 있으면 `UR`.
 
-## 기술 노트
+- **Sub2 status 분류 보정 조건** — `sub2_actual_date`가 비어 있어도 다음 중 하나라도 참이면 TBS로 보지 않음:
+  - `sub2_response_status` ∈ {A, B, C}
+  - `sub2_response_actual_date`가 있음
+  - `sub3_planned_date` 또는 `sub3_actual_date`가 있음
+  - `final_planned_date` / `final_actual_date`가 있음
 
-- Pass 2가 추가되어 그룹 N개당 AI 호출이 1 + N 이 되므로 **레이트 리밋/비용 영향**이 있습니다. 한 스크린샷당 평균 4~6 그룹이라 가정하면 호출 5~7배. 필요하면 향후 batching/낮은 모델(`gemini-2.5-flash-lite`) 사용으로 비용 최적화 가능.
-- Pass 1은 좌표 정밀도가 중요하므로 `gemini-2.5-pro` 유지, Pass 2는 빠르고 저렴한 `gemini-2.5-flash` 사용을 기본값으로 (사용자 설정 없이 코드에 명시).
-- 기존 `caption_y_normalized` 단일값 응답을 받는 구버전 캐시/로직은 fallback으로 호환.
+  → 같은 방식으로 응답 상태가 비어 있으면 `UR`.
 
-## 검증
+### 2. 영향 범위
 
-- `bunx vitest run src/test/defect-photo-ocr.test.ts` — bbox 기반 band 계산 신규 케이스 통과 확인
-- 실제 WhatsApp 스크린샷 1장으로 수동 테스트:
-  - 썸네일이 각 번호에 매칭되는 사진 영역만 정확히 보이는지
-  - issue_no 누락/혼동 없는지
-  - 다른 메뉴 이동 시 백그라운드 진행 유지 (기존 동작 회귀 없음)
+수정 대상 함수:
+- `computeBuckets` → `computeOmmSub1StatusBuckets`, `computeOmmSub2StatusBuckets` (Executive Dashboard 카드 카운트)
+- `classifyStatus` → `classifyOmmSub1Status`, `classifyOmmSub2Status` (Raw Data Page 필터링용 행 분류)
 
-## 영향 범위
+두 곳 모두 같은 보정 규칙을 공유하도록 단일 헬퍼로 통합합니다.
 
-- 변경: `supabase/functions/defect-photo-ocr/index.ts`, `src/lib/defect-photo-ocr.ts`, `src/contexts/PhotoOcrContext.tsx`, `src/test/defect-photo-ocr.test.ts`
-- 신규: `supabase/functions/defect-photo-ocr-crop/index.ts`
-- DB/마이그레이션 변경 없음, RLS 변경 없음
+### 3. 후속 영향
+
+- `/docs/omm?sub1_status=TBS` 카운트와 행 목록에서 위 4건이 빠지고 각자 응답 상태(C)에 합산됩니다.
+- Executive Dashboard의 Sub1 Status / Sub2 Status 카드 숫자도 같은 규칙으로 재계산됩니다.
+- 데이터 입력 자체(예: `sub1_actual_date` 채우기)는 건드리지 않습니다 — 분류 로직만 보정.
+
+### 4. 테스트
+
+- 기존 `src/test/` 하위에 OMM status 관련 테스트가 있는지 확인 후, 신규 케이스 추가:
+  - `sub1_actual_date` 없음 + `sub1_response_status='C'` → C
+  - `sub1_actual_date` 없음 + `sub2_actual_date` 있음 + response 빈값 → UR
+  - `sub1_actual_date` 없음 + 모든 후속 신호 없음 → TBS (기존 동작 유지)
+
+## 작업 파일
+
+- `src/lib/docs-stage-records.ts` (수정)
+- 관련 단위 테스트 파일 (있다면 추가/수정)
