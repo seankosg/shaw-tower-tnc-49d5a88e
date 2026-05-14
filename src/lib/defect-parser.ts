@@ -59,6 +59,8 @@ export interface ParsedDefectRow {
   raw_payload: Record<string, unknown>;
   custom_payload: Record<string, string | number | boolean | null>;
   custom_field_errors: Array<{ field_name: string; raw: string; reason: string }>;
+  /** Date cells that contained text but couldn't be parsed (for field log warnings). */
+  _dateWarnings?: Array<{ field: string; raw: string }>;
 }
 
 export interface ParseDefectResult {
@@ -208,100 +210,34 @@ function toText(value: unknown): string | null {
   return text === '' ? null : text;
 }
 
-const MONTH_ABBR: Record<string, string> = {
-  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
-  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
-};
+// Date helpers delegated to the shared module so all importers behave the same.
+import { normalizeDate as _normalizeDate, parseDate as _parseDate } from '@/lib/date-normalize';
+export const normalizeDate = _normalizeDate;
+export const parseDate = _parseDate;
 
-function pad2(n: number | string): string {
-  return String(n).padStart(2, '0');
-}
+const DEFECT_DATE_FIELDS = [
+  'planned_start_date', 'planned_completion_date', 'planned_closure_date',
+  'actual_start_date', 'actual_completion_date', 'actual_closure_date',
+] as const;
 
-function clampReasonable(iso: string | null): string | null {
-  if (!iso) return null;
-  // Reject obviously bogus parsed years (e.g., 1901/2001 from year-less input bugs)
-  const y = Number(iso.slice(0, 4));
-  if (!Number.isFinite(y) || y < 2010 || y > 2100) return null;
-  return iso;
-}
-
-export function normalizeDate(value: unknown): string | null {
-  if (value == null || value === '') return null;
-
-  // 1. Excel serial number
-  if (typeof value === 'number') {
-    const parsed = XLSX.SSF.parse_date_code(value);
-    if (parsed) return clampReasonable(`${parsed.y}-${pad2(parsed.m)}-${pad2(parsed.d)}`);
-    return null;
-  }
-
-  const text = String(value).trim();
-  if (!text) return null;
-
-  // 2. Numeric string → Excel serial
-  if (/^\d+(\.\d+)?$/.test(text)) {
-    const parsed = XLSX.SSF.parse_date_code(parseFloat(text));
-    if (parsed) return clampReasonable(`${parsed.y}-${pad2(parsed.m)}-${pad2(parsed.d)}`);
-  }
-
-  // 3. ISO YYYY-MM-DD
-  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (isoMatch) return clampReasonable(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`);
-
-  // 4. dd-MMM or dd-MMM-YYYY (e.g. "27-Apr", "03-May-2026", "3 May 26")
-  const ddMmmMatch = text.match(/^(\d{1,2})[\s\-\/]+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[\s\-\/]+(\d{2,4}))?$/i);
-  if (ddMmmMatch) {
-    const day = pad2(ddMmmMatch[1]);
-    const month = MONTH_ABBR[ddMmmMatch[2].toLowerCase()];
-    let yearStr = ddMmmMatch[3];
-    let year: number;
-    if (yearStr) {
-      year = Number(yearStr);
-      if (year < 100) year += 2000;
-    } else {
-      year = new Date().getFullYear();
-    }
-    return clampReasonable(`${year}-${month}-${day}`);
-  }
-
-  // 5. MMM-dd or MMM-dd-YYYY (e.g. "Apr-27", "May 3, 2026")
-  const mmmDdMatch = text.match(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\-\/,]+(\d{1,2})(?:[\s\-\/,]+(\d{2,4}))?$/i);
-  if (mmmDdMatch) {
-    const month = MONTH_ABBR[mmmDdMatch[1].toLowerCase()];
-    const day = pad2(mmmDdMatch[2]);
-    let yearStr = mmmDdMatch[3];
-    let year: number;
-    if (yearStr) {
-      year = Number(yearStr);
-      if (year < 100) year += 2000;
-    } else {
-      year = new Date().getFullYear();
-    }
-    return clampReasonable(`${year}-${month}-${day}`);
-  }
-
-  // 6. Slash formats: try DD/MM/YYYY first (project locale), then MM/DD/YYYY
-  const slashMatch = text.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
-  if (slashMatch) {
-    let a = Number(slashMatch[1]);
-    let b = Number(slashMatch[2]);
-    let y = Number(slashMatch[3]);
-    if (y < 100) y += 2000;
-    // If first part > 12, it must be day (DD/MM)
-    // Otherwise default to DD/MM (project convention)
-    let day: number, month: number;
-    if (a > 12) { day = a; month = b; }
-    else if (b > 12) { month = a; day = b; }
-    else { day = a; month = b; } // ambiguous → DD/MM
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      return clampReasonable(`${y}-${pad2(month)}-${pad2(day)}`);
+/**
+ * Parse all known date fields from a raw defect row, collecting unparseable
+ * cells as warnings for downstream field-log emission.
+ */
+function pickDefectDates(getMappedFn: (key: string) => unknown) {
+  const out: Record<string, string | null> = {};
+  const warnings: Array<{ field: string; raw: string }> = [];
+  for (const f of DEFECT_DATE_FIELDS) {
+    const r = _parseDate(getMappedFn(f));
+    out[f] = r.date;
+    if (r.mode === 'unparseable' && r.raw) {
+      warnings.push({ field: f, raw: r.raw });
     }
   }
-
-  // 7. Last-resort fallback — but NEVER use new Date() on year-less strings
-  //    (V8 silently maps to 1901/2001). If we got here, give up.
-  return null;
+  return { dates: out, warnings };
 }
+
+
 
 function normalizePct(value: unknown): number | null {
   const text = toText(value);
@@ -641,6 +577,8 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
     const explicitLocation = toText(getMapped(raw, 'area_location'));
     const reconciledArea = reconcileAreaFields(parsedArea, explicitLevel, explicitLocation);
     const status = toText(getMapped(raw, 'status'));
+    const dp = pickDefectDates((key) => getMapped(raw, key));
+    const explicitClosure = dp.dates.planned_closure_date;
 
     return {
       rawRowNo: index + headerRowIdx + 2,
@@ -664,17 +602,16 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
       subsub_name: toText(getMapped(raw, 'subsub_name')),
       hdec_pic_name: toText(getMapped(raw, 'hdec_pic_name')),
       hdec_eng_name: toText(getMapped(raw, 'hdec_eng_name')),
-      planned_start_date: normalizeDate(getMapped(raw, 'planned_start_date')),
-      planned_completion_date: normalizeDate(getMapped(raw, 'planned_completion_date')),
-      planned_closure_date: (() => {
-        const explicit = normalizeDate(getMapped(raw, 'planned_closure_date'));
-        if (explicit) return explicit;
-        const completion = normalizeDate(getMapped(raw, 'planned_completion_date'));
-        return completion ? addBusinessDaysNoSunday(completion, 4) : null;
-      })(),
-      actual_start_date: normalizeDate(getMapped(raw, 'actual_start_date')),
-      actual_completion_date: normalizeDate(getMapped(raw, 'actual_completion_date')),
-      actual_closure_date: normalizeDate(getMapped(raw, 'actual_closure_date')),
+      planned_start_date: dp.dates.planned_start_date,
+      planned_completion_date: dp.dates.planned_completion_date,
+      planned_closure_date:
+        explicitClosure
+          ?? (dp.dates.planned_completion_date
+                ? addBusinessDaysNoSunday(dp.dates.planned_completion_date, 4)
+                : null),
+      actual_start_date: dp.dates.actual_start_date,
+      actual_completion_date: dp.dates.actual_completion_date,
+      actual_closure_date: dp.dates.actual_closure_date,
       planned_progress_pct: normalizePct(getMapped(raw, 'planned_progress_pct')),
       actual_progress_pct: normalizePct(getMapped(raw, 'actual_progress_pct')),
       completion_status: toText(getMapped(raw, 'completion_status')),
@@ -684,6 +621,7 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
       aconex_comments: toText(getMapped(raw, 'aconex_comments')),
       work_type: toText(getMapped(raw, 'work_type')),
       raw_payload: raw,
+      _dateWarnings: dp.warnings.length ? dp.warnings : undefined,
       ...extractDefectCustomFields(raw),
     };
   });

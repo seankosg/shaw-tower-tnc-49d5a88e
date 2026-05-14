@@ -615,6 +615,18 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       pendingFieldLogs.push(buildFieldLog('defect', { rawRowNo, field, outcome, ...opts }));
     };
 
+    // Emit warnings for date cells that contained text but couldn't be parsed.
+    for (const row of mappedRows as any[]) {
+      if (!row?._dateWarnings?.length) continue;
+      for (const w of row._dateWarnings) {
+        fl(row.rawRowNo ?? null, w.field, 'rejected_invalid', {
+          raw: w.raw,
+          code: 'unparseable_date',
+          detail: `Could not parse "${w.raw}" as a date`,
+        });
+      }
+    }
+
     const FLUSH_THRESHOLD = 250;       // rows of accumulated work before we flush
     const INSERT_CHUNK = 200;          // PostgREST batch size for inserts
     const UPDATE_CONCURRENCY = 8;      // parallel updates per chunk

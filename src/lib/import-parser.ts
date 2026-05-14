@@ -144,48 +144,35 @@ export function normalizeHeader(raw: string): string {
   return getMappedField('tnc', cleaned) ?? HEADER_MAP[cleaned] ?? cleaned;
 }
 
-// ── Date normalization ────────────────────────────────────────────────
-const MONTH_ABBR_MAP: Record<string, string> = {
-  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
-  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
-};
+// ── Date normalization (delegated to shared module) ──────────────────
+import { normalizeDate as _normalizeDate, parseDate } from '@/lib/date-normalize';
+const normalizeDate = _normalizeDate;
+export { parseDate };
 
-function normalizeDate(val: any): string | null {
-  if (val == null || val === '') return null;
+const SUBTEST_DATE_FIELDS = [
+  't1_planned_date', 't2_planned_date',
+  'r1_target_submission_date', 'r1_actual_submission_date',
+  'r2_target_submission_date', 'r2_actual_submission_date',
+  'r2_target_approval_date', 'r2_actual_approval_date',
+] as const;
 
-  // 1. Numeric (Excel serial date)
-  if (typeof val === 'number') {
-    const d = XLSX.SSF.parse_date_code(val);
-    if (d) return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+/**
+ * Parse all known date fields from a raw row, collecting any unparseable
+ * cells as warnings for downstream field-log emission.
+ */
+function pickSubtestDates(row: Record<string, any>) {
+  const out: Record<string, string | null> = {};
+  const warnings: Array<{ field: string; raw: string }> = [];
+  for (const f of SUBTEST_DATE_FIELDS) {
+    const r = parseDate(row[f]);
+    out[f] = r.date;
+    if (r.mode === 'unparseable' && r.raw) {
+      warnings.push({ field: f, raw: r.raw });
+    }
   }
-
-  const s = String(val).trim();
-
-  // 2. Numeric string → Excel serial date
-  if (/^\d+(\.\d+)?$/.test(s)) {
-    const d = XLSX.SSF.parse_date_code(parseFloat(s));
-    if (d) return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
-  }
-
-  // 3. ISO format YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
-
-  // 4. dd-MMM or dd-MMM-YYYY (e.g. 15-Jan, 03-Feb-2025)
-  const ddMmmMatch = s.match(/^(\d{1,2})-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:-(\d{4}))?$/i);
-  if (ddMmmMatch) {
-    const day = ddMmmMatch[1].padStart(2, '0');
-    const month = MONTH_ABBR_MAP[ddMmmMatch[2].toLowerCase()];
-    const year = ddMmmMatch[3] || new Date().getFullYear().toString();
-    return `${year}-${month}-${day}`;
-  }
-
-  // 5. Fallback: new Date()
-  const parsed = new Date(s);
-  if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().substring(0, 10);
-  }
-  return null;
+  return { dates: out, warnings };
 }
+
 
 function normalizeStatus(val: any): string | null {
   if (val == null || val === '') return null;
@@ -331,6 +318,8 @@ export interface ParsedSubtest {
   punchlist_comments: string | null;
   custom_payload: Record<string, string | number | boolean | null>;
   custom_field_errors: Array<{ field_name: string; raw: string; reason: string }>;
+  /** Date cells that contained text but couldn't be parsed (for field log warnings). */
+  _dateWarnings?: Array<{ field: string; raw: string }>;
 }
 
 // ── Known target field names (after normalization) ───────────────────
@@ -552,6 +541,7 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
     if (!item_no) continue;
 
     const pred = parsePredecessor(row.predecessor_status_raw);
+    const dp = pickSubtestDates(row);
     const base = {
       raw_row_no: parseInt(row.__row_no) || 0,
       raw_system_name: system,
@@ -560,9 +550,9 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
       level: row.level?.trim() || null,
       equipment: row.equipment?.trim() || null,
       description: row.description?.trim() || null,
-      t1_planned_date: normalizeDate(row.t1_planned_date),
+      t1_planned_date: dp.dates.t1_planned_date,
       t1_status: normalizeStatus(row.t1_status),
-      t2_planned_date: normalizeDate(row.t2_planned_date),
+      t2_planned_date: dp.dates.t2_planned_date,
       t2_status: normalizeStatus(row.t2_status),
       predecessor_status_raw: pred.raw,
       pred_status: pred.status,
@@ -583,14 +573,15 @@ export function parseLegacy(rows: Record<string, string>[]): ParsedSubtest[] {
           aconex_ref_no: aconexExplicit ?? r2.ref,
         };
       })(),
-      r1_target_submission_date: normalizeDate(row.r1_target_submission_date),
-      r1_actual_submission_date: normalizeDate(row.r1_actual_submission_date),
-      r2_target_submission_date: normalizeDate(row.r2_target_submission_date),
-      r2_actual_submission_date: normalizeDate(row.r2_actual_submission_date),
-      r2_target_approval_date: normalizeDate(row.r2_target_approval_date),
-      r2_actual_approval_date: normalizeDate(row.r2_actual_approval_date),
+      r1_target_submission_date: dp.dates.r1_target_submission_date,
+      r1_actual_submission_date: dp.dates.r1_actual_submission_date,
+      r2_target_submission_date: dp.dates.r2_target_submission_date,
+      r2_actual_submission_date: dp.dates.r2_actual_submission_date,
+      r2_target_approval_date: dp.dates.r2_target_approval_date,
+      r2_actual_approval_date: dp.dates.r2_actual_approval_date,
       remarks: row.remarks?.trim() || null,
       punchlist_comments: row.punchlist_comments?.trim() || null,
+      _dateWarnings: dp.warnings.length ? dp.warnings : undefined,
       ...extractCustomFields(row),
     };
 
@@ -629,6 +620,7 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
     if (!item_no || !mos_code) continue;
 
     const pred = parsePredecessor(row.predecessor_status_raw);
+    const dp = pickSubtestDates(row);
     result.push({
       raw_row_no: parseInt(row.__row_no) || 0,
       raw_system_name: system,
@@ -639,9 +631,9 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
       description: row.description?.trim() || null,
       mos_code,
       subtest_id: row.subtest_id?.trim() || `${item_no}-${mos_code}`,
-      t1_planned_date: normalizeDate(row.t1_planned_date),
+      t1_planned_date: dp.dates.t1_planned_date,
       t1_status: normalizeStatus(row.t1_status),
-      t2_planned_date: normalizeDate(row.t2_planned_date),
+      t2_planned_date: dp.dates.t2_planned_date,
       t2_status: normalizeStatus(row.t2_status),
       predecessor_status_raw: pred.raw,
       pred_status: pred.status,
@@ -661,14 +653,15 @@ export function parseStandard(rows: Record<string, string>[]): ParsedSubtest[] {
           aconex_ref_no: aconexExplicit ?? r2.ref,
         };
       })(),
-      r1_target_submission_date: normalizeDate(row.r1_target_submission_date),
-      r1_actual_submission_date: normalizeDate(row.r1_actual_submission_date),
-      r2_target_submission_date: normalizeDate(row.r2_target_submission_date),
-      r2_actual_submission_date: normalizeDate(row.r2_actual_submission_date),
-      r2_target_approval_date: normalizeDate(row.r2_target_approval_date),
-      r2_actual_approval_date: normalizeDate(row.r2_actual_approval_date),
+      r1_target_submission_date: dp.dates.r1_target_submission_date,
+      r1_actual_submission_date: dp.dates.r1_actual_submission_date,
+      r2_target_submission_date: dp.dates.r2_target_submission_date,
+      r2_actual_submission_date: dp.dates.r2_actual_submission_date,
+      r2_target_approval_date: dp.dates.r2_target_approval_date,
+      r2_actual_approval_date: dp.dates.r2_actual_approval_date,
       remarks: row.remarks?.trim() || null,
       punchlist_comments: row.punchlist_comments?.trim() || null,
+      _dateWarnings: dp.warnings.length ? dp.warnings : undefined,
       ...extractCustomFields(row),
     });
   }
