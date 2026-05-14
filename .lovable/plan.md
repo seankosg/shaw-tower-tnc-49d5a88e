@@ -1,145 +1,161 @@
-## 목표
+# Photo OCR Import 기능 구현 계획 (v2 — WhatsApp 스크린샷 대응)
 
-T&C 모듈의 모든 UI/Export에서 핵심 지표를 **R2A(승인일) → R2S(제출일)**로 전환합니다.
-- DB 컬럼(`r2_target_approval_date`, `r2_actual_approval_date`)은 **유지**합니다.
-- Import는 R2A 데이터를 계속 받아 저장합니다(미래 복원 가능).
-- 사용자에게 노출되는 모든 카드/컬럼/필터/Excel에서는 R2A를 **숨기고** R2S만 노출합니다.
+Defect Import 탭에 "Photo OCR" 모드를 추가합니다. Kurmar(mep) 같은 현장 인원의 **WhatsApp 채팅 스크린샷**을 통째로 업로드하면, AI 비전 모델이 스크린샷 안의 모든 (사진그룹 + 숫자 캡션) 쌍을 인식해 Issue No를 추출하고, 매칭되는 defect의 Actual Start/Completion Date를 Data Date로, Aconex Comments에 "Verified by HDEC"를 채웁니다. 사진은 시스템에 저장하지 않습니다.
 
----
+## 1. 입력 형태 — WhatsApp 스크린샷 우선
 
-## 전제 (코드 분석 결과)
+샘플 분석 결과, 사용자는 보통 다음을 업로드합니다:
+- **WhatsApp 채팅 스크린샷 (세로로 긴 이미지)** — 한 장에 여러 Issue 묶음 포함
+- 각 묶음 = `보낸사람 헤더` + `사진 콜라주 (1~6장, "+N" 더보기 표시 가능)` + `숫자 캡션 (예: 2125)` + `시간 (예: PM 2:42)`
+- 다른 사람의 답장/포워딩 미리보기 블록은 같은 화면에 섞여 있을 수 있음 → 제외 필요
+- 드물게 "2221 - Defect / Light panel..." 같이 텍스트 설명이 붙는 경우도 있음
 
-`src/lib/stage-metrics.ts`에는 이미 `r2s`와 `r2a` 두 stage가 모두 정의되어 있고, 헬퍼 함수(`getStagePlannedDate`, `isStageDone` 등)가 양쪽을 모두 지원합니다. 따라서 **stage 정의 로직은 그대로 두고**, 노출되는 stage 리스트만 교체하면 됩니다.
+따라서 OCR은 단순 숫자 추출이 아닌 **그룹 단위 파싱**이 필요합니다.
 
----
+## 2. UI 구조
 
-## 변경 사항
+### Import 페이지 모드 토글
+`DefectImportPage` 상단에 모드 탭:
+- **Excel Import** (기존)
+- **Photo OCR** (신규)
 
-### 1. 핵심 stage 리스트 (단일 진실 소스)
+라우트는 `/defects/import` 그대로 사용, 내부 state로 분기. 사이드바에는 새 항목 추가 안 함.
 
-**`src/lib/stage-metrics.ts`**
-- `ALL_STAGE_KEYS`: `['pred','t1','t2','r1','r2s','r2a']` → `['pred','t1','t2','r1','r2s']`
-- `r2a` 관련 헬퍼 분기는 그대로 유지(향후 복원 대비).
+### Photo OCR 모드 화면
 
-**`src/lib/tnc-simulation.ts`**
-- `TncSimStage` 타입: `'r2a'` → `'r2s'`
-- `ALL_TNC_SIM_STAGES`: `['t1','t2','r1','r2a']` → `['t1','t2','r1','r2s']`
-- `TNC_SIM_STAGE_LABELS`: `r2a: 'R2A'` 제거, `r2s: 'R2S'` 추가
-- `prerequisiteStages('r2s') → ['r1']` (기존 r2a 룰을 r2s에 적용)
-- 주석/JSDoc의 R2A 표기를 R2S로 교체
+1) **Header bar**
+   - Data Date picker (기본: 오늘) — 모든 업데이트에 일괄 적용
+   - 안내 문구: "Aconex Comments will be set to: Verified by HDEC"
+   - Drop zone / "Select Screenshots" 버튼 (jpg/jpeg/png, 다중 선택, HEIC는 차단 안내)
 
-### 2. T&C Simulation 페이지
+2) **업로드 패널 — 두 단계로 진행**
 
-**`src/pages/TncSimulationPage.tsx`**
-- import/타입 참조 r2a → r2s로 정리
-- URL 파라미터 마이그레이션: `?stages=` 값에 `r2a`가 있으면 `r2s`로 자동 치환(레거시 북마크 호환)
+   **Step 1: Parse**
+   - 각 업로드 파일에 대해 비전 모델이 스크린샷을 분석
+   - 추출 결과 = `extractedGroups: [{ issueNo, captionText, confidence, cropHintBox }, ...]`
+   - 진행률 표시 (파일별)
 
-### 3. T&C Dashboard
+   **Step 2: Review & Apply**
+   - 모든 파일에서 추출된 그룹들을 평탄화하여 **Issue 리스트 그리드**로 표시
+   - 각 행: `[원본 파일 thumbnail · 그룹 영역 미리보기(crop) · Issue No · DB 매칭 상태 · 결정 액션]`
+   - 매칭 상태:
+     - `Will update` (DB에 존재 + actual_completion_date 비어 있음)
+     - `Skip — already completed` (이미 완료)
+     - `Not found` (DB에 없음)
+     - `Needs review` (confidence 낮음 / 캡션 모호)
+     - `No permission` (D.Super User가 다른 team의 row를 선택한 경우)
+   - 각 행 액션: `Edit Issue No` (수동 수정), `Skip`, `Re-include`
+   - 일괄 액션: `Apply All`, `Apply Selected`, `Clear`
 
-**`src/lib/dashboard-utils.ts`**
-- `ALL_STAGES`: `r2a` 제거
-- `OCCURRENCE_STAGES`: `r2a` → `r2s`
-- KPI 계산 `calc('r2a')` → `calc('r2s')`
-- 주석 "R2S/R2A" → "R2S"
+3) **Needs Review 패널**
+   - confidence < 0.7 또는 미매칭 항목을 모아 표시
+   - 사진 옆 입력란에 Issue No 직접 입력 → `Apply`
 
-**`src/pages/DashboardPage.tsx`**
-- `stageStat('r2a', 'r2_target_approval_date')` → `stageStat('r2s', 'r2_target_submission_date')`
-- KPI 카드 `<StageCard stage="R2A" …>` → `<StageCard stage="R2S" …>` 라벨 및 navigate 파라미터(`r2_delay_asof` → `r2s_delay_asof`) 정리
-- 팀 매트릭스 행 라벨 `'R2A'` → `'R2S'`
+4) **결과 요약 카드**
+   - Updated N · Skipped(이미 완료) N · Not found N · Manual N · Failed N
+   - "View change log" 링크로 import logs 페이지 이동
 
-### 4. T&C Progress (Schedule)
+## 3. OCR 처리 — Edge Function `defect-photo-ocr`
 
-**`src/lib/schedule-utils.ts`**
-- 노출 stage 배열에서 `r2a` 제거: `['pred','t1','t2','r1','r2s','r2a']` → `['pred','t1','t2','r1','r2s']`
-- `RISK_STAGES`에서 `r2a` 제거
-- 라벨 맵에서 `r2a: 'R2A'` 제거
+신규 edge function:
+- 입력: 단일 이미지 (base64 data URL) + dataDate
+- 모델: **`google/gemini-2.5-pro`** — 멀티 객체/긴 스크린샷 + 한국어 UI + 숫자 인식 모두 강함 (gemini-2.5-flash로 시작했다 정확도 부족하면 pro로 폴백 옵션)
+- Tool calling으로 구조화 출력 강제:
+  ```json
+  {
+    "groups": [
+      {
+        "issue_no": "2125",
+        "caption_raw": "2125",
+        "sender": "Kumar(mep)",
+        "timestamp_text": "PM 2:42",
+        "confidence": 0.0~1.0,
+        "bbox_normalized": { "x": 0, "y": 0.05, "w": 1, "h": 0.18 },
+        "notes": "string (모호한 점)"
+      }
+    ],
+    "rejected_blocks": [
+      { "reason": "reply preview / different sender", "y_range": [0.6, 0.75] }
+    ]
+  }
+  ```
+- 시스템 프롬프트 요지(영문):
+  - "This is a WhatsApp chat screenshot. Find every message group sent by 'Kumar(mep)' (or similar mep/elec field staff). Each group has photos followed by a numeric caption (1–5 digits). Return one entry per group with the numeric caption as `issue_no`. Ignore reply previews, forwarded link cards, and messages from other senders. If a group has a non-numeric caption like 'Defect 2221 - ...', extract the leading number."
+  - "If a caption is unreadable or ambiguous, set confidence < 0.5 and still include it so a human can review."
+- 신뢰도 < 0.7 → Needs Review로 분류
+- bbox_normalized은 클라이언트가 원본 이미지를 crop해서 리뷰 UI에 미리보기로 표시하기 위함 (저장 안 함, 메모리 canvas)
+- 429 / 402 에러는 그대로 클라이언트 → 토스트
+- 사진은 함수 내에서만 사용, storage / log에 일절 저장하지 않음
 
-**`src/pages/SchedulePage.tsx`**
-- Stage 토글 그룹의 R2A 토글 버튼 제거
-- stage 처리 분기에서 `r2a` 케이스 제거
-- 레거시 URL 파라미터 마이그레이션(r2a → r2s)
+## 4. 매칭 & 업데이트 (클라이언트 → Supabase)
 
-**`src/components/schedule/ScheduleMatrix.tsx`**
-- `ALL_STAGES`에서 `r2a` 제거
-- 셀 색상 분기 `st === 'r2a'` 제거(또는 `r2s`로 색상 이전)
+`Apply` 클릭 시 각 그룹별로:
 
-**`src/components/schedule/CriticalWatchlist.tsx`**
-- `item.stage === 'r2a'` 분기 제거(또는 `r2s`로 이전)
+1. `defect_items` 조회: `issue_no = ?` AND `is_active = true` AND `project_id = currentProject`
+2. 분기:
+   - **없음** → `Not found`
+   - **`actual_completion_date` 이미 채워짐** → `Skipped — already completed`
+   - **그 외** → 업데이트 실행:
+     ```
+     actual_start_date = (기존 값 있으면 유지, 없으면 dataDate)
+     actual_completion_date = dataDate
+     aconex_comments = (기존 코멘트가 있으면) "${existing}\n[${dataDate}] Verified by HDEC"
+                       (없으면) "Verified by HDEC"
+     updated_by = auth.uid()
+     row_version = row_version + 1
+     ```
+3. `defect_change_log`에 변경 이력 기록 (`change_source = 'photo_ocr'`, 필드별 row 1개씩)
+4. 모든 업데이트 완료 후 `recompute-defect-status` edge function 1회 호출 → `closure_status` / `completion_status` / `progress_pct` 자동 갱신
+5. 추적용 `defect_upload_batches` 1행 생성 (`uploaded_file_name = 'photo_ocr_<timestamp>'`, `data_date = dataDate`, 통계 기록) → 기존 Import Logs 페이지에서 가시화
 
-### 5. Raw Data (SubtestList) 필터
+## 5. 권한 & 모듈 상태
 
-**`src/pages/SubtestList.tsx`**
-- `STAGE_FILTER_KEYS`: `['pred','t1','t2','r1','r2a']` → `['pred','t1','t2','r1','r2s']`
-- 라벨 맵에서 `r2a: 'R2A'` 제거, `r2s: 'R2S'` 추가
-- "Remaining" 필터의 완료 판단을 `isStageDone(r,'r2a')` → `isStageDone(r,'r2s')`로 전환
-- 행 정렬 가중치(`isStageDone(r,'r2a') ? 16 : 0`)를 `r2s` 기준으로 변경
-- URL 파라미터 호환: 시뮬레이션/대시보드에서 넘어오는 기존 `r2_*` 파라미터를 `r2s_*`로 매핑하거나, 동일 키를 R2S용으로 재해석
+- 기존 Import 페이지와 동일: `useModuleStatus().defect.enabled` + admin bypass
+- Write 권한은 RLS가 자동 적용:
+  - user / senior_user / superuser / admin → 전체
+  - d_superuser → 본인 team의 row만 (RLS에서 거부 시 결과 = `Failed (no permission)`)
+- 권한 거부된 행은 결과 요약에 별도 카운트
 
-### 6. Subtest Detail / 공유 컴포넌트
+## 6. 데이터 / 스키마 변경
 
-**`src/components/shared/StageProgress.tsx`**
-- "Pred → T1 → T2 → R1 → R2A" → "Pred → T1 → T2 → R1 → R2S"
-- R2A Pip/툴팁 제거, R2S Pip 추가(분류 함수는 r2s로 호출)
-- 색상/상태 분기 r2a → r2s로 교체
+DB 스키마 변경 **없음**. 재사용:
+- `defect_items` 컬럼: `actual_start_date`, `actual_completion_date`, `aconex_comments`, `updated_by`, `row_version`
+- `defect_change_log` (`change_source` 새 값 `photo_ocr`)
+- `defect_upload_batches` (트래킹용)
 
-**`src/pages/SubtestDetail.tsx`**
-- R2A 표기 제거 또는 R2S로 교체(상세 점검 후)
+## 7. 파일별 작업
 
-### 7. Excel Export
+### 신규
+- `supabase/functions/defect-photo-ocr/index.ts` — Vision OCR (Lovable AI Gateway, gemini-2.5-pro, tool calling)
+- `src/lib/defect-photo-ocr.ts` — 클라이언트 헬퍼: 이미지 base64 변환, edge function invoke, bbox crop 미리보기 생성, 매칭/업데이트 트랜잭션
+- `src/components/import/PhotoOcrPanel.tsx` — Photo OCR 메인 UI (업로드 + Parse + Review + Apply)
+- `src/components/import/PhotoOcrGroupRow.tsx` — 추출된 그룹 1행 (썸네일/crop preview/issue/상태/액션)
+- `src/components/import/PhotoOcrManualEntry.tsx` — Needs Review 수동 입력 다이얼로그
 
-**`src/lib/excel-export.ts`**, **`src/lib/schedule-excel-export.ts`**
-- 출력 컬럼 목록의 `r2a` 제거 (R2A Target/Actual Approval Date 컬럼 미출력)
-- R2S Target/Actual Submission Date는 유지/추가
+### 수정
+- `src/pages/DefectImportPage.tsx` — 상단 모드 토글, Photo OCR 모드 분기
+- `src/contexts/DefectImportContext.tsx` — `change_source` 상수에 `photo_ocr` 추가 (그 외 photo state는 PhotoOcrPanel 내부 격리)
 
-### 8. 기타 보조 파일
+## 8. 에러 / 엣지 케이스
 
-**`src/lib/filter-chip-utils.ts`**
-- `STAGE_KEYS`에서 `r2a` 제거, `r2s` 추가
-- 라벨 맵 `r2a: 'R2A'` 제거, `r2s: 'R2S'` 추가
+- HEIC: 브라우저에서 디코드 불가 → "Convert HEIC to JPG/PNG" 토스트
+- 매우 긴 스크린샷(예: 5000px 이상): 클라이언트에서 자동으로 4000px 단위로 분할해서 함수에 순차 호출 → 그룹 결과 병합
+- 단일 파일 최대 15MB, 큐 최대 30장 (rate limit 보호)
+- OCR 동시 호출 = 2건 (queue) — 429 방지
+- 부분 실패 허용: Apply 단계는 그룹 단위 트랜잭션, 한 건 실패가 전체 막지 않음
+- 사진은 메모리에서만 보유, Apply 종료 또는 Clear 시 `URL.revokeObjectURL`로 즉시 해제
+- 다른 발신자 블록(예: Rajalingalm(PT) 답장)은 모델이 `rejected_blocks`로 보고 → 클라이언트가 결과 요약에 "Other-sender blocks ignored: N" 표시
 
-**`src/lib/business-days.ts`, `src/lib/bulk-actions.ts`, `src/lib/subtest-cache.ts`**
-- R2A 전용 처리 로직이 있다면 R2S로 이전(필요시 r2a는 silent fallback으로 보존)
+## 9. 검증 계획
 
-### 9. 비변경 영역 (그대로 유지)
-
-- DB 스키마: `r2_target_approval_date`, `r2_actual_approval_date` 컬럼 유지
-- `src/contexts/ImportContext.tsx`: R2 Approval 컬럼 import/insert 로직 유지
-- `src/lib/import-parser.ts`, `src/pages/admin/HeaderMappingsTab.tsx`: R2 Approval 헤더 매핑 유지(엑셀 import 호환)
-- `src/lib/stage-metrics.ts`의 `r2a` 분기 헬퍼: 유지 (URL 파라미터/개별 호출 시 안전)
-
-### 10. 테스트
-
-**`src/test/tnc-simulation.test.ts`**
-- R2A 테스트 케이스를 R2S 기준으로 변경 (`r2_target_submission_date` 사용)
-
----
-
-## 사용자 영향 요약
-
-| 화면 | 변경 전 (R2A) | 변경 후 (R2S) |
-|------|--------------|---------------|
-| T&C Dashboard 카드 | T1·T2·R1·**R2A** | T1·T2·R1·**R2S** |
-| T&C Simulation 카드/차트 | 4단계 (R2A 포함) | 4단계 (R2S 포함) |
-| T&C Progress 토글/매트릭스 | Pred·T1·T2·R1·R2S·**R2A** | Pred·T1·T2·R1·**R2S** |
-| Raw Data 필터/Stage Pip | R2A 포함 | R2A 제거, R2S만 |
-| Excel Export | R2A 컬럼 포함 | R2A 컬럼 미출력 |
-| Subtest Detail Stage Bar | …→R2A | …→R2S |
-
----
-
-## 위험 및 완화
-
-- **레거시 URL 북마크**: `?stages=r2a` 등을 사용하던 사용자는 차트가 비어 보일 수 있음 → 페이지 진입 시 r2a → r2s 자동 치환.
-- **기존 R2A 기준 의사결정 데이터**: DB에 그대로 보존되므로, 향후 필요 시 분기 한 줄로 즉시 복원 가능.
-- **Import 깨짐 없음**: import는 R2 Approval 컬럼을 계속 수신·저장.
-
----
-
-## 작업 순서
-
-1. `stage-metrics.ts`, `tnc-simulation.ts` (단일 진실 소스 교체)
-2. Dashboard / Simulation / Progress 페이지
-3. Raw Data 및 Stage Pip 컴포넌트
-4. Excel Export
-5. 보조 유틸 (filter-chip-utils 등)
-6. 테스트 갱신 및 빌드 확인
+- TypeScript 빌드 무오류
+- 단위 테스트: `src/test/defect-photo-ocr.test.ts`
+  - `decideUpdate(existing, dataDate)` — 5가지 분기 (없음/완료됨/start만 비어있음/coments append/append 없음)
+  - `mergeAconexComment(existing, dataDate)` — 줄바꿈 append 규칙
+- 수동 QA 시나리오 (업로드된 두 샘플 사용):
+  1. 정상 스크린샷 → 5~6개 그룹 모두 인식, 각 Issue No 매칭
+  2. 답장 미리보기 섞인 스크린샷 → 답장 블록 무시
+  3. "+3" 더보기 콜라주 → 캡션 숫자만 정확히 인식
+  4. 이미 완료된 issue 포함 → Skipped로 표시
+  5. 존재하지 않는 issue (예: 9999) → Not found, 수동 수정 후 Apply
+  6. D.Super User가 타 team issue 처리 시 → Failed (no permission)
