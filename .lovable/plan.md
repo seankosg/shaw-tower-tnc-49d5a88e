@@ -1,52 +1,87 @@
-# Subtest 내보내기 — 날짜 컬럼 텍스트 혼재 수정
+# Excel 업로드 — 날짜 컬럼 텍스트 혼재 자동 파싱
 
-## 원인
+## 현황
 
-업로드한 파일(`SHAW_Subtests_20260513_2219.xlsx`)을 분석한 결과:
+5개 파서가 각자 `normalizeDate`를 보유:
 
-| 컬럼 | datetime 셀 | text 셀 |
-|---|---|---|
-| T1 Planned Date | 303 | 74 (빈 문자열) |
-| T2 Planned Date | 377 | 0 |
-| **R1 Target Submission Date** | 129 | **248 (ISO 문자열)** |
-| **R2 Target Submission Date** | 107 | **270 (ISO 문자열)** |
-| **R2 Target Approval Date** | 193 | **184 (ISO 문자열)** |
-| Updated At | 377 | 0 |
+| 파일 | 현재 robust 수준 |
+|---|---|
+| `src/lib/defect-parser.ts` | ★★★ (slash/MMM-dd/clampReasonable 포함) |
+| `src/lib/import-parser.ts` (Subtest) | ★ (`new Date()` fallback — TZ/garbage 위험) |
+| `src/lib/docs-import-parser.ts` | ★ |
+| `src/lib/docs-omm-import-parser.ts` | ★ |
+| `src/lib/docs-warranty-import-parser.ts` | ★ |
 
-`src/lib/excel-export.ts`의 `DATE_COLUMN_IDS` 화이트리스트에 T1/T2 컬럼만 등록되어 있고, R1/R2 관련 날짜 컬럼이 누락되어 있습니다. 따라서 R1/R2 날짜는 ISO 문자열 그대로 일반 텍스트 셀(`setCell`, number_format=`General`)에 들어가서 Excel이 날짜로 인식하지 못합니다.
+문제:
+- Subtest/Docs는 약한 파서로 `27-Apr` → `1970-01-01` 같은 오류 발생 여지
+- 모든 파서가 텍스트 안에 날짜가 끼어 있는 경우(`"TBD 2026-05-18"`, `"submitted 27-Apr"`) 처리 불가
+- 파싱 실패 시 조용히 `null`로 떨어져 사용자가 알지 못함
 
-```ts
-// src/lib/excel-export.ts:118
-const DATE_COLUMN_IDS = new Set([
-  't1_planned_date', 't1_actual_date',
-  't2_planned_date', 't2_actual_date',
-  // ❌ r1/r2 누락
-]);
-```
+## 구현 계획
 
-이 Set은 단일 파일 export(line 296)와 시스템별 번들 export(line 651) 두 경로 모두에서 사용되므로, 한 곳만 고치면 두 경로 모두 수정됩니다.
+### 1. 공용 모듈 신설 — `src/lib/date-normalize.ts`
 
-## 변경 사항
+`defect-parser.normalizeDate` 로직을 추출 + 강화:
 
-### 1. `src/lib/excel-export.ts`
-`DATE_COLUMN_IDS`에 R1/R2 날짜 컬럼 추가:
-- `r1_target_submission_date`
-- `r1_actual_submission_date` (스키마에 있다면)
-- `r2_target_submission_date`
-- `r2_actual_submission_date` (스키마에 있다면)
-- `r2_target_approval_date`
-- `r2_actual_approval_date` (스키마에 있다면)
+- **노이즈 필터**: `TBD`, `TBA`, `N/A`, `n/a`, `-`, `없음`, `pending` 등은 즉시 `null` (warning 없이 정상 skip)
+- **JS Date 입력 지원**: xlsx `cellDates: true` 모드에서 들어오는 Date 객체 처리
+- **Excel serial / ISO / dd-MMM / MMM-dd / DD/MM/YYYY** (기존 defect 로직)
+- **임베디드 날짜 추출**: 전체 매칭 실패 시 문자열 안에서 ISO(`\d{4}-\d{2}-\d{2}`), dd-MMM-YYYY, 슬래시 패턴을 검색하여 첫 매치를 사용 (예: `"see remarks: 2026-05-18 revised"` → `"2026-05-18"`)
+- **clampReasonable**: 연도 < 2000 또는 > 2099 거부
+- **시그니처**:
+  ```ts
+  export type DateParseResult =
+    | { date: string; mode: 'exact' | 'extracted' | 'serial' | 'noise' }
+    | { date: null; mode: 'noise' | 'unparseable'; raw: string };
+  export function normalizeDate(value: unknown): string | null;          // 기존 호환
+  export function parseDate(value: unknown): DateParseResult;             // 신규 (warning 발행용)
+  ```
 
-(실제 컬럼 id는 구현 시 `subtests` 타입과 raw-data 컬럼 정의를 확인하여 존재하는 것만 추가)
+### 2. 5개 파서 통합
 
-### 2. 빈 값 처리 (선택)
-값이 `null` 또는 빈 문자열이면 `setCell`을 호출하지 않고 셀을 비워두도록 하여 `General` 빈 문자열 셀이 남지 않게 정리. (T1 Planned에 74개의 빈 문자열 셀이 남아 있는 현상 해결.)
+각 파일에서 로컬 `normalizeDate`를 제거하고 신규 모듈을 import. `defect-parser.normalizeDate`는 기존 export를 유지하기 위해 신규 모듈로 위임하는 re-export로 변경.
 
-### 3. 회귀 검증
-수정 후 동일 필터로 다시 내보내서 `openpyxl`로 검사 — R1/R2 컬럼의 모든 비어있지 않은 셀이 `datetime` 타입 + `dd-mmm` number_format으로 저장되는지 확인.
+영향 호출부 30곳은 시그니처가 동일하므로 수정 불필요.
 
-## 영향 범위
+### 3. Field log 경고 기록
 
-- 단일 Subtest export (`exportSubtestsToExcel`)
-- 시스템별 번들 export (`exportSubtestsPerSystemBundle`)
-- Defect/Docs export 경로는 별도 함수이며 본 수정과 무관 (이미 자체 화이트리스트 보유).
+각 importer가 row 변환 시 `parseDate`의 `mode: 'unparseable'` 결과를 수집하여 field_log에 기록:
+
+- outcome: `rejected_invalid`
+- reason_code: `unparseable_date`
+- reason_detail: `Could not parse "{raw}" as a date`
+
+수정 파일:
+- `src/contexts/ImportContext.tsx` (Subtest)
+- `src/contexts/DefectImportContext.tsx` (Defect)
+- `src/lib/docs-import-workers.ts` (Docs/OMM/Warranty/Spare/ABD 공통 워커)
+
+구현 패턴(파서 함수 시그니처 변경 최소화):
+- `normalizeDate` 자체에 모듈 스코프 weak-warning 채널을 두지 않고, 각 파서의 row 빌드 함수가 `warnings: { field, raw }[]` 배열을 추가로 반환
+- importer가 해당 배열을 `buildFieldLog(...)` 로 변환하여 기존 field_log 파이프라인에 합류
+
+### 4. 테스트
+
+- 신규 `src/test/date-normalize.test.ts` — 매트릭스:
+  - `"TBD"`, `"N/A"`, `""` → null (noise)
+  - `"2026-05-18"`, `"27-Apr"`, `"27-Apr-2026"`, `"3/5/2026"`, `45444`(serial) → 정상
+  - `"see remarks: 2026-05-18"`, `"submitted 27-Apr-2026"` → extracted
+  - `"2001-05-03"`, `"1899-12-30"` → null (clamp)
+  - `"hello world"` → null (unparseable)
+- 기존 `src/test/defect-parser-date.test.ts` 회귀 통과 유지
+
+### 5. 검증
+
+`src/lib/import-parser.ts`의 `parseSubtestRows` 같은 진입점에 텍스트 혼재 샘플 입력 → 결과 row + warnings 출력. (vitest 또는 단발 스크립트)
+
+## 영향 범위 / 비영향
+
+- **수정**: `src/lib/{date-normalize.ts(신규), import-parser.ts, defect-parser.ts, docs-import-parser.ts, docs-omm-import-parser.ts, docs-warranty-import-parser.ts}`, `src/contexts/{ImportContext.tsx, DefectImportContext.tsx}`, `src/lib/docs-import-workers.ts`, 신규 테스트 1개
+- **비영향**: DB 스키마, RLS, export 로직, UI
+
+## 완료 기준
+
+1. `"TBD 2026-05-18"`, `"see notes 27-Apr-2026"` 같은 입력이 정확한 날짜로 파싱됨
+2. `"TBD"`, `"N/A"` 단독 입력은 조용히 null (warning 없음)
+3. `"hello world"`, `"!!!"` 같은 진짜 garbage는 import field log에 `unparseable_date` 경고로 기록
+4. 모든 단위 테스트 통과 (defect 회귀 포함)
