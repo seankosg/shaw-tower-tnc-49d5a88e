@@ -13,7 +13,7 @@ interface OcrGroup {
   sender: string | null;
   timestamp_text: string | null;
   confidence: number;
-  bbox_normalized: { x: number; y: number; w: number; h: number } | null;
+  caption_y_normalized: number | null;
   notes?: string | null;
 }
 interface OcrRejected { reason: string; y_range?: [number, number] }
