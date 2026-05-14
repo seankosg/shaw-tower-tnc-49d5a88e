@@ -190,11 +190,24 @@ export default function PhotoOcrPanel({ disabled }: { disabled?: boolean }) {
         const d = decideUpdate(ex, dataDate, item.group.confidence);
         return { ...item, existing: ex, decision: d.kind, decisionReason: d.reason ?? '' } satisfies ReviewItem;
       });
-      // Lazy-build crops (best-effort).
+      // Build per-file group bands from caption_y, then crop each band.
+      const byFile = new Map<string, ReviewItem[]>();
       for (const it of matched) {
-        const file = results.find((f) => f.id === it.fileId);
-        if (file && it.group.bbox_normalized) {
-          try { it.cropDataUrl = await cropFromDataUrl(file.fullDataUrl, it.group.bbox_normalized); } catch { /* ignore */ }
+        const arr = byFile.get(it.fileId) ?? [];
+        arr.push(it);
+        byFile.set(it.fileId, arr);
+      }
+      for (const [fileId, items] of byFile.entries()) {
+        const file = results.find((f) => f.id === fileId);
+        if (!file) continue;
+        const bands = computeGroupBands(items.map((it) => it.group.caption_y_normalized));
+        for (let i = 0; i < items.length; i += 1) {
+          const band = bands[i];
+          try {
+            items[i].cropDataUrl = await cropFromDataUrl(file.fullDataUrl, {
+              x: 0, y: band.yTop, w: 1, h: Math.max(0.01, band.yBottom - band.yTop),
+            });
+          } catch { /* ignore */ }
         }
       }
       setReviewItems(matched);
