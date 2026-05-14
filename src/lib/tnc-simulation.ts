@@ -28,27 +28,17 @@ export const TNC_SIM_STAGE_LABELS: Record<TncSimStage, string> = {
 
 // ───── Delay handling ─────
 
-export type DelayMode = 'optimistic' | 'shift-today' | 'penalty' | 'learned';
+export type DelayMode = 'optimistic' | 'penalty';
 
 export const DELAY_MODE_LABELS: Record<DelayMode, string> = {
-  optimistic: 'Optimistic',
-  'shift-today': 'Shift to today',
-  penalty: 'Penalty (exclude)',
-  learned: 'Learned lag',
+  optimistic: 'Best Case',
+  penalty: 'Worst Case',
 };
 
 export interface SimOptions {
   mode: DelayMode;
   /** Reference "today" — typically latest data date from completed batches. */
   dataDate: string;
-  /** Per-stage average lag in days, used only when mode === 'learned'. */
-  lagDays?: Partial<Record<TncSimStage, number>>;
-  /**
-   * When true, T2 is only counted as actually done if T1 is also done,
-   * and R2A only if R1 is done. Mirrors the workflow rule and protects
-   * against legacy data where downstream actuals exist without upstream.
-   */
-  enforceSequential?: boolean;
 }
 
 /** Returns the prerequisite stages that must also be `isStageDone` for `stage`. */
