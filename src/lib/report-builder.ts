@@ -13,6 +13,7 @@ import { simulateAllDefectStages } from '@/lib/defect-simulation';
 import type { SubtestForDashboard } from '@/lib/dashboard-utils';
 import type { DefectItem } from '@/lib/defect-utils';
 import type { DefectScheduleStage } from '@/lib/defect-schedule-utils';
+import { TNC_RAW_DATA_GUIDE_MD } from '@/lib/tnc-raw-data-guide';
 
 export type ReportModule = 'tnc' | 'defect' | 'docs' | 'punch';
 export type ReportSection = 'dashboard' | 'progress' | 'simulation' | 'snapshots';
@@ -26,6 +27,8 @@ export interface ReportOptions {
   delayMode?: DelayMode;
   /** Override Data Date (YYYY-MM-DD). When omitted, latest completed batch date is used. */
   dataDate?: string;
+  /** Append the T&C Raw Data Business Guide as Appendix A. Default true when T&C module selected. */
+  includeTncGuide?: boolean;
 }
 
 // ---------- helpers ----------
