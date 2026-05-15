@@ -2109,6 +2109,45 @@ export type Database = {
         }
         Relationships: []
       }
+      punch_field_config: {
+        Row: {
+          display_name: string
+          editable_to_roles: Database["public"]["Enums"]["app_role"][] | null
+          field_name: string
+          id: string
+          is_enabled: boolean
+          is_required: boolean
+          original_header: string | null
+          sort_order: number
+          source_origin: string
+          visible_to_roles: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Insert: {
+          display_name: string
+          editable_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+          field_name: string
+          id?: string
+          is_enabled?: boolean
+          is_required?: boolean
+          original_header?: string | null
+          sort_order?: number
+          source_origin?: string
+          visible_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Update: {
+          display_name?: string
+          editable_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+          field_name?: string
+          id?: string
+          is_enabled?: boolean
+          is_required?: boolean
+          original_header?: string | null
+          sort_order?: number
+          source_origin?: string
+          visible_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Relationships: []
+      }
       punch_items: {
         Row: {
           actual_completion_date: string | null
@@ -2280,6 +2319,7 @@ export type Database = {
           project_id: string | null
           rejected_rows: number | null
           rollback_force: boolean | null
+          rollback_reason: string | null
           rolled_back_at: string | null
           rolled_back_by: string | null
           skipped_rows: number | null
@@ -2298,6 +2338,7 @@ export type Database = {
           project_id?: string | null
           rejected_rows?: number | null
           rollback_force?: boolean | null
+          rollback_reason?: string | null
           rolled_back_at?: string | null
           rolled_back_by?: string | null
           skipped_rows?: number | null
@@ -2316,6 +2357,7 @@ export type Database = {
           project_id?: string | null
           rejected_rows?: number | null
           rollback_force?: boolean | null
+          rollback_reason?: string | null
           rolled_back_at?: string | null
           rolled_back_by?: string | null
           skipped_rows?: number | null
