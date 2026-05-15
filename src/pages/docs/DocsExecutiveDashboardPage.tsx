@@ -78,6 +78,7 @@ export default function DocsExecutiveDashboardPage() {
   const abdRows = snap?.abdRows ?? [];
   const ommRows = snap?.ommRows ?? [];
   const warrantyRows = snap?.warrantyRows ?? [];
+  const sparePartRows = snap?.sparePartRows ?? [];
 
   const goRaw = (m: DocModule, params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
@@ -103,8 +104,8 @@ export default function DocsExecutiveDashboardPage() {
   }, [records, asOf]);
 
   const dataQuality = useMemo(
-    () => computeDataQualityIssues(records, { abd: abdRows, omm: ommRows, warranty: warrantyRows }),
-    [records, abdRows, ommRows, warrantyRows],
+    () => computeDataQualityIssues(records, { abd: abdRows, omm: ommRows, warranty: warrantyRows, spare_part: sparePartRows }),
+    [records, abdRows, ommRows, warrantyRows, sparePartRows],
   );
 
   return (
