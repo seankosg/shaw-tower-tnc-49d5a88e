@@ -860,3 +860,109 @@ function OmmSubStatusCard({
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────
+function DelaySeverityRow({
+  counts,
+  onClick,
+}: {
+  counts: Record<DelayBucketKey, number>;
+  onClick: (b: DelayBucketKey) => void;
+}) {
+  const total = DELAY_BUCKETS.reduce((s, b) => s + (counts[b] ?? 0), 0);
+  const tone: Record<DelayBucketKey, string> = {
+    '0-7':   'bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20',
+    '8-14':  'bg-orange-500/10 text-orange-700 dark:text-orange-300 hover:bg-orange-500/20',
+    '15-30': 'bg-red-500/10 text-red-700 dark:text-red-300 hover:bg-red-500/20',
+    '30+':   'bg-red-600/15 text-red-800 dark:text-red-200 hover:bg-red-600/25',
+  };
+  return (
+    <div className="rounded-xl border bg-card p-3.5">
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Delay Severity (Overdue Items)
+        </span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          Total {total.toLocaleString()}
+        </span>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {DELAY_BUCKETS.map((b) => (
+          <button
+            key={b}
+            type="button"
+            onClick={() => onClick(b)}
+            className={cn(
+              'flex flex-col items-center justify-center rounded-md px-2 py-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              tone[b],
+            )}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wide leading-none">
+              {b === '30+' ? '30+ days' : `${b} days`}
+            </span>
+            <span className="mt-1 text-base font-semibold tabular-nums leading-none">
+              {(counts[b] ?? 0).toLocaleString()}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+function DataQualityPanel({
+  issues,
+  onNavigate,
+}: {
+  issues: { key: string; module: DocModule; label: string; count: number; ids: string[] }[];
+  onNavigate: (m: DocModule, params?: Record<string, string>) => void;
+}) {
+  if (!issues.length) {
+    return (
+      <Card>
+        <CardContent className="flex items-center gap-3 p-5">
+          <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+          <div>
+            <h3 className="text-sm font-semibold">Data Quality</h3>
+            <p className="text-xs text-muted-foreground">No issues detected.</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <div className="flex items-center gap-3 border-b px-5 py-4">
+        <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+        <div className="flex-1">
+          <h2 className="text-base font-semibold leading-tight">Data Quality</h2>
+          <p className="text-xs text-muted-foreground">
+            {issues.length.toLocaleString()} issue group(s) detected — click View to inspect.
+          </p>
+        </div>
+      </div>
+      <CardContent className="divide-y p-0">
+        {issues.map((it) => (
+          <div key={it.key} className="flex items-center gap-3 px-5 py-3">
+            <span className={cn('rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide', MODULE_ACCENT[it.module].chip)}>
+              {MODULE_LABEL[it.module]}
+            </span>
+            <span className="flex-1 text-sm text-foreground">{it.label}</span>
+            <span className="text-sm font-semibold tabular-nums text-amber-700 dark:text-amber-300">
+              {it.count.toLocaleString()}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => onNavigate(it.module, { dq: it.key.split(':')[1] ?? it.key })}
+            >
+              View <ArrowRight className="ml-1 h-3 w-3" />
+            </Button>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
