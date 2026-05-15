@@ -234,8 +234,9 @@ export default function DocsSparePartRawDataPage() {
   const { items: cachedItems, initialLoaded } = useSparePartCache();
   const items = cachedItems as Row[];
   const loading = !initialLoaded;
-  const { isFieldVisible: _v, getLabel, sortFieldNames, fields: fieldConfigRows, getSourceOrigin } =
+  const { isFieldVisible, getLabel, sortFieldNames, fields: fieldConfigRows, getSourceOrigin } =
     useDocsFieldConfig('spare_part');
+  const { roles } = useAuth() as any;
 
   const storageKey = user?.id ? `spare-part-raw-data-state:${user.id}` : 'spare-part-raw-data-state:anon';
   const [stateLoaded, setStateLoaded] = useState(false);
