@@ -19,7 +19,12 @@ export interface BulkEditBarProps<TRow extends { id: string }> {
 }
 
 export function BulkEditBar<TRow extends { id: string }>(props: BulkEditBarProps<TRow>) {
-  const entity: BulkEntity = props.entity ?? (props.table === 'subtests' ? 'subtest' : 'defect');
+  const entity: BulkEntity = props.entity ?? (
+    props.table === 'subtests' ? 'subtest'
+    : props.table === 'docs_drawings' ? 'drawing'
+    : props.table === 'punch_items' ? 'punch'
+    : 'defect'
+  );
   const exportColumns: ExportColumn[] = props.exportColumns ?? defaultColumnsFor(entity);
   const reassignFields: ReassignField[] = props.reassignFields ?? [];
 
@@ -48,6 +53,16 @@ function defaultColumnsFor(entity: BulkEntity): ExportColumn[] {
       { id: 'subcontractor_name', label: 'Subcontractor' },
       { id: 'hdec_pic_name', label: 'HDEC PIC' },
       { id: 'team', label: 'Team' },
+    ];
+  }
+  if (entity === 'punch') {
+    return [
+      { id: 'item_no', label: 'Item No' },
+      { id: 'description', label: 'Description' },
+      { id: 'subcontractor_name', label: 'Subcontractor' },
+      { id: 'hdec_pic_name', label: 'HDEC PIC' },
+      { id: 'team', label: 'Team' },
+      { id: 'status', label: 'Status' },
     ];
   }
   return [
