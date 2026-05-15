@@ -187,9 +187,39 @@ export function computeDashboardFilteredIds(
       const ok = recs.some((r: any) => r.stage_key === lastKey && r.is_done);
       if (!ok) continue;
     }
+    // Spare-part: status filter is procurement status (short/pending/ordered/stock/unknown)
+    if (module === 'spare_part' && params.status && params.status !== 'completed') {
+      const row = sparePartById.get(id);
+      if (!row) continue;
+      if (normalizeSparePartStatus(row.status) !== params.status) continue;
+    }
+    if (module === 'spare_part' && params.po_status) {
+      const row = sparePartById.get(id);
+      if (!row) continue;
+      if (String(row.po_status ?? '').toLowerCase() !== params.po_status.toLowerCase()) continue;
+    }
     if (params.overdue === '1') {
-      const ok = recs.some((r: any) => r.is_overdue);
-      if (!ok) continue;
+      if (module === 'spare_part') {
+        const row = sparePartById.get(id);
+        if (!row || !isOverdueSparePart(row, asOfIso)) continue;
+      } else {
+        const ok = recs.some((r: any) => r.is_overdue);
+        if (!ok) continue;
+      }
+    }
+    if (module === 'spare_part' && params.eta_missing && params.eta_missing !== '0' && params.eta_missing !== 'false') {
+      const row = sparePartById.get(id);
+      if (!row || row.eta_date) continue;
+    }
+    if (module === 'spare_part' && params.po_pending && params.po_pending !== '0' && params.po_pending !== 'false') {
+      const row = sparePartById.get(id);
+      if (!row) continue;
+      // PO pending = no actual_po_date and (planned_po_date passed OR not set)
+      if (row.actual_po_date) continue;
+    }
+    if (module === 'spare_part' && params.delivery_pending && params.delivery_pending !== '0' && params.delivery_pending !== 'false') {
+      const row = sparePartById.get(id);
+      if (!row || row.actual_delivery_date) continue;
     }
     if (params.stage) {
       const stageRec = recs.find((r: any) => r.stage_key === params.stage);
