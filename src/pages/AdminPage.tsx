@@ -2050,18 +2050,20 @@ function PermissionsTab() {
 
 /* ═══════ Tab 4: Field Config ═══════ */
 function FieldConfigTab() {
-  const [scope, setScope] = useState<'tc' | 'defect' | 'docs'>('tc');
+  const [scope, setScope] = useState<'tc' | 'defect' | 'docs' | 'punch'>('tc');
   const [docsSub, setDocsSub] = useState<'as_built' | 'omm' | 'warranty' | 'spare_part'>('as_built');
 
   return (
-    <Tabs value={scope} onValueChange={(value) => setScope(value as 'tc' | 'defect' | 'docs')}>
+    <Tabs value={scope} onValueChange={(value) => setScope(value as 'tc' | 'defect' | 'docs' | 'punch')}>
       <TabsList>
         <TabsTrigger value="tc">T&C Fields</TabsTrigger>
         <TabsTrigger value="defect">Defect Fields</TabsTrigger>
         <TabsTrigger value="docs">Docs Fields</TabsTrigger>
+        <TabsTrigger value="punch">Punch Fields</TabsTrigger>
       </TabsList>
       <TabsContent value="tc"><FieldConfigTable table="field_config" title="T&C Field Configuration" /></TabsContent>
       <TabsContent value="defect"><FieldConfigTable table="defect_field_config" title="Defect Field Configuration" showOrigin /></TabsContent>
+      <TabsContent value="punch"><FieldConfigTable table="punch_field_config" title="Punch Field Configuration" showOrigin /></TabsContent>
       <TabsContent value="docs">
         <Tabs value={docsSub} onValueChange={(v) => setDocsSub(v as typeof docsSub)} className="space-y-3">
           <TabsList>
@@ -2088,7 +2090,7 @@ function normalizeOriginValue(value: string | null | undefined): 'hdec' | 'acone
   return 'system'; // covers 'system', 'derived', and unknown
 }
 
-function FieldConfigTable({ table, subModule, title, showOrigin = false }: { table: 'field_config' | 'defect_field_config' | 'docs_field_config'; subModule?: string; title: string; showOrigin?: boolean }) {
+function FieldConfigTable({ table, subModule, title, showOrigin = false }: { table: 'field_config' | 'defect_field_config' | 'docs_field_config' | 'punch_field_config'; subModule?: string; title: string; showOrigin?: boolean }) {
   const { toast } = useToast();
   const [fields, setFields] = useState<FieldCfg[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2096,8 +2098,8 @@ function FieldConfigTable({ table, subModule, title, showOrigin = false }: { tab
   const [pendingDisable, setPendingDisable] = useState<FieldCfg | null>(null);
 
   // Map field_config table -> Header Mappings module key.
-  const moduleKey: 'tnc' | 'defect' | 'docs' =
-    table === 'field_config' ? 'tnc' : table === 'defect_field_config' ? 'defect' : 'docs';
+  const moduleKey: 'tnc' | 'defect' | 'docs' | 'punch' =
+    table === 'field_config' ? 'tnc' : table === 'defect_field_config' ? 'defect' : table === 'punch_field_config' ? 'punch' : 'docs';
 
   const loadAliasCounts = async () => {
     let q = (supabase as any)

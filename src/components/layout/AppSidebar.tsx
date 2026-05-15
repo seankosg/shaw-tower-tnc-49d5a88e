@@ -60,6 +60,7 @@ const punchNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/punch/dashboard' },
   { label: 'Raw Data', icon: Database, path: '/punch/raw-data' },
   { label: 'Import', icon: Upload, path: '/punch/import' },
+  { label: 'Import Logs', icon: ClipboardList, path: '/punch/import/logs' },
   { label: 'Export', icon: Download, path: '/punch/export' },
 ];
 

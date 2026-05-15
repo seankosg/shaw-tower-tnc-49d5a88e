@@ -37,7 +37,7 @@ async function reloadHeaderMappings() {
   await loadHeaderMappingsCache(true).catch(() => {});
 }
 
-type TopModuleKey = 'tnc' | 'defect' | 'docs';
+type TopModuleKey = 'tnc' | 'defect' | 'docs' | 'punch';
 type DocsSubKey = 'as_built' | 'warranty' | 'omm' | 'spare_part';
 
 /** Internal module context: (module, sub_module). sub_module is '' for tnc/defect. */
@@ -150,6 +150,20 @@ const DOCS_SPARE_PART_FIELDS = [
   'skip',
 ] as const;
 
+const PUNCH_FIELDS_LIST = [
+  'item_no','outstanding_work','location','level',
+  'category1','category2','category3','critical_level','work_type','main_trade','sub_trade',
+  'team','subcontractor_name','subsub_name','hdec_pic_name','hdec_eng_name',
+  'planned_start_date','actual_start_date','planned_completion_date','actual_completion_date',
+  'actual_progress_pct','completion_status','data_date','weight',
+  'material_approval_status','material_approval_date',
+  'material_procurement_status','material_procurement_date',
+  'drawing_approval_status','drawing_approval_date',
+  'mos_approval_status','mos_approval_date',
+  'remarks',
+  'skip',
+] as const;
+
 // Docs sub-modules registry — add new sub-modules here to auto-register a tab.
 const DOCS_SUBMODULES: Array<{
   key: DocsSubKey;
@@ -165,6 +179,7 @@ const DOCS_SUBMODULES: Array<{
 function getFieldList(ctx: ModuleContext): readonly string[] {
   if (ctx.module === 'tnc') return TNC_FIELDS;
   if (ctx.module === 'defect') return DEFECT_FIELDS;
+  if (ctx.module === 'punch') return PUNCH_FIELDS_LIST;
   const sub = DOCS_SUBMODULES.find((s) => s.key === ctx.sub_module);
   return sub?.fields ?? [];
 }
@@ -176,6 +191,9 @@ function normalizeAlias(ctx: ModuleContext, raw: string): string {
   if (ctx.module === 'defect') {
     return raw.replace(/\s*\(H\)\s*$/i, '').trim()
       .toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  if (ctx.module === 'punch') {
+    return raw.toLowerCase().replace(/[^a-z0-9]+/g, '');
   }
   // docs (both as_built & warranty): collapse whitespace + lowercase, strip trailing periods.
   return raw.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -191,8 +209,10 @@ function ctxMatches(row: HeaderMappingRow, ctx: ModuleContext): boolean {
 function ctxLabel(ctx: ModuleContext): string {
   if (ctx.module === 'tnc') return 'T&C';
   if (ctx.module === 'defect') return 'DEFECT';
+  if (ctx.module === 'punch') return 'PUNCH';
   return `DOCS / ${DOCS_SUBMODULES.find((s) => s.key === ctx.sub_module)?.label ?? ctx.sub_module}`;
 }
+
 
 interface AddDialogState {
   open: boolean;
@@ -378,6 +398,7 @@ export default function HeaderMappingsTab() {
             <TabsTrigger value="tnc">T&amp;C</TabsTrigger>
             <TabsTrigger value="defect">Defect</TabsTrigger>
             <TabsTrigger value="docs">Docs</TabsTrigger>
+            <TabsTrigger value="punch">Punch</TabsTrigger>
           </TabsList>
         </Tabs>
 
