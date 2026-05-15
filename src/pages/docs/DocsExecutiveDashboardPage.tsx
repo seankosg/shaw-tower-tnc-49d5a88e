@@ -115,7 +115,7 @@ export default function DocsExecutiveDashboardPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Document Executive Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Close-out documents — As-Built Drawings · Operation &amp; Maintenance Manual · Warranty Deeds
+            Close-out documents — As-Built Drawings · Operation &amp; Maintenance Manual · Warranty Deeds · Spare Parts
           </p>
         </div>
         <Popover>
