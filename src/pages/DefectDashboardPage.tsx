@@ -24,7 +24,7 @@ import { useAtRiskThreshold } from '@/hooks/useAppSettings';
 import { useMainScrollRestoration } from '@/hooks/useMainScrollRestoration';
 import { cn } from '@/lib/utils';
 import { DDayBadge } from '@/components/shared/DDayBadge';
-import { MECHANICAL_COMPLETION_DDAY } from '@/lib/constants';
+import { PROJECT_COMPLETION_DDAY } from '@/lib/constants';
 import { formatDdMmm } from '@/lib/format';
 import { exportDefectPlanActualToExcel } from '@/lib/defect-dashboard-excel-export';
 import { RecentDefectComments } from '@/components/dashboard/RecentDefectComments';
@@ -324,7 +324,7 @@ export default function DefectDashboardPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold text-foreground">Defect Executive Dashboard</h1>
-          <DDayBadge targetDate={MECHANICAL_COMPLETION_DDAY} />
+          <DDayBadge targetDate={PROJECT_COMPLETION_DDAY} />
         </div>
         <div className="flex items-center gap-3">
           <ToggleGroup type="multiple" value={teamFilter} onValueChange={setTeamFilter} className="gap-1 flex-wrap">

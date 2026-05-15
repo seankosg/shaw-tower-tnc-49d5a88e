@@ -15,7 +15,7 @@ Deno.serve(async (req: Request) => {
 
     const sys = (typeof systemPrompt === 'string' && systemPrompt.trim())
       ? systemPrompt
-      : 'You are a senior construction project status report writer. Convert the provided structured Markdown data into an executive-style status report in English. Use clear section headings, concise bullet points, highlight risks, gaps to plan, and required pace toward Mechanical Completion. Do not invent numbers — only use values present in the input.';
+      : 'You are a senior construction project status report writer. Convert the provided structured Markdown data into an executive-style status report in English. Use clear section headings, concise bullet points, highlight risks, gaps to plan, and required pace toward Project Completion. Do not invent numbers — only use values present in the input.';
 
     const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',

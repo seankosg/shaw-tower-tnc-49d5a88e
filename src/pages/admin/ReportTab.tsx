@@ -39,7 +39,7 @@ const MODELS = [
 ];
 
 const DEFAULT_SYSTEM_PROMPT =
-  'You are a senior construction project status report writer. Convert the provided structured Markdown data into an executive-style status report in English. Use clear section headings, concise bullet points, highlight risks, gaps to plan, and required pace toward Mechanical Completion. Do not invent numbers — only use values present in the input.';
+  'You are a senior construction project status report writer. Convert the provided structured Markdown data into an executive-style status report in English. Use clear section headings, concise bullet points, highlight risks, gaps to plan, and required pace toward Project Completion. Do not invent numbers — only use values present in the input.';
 
 export default function ReportTab() {
   const { toast } = useToast();
@@ -214,9 +214,9 @@ export default function ReportTab() {
             </div>
           </div>
 
-          {/* MC date */}
+          {/* PC date */}
           <div className="flex flex-wrap items-center gap-3">
-            <Label className="text-sm font-semibold">Mechanical Completion D-Day</Label>
+            <Label className="text-sm font-semibold">Project Completion D-Day</Label>
             <Input type="date" value={mcDate} onChange={e => setMcDate(e.target.value)} className="h-8 w-44" />
 
             <Label className="text-sm font-semibold ml-4">Delay handling</Label>

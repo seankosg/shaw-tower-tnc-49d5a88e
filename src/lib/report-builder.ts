@@ -120,12 +120,12 @@ function buildTncSection(rows: SubtestForDashboard[], opts: ReportOptions, dataD
     lines.push('');
   }
   if (opts.sections.includes('simulation')) {
-    lines.push('### 1.3 Simulation (vs Mechanical Completion ' + (opts.mcDate ?? MC_DEFAULT) + ')');
+    lines.push('### 1.3 Simulation (vs Project Completion ' + (opts.mcDate ?? MC_DEFAULT) + ')');
     const mc = opts.mcDate ?? MC_DEFAULT;
     const remT2 = cur.total - cur.t2;
     const remR2S = cur.total - cur.r2s;
     const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
-    lines.push(`- Days remaining to MC: **${days}**`);
+    lines.push(`- Days remaining to PC: **${days}**`);
     lines.push(`- T2 remaining: ${remT2} → required pace: ${(remT2 / days).toFixed(2)} / day`);
     lines.push(`- R2S remaining: ${remR2S} → required pace: ${(remR2S / days).toFixed(2)} / day`);
     lines.push('');
@@ -213,7 +213,7 @@ function buildDefectSection(rows: DefectItem[], opts: ReportOptions, dataDate: s
   if (opts.sections.includes('simulation')) {
     const mc = opts.mcDate ?? MC_DEFAULT;
     const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
-    lines.push('### 2.3 Simulation (vs MC ' + mc + ')');
+    lines.push('### 2.3 Simulation (vs PC ' + mc + ')');
     lines.push(`- Days remaining: **${days}**`);
     lines.push(`- Completion remaining: ${cur.total - cur.completion} → required: ${((cur.total - cur.completion) / days).toFixed(2)} / day`);
     lines.push(`- Closure remaining: ${cur.total - cur.closure} → required: ${((cur.total - cur.closure) / days).toFixed(2)} / day`);
@@ -288,7 +288,7 @@ function buildPunchSection(rows: PunchRow[], opts: ReportOptions): string {
   if (opts.sections.includes('simulation')) {
     const mc = opts.mcDate ?? MC_DEFAULT;
     const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
-    lines.push('### 4.3 Simulation (vs MC ' + mc + ')');
+    lines.push('### 4.3 Simulation (vs PC ' + mc + ')');
     lines.push(`- Days remaining: **${days}**`);
     lines.push(`- Completion remaining: ${cur.total - cur.completion} → required: ${((cur.total - cur.completion) / days).toFixed(2)} / day`);
     lines.push('');
@@ -453,7 +453,7 @@ export async function buildReportMarkdown(opts: ReportOptions): Promise<string> 
   const head: string[] = [];
   head.push('# SHAW Project — Status Report');
   head.push(`_Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')} (SGT)_`);
-  head.push(`_Mechanical Completion D-Day: ${opts.mcDate ?? MC_DEFAULT}_`);
+  head.push(`_Project Completion D-Day: ${opts.mcDate ?? MC_DEFAULT}_`);
   head.push(`_Snapshot dates: ${opts.snapshotDates.join(', ') || '(none)'}_`);
   head.push(`_Snapshot delay mode: **${modeLabel}**_`);
   if (needsTncDate) head.push(`_T&C data date: ${tncDataDate}_`);
