@@ -433,6 +433,67 @@ export async function applyBulkDuplicate(args: {
     return out;
   }
 
+  if (args.entity === 'punch') {
+    // Punch duplicate — increment item_no per project (numeric portion if possible).
+    const ids = args.rows.map((r) => r.id);
+    const { data: src, error: srcErr } = await (supabase as any)
+      .from('punch_items')
+      .select('*')
+      .in('id', ids);
+    if (srcErr) throw srcErr;
+
+    const projectIds = Array.from(new Set((src ?? []).map((r: any) => r.project_id)));
+    const maxByProject = new Map<string, number>();
+    for (const pid of projectIds) {
+      // eslint-disable-next-line no-await-in-loop
+      const { data: rows } = await (supabase as any)
+        .from('punch_items')
+        .select('item_no')
+        .eq('project_id', pid);
+      let maxN = 0;
+      for (const r of rows ?? []) {
+        const m = String(r.item_no ?? '').match(/(\d+)/g);
+        if (m) {
+          const n = parseInt(m[m.length - 1], 10);
+          if (!Number.isNaN(n) && n > maxN) maxN = n;
+        }
+      }
+      maxByProject.set(pid as string, maxN);
+    }
+
+    const inserts: any[] = [];
+    for (const row of src ?? []) {
+      const cur = (maxByProject.get(row.project_id) ?? 0) + 1;
+      maxByProject.set(row.project_id, cur);
+      const m = String(row.item_no ?? '').match(/^(\D*)(\d+)(.*)$/);
+      const newItemNo = m
+        ? `${m[1]}${String(cur).padStart(m[2].length, '0')}${m[3] ?? ''}`
+        : String(cur);
+      const copy: any = { ...row };
+      delete copy.id;
+      delete copy.created_at;
+      delete copy.updated_at;
+      delete copy.row_version;
+      copy.item_no = newItemNo;
+      copy.updated_by = args.userId;
+      copy.data_source_type = 'manual';
+      copy.source_upload_id = null;
+      copy.is_active = true;
+      if (args.options.resetActualDates) for (const f of PUNCH_RESET_ACTUALS) copy[f] = null;
+      if (args.options.resetProgressStatus) for (const f of PUNCH_RESET_STATUS) copy[f] = null;
+      inserts.push(copy);
+    }
+
+    const { data: ins, error: insErr } = await (supabase as any)
+      .from('punch_items')
+      .insert(inserts)
+      .select('id');
+    if (insErr) throw insErr;
+    out.succeeded = (ins ?? []).length;
+    out.failed = inserts.length - out.succeeded;
+    return out;
+  }
+
   // Defect duplicate — increment issue_no per project (numeric portion if possible)
   const ids = args.rows.map((r) => r.id);
   const { data: src, error: srcErr } = await (supabase as any)
