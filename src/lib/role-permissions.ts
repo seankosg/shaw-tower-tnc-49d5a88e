@@ -34,7 +34,7 @@ const ROUTE_MIN_RANK: [RegExp, number][] = [
   [/^\/tc\/dashboard/, 0],   // everyone
   [/^\/tc\/progress/, 0],    // everyone
   [/^\/tc\/schedule-revision/, 2], // user+
-  [/^\/tc\/simulation/, 3], // senior_user+
+  [/^\/tc\/simulation/, 1], // super_guest+
   [/^\/defects\/import/, 2], // user+
   [/^\/defects\/export/, 2], // user+
   [/^\/defects\/quick-update/, 2], // user+
@@ -42,7 +42,7 @@ const ROUTE_MIN_RANK: [RegExp, number][] = [
   [/^\/defects\/dashboard/, 0], // everyone (must come before generic detail pattern)
   [/^\/defects\/progress/, 0], // everyone (must come before generic detail pattern)
   [/^\/defects\/schedule-revision/, 2], // user+
-  [/^\/defects\/simulation/, 3], // senior_user+
+  [/^\/defects\/simulation/, 1], // super_guest+
   [/^\/defects\/[^/]+$/, 1], // defect detail (generic — keep last)
   [/^\/docs\/import/, 2],    // user+
   [/^\/docs\/export/, 2],    // user+
