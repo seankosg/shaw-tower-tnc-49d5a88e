@@ -16,7 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 
-export type RollbackKind = 'tnc' | 'defect';
+export type RollbackKind = 'tnc' | 'defect' | 'punch';
 
 interface PreviewResult {
   insert_count: number;
@@ -34,11 +34,13 @@ interface Props {
 const PREVIEW_FN = {
   tnc: 'preview_rollback_upload_batch',
   defect: 'preview_rollback_defect_import_batch',
+  punch: 'preview_rollback_punch_import_batch',
 } as const;
 
 const ROLLBACK_FN = {
   tnc: 'rollback_upload_batch',
   defect: 'rollback_defect_import_batch',
+  punch: 'rollback_punch_import_batch',
 } as const;
 
 export function RollbackDialog({ kind, batchId, fileName, onDone }: Props) {
