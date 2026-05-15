@@ -422,6 +422,10 @@ export async function upsertPunchRows(
     const { error } = await supabase.from('punch_change_log').insert(pendingChangeLogs as any);
     if (error) console.warn('[punch] change log insert failed:', error.message);
   }
+  if (opts.uploadId && pendingRowLogs.length) {
+    const { error } = await (supabase as any).from('punch_upload_row_logs').insert(pendingRowLogs);
+    if (error) console.warn('[punch] row log insert failed:', error.message);
+  }
 
   return result;
 }
