@@ -32,6 +32,7 @@ export interface DashboardFilterParams {
   po_status?: string | null;
   eta_missing?: string | null;       // '1' | 'true'
   po_pending?: string | null;        // '1' | 'true'
+  po_overdue?: string | null;        // '1' | 'true' — planned_po_date passed & no actual_po_date
   delivery_pending?: string | null;  // '1' | 'true'
 }
 
