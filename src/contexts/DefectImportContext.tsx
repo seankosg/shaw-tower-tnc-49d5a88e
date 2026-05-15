@@ -563,6 +563,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
 
     const batchRes = await (supabase as any).from('defect_upload_batches').insert({ uploaded_file_name: item.name, uploaded_by: user.id, status: 'processing', total_rows: item.parsed.length, data_date: dataDate }).select('id').single();
     const uploadId = batchRes.data?.id;
+    (item as any)._uploadId = uploadId;
     let insertedCount = 0;
     let updatedCount = 0;
     let skipped = 0;
