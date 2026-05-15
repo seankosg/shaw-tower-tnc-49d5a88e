@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 interface DDayBadgeProps {
   /** Target date in ISO `YYYY-MM-DD` format, interpreted as Singapore Time (UTC+8). */
   targetDate: string;
-  /** Short label shown under the count (default: "MC"). */
+  /** Short label shown under the count (default: "PC"). */
   label?: string;
   className?: string;
 }
@@ -27,7 +27,7 @@ function formatTargetLabel(iso: string): string {
   return `${m[3]}-${MONTH_ABBR[parseInt(m[2], 10) - 1]}-${m[1]}`;
 }
 
-export function DDayBadge({ targetDate, label = 'MC', className }: DDayBadgeProps) {
+export function DDayBadge({ targetDate, label = 'PC', className }: DDayBadgeProps) {
   // Refresh once a minute so the badge ticks over at SGT midnight even if the
   // tab has been open for a long time.
   const [, setTick] = useState(0);
