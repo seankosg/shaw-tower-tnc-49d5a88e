@@ -26,6 +26,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { USER_TYPE_LABELS, formatTeamLabel } from '@/types/enums';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import { cn } from '@/lib/utils';
+import { isMetaField } from '@/lib/meta-fields';
 import { formatDdMmm } from '@/lib/format';
 import { getOriginHeaderStyle } from '@/lib/origin-header-style';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
@@ -233,8 +234,9 @@ export default function DocsSparePartRawDataPage() {
   const { items: cachedItems, initialLoaded } = useSparePartCache();
   const items = cachedItems as Row[];
   const loading = !initialLoaded;
-  const { isFieldVisible: _v, getLabel, sortFieldNames, fields: fieldConfigRows, getSourceOrigin } =
+  const { isFieldVisible, getLabel, sortFieldNames, fields: fieldConfigRows, getSourceOrigin } =
     useDocsFieldConfig('spare_part');
+  const { roles } = useAuth() as any;
 
   const storageKey = user?.id ? `spare-part-raw-data-state:${user.id}` : 'spare-part-raw-data-state:anon';
   const [stateLoaded, setStateLoaded] = useState(false);
@@ -243,7 +245,7 @@ export default function DocsSparePartRawDataPage() {
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [columnVisibilityOverrides, setColumnVisibilityOverrides] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportMode, setExportMode] = useState<'single' | 'per-subcon'>('single');
@@ -261,7 +263,7 @@ export default function DocsSparePartRawDataPage() {
         if (Array.isArray(p.columnFilters)) setColumnFilters(p.columnFilters);
         if (typeof p.globalFilter === 'string') { setGlobalFilter(p.globalFilter); setSearchInput(p.globalFilter); }
         if (p.columnSizing && typeof p.columnSizing === 'object') setColumnSizing(p.columnSizing);
-        if (p.columnVisibility && typeof p.columnVisibility === 'object') setColumnVisibility(p.columnVisibility);
+        if (p.columnVisibility && typeof p.columnVisibility === 'object') setColumnVisibilityOverrides(p.columnVisibility);
       }
     } catch { /* ignore */ }
     setStateLoaded(true);
@@ -274,10 +276,10 @@ export default function DocsSparePartRawDataPage() {
   useEffect(() => {
     if (!stateLoaded) return;
     const t = window.setTimeout(() => {
-      try { localStorage.setItem(storageKey, JSON.stringify({ sorting, columnFilters, globalFilter, columnSizing, columnVisibility })); } catch { /* ignore */ }
+      try { localStorage.setItem(storageKey, JSON.stringify({ sorting, columnFilters, globalFilter, columnSizing, columnVisibility: columnVisibilityOverrides })); } catch { /* ignore */ }
     }, 500);
     return () => window.clearTimeout(t);
-  }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter, columnSizing, columnVisibility]);
+  }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter, columnSizing, columnVisibilityOverrides]);
 
   // URL drill-down: ?overdue=true&asOf=YYYY-MM-DD
   const filteredBaseData = useMemo(() => {
@@ -308,6 +310,7 @@ export default function DocsSparePartRawDataPage() {
   }), [items]);
 
   const sizeByField: Record<string, number> = {
+    item_no: 70, sn_outline: 110,
     sn: 100, category: 90, sub_category: 130, parent_item: 180, material: 260,
     spec_ref: 130, location: 130, floor_level: 90, item_type: 110, specification: 220,
     size: 90, spares_requirements: 200, unit: 70, spares_quantity: 80, storage_area_required: 160,
@@ -377,18 +380,87 @@ export default function DocsSparePartRawDataPage() {
       } as ColumnDef<Row>;
     });
 
-    return [selectColumn, progressColumn, ...dataColumns];
-  }, [optionFields, getLabel]);
+    // Dynamic columns: any enabled docs_field_config row not in SPARE_PART_RAW_FIELDS
+    const knownIds = new Set<string>(SPARE_PART_RAW_FIELDS as readonly string[]);
+    const dynamicColumns: ColumnDef<Row>[] = (fieldConfigRows ?? [])
+      .filter((r) => r && r.is_enabled && !knownIds.has(r.field_name) && !isMetaField(r.field_name))
+      .map((r) => {
+        const fieldName = r.field_name;
+        const headerKey = r.original_header || fieldName;
+        const accessorFn = (row: Row): any => {
+          const direct = (row as any)[fieldName];
+          if (direct != null && direct !== '') return direct;
+          const rawP = (row as any).raw_payload;
+          if (rawP && typeof rawP === 'object') {
+            const v = rawP[headerKey] ?? rawP[fieldName];
+            if (v != null && v !== '') return v;
+          }
+          const customP = (row as any).custom_payload;
+          if (customP && typeof customP === 'object') {
+            return customP[headerKey] ?? customP[fieldName] ?? null;
+          }
+          return null;
+        };
+        return {
+          id: fieldName,
+          accessorFn,
+          header: r.display_name || getLabel(fieldName),
+          size: 140,
+          filterFn: textFilterFn,
+          meta: { filterType: 'text', filterOptions: [], label: r.display_name || getLabel(fieldName), isDynamic: true },
+          cell: ({ getValue }) => {
+            const v = getValue() as any;
+            if (v == null || v === '') return '—';
+            return <span className="block truncate" title={String(v)}>{String(v)}</span>;
+          },
+        } as ColumnDef<Row>;
+      });
+
+    return [selectColumn, progressColumn, ...dataColumns, ...dynamicColumns];
+  }, [optionFields, getLabel, fieldConfigRows]);
+
+  // All column ids (static + dynamic)
+  const allColumnIds = useMemo<string[]>(
+    () => columns.map((c) => (c as any).id ?? (c as any).accessorKey).filter(Boolean) as string[],
+    [columns],
+  );
+
+  // Visibility derived from Field Config (+ user overrides from localStorage)
+  const columnVisibility = useMemo<VisibilityState>(() => {
+    const v: VisibilityState = { __select: true, procurement_progress: true };
+    for (const id of allColumnIds) {
+      if (id === '__select' || id === 'procurement_progress') continue;
+      if (Object.prototype.hasOwnProperty.call(columnVisibilityOverrides, id)) {
+        v[id] = columnVisibilityOverrides[id]!;
+      } else {
+        v[id] = isFieldVisible(id, roles ?? []);
+      }
+    }
+    return v;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allColumnIds, isFieldVisible, roles, columnVisibilityOverrides]);
+
+  // Order from Field Config sort_order (pinned first)
+  const columnOrder = useMemo(() => {
+    const PINNED_FRONT = ['__select', 'procurement_progress'];
+    const remaining = allColumnIds.filter((id) => !PINNED_FRONT.includes(id));
+    return [...PINNED_FRONT, ...sortFieldNames(remaining)];
+  }, [allColumnIds, sortFieldNames]);
 
   const table = useReactTable({
     data: filteredBaseData,
     columns,
-    state: { sorting, columnFilters, globalFilter, columnSizing, columnVisibility, rowSelection },
+    state: { sorting, columnFilters, globalFilter, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
     onColumnSizingChange: setColumnSizing,
-    onColumnVisibilityChange: setColumnVisibility,
+    onColumnVisibilityChange: (updater) => {
+      setColumnVisibilityOverrides((prev) => {
+        const next = typeof updater === 'function' ? (updater as any)(columnVisibility) : updater;
+        return { ...prev, ...next };
+      });
+    },
     onRowSelectionChange: setRowSelection,
     globalFilterFn: globalFn,
     enableMultiSort: true,
