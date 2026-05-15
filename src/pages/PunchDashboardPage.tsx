@@ -153,6 +153,10 @@ export default function PunchDashboardPage() {
       .slice(0, 25);
   }, [rows, asOf]);
 
+  const dqCounts = useMemo(() => computePunchDqCounts(rows), [rows]);
+  const topSubcons = useMemo(() => topDelayingParties(rows, (r) => r.subcontractor_name ?? '', 5, asOf), [rows, asOf]);
+  const topPics = useMemo(() => topDelayingParties(rows, (r) => r.hdec_pic_name ?? '', 5, asOf), [rows, asOf]);
+
   const go = (qs: string) => navigate(`/punch/raw-data?${qs}`);
 
   return (
