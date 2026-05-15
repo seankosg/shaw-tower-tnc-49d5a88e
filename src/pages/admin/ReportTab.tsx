@@ -50,6 +50,7 @@ export default function ReportTab() {
   const [mcDate, setMcDate] = useState('2026-06-15');
   const [delayMode, setDelayMode] = useState<'optimistic' | 'penalty'>('penalty');
   const [dataDateOverride, setDataDateOverride] = useState('');
+  const [includeTncGuide, setIncludeTncGuide] = useState(true);
   const [markdown, setMarkdown] = useState('');
   const [generating, setGenerating] = useState(false);
 
