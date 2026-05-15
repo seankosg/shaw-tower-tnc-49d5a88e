@@ -615,3 +615,143 @@ export function computeAbdBucketDistribution(rows: any[]): AbdBucketDistribution
   }
   return dist;
 }
+
+// ─── Delay severity buckets ───────────────────────────────────────────────
+export type DelayBucketKey = '0-7' | '8-14' | '15-30' | '30+';
+export const DELAY_BUCKETS: DelayBucketKey[] = ['0-7', '8-14', '15-30', '30+'];
+
+export function bucketDelayDays(days: number): DelayBucketKey | null {
+  if (days <= 0) return null;
+  if (days <= 7) return '0-7';
+  if (days <= 14) return '8-14';
+  if (days <= 30) return '15-30';
+  return '30+';
+}
+
+export interface DelaySeverityCounts {
+  '0-7': number;
+  '8-14': number;
+  '15-30': number;
+  '30+': number;
+}
+
+export function computeDelaySeverityBuckets(records: DocsStageRecord[]): DelaySeverityCounts {
+  const out: DelaySeverityCounts = { '0-7': 0, '8-14': 0, '15-30': 0, '30+': 0 };
+  // item-level: use max delay across stages
+  const maxByItem = new Map<string, number>();
+  for (const r of records) {
+    if (!r.is_overdue) continue;
+    const cur = maxByItem.get(r.item_id) ?? 0;
+    if (r.delay_days > cur) maxByItem.set(r.item_id, r.delay_days);
+  }
+  for (const d of maxByItem.values()) {
+    const b = bucketDelayDays(d);
+    if (b) out[b]++;
+  }
+  return out;
+}
+
+// ─── Due This Week / Critical Delay (item-level extras) ───────────────────
+export function isDueThisWeek(records: DocsStageRecord[], asOf: Date = new Date()): Set<string> {
+  const start = startOfDay(asOf).getTime();
+  const end = start + 7 * 86400000;
+  const ids = new Set<string>();
+  for (const r of records) {
+    if (r.is_done) continue;
+    const p = safeDate(r.planned_date);
+    if (!p) continue;
+    const t = p.getTime();
+    if (t >= start && t <= end) ids.add(r.item_id);
+  }
+  return ids;
+}
+
+export function criticalDelayItemIds(records: DocsStageRecord[]): Set<string> {
+  const ids = new Set<string>();
+  const maxByItem = new Map<string, number>();
+  for (const r of records) {
+    if (!r.is_overdue) continue;
+    const cur = maxByItem.get(r.item_id) ?? 0;
+    if (r.delay_days > cur) maxByItem.set(r.item_id, r.delay_days);
+  }
+  for (const [id, d] of maxByItem) if (d > 30) ids.add(id);
+  return ids;
+}
+
+// ─── Data Quality issues ──────────────────────────────────────────────────
+export type DataQualityKey =
+  | 'missing_planned'
+  | 'missing_actual'
+  | 'missing_subcontractor'
+  | 'missing_hdec_pic'
+  | 'inconsistent_stage';
+
+export interface DataQualityIssue {
+  key: DataQualityKey;
+  module: DocModule;
+  label: string;
+  count: number;
+  ids: string[];
+}
+
+function pushIssue(map: Map<string, DataQualityIssue>, key: string, init: () => DataQualityIssue, id: string) {
+  let v = map.get(key);
+  if (!v) { v = init(); map.set(key, v); }
+  if (!v.ids.includes(id)) { v.ids.push(id); v.count++; }
+}
+
+export function computeDataQualityIssues(
+  records: DocsStageRecord[],
+  rawByModule: { abd: any[]; omm: any[]; warranty: any[] },
+): DataQualityIssue[] {
+  const map = new Map<string, DataQualityIssue>();
+
+  for (const r of records) {
+    const k = (key: DataQualityKey) => `${r.document_type}:${key}`;
+    const init = (key: DataQualityKey, label: string): (() => DataQualityIssue) =>
+      () => ({ key, module: r.document_type, label, count: 0, ids: [] });
+
+    if (!r.is_done && !r.planned_date) {
+      pushIssue(map, k('missing_planned'), init('missing_planned', `${MODULE_LABEL[r.document_type]} — Missing planned date`), r.item_id);
+    }
+    if (r.is_done && !r.actual_date) {
+      pushIssue(map, k('missing_actual'), init('missing_actual', `${MODULE_LABEL[r.document_type]} — Completed without actual date`), r.item_id);
+    }
+    if (!r.subcontractor) {
+      pushIssue(map, k('missing_subcontractor'), init('missing_subcontractor', `${MODULE_LABEL[r.document_type]} — Missing subcontractor`), r.item_id);
+    }
+    if (!r.hdec_pic) {
+      pushIssue(map, k('missing_hdec_pic'), init('missing_hdec_pic', `${MODULE_LABEL[r.document_type]} — Missing HDEC PIC`), r.item_id);
+    }
+  }
+
+  // Inconsistent stage data — per module raw checks
+  const addInconsistent = (module: DocModule, id: string) => {
+    const key = `${module}:inconsistent_stage`;
+    pushIssue(map, key, () => ({
+      key: 'inconsistent_stage', module,
+      label: `${MODULE_LABEL[module]} — Inconsistent stage data`, count: 0, ids: [],
+    }), id);
+  };
+  for (const row of rawByModule.abd) {
+    // Sub2 submission without Sub1 submission, etc.
+    if (row.sub2_submission_date && !row.sub1_submission_date) addInconsistent('abd', row.id);
+    else if (row.sub3_submission_date && !row.sub2_submission_date) addInconsistent('abd', row.id);
+    else if (row.sub1_approval_date && !row.sub1_submission_date) addInconsistent('abd', row.id);
+  }
+  for (const row of rawByModule.omm) {
+    if (row.sub2_actual_date && !row.sub1_actual_date) addInconsistent('omm', row.id);
+    else if (row.sub3_actual_date && !row.sub2_actual_date) addInconsistent('omm', row.id);
+    else if (row.final_actual_date && !row.sub1_actual_date) addInconsistent('omm', row.id);
+  }
+  for (const row of rawByModule.warranty) {
+    if (row.subcon_signing_actual_date && !row.draft_actual_date) addInconsistent('warranty', row.id);
+    else if (row.hdec_signing_actual_date && !row.subcon_signing_actual_date) addInconsistent('warranty', row.id);
+    else if (row.final_actual_date && !row.hdec_signing_actual_date) addInconsistent('warranty', row.id);
+  }
+
+  return Array.from(map.values()).sort((a, b) => {
+    if (a.module !== b.module) return a.module.localeCompare(b.module);
+    return a.key.localeCompare(b.key);
+  });
+}

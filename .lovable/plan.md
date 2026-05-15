@@ -1,66 +1,102 @@
 
-## 목표
+# Documents Dashboard 확장 계획
 
-Report 섹션의 시스템 프롬프트와 빌드되는 마크다운에 새 워딩 규칙을 일괄 반영. 각 모듈은 **현재 상황(Current Status) → 계획(Plan)** 의 자연스러운 흐름으로 구성.
+기존 자산을 그대로 사용하고 추가 로직만 얹습니다. T&C / Defect 대시보드는 건드리지 않습니다.
 
-### 워딩 규칙
+재사용 자산
+- `src/lib/docs-stage-records.ts` — stage record SSOT, ABD/OMM bucket helpers
+- `src/lib/docs-executive-dashboard-data.ts` — 페이지네이션 fetchAll로 모든 행 로딩 (이미 1000행 제한 없음)
+- `src/lib/docs-dashboard-filter.ts` — URL param → row id 필터링
+- `src/pages/docs/DocsExecutiveDashboardPage.tsx` — 모듈별 섹션 구조
+- Raw Data 페이지 3종은 이미 `useSearchParams` + `readDashboardFilterParams`로 드릴다운 처리 중
 
-- T1 → **Pre-Test**, T2 → **Actual Test**
-- "PC" 약어 금지 → **Project Completion** 또는 **the Completion** 으로 풀어 표기
-- R2 = T&C 최종 단계 → **Test Report** 로 통일, "Submission" 단어 제거
-- ABD → **As Built Drawing** 으로 풀어 표기
-- "Prediction / Forecast" 대신 **Plan** 사용 (계획 대비 필요 페이스, 스냅샷 계획선 의미)
-- 각 모듈을 **(a) Current Status → (b) Plan** 두 파트로 명확히 분리하되, 현황 설명 후 그에 따른 계획으로 자연스럽게 이어지는 서술 흐름 유지
+## 1. Stage record / 헬퍼 확장 (`docs-stage-records.ts`)
 
----
+새 헬퍼 추가 (기존 함수는 변경하지 않음):
 
-## 변경 파일
+- `summariseByItem`에 `due_this_week: boolean`, `critical_delay: boolean(>30d)` 필드 추가
+- `DELAY_BUCKETS = ['0-7','8-14','15-30','30+']` 상수와 `bucketDelayDays(days)` 함수
+- `computeDelaySeverityBuckets(records)` → `{ '0-7': n, '8-14': n, '15-30': n, '30+': n }` (item 단위, max_delay_days 기준)
+- `computeWarrantyStageBreakdown(records)` → 4 step 별 `{ total, done, remaining, overdue }`
+- `computeDataQualityIssues(records, rawAbd, rawOmm, rawWarranty)`
+  - missing planned date (어떤 stage든 planned_date 비어있고 not done)
+  - missing actual date (is_done인데 actual_date null)
+  - missing subcontractor / hdec_pic
+  - inconsistent stage data (예: actual 있는데 planned 없음, sub2_actual 있는데 sub1_actual 없음 등 모듈별 룰)
+  - 결과: `{ key, label, count, ids: string[] }`
 
-### 1. `src/pages/admin/ReportTab.tsx`
-`DEFAULT_SYSTEM_PROMPT` 교체 (영문, UI 규칙):
+## 2. Dashboard 데이터 로더 (`docs-executive-dashboard-data.ts`)
 
-> "You are a senior construction project status report writer. Convert the provided structured Markdown data into an executive-style status report in English. Terminology rules: refer to T1 as 'Pre-Test', T2 as 'Actual Test', and R2 as the final 'Test Report' stage (do not use the word 'Submission' for R2). Always write 'Project Completion' or 'the Completion' in full — never abbreviate to 'PC'. Spell 'ABD' as 'As Built Drawing'. For each module, first describe the **Current Status** (actuals to date, gaps versus plan, key risks), then transition naturally into the **Plan** (required pace and milestone targets toward the Completion) so the narrative flows from where things stand to what must happen next. Use clear section headings and concise bullet points. Do not invent numbers — only use values present in the input."
+- 변경 최소화. 기존 fetchAll 페이지네이션 유지
+- ABD/OMM select에 누락된 컬럼 보강(Data Quality 검사용): 없는 경우 raw_payload 사용
+- warranty raw rows도 caller가 사용할 수 있게 `warrantyRows`를 snapshot에 추가 노출
 
-### 2. `supabase/functions/report-llm/index.ts`
-- Edge function의 default `sys` 프롬프트를 위와 동일 문구로 교체.
+## 3. 대시보드 페이지 (`DocsExecutiveDashboardPage.tsx`)
 
-### 3. `src/lib/report-builder.ts`
+상단에 새 섹션을 추가하고 기존 모듈 섹션은 그대로 유지하면서 새 카드를 끼워넣습니다.
 
-T&C 섹션 (`buildTncSection`):
-- 1.1 Dashboard 라벨: `T1 completed` → `Pre-Test (T1) completed`, `T2 completed` → `Actual Test (T2) completed`, `R2S completed` → `Test Report (R2) completed`
-- 1.2 헤더: `### 1.2 Current Status (Stages: Pre-Test, Actual Test, Test Report)`
-- 표 행 라벨: `Pre-Test (T1)` / `Actual Test (T2)` / `Test Report (R2)`
-- 1.3 헤더: `### 1.3 Plan — Required Pace toward Project Completion (<date>)`
-- `Days remaining to PC` → `Days remaining to Project Completion`
-- `T2 remaining` → `Actual Test remaining`, `R2S remaining` → `Test Report remaining`
-- 1.4 헤더: `### 1.4 Plan — Stage Progress Snapshots`
-- 표 헤더: `Pre-Test Planned % (Actual %) | Actual Test Planned % (Actual %) | Test Report Planned % (Actual %)`  
-  (기존 "Predicted %" → "Planned %"로 표기. 내부 계산 결과는 simulation 엔진의 predictedPct 그대로 사용)
-- 캡션의 `_Computed via Simulation engine — mode: …_` → `_Plan computed via Simulation engine — mode: …_`
+A. **Portfolio KPI Strip (신규, 페이지 최상단)**
+   6개 클릭 가능 KPI 카드 (전체 모듈 합):
+   - Total / Completed / Remaining / Overdue / Due This Week / Critical Delay (>30d)
+   - 클릭 시 해당 모듈로 드릴다운하는 대신, 모듈별 동일 카드도 모듈 섹션 안에 두어 모듈 컨텍스트로 이동
 
-Defect 섹션 (`buildDefectSection`):
-- 2.2 헤더: `### 2.2 Current Status (Stages: Completion, Closure)`
-- 2.3 헤더: `### 2.3 Plan — Required Pace toward Project Completion (<date>)`
-- 2.4 헤더: `### 2.4 Plan — Stage Progress Snapshots`, 표 헤더의 `Predicted %` → `Planned %`
+B. **모듈 KPI 6카드 (각 모듈 섹션의 SummaryTile 행 확장)**
+   - 기존 Total/Done/Overdue → Total/Completed/Remaining/Overdue/Due This Week/Critical Delay 6개로 확장
+   - 클릭 시 raw 페이지로 이동: `?status=completed`, `?overdue=1`, `?due_this_week=1`, `?delay_bucket=30+`
 
-Punch 섹션 (`buildPunchSection`):
-- 4.2: `### 4.2 Current Status (Stage: Completion)`
-- 4.3: `### 4.3 Plan — Required Pace toward Project Completion (<date>)`
-- 4.4: `### 4.4 Plan — Stage Progress Snapshots`
+C. **Delay Severity Bucket 카드 (모듈별)**
+   - 4개 버킷 가로 표시, 각 버킷 클릭 → `?delay_bucket=0-7|8-14|15-30|30+`
 
-Docs 섹션 (`buildDocsSection`):
-- `### 3.1 ABD (As-Built Drawings)` → `### 3.1 As Built Drawing (ABD)`
+D. **Warranty 4-Step Progress (Warranty 섹션)**
+   - 기존 generic StageCard 4개를 그대로 사용하되, `Draft / Subcon Sign / HDEC Sign / Final` 라벨/순서가 이미 stage def에 있음
+   - 각 카드에 Remaining + Overdue 동시 표시(이미 StageCard 지원). 클릭 시 `?stage=warranty.<key>`
 
-### 4. `src/lib/tnc-raw-data-guide.ts` (Appendix A)
-- `T1 — Internal Test` → `Pre-Test (T1) — Internal Test`
-- `T2 — Official Test` → `Actual Test (T2) — Official Test`
-- `R2 — HDEC → Client Report` 단계 설명에서 "Submission" 단어 정리, 최종산출물을 **Test Report (R2)** 로 호칭 (DB 컬럼명 r2_target_submission_date 등 코드 표기는 유지)
-- 본문 내 `R2S` 표현 → `Test Report (R2)` 로 교체
-- 어디든 약어 "PC"가 등장하면 `Project Completion`으로 풀어 표기 (현재 가이드엔 없음, 안전 점검)
+E. **확장 필터 바 (모듈 섹션 내, 기존 Team/Trade Tabs 옆)**
+   - Subcontractor 드롭다운 (Select, 'All' + uniq)
+   - HDEC PIC 드롭다운
+   - 선택 시 stage records 로컬 필터에 적용 + 드릴다운 URL에 `subcontractor=`, `hdec_pic=` 부착
 
----
+F. **Data Quality 패널 (페이지 하단, 신규)**
+   - `<Card>`에 5~6개 행: 항목 라벨 / count / "View" 버튼
+   - View 클릭 → 해당 모듈 raw 페이지로 `?dq=<issue_key>`
 
-## 비변경 사항
+## 4. Filter 헬퍼 확장 (`docs-dashboard-filter.ts`)
 
-- DB 컬럼명 (`r2_target_submission_date` 등), 내부 식별자 (`r2s`, `mcDate`, `predictedPct`), D-Day 값 (2026-06-15), 다른 페이지/사이드바 라벨은 그대로.
-- 영향 범위: Report 마크다운 빌더 + Edge function 시스템 프롬프트 + Appendix A 한정.
+`DashboardFilterParams`에 다음 추가:
+- `subcontractor`, `hdec_pic`, `due_this_week` ('1'), `delay_bucket` ('0-7'|'8-14'|'15-30'|'30+'), `dq` (data quality issue key)
+
+`computeDashboardFilteredIds`에 각 필터 분기 추가:
+- subcontractor/hdec_pic — stage record의 해당 필드 매칭
+- due_this_week — item에 stage record 중 planned_date가 [오늘, 오늘+7일] 범위 & not done인 것이 하나라도
+- delay_bucket — `summariseByItem.max_delay_days`로 버킷 매핑
+- dq — `computeDataQualityIssues` 결과에서 issue.ids 사용
+
+`hasAnyDashboardFilter`, `dashboardFilterLabel`도 새 키 반영. Raw Data 페이지는 이미 이 헬퍼를 통해 자동 적용되므로 페이지 코드 수정 불필요.
+
+## 5. UI 가이드
+
+- 모든 라벨 영문, 기존 design system (Card / Button / Tabs / Select / Progress / Badge) 사용
+- 색상은 semantic token + 기존 MODULE_ACCENT 유지
+- 한국어 텍스트 금지
+
+## 6. 영향 범위 / 비변경
+
+- T&C / Defect 대시보드, Punch 모듈, 기존 ABD/OMM/Warranty 비즈니스 로직(status / cycle 분류) 변경 없음
+- 기존 KPI / Stage card / OMM Sub Status card / ABD Bucket grid는 그대로 동작
+- Raw 페이지 3종은 `docs-dashboard-filter.ts` 통해 자동으로 새 param 인식
+
+## 작업 단위(파일별)
+
+```
+src/lib/docs-stage-records.ts      ← 헬퍼 추가
+src/lib/docs-dashboard-filter.ts   ← param/필터 분기 추가
+src/lib/docs-executive-dashboard-data.ts ← warrantyRows 노출, select 보강
+src/pages/docs/DocsExecutiveDashboardPage.tsx ← Portfolio Strip / 6KPI / Delay Bucket / Subcon·PIC 필터 / Data Quality 패널
+```
+
+## 기술 메모
+
+- "Critical Delay" = item.max_delay_days > 30
+- "Due This Week" = stage record의 planned_date ∈ [today, today+7], !is_done
+- "Completed" = item summary의 `is_completed`(마지막 stage done). ABD는 SSOT 일치를 위해 `computeAbdBucketDistribution`의 approved 카운트와 교차 검증해 차이 시 dev console.warn
+- 페이지네이션: 기존 `fetchAll(builder)` 패턴 그대로 사용 (1000행 페이지)

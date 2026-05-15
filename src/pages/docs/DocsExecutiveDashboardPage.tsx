@@ -4,14 +4,17 @@ import { format } from 'date-fns';
 import {
   Calendar as CalendarIcon, FileText, BookOpen, ShieldCheck,
   AlertTriangle, CheckCircle2, ListChecks, ArrowRight,
+  CalendarClock, Flame, Clock, Layers, AlertCircle,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { resolveTrade, TRADE_OPTIONS, type TradeCategory } from '@/lib/docs-trade';
 import {
@@ -21,8 +24,11 @@ import {
   ALL_STAGE_DEFS, MODULE_LABEL, MODULE_RAW_ROUTE,
   computeStageProgress, summariseByItem, computeAbdBucketDistribution,
   computeOmmSub1StatusBuckets, computeOmmSub2StatusBuckets, OMM_VISIBLE_STAGE_KEYS,
+  computeDelaySeverityBuckets, isDueThisWeek, criticalDelayItemIds,
+  computeDataQualityIssues, DELAY_BUCKETS,
   type DocModule, type DocsStageRecord, type AbdBucketDistribution,
   type OmmSub1StatusBuckets, type OmmSub2StatusBuckets, type OmmStatusBucketKey,
+  type DelayBucketKey,
 } from '@/lib/docs-stage-records';
 
 const MODULE_ICON: Record<DocModule, typeof FileText> = {
@@ -67,11 +73,35 @@ export default function DocsExecutiveDashboardPage() {
   const records = snap?.records ?? [];
   const abdRows = snap?.abdRows ?? [];
   const ommRows = snap?.ommRows ?? [];
+  const warrantyRows = snap?.warrantyRows ?? [];
 
   const goRaw = (m: DocModule, params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     navigate(`${MODULE_RAW_ROUTE[m]}${qs}`);
   };
+
+  // Portfolio-wide KPI summary across all modules
+  const portfolioKpi = useMemo(() => {
+    const summaries = summariseByItem(records);
+    const total = summaries.length;
+    const completed = summaries.filter((i) => i.is_completed).length;
+    const overdue = summaries.filter((i) => i.is_overdue).length;
+    const dueIds = isDueThisWeek(records, asOf);
+    const critIds = criticalDelayItemIds(records);
+    return {
+      total,
+      completed,
+      remaining: total - completed,
+      overdue,
+      dueThisWeek: dueIds.size,
+      criticalDelay: critIds.size,
+    };
+  }, [records, asOf]);
+
+  const dataQuality = useMemo(
+    () => computeDataQualityIssues(records, { abd: abdRows, omm: ommRows, warranty: warrantyRows }),
+    [records, abdRows, ommRows, warrantyRows],
+  );
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -99,21 +129,69 @@ export default function DocsExecutiveDashboardPage() {
 
       {loading && !snap && <p className="text-sm text-muted-foreground">Loading…</p>}
 
+      {/* Portfolio KPI Strip */}
+      <PortfolioKpiStrip kpi={portfolioKpi} />
+
       {MODULES.map((m) => (
-        <ModuleSection key={m} module={m} records={records} abdRows={abdRows} ommRows={ommRows} onNavigate={goRaw} />
+        <ModuleSection key={m} module={m} records={records} abdRows={abdRows} ommRows={ommRows} asOf={asOf} onNavigate={goRaw} />
       ))}
+
+      {/* Data Quality Panel */}
+      <DataQualityPanel issues={dataQuality} onNavigate={goRaw} />
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────
+function PortfolioKpiStrip({ kpi }: {
+  kpi: { total: number; completed: number; remaining: number; overdue: number; dueThisWeek: number; criticalDelay: number };
+}) {
+  const items = [
+    { label: 'Total', value: kpi.total, icon: ListChecks, tone: 'default' as const },
+    { label: 'Completed', value: kpi.completed, icon: CheckCircle2, tone: 'green' as const },
+    { label: 'Remaining', value: kpi.remaining, icon: Clock, tone: 'default' as const },
+    { label: 'Overdue', value: kpi.overdue, icon: AlertTriangle, tone: kpi.overdue > 0 ? 'red' as const : 'muted' as const },
+    { label: 'Due This Week', value: kpi.dueThisWeek, icon: CalendarClock, tone: 'amber' as const },
+    { label: 'Critical Delay (>30d)', value: kpi.criticalDelay, icon: Flame, tone: kpi.criticalDelay > 0 ? 'red' as const : 'muted' as const },
+  ];
+  const toneClass = (t: 'default' | 'green' | 'red' | 'amber' | 'muted') => ({
+    default: 'text-foreground',
+    green: 'text-emerald-600 dark:text-emerald-400',
+    red: 'text-red-600 dark:text-red-400',
+    amber: 'text-amber-600 dark:text-amber-400',
+    muted: 'text-muted-foreground',
+  }[t]);
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+      {items.map((it) => {
+        const Icon = it.icon;
+        return (
+          <div key={it.label} className="flex flex-col rounded-xl border bg-card p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{it.label}</span>
+              <Icon className={cn('h-4 w-4', toneClass(it.tone))} />
+            </div>
+            <div className={cn('mt-2 text-2xl font-semibold tabular-nums tracking-tight', toneClass(it.tone))}>
+              {it.value.toLocaleString()}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+
+
+// ─────────────────────────────────────────────────────────────────────
 function ModuleSection({
-  module, records, abdRows, ommRows, onNavigate,
+  module, records, abdRows, ommRows, asOf, onNavigate,
 }: {
   module: DocModule;
   records: DocsStageRecord[];
   abdRows: any[];
   ommRows: any[];
+  asOf: Date;
   onNavigate: (m: DocModule, params?: Record<string, string>) => void;
 }) {
   const Icon = MODULE_ICON[module];
@@ -209,6 +287,53 @@ function ModuleSection({
     [ommRowsForTab],
   );
 
+  // Subcontractor / HDEC PIC filters (module-scoped)
+  const subcontractors = useMemo(() => uniqSorted(moduleRecords.map((r) => r.subcontractor)), [moduleRecords]);
+  const pics = useMemo(() => uniqSorted(moduleRecords.map((r) => r.hdec_pic)), [moduleRecords]);
+  const [subFilter, setSubFilter] = useState<string>('__all__');
+  const [picFilter, setPicFilter] = useState<string>('__all__');
+  useEffect(() => { if (subFilter !== '__all__' && !subcontractors.includes(subFilter)) setSubFilter('__all__'); }, [subcontractors, subFilter]);
+  useEffect(() => { if (picFilter !== '__all__' && !pics.includes(picFilter)) setPicFilter('__all__'); }, [pics, picFilter]);
+
+  // Module 6-KPI summary (responds to tab + subcon + pic filters via filteredItems)
+  const filteredItems = useMemo(() => {
+    let base = filteredRecords;
+    if (subFilter !== '__all__') base = base.filter((r) => (r.subcontractor ?? '') === subFilter);
+    if (picFilter !== '__all__') base = base.filter((r) => (r.hdec_pic ?? '') === picFilter);
+    return summariseByItem(base);
+  }, [filteredRecords, subFilter, picFilter]);
+
+  const kpiTotal = filteredItems.length;
+  const kpiCompleted = filteredItems.filter((i) => i.is_completed).length;
+  const kpiOverdue = filteredItems.filter((i) => i.is_overdue).length;
+  const kpiDueIds = useMemo(() => isDueThisWeek(
+    filteredRecords
+      .filter((r) => subFilter === '__all__' || (r.subcontractor ?? '') === subFilter)
+      .filter((r) => picFilter === '__all__' || (r.hdec_pic ?? '') === picFilter),
+    asOf,
+  ), [filteredRecords, subFilter, picFilter, asOf]);
+  const kpiCriticalIds = useMemo(() => criticalDelayItemIds(
+    filteredRecords
+      .filter((r) => subFilter === '__all__' || (r.subcontractor ?? '') === subFilter)
+      .filter((r) => picFilter === '__all__' || (r.hdec_pic ?? '') === picFilter),
+  ), [filteredRecords, subFilter, picFilter]);
+  const delayBuckets = useMemo(() => computeDelaySeverityBuckets(
+    filteredRecords
+      .filter((r) => subFilter === '__all__' || (r.subcontractor ?? '') === subFilter)
+      .filter((r) => picFilter === '__all__' || (r.hdec_pic ?? '') === picFilter),
+  ), [filteredRecords, subFilter, picFilter]);
+
+  // Build extra params for drill-down (preserve current filters)
+  const extraParams = (): Record<string, string> => {
+    const p: Record<string, string> = {};
+    if (tab !== '__all__') {
+      if (isAbd) p.trade = tab; else p.team = tab;
+    }
+    if (subFilter !== '__all__') p.subcontractor = subFilter;
+    if (picFilter !== '__all__') p.hdec_pic = picFilter;
+    return p;
+  };
+
   // Short trade labels for the tab list
   const TRADE_SHORT: Record<TradeCategory, string> = {
     'Architecture': 'Arch',
@@ -242,37 +367,60 @@ function ModuleSection({
       </div>
 
       <CardContent className="space-y-5 p-5">
-        {/* Module Summary Card row */}
-        <div className="grid gap-3 md:grid-cols-3">
-          <SummaryTile
-            icon={ListChecks}
-            label="Total"
-            value={total}
-            sublabel="All documents"
-            accent={accent}
-            onClick={() => onNavigate(module)}
-          />
-          <SummaryTile
-            icon={CheckCircle2}
-            label="Done"
-            value={done}
-            sublabel={`${pct}% complete`}
-            accent={accent}
-            tone="green"
-            onClick={() => onNavigate(module, isAbd ? { bucket: 'done' } : { status: 'completed' })}
-          >
-            <Progress value={pct} className="mt-2 h-1.5" />
-          </SummaryTile>
-          <SummaryTile
-            icon={AlertTriangle}
-            label="Overdue"
-            value={overdue}
-            sublabel={overdue > 0 ? 'Past planned date' : 'On track'}
-            accent={accent}
-            tone={overdue > 0 ? 'red' : 'muted'}
-            onClick={() => onNavigate(module, { overdue: '1' })}
-          />
+        {/* Subcontractor / HDEC PIC filter row */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Filters</span>
+          <Select value={subFilter} onValueChange={setSubFilter}>
+            <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue placeholder="Subcontractor" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Subcontractors</SelectItem>
+              {subcontractors.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={picFilter} onValueChange={setPicFilter}>
+            <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="HDEC PIC" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All HDEC PIC</SelectItem>
+              {pics.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {(subFilter !== '__all__' || picFilter !== '__all__') && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs"
+              onClick={() => { setSubFilter('__all__'); setPicFilter('__all__'); }}>
+              Clear
+            </Button>
+          )}
         </div>
+
+        {/* Module 6-KPI row */}
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+          <SummaryTile icon={ListChecks} label="Total" value={kpiTotal} accent={accent}
+            onClick={() => onNavigate(module, extraParams())} />
+          <SummaryTile icon={CheckCircle2} label="Completed" value={kpiCompleted}
+            sublabel={kpiTotal ? `${Math.round((kpiCompleted / kpiTotal) * 100)}%` : '—'}
+            accent={accent} tone="green"
+            onClick={() => onNavigate(module, { ...extraParams(), ...(isAbd ? { bucket: 'done' } : { status: 'completed' }) })}>
+            <Progress value={kpiTotal ? Math.round((kpiCompleted / kpiTotal) * 100) : 0} className="mt-2 h-1.5" />
+          </SummaryTile>
+          <SummaryTile icon={Clock} label="Remaining" value={kpiTotal - kpiCompleted} accent={accent}
+            onClick={() => onNavigate(module, extraParams())} />
+          <SummaryTile icon={AlertTriangle} label="Overdue" value={kpiOverdue} accent={accent}
+            tone={kpiOverdue > 0 ? 'red' : 'muted'}
+            onClick={() => onNavigate(module, { ...extraParams(), overdue: '1' })} />
+          <SummaryTile icon={CalendarClock} label="Due This Week" value={kpiDueIds.size} accent={accent}
+            tone="amber"
+            onClick={() => onNavigate(module, { ...extraParams(), due_this_week: '1' })} />
+          <SummaryTile icon={Flame} label="Critical Delay" value={kpiCriticalIds.size} accent={accent}
+            tone={kpiCriticalIds.size > 0 ? 'red' : 'muted'}
+            sublabel=">30 days"
+            onClick={() => onNavigate(module, { ...extraParams(), delay_bucket: '30+' })} />
+        </div>
+
+        {/* Delay Severity Buckets */}
+        <DelaySeverityRow
+          counts={delayBuckets}
+          onClick={(b) => onNavigate(module, { ...extraParams(), delay_bucket: b, overdue: '1' })}
+        />
 
         {/* Stage Progress */}
         <div>
@@ -407,7 +555,7 @@ function SummaryTile({
   sublabel?: string;
   accent: Accent;
   onClick?: () => void;
-  tone?: 'default' | 'green' | 'red' | 'muted';
+  tone?: 'default' | 'green' | 'red' | 'muted' | 'amber';
   children?: React.ReactNode;
 }) {
   const valueClass = {
@@ -415,6 +563,7 @@ function SummaryTile({
     green: 'text-emerald-600 dark:text-emerald-400',
     red: 'text-red-600 dark:text-red-400',
     muted: 'text-muted-foreground',
+    amber: 'text-amber-600 dark:text-amber-400',
   }[tone];
   return (
     <button

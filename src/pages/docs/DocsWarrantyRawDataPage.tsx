@@ -566,7 +566,7 @@ export default function DocsWarrantyRawDataPage() {
   }, [rows]);
 
   // ── State persistence ──
-  const DOCS_DRILLDOWN_PARAMS = ['status', 'overdue', 'stage', 'team', 'q', 'resub'];
+  const DOCS_DRILLDOWN_PARAMS = ['status', 'overdue', 'stage', 'team', 'q', 'resub', 'subcontractor', 'hdec_pic', 'due_this_week', 'delay_bucket', 'dq'];
   useEffect(() => {
     setStateLoaded(false);
     const isDrilldown = DOCS_DRILLDOWN_PARAMS.some((p) => searchParams.has(p));
