@@ -213,9 +213,28 @@ export default function ReportTab() {
           </div>
 
           {/* MC date */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Label className="text-sm font-semibold">Mechanical Completion D-Day</Label>
             <Input type="date" value={mcDate} onChange={e => setMcDate(e.target.value)} className="h-8 w-44" />
+
+            <Label className="text-sm font-semibold ml-4">Delay handling</Label>
+            <Select value={delayMode} onValueChange={(v) => setDelayMode(v as 'optimistic' | 'penalty')}>
+              <SelectTrigger className="w-40 h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="penalty">Worst Case</SelectItem>
+                <SelectItem value="optimistic">Best Case</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Label className="text-sm font-semibold ml-4">Data date (override)</Label>
+            <Input
+              type="date"
+              value={dataDateOverride}
+              onChange={e => setDataDateOverride(e.target.value)}
+              className="h-8 w-44"
+              placeholder="auto"
+            />
+            <span className="text-xs text-muted-foreground">leave empty to use latest actual date</span>
           </div>
 
           {/* Generate */}
