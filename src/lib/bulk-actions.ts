@@ -26,24 +26,25 @@ export async function getEditableScopeMap(
   const out: ScopeMapResult = { byId: {}, editableIds: [], skippedIds: [] };
   if (!ids.length || !userId) return out;
 
-  // Drawings: no per-row RPC. Resolve from role + team match against docs_drawings.team.
-  if (entity === 'drawing') {
-    const [{ data: roleRows }, { data: profileRow }, { data: drawingRows }] = await Promise.all([
+  // Drawings + Punch: no per-row RPC. Resolve from role + team match against the source table.
+  if (entity === 'drawing' || entity === 'punch') {
+    const tableName = entity === 'drawing' ? 'docs_drawings' : 'punch_items';
+    const [{ data: roleRows }, { data: profileRow }, { data: srcRows }] = await Promise.all([
       (supabase as any).from('user_roles').select('role').eq('user_id', userId),
       (supabase as any).from('profiles').select('team, is_active').eq('user_id', userId).maybeSingle(),
-      (supabase as any).from('docs_drawings').select('id, team').in('id', ids),
+      (supabase as any).from(tableName).select('id, team').in('id', ids),
     ]);
     const roles = new Set<string>(((roleRows as any[]) ?? []).map((r) => r.role));
     const isAdminFull = roles.has('admin') || roles.has('superuser');
     const profileActive = (profileRow as any)?.is_active !== false;
-    // Mirror docs_drawings RLS UPDATE policy: admin/superuser/senior_user/user have full
-    // edit on every row; d_superuser is restricted to own-team rows.
+    // Mirror UPDATE policy: admin/superuser/senior_user/user have full edit
+    // on every row; d_superuser is restricted to own-team rows.
     const isFull = isAdminFull
       || (profileActive && (roles.has('senior_user') || roles.has('user')));
     const isDSuper = roles.has('d_superuser');
     const userTeam = (profileRow as any)?.team ?? null;
     const teamById = new Map<string, string | null>(
-      ((drawingRows as any[]) ?? []).map((r) => [r.id, r.team ?? null]),
+      ((srcRows as any[]) ?? []).map((r) => [r.id, r.team ?? null]),
     );
     for (const id of ids) {
       let scope: EditableScope = 'none';
