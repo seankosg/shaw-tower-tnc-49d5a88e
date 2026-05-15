@@ -555,7 +555,7 @@ function SummaryTile({
   sublabel?: string;
   accent: Accent;
   onClick?: () => void;
-  tone?: 'default' | 'green' | 'red' | 'muted';
+  tone?: 'default' | 'green' | 'red' | 'muted' | 'amber';
   children?: React.ReactNode;
 }) {
   const valueClass = {
@@ -563,6 +563,7 @@ function SummaryTile({
     green: 'text-emerald-600 dark:text-emerald-400',
     red: 'text-red-600 dark:text-red-400',
     muted: 'text-muted-foreground',
+    amber: 'text-amber-600 dark:text-amber-400',
   }[tone];
   return (
     <button
