@@ -263,7 +263,7 @@ export default function DocsSparePartRawDataPage() {
         if (Array.isArray(p.columnFilters)) setColumnFilters(p.columnFilters);
         if (typeof p.globalFilter === 'string') { setGlobalFilter(p.globalFilter); setSearchInput(p.globalFilter); }
         if (p.columnSizing && typeof p.columnSizing === 'object') setColumnSizing(p.columnSizing);
-        if (p.columnVisibility && typeof p.columnVisibility === 'object') setColumnVisibility(p.columnVisibility);
+        if (p.columnVisibility && typeof p.columnVisibility === 'object') setColumnVisibilityOverrides(p.columnVisibility);
       }
     } catch { /* ignore */ }
     setStateLoaded(true);
