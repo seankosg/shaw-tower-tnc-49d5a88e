@@ -142,46 +142,54 @@ function buildTncSection(rows: SubtestForDashboard[], opts: ReportOptions, dataD
   }
   return lines.join('\n');
 }
-interface DefectRow {
-  actual_completion_date: string | null;
-  actual_closure_date: string | null;
-  planned_completion_date: string | null;
-  planned_closure_date: string | null;
-  status: string | null;
-}
-
-async function fetchDefects(): Promise<DefectRow[]> {
-  const out: DefectRow[] = [];
+async function fetchDefects(): Promise<DefectItem[]> {
+  const out: DefectItem[] = [];
   let from = 0; const size = 1000;
   while (true) {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('defect_items')
-      .select('actual_completion_date,actual_closure_date,planned_completion_date,planned_closure_date,status')
+      .select('*')
       .eq('is_active', true)
       .range(from, from + size - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
-    out.push(...(data as DefectRow[]));
+    out.push(...(data as DefectItem[]));
     if (data.length < size) break;
     from += size;
   }
   return out;
 }
 
-function defectSnapshot(rows: DefectRow[], snap: string) {
+/** Resolve effective Data Date for Defect: explicit override → latest completed defect batch → today. */
+async function resolveDefectDataDate(override?: string): Promise<string> {
+  if (override) return override;
+  const { data } = await (supabase as any)
+    .from('defect_upload_batches')
+    .select('data_date')
+    .eq('status', 'completed')
+    .not('data_date', 'is', null)
+    .order('data_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data?.data_date as string | undefined) ?? format(new Date(), 'yyyy-MM-dd');
+}
+
+function defectCurrentCounts(rows: DefectItem[]) {
   const total = rows.length;
-  const completion = rows.filter(r => isOnOrBefore(r.actual_completion_date, snap)).length;
-  const closure = rows.filter(r => isOnOrBefore(r.actual_closure_date, snap)).length;
+  const completion = rows.filter(r => !!(r as any).actual_completion_date).length;
+  const closure = rows.filter(r => !!(r as any).actual_closure_date).length;
   return { total, completion, closure };
 }
 
-function buildDefectSection(rows: DefectRow[], opts: ReportOptions): string {
+function buildDefectSection(rows: DefectItem[], opts: ReportOptions, dataDate: string): string {
   const today = format(new Date(), 'yyyy-MM-dd');
-  const cur = defectSnapshot(rows, today);
+  const cur = defectCurrentCounts(rows);
   const planned = {
-    completion: rows.filter(r => isOnOrBefore(r.planned_completion_date, today)).length,
-    closure: rows.filter(r => isOnOrBefore(r.planned_closure_date, today)).length,
+    completion: rows.filter(r => isOnOrBefore((r as any).planned_completion_date, today)).length,
+    closure: rows.filter(r => isOnOrBefore((r as any).planned_closure_date, today)).length,
   };
+  const mode: DelayMode = opts.delayMode ?? 'penalty';
+  const modeLabel = mode === 'penalty' ? 'Worst Case' : 'Best Case';
   const lines: string[] = [];
   lines.push('## 2. Defect Management');
   if (opts.sections.includes('dashboard')) {
@@ -210,11 +218,14 @@ function buildDefectSection(rows: DefectRow[], opts: ReportOptions): string {
   }
   if (opts.sections.includes('snapshots')) {
     lines.push('### 2.4 Stage Progress Snapshots');
-    lines.push('| Date | Completion % | Closure % |');
-    lines.push('|------|--------------|-----------|');
+    lines.push(`_Computed via Simulation engine — mode: **${modeLabel}**, data date: **${dataDate}**._`);
+    lines.push('| Date | Start Predicted % (Actual %) | Completion Predicted % (Actual %) | Closure Predicted % (Actual %) |');
+    lines.push('|------|------------------------------|-----------------------------------|--------------------------------|');
+    const stages: DefectScheduleStage[] = ['start', 'completion', 'closure'];
     for (const d of opts.snapshotDates) {
-      const s = defectSnapshot(rows, d);
-      lines.push(`| ${d} | ${pct(s.completion, s.total)} | ${pct(s.closure, s.total)} |`);
+      const r = simulateAllDefectStages(rows, d, { mode, dataDate }, stages);
+      const cell = (s: DefectScheduleStage) => `${r[s].predictedPct.toFixed(1)}% (${r[s].actualPct.toFixed(1)}%)`;
+      lines.push(`| ${d} | ${cell('start')} | ${cell('completion')} | ${cell('closure')} |`);
     }
     lines.push('');
   }
