@@ -3,15 +3,18 @@
 
 import {
   buildAbdStageRecords, buildOmmStageRecords, buildWarrantyStageRecords,
+  buildSparePartStageRecords,
   asOfStartOfDay, ALL_STAGE_DEFS, classifyAbdRowBucket,
   classifyOmmSub1Status, classifyOmmSub2Status,
   bucketDelayDays, isDueThisWeek, computeDataQualityIssues,
   type DocModule,
 } from '@/lib/docs-stage-records';
 import { resolveTrade } from '@/lib/docs-trade';
+import { isOverdueSparePart, procurementProgressLevel } from '@/lib/spare-part-utils';
+import { normalizeSparePartStatus } from '@/lib/docs-spare-part-status';
 
 export interface DashboardFilterParams {
-  status?: string | null;   // 'completed'
+  status?: string | null;   // 'completed' | 'short' | 'pending' | 'ordered' | 'stock' | 'unknown'
   overdue?: string | null;  // '1'
   stage?: string | null;
   team?: string | null;
@@ -19,12 +22,17 @@ export interface DashboardFilterParams {
   bucket?: string | null;
   sub1_status?: string | null;
   sub2_status?: string | null;
-  // New extended filters
+  // Extended filters
   subcontractor?: string | null;
   hdec_pic?: string | null;
   due_this_week?: string | null; // '1'
   delay_bucket?: string | null;  // '0-7' | '8-14' | '15-30' | '30+'
-  dq?: string | null;            // data quality issue key (e.g. 'missing_planned')
+  dq?: string | null;            // data quality issue key
+  // Spare-part specific
+  po_status?: string | null;
+  eta_missing?: string | null;       // '1' | 'true'
+  po_pending?: string | null;        // '1' | 'true'
+  delivery_pending?: string | null;  // '1' | 'true'
 }
 
 export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterParams {
@@ -42,19 +50,25 @@ export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterP
     due_this_week: sp.get('due_this_week'),
     delay_bucket: sp.get('delay_bucket'),
     dq: sp.get('dq'),
+    po_status: sp.get('po_status'),
+    eta_missing: sp.get('eta_missing'),
+    po_pending: sp.get('po_pending'),
+    delivery_pending: sp.get('delivery_pending'),
   };
 }
 
 export function hasAnyDashboardFilter(p: DashboardFilterParams): boolean {
   return !!(p.status || p.overdue || p.stage || p.team || p.trade || p.bucket
     || p.sub1_status || p.sub2_status
-    || p.subcontractor || p.hdec_pic || p.due_this_week || p.delay_bucket || p.dq);
+    || p.subcontractor || p.hdec_pic || p.due_this_week || p.delay_bucket || p.dq
+    || p.po_status || p.eta_missing || p.po_pending || p.delivery_pending);
 }
 
 const BUILDERS: Record<DocModule, (rows: any[], asOf: Date) => any[]> = {
   abd: buildAbdStageRecords,
   omm: buildOmmStageRecords,
   warranty: buildWarrantyStageRecords,
+  spare_part: buildSparePartStageRecords,
 };
 
 /**
