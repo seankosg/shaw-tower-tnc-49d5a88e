@@ -129,26 +129,7 @@ export default function PunchImportLogsPage() {
       setUploaderNames({});
     }
 
-    const batchIds = list.map((b) => b.id);
-    if (batchIds.length) {
-      const { data: logs } = await (supabase as any)
-        .from('punch_upload_row_logs')
-        .select('upload_id, processed_at')
-        .in('upload_id', batchIds);
-      const maxByBatch: Record<string, number> = {};
-      (logs ?? []).forEach((l: any) => {
-        const t = new Date(l.processed_at).getTime();
-        if (!maxByBatch[l.upload_id] || t > maxByBatch[l.upload_id]) maxByBatch[l.upload_id] = t;
-      });
-      const durs: Record<string, number> = {};
-      list.forEach((b) => {
-        const end = maxByBatch[b.id];
-        if (end) durs[b.id] = end - new Date(b.uploaded_at).getTime();
-      });
-      setDurationsMs(durs);
-    } else {
-      setDurationsMs({});
-    }
+    setDurationsMs({});
   };
 
   const selectBatch = async (id: string) => {
@@ -163,29 +144,48 @@ export default function PunchImportLogsPage() {
     setRowSearch('');
     setRenderLimit(500);
     setExpandedRows(new Set());
+    let fl: FieldLog[] = [];
     try {
-      const rows = await fetchAllByUploadId<PunchRowLog>(
-        'punch_upload_row_logs' as any,
-        'id, raw_row_no, item_no, action_taken, reason_code, reason_detail',
-        id,
-      );
-      setRowLogs(rows);
-    } catch (e) {
-      console.error('Failed to load punch row logs', e);
-      setRowLogs([]);
-    }
-
-    try {
-      const fl = await fetchAllByUploadId<FieldLog>(
+      fl = await fetchAllByUploadId<FieldLog>(
         'import_field_logs',
         'id, raw_row_no, field_name, outcome, raw_value, applied_value, previous_value, reason_code, reason_detail',
         id,
       );
-      setFieldLogs(fl);
     } catch (e) {
       console.error('Failed to load field logs', e);
-      setFieldLogs([]);
     }
+    setFieldLogs(fl);
+
+    // Synthesize per-row summary from field logs (no dedicated punch_upload_row_logs table).
+    const byRow = new Map<number, FieldLog[]>();
+    for (const f of fl) {
+      if (f.raw_row_no == null) continue;
+      const arr = byRow.get(f.raw_row_no) || [];
+      arr.push(f);
+      byRow.set(f.raw_row_no, arr);
+    }
+    const synth: PunchRowLog[] = [];
+    for (const [rowNo, fls] of byRow.entries()) {
+      const itemNoLog = fls.find((f) => f.field_name === 'item_no');
+      const hasRejected = fls.some((f) => f.outcome.startsWith('rejected'));
+      const hasApplied = fls.some((f) => f.outcome === 'applied' || f.outcome === 'corrected');
+      const action = hasRejected
+        ? 'rejected'
+        : hasApplied
+          ? 'updated'
+          : 'skipped';
+      const reasonLog = fls.find((f) => f.reason_code);
+      synth.push({
+        id: `r-${rowNo}`,
+        raw_row_no: rowNo,
+        item_no: itemNoLog?.applied_value ?? itemNoLog?.raw_value ?? null,
+        action_taken: action,
+        reason_code: reasonLog?.reason_code ?? null,
+        reason_detail: reasonLog?.reason_detail ?? null,
+      });
+    }
+    synth.sort((a, b) => (a.raw_row_no ?? 0) - (b.raw_row_no ?? 0));
+    setRowLogs(synth);
   };
 
   const deleteBatch = async (batch: PunchBatch) => {
@@ -197,7 +197,6 @@ export default function PunchImportLogsPage() {
         .from('punch_items')
         .update({ is_active: false })
         .eq('source_upload_id', batch.id);
-      await (supabase as any).from('punch_upload_row_logs').delete().eq('upload_id', batch.id);
       await (supabase as any).from('punch_change_log').delete().eq('upload_id', batch.id);
       await (supabase as any).from('import_field_logs').delete().eq('upload_id', batch.id);
       const { error } = await (supabase as any)
