@@ -105,36 +105,36 @@ function buildTncSection(rows: SubtestForDashboard[], opts: ReportOptions, dataD
   if (opts.sections.includes('dashboard')) {
     lines.push('### 1.1 Dashboard');
     lines.push(`- Total subtests (active): **${cur.total}**`);
-    lines.push(`- T1 completed: ${cur.t1} (${pct(cur.t1, cur.total)})`);
-    lines.push(`- T2 completed: ${cur.t2} (${pct(cur.t2, cur.total)})`);
-    lines.push(`- R2S completed: ${cur.r2s} (${pct(cur.r2s, cur.total)})`);
+    lines.push(`- Pre-Test (T1) completed: ${cur.t1} (${pct(cur.t1, cur.total)})`);
+    lines.push(`- Actual Test (T2) completed: ${cur.t2} (${pct(cur.t2, cur.total)})`);
+    lines.push(`- Test Report (R2) completed: ${cur.r2s} (${pct(cur.r2s, cur.total)})`);
     lines.push('');
   }
   if (opts.sections.includes('progress')) {
-    lines.push('### 1.2 Progress (Stages: T1 Internal Test, T2 Official Test, R2S Report Submission)');
+    lines.push('### 1.2 Current Status (Stages: Pre-Test, Actual Test, Test Report)');
     lines.push('| Stage | Planned to date | Actual to date | Actual % | Gap (Actual − Planned) |');
     lines.push('|-------|-----------------|----------------|----------|------------------------|');
-    lines.push(`| T1 Internal Test | ${planned.t1} | ${cur.t1} | ${pct(cur.t1, cur.total)} | ${cur.t1 - planned.t1} |`);
-    lines.push(`| T2 Official Test | ${planned.t2} | ${cur.t2} | ${pct(cur.t2, cur.total)} | ${cur.t2 - planned.t2} |`);
-    lines.push(`| R2S Report Submission | ${planned.r2s} | ${cur.r2s} | ${pct(cur.r2s, cur.total)} | ${cur.r2s - planned.r2s} |`);
+    lines.push(`| Pre-Test (T1) | ${planned.t1} | ${cur.t1} | ${pct(cur.t1, cur.total)} | ${cur.t1 - planned.t1} |`);
+    lines.push(`| Actual Test (T2) | ${planned.t2} | ${cur.t2} | ${pct(cur.t2, cur.total)} | ${cur.t2 - planned.t2} |`);
+    lines.push(`| Test Report (R2) | ${planned.r2s} | ${cur.r2s} | ${pct(cur.r2s, cur.total)} | ${cur.r2s - planned.r2s} |`);
     lines.push('');
   }
   if (opts.sections.includes('simulation')) {
-    lines.push('### 1.3 Simulation (vs Project Completion ' + (opts.mcDate ?? MC_DEFAULT) + ')');
+    lines.push('### 1.3 Plan — Required Pace toward Project Completion (' + (opts.mcDate ?? MC_DEFAULT) + ')');
     const mc = opts.mcDate ?? MC_DEFAULT;
     const remT2 = cur.total - cur.t2;
     const remR2S = cur.total - cur.r2s;
     const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
-    lines.push(`- Days remaining to PC: **${days}**`);
-    lines.push(`- T2 remaining: ${remT2} → required pace: ${(remT2 / days).toFixed(2)} / day`);
-    lines.push(`- R2S remaining: ${remR2S} → required pace: ${(remR2S / days).toFixed(2)} / day`);
+    lines.push(`- Days remaining to Project Completion: **${days}**`);
+    lines.push(`- Actual Test remaining: ${remT2} → required pace: ${(remT2 / days).toFixed(2)} / day`);
+    lines.push(`- Test Report remaining: ${remR2S} → required pace: ${(remR2S / days).toFixed(2)} / day`);
     lines.push('');
   }
   if (opts.sections.includes('snapshots')) {
-    lines.push('### 1.4 Stage Progress Snapshots');
-    lines.push(`_Computed via Simulation engine — mode: **${modeLabel}**, data date: **${dataDate}**, sequential: enforced._`);
-    lines.push('| Date | T1 Predicted % (Actual %) | T2 Predicted % (Actual %) | R2S Predicted % (Actual %) |');
-    lines.push('|------|---------------------------|---------------------------|----------------------------|');
+    lines.push('### 1.4 Plan — Stage Progress Snapshots');
+    lines.push(`_Plan computed via Simulation engine — mode: **${modeLabel}**, data date: **${dataDate}**, sequential: enforced._`);
+    lines.push('| Date | Pre-Test Planned % (Actual %) | Actual Test Planned % (Actual %) | Test Report Planned % (Actual %) |');
+    lines.push('|------|-------------------------------|----------------------------------|----------------------------------|');
     const stages: TncSimStage[] = ['t1', 't2', 'r2s'];
     for (const d of opts.snapshotDates) {
       const r = simulateAllTncStages(rows, d, { mode, dataDate, enforceSequential: true }, stages);
