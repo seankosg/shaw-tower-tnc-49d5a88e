@@ -458,6 +458,8 @@ export async function buildReportMarkdown(opts: ReportOptions): Promise<string> 
   head.push(`_Snapshot delay mode: **${modeLabel}**_`);
   if (needsTncDate) head.push(`_T&C data date: ${tncDataDate}_`);
   if (needsDefectDate) head.push(`_Defect data date: ${defectDataDate}_`);
+  const includeGuide = needsTncDate && opts.includeTncGuide !== false;
+  if (includeGuide) head.push(`_T&C guide: included (Appendix A)_`);
   head.push('');
 
   const parts: string[] = [head.join('\n')];
@@ -477,6 +479,8 @@ export async function buildReportMarkdown(opts: ReportOptions): Promise<string> 
     const rows = await fetchPunch();
     parts.push(buildPunchSection(rows, opts));
   }
+
+  if (includeGuide) parts.push(TNC_RAW_DATA_GUIDE_MD);
 
   return parts.join('\n');
 }
