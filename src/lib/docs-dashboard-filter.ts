@@ -54,6 +54,7 @@ export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterP
     po_status: sp.get('po_status'),
     eta_missing: sp.get('eta_missing'),
     po_pending: sp.get('po_pending'),
+    po_overdue: sp.get('po_overdue'),
     delivery_pending: sp.get('delivery_pending'),
   };
 }
