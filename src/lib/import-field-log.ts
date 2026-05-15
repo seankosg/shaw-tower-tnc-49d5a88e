@@ -14,7 +14,7 @@ export type FieldLogOutcome =
   | 'rejected_conflict'
   | 'info';
 
-export type FieldLogKind = 'tnc' | 'defect' | 'docs';
+export type FieldLogKind = 'tnc' | 'defect' | 'docs' | 'punch';
 
 export interface PendingFieldLog {
   // Filled in at write time:

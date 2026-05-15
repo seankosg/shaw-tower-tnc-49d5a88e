@@ -284,7 +284,7 @@ export async function upsertPunchRows(
         const change = classifyChange(incoming, previous);
         if (change === 'empty') continue;
         pendingFieldLogs.push(
-          buildFieldLog('punch' as any, {
+          buildFieldLog('punch', {
             rawRowNo: row.rawRowNo,
             field,
             outcome: change === 'applied' ? 'applied' : 'unchanged',
@@ -334,7 +334,7 @@ export async function upsertPunchRows(
         const incoming = (row.values as any)[field];
         if (incoming === null || incoming === undefined || incoming === '') continue;
         pendingFieldLogs.push(
-          buildFieldLog('punch' as any, {
+          buildFieldLog('punch', {
             rawRowNo: row.rawRowNo,
             field,
             outcome: 'applied',
