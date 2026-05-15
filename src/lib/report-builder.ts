@@ -4,6 +4,15 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { format, parseISO, isValid } from 'date-fns';
+import {
+  simulateAllTncStages,
+  type TncSimStage,
+  type DelayMode,
+} from '@/lib/tnc-simulation';
+import { simulateAllDefectStages } from '@/lib/defect-simulation';
+import type { SubtestForDashboard } from '@/lib/dashboard-utils';
+import type { DefectItem } from '@/lib/defect-utils';
+import type { DefectScheduleStage } from '@/lib/defect-schedule-utils';
 
 export type ReportModule = 'tnc' | 'defect' | 'docs' | 'punch';
 export type ReportSection = 'dashboard' | 'progress' | 'simulation' | 'snapshots';
@@ -13,6 +22,10 @@ export interface ReportOptions {
   sections: ReportSection[];
   snapshotDates: string[]; // YYYY-MM-DD
   mcDate?: string;         // default 2026-06-15
+  /** Delay handling for snapshot Predicted % (mirrors Simulation tab). Default 'penalty'. */
+  delayMode?: DelayMode;
+  /** Override Data Date (YYYY-MM-DD). When omitted, latest completed batch date is used. */
+  dataDate?: string;
 }
 
 // ---------- helpers ----------
