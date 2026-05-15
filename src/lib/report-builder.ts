@@ -57,40 +57,57 @@ interface TncRow {
   is_active: boolean;
 }
 
-async function fetchTnc(): Promise<TncRow[]> {
-  const out: TncRow[] = [];
+// ---------- T&C ----------
+async function fetchTnc(): Promise<SubtestForDashboard[]> {
+  const out: SubtestForDashboard[] = [];
   let from = 0; const size = 1000;
   while (true) {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('subtests')
-      .select('t1_actual_date,t2_actual_date,r2_actual_submission_date,t1_planned_date,t2_planned_date,r2_target_submission_date,is_active')
+      .select('*')
       .eq('is_active', true)
       .range(from, from + size - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
-    out.push(...(data as TncRow[]));
+    out.push(...(data as SubtestForDashboard[]));
     if (data.length < size) break;
     from += size;
   }
   return out;
 }
 
-function tncStageSnapshot(rows: TncRow[], snap: string) {
+/** Resolve effective Data Date: explicit override → latest completed T&C batch → today. */
+async function resolveTncDataDate(override?: string): Promise<string> {
+  if (override) return override;
+  const { data } = await (supabase as any)
+    .from('upload_batches')
+    .select('data_date')
+    .eq('status', 'completed')
+    .not('data_date', 'is', null)
+    .order('data_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data?.data_date as string | undefined) ?? format(new Date(), 'yyyy-MM-dd');
+}
+
+function tncCurrentCounts(rows: SubtestForDashboard[]) {
   const total = rows.length;
-  const t1 = rows.filter(r => isOnOrBefore(r.t1_actual_date, snap)).length;
-  const t2 = rows.filter(r => isOnOrBefore(r.t2_actual_date, snap)).length;
-  const r2s = rows.filter(r => isOnOrBefore(r.r2_actual_submission_date, snap)).length;
+  const t1 = rows.filter(r => !!(r as any).t1_actual_date).length;
+  const t2 = rows.filter(r => !!(r as any).t2_actual_date).length;
+  const r2s = rows.filter(r => !!(r as any).r2_actual_submission_date).length;
   return { total, t1, t2, r2s };
 }
 
-function buildTncSection(rows: TncRow[], opts: ReportOptions): string {
+function buildTncSection(rows: SubtestForDashboard[], opts: ReportOptions, dataDate: string): string {
   const today = format(new Date(), 'yyyy-MM-dd');
-  const cur = tncStageSnapshot(rows, today);
+  const cur = tncCurrentCounts(rows);
   const planned = {
-    t1: rows.filter(r => isOnOrBefore(r.t1_planned_date, today)).length,
-    t2: rows.filter(r => isOnOrBefore(r.t2_planned_date, today)).length,
-    r2s: rows.filter(r => isOnOrBefore(r.r2_target_submission_date, today)).length,
+    t1: rows.filter(r => isOnOrBefore((r as any).t1_planned_date, today)).length,
+    t2: rows.filter(r => isOnOrBefore((r as any).t2_planned_date, today)).length,
+    r2s: rows.filter(r => isOnOrBefore((r as any).r2_target_submission_date, today)).length,
   };
+  const mode: DelayMode = opts.delayMode ?? 'penalty';
+  const modeLabel = mode === 'penalty' ? 'Worst Case' : 'Best Case';
   const lines: string[] = [];
   lines.push('## 1. T&C Management');
   if (opts.sections.includes('dashboard')) {
@@ -123,18 +140,19 @@ function buildTncSection(rows: TncRow[], opts: ReportOptions): string {
   }
   if (opts.sections.includes('snapshots')) {
     lines.push('### 1.4 Stage Progress Snapshots');
-    lines.push('| Date | T1 % | T2 % | R2S % |');
-    lines.push('|------|------|------|-------|');
+    lines.push(`_Computed via Simulation engine — mode: **${modeLabel}**, data date: **${dataDate}**, sequential: enforced._`);
+    lines.push('| Date | T1 Predicted % (Actual %) | T2 Predicted % (Actual %) | R2S Predicted % (Actual %) |');
+    lines.push('|------|---------------------------|---------------------------|----------------------------|');
+    const stages: TncSimStage[] = ['t1', 't2', 'r2s'];
     for (const d of opts.snapshotDates) {
-      const s = tncStageSnapshot(rows, d);
-      lines.push(`| ${d} | ${pct(s.t1, s.total)} | ${pct(s.t2, s.total)} | ${pct(s.r2s, s.total)} |`);
+      const r = simulateAllTncStages(rows, d, { mode, dataDate, enforceSequential: true }, stages);
+      const cell = (s: TncSimStage) => `${r[s].predictedPct.toFixed(1)}% (${r[s].actualPct.toFixed(1)}%)`;
+      lines.push(`| ${d} | ${cell('t1')} | ${cell('t2')} | ${cell('r2s')} |`);
     }
     lines.push('');
   }
   return lines.join('\n');
 }
-
-// ---------- Defect ----------
 interface DefectRow {
   actual_completion_date: string | null;
   actual_closure_date: string | null;
