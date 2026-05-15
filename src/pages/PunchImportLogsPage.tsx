@@ -129,8 +129,26 @@ export default function PunchImportLogsPage() {
       setUploaderNames({});
     }
 
-    setDurationsMs({});
-  };
+    const batchIds = list.map((b) => b.id);
+    if (batchIds.length) {
+      const { data: logs } = await (supabase as any)
+        .from('punch_upload_row_logs')
+        .select('upload_id, processed_at')
+        .in('upload_id', batchIds);
+      const maxByBatch: Record<string, number> = {};
+      (logs ?? []).forEach((l: any) => {
+        const t = new Date(l.processed_at).getTime();
+        if (!maxByBatch[l.upload_id] || t > maxByBatch[l.upload_id]) maxByBatch[l.upload_id] = t;
+      });
+      const durs: Record<string, number> = {};
+      list.forEach((b) => {
+        const end = maxByBatch[b.id];
+        if (end) durs[b.id] = end - new Date(b.uploaded_at).getTime();
+      });
+      setDurationsMs(durs);
+    } else {
+      setDurationsMs({});
+    }
 
   const selectBatch = async (id: string) => {
     setSelectedBatch(id);
