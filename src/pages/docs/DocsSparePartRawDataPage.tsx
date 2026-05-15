@@ -302,13 +302,13 @@ export default function DocsSparePartRawDataPage() {
     const poStatus = searchParams.get('po_status');
     if (poStatus) next = next.filter((r) => String(r.po_status ?? '').toLowerCase() === poStatus.toLowerCase());
     if (searchParams.get('po_pending') === 'true') {
-      next = next.filter((r) => !(r as any).po_issued_date);
+      next = next.filter((r) => !(r as any).actual_po_date);
     }
     if (searchParams.get('eta_missing') === 'true') {
-      next = next.filter((r) => !(r as any).eta_date && !(r as any).delivered_date);
+      next = next.filter((r) => !(r as any).eta_date && !(r as any).actual_delivery_date);
     }
     if (searchParams.get('delivery_pending') === 'true') {
-      next = next.filter((r) => !(r as any).delivered_date);
+      next = next.filter((r) => !(r as any).actual_delivery_date);
     }
     return next;
   }, [items, searchParams]);
