@@ -367,37 +367,60 @@ function ModuleSection({
       </div>
 
       <CardContent className="space-y-5 p-5">
-        {/* Module Summary Card row */}
-        <div className="grid gap-3 md:grid-cols-3">
-          <SummaryTile
-            icon={ListChecks}
-            label="Total"
-            value={total}
-            sublabel="All documents"
-            accent={accent}
-            onClick={() => onNavigate(module)}
-          />
-          <SummaryTile
-            icon={CheckCircle2}
-            label="Done"
-            value={done}
-            sublabel={`${pct}% complete`}
-            accent={accent}
-            tone="green"
-            onClick={() => onNavigate(module, isAbd ? { bucket: 'done' } : { status: 'completed' })}
-          >
-            <Progress value={pct} className="mt-2 h-1.5" />
-          </SummaryTile>
-          <SummaryTile
-            icon={AlertTriangle}
-            label="Overdue"
-            value={overdue}
-            sublabel={overdue > 0 ? 'Past planned date' : 'On track'}
-            accent={accent}
-            tone={overdue > 0 ? 'red' : 'muted'}
-            onClick={() => onNavigate(module, { overdue: '1' })}
-          />
+        {/* Subcontractor / HDEC PIC filter row */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Filters</span>
+          <Select value={subFilter} onValueChange={setSubFilter}>
+            <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue placeholder="Subcontractor" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Subcontractors</SelectItem>
+              {subcontractors.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={picFilter} onValueChange={setPicFilter}>
+            <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="HDEC PIC" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All HDEC PIC</SelectItem>
+              {pics.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {(subFilter !== '__all__' || picFilter !== '__all__') && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs"
+              onClick={() => { setSubFilter('__all__'); setPicFilter('__all__'); }}>
+              Clear
+            </Button>
+          )}
         </div>
+
+        {/* Module 6-KPI row */}
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+          <SummaryTile icon={ListChecks} label="Total" value={kpiTotal} accent={accent}
+            onClick={() => onNavigate(module, extraParams())} />
+          <SummaryTile icon={CheckCircle2} label="Completed" value={kpiCompleted}
+            sublabel={kpiTotal ? `${Math.round((kpiCompleted / kpiTotal) * 100)}%` : '—'}
+            accent={accent} tone="green"
+            onClick={() => onNavigate(module, { ...extraParams(), ...(isAbd ? { bucket: 'done' } : { status: 'completed' }) })}>
+            <Progress value={kpiTotal ? Math.round((kpiCompleted / kpiTotal) * 100) : 0} className="mt-2 h-1.5" />
+          </SummaryTile>
+          <SummaryTile icon={Clock} label="Remaining" value={kpiTotal - kpiCompleted} accent={accent}
+            onClick={() => onNavigate(module, extraParams())} />
+          <SummaryTile icon={AlertTriangle} label="Overdue" value={kpiOverdue} accent={accent}
+            tone={kpiOverdue > 0 ? 'red' : 'muted'}
+            onClick={() => onNavigate(module, { ...extraParams(), overdue: '1' })} />
+          <SummaryTile icon={CalendarClock} label="Due This Week" value={kpiDueIds.size} accent={accent}
+            tone="amber"
+            onClick={() => onNavigate(module, { ...extraParams(), due_this_week: '1' })} />
+          <SummaryTile icon={Flame} label="Critical Delay" value={kpiCriticalIds.size} accent={accent}
+            tone={kpiCriticalIds.size > 0 ? 'red' : 'muted'}
+            sublabel=">30 days"
+            onClick={() => onNavigate(module, { ...extraParams(), delay_bucket: '30+' })} />
+        </div>
+
+        {/* Delay Severity Buckets */}
+        <DelaySeverityRow
+          counts={delayBuckets}
+          onClick={(b) => onNavigate(module, { ...extraParams(), delay_bucket: b, overdue: '1' })}
+        />
 
         {/* Stage Progress */}
         <div>
