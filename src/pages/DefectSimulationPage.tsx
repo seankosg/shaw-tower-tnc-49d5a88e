@@ -49,7 +49,7 @@ export default function DefectSimulationPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const today = useMemo(() => todayIso(), []);
   const { dataDate, source: dataDateSource } = useLatestDataDate();
-  const { subcontractorOptions } = useCommonMasters();
+  import { useCommonMasters } from '@/hooks/useCommonMasters';
 
   const { items: cachedItems, initialLoaded } = useDefectCache();
   const items = cachedItems as unknown as DefectItem[];
