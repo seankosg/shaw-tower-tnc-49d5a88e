@@ -80,6 +80,7 @@ export default function TncSimulationPage() {
 
   // ───── Controls ─────
   const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');
+  const [subconFilter, setSubconFilter] = useState<string>(searchParams.get('subcon') || 'all');
   const [stages, setStages] = useState<TncSimStage[]>(() => {
     const raw = searchParams.get('stages');
     if (!raw) return [...ALL_TNC_SIM_STAGES];
