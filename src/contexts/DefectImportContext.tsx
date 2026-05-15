@@ -563,6 +563,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
 
     const batchRes = await (supabase as any).from('defect_upload_batches').insert({ uploaded_file_name: item.name, uploaded_by: user.id, status: 'processing', total_rows: item.parsed.length, data_date: dataDate }).select('id').single();
     const uploadId = batchRes.data?.id;
+    (item as any)._uploadId = uploadId;
     let insertedCount = 0;
     let updatedCount = 0;
     let skipped = 0;
@@ -1230,6 +1231,15 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         const result = await importOneFile(item, decisions);
         setFiles((current) => current.map((file) => file.id === item.id ? { ...file, status: 'done', progress: 100, result } : file));
       } catch (error) {
+        const uploadId = (item as any)._uploadId;
+        if (uploadId) {
+          try {
+            await (supabase as any).from('defect_upload_batches').update({
+              status: 'failed',
+              note: (error instanceof Error ? error.message : String(error)).slice(0, 1000),
+            }).eq('id', uploadId);
+          } catch { /* ignore */ }
+        }
         setFiles((current) => current.map((file) => file.id === item.id ? { ...file, status: 'failed', error: error instanceof Error ? error.message : 'Import failed' } : file));
       }
     }
