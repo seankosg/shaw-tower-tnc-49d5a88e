@@ -274,6 +274,8 @@ const DRAWING_RESET_STATUS = [
   'current_status', 'aconex_status',
   'sub1_approval_status', 'sub2_approval_status', 'sub3_approval_status',
 ];
+const PUNCH_RESET_ACTUALS = ['actual_start_date', 'actual_completion_date'];
+const PUNCH_RESET_STATUS = ['completion_status', 'actual_progress_pct', 'health_status'];
 
 export async function applyBulkDuplicate(args: {
   entity: BulkEntity;
