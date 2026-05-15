@@ -1,91 +1,105 @@
-## 진단 — Punch Raw Data와 Defect Raw Data 격차
+## 목표
+Admin 페이지에 **Report** 탭을 추가합니다. 모듈/섹션/스냅샷 날짜를 선택하면 앱 내 데이터를 집계해 **Markdown 보고서**를 생성하고, 외부 LLM(Lovable AI Gateway)과 연동해 자동으로 보고서 본문까지 작성할 수 있도록 합니다.
 
-| 기능 | Defect Raw Data | Punch Raw Data |
-|---|---|---|
-| 컬럼별 필터 (multi-select / text / date-range / progress) | ✅ | ❌ |
-| 헤더 필터 칩 + URL 필터 칩 | ✅ | ❌ |
-| Global token search (콤마 = AND) | ✅ | ❌ (단순 substring) |
-| 정렬 (Shift+Click 다중 정렬) | ✅ | ❌ (정렬 불가) |
-| 컬럼 리사이즈 + 컬럼 가시성 | ✅ | ❌ |
-| 정렬·필터·컬럼폭 localStorage 저장 + URL 파라미터 복원 | ✅ | ❌ |
-| 행 선택 체크박스 + Select-all | ✅ | ❌ |
-| **BulkEditBar — 다중 필드값 일괄 변경 / Reassign** | ✅ | ❌ |
-| 일괄 Critical / Duplicate / Delete | ✅ | ❌ |
-| Critical 인라인 토글 | ✅ | n/a (Punch에 is_critical 없음) |
-| Active filter chip bar (URL + column filters) | ✅ | ❌ |
+## 노출 제어
+- `useAuth().isAdmin === true` 일 때만 `Report` 탭 렌더 (Superuser/D.Superuser 비노출).
+- 별도 안내 문구는 표기하지 않음.
 
-원인: `PunchRawDataPage`는 plain HTML `<Table>`로 구현되어 있고, TanStack React Table을 도입하지 않았습니다. BulkEditBar 인프라(`bulk-edit.ts`, `bulk-actions.ts`)도 `'punch'` entity를 모릅니다.
+## UI (`src/pages/admin/ReportTab.tsx`)
 
----
+```text
+[Report 탭]
+┌─ Modules ──────────────────────────────────────────────┐
+│ ☑ T&C   ☑ Defect   ☑ Docs (ABD/OMM/Warranty/Spare)    │
+│ ☑ Punch                                                 │
+└────────────────────────────────────────────────────────┘
+┌─ Sections per module ──────────────────────────────────┐
+│ ☑ Dashboard summary (KPI, 상태 분포)                    │
+│ ☑ Progress summary (스테이지별 누적/주간 진도율)         │
+│ ☑ Simulation summary (현재 vs 목표, To-Achieve)         │
+│ ☑ Stage Progress Snapshots (날짜별 스테이지 진도율)     │
+└────────────────────────────────────────────────────────┘
+┌─ Snapshot Dates ───────────────────────────────────────┐
+│ 2026-05-30   2026-06-07   2026-06-14   [+ 날짜 추가]    │
+└────────────────────────────────────────────────────────┘
 
-## 작업 범위
+[ Generate Markdown ]   [ Copy ]   [ Download .md ]
 
-### 1. 공용 컴포넌트 추출 (재사용 위한 사전 정리)
-- `src/components/raw-data/ColumnFilterDropdowns.tsx` 신규
-  - `MultiSelectDropdown`, `TextFilterDropdown`, `DateRangeDropdown`, `ColumnFilterDropdown`을 `DefectRawDataPage`에서 추출 → export
-  - `multiSelectFilterFn`, `textFilterFn`, `dateRangeFilterFn`, `progressFilterFn`, `tokenizeAnd`, `matchesAllTokens`, `EMPTY_TOKEN`도 동일 위치로 이동 후 두 페이지에서 import
-  - DefectRawDataPage는 import만 교체 (동작 변경 없음)
+┌─ Preview (textarea, MD 원문) ──────────────────────────┐
 
-### 2. Bulk 인프라에 'punch' 추가
-- `src/lib/bulk-edit.ts`
-  - `BulkUpdateRequest['table']` 유니언에 `'punch_items'` 추가
-  - `logTableFor` → `'punch_change_log'`, `logIdField` → `'punch_id'` 분기 추가
-- `src/lib/bulk-actions.ts`
-  - `BulkEntity` 유니언에 `'punch'` 추가
-  - 모든 분기(`getEditableScopeMap`, `applyBulkReassign`, `previewBulkDelete`, `applyBulkDelete`, `applyBulkDuplicate`)에 punch 케이스 분기
-  - **Edit scope**: punch RLS는 defect와 동일 패턴(`has_any_role` + `d_superuser`+team)이므로 drawing 케이스의 클라이언트 사이드 role+team 검사 로직을 재사용 (RPC 신설 불필요)
-  - **Soft delete**: drawing 패턴 그대로 `UPDATE punch_items SET is_active=false`
-  - **Hard delete / Duplicate / Cascade preview**: drawing과 동등하게 클라이언트 사이드 처리(`punch_change_log`도 함께 제거). 신규 RPC 없이 처리 가능
-- `src/components/raw-data/BulkEditBar.tsx` — entity 기본값 매핑에 `'punch_items' → 'punch'` 분기 추가
-- `src/components/raw-data/BulkActionBar.tsx` 및 dialogs — `entity === 'punch'`에서도 정상 동작하도록 라벨/카피만 보강 (이미 entity-기반 분기 구조)
+──── External LLM ────────────────────────────────────────
+Model: [google/gemini-3-flash-preview ▼]  (gemini/gpt-5 계열 선택)
+System prompt: [편집 가능 textarea — 기본값 제공]
+[ Generate Report via LLM ]   [ Copy Report ]   [ Download Report .md ]
 
-### 3. PunchRawDataPage 전면 재작성 (Defect 구조 미러)
-**파일**: `src/pages/PunchRawDataPage.tsx`
-- TanStack React Table 도입: `useReactTable`, `getCoreRowModel`, `getSortedRowModel`, `getFilteredRowModel`, `getFacetedRowModel`, `getFacetedUniqueValues`
-- 상태: `sorting`, `columnFilters`, `globalFilter`, `searchInput`(debounced), `columnSizing`, `rowSelection`
-- LocalStorage 키 `punch-raw-data-state-v1`로 sorting/columnFilters/globalFilter/columnSizing 저장·복원, URL 필터 우선 적용 (Defect 패턴 그대로)
-- URL 파라미터 지원: `q`, `dateField`+`dateStart`+`dateEnd`, `health`, `ready`, 기타 punch 필드명 — 진입 시 columnFilters로 변환
-- 컬럼 정의:
-  - `__select` (Checkbox), `item_no` (피닝)
-  - 데이터 컬럼: `PUNCH_FIELDS` 순회하면서 dataType별로 filterFn/meta 결정
-    - `date` → `dateRangeFilterFn` + `filterType: 'date-range'`
-    - `pct`, `number` → `textFilterFn` (또는 progress filter) + `filterType: 'text'`
-    - `enum` (health/gate/proc) → `multiSelectFilterFn` + `filterType: 'multi-select'` + 기존 라벨 옵션
-    - `text` → `multiSelectFilterFn` (낮은 카디널리티 enum-like 필드) 또는 `textFilterFn` (description류) — 기존 `inferFilterType` 활용
-  - 동적 컬럼: `usePunchFieldConfig` 의 `is_enabled && !knownFields` 항목을 `inferFilterType`로 자동 분류
-- Visibility: `isFieldVisible(field, roles)` 그대로
-- Sticky header, column resizing, multi-sort (Shift+Click), facet 카운트 표기는 Defect와 동일
-- Active URL filter chip bar + Active column filter chip bar — Defect의 마크업 그대로 복사
-- Search 입력 300ms debounce → globalFilter, `globalDefectFilterFn` 동등 함수(`globalPunchFilterFn`)는 `PUNCH_RAW_SEARCH_FIELDS`(item_no, outstanding_work, location, level, subcontractor_name 등)로 정의
-- Health/Pre-Eng 빠른 버튼은 그대로 유지하되 내부적으로 `setColumnFilters`로 매핑 (URL과 일관)
+┌─ LLM Output (스트리밍 표시) ───────────────────────────┐
+```
 
-### 4. BulkEditBar 통합
-- `bulkFields: BulkEditableField[]` 정의 (그룹별):
-  - **Identity**: `location`, `level`
-  - **Classification**: `team`, `work_type`, `category1`, `category2`
-  - **People**: `subcontractor_name`, `subsub_name`, `hdec_pic_name`, `hdec_eng_name`
-  - **Schedule**: `planned_start_date`, `planned_completion_date`, `actual_start_date`, `actual_completion_date`
-  - **Pre-engineering**: `material_approval_status`, `material_procurement_status`, `drawing_approval_status`, `mos_approval_status` (enum select)
-  - **Notes**: `remarks` (있는 경우)
-- `<BulkEditBar selectedRows table="punch_items" entity="punch" exportColumns={[...]} fields={bulkFields} ...>` 마운트
-- Apply 후 클라이언트 캐시 patch 함수 신규: `src/lib/punch-cache.ts`의 `patchPunchCacheLocal(ids, patch)` (defect-cache 패턴 미러). 단일 페이지 메모리 상태가 단순하므로 `setRows`로도 충분 — 별도 캐시 모듈 없이 페이지 내 `setRows` 직접 갱신으로 처리
+## MD 출력 구조
 
-### 5. 검증
-1. 컬럼 헤더의 Filter 아이콘 클릭 → multi-select / text / date-range 드롭다운 동작
-2. Shift+Click 다중 정렬, 컬럼 폭 드래그 후 새로고침 → 유지
-3. 행 다중 선택 → BulkEditBar 등장 → 필드 선택 → 값 변경 → 토스트 + 표 즉시 반영
-4. URL `?subcontractor=X&dateField=planned_completion_date&dateStart=2026-01-01` 진입 → 칩 + 컬럼 필터 적용
-5. Defect Raw Data가 회귀 없이 동일 동작 (공용 컴포넌트 추출 후)
-6. 빌드 통과
+```markdown
+# SHAW Project — Status Report
+Generated: YYYY-MM-DD HH:mm (SGT)
+Mechanical Completion D-Day: 2026-06-15
 
----
+## 1. T&C Management
+### 1.1 Dashboard
+- Total subtests: N / Completed/In Progress/Pending …
+### 1.2 Progress (Stages: T1, T2, R2S)
+- T1 (Internal Test):     planned X / actual Y (xx%)
+- T2 (Official Test):     planned X / actual Y (xx%)
+- R2S (Report Submission): planned X / actual Y (xx%)
+### 1.3 Simulation
+- Current pace, Required pace to MC, Forecast finish, Gap
+### 1.4 Stage Progress Snapshots
+| Date | T1 % | T2 % | R2S % |
+|------|------|------|-------|
+| 2026-05-30 | … | … | … |
+| 2026-06-07 | … | … | … |
+| 2026-06-14 | … | … | … |
 
-## 영향 범위
-- 신규 파일 1개 (공용 필터 드롭다운)
-- 수정 파일 5개 (`bulk-edit.ts`, `bulk-actions.ts`, `BulkEditBar.tsx`, `DefectRawDataPage.tsx`, `PunchRawDataPage.tsx`)
-- DB 변경 **없음** (Punch RLS·change_log 인프라 이미 존재, drawing 패턴으로 클라이언트 사이드 권한 체크)
-- Defect Raw Data는 import 경로만 바뀌고 동작은 그대로
+## 2. Defect Management
+### Stages: Completion, Closure
+... (Dashboard / Progress / Simulation / Snapshots)
+### Snapshot table
+| Date | Completion % | Closure % |
 
-## 범위 외 (별도 작업으로 분리 제안)
-- `is_critical`은 Punch 도메인에 없으므로 인라인 Critical 토글은 미구현
-- `delete_punches_cascade` RPC는 만들지 않고, Hard delete는 클라이언트 사이드 cascade(`punch_change_log` 정리 후 `DELETE`)로 처리. 향후 트랜잭션 보장 필요 시 RPC 추가 가능
+## 3. Docs Management
+서브모듈별(ABD / OMM / Warranty / Spare Part) 섹션 + 각 서브모듈의 **모든 스테이지** 스냅샷 표.
+
+## 4. Punch Management
+... (Dashboard / Progress / Simulation / Snapshots)
+```
+
+## 데이터 집계 매핑
+
+| 모듈 | Dashboard | Progress | Simulation | Snapshot 스테이지 |
+|------|-----------|----------|------------|-----------------|
+| T&C    | `lib/dashboard-utils.ts` | `lib/stage-metrics.ts` | `lib/tnc-simulation.ts` | **t1, t2, r2s** |
+| Defect | `lib/defect-dashboard-utils.ts` | `lib/defect-progress-calc.ts` | `lib/defect-simulation.ts` | **completion, closure** |
+| Docs   | `lib/docs-dashboard-data.ts`, `lib/docs-executive-dashboard-data.ts` | `lib/docs-stage-records.ts` | (해당 시) | **모든 stage** (서브모듈별) |
+| Punch  | Punch Dashboard 페이지 로직 재사용 | status 기반 카운트 | (없으면 생략) | status 변경일 기반 |
+
+스냅샷 계산: 각 행의 actual 완료일이 snapshotDate 이하인 비율을 백분율로 표기. 데이터 없는 항목은 `_(not available)_` 명시.
+
+## 외부 LLM 연동
+- 신규 edge function: `supabase/functions/report-llm/index.ts`
+  - body: `{ markdown, model, systemPrompt }`
+  - Lovable AI Gateway (`https://ai.gateway.lovable.dev/v1/chat/completions`) 호출, **스트리밍 SSE** 응답
+  - 429/402 에러 토스트로 surface
+  - `verify_jwt` 기본값 사용
+- 클라이언트는 SSE 토큰을 받아 textarea에 점진적 렌더 → Copy / Download 가능
+- 기본 model: `google/gemini-3-flash-preview`, 선택지: gemini-2.5-pro, gpt-5, gpt-5-mini, gpt-5.2
+- 기본 system prompt 예: *"You are a construction project status report writer. Convert the following structured Markdown data into an executive-style status report in English with sections, bullet points, and key risks."* (편집 가능)
+
+## 변경 파일
+1. **신규** `src/pages/admin/ReportTab.tsx` — UI, 상태, MD 생성/LLM 호출
+2. **신규** `src/lib/report-builder.ts` — 모듈별 집계 → MD 빌더 (단위 테스트 가능)
+3. **신규** `supabase/functions/report-llm/index.ts` — Lovable AI 게이트웨이 SSE 프록시
+4. **수정** `src/pages/AdminPage.tsx` — `Report` `TabsTrigger`/`TabsContent` 추가 (admin 한정)
+
+## 범위 외
+- 보고서 결과의 DB 영구 저장 (필요 시 별도 작업)
+- 엑셀/PDF 내보내기 (현재는 .md만)
+
+승인하시면 위 구조대로 구현하겠습니다.
