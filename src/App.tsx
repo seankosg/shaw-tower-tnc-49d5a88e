@@ -54,6 +54,7 @@ import DocsWarrantyDetailPage from "./pages/docs/DocsWarrantyDetailPage";
 import PunchRawDataPage from "./pages/PunchRawDataPage";
 import PunchDetailPage from "./pages/PunchDetailPage";
 import PunchImportPage from "./pages/PunchImportPage";
+import PunchImportLogsPage from "./pages/PunchImportLogsPage";
 import PunchExportPage from "./pages/PunchExportPage";
 import PunchDashboardPage from "./pages/PunchDashboardPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
@@ -153,6 +154,7 @@ const App = () => (
                 <Route path="/punch/dashboard" element={<PunchDashboardPage />} />
                 <Route path="/punch/raw-data" element={<PunchRawDataPage />} />
                 <Route path="/punch/import" element={<PunchImportPage />} />
+                <Route path="/punch/import/logs" element={<PunchImportLogsPage />} />
                 <Route path="/punch/export" element={<PunchExportPage />} />
                 <Route path="/punch/:id" element={<PunchDetailPage />} />
                 <Route path="/comments/subtest" element={<AllSubtestCommentsPage />} />
