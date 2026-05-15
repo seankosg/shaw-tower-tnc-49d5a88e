@@ -26,6 +26,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { USER_TYPE_LABELS, formatTeamLabel } from '@/types/enums';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import { cn } from '@/lib/utils';
+import { isMetaField } from '@/lib/meta-fields';
 import { formatDdMmm } from '@/lib/format';
 import { getOriginHeaderStyle } from '@/lib/origin-header-style';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
