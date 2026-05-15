@@ -287,6 +287,53 @@ function ModuleSection({
     [ommRowsForTab],
   );
 
+  // Subcontractor / HDEC PIC filters (module-scoped)
+  const subcontractors = useMemo(() => uniqSorted(moduleRecords.map((r) => r.subcontractor)), [moduleRecords]);
+  const pics = useMemo(() => uniqSorted(moduleRecords.map((r) => r.hdec_pic)), [moduleRecords]);
+  const [subFilter, setSubFilter] = useState<string>('__all__');
+  const [picFilter, setPicFilter] = useState<string>('__all__');
+  useEffect(() => { if (subFilter !== '__all__' && !subcontractors.includes(subFilter)) setSubFilter('__all__'); }, [subcontractors, subFilter]);
+  useEffect(() => { if (picFilter !== '__all__' && !pics.includes(picFilter)) setPicFilter('__all__'); }, [pics, picFilter]);
+
+  // Module 6-KPI summary (responds to tab + subcon + pic filters via filteredItems)
+  const filteredItems = useMemo(() => {
+    let base = filteredRecords;
+    if (subFilter !== '__all__') base = base.filter((r) => (r.subcontractor ?? '') === subFilter);
+    if (picFilter !== '__all__') base = base.filter((r) => (r.hdec_pic ?? '') === picFilter);
+    return summariseByItem(base);
+  }, [filteredRecords, subFilter, picFilter]);
+
+  const kpiTotal = filteredItems.length;
+  const kpiCompleted = filteredItems.filter((i) => i.is_completed).length;
+  const kpiOverdue = filteredItems.filter((i) => i.is_overdue).length;
+  const kpiDueIds = useMemo(() => isDueThisWeek(
+    filteredRecords
+      .filter((r) => subFilter === '__all__' || (r.subcontractor ?? '') === subFilter)
+      .filter((r) => picFilter === '__all__' || (r.hdec_pic ?? '') === picFilter),
+    asOf,
+  ), [filteredRecords, subFilter, picFilter, asOf]);
+  const kpiCriticalIds = useMemo(() => criticalDelayItemIds(
+    filteredRecords
+      .filter((r) => subFilter === '__all__' || (r.subcontractor ?? '') === subFilter)
+      .filter((r) => picFilter === '__all__' || (r.hdec_pic ?? '') === picFilter),
+  ), [filteredRecords, subFilter, picFilter]);
+  const delayBuckets = useMemo(() => computeDelaySeverityBuckets(
+    filteredRecords
+      .filter((r) => subFilter === '__all__' || (r.subcontractor ?? '') === subFilter)
+      .filter((r) => picFilter === '__all__' || (r.hdec_pic ?? '') === picFilter),
+  ), [filteredRecords, subFilter, picFilter]);
+
+  // Build extra params for drill-down (preserve current filters)
+  const extraParams = (): Record<string, string> => {
+    const p: Record<string, string> = {};
+    if (tab !== '__all__') {
+      if (isAbd) p.trade = tab; else p.team = tab;
+    }
+    if (subFilter !== '__all__') p.subcontractor = subFilter;
+    if (picFilter !== '__all__') p.hdec_pic = picFilter;
+    return p;
+  };
+
   // Short trade labels for the tab list
   const TRADE_SHORT: Record<TradeCategory, string> = {
     'Architecture': 'Arch',
