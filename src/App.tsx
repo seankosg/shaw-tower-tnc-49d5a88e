@@ -150,10 +150,10 @@ const App = () => (
                 {/* Legacy redirects (ABD was previously at /docs/raw-data and /docs/:id) */}
                 <Route path="/docs/raw-data" element={<RedirectPreserveSearch to="/docs/abd" />} />
                 <Route path="/docs/:id" element={<DocsDrawingDetailPage />} />
-                <Route path="/punch/dashboard" element={<PlaceholderPage title="Punch Dashboard" />} />
+                <Route path="/punch/dashboard" element={<PunchDashboardPage />} />
                 <Route path="/punch/raw-data" element={<PunchRawDataPage />} />
-                <Route path="/punch/import" element={<PlaceholderPage title="Punch Import" />} />
-                <Route path="/punch/export" element={<PlaceholderPage title="Punch Export" />} />
+                <Route path="/punch/import" element={<PunchImportPage />} />
+                <Route path="/punch/export" element={<PunchExportPage />} />
                 <Route path="/punch/:id" element={<PunchDetailPage />} />
                 <Route path="/comments/subtest" element={<AllSubtestCommentsPage />} />
                 <Route path="/comments/defect" element={<AllDefectCommentsPage />} />
