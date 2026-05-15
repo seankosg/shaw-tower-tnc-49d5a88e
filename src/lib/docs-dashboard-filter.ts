@@ -1,15 +1,11 @@
 // Helpers for applying Document Executive Dashboard URL params on the
-// individual Raw Data pages. The dashboard cards/stages link with
-// `?status=completed`, `?overdue=1`, `?stage=<stage_key>` and optional `?team=<team>`.
-//
-// Each helper accepts the loaded raw rows for a module and returns the set
-// of row IDs that match the given URL parameters, so the Raw Data page can
-// pre-filter its table data without touching its existing column filters.
+// individual Raw Data pages.
 
 import {
   buildAbdStageRecords, buildOmmStageRecords, buildWarrantyStageRecords,
   asOfStartOfDay, ALL_STAGE_DEFS, classifyAbdRowBucket,
   classifyOmmSub1Status, classifyOmmSub2Status,
+  bucketDelayDays, isDueThisWeek, computeDataQualityIssues,
   type DocModule,
 } from '@/lib/docs-stage-records';
 import { resolveTrade } from '@/lib/docs-trade';
@@ -17,15 +13,18 @@ import { resolveTrade } from '@/lib/docs-trade';
 export interface DashboardFilterParams {
   status?: string | null;   // 'completed'
   overdue?: string | null;  // '1'
-  stage?: string | null;    // stage_key (eg 'abd.sub1_submission')
+  stage?: string | null;
   team?: string | null;
-  trade?: string | null;    // ABD only — TradeCategory string
-  /** ABD bucket: approved | under_review | submission_required | sub1_required | sub2_required | sub3_required */
+  trade?: string | null;
   bucket?: string | null;
-  /** OMM Sub1 Status bucket: A | B | C | UR | TBS */
   sub1_status?: string | null;
-  /** OMM Sub2 Status bucket: A | B | C | UR | TBS */
   sub2_status?: string | null;
+  // New extended filters
+  subcontractor?: string | null;
+  hdec_pic?: string | null;
+  due_this_week?: string | null; // '1'
+  delay_bucket?: string | null;  // '0-7' | '8-14' | '15-30' | '30+'
+  dq?: string | null;            // data quality issue key (e.g. 'missing_planned')
 }
 
 export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterParams {
@@ -38,11 +37,18 @@ export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterP
     bucket: sp.get('bucket'),
     sub1_status: sp.get('sub1_status'),
     sub2_status: sp.get('sub2_status'),
+    subcontractor: sp.get('subcontractor'),
+    hdec_pic: sp.get('hdec_pic'),
+    due_this_week: sp.get('due_this_week'),
+    delay_bucket: sp.get('delay_bucket'),
+    dq: sp.get('dq'),
   };
 }
 
 export function hasAnyDashboardFilter(p: DashboardFilterParams): boolean {
-  return !!(p.status || p.overdue || p.stage || p.team || p.trade || p.bucket || p.sub1_status || p.sub2_status);
+  return !!(p.status || p.overdue || p.stage || p.team || p.trade || p.bucket
+    || p.sub1_status || p.sub2_status
+    || p.subcontractor || p.hdec_pic || p.due_this_week || p.delay_bucket || p.dq);
 }
 
 const BUILDERS: Record<DocModule, (rows: any[], asOf: Date) => any[]> = {
@@ -52,8 +58,7 @@ const BUILDERS: Record<DocModule, (rows: any[], asOf: Date) => any[]> = {
 };
 
 /**
- * Compute the set of row IDs that satisfy the dashboard filter. Returns null
- * when no filter is active (caller should bypass filtering entirely).
+ * Compute the set of row IDs that satisfy the dashboard filter.
  */
 export function computeDashboardFilteredIds(
   module: DocModule,
@@ -65,7 +70,6 @@ export function computeDashboardFilteredIds(
   const records = BUILDERS[module](rows, asOfStartOfDay(asOf));
   const lastKey = ALL_STAGE_DEFS[module].at(-1)!.key;
 
-  // Group by item_id
   const byItem = new Map<string, typeof records>();
   for (const r of records) {
     const arr = byItem.get(r.item_id) ?? [];
@@ -73,7 +77,6 @@ export function computeDashboardFilteredIds(
     byItem.set(r.item_id, arr);
   }
 
-  // For ABD trade filter, build id -> trade map from raw rows
   const tradeById = new Map<string, string>();
   if (module === 'abd' && params.trade) {
     for (const r of rows) {
@@ -82,17 +85,11 @@ export function computeDashboardFilteredIds(
     }
   }
 
-  // For ABD bucket filter, build id -> bucket map from raw rows (SSOT)
   const bucketById = new Map<string, string>();
   if (module === 'abd' && params.bucket) {
-    for (const r of rows) {
-      bucketById.set(r.id, classifyAbdRowBucket(r));
-    }
+    for (const r of rows) bucketById.set(r.id, classifyAbdRowBucket(r));
   }
 
-  // For OMM sub1_status / sub2_status filter, build id -> bucket map from raw rows.
-  // classifyOmm*Status returns null for rows whose current cycle isn't sub1/sub2,
-  // ensuring each row is counted only in its active cycle's bucket (no double-counting).
   const ommSub1ById = new Map<string, string | null>();
   if (module === 'omm' && params.sub1_status) {
     for (const r of rows) ommSub1ById.set(r.id, classifyOmmSub1Status(r));
@@ -102,11 +99,44 @@ export function computeDashboardFilteredIds(
     for (const r of rows) ommSub2ById.set(r.id, classifyOmmSub2Status(r));
   }
 
+  const dueThisWeekIds = params.due_this_week === '1' ? isDueThisWeek(records, asOf) : null;
+
+  // Max delay per item for delay_bucket filter
+  const maxDelayByItem = new Map<string, number>();
+  if (params.delay_bucket) {
+    for (const r of records) {
+      if (!r.is_overdue) continue;
+      const cur = maxDelayByItem.get(r.item_id) ?? 0;
+      if (r.delay_days > cur) maxDelayByItem.set(r.item_id, r.delay_days);
+    }
+  }
+
+  // Data quality ids
+  const dqIds = new Set<string>();
+  if (params.dq) {
+    const issues = computeDataQualityIssues(records, {
+      abd: module === 'abd' ? rows : [],
+      omm: module === 'omm' ? rows : [],
+      warranty: module === 'warranty' ? rows : [],
+    });
+    for (const it of issues) {
+      if (it.key === params.dq) for (const id of it.ids) dqIds.add(id);
+    }
+  }
+
   const out = new Set<string>();
   for (const [id, recs] of byItem) {
     if (params.team) {
       const teamMatch = recs.some((r: any) => (r.team ?? '') === params.team);
       if (!teamMatch) continue;
+    }
+    if (params.subcontractor) {
+      const ok = recs.some((r: any) => (r.subcontractor ?? '') === params.subcontractor);
+      if (!ok) continue;
+    }
+    if (params.hdec_pic) {
+      const ok = recs.some((r: any) => (r.hdec_pic ?? '') === params.hdec_pic);
+      if (!ok) continue;
     }
     if (module === 'abd' && params.trade) {
       if ((tradeById.get(id) ?? '') !== params.trade) continue;
@@ -143,6 +173,13 @@ export function computeDashboardFilteredIds(
       if (!stageRec) continue;
       if (stageRec.is_done) continue;
     }
+    if (dueThisWeekIds && !dueThisWeekIds.has(id)) continue;
+    if (params.delay_bucket) {
+      const d = maxDelayByItem.get(id) ?? 0;
+      const b = bucketDelayDays(d);
+      if (b !== params.delay_bucket) continue;
+    }
+    if (params.dq && !dqIds.has(id)) continue;
     out.add(id);
   }
   return out;
@@ -158,10 +195,20 @@ const ABD_BUCKET_LABEL: Record<string, string> = {
   sub3_required: '3rd Submission Required',
 };
 
+const DQ_LABEL: Record<string, string> = {
+  missing_planned: 'Missing planned date',
+  missing_actual: 'Missing actual date',
+  missing_subcontractor: 'Missing subcontractor',
+  missing_hdec_pic: 'Missing HDEC PIC',
+  inconsistent_stage: 'Inconsistent stage data',
+};
+
 export function dashboardFilterLabel(module: DocModule, p: DashboardFilterParams): string | null {
   const parts: string[] = [];
   if (p.status === 'completed') parts.push('Completed');
   if (p.overdue === '1') parts.push('Overdue');
+  if (p.due_this_week === '1') parts.push('Due This Week');
+  if (p.delay_bucket) parts.push(`Delay ${p.delay_bucket}d`);
   if (p.stage) {
     const def = ALL_STAGE_DEFS[module].find((d) => d.key === p.stage);
     parts.push(`Stage: ${def?.label ?? p.stage}`);
@@ -169,7 +216,10 @@ export function dashboardFilterLabel(module: DocModule, p: DashboardFilterParams
   if (p.bucket) parts.push(ABD_BUCKET_LABEL[p.bucket] ?? p.bucket);
   if (p.team) parts.push(`Team: ${p.team}`);
   if (p.trade) parts.push(`Trade: ${p.trade}`);
+  if (p.subcontractor) parts.push(`Subcon: ${p.subcontractor}`);
+  if (p.hdec_pic) parts.push(`PIC: ${p.hdec_pic}`);
   if (p.sub1_status) parts.push(`1st Status: ${p.sub1_status}`);
   if (p.sub2_status) parts.push(`2nd Status: ${p.sub2_status}`);
+  if (p.dq) parts.push(`Data Quality: ${DQ_LABEL[p.dq] ?? p.dq}`);
   return parts.length ? parts.join(' · ') : null;
 }
