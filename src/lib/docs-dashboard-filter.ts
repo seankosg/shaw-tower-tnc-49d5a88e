@@ -219,6 +219,13 @@ export function computeDashboardFilteredIds(
       // PO pending = no actual_po_date and (planned_po_date passed OR not set)
       if (row.actual_po_date) continue;
     }
+    if (module === 'spare_part' && params.po_overdue && params.po_overdue !== '0' && params.po_overdue !== 'false') {
+      const row = sparePartById.get(id);
+      if (!row) continue;
+      if (row.actual_po_date) continue;
+      const planned = row.planned_po_date ? String(row.planned_po_date).slice(0, 10) : '';
+      if (!planned || planned >= asOfIso) continue;
+    }
     if (module === 'spare_part' && params.delivery_pending && params.delivery_pending !== '0' && params.delivery_pending !== 'false') {
       const row = sparePartById.get(id);
       if (!row || row.actual_delivery_date) continue;
