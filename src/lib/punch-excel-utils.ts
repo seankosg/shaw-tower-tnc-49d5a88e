@@ -129,13 +129,16 @@ export async function parsePunchWorkbook(
     : (sheetNames.find((n) => /punch|outstanding|minor/i.test(n)) ?? sheetNames[0]);
   const ws = wb.Sheets[sheetName];
 
-  // Auto-detect header row: scan first 10 rows, pick the one with most registry-matched cells.
+  // Auto-detect header row: scan first 20 rows, pick the one with most registry-matched cells.
+  // IMPORTANT: use blankrows:true so row indices align with real sheet coordinates
+  // (otherwise sheet_to_json({range}) below reads from the wrong row when the
+  // workbook starts with one or more blank rows above the real header).
   const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, {
-    header: 1, raw: true, defval: null, blankrows: false,
+    header: 1, raw: true, defval: null, blankrows: true,
   });
   let headerRowIdx = 0;
   let bestScore = -1;
-  const scanLimit = Math.min(10, aoa.length);
+  const scanLimit = Math.min(20, aoa.length);
   for (let i = 0; i < scanLimit; i++) {
     const row = aoa[i] ?? [];
     let score = 0;
