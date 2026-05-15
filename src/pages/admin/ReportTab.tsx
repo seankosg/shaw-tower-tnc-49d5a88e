@@ -214,7 +214,7 @@ export default function ReportTab() {
             </div>
           </div>
 
-          {/* MC date */}
+          {/* PC date */}
           <div className="flex flex-wrap items-center gap-3">
             <Label className="text-sm font-semibold">Project Completion D-Day</Label>
             <Input type="date" value={mcDate} onChange={e => setMcDate(e.target.value)} className="h-8 w-44" />
