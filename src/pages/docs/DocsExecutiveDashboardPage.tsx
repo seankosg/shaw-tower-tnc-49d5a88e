@@ -73,11 +73,35 @@ export default function DocsExecutiveDashboardPage() {
   const records = snap?.records ?? [];
   const abdRows = snap?.abdRows ?? [];
   const ommRows = snap?.ommRows ?? [];
+  const warrantyRows = snap?.warrantyRows ?? [];
 
   const goRaw = (m: DocModule, params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     navigate(`${MODULE_RAW_ROUTE[m]}${qs}`);
   };
+
+  // Portfolio-wide KPI summary across all modules
+  const portfolioKpi = useMemo(() => {
+    const summaries = summariseByItem(records);
+    const total = summaries.length;
+    const completed = summaries.filter((i) => i.is_completed).length;
+    const overdue = summaries.filter((i) => i.is_overdue).length;
+    const dueIds = isDueThisWeek(records, asOf);
+    const critIds = criticalDelayItemIds(records);
+    return {
+      total,
+      completed,
+      remaining: total - completed,
+      overdue,
+      dueThisWeek: dueIds.size,
+      criticalDelay: critIds.size,
+    };
+  }, [records, asOf]);
+
+  const dataQuality = useMemo(
+    () => computeDataQualityIssues(records, { abd: abdRows, omm: ommRows, warranty: warrantyRows }),
+    [records, abdRows, ommRows, warrantyRows],
+  );
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -105,12 +129,59 @@ export default function DocsExecutiveDashboardPage() {
 
       {loading && !snap && <p className="text-sm text-muted-foreground">Loading…</p>}
 
+      {/* Portfolio KPI Strip */}
+      <PortfolioKpiStrip kpi={portfolioKpi} />
+
       {MODULES.map((m) => (
-        <ModuleSection key={m} module={m} records={records} abdRows={abdRows} ommRows={ommRows} onNavigate={goRaw} />
+        <ModuleSection key={m} module={m} records={records} abdRows={abdRows} ommRows={ommRows} asOf={asOf} onNavigate={goRaw} />
       ))}
+
+      {/* Data Quality Panel */}
+      <DataQualityPanel issues={dataQuality} onNavigate={goRaw} />
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────
+function PortfolioKpiStrip({ kpi }: {
+  kpi: { total: number; completed: number; remaining: number; overdue: number; dueThisWeek: number; criticalDelay: number };
+}) {
+  const items = [
+    { label: 'Total', value: kpi.total, icon: ListChecks, tone: 'default' as const },
+    { label: 'Completed', value: kpi.completed, icon: CheckCircle2, tone: 'green' as const },
+    { label: 'Remaining', value: kpi.remaining, icon: Clock, tone: 'default' as const },
+    { label: 'Overdue', value: kpi.overdue, icon: AlertTriangle, tone: kpi.overdue > 0 ? 'red' as const : 'muted' as const },
+    { label: 'Due This Week', value: kpi.dueThisWeek, icon: CalendarClock, tone: 'amber' as const },
+    { label: 'Critical Delay (>30d)', value: kpi.criticalDelay, icon: Flame, tone: kpi.criticalDelay > 0 ? 'red' as const : 'muted' as const },
+  ];
+  const toneClass = (t: 'default' | 'green' | 'red' | 'amber' | 'muted') => ({
+    default: 'text-foreground',
+    green: 'text-emerald-600 dark:text-emerald-400',
+    red: 'text-red-600 dark:text-red-400',
+    amber: 'text-amber-600 dark:text-amber-400',
+    muted: 'text-muted-foreground',
+  }[t]);
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+      {items.map((it) => {
+        const Icon = it.icon;
+        return (
+          <div key={it.label} className="flex flex-col rounded-xl border bg-card p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{it.label}</span>
+              <Icon className={cn('h-4 w-4', toneClass(it.tone))} />
+            </div>
+            <div className={cn('mt-2 text-2xl font-semibold tabular-nums tracking-tight', toneClass(it.tone))}>
+              {it.value.toLocaleString()}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+
 
 // ─────────────────────────────────────────────────────────────────────
 function ModuleSection({
