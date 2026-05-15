@@ -29,9 +29,9 @@ function safeRoute(basePath: string, roles: AppRole[]): string {
 const mainNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/tc/dashboard' },
   { label: 'Progress',  icon: Calendar,  path: '/tc/progress' },
+  { label: 'Raw Data',  icon: Database,  path: '/tc/raw-data' },
   { label: 'Simulation', icon: FlaskConical, path: '/tc/simulation' },
   { label: 'Schedule Revision', icon: CalendarClock, path: '/tc/schedule-revision' },
-  { label: 'Raw Data',  icon: Database,  path: '/tc/raw-data' },
   { label: 'Import',    icon: Upload,    path: '/tc/import' },
   { label: 'Export',    icon: Download,  path: '/tc/export' },
 ];
@@ -39,9 +39,9 @@ const mainNav = [
 const defectNav = [
   { label: 'Dashboard', icon: BarChart3, path: '/defects/dashboard' },
   { label: 'Progress', icon: Calendar, path: '/defects/progress' },
+  { label: 'Raw Data', icon: Database, path: '/defects/raw-data' },
   { label: 'Simulation', icon: FlaskConical, path: '/defects/simulation' },
   { label: 'Schedule Revision', icon: CalendarClock, path: '/defects/schedule-revision' },
-  { label: 'Raw Data', icon: Database, path: '/defects/raw-data' },
   { label: 'Import', icon: Upload, path: '/defects/import' },
   { label: 'Export', icon: Download, path: '/defects/export' },
 ];
