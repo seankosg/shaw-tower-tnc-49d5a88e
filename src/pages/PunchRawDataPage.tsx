@@ -621,6 +621,29 @@ export default function PunchRawDataPage() {
       if (blocker === 'multiple') next = next.filter((r) => blockersOf(r).length > 1);
       else next = next.filter((r) => has(r, [blocker]));
     }
+    const dq = searchParams.get('dq');
+    if (dq) {
+      const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+      switch (dq) {
+        case 'missing_planned_start': next = next.filter((r) => !r.planned_start_date); break;
+        case 'missing_planned_completion': next = next.filter((r) => !r.planned_completion_date); break;
+        case 'missing_hdec_pic': next = next.filter((r) => !String(r.hdec_pic_name ?? '').trim()); break;
+        case 'missing_subcontractor': next = next.filter((r) => !String(r.subcontractor_name ?? '').trim()); break;
+        case 'missing_team': next = next.filter((r) => !String(r.team ?? '').trim()); break;
+        case 'completed_missing_actual_completion':
+          next = next.filter((r) => (Number(r.actual_progress_pct) || 0) >= 100 && !r.actual_completion_date); break;
+        case 'invalid_progress':
+          next = next.filter((r) => {
+            const a = num(r.actual_progress_pct), p = num(r.planned_progress_pct);
+            return (a != null && (a > 100 || a < 0)) || (p != null && (p > 100 || p < 0));
+          }); break;
+        case 'invalid_dates':
+          next = next.filter((r) => (r.planned_start_date && r.planned_completion_date && r.planned_completion_date < r.planned_start_date)
+            || (r.actual_start_date && r.actual_completion_date && r.actual_completion_date < r.actual_start_date)); break;
+        case 'missing_weight': next = next.filter((r) => !(Number(r.weight) > 0)); break;
+        case 'missing_health': next = next.filter((r) => !r.health_status); break;
+      }
+    }
     return next;
   }, [rows, searchParams]);
 
