@@ -281,15 +281,35 @@ export default function DocsSparePartRawDataPage() {
     return () => window.clearTimeout(t);
   }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter, columnSizing, columnVisibilityOverrides]);
 
-  // URL drill-down: ?overdue=true&asOf=YYYY-MM-DD
+  // URL drill-down: ?overdue, ?asOf, ?subcontractor, ?hdec_pic, ?team, ?trade,
+  //                  ?status, ?po_status, ?po_pending, ?eta_missing, ?delivery_pending, ?stage
   const filteredBaseData = useMemo(() => {
     let next = items;
+    const asOf = searchParams.get('asOf') ?? new Date().toISOString().slice(0, 10);
     if (searchParams.get('overdue') === 'true') {
-      const asOf = searchParams.get('asOf') ?? new Date().toISOString().slice(0, 10);
       next = next.filter((r) => isOverdueSparePart(r, asOf));
     }
     const subcon = searchParams.get('subcontractor');
     if (subcon) next = next.filter((r) => String(r.subcontractor_name ?? '') === subcon);
+    const hdecPic = searchParams.get('hdec_pic');
+    if (hdecPic) next = next.filter((r) => String(r.hdec_pic_name ?? '') === hdecPic);
+    const team = searchParams.get('team');
+    if (team) next = next.filter((r) => String(r.team ?? '') === team);
+    const trade = searchParams.get('trade');
+    if (trade) next = next.filter((r) => String(r.trade ?? '') === trade);
+    const status = searchParams.get('status');
+    if (status) next = next.filter((r) => String(r.status ?? '').toLowerCase() === status.toLowerCase());
+    const poStatus = searchParams.get('po_status');
+    if (poStatus) next = next.filter((r) => String(r.po_status ?? '').toLowerCase() === poStatus.toLowerCase());
+    if (searchParams.get('po_pending') === 'true') {
+      next = next.filter((r) => !(r as any).po_issued_date);
+    }
+    if (searchParams.get('eta_missing') === 'true') {
+      next = next.filter((r) => !(r as any).eta_date && !(r as any).delivered_date);
+    }
+    if (searchParams.get('delivery_pending') === 'true') {
+      next = next.filter((r) => !(r as any).delivered_date);
+    }
     return next;
   }, [items, searchParams]);
 
