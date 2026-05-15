@@ -371,9 +371,11 @@ export async function upsertPunchRows(
       if (error) {
         result.failed++;
         result.errors.push({ itemNo, reason: error.message });
+        pushRowLog(row.rawRowNo, itemNo, 'rejected', 'db_error', error.message);
         continue;
       }
       result.inserted++;
+      pushRowLog(row.rawRowNo, itemNo, 'inserted');
 
       // Field logs for inserts (every applied non-empty field)
       const newId = inserted?.id;
