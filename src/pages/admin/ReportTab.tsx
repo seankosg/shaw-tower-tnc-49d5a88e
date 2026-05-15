@@ -48,6 +48,8 @@ export default function ReportTab() {
   const [snapshotDates, setSnapshotDates] = useState<string[]>(['2026-05-30', '2026-06-07', '2026-06-14']);
   const [newDate, setNewDate] = useState('');
   const [mcDate, setMcDate] = useState('2026-06-15');
+  const [delayMode, setDelayMode] = useState<'optimistic' | 'penalty'>('penalty');
+  const [dataDateOverride, setDataDateOverride] = useState('');
   const [markdown, setMarkdown] = useState('');
   const [generating, setGenerating] = useState(false);
 
@@ -72,6 +74,8 @@ export default function ReportTab() {
     try {
       const md = await buildReportMarkdown({
         modules, sections, snapshotDates, mcDate,
+        delayMode,
+        dataDate: dataDateOverride || undefined,
       });
       setMarkdown(md);
       toast({ title: 'Markdown generated', description: `${md.length.toLocaleString()} characters` });
