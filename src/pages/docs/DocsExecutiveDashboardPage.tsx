@@ -185,12 +185,13 @@ function PortfolioKpiStrip({ kpi }: {
 
 // ─────────────────────────────────────────────────────────────────────
 function ModuleSection({
-  module, records, abdRows, ommRows, onNavigate,
+  module, records, abdRows, ommRows, asOf, onNavigate,
 }: {
   module: DocModule;
   records: DocsStageRecord[];
   abdRows: any[];
   ommRows: any[];
+  asOf: Date;
   onNavigate: (m: DocModule, params?: Record<string, string>) => void;
 }) {
   const Icon = MODULE_ICON[module];
