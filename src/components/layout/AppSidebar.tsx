@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut, ClipboardList, Tags,
-  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical, Loader2,
+  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical, Loader2, ListChecks,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -56,6 +56,13 @@ const docsNav = [
   { label: 'Export', icon: Download, path: '/docs/export' },
 ];
 
+const punchNav = [
+  { label: 'Dashboard', icon: BarChart3, path: '/punch/dashboard' },
+  { label: 'Raw Data', icon: Database, path: '/punch/raw-data' },
+  { label: 'Import', icon: Upload, path: '/punch/import' },
+  { label: 'Export', icon: Download, path: '/punch/export' },
+];
+
 const adminNav = [
   { label: 'Admin', icon: Shield, path: '/admin' },
   { label: 'Defect Classification', icon: Tags, path: '/admin/classification' },
@@ -65,7 +72,7 @@ export function AppSidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { profile, roles, signOut, isAdmin } = useAuth();
-  const { tnc, defect, docs } = useModuleStatus();
+  const { tnc, defect, docs, punch } = useModuleStatus();
   const { phase: ocrPhase, parseProgress, applyProgress } = usePhotoOcr();
   const ocrBusy = ocrPhase === 'parsing' || ocrPhase === 'applying';
   const ocrLabel = ocrPhase === 'parsing'
@@ -78,12 +85,14 @@ export function AppSidebar() {
   const visibleMain = filterNavItems(mainNav, roles);
   const visibleDefects = filterNavItems(defectNav, roles);
   const visibleDocs = filterNavItems(docsNav, roles);
+  const visiblePunch = filterNavItems(punchNav, roles);
   const visibleAdmin = filterNavItems(adminNav, roles);
 
   // Non-admins lose the entire group when the module is paused
   const showTncGroup = isAdmin || tnc.enabled;
   const showDefectGroup = isAdmin || defect.enabled;
   const showDocsGroup = isAdmin || docs.enabled;
+  const showPunchGroup = isAdmin || punch.enabled;
 
   return (
     <Sidebar>
