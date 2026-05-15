@@ -90,9 +90,10 @@ function compareSortValues(a: string | number | boolean | null | undefined, b: s
 }
 
 export default function AdminPage() {
-  const { isAdminOrSuperuser } = useAuth();
+  const { isAdminOrSuperuser, isAdmin } = useAuth();
   const isDev = import.meta.env.DEV;
   const hasAccess = isDev || isAdminOrSuperuser;
+  const showReportTab = isDev || isAdmin;
 
   if (!hasAccess) {
     return (
