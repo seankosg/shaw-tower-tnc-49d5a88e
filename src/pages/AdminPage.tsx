@@ -91,10 +91,9 @@ function compareSortValues(a: string | number | boolean | null | undefined, b: s
 }
 
 export default function AdminPage() {
-  const { isAdminOrSuperuser, isAdmin } = useAuth();
+  const { isAdminOrSuperuser } = useAuth();
   const isDev = import.meta.env.DEV;
   const hasAccess = isDev || isAdminOrSuperuser;
-  const showReportTab = isDev || isAdmin;
 
   if (!hasAccess) {
     return (
@@ -122,7 +121,6 @@ export default function AdminPage() {
           <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
           <TabsTrigger value="events">Event Log</TabsTrigger>
-          {showReportTab && <TabsTrigger value="report">Report</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="users"><UsersTab /></TabsContent>
@@ -137,7 +135,6 @@ export default function AdminPage() {
         <TabsContent value="backup"><BackupTab /></TabsContent>
         <TabsContent value="audit"><AuditTab /></TabsContent>
         <TabsContent value="events"><EventLogTab /></TabsContent>
-        {showReportTab && <TabsContent value="report"><ReportTab /></TabsContent>}
       </Tabs>
     </div>
   );
