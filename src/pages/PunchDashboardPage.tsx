@@ -21,7 +21,8 @@ import {
   isCriticalDelay, isBehindSchedule, isBlockedByPreEng, isReadyButNotStarted,
   isDueWithin, isPlannedToStartWithin, dominantBlocker, blockersFor,
   weightedProgress, simpleAverageProgress, groupProgressMatrix, recoveryPriorityScore,
-  type PunchBlockerKind,
+  suggestedRecoveryAction, computePunchDqCounts, PUNCH_DQ_LABEL, topDelayingParties,
+  type PunchBlockerKind, type PunchDqKey,
 } from '@/lib/punch-dashboard-utils';
 
 const PAGE_SIZE = 1000;
