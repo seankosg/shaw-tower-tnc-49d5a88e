@@ -12,6 +12,7 @@ const KEY_MAP: Record<ModuleKey, string> = {
   tnc: 'module_tnc_status',
   defect: 'module_defect_status',
   docs: 'module_docs_status',
+  punch: 'module_punch_status',
 };
 
 const DEFAULT_STATUS: ModuleStatus = { enabled: true };
@@ -46,18 +47,20 @@ export function ModuleStatusProvider({ children }: { children: ReactNode }) {
   const [tnc, setTnc] = useState<ModuleStatus>(DEFAULT_STATUS);
   const [defect, setDefect] = useState<ModuleStatus>(DEFAULT_STATUS);
   const [docs, setDocs] = useState<ModuleStatus>(DEFAULT_STATUS);
+  const [punch, setPunch] = useState<ModuleStatus>(DEFAULT_STATUS);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     const { data } = await supabase
       .from('app_settings')
       .select('key, value')
-      .in('key', [KEY_MAP.tnc, KEY_MAP.defect, KEY_MAP.docs]);
+      .in('key', [KEY_MAP.tnc, KEY_MAP.defect, KEY_MAP.docs, KEY_MAP.punch]);
     if (data) {
       for (const row of data) {
         if (row.key === KEY_MAP.tnc) setTnc(parseValue(row.value));
         if (row.key === KEY_MAP.defect) setDefect(parseValue(row.value));
         if (row.key === KEY_MAP.docs) setDocs(parseValue(row.value));
+        if (row.key === KEY_MAP.punch) setPunch(parseValue(row.value));
       }
     }
     setLoading(false);
@@ -73,7 +76,12 @@ export function ModuleStatusProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const row = (payload.new ?? payload.old) as { key?: string } | null;
           if (!row?.key) return;
-          if (row.key === KEY_MAP.tnc || row.key === KEY_MAP.defect || row.key === KEY_MAP.docs) {
+          if (
+            row.key === KEY_MAP.tnc ||
+            row.key === KEY_MAP.defect ||
+            row.key === KEY_MAP.docs ||
+            row.key === KEY_MAP.punch
+          ) {
             void refresh();
           }
         },
@@ -95,13 +103,14 @@ export function ModuleStatusProvider({ children }: { children: ReactNode }) {
     if (!error) {
       if (module === 'tnc') setTnc(status);
       else if (module === 'defect') setDefect(status);
-      else setDocs(status);
+      else if (module === 'docs') setDocs(status);
+      else setPunch(status);
     }
     return { error: error as Error | null };
   }, []);
 
   return (
-    <ModuleStatusContext.Provider value={{ tnc, defect, docs, loading, refresh, setStatus }}>
+    <ModuleStatusContext.Provider value={{ tnc, defect, docs, punch, loading, refresh, setStatus }}>
       {children}
     </ModuleStatusContext.Provider>
   );
