@@ -72,18 +72,20 @@ function chunk<T>(arr: T[], size: number): T[][] {
 /** Map source table -> change log table */
 function logTableFor(
   table: BulkUpdateRequest['table'],
-): 'defect_change_log' | 'subtest_change_log' | 'docs_change_log' {
+): 'defect_change_log' | 'subtest_change_log' | 'docs_change_log' | 'punch_change_log' {
   if (table === 'defect_items') return 'defect_change_log';
   if (table === 'docs_drawings') return 'docs_change_log';
+  if (table === 'punch_items') return 'punch_change_log';
   return 'subtest_change_log';
 }
 
 /** Map source table -> entity id column on the log table */
 function logIdField(
   table: BulkUpdateRequest['table'],
-): 'defect_id' | 'subtest_id' | 'drawing_id' {
+): 'defect_id' | 'subtest_id' | 'drawing_id' | 'punch_id' {
   if (table === 'defect_items') return 'defect_id';
   if (table === 'docs_drawings') return 'drawing_id';
+  if (table === 'punch_items') return 'punch_id';
   return 'subtest_id';
 }
 
