@@ -270,6 +270,19 @@ export default function TncSimulationPage() {
           </div>
 
           <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Subcontractor</span>
+            <Select value={subconFilter} onValueChange={setSubconFilter}>
+              <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Subcontractors</SelectItem>
+                {subconOptions.map(s => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">Stages</span>
             <ToggleGroup
               type="multiple"
