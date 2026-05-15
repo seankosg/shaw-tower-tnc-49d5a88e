@@ -239,6 +239,18 @@ export default function ReportTab() {
             <span className="text-xs text-muted-foreground">leave empty to use latest actual date</span>
           </div>
 
+          {/* Appendix toggle */}
+          <div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={includeTncGuide}
+                disabled={!modules.includes('tnc')}
+                onCheckedChange={(v) => setIncludeTncGuide(v === true)}
+              />
+              Include T&amp;C Raw Data Business Guide (Appendix A)
+            </label>
+          </div>
+
           {/* Generate */}
           <div className="flex flex-wrap gap-2">
             <Button onClick={handleGenerate} disabled={generating || modules.length === 0}>
