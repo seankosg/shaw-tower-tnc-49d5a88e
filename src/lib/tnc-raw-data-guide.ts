@@ -38,10 +38,10 @@ Predecessor → Pre-Test (T1) → Actual Test (T2) → R1 (Sub→HDEC Report) �
 | Stage | Meaning | Columns |
 |---|---|---|
 | Pred | Test prerequisites (construction complete, punch cleared, etc.) | \`pred_planned_date\`, \`pred_actual_date\`, \`pred_status\`, \`predecessor_status_raw\` |
-| T1 — Internal Test | Internal test by Subcontractor / HDEC | \`t1_planned_date\`, \`t1_actual_date\`, \`t1_status\` |
-| T2 — Official Test | Official test witnessed by the Client | \`t2_planned_date\`, \`t2_actual_date\`, \`t2_status\` |
+| Pre-Test (T1) | Internal test by Subcontractor / HDEC | \`t1_planned_date\`, \`t1_actual_date\`, \`t1_status\` |
+| Actual Test (T2) | Official test witnessed by the Client | \`t2_planned_date\`, \`t2_actual_date\`, \`t2_status\` |
 | R1 — Sub → HDEC Report | Subcontractor submits the test report to HDEC | \`r1_target_submission_date\`, \`r1_actual_submission_date\`, \`r1_status\` |
-| R2 — HDEC → Client Report | HDEC submits to Client and obtains approval (two milestones: Submission / Approval) | \`r2_target_submission_date\`, \`r2_actual_submission_date\`, \`r2_target_approval_date\`, \`r2_actual_approval_date\`, \`r2_status\` |
+| Test Report (R2) | HDEC issues the final Test Report to the Client and obtains approval | \`r2_target_submission_date\`, \`r2_actual_submission_date\`, \`r2_target_approval_date\`, \`r2_actual_approval_date\`, \`r2_status\` |
 
 **Status values**
 
