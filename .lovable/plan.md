@@ -1,88 +1,60 @@
-# 검토 결과 및 계획
+## 현재 상태 리뷰 (이미 구현된 부분)
 
-요청 내용을 현재 코드베이스와 대조해 검토한 결과, **요청 자체에 충돌은 없고 그대로 진행 가능**합니다. 다만 몇 가지 확인 사항이 있습니다.
+지난 작업으로 다음은 이미 반영되어 있습니다. **재작업하지 않습니다**.
 
-## 검토 시 발견한 사항
+- `DocModule` 에 `'spare_part'` 추가, `MODULE_LABEL` / `MODULE_RAW_ROUTE` / `MODULES` 갱신
+- `buildSparePartStageRecords` (5단계: Confirm → Direction → PO → ETA → Delivered) 및 `computeDataQualityIssues` 의 spare_part 케이스
+- `loadExecutiveDashboard` 가 `docs_spare_part` 를 paginated `fetchAll` 로 로드, `sparePartRows` 스냅샷 노출
+- `DocsExecutiveDashboardPage`: Spare Parts 모듈 카드 / 스테이지 진행 / Data Quality 통합
+- `DocsSparePartRawDataPage`: `stage / status / po_status / overdue / po_pending / eta_missing / delivery_pending / missing_subcontractor / missing_hdec_pic / subcontractor / hdec_pic / team / trade / asOf` 쿼리 필터
+- `PunchDashboardPage`: 14개+ KPI 카드, Weighted/Simple Progress, Schedule Control, Pre-Engineering Readiness, 7/14-Day Lookahead, Progress Matrix, Recovery Priority 리스트
+- `PunchRawDataPage`: `status / health / due / start_delayed / pre_eng / blocker / ready_not_started / lookahead` 쿼리 필터
+- `punch-dashboard-utils.ts`: weighted progress, blocker classification, recovery priority score
 
-1. **`docs-stage-records.ts`의 `DocModule` 유니온 확장 영향 범위가 큼** — `DocModule = 'abd' | 'omm' | 'warranty'`가 `ALL_STAGE_DEFS`, `MODULE_LABEL`, `MODULE_RAW_ROUTE`, `computeDataQualityIssues` 등에서 Record로 사용되어, `'spare_part'` 추가 시 모든 Record에 항목을 채워야 컴파일됩니다. (큰 문제는 아니고 일괄 추가)
-2. **Spare Part의 "current stage" 개념이 ABD/OMM/Warranty와 다름** — Spare Part는 단계가 순차적이고 마지막 도달 단계만 "current"로 보는 게 자연스러움. 기존 `procurementProgressLevel` 헬퍼를 그대로 사용해 stage_order로 매핑하는 방식이 맞음.
-3. **Spare Part는 "planned date"가 누락되는 단계가 많음** (Direction/ETA 등) — 요청대로 "planned 없으면 overdue 아님"으로 처리. 기존 `isOverdueSparePart`는 delivery만 본다는 점을 인지하고, 단계별 overdue는 stage 정의 안에서 별도 계산 필요.
-4. **Punch `weight` 필드는 `punch-field-registry.ts`에 이미 존재** — 가중 진척 계산 가능. `progress_variance_pct`, `health_status`도 이미 있음.
-5. **PunchDashboardPage(281줄)는 비교적 단순** — 기존 구조 유지하며 섹션 추가로 확장 가능. 컴포넌트 분리 필요(파일이 600줄 넘기지 않게).
-6. **Punch 진척 자동 재계산** — `progress_variance_pct`, `health_status`가 import 시 채워진다고 가정. 대시보드에서는 fallback 계산만 보강.
-7. **Import/Export 레지스트리 변경 없음** — Part B-9 요구대로 `punch-field-registry.ts` 손대지 않음.
-8. **App UI는 영문 유지** (메모리 Core 규칙과 일치).
+## 남은 갭 (이번 작업 범위)
 
-## Part A — Document Dashboard에 Spare Part 추가
+스펙과 코드를 비교해 누락된 부분만 보강합니다.
 
-### A1. `src/lib/docs-stage-records.ts`
-- `DocModule`에 `'spare_part'` 추가
-- `MODULE_LABEL.spare_part = 'Spare Parts'`, `MODULE_RAW_ROUTE.spare_part = '/docs/spare-part'`
-- `SPARE_PART_STAGE_DEFS` 추가 (5단계: confirm / direction / po / eta / delivered) — key, label, planned_field, actual_field, done predicate
-- `ALL_STAGE_DEFS.spare_part = SPARE_PART_STAGE_DEFS`
-- `buildSparePartStageRecords(rows, asOf)` 신규 — 행당 5개 stage record 생성, current_stage는 `procurementProgressLabel` 사용, planned 없으면 `is_overdue=false`
-- `computeDataQualityIssues`의 module Record에 `spare_part` 케이스 추가 (missing planned/actual/subcon/PIC, inconsistent — 단계 역행 검사)
+### A. Document — Spare Parts
+1. **`po_overdue` 필터 추가**
+   - `docs-dashboard-filter.ts` `DashboardFilterParams` 에 `po_overdue` 추가, 정의: `!actual_po_date && planned_po_date < asOf`
+   - `DocsSparePartRawDataPage` 의 URL 파라미터 처리에 `po_overdue=true` 추가
+2. **Executive Dashboard Spare Parts KPI 카드 보강**
+   - `PO Pending`, `PO Overdue`, `ETA Missing`, `Missing Subcontractor`, `Missing HDEC PIC` 버킷 카드가 모두 클릭 → 위 URL로 드릴다운되는지 확인 및 누락분 추가
+3. **Spare Parts 상태 분포 (Stock Status / PO Status Distribution)**
+   - 모듈 카드 하단에 status / po_status 카운트 미니 분포 추가 (클릭 시 `?status=` / `?po_status=` 드릴다운)
 
-### A2. `src/lib/docs-executive-dashboard-data.ts`
-- `docs_spare_part` 4번째 `fetchAll` 추가 (필요 컬럼만 select, 기존 페이지네이션 패턴 유지)
-- `ExecDashboardSnapshot`에 `sparePartRows` 추가
-- `records`에 `buildSparePartStageRecords(...)` 결과 합치기
+### B. Punch — Daily Recovery Control
 
-### A3. `src/lib/docs-dashboard-filter.ts`
-- `po_pending`, `eta_missing`, `delivery_pending`, `po_status` 키 추가
-- 필터 분기 추가, `DocModule`에 spare_part 포함되도록 확장
+1. **Today's Recovery Priority Items 테이블 보강**
+   - 컬럼 보강: `Item No / Outstanding Works / Location / Team / Main Trade / Subcontractor / HDEC PIC / Planned Completion / Planned % / Actual % / Variance % / Health / Blocker / Days Overdue / Suggested Recovery Action`
+   - **신규** `suggestedRecoveryAction(row)` 헬퍼를 `punch-dashboard-utils.ts` 에 추가 (스펙의 룰 기반 매핑)
+   - 정렬 우선순위: Critical → days overdue desc → blocked → due date asc → weight desc → variance asc
+2. **Punch Data Quality 패널 (신규 섹션, 하단)**
+   - 버킷: missing_planned_start / missing_planned_completion / missing_hdec_pic / missing_subcontractor / missing_team / completed_missing_actual_completion / invalid_progress (>100 or <0) / invalid_dates (planned_completion < planned_start, actual_completion < actual_start) / missing_weight / missing_health
+   - 각 버킷 클릭 → `/punch/raw-data?dq=<key>`
+   - `PunchRawDataPage` 에서 `dq` 파라미터 처리 추가
+3. **Daily Meeting Action View (신규 컴팩트 섹션, 상단 근처)**
+   - 좌측: Today's Recovery Priority (top 10) / Due This Week count / Blocked count / Ready but Not Started count
+   - 우측: Top Delaying Subcontractors (top 5, overdue+critical count desc) / Top Responsible HDEC PICs (top 5)
+   - 모든 항목 클릭 → 필터링된 raw-data 링크
 
-### A4. `src/pages/docs/DocsExecutiveDashboardPage.tsx`
-- Portfolio KPI strip의 분모에 spare part도 포함
-- Spare Parts 모듈 섹션 신규 (KPI 6장 + Procurement Buckets):
-  - Total / Delivered / Remaining / Overdue Delivery / PO Pending / ETA Missing
-  - Status 분포 바 (Short / Pending / Ordered / Stock) — `normalizeSparePartStatus` 사용
-  - 5단계 progress (StageCard 재사용)
-  - Subcontractor / HDEC PIC 드롭다운 필터
-  - 각 카드 클릭 → `/docs/spare-part?...` 드릴다운
-- Data Quality 패널에 spare_part 항목도 자동 노출
+## 변경 파일
 
-### A5. `src/pages/docs/DocsSparePartRawDataPage.tsx`
-- 기존 `searchParams` 처리 확장: `stage`, `status`, `po_status`, `hdec_pic`, `team`, `trade`, `eta_missing`, `po_pending`, `delivery_pending`
-- 기존 overdue/asOf/subcontractor 로직과 합쳐 useMemo 한 곳에서 적용
-- DOCS_DRILLDOWN_PARAMS 패턴이 있다면 동일하게 정의
+- `src/lib/docs-dashboard-filter.ts` — `po_overdue` 키 추가
+- `src/pages/docs/DocsSparePartRawDataPage.tsx` — `po_overdue` URL 처리
+- `src/pages/docs/DocsExecutiveDashboardPage.tsx` — Spare Parts KPI/분포 카드 누락분 보강
+- `src/lib/punch-dashboard-utils.ts` — `suggestedRecoveryAction`, data-quality 헬퍼
+- `src/pages/PunchDashboardPage.tsx` — Recovery Priority 컬럼 확장, Daily Meeting Action View, Data Quality 패널
+- `src/pages/PunchRawDataPage.tsx` — `dq=` 필터 처리
 
-## Part B — Punch Dashboard 진척 통제 강화
+## 비변경 보장
 
-`PunchDashboardPage.tsx`를 섹션 컴포넌트로 분할하면서 확장. 파일이 커지면 `src/components/punch/` 하위로 분리.
+- `punch-field-registry.ts` (import/export SSOT) **수정하지 않음**
+- Supabase 스키마 / 마이그레이션 **변경 없음**
+- 기존 detail/import/export 페이지 및 cache 유틸 미수정
+- 모든 UI 라벨 영어 유지
 
-### B1. 신규 헬퍼 `src/lib/punch-dashboard-utils.ts`
-- `isStartDelayed`, `isCompletionOverdue`, `isDueThisWeek`, `isCriticalDelay`, `isBehindSchedule`, `isBlockedByPreEng`, `daysOverdue`
-- `weightedProgress(rows)` → `{ planned, actual, variance, hasWeight }`
-- `groupProgressMatrix(rows, keyFn)` → 행별 집계 (Total/Completed/Remaining/WIP/NotStarted/Overdue/Critical/Blocked/Completion%/WPlanned/WActual/Variance)
-- `dominantBlocker(row)` → 'material_approval' | 'material_procurement' | 'drawing_approval' | 'mos_approval' | 'multiple' | null
-- `recoveryPriorityScore(row)` → 정렬용 점수
+## 검증
 
-### B2. `src/pages/PunchDashboardPage.tsx`
-**기존 KPI 4장을 14장 그리드로 확장** (모두 클릭 시 `/punch/raw-data?...`):
-- Total, Completed, Remaining, WIP, Not Started, Overdue, Critical, Behind, Blocked, Due This Week
-- Completion %, Weighted Planned %, Weighted Actual %, Variance %
-
-**Progress Overview 카드**: Weighted를 메인으로, Simple Average를 보조 표시. Variance도 둘 다.
-
-**신규 섹션들**:
-- **Schedule Control**: Start Delayed / Completion Overdue / Due This Week / Critical Delay (각 클릭형)
-- **Pre-Engineering Readiness Panel**: Material Approval Pending, Material Procurement Pending, Drawing Approval Pending, MOS Approval Pending, Multiple Blockers, Ready but Not Started — 각 `?blocker=...` 드릴다운
-- **Lookahead Panel (7d / 14d 탭)**: Due in 7d, Due in 14d, Planned to Start This Week, Planned to Complete This Week, Should Have Started, WIP Due Soon
-- **Progress Matrix**: Group by 셀렉터 (Team / Main Trade / Subcontractor / HDEC PIC), 정렬 가능 (Overdue desc / Critical desc / Variance asc / Remaining desc), 컬럼: Total/Completed/Remaining/WIP/NotStarted/Overdue/Critical/Blocked/Completion%/WPlanned/WActual/Variance
-- **Recovery Priority Items 테이블**: 상위 N개 (Critical | overdue>14d | blocked | high weight & behind | due 7d & actual<planned)
-
-### B3. `src/pages/PunchRawDataPage.tsx`
-- searchParams 드릴다운 자동 적용 추가:
-  - `status` (completed/wip/not_started/overdue), `health` (critical/behind), `pre_eng=blocked`, `due` (this_week/next_14_days), `team`, `main_trade`, `subcontractor`, `hdec_pic`, `blocker` (material_approval/material_procurement/drawing_approval/mos_approval)
-- 진입 시 필터 상태에 반영하고 배너 표시 (기존 패턴 따름)
-
-### B4. 디자인 / 영향 범위
-- 디자인 시스템 그대로 사용, 영문 라벨 유지
-- 기존 `ScheduleMatrix`, `KpiCard`, `Progress`, `Card` 재사용
-- import/export 레지스트리 변경 없음
-- T&C / Defect / 기존 Docs 모듈 로직 변경 없음
-
-## 산출물
-- 수정: `docs-stage-records.ts`, `docs-executive-dashboard-data.ts`, `docs-dashboard-filter.ts`, `DocsExecutiveDashboardPage.tsx`, `DocsSparePartRawDataPage.tsx`, `PunchDashboardPage.tsx`, `PunchRawDataPage.tsx`
-- 신규: `src/lib/punch-dashboard-utils.ts` (+ 필요 시 `src/components/punch/` 하위 섹션 컴포넌트들)
+`tsc --noEmit` 자동 빌드로 타입 통과 확인 후, KPI/패널의 URL 드릴다운이 raw-data 페이지 필터와 일치하는지 수동 점검.
