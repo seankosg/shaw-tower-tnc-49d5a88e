@@ -68,6 +68,15 @@ export function usePunchFieldConfig() {
 
   const getOrder = (fieldName: string) => fieldMap.get(fieldName)?.sort_order ?? 9999;
 
+  const sortFieldNames = (fieldNames: string[]) =>
+    [...fieldNames].sort((a, b) => getOrder(a) - getOrder(b));
+
+  const getOriginalHeader = (fieldName: string) =>
+    fieldMap.get(fieldName)?.original_header ?? null;
+
+  const getSourceOrigin = (fieldName: string): string =>
+    fieldMap.get(fieldName)?.source_origin ?? 'system';
+
   return {
     fields,
     loading,
@@ -76,5 +85,8 @@ export function usePunchFieldConfig() {
     isFieldEditable,
     getLabel,
     getOrder,
+    sortFieldNames,
+    getOriginalHeader,
+    getSourceOrigin,
   };
 }
