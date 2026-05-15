@@ -276,10 +276,10 @@ export default function DocsSparePartRawDataPage() {
   useEffect(() => {
     if (!stateLoaded) return;
     const t = window.setTimeout(() => {
-      try { localStorage.setItem(storageKey, JSON.stringify({ sorting, columnFilters, globalFilter, columnSizing, columnVisibility })); } catch { /* ignore */ }
+      try { localStorage.setItem(storageKey, JSON.stringify({ sorting, columnFilters, globalFilter, columnSizing, columnVisibility: columnVisibilityOverrides })); } catch { /* ignore */ }
     }, 500);
     return () => window.clearTimeout(t);
-  }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter, columnSizing, columnVisibility]);
+  }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter, columnSizing, columnVisibilityOverrides]);
 
   // URL drill-down: ?overdue=true&asOf=YYYY-MM-DD
   const filteredBaseData = useMemo(() => {
