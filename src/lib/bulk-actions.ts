@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { applyBulkUpdate, type BulkUpdateRequest } from '@/lib/bulk-edit';
 
-export type BulkEntity = 'subtest' | 'defect' | 'drawing';
+export type BulkEntity = 'subtest' | 'defect' | 'drawing' | 'punch';
 
 export type EditableScope = 'none' | 'assigned' | 'team' | 'full';
 
