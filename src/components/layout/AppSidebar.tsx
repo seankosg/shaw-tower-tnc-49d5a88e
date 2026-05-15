@@ -228,6 +228,35 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
+        {showPunchGroup && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="flex items-center gap-2">
+              <span>Punch Management</span>
+              {!punch.enabled && (
+                <Badge variant="outline" className="border-amber-400 bg-amber-100/60 text-[10px] text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                  Paused
+                </Badge>
+              )}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visiblePunch.map((item) => (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={pathname === item.path || (item.path === '/punch/raw-data' && /^\/punch\/(?!dashboard|raw-data|import|export)[^/]+$/.test(pathname))}
+                      onClick={() => navigate(safeRoute(item.path, roles))}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
         {visibleAdmin.length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>Administration</SidebarGroupLabel>
