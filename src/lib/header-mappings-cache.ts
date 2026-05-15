@@ -2,7 +2,7 @@
 // Loaded once on app boot via loadHeaderMappingsCache(); parsers read it sync.
 import { supabase } from '@/integrations/supabase/client';
 
-export type MappingModule = 'tnc' | 'defect' | 'docs';
+export type MappingModule = 'tnc' | 'defect' | 'docs' | 'punch';
 /** Sub-modules currently used (Docs umbrella). Empty string for tnc/defect. */
 export type MappingSubModule = '' | 'as_built' | 'warranty' | 'omm' | 'spare_part';
 
@@ -39,7 +39,7 @@ export async function loadHeaderMappingsCache(force = false): Promise<void> {
       const next = new Map<string, Map<string, string>>();
       for (const r of (data ?? []) as MappingRow[]) {
         if (!r.is_active) continue;
-        if (r.module !== 'tnc' && r.module !== 'defect' && r.module !== 'docs') continue;
+        if (r.module !== 'tnc' && r.module !== 'defect' && r.module !== 'docs' && r.module !== 'punch') continue;
         const k = `${r.module}::${r.sub_module ?? ''}`;
         let bucket = next.get(k);
         if (!bucket) { bucket = new Map(); next.set(k, bucket); }

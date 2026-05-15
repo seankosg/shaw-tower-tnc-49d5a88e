@@ -21,6 +21,13 @@ import {
 } from '@/lib/punch-field-registry';
 import { normalizeDate } from '@/lib/date-normalize';
 import { isoToExcelSerial, DATE_NUMFMT } from '@/lib/excel-date-cell';
+import { getMappedField } from '@/lib/header-mappings-cache';
+import {
+  buildFieldLog,
+  classifyChange,
+  stringifyForLog,
+  type PendingFieldLog,
+} from '@/lib/import-field-log';
 import type { Database } from '@/integrations/supabase/types';
 
 export type PunchItem = Database['public']['Tables']['punch_items']['Row'];
@@ -54,6 +61,32 @@ function coerceNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Normalize Excel header for header_mapping lookup (lowercase, collapse whitespace). */
+function normalizeAliasForLookup(raw: string): string {
+  return raw
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\.$/, '')
+    .trim();
+}
+
+/**
+ * Resolve a header string to a PunchFieldDef:
+ *   1. Try Admin-managed `import_header_mappings` (module='punch') first.
+ *   2. Fall back to the registry's hardcoded aliases.
+ */
+function resolveHeader(raw: string): PunchFieldDef | null {
+  const aliasNorm = normalizeAliasForLookup(raw);
+  const mappedField = getMappedField('punch', aliasNorm, '');
+  if (mappedField) {
+    const def = PUNCH_FIELDS_BY_NAME[mappedField];
+    if (def) return def;
+  }
+  return normalizePunchHeader(raw);
+}
+
 // --- Parse (Import) -------------------------------------------------------
 
 export interface PunchParseRowError {
@@ -72,13 +105,21 @@ export interface PunchParseResult {
   errors: PunchParseRowError[];
   /** Header → matched field (for UI preview). null = unmatched. */
   headerMap: Array<{ header: string; field: PunchFieldDef | null }>;
+  /** First non-null sample value per header — used by the Column Select dialog. */
+  headerSamples: Record<string, unknown>;
   sheetName: string;
   sheetNames: string[];
+}
+
+export interface PunchParseOptions {
+  /** Excel headers to skip (their fields will not be applied/persisted). */
+  excludedHeaders?: string[];
 }
 
 export async function parsePunchWorkbook(
   file: File,
   preferredSheet?: string,
+  opts: PunchParseOptions = {},
 ): Promise<PunchParseResult> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array', cellDates: false, cellNF: false });
@@ -92,7 +133,20 @@ export async function parsePunchWorkbook(
   });
 
   const headers = Object.keys(json[0] ?? {});
-  const headerMap = headers.map((h) => ({ header: h, field: normalizePunchHeader(h) }));
+  const excludedSet = new Set(opts.excludedHeaders ?? []);
+  const headerMap = headers.map((h) => ({ header: h, field: resolveHeader(h) }));
+
+  // Collect first non-null/non-empty sample per header for UI preview
+  const headerSamples: Record<string, unknown> = {};
+  for (const h of headers) {
+    for (const row of json) {
+      const v = row[h];
+      if (v !== null && v !== undefined && v !== '') {
+        headerSamples[h] = v;
+        break;
+      }
+    }
+  }
 
   const rows: PunchParsedRow[] = [];
   const errors: PunchParseRowError[] = [];
@@ -102,6 +156,7 @@ export async function parsePunchWorkbook(
     const values: Partial<PunchInsert> = {};
     for (const { header, field } of headerMap) {
       if (!field || field.readOnly) continue;
+      if (excludedSet.has(header)) continue;
       const cell = raw[header];
       if (cell == null || cell === '') continue;
       switch (field.dataType) {
@@ -149,7 +204,7 @@ export async function parsePunchWorkbook(
     rows.push({ rawRowNo, values, rawPayload: raw });
   });
 
-  return { rows, errors, headerMap, sheetName, sheetNames };
+  return { rows, errors, headerMap, headerSamples, sheetName, sheetNames };
 }
 
 // --- Upsert ---------------------------------------------------------------
@@ -163,6 +218,11 @@ export interface PunchUpsertResult {
 }
 
 import { supabase } from '@/integrations/supabase/client';
+
+/** Fields whose changes we record in punch_change_log + import_field_logs. */
+const TRACKED_FIELDS: string[] = PUNCH_FIELDS
+  .filter((f) => !f.readOnly)
+  .map((f) => f.field);
 
 export async function upsertPunchRows(
   rows: PunchParsedRow[],
@@ -184,9 +244,21 @@ export async function upsertPunchRows(
     });
   }
 
+  const pendingFieldLogs: PendingFieldLog[] = [];
+  const pendingChangeLogs: Array<{
+    punch_id: string;
+    upload_id: string | null;
+    changed_field: string;
+    old_value: string | null;
+    new_value: string | null;
+    change_source: string;
+    changed_by: string | null;
+  }> = [];
+
   for (const row of rows) {
     const itemNo = row.values.item_no ?? null;
     const existing = itemNo ? existingByItemNo.get(itemNo) : undefined;
+
     if (existing) {
       const { error } = await supabase
         .from('punch_items')
@@ -200,7 +272,39 @@ export async function upsertPunchRows(
       if (error) {
         result.failed++;
         result.errors.push({ itemNo, reason: error.message });
-      } else result.updated++;
+        continue;
+      }
+      result.updated++;
+
+      // Build field-level diffs
+      for (const field of TRACKED_FIELDS) {
+        if (!(field in row.values)) continue;
+        const incoming = (row.values as any)[field];
+        const previous = (existing as any)[field];
+        const change = classifyChange(incoming, previous);
+        if (change === 'empty') continue;
+        pendingFieldLogs.push(
+          buildFieldLog('punch', {
+            rawRowNo: row.rawRowNo,
+            field,
+            outcome: change === 'applied' ? 'applied' : 'unchanged',
+            raw: incoming,
+            applied: change === 'applied' ? incoming : previous,
+            previous,
+          }),
+        );
+        if (change === 'applied') {
+          pendingChangeLogs.push({
+            punch_id: existing.id,
+            upload_id: opts.uploadId ?? null,
+            changed_field: field,
+            old_value: stringifyForLog(previous),
+            new_value: stringifyForLog(incoming),
+            change_source: 'excel_import',
+            changed_by: opts.updatedBy,
+          });
+        }
+      }
     } else {
       const insert: PunchInsert = {
         ...(row.values as PunchInsert),
@@ -211,13 +315,64 @@ export async function upsertPunchRows(
         data_source_type: 'excel_import',
         raw_payload: row.rawPayload as any,
       };
-      const { error } = await supabase.from('punch_items').insert(insert);
+      const { data: inserted, error } = await supabase
+        .from('punch_items')
+        .insert(insert)
+        .select('id')
+        .maybeSingle();
       if (error) {
         result.failed++;
         result.errors.push({ itemNo, reason: error.message });
-      } else result.inserted++;
+        continue;
+      }
+      result.inserted++;
+
+      // Field logs for inserts (every applied non-empty field)
+      const newId = inserted?.id;
+      for (const field of TRACKED_FIELDS) {
+        if (!(field in row.values)) continue;
+        const incoming = (row.values as any)[field];
+        if (incoming === null || incoming === undefined || incoming === '') continue;
+        pendingFieldLogs.push(
+          buildFieldLog('punch', {
+            rawRowNo: row.rawRowNo,
+            field,
+            outcome: 'applied',
+            raw: incoming,
+            applied: incoming,
+            previous: null,
+          }),
+        );
+        if (newId) {
+          pendingChangeLogs.push({
+            punch_id: newId,
+            upload_id: opts.uploadId ?? null,
+            changed_field: field,
+            old_value: null,
+            new_value: stringifyForLog(incoming),
+            change_source: 'excel_import',
+            changed_by: opts.updatedBy,
+          });
+        }
+      }
     }
   }
+
+  // Flush field logs (best-effort; log failures but don't fail the import)
+  if (opts.uploadId && pendingFieldLogs.length) {
+    const payload = pendingFieldLogs.map((p) => ({
+      ...p,
+      upload_id: opts.uploadId,
+      created_by: opts.updatedBy,
+    }));
+    const { error } = await supabase.from('import_field_logs').insert(payload as any);
+    if (error) console.warn('[punch] field log insert failed:', error.message);
+  }
+  if (pendingChangeLogs.length) {
+    const { error } = await supabase.from('punch_change_log').insert(pendingChangeLogs as any);
+    if (error) console.warn('[punch] change log insert failed:', error.message);
+  }
+
   return result;
 }
 

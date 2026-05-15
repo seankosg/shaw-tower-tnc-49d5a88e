@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, Lock } from 'lucide-react';
+import { Upload, FileSpreadsheet, X, CheckCircle2, AlertCircle, Loader2, Lock, Settings2, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ import {
   parsePunchWorkbook, upsertPunchRows,
   type PunchParseResult, type PunchUpsertResult,
 } from '@/lib/punch-excel-utils';
+import { PunchColumnSelect } from '@/components/import/PunchColumnSelect';
 
 interface QueueItem {
   id: string;
@@ -20,6 +21,7 @@ interface QueueItem {
   status: 'pending' | 'parsing' | 'ready' | 'processing' | 'done' | 'failed';
   parsed?: PunchParseResult;
   selectedSheet?: string;
+  excludedHeaders: string[];
   result?: PunchUpsertResult;
   error?: string;
 }
@@ -32,13 +34,14 @@ export default function PunchImportPage() {
   const { punch } = useModuleStatus();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [running, setRunning] = useState(false);
+  const [columnDialogId, setColumnDialogId] = useState<string | null>(null);
 
   const moduleLocked = !punch.enabled && !isAdmin;
 
   const addFiles = useCallback(async (files: File[]) => {
     const newItems: QueueItem[] = files.map((f) => ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      file: f, status: 'parsing',
+      file: f, status: 'parsing', excludedHeaders: [],
     }));
     setQueue((q) => [...q, ...newItems]);
     for (const item of newItems) {
@@ -73,10 +76,28 @@ export default function PunchImportPage() {
     if (!item) return;
     setQueue((q) => q.map((it) => it.id === id ? { ...it, status: 'parsing', selectedSheet: sheet } : it));
     try {
-      const parsed = await parsePunchWorkbook(item.file, sheet);
+      const parsed = await parsePunchWorkbook(item.file, sheet, { excludedHeaders: item.excludedHeaders });
       setQueue((q) => q.map((it) => it.id === id ? { ...it, status: 'ready', parsed, selectedSheet: sheet } : it));
     } catch (e: any) {
       setQueue((q) => q.map((it) => it.id === id ? { ...it, status: 'failed', error: e?.message } : it));
+    }
+  };
+
+  const applyExcluded = async (id: string, excluded: string[]) => {
+    const item = queue.find((it) => it.id === id);
+    if (!item) return;
+    setQueue((q) => q.map((it) => it.id === id
+      ? { ...it, status: 'parsing', excludedHeaders: excluded }
+      : it));
+    try {
+      const parsed = await parsePunchWorkbook(item.file, item.selectedSheet, { excludedHeaders: excluded });
+      setQueue((q) => q.map((it) => it.id === id
+        ? { ...it, status: 'ready', parsed, excludedHeaders: excluded }
+        : it));
+    } catch (e: any) {
+      setQueue((q) => q.map((it) => it.id === id
+        ? { ...it, status: 'failed', error: e?.message }
+        : it));
     }
   };
 
@@ -84,7 +105,6 @@ export default function PunchImportPage() {
     if (moduleLocked) return;
     setRunning(true);
 
-    // Resolve project once
     const { data: projectsData, error: projErr } = await supabase
       .from('projects').select('id').eq('is_active', true).order('created_at', { ascending: true });
     if (projErr || !projectsData?.length) {
@@ -97,7 +117,6 @@ export default function PunchImportPage() {
     for (const item of queue.filter((it) => it.status === 'ready' && it.parsed)) {
       setQueue((q) => q.map((it) => it.id === item.id ? { ...it, status: 'processing' } : it));
 
-      // upload batch
       const { data: batch } = await supabase
         .from('punch_upload_batches')
         .insert({
@@ -141,6 +160,11 @@ export default function PunchImportPage() {
     return acc;
   }, { inserted: 0, updated: 0, failed: 0 });
 
+  const dialogItem = columnDialogId ? queue.find((it) => it.id === columnDialogId) : null;
+  const fieldByHeader: Record<string, string | null> = dialogItem?.parsed
+    ? Object.fromEntries(dialogItem.parsed.headerMap.map((h) => [h.header, h.field?.field ?? null]))
+    : {};
+
   return (
     <div className="space-y-4 p-4">
       <div className="flex items-center justify-between">
@@ -150,7 +174,12 @@ export default function PunchImportPage() {
             Upload Excel files. Existing rows match on Item No within the active project.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate('/punch/raw-data')}>View Raw Data</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate('/punch/import/logs')}>
+            <History className="mr-1.5 h-3.5 w-3.5" />Import Logs
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/punch/raw-data')}>View Raw Data</Button>
+        </div>
       </div>
 
       {!punch.enabled && (
@@ -204,6 +233,7 @@ export default function PunchImportPage() {
               const matched = it.parsed?.headerMap.filter((h) => h.field).length ?? 0;
               const total = it.parsed?.headerMap.length ?? 0;
               const unmatched = it.parsed?.headerMap.filter((h) => !h.field).map((h) => h.header) ?? [];
+              const excludedCount = it.excludedHeaders.length;
               return (
                 <div key={it.id} className="rounded-md border p-3">
                   <div className="flex items-start gap-3">
@@ -212,27 +242,52 @@ export default function PunchImportPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="truncate text-sm font-medium">{it.file.name}</span>
                         <Badge variant="outline" className="text-xs">{it.status}</Badge>
-                        {it.parsed && <span className="text-xs text-muted-foreground">{it.parsed.rows.length} rows · {matched}/{total} cols mapped</span>}
+                        {it.parsed && <span className="text-xs text-muted-foreground">{it.parsed.rows.length} rows · {matched}/{total} cols mapped{excludedCount > 0 ? ` · ${excludedCount} excluded` : ''}</span>}
                       </div>
                       {it.error && <div className="text-xs text-destructive mt-1">{it.error}</div>}
-                      {it.parsed && it.parsed.sheetNames.length > 1 && (
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">Sheet:</span>
-                          <Select
-                            value={it.selectedSheet}
-                            onValueChange={(v) => reparseSheet(it.id, v)}
-                            disabled={running || it.status === 'done'}
+                      {it.parsed && (
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                          {it.parsed.sheetNames.length > 1 && (
+                            <>
+                              <span className="text-xs text-muted-foreground">Sheet:</span>
+                              <Select
+                                value={it.selectedSheet}
+                                onValueChange={(v) => reparseSheet(it.id, v)}
+                                disabled={running || it.status === 'done'}
+                              >
+                                <SelectTrigger className="h-7 w-[200px] text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {it.parsed.sheetNames.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            disabled={running || it.status === 'done' || it.status === 'processing'}
+                            onClick={() => setColumnDialogId(it.id)}
                           >
-                            <SelectTrigger className="h-7 w-[200px] text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {it.parsed.sheetNames.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                            <Settings2 className="mr-1 h-3.5 w-3.5" />
+                            Configure Columns
+                          </Button>
                         </div>
                       )}
                       {unmatched.length > 0 && (
                         <div className="mt-2 text-xs text-amber-700 dark:text-amber-300">
                           Unmapped columns (will be ignored): {unmatched.join(', ')}
+                          {isAdmin && (
+                            <>
+                              {' '}·{' '}
+                              <button
+                                className="underline hover:text-amber-900 dark:hover:text-amber-100"
+                                onClick={() => navigate('/admin?tab=header-mappings&module=punch')}
+                              >
+                                Manage in Admin
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
                       {it.parsed && it.parsed.errors.length > 0 && (
@@ -272,6 +327,22 @@ export default function PunchImportPage() {
             <SummaryBox label="Failed" value={totals.failed} />
           </CardContent>
         </Card>
+      )}
+
+      {dialogItem?.parsed && (
+        <PunchColumnSelect
+          fileName={dialogItem.file.name}
+          headers={dialogItem.parsed.headerMap.map((h) => h.header)}
+          samples={dialogItem.parsed.headerSamples}
+          fieldByHeader={fieldByHeader}
+          defaultExcluded={dialogItem.excludedHeaders}
+          open={!!columnDialogId}
+          onClose={() => setColumnDialogId(null)}
+          onApply={(excluded) => {
+            void applyExcluded(dialogItem.id, excluded);
+            setColumnDialogId(null);
+          }}
+        />
       )}
     </div>
   );
