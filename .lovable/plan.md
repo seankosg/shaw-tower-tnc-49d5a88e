@@ -1,51 +1,48 @@
-## 검증 결과: 추가 작업 불필요
+## 문제
 
-### 1. `punch_field_config` 시드 상태 — 완료됨
+`PunchRawDataPage.tsx`에는 Excel 내보내기 기능이 전혀 구현되어 있지 않습니다. (코드 검색 결과 `export*` 식별자 0개, `src/lib/`에 `punch-excel-export.ts` 파일 없음)
 
-DB 조회 결과 **38개 행 모두 시드되어 있음** (이전 턴에서 삽입 완료). `PUNCH_FIELDS` 레지스트리(38개 항목)와 1:1 일치합니다.
+반면 Defect 측은 다음을 모두 갖추고 있습니다:
+- `src/lib/defect-excel-export.ts`: `exportDefectRawToExcel`, `exportDefectRawToExcelBySubcontractor`, `exportDefectRawToZipBySubcontractor`
+- `DefectRawDataPage.tsx`의 Export Excel 버튼 + Dialog (Single/Per-subcontractor, View-friendly/Re-import ready 옵션)
 
-| 그룹 | 필드 수 | sort_order 범위 |
-|---|---|---|
-| identity | 4 (item_no, outstanding_work, location, level) | 10–50 |
-| classification | 7 (category1–3, critical_level, work_type, main_trade, sub_trade) | 60–120 |
-| people | 5 (team, subcontractor, subsub, hdec_pic, hdec_eng) | 130–160 |
-| schedule | 4 (planned/actual × start/completion) | 170–200 |
-| progress | 7 (planned/actual/variance pct, health, completion_status, data_date, weight) | 210–270 |
-| pre_engineering | 10 (material/drawing/mos approval+date, procurement+date, ready, blockers) | 280–370 |
-| meta | 1 (remarks) | 380 |
+이전 작업에서 "Defect Raw Data UI/기능 모두 반영" 요청을 받았음에도 export 부분을 누락한 것을 확인했습니다. 죄송합니다.
 
-- `outstanding_work` 만 `is_required = true` (레지스트리와 일치)
-- `planned_progress_pct`, `progress_variance_pct`, `health_status`, `pre_engineering_ready`, `pre_engineering_blockers` 5개는 `source_origin = 'derived'` (계산 필드)
-- 나머지 33개는 `source_origin = 'system'`
-- 모든 행 `is_enabled = true` (단, `category3` 만 비활성 — 사용 안 함)
+## 작업 범위
 
-### 2. Punch Raw Data 페이지 반영 — 코드 검증 완료
+### 1. 신규 파일: `src/lib/punch-excel-export.ts`
+`defect-excel-export.ts` 구조를 그대로 이식하되 Punch 도메인에 맞게 변환:
+- `exportPunchRawToExcel({ table, fieldConfig, globalFilter, searchParams, meta, format })`
+- `exportPunchRawToExcelBySubcontractor(...)` — Punch는 subcontractor 개념이 약하므로 **Vendor**(또는 `responsible_party`) 기준으로 그룹핑
+- `exportPunchRawToZipBySubcontractor(...)` — JSZip 사용, 동일 패턴
+- 컬럼 정의는 `PUNCH_FIELDS` registry + `punch_field_config` 동적 필드를 사용 (현재 페이지의 visibleFields 로직과 동일)
+- `format: 'view'`는 화면에 보이는 라벨/값, `'reimport'`는 Punch Import 양식 헤더와 raw 코드값
 
-`src/pages/PunchRawDataPage.tsx` 의 `visibleFields` 계산 로직:
+### 2. `src/pages/PunchRawDataPage.tsx` 수정
+- import 추가
+- state 추가: `exportDialogOpen`, `exportMode`, `exportFormat`, `exportBusy`
+- 툴바에 **Export Excel** 버튼 + (선택) `/punches/export` 페이지로 가는 Export 버튼
+- Defect와 동일한 Dialog 마크업 복사:
+  - Format: View-friendly / Re-import ready
+  - Mode: Single file / Per-vendor (ZIP for many)
+- 핸들러는 위 신규 함수 호출
 
-```
-PUNCH_FIELDS (registry, 38개)
-  + punch_field_config 의 dynamic 필드 (registry에 없는 것)
-  → sortFieldNames(getOrder)         ← DB sort_order 우선
-  → filter(isFieldVisible(roles))    ← DB is_enabled + visible_to_roles 적용
-```
+### 3. 그룹핑 키 결정 (확인 필요)
+Defect는 `subcontractor` 컬럼으로 그룹핑합니다. Punch에서는 어느 필드를 사용할까요?
 
-따라서 다음이 자동 반영됩니다:
-- Admin이 `display_name` 변경 시 → 컬럼 헤더 라벨 즉시 변경
-- `sort_order` 조정 시 → 컬럼 순서 즉시 변경
-- `is_enabled = false` 또는 `visible_to_roles` 제한 시 → 해당 컬럼 숨김
-- `original_header` 입력 시 → 컬럼 헤더 툴팁에 표시
-- Admin이 `punch_field_config` 에 새 행 추가 (registry 외) 시 → `raw_payload[original_header]` / `custom_payload[field_name]` 에서 값을 읽어 동적 컬럼으로 표시
+옵션:
+- **A. Vendor** (가장 가까움 — Defect의 subcontractor 대응)
+- **B. Discipline** (공종별 분배가 운영상 더 유용한 경우)
+- **C. Responsible Party** (담당자 단위)
 
-### 3. 결론
+기본값으로 **A (Vendor)** 를 사용하고, 추후 옵션화 가능하도록 키를 상수로 분리해 둘 예정입니다. 다른 키를 원하시면 알려주세요.
 
-이미 이전 턴에서 시드 + 페이지 통합이 모두 완료된 상태입니다. **추가 코드 변경이나 마이그레이션 불필요**합니다.
+## 영향 범위
+- 신규 1개 파일, 수정 1개 파일
+- DB/마이그레이션 없음
+- 사이드바 변경 없음 (이미 Raw Data 위치는 Progress 다음)
 
-### 다음에 해볼 만한 검증 (선택)
-
-원하시면 build 모드로 전환 후 다음을 실행할 수 있습니다:
-1. Admin → Field Config → Punch 에서 `Item No` 의 `display_name` 을 임시로 바꿔보고 Raw Data 헤더가 즉시 반영되는지 확인
-2. `sort_order` 두 필드를 swap 하고 컬럼 순서가 바뀌는지 확인
-3. 임의 필드 `is_enabled = false` 후 컬럼이 사라지는지 확인
-
-진행할 검증 시나리오가 있으면 알려주세요.
+## 검증
+- 빌드 통과 확인
+- View-friendly 단일 파일 다운로드 동작
+- Re-import ready 포맷이 Punch Import 파서와 라운드트립 호환되는지 헤더 매칭 확인
