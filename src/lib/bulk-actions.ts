@@ -104,7 +104,10 @@ export async function applyBulkReassign(args: {
   userId: string;
 }): Promise<BulkReassignResult> {
   const table: BulkUpdateRequest['table'] =
-    args.entity === 'subtest' ? 'subtests' : args.entity === 'drawing' ? 'docs_drawings' : 'defect_items';
+    args.entity === 'subtest' ? 'subtests'
+      : args.entity === 'drawing' ? 'docs_drawings'
+        : args.entity === 'punch' ? 'punch_items'
+          : 'defect_items';
   const out: BulkReassignResult = { attempted: args.ids.length, succeeded: 0, failed: 0, perField: [] };
   for (const ch of args.changes) {
     const r = await applyBulkUpdate({
