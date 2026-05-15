@@ -24,7 +24,7 @@ export interface BulkEditableField {
 
 export interface BulkUpdateRequest {
   /** Postgres table name */
-  table: 'defect_items' | 'subtests' | 'docs_drawings';
+  table: 'defect_items' | 'subtests' | 'docs_drawings' | 'punch_items';
   /** Primary key column (always 'id' here) */
   idField?: string;
   /** Row ids to update */
