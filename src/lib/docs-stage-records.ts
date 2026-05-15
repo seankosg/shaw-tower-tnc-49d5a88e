@@ -7,8 +7,9 @@
 import { differenceInDays, isAfter, parseISO, isValid, startOfDay } from 'date-fns';
 import { classifyWarrantyStageState } from '@/lib/docs-warranty-status';
 import { computeOmmStatus } from '@/lib/docs-omm-status';
+import { procurementProgressLevel, procurementProgressLabel } from '@/lib/spare-part-utils';
 
-export type DocModule = 'abd' | 'omm' | 'warranty';
+export type DocModule = 'abd' | 'omm' | 'warranty' | 'spare_part';
 
 export interface DocsStageRecord {
   /** uuid of the source row */
