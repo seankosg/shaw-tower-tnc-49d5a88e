@@ -183,7 +183,8 @@ export async function applyBulkDelete(args: {
     const table =
       args.entity === 'subtest' ? 'subtests'
         : args.entity === 'drawing' ? 'docs_drawings'
-          : 'defect_items';
+          : args.entity === 'punch' ? 'punch_items'
+            : 'defect_items';
     const CHUNK = 200;
     let succeeded = 0;
     let failed = 0;
@@ -205,16 +206,21 @@ export async function applyBulkDelete(args: {
   }
 
   // Hard delete
-  if (args.entity === 'drawing') {
-    // No FK dependents on docs_drawings — direct DELETE, RLS gates admin/superuser only.
+  if (args.entity === 'drawing' || args.entity === 'punch') {
+    // No cascade RPC — purge change_log first, then delete the rows.
+    const tableName = args.entity === 'drawing' ? 'docs_drawings' : 'punch_items';
+    const logTable = args.entity === 'drawing' ? 'docs_change_log' : 'punch_change_log';
+    const logIdCol = args.entity === 'drawing' ? 'drawing_id' : 'punch_id';
     const CHUNK = 200;
     let succeeded = 0;
     let failed = 0;
     for (let i = 0; i < args.ids.length; i += CHUNK) {
       const slice = args.ids.slice(i, i + CHUNK);
       // eslint-disable-next-line no-await-in-loop
+      await (supabase as any).from(logTable).delete().in(logIdCol, slice);
+      // eslint-disable-next-line no-await-in-loop
       const { data, error } = await (supabase as any)
-        .from('docs_drawings')
+        .from(tableName)
         .delete()
         .in('id', slice)
         .select('id');
