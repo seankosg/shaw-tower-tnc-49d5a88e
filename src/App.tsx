@@ -51,6 +51,9 @@ import DocsSparePartRawDataPage from "./pages/docs/DocsSparePartRawDataPage";
 import DocsSparePartDetailPage from "./pages/docs/DocsSparePartDetailPage";
 import DocsWarrantyRawDataPage from "./pages/docs/DocsWarrantyRawDataPage";
 import DocsWarrantyDetailPage from "./pages/docs/DocsWarrantyDetailPage";
+import PunchRawDataPage from "./pages/PunchRawDataPage";
+import PunchDetailPage from "./pages/PunchDetailPage";
+import PlaceholderPage from "./pages/PlaceholderPage";
 import { useHeaderMappingsSync } from "@/hooks/useHeaderMappings";
 import { loadHeaderMappingsCache } from "@/lib/header-mappings-cache";
 import { useCustomFieldsSync } from "@/hooks/useCustomFields";
@@ -144,6 +147,11 @@ const App = () => (
                 {/* Legacy redirects (ABD was previously at /docs/raw-data and /docs/:id) */}
                 <Route path="/docs/raw-data" element={<RedirectPreserveSearch to="/docs/abd" />} />
                 <Route path="/docs/:id" element={<DocsDrawingDetailPage />} />
+                <Route path="/punch/dashboard" element={<PlaceholderPage title="Punch Dashboard" />} />
+                <Route path="/punch/raw-data" element={<PunchRawDataPage />} />
+                <Route path="/punch/import" element={<PlaceholderPage title="Punch Import" />} />
+                <Route path="/punch/export" element={<PlaceholderPage title="Punch Export" />} />
+                <Route path="/punch/:id" element={<PunchDetailPage />} />
                 <Route path="/comments/subtest" element={<AllSubtestCommentsPage />} />
                 <Route path="/comments/defect" element={<AllDefectCommentsPage />} />
                 <Route path="/admin" element={<AdminPage />} />

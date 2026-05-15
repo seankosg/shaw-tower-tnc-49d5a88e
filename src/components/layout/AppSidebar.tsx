@@ -56,6 +56,13 @@ const docsNav = [
   { label: 'Export', icon: Download, path: '/docs/export' },
 ];
 
+const punchNav = [
+  { label: 'Dashboard', icon: BarChart3, path: '/punch/dashboard' },
+  { label: 'Raw Data', icon: Database, path: '/punch/raw-data' },
+  { label: 'Import', icon: Upload, path: '/punch/import' },
+  { label: 'Export', icon: Download, path: '/punch/export' },
+];
+
 const adminNav = [
   { label: 'Admin', icon: Shield, path: '/admin' },
   { label: 'Defect Classification', icon: Tags, path: '/admin/classification' },
@@ -65,7 +72,7 @@ export function AppSidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { profile, roles, signOut, isAdmin } = useAuth();
-  const { tnc, defect, docs } = useModuleStatus();
+  const { tnc, defect, docs, punch } = useModuleStatus();
   const { phase: ocrPhase, parseProgress, applyProgress } = usePhotoOcr();
   const ocrBusy = ocrPhase === 'parsing' || ocrPhase === 'applying';
   const ocrLabel = ocrPhase === 'parsing'
@@ -78,12 +85,14 @@ export function AppSidebar() {
   const visibleMain = filterNavItems(mainNav, roles);
   const visibleDefects = filterNavItems(defectNav, roles);
   const visibleDocs = filterNavItems(docsNav, roles);
+  const visiblePunch = filterNavItems(punchNav, roles);
   const visibleAdmin = filterNavItems(adminNav, roles);
 
   // Non-admins lose the entire group when the module is paused
   const showTncGroup = isAdmin || tnc.enabled;
   const showDefectGroup = isAdmin || defect.enabled;
   const showDocsGroup = isAdmin || docs.enabled;
+  const showPunchGroup = isAdmin || punch.enabled;
 
   return (
     <Sidebar>
@@ -206,6 +215,35 @@ export function AppSidebar() {
                         (item.path === '/docs/spare-part' && pathname.startsWith('/docs/spare-part/')) ||
                         (item.path === '/docs/warranty' && pathname.startsWith('/docs/warranty/'))
                       }
+                      onClick={() => navigate(safeRoute(item.path, roles))}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {showPunchGroup && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="flex items-center gap-2">
+              <span>Punch Management</span>
+              {!punch.enabled && (
+                <Badge variant="outline" className="border-amber-400 bg-amber-100/60 text-[10px] text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                  Paused
+                </Badge>
+              )}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visiblePunch.map((item) => (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={pathname === item.path || (item.path === '/punch/raw-data' && /^\/punch\/(?!dashboard|raw-data|import|export)[^/]+$/.test(pathname))}
                       onClick={() => navigate(safeRoute(item.path, roles))}
                       tooltip={item.label}
                     >

@@ -1,189 +1,143 @@
+## Punch Module Phase 1 — Step 2: Field Registry / Sidebar / Raw Data + Detail
 
-# Punch (Minor O/S Work) Management 모듈 추가 계획
+이번 단계는 DB 위에 얹는 **프론트 기반 작업**입니다. Import/Export/대시보드는 다음 단계에서 진행합니다.
 
-기존 Defect / Docs 모듈과 동일한 아키텍처(테이블 + RLS + Import/Export + Raw Data + Dashboard)를 따라 신설합니다. 업로드 파일의 컬럼은 모두 보존하고, 공정관리/Pre-Engineering 게이트용 필드를 추가합니다. **Export → Import 라운드트립이 매핑 누락 없이 동작하도록 헤더 매핑을 사전 정의합니다.**
+### 1. Field Registry — `src/lib/punch-field-registry.ts`
 
-## 1. 사이드바 / 라우팅
-
-신규 섹션 `Punch` 추가:
-- `/punch/dashboard` — Dashboard
-- `/punch/raw-data` — Raw Data 그리드
-- `/punch/:id` — Detail
-- `/punch/import` + `/punch/import/logs` — Import + History
-- `/punch/export` — Export
-- `/punch/quick-update` — (Phase 2) 모바일 빠른 업데이트
-
-ModuleStatusContext에 `punch` 키 추가 → Admin > Module Control에서 활성/일시정지 가능.
-
-## 2. 데이터 모델 (신규 테이블)
-
-### `punch_items` — 핵심 작업 단위 (1행 = 1 O/S Work)
-
-업로드 파일(보존):
-- `item_no` (text, 그룹핑용 — 같은 번호가 여러 행 가능)
-- `category1` (구분1), `category2` (구분2), `category3` (구분3)
-- `critical_level` (text: 상/중상/중/중하/하)
-- `subcontractor_name`, `subsub_name`, `hdec_pic_name`, `hdec_eng_name`
-- `outstanding_work` (text, 작업명 / 핵심 식별자)
-- `level`, `location`
-- `team`, `main_trade`, `sub_trade`
-- `work_type` (Late confirmed / Outstanding / Replacement …)
-- `planned_start_date`, `planned_completion_date`
-- `actual_start_date`, `actual_completion_date`
-- `actual_progress_pct` (numeric 0–100)
-- `completion_status` (Not Started / In Progress / Completed / On Hold)
-- `remarks`
-
-신규 (공정관리):
-- `planned_progress_pct` — `data_date` 기준 일자별 linear 계산 (defect의 `computePlannedProgressPct` 재사용)
-- `progress_variance_pct` — `actual − planned`
-- `data_date` — 진행률 평가 기준일 (전역 dataDate)
-- `health_status` — Ahead / On Track / Behind / Critical
-- `weight` — S-curve 가중치 (기본 1)
-
-신규 (Pre-Engineering 게이트 4종):
-- `material_approval_status` (enum: not_required / pending / approved) + `material_approval_date`
-- `material_procurement_status` (enum: not_required / pending / partially_secured / secured) + `material_procurement_date`
-- `drawing_approval_status` (enum: not_required / pending / approved) + `drawing_approval_date`
-- `mos_approval_status` (enum: not_required / pending / approved) + `mos_approval_date`
-- `pre_engineering_ready` (boolean, 트리거 자동) + `pre_engineering_blockers` (text[])
-
-표준 메타:
-- `id`, `project_id`, `is_active`, `row_version`, `data_source_type`, `source_upload_id`, `custom_payload` (jsonb), `created_at`, `updated_at`, `updated_by`
-
-### 보조 테이블
-- `punch_upload_batches` — defect_upload_batches와 동일 구조 (status는 실패 시 'failed'로 업데이트)
-- `punch_change_log` — 필드 변경 이력
-- `punch_comments` + `punch_comment_reads`
-- `punch_daily_snapshots` — 매일 progress 스냅샷 (S-curve용)
-
-### RLS
-Defect/Subtest와 동일 패턴 (`get_punch_edit_scope`, `can_update_punch`, `validate_punch_responsibility_update`, `delete_punch_cascade` 등 함수 신설). Pre-Engineering 게이트는 hdec PIC/superuser만 변경 가능.
-
-## 3. Header Mapping & Export ↔ Import 라운드트립 (핵심)
-
-### 3-1. 매핑 단일 진실 소스
-`src/lib/punch-field-registry.ts` 신설 — 모든 punch 필드 메타를 한 곳에 정의:
+각 필드 1개 entry, Export ↔ Import 라운드트립을 보장하기 위한 단일 진실 소스(SSOT).
 
 ```ts
-export const PUNCH_FIELDS = [
-  { field: 'item_no',                  exportLabel: 'Item No',                aliases: ['item no', 'item_no', 'no', '번호'] },
-  { field: 'category1',                exportLabel: '구분1',                  aliases: ['구분1', 'category 1', 'cat1'] },
-  { field: 'category2',                exportLabel: '구분2',                  aliases: ['구분2', 'category 2'] },
-  { field: 'category3',                exportLabel: '구분3',                  aliases: ['구분3', 'category 3'] },
-  { field: 'critical_level',           exportLabel: 'Critical Level',         aliases: ['critical level', 'criticality', '중요도'] },
-  { field: 'subcontractor_name',       exportLabel: 'Subcontractor',          aliases: ['subcontractor', 'sub', 'sub-contractor'] },
-  { field: 'outstanding_work',         exportLabel: 'Outstanding Works',      aliases: ['outstanding works', 'outsanding works', 'outstanding work', 'work', 'description'] }, // 원본 오타 'Outsanding' 포함
-  { field: 'level',                    exportLabel: 'Level',                  aliases: ['level', 'floor'] },
-  { field: 'location',                 exportLabel: 'Location',               aliases: ['location', 'area'] },
-  { field: 'team',                     exportLabel: 'Team',                   aliases: ['team'] },
-  { field: 'main_trade',               exportLabel: 'Main Trade',             aliases: ['main trade', 'trade'] },
-  { field: 'sub_trade',                exportLabel: 'Sub Trade',              aliases: ['sub trade'] },
-  { field: 'subsub_name',              exportLabel: 'Sub-Sub',                aliases: ['sub-sub', 'subsub', 'sub sub'] },
-  { field: 'hdec_pic_name',            exportLabel: 'HDEC PIC',               aliases: ['hdec pic', 'pic', 'hdec_pic'] },
-  { field: 'hdec_eng_name',            exportLabel: 'HDEC Eng',               aliases: ['hdec eng', 'engineer', 'hdec engineer'] },
-  { field: 'work_type',                exportLabel: 'Work Type',              aliases: ['work type', 'type'] },
-  { field: 'planned_start_date',       exportLabel: 'Planned Start Date',     aliases: ['planned start date', 'plan start', 'planned start'] },
-  { field: 'planned_completion_date',  exportLabel: 'Planned Completion Date',aliases: ['planned completion date', 'plan completion', 'planned completion', 'planned finish'] },
-  { field: 'actual_start_date',        exportLabel: 'Actual Start Date',      aliases: ['actual start date', 'actual start'] },
-  { field: 'actual_completion_date',   exportLabel: 'Actual Completion Date', aliases: ['actual completion date', 'actual completion', 'actual finish'] },
-  { field: 'actual_progress_pct',      exportLabel: 'Actual Progress %',      aliases: ['actual progress %', 'actual progress', 'progress'] },
-  { field: 'planned_progress_pct',     exportLabel: 'Planned Progress %',     aliases: ['planned progress %', 'planned progress'] },
-  { field: 'progress_variance_pct',    exportLabel: 'Variance %',             aliases: ['variance %', 'variance', 'gap'], readOnly: true }, // import 시 무시
-  { field: 'health_status',            exportLabel: 'Health',                 aliases: ['health', 'health status'], readOnly: true },
-  { field: 'completion_status',        exportLabel: 'Completion Status',      aliases: ['completion status', 'status'] },
-  { field: 'material_approval_status', exportLabel: 'Material Approval',      aliases: ['material approval', 'material approval status'] },
-  { field: 'material_approval_date',   exportLabel: 'Material Approval Date', aliases: ['material approval date'] },
-  { field: 'material_procurement_status', exportLabel: 'Material Procurement', aliases: ['material procurement', 'material secured', 'procurement'] },
-  { field: 'material_procurement_date',   exportLabel: 'Material Procurement Date', aliases: ['material procurement date', 'procurement date'] },
-  { field: 'drawing_approval_status',  exportLabel: 'Drawing Approval',       aliases: ['drawing approval', '도면승인'] },
-  { field: 'drawing_approval_date',    exportLabel: 'Drawing Approval Date',  aliases: ['drawing approval date'] },
-  { field: 'mos_approval_status',      exportLabel: 'MOS Approval',           aliases: ['mos approval', 'mos approval status'] },
-  { field: 'mos_approval_date',        exportLabel: 'MOS Approval Date',      aliases: ['mos approval date'] },
-  { field: 'pre_engineering_ready',    exportLabel: 'Pre-Eng Ready',          aliases: ['pre-eng ready', 'pre engineering ready'], readOnly: true },
-  { field: 'remarks',                  exportLabel: 'Remarks',                aliases: ['remarks', 'remark', 'note', 'notes'] },
-];
+type PunchFieldDef = {
+  field: string;           // DB column
+  exportLabel: string;     // Export 시 헤더 (= 1순위 alias)
+  aliases: string[];       // Import 시 매칭 후보 (정규화 후)
+  group: 'identity' | 'classification' | 'people' | 'schedule' |
+         'progress' | 'pre_engineering' | 'meta';
+  dataType: 'text' | 'date' | 'number' | 'pct' | 'enum' | 'bool';
+  enumValues?: string[];   // status / health 등
+  readOnly?: boolean;      // 파생값 — Import 무시, Export O
+  required?: boolean;
+};
 ```
 
-### 3-2. Export 동작
-- 컬럼 헤더는 항상 위 `exportLabel` 사용
-- ID 컬럼(`id`, `row_version`)을 hidden 또는 별도 시트에 같이 출력 → import 시 안전 upsert에 활용
-- Custom field는 `Custom: <fieldName>` 헤더로 출력하고 import 시 동일 규칙으로 역매핑
+핵심 필드 그룹:
+- **identity**: `item_no`, `outstanding_work`, `location`, `level`
+- **classification**: `category1/2/3`, `critical_level`, `work_type`
+- **people**: `subcontractor_name`, `subsub_name`, `hdec_pic_name`, `team`
+- **schedule**: `planned_start_date`, `actual_start_date`, `planned_completion_date`, `actual_completion_date`
+- **progress**: `planned_progress_pct`, `actual_progress_pct`, `progress_variance_pct`*, `health_status`*, `completion_status`, `data_date`
+- **pre_engineering**: `material_approval_status/date`, `material_procurement_status/date`, `drawing_approval_status/date`, `mos_approval_status/date`, `pre_engineering_ready`*, `pre_engineering_blockers`*
+- **meta**: `remarks`
 
-### 3-3. Import 매핑 로직
-1. 헤더 정규화(`normalizePunchHeader`): lowercase + trim + 다중 공백/특수문자 압축
-2. `exportLabel`(정규화)과 모든 `aliases` 를 합쳐 lookup map 구성 → 1차 매칭
-3. `import_header_mappings` 테이블(module='punch')의 사용자 정의 매핑 → 2차 매칭
-4. 그래도 매칭 실패 시 `Custom: xxx` 패턴이면 custom_payload로 저장
-5. `readOnly: true` 필드(Variance/Health/Pre-Eng Ready)는 import 시 무시(경고만 표시)
-6. ColumnSelectDialog에서 매핑 결과를 표시 — 매핑 실패 헤더는 노란 배지
+(* = `readOnly: true`, 트리거가 자동 계산)
 
-### 3-4. 라운드트립 자가 검증
-`src/test/punch-roundtrip.test.ts`:
-- 모든 `PUNCH_FIELDS` 의 `exportLabel` → `mapHeader()` → 동일 `field` 로 역매핑되는지 단위 테스트
-- 업로드된 원본 파일(`Outstanding_Works_MECH_FACADE_Archi_External_r4.xlsx`)의 24개 헤더가 모두 매핑되는지 확인
-- 새 필드 추가 시 테스트가 자동 보호
+또한 export header → field 역매핑용 `PUNCH_FIELDS_BY_LABEL` Map과 `normalizePunchHeader(raw)` → `field | null` 헬퍼를 함께 export.
 
-### 3-5. 시드 마이그레이션
-`import_header_mappings` 에 `module='punch'` 행을 위 registry로부터 일괄 INSERT (Admin > Header Mappings에서 사후 편집 가능).
+### 2. Sidebar / Routing / Module Status
 
-## 4. Raw Data 페이지
-`DefectRawDataPage` 패턴 그대로:
-- 컬럼: 전체 + custom field
-- 필터: team / trade / sub / status / critical_level / health_status / pre_eng_ready
-- Bulk edit, soft-delete, comments 패널
-- Pre-Engineering 게이트는 4개 컬럼 + "Ready" 칩으로 가시화
-- 행 클릭 → `/punch/:id` Detail
+**`AppSidebar.tsx`**
+- 새 그룹 `Punch Management` 추가 (Defect 그룹 아래).
+- 메뉴: Dashboard, Raw Data, Import, Export (이번 단계는 Raw Data만 라우팅 활성, 나머지는 PlaceholderPage).
+- 아이콘: `ListChecks` (lucide-react).
+- `useModuleStatus()`에 `punch` 추가 → Paused 뱃지/그룹 숨김 동작 동일 적용.
 
-## 5. Dashboard
-KPI: Total / In Progress / Completed / On Hold / Overall Planned vs Actual / Critical Behind / Pre-Eng Not Ready
+**`module-status-context.ts` / `ModuleStatusContext.tsx`**
+- `ModuleKey`에 `'punch'` 추가, `KEY_MAP.punch = 'module_punch_status'`.
+- `app_settings`의 punch RLS는 이미 admin 전용으로 들어가도록 마이그레이션에서 처리 필요(아래 마이그레이션 항목).
 
-차트:
-- S-Curve (Planned vs Actual, daily snapshot)
-- Team / Trade / Subcontractor 진행률 매트릭스
-- Critical Watchlist (variance < −10% 또는 critical=상/중상 + behind)
-- Pre-Engineering Bottleneck (게이트별 미승인 건수)
-- Recent Comments
+**`role-permissions.ts`**
+- `/punch/raw-data`, `/punch/:id` → super_guest+
+- `/punch/import`, `/punch/export` → user+
+- `/punch/dashboard` → super_guest+ (기본 Punch 진입점)
 
-## 6. 공정률 계산
-- `planned_progress_pct`: `defect-progress-calc.ts` 의 `computePlannedProgressPct` 재사용
-- `progress_variance_pct = actual − planned`
-- `health_status`: variance ≥ +5 Ahead / (−5,+5) On Track / (−15,−5] Behind / ≤ −15 Critical
-- 매일 1회 cron edge function `punch-daily-snapshot`
+**`App.tsx`**
+- 라우트 추가:
+  - `/punch/dashboard` → PlaceholderPage
+  - `/punch/raw-data` → `PunchRawDataPage`
+  - `/punch/import` → PlaceholderPage
+  - `/punch/export` → PlaceholderPage
+  - `/punch/:id` → `PunchDetailPage`
 
-## 7. Pre-Engineering 게이트 검증
-트리거 `punch_compute_pre_eng()`:
-- 4개 status가 모두 approved/secured/not_required → `pre_engineering_ready=true`
-- 미완 게이트명을 `pre_engineering_blockers` 배열에 채움
-- Detail 페이지에 Pre-Engineering 섹션(4개 게이트 + 승인일)
+### 3. 마이그레이션 (작은 보조 1건)
 
-## 8. Export
-- `DefectExportPage` 복제 → 컬럼 선택형 Excel export
-- 헤더는 항상 `PUNCH_FIELDS.exportLabel` 사용 (라운드트립 보장)
-- 프리셋: "All Columns" / "Pre-Engineering Status" / "Behind Schedule Only"
+`app_settings` 모듈키 RLS 정책을 `module_punch_status`까지 포함하도록 갱신:
 
-## 9. Phase 계획
+```sql
+-- WHERE key IN ('module_tnc_status','module_defect_status','module_docs_status','module_punch_status')
+```
 
-**Phase 1 (이번 작업 기본 범위)**
-- 테이블 + enum + RLS + 트리거 마이그레이션
-- `punch-field-registry.ts` + 헤더 매핑 시드
-- Sidebar / Routing / ModuleStatus
-- Raw Data + Detail (CRUD, Pre-Engineering 게이트 포함)
-- Import + ColumnSelectDialog + Import Logs (실패 시 status='failed')
-- Export (라운드트립 보장)
-- 라운드트립 자가 검증 테스트
+(`app_settings`의 ALL 정책을 DROP 후 재생성)
+
+### 4. Raw Data 페이지 — `src/pages/PunchRawDataPage.tsx`
+
+Defect Raw Data 패턴을 그대로 따르되 **이번 단계는 핵심만** 구현 (BulkEdit/Reassign/QuickUpdate는 Phase 2):
+
+- 데이터 fetch: `supabase.from('punch_items').select('*').eq('is_active', true)` + 페이지네이션 1000행 chunk.
+- TanStack Table + 가상화(`useVirtualizer`).
+- 컬럼은 `PUNCH_FIELDS` 순서대로 자동 생성, `useFieldConfig('punch')`(없으면 registry default)로 visible/순서 결정.
+- 특수 셀 렌더러:
+  - **Stage Progress 칸**: 4개 Pre-Engineering 게이트 미니 인디케이터 (Material Approval / Material / Drawing / MOS) — 색상 dot + tooltip.
+  - **Health Status 뱃지**: Ahead(green) / On Track(blue) / Behind(amber) / Critical(red).
+  - **Variance %**: 음수 빨강, 0 회색, 양수 초록.
+  - **% 컬럼**: `formatPct` 재사용.
+  - **날짜**: `formatDdMmm`.
+- 필터: 검색바 + 컬럼별 필터(텍스트 / Enum / 숫자 범위) — 기존 `inferFilterType` 헬퍼 재사용.
+- 행 클릭 → `/punch/:id`.
+- 상단 액션: Search, Filter chip, Export(이번 단계는 disabled placeholder).
+- 권한: `can_write_for_team` 패턴은 RLS가 처리하므로 UI는 항상 클릭 가능, 실패는 toast.
+
+> **Phase 2로 미루는 항목**: 일괄 편집/Reassign/Duplicate, Bulk delete, Critical Pending Bar, 댓글 패널, Top horizontal scrollbar.
+
+### 5. Detail 페이지 — `src/pages/PunchDetailPage.tsx`
+
+좌측 폼 / 우측 사이드 정보 2-컬럼 레이아웃 (Defect Detail과 동일 톤).
+
+**섹션 구성:**
+1. **Identity** (read-only): Item No, Outstanding Work, Location/Level
+2. **Classification**: Category 1/2/3, Critical Level, Work Type — Select
+3. **People & Team**: Subcontractor / Sub-sub / HDEC PIC / Team
+4. **Schedule**: 4개 날짜(Planned/Actual Start/Completion) — DatePicker
+5. **Progress**:
+   - Planned % (자동 계산, 읽기 전용 표시 + "Recalculate" 버튼)
+   - Actual % (입력)
+   - Variance / Health (자동, 뱃지 표시)
+   - Completion Status (Select)
+   - Data Date (DatePicker, 기본값 today)
+6. **Pre-Engineering Gates** (가장 중요한 신규 섹션):
+   - 4개 Card: Material Approval, Material Procurement, Drawing Approval, MOS Approval
+   - 각 카드: Status Select (`Pending / In Progress / Approved / Rejected / N/A`) + Date picker
+   - 하단에 자동 계산된 `Pre-Engineering Ready` 뱃지(✓/✗) + `pre_engineering_blockers` 칩 리스트
+7. **Remarks**: Textarea
+8. **History 사이드 패널**: 최근 `punch_change_log` 10건 (변경 필드 / before→after / 시각 / 사용자).
+
+**저장 로직:**
+- `row_version` Optimistic Concurrency: UPDATE 시 `eq('row_version', current)` → 0건 영향 시 "다른 사용자가 수정" 토스트 + reload.
+- 변경된 필드만 `update()` payload에 포함.
+- 성공 후 trigger가 derived 컬럼을 다시 계산 → `select()`로 다시 받아 폼 갱신.
+
+**권한 분기:**
+- `RoleGuard`로 라우트 진입 통제.
+- D.Super User는 row.team !== profile.team이면 모든 입력 disabled + 안내 배너.
+- guest/super_guest는 view-only.
+
+### 6. 기술 노트 (구현 순서)
+
+```text
+1) field registry 작성 + 단위 테스트(라운드트립 골격만)
+2) module-status-context 'punch' 추가
+3) role-permissions / App.tsx 라우트
+4) AppSidebar 그룹 추가
+5) PunchRawDataPage 스캐폴드 → 컬럼/필터/검색
+6) PunchDetailPage 스캐폴드 → Pre-Eng 게이트 카드
+7) app_settings RLS 마이그레이션
+```
+
+### 다음(Step 3) 예고
+
+- Import 페이지 + 라운드트립 매핑 검증
+- Export 페이지 (registry 기반)
+- Import Logs (`failed` 상태 처리 포함)
 - 기본 Dashboard (KPI + Critical Watchlist + Pre-Eng Bottleneck)
-- Comments
+- 댓글 시스템
 
-**Phase 2**
-- S-Curve + daily snapshot edge function
-- Export 프리셋 확장
-- 모바일 Quick Update
-- Schedule Revision 페이지
-
-**Phase 3**
-- Bulk reassign / duplicate
-- Simulation (To-Achieve 밴드)
-- Custom fields UI 통합
-
-승인하시면 Phase 1을 마이그레이션부터 순차 구현하겠습니다.
+이 계획으로 진행해도 될까요?
