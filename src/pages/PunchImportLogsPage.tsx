@@ -144,48 +144,30 @@ export default function PunchImportLogsPage() {
     setRowSearch('');
     setRenderLimit(500);
     setExpandedRows(new Set());
-    let fl: FieldLog[] = [];
+
     try {
-      fl = await fetchAllByUploadId<FieldLog>(
+      const rows = await fetchAllByUploadId<PunchRowLog>(
+        'punch_upload_row_logs',
+        'id, raw_row_no, item_no, action_taken, reason_code, reason_detail',
+        id,
+      );
+      setRowLogs(rows);
+    } catch (e) {
+      console.error('Failed to load punch row logs', e);
+      setRowLogs([]);
+    }
+
+    try {
+      const fl = await fetchAllByUploadId<FieldLog>(
         'import_field_logs',
         'id, raw_row_no, field_name, outcome, raw_value, applied_value, previous_value, reason_code, reason_detail',
         id,
       );
+      setFieldLogs(fl);
     } catch (e) {
       console.error('Failed to load field logs', e);
+      setFieldLogs([]);
     }
-    setFieldLogs(fl);
-
-    // Synthesize per-row summary from field logs (no dedicated punch_upload_row_logs table).
-    const byRow = new Map<number, FieldLog[]>();
-    for (const f of fl) {
-      if (f.raw_row_no == null) continue;
-      const arr = byRow.get(f.raw_row_no) || [];
-      arr.push(f);
-      byRow.set(f.raw_row_no, arr);
-    }
-    const synth: PunchRowLog[] = [];
-    for (const [rowNo, fls] of byRow.entries()) {
-      const itemNoLog = fls.find((f) => f.field_name === 'item_no');
-      const hasRejected = fls.some((f) => f.outcome.startsWith('rejected'));
-      const hasApplied = fls.some((f) => f.outcome === 'applied' || f.outcome === 'corrected');
-      const action = hasRejected
-        ? 'rejected'
-        : hasApplied
-          ? 'updated'
-          : 'skipped';
-      const reasonLog = fls.find((f) => f.reason_code);
-      synth.push({
-        id: `r-${rowNo}`,
-        raw_row_no: rowNo,
-        item_no: itemNoLog?.applied_value ?? itemNoLog?.raw_value ?? null,
-        action_taken: action,
-        reason_code: reasonLog?.reason_code ?? null,
-        reason_detail: reasonLog?.reason_detail ?? null,
-      });
-    }
-    synth.sort((a, b) => (a.raw_row_no ?? 0) - (b.raw_row_no ?? 0));
-    setRowLogs(synth);
   };
 
   const deleteBatch = async (batch: PunchBatch) => {
