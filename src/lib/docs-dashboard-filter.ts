@@ -146,8 +146,8 @@ export function computeDashboardFilteredIds(
   if (module === 'spare_part') {
     for (const r of rows) sparePartById.set(r.id, r);
   }
-  const asOfIso = (params.delivery_pending || params.po_pending || params.eta_missing || params.status || params.po_status || params.overdue === '1')
-    ? asOf.toISOString().slice(0, 10) : '';
+  const asOfIso = (params.delivery_pending || params.po_pending || params.po_overdue || params.eta_missing || params.status || params.po_status || params.overdue === '1')
+    ? asOf.toISOString().slice(0, 10) : asOf.toISOString().slice(0, 10);
 
   const out = new Set<string>();
   for (const [id, recs] of byItem) {
