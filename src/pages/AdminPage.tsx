@@ -32,7 +32,6 @@ import EventLogTab from './admin/EventLogTab';
 import { ModuleControlTab } from './admin/ModuleControlTab';
 import HeaderMappingsTab from './admin/HeaderMappingsTab';
 import CustomFieldsTab from './admin/CustomFieldsTab';
-import ReportTab from './admin/ReportTab';
 import { loadHeaderMappingsCache } from '@/lib/header-mappings-cache';
 import { invalidateAdminRolesCache } from '@/lib/admin-roles-cache';
 import { UnmappedAliasQueue } from '@/components/admin/UnmappedAliasQueue';
