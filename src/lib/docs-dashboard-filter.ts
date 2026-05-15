@@ -63,7 +63,7 @@ export function hasAnyDashboardFilter(p: DashboardFilterParams): boolean {
   return !!(p.status || p.overdue || p.stage || p.team || p.trade || p.bucket
     || p.sub1_status || p.sub2_status
     || p.subcontractor || p.hdec_pic || p.due_this_week || p.delay_bucket || p.dq
-    || p.po_status || p.eta_missing || p.po_pending || p.delivery_pending);
+    || p.po_status || p.eta_missing || p.po_pending || p.po_overdue || p.delivery_pending);
 }
 
 const BUILDERS: Record<DocModule, (rows: any[], asOf: Date) => any[]> = {
