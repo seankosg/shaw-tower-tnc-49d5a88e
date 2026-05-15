@@ -214,6 +214,7 @@ export default function TncSimulationPage() {
             {dataDateSource === 'fallback' && ' (fallback)'} · Target{' '}
             <span className="font-medium">{targetIso}</span> · N ={' '}
             <span className="font-medium">{filteredItems.length}</span>
+            {subconFilter !== 'all' && <> · Subcontractor <span className="font-medium">{subconFilter}</span></>}
             {lastCalcAt && (
               <> · Last calculated <span className="font-medium">{lastCalcAt.toLocaleTimeString()}</span></>
             )}
