@@ -4,14 +4,17 @@ import { format } from 'date-fns';
 import {
   Calendar as CalendarIcon, FileText, BookOpen, ShieldCheck,
   AlertTriangle, CheckCircle2, ListChecks, ArrowRight,
+  CalendarClock, Flame, Clock, Layers, AlertCircle,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { resolveTrade, TRADE_OPTIONS, type TradeCategory } from '@/lib/docs-trade';
 import {
@@ -21,8 +24,11 @@ import {
   ALL_STAGE_DEFS, MODULE_LABEL, MODULE_RAW_ROUTE,
   computeStageProgress, summariseByItem, computeAbdBucketDistribution,
   computeOmmSub1StatusBuckets, computeOmmSub2StatusBuckets, OMM_VISIBLE_STAGE_KEYS,
+  computeDelaySeverityBuckets, isDueThisWeek, criticalDelayItemIds,
+  computeDataQualityIssues, DELAY_BUCKETS,
   type DocModule, type DocsStageRecord, type AbdBucketDistribution,
   type OmmSub1StatusBuckets, type OmmSub2StatusBuckets, type OmmStatusBucketKey,
+  type DelayBucketKey,
 } from '@/lib/docs-stage-records';
 
 const MODULE_ICON: Record<DocModule, typeof FileText> = {
