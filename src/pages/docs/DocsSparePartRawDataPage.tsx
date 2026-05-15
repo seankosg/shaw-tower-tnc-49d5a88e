@@ -379,18 +379,87 @@ export default function DocsSparePartRawDataPage() {
       } as ColumnDef<Row>;
     });
 
-    return [selectColumn, progressColumn, ...dataColumns];
-  }, [optionFields, getLabel]);
+    // Dynamic columns: any enabled docs_field_config row not in SPARE_PART_RAW_FIELDS
+    const knownIds = new Set<string>(SPARE_PART_RAW_FIELDS as readonly string[]);
+    const dynamicColumns: ColumnDef<Row>[] = (fieldConfigRows ?? [])
+      .filter((r) => r && r.is_enabled && !knownIds.has(r.field_name) && !isMetaField(r.field_name))
+      .map((r) => {
+        const fieldName = r.field_name;
+        const headerKey = r.original_header || fieldName;
+        const accessorFn = (row: Row): any => {
+          const direct = (row as any)[fieldName];
+          if (direct != null && direct !== '') return direct;
+          const rawP = (row as any).raw_payload;
+          if (rawP && typeof rawP === 'object') {
+            const v = rawP[headerKey] ?? rawP[fieldName];
+            if (v != null && v !== '') return v;
+          }
+          const customP = (row as any).custom_payload;
+          if (customP && typeof customP === 'object') {
+            return customP[headerKey] ?? customP[fieldName] ?? null;
+          }
+          return null;
+        };
+        return {
+          id: fieldName,
+          accessorFn,
+          header: r.display_name || getLabel(fieldName),
+          size: 140,
+          filterFn: textFilterFn,
+          meta: { filterType: 'text', filterOptions: [], label: r.display_name || getLabel(fieldName), isDynamic: true },
+          cell: ({ getValue }) => {
+            const v = getValue() as any;
+            if (v == null || v === '') return '—';
+            return <span className="block truncate" title={String(v)}>{String(v)}</span>;
+          },
+        } as ColumnDef<Row>;
+      });
+
+    return [selectColumn, progressColumn, ...dataColumns, ...dynamicColumns];
+  }, [optionFields, getLabel, fieldConfigRows]);
+
+  // All column ids (static + dynamic)
+  const allColumnIds = useMemo<string[]>(
+    () => columns.map((c) => (c as any).id ?? (c as any).accessorKey).filter(Boolean) as string[],
+    [columns],
+  );
+
+  // Visibility derived from Field Config (+ user overrides from localStorage)
+  const columnVisibility = useMemo<VisibilityState>(() => {
+    const v: VisibilityState = { __select: true, procurement_progress: true };
+    for (const id of allColumnIds) {
+      if (id === '__select' || id === 'procurement_progress') continue;
+      if (Object.prototype.hasOwnProperty.call(columnVisibilityOverrides, id)) {
+        v[id] = columnVisibilityOverrides[id]!;
+      } else {
+        v[id] = isFieldVisible(id, roles ?? []);
+      }
+    }
+    return v;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allColumnIds, isFieldVisible, roles, columnVisibilityOverrides]);
+
+  // Order from Field Config sort_order (pinned first)
+  const columnOrder = useMemo(() => {
+    const PINNED_FRONT = ['__select', 'procurement_progress'];
+    const remaining = allColumnIds.filter((id) => !PINNED_FRONT.includes(id));
+    return [...PINNED_FRONT, ...sortFieldNames(remaining)];
+  }, [allColumnIds, sortFieldNames]);
 
   const table = useReactTable({
     data: filteredBaseData,
     columns,
-    state: { sorting, columnFilters, globalFilter, columnSizing, columnVisibility, rowSelection },
+    state: { sorting, columnFilters, globalFilter, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
     onColumnSizingChange: setColumnSizing,
-    onColumnVisibilityChange: setColumnVisibility,
+    onColumnVisibilityChange: (updater) => {
+      setColumnVisibilityOverrides((prev) => {
+        const next = typeof updater === 'function' ? (updater as any)(columnVisibility) : updater;
+        return { ...prev, ...next };
+      });
+    },
     onRowSelectionChange: setRowSelection,
     globalFilterFn: globalFn,
     enableMultiSort: true,
