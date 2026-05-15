@@ -1,51 +1,44 @@
-## 문제 진단
+## 문제
 
-업로드 로그의 모든 행이 `[PGRST204] Could not find the '_dateWarnings' column of 'defect_items' in the schema cache` 로 reject 되고 있습니다.
+Import History의 배지는 `defect_upload_batches.status` DB 컬럼을 그대로 표시합니다. 그런데 import 실행 중 예외가 발생하면:
 
-### 원인
-`src/contexts/DefectImportContext.tsx` 1060번 줄 부근에서 DB insert payload를 만들 때 파서 결과를 그대로 spread 합니다:
+- 메모리상 파일 status는 `failed`로 바뀜 (`runImport` catch)
+- DB row의 status는 batch 생성 시점에 찍힌 `'processing'` 그대로 남음
+- 정상 종료 경로에서만 `status: 'completed'`로 update (1214행)
 
-```ts
-const payload = { ...row, project_id: ..., ... };
-delete payload.rawRowNo;
-delete payload.id;
-delete payload.custom_field_errors;
-```
+→ History에서 영원히 "processing" 배지로 표시됨.
 
-파서(`src/lib/defect-parser.ts` 624번)는 날짜 셀에서 경고가 발생한 행에 한해 내부용 키 `_dateWarnings`를 붙여 반환합니다. 이 키가 payload에 남은 채 PostgREST로 전송되면, 실제 컬럼이 아니므로 batch 전체가 PGRST204로 실패합니다.
+## 수정안
 
-### 왜 "new" 시트에서만 발생했나
-- 다른 시트는 날짜 형식이 정상 → `dp.warnings.length === 0` → `_dateWarnings` 키 자체가 추가되지 않음 → 통과
-- "new" 시트는 어떤 날짜 셀에서 경고가 발생 → 모든(또는 일부) 행에 `_dateWarnings` 포함 → batch 전체 reject
-- DB 로그 caption도 row 단위가 아닌 chunk 전체에 같은 reason이 찍히는 이유와 일치합니다 (1개 행이 schema-cache 에러를 일으키면 chunk 전체 실패).
-
-## 수정안 (한 곳만 손대면 됨)
-
-`src/contexts/DefectImportContext.tsx`의 payload 정리 블록(1082~1084행 근처)에 다음 한 줄을 추가:
+`src/contexts/DefectImportContext.tsx` `importOneFile` 함수에서 batch row 생성(564행) 이후의 모든 처리를 try/catch로 감싸고, 실패 시 다음 작업을 수행한 뒤 에러를 rethrow:
 
 ```ts
-delete payload._dateWarnings;
+await supabase.from('defect_upload_batches').update({
+  status: 'failed',
+  processed_rows: insertedCount + updatedCount + skipped + rejected,
+  success_rows: insertedCount + updatedCount,
+  skipped_rows: skipped,
+  rejected_rows: rejected,
+  error_message: (error as Error)?.message?.slice(0, 1000) ?? 'Import failed',
+}).eq('id', uploadId);
 ```
 
-추가로 향후 같은 사고 재발 방지를 위해, 같은 자리에서 **언더스코어로 시작하는 모든 키를 일괄 strip** 하도록 보강합니다:
+(`error_message` 컬럼이 없는 경우 해당 키를 생략 — 우선 컬럼 존재 여부 확인 후 결정)
 
-```ts
-for (const k of Object.keys(payload)) {
-  if (k.startsWith('_')) delete payload[k];
-}
-```
+추가로 History 페이지(`DefectImportLogsPage.tsx`)의 `statusColor` 맵에 `failed`(빨강) 항목이 이미 존재하는지 확인하고 없으면 추가합니다.
 
-이렇게 하면 파서가 앞으로 다른 `_xxx` 내부 키를 추가하더라도 자동 보호됩니다.
+## 사전 확인 항목
 
-## 영향 범위
-
-- 변경 파일: `src/contexts/DefectImportContext.tsx` 1줄~3줄 추가
-- 비즈니스 로직, 검증, 진척, RLS, 컬럼 매핑 변화 없음
-- `_dateWarnings`는 이미 1행 위 621~622번에서 row 로그 작성에 사용되고 있으므로, payload에서만 제거되어도 경고 표시 기능은 유지됩니다
-- T&C importer(`src/contexts/ImportContext.tsx`)도 동일 패턴이지만 거기서는 다른 strip 경로를 사용 — 이번 변경 범위 밖, 추후 점검 권장 (별도 작업으로 표시)
+1. `defect_upload_batches` 테이블에 `error_message` 컬럼이 있는지 — 없으면 query에서 빼고 status만 업데이트
+2. `statusColor['failed']` 키 존재 여부
 
 ## 검증
 
-1. 수정 후 동일한 "new" 시트를 재 import → reject 0, inserted/updated 정상
-2. 의도적으로 잘못된 날짜 형식이 있는 행 → 경고는 row log에 남고, defect_items insert는 성공해야 함
-3. 기존 정상 시트 회귀 없음 확인
+- 의도적으로 실패하는 시트(예: 잘못된 컬럼명 가진 파일) 임포트 후 History에서 해당 배치가 빨간 "failed" 배지로 표시되는지 확인
+- 정상 임포트는 기존대로 "completed" 표시되는지 회귀 확인
+
+## 영향 범위
+
+- `src/contexts/DefectImportContext.tsx` 1곳 (try/catch 래핑 + 실패 시 update 호출)
+- 필요 시 `src/pages/DefectImportLogsPage.tsx` `statusColor` 보강
+- 다른 importer(T&C, Docs)에도 동일 패턴 가능성 있으나 이번 작업 범위 밖
