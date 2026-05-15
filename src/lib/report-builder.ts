@@ -47,17 +47,6 @@ function isOnOrBefore(actual: string | null | undefined, snapshot: string): bool
 }
 
 // ---------- T&C ----------
-interface TncRow {
-  t1_actual_date: string | null;
-  t2_actual_date: string | null;
-  r2_actual_submission_date: string | null;
-  t1_planned_date: string | null;
-  t2_planned_date: string | null;
-  r2_target_submission_date: string | null;
-  is_active: boolean;
-}
-
-// ---------- T&C ----------
 async function fetchTnc(): Promise<SubtestForDashboard[]> {
   const out: SubtestForDashboard[] = [];
   let from = 0; const size = 1000;
