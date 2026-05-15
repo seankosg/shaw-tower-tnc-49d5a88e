@@ -3,6 +3,7 @@
 export interface SparePartItem {
   id: string;
   project_id: string | null;
+  item_no: number | null;
   sn: string | null;
   level: string | null;
   sn_outline: string | null;
