@@ -55,6 +55,16 @@ function defaultColumnsFor(entity: BulkEntity): ExportColumn[] {
       { id: 'team', label: 'Team' },
     ];
   }
+  if (entity === 'punch') {
+    return [
+      { id: 'item_no', label: 'Item No' },
+      { id: 'description', label: 'Description' },
+      { id: 'subcontractor_name', label: 'Subcontractor' },
+      { id: 'hdec_pic_name', label: 'HDEC PIC' },
+      { id: 'team', label: 'Team' },
+      { id: 'status', label: 'Status' },
+    ];
+  }
   return [
     { id: 'issue_no', label: 'Issue No' },
     { id: 'description', label: 'Description' },
