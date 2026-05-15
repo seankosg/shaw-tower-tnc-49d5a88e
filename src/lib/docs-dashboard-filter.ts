@@ -132,11 +132,20 @@ export function computeDashboardFilteredIds(
       abd: module === 'abd' ? rows : [],
       omm: module === 'omm' ? rows : [],
       warranty: module === 'warranty' ? rows : [],
+      spare_part: module === 'spare_part' ? rows : [],
     });
     for (const it of issues) {
       if (it.key === params.dq) for (const id of it.ids) dqIds.add(id);
     }
   }
+
+  // Spare-part raw row map for status / po_status / pending filters
+  const sparePartById = new Map<string, any>();
+  if (module === 'spare_part') {
+    for (const r of rows) sparePartById.set(r.id, r);
+  }
+  const asOfIso = (params.delivery_pending || params.po_pending || params.eta_missing || params.status || params.po_status || params.overdue === '1')
+    ? asOf.toISOString().slice(0, 10) : '';
 
   const out = new Set<string>();
   for (const [id, recs] of byItem) {
