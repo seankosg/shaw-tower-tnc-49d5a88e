@@ -617,9 +617,13 @@ export default function DocsOMMRawDataPage() {
 
   // ── State persistence (localStorage) ──────────────────────────────────────
   const DOCS_DRILLDOWN_PARAMS = ['status', 'overdue', 'stage', 'team', 'q', 'mismatch', 'resub', 'sub1_status', 'sub2_status'];
+  const hasRestoredRef = useRef(false);
   useEffect(() => {
-    setStateLoaded(false);
     const isDrilldown = DOCS_DRILLDOWN_PARAMS.some((p) => searchParams.has(p));
+    // Skip re-running when our own URL-sync cleared params after user toggled off a filter.
+    if (hasRestoredRef.current && !isDrilldown) return;
+    hasRestoredRef.current = true;
+    setStateLoaded(false);
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
