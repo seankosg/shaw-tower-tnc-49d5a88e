@@ -304,12 +304,32 @@ export default function PunchRawDataPage() {
 
   return (
     <div className="flex h-full flex-col gap-4 p-4">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">Punch (Minor O/S Work) — Raw Data</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             {stats.total} items · {stats.critical} critical · {stats.behind} behind · {stats.blocked} pre-eng blocked
           </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate('/punch/import')}>
+            <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (filtered.length === 0) {
+                toast({ title: 'No rows to export', description: 'Adjust filters and try again.', variant: 'destructive' });
+                return;
+              }
+              setExportMode('single');
+              setExportFormat('view');
+              setExportDialogOpen(true);
+            }}
+          >
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export Excel
+          </Button>
         </div>
       </div>
 
