@@ -75,7 +75,7 @@ Every figure is anchored to two reference points:
 | Overdue | \`isOverdue(s, dataDate)\` — any of Pred/T1/T2 with \`planned_date ≤ Data Date\` and not yet Done |
 | At-Risk | \`isAtRisk(s, today, threshold)\` — not Overdue, but a Pred/T1/T2 planned date falls within N days from \`today\` (threshold configured in Settings) |
 
-**Tier 2 — Stage Cards (Pred / T1 / T2 / R1 / R2S)**
+**Tier 2 — Stage Cards (Pred / Pre-Test / Actual Test / R1 / Test Report)**
 
 Each card shows three numbers per stage:
 
@@ -83,7 +83,7 @@ Each card shows three numbers per stage:
 - **OD (Overdue)**: \`planned_date ≤ Data Date\` but stage not yet Done
 - **%**: \`Done / Total × 100\`
 
-The R2 card uses **R2 Submission (R2S)** (Approval is hidden from the UI).
+The R2 card uses the **Test Report (R2)** stage (R2 Approval is hidden from the UI).
 
 **Tier 3 — All-Stage Alert Banner**
 
