@@ -310,6 +310,7 @@ export default function DocsSparePartRawDataPage() {
   }), [items]);
 
   const sizeByField: Record<string, number> = {
+    item_no: 70, sn_outline: 110,
     sn: 100, category: 90, sub_category: 130, parent_item: 180, material: 260,
     spec_ref: 130, location: 130, floor_level: 90, item_type: 110, specification: 220,
     size: 90, spares_requirements: 200, unit: 70, spares_quantity: 80, storage_area_required: 160,
