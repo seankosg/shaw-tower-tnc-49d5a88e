@@ -32,6 +32,7 @@ export interface DashboardFilterParams {
   po_status?: string | null;
   eta_missing?: string | null;       // '1' | 'true'
   po_pending?: string | null;        // '1' | 'true'
+  po_overdue?: string | null;        // '1' | 'true' — planned_po_date passed & no actual_po_date
   delivery_pending?: string | null;  // '1' | 'true'
 }
 
@@ -53,6 +54,7 @@ export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterP
     po_status: sp.get('po_status'),
     eta_missing: sp.get('eta_missing'),
     po_pending: sp.get('po_pending'),
+    po_overdue: sp.get('po_overdue'),
     delivery_pending: sp.get('delivery_pending'),
   };
 }
@@ -61,7 +63,7 @@ export function hasAnyDashboardFilter(p: DashboardFilterParams): boolean {
   return !!(p.status || p.overdue || p.stage || p.team || p.trade || p.bucket
     || p.sub1_status || p.sub2_status
     || p.subcontractor || p.hdec_pic || p.due_this_week || p.delay_bucket || p.dq
-    || p.po_status || p.eta_missing || p.po_pending || p.delivery_pending);
+    || p.po_status || p.eta_missing || p.po_pending || p.po_overdue || p.delivery_pending);
 }
 
 const BUILDERS: Record<DocModule, (rows: any[], asOf: Date) => any[]> = {
@@ -144,8 +146,8 @@ export function computeDashboardFilteredIds(
   if (module === 'spare_part') {
     for (const r of rows) sparePartById.set(r.id, r);
   }
-  const asOfIso = (params.delivery_pending || params.po_pending || params.eta_missing || params.status || params.po_status || params.overdue === '1')
-    ? asOf.toISOString().slice(0, 10) : '';
+  const asOfIso = (params.delivery_pending || params.po_pending || params.po_overdue || params.eta_missing || params.status || params.po_status || params.overdue === '1')
+    ? asOf.toISOString().slice(0, 10) : asOf.toISOString().slice(0, 10);
 
   const out = new Set<string>();
   for (const [id, recs] of byItem) {
@@ -216,6 +218,13 @@ export function computeDashboardFilteredIds(
       if (!row) continue;
       // PO pending = no actual_po_date and (planned_po_date passed OR not set)
       if (row.actual_po_date) continue;
+    }
+    if (module === 'spare_part' && params.po_overdue && params.po_overdue !== '0' && params.po_overdue !== 'false') {
+      const row = sparePartById.get(id);
+      if (!row) continue;
+      if (row.actual_po_date) continue;
+      const planned = row.planned_po_date ? String(row.planned_po_date).slice(0, 10) : '';
+      if (!planned || planned >= asOfIso) continue;
     }
     if (module === 'spare_part' && params.delivery_pending && params.delivery_pending !== '0' && params.delivery_pending !== 'false') {
       const row = sparePartById.get(id);

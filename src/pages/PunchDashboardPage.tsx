@@ -21,7 +21,8 @@ import {
   isCriticalDelay, isBehindSchedule, isBlockedByPreEng, isReadyButNotStarted,
   isDueWithin, isPlannedToStartWithin, dominantBlocker, blockersFor,
   weightedProgress, simpleAverageProgress, groupProgressMatrix, recoveryPriorityScore,
-  type PunchBlockerKind,
+  suggestedRecoveryAction, computePunchDqCounts, PUNCH_DQ_LABEL, topDelayingParties,
+  type PunchBlockerKind, type PunchDqKey,
 } from '@/lib/punch-dashboard-utils';
 
 const PAGE_SIZE = 1000;
@@ -151,6 +152,10 @@ export default function PunchDashboardPage() {
       .sort((a, b) => b.score - a.score)
       .slice(0, 25);
   }, [rows, asOf]);
+
+  const dqCounts = useMemo(() => computePunchDqCounts(rows), [rows]);
+  const topSubcons = useMemo(() => topDelayingParties(rows, (r) => r.subcontractor_name ?? '', 5, asOf), [rows, asOf]);
+  const topPics = useMemo(() => topDelayingParties(rows, (r) => r.hdec_pic_name ?? '', 5, asOf), [rows, asOf]);
 
   const go = (qs: string) => navigate(`/punch/raw-data?${qs}`);
 
@@ -400,48 +405,119 @@ export default function PunchDashboardPage() {
 
       {/* ── Recovery Priority ──────────────────────────────────────────── */}
       <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Recovery Priority Items</CardTitle></CardHeader>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Today's Recovery Priority Items</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[60px]">Score</TableHead>
+                <TableHead className="w-[50px]">Score</TableHead>
                 <TableHead>Item No</TableHead>
-                <TableHead>Outstanding Work</TableHead>
+                <TableHead>Outstanding Works</TableHead>
+                <TableHead>Location</TableHead>
                 <TableHead>Team</TableHead>
+                <TableHead>Trade</TableHead>
                 <TableHead>Subcon</TableHead>
+                <TableHead>HDEC PIC</TableHead>
+                <TableHead>Planned Comp.</TableHead>
+                <TableHead className="text-right">Plan %</TableHead>
+                <TableHead className="text-right">Act %</TableHead>
+                <TableHead className="text-right">Var%</TableHead>
                 <TableHead>Health</TableHead>
                 <TableHead>Blocker</TableHead>
                 <TableHead className="text-right">Days OD</TableHead>
-                <TableHead className="text-right">Var%</TableHead>
+                <TableHead>Suggested Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {recovery.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">No items need attention.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground py-6">No items need attention.</TableCell></TableRow>
               ) : recovery.map(({ r, score }) => {
                 const od = r.planned_completion_date && !r.actual_completion_date && r.planned_completion_date < asOf
                   ? Math.round((Date.parse(asOf) - Date.parse(r.planned_completion_date)) / 86_400_000) : 0;
-                const variance = (Number(r.actual_progress_pct) || 0) - (Number(r.planned_progress_pct) || 0);
+                const plan = Number(r.planned_progress_pct) || 0;
+                const act = Number(r.actual_progress_pct) || 0;
+                const variance = act - plan;
                 const blk = dominantBlocker(r);
                 return (
                   <TableRow key={r.id} className="cursor-pointer hover:bg-muted/40" onClick={() => navigate(`/punch/${r.id}`)}>
                     <TableCell className="tabular-nums font-semibold">{Math.round(score)}</TableCell>
                     <TableCell className="font-mono text-xs">{r.item_no}</TableCell>
-                    <TableCell className="max-w-[280px] truncate" title={r.outstanding_work || ''}>{r.outstanding_work}</TableCell>
+                    <TableCell className="max-w-[240px] truncate" title={r.outstanding_work || ''}>{r.outstanding_work}</TableCell>
+                    <TableCell className="text-xs max-w-[140px] truncate" title={(r as any).location || ''}>{(r as any).location || '—'}</TableCell>
                     <TableCell className="text-xs">{r.team || '—'}</TableCell>
+                    <TableCell className="text-xs">{(r as any).main_trade || '—'}</TableCell>
                     <TableCell className="text-xs">{r.subcontractor_name || '—'}</TableCell>
+                    <TableCell className="text-xs">{r.hdec_pic_name || '—'}</TableCell>
+                    <TableCell className="text-xs tabular-nums">{r.planned_completion_date || '—'}</TableCell>
+                    <TableCell className="text-right tabular-nums">{plan.toFixed(0)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{act.toFixed(0)}</TableCell>
+                    <TableCell className={cn('text-right tabular-nums', variance < 0 ? 'text-red-600' : 'text-emerald-600')}>{signed(variance)}</TableCell>
                     <TableCell>{r.health_status
                       ? <Badge variant="outline" className={cn('text-[10px]', healthBadge(r.health_status))}>{PUNCH_HEALTH_LABEL[r.health_status]}</Badge>
                       : '—'}</TableCell>
                     <TableCell className="text-xs">{blk ? blk === 'multiple' ? 'Multiple' : blockerLabel(blk) : '—'}</TableCell>
                     <TableCell className={cn('text-right tabular-nums', od > 0 && 'text-red-600 font-medium')}>{od || '—'}</TableCell>
-                    <TableCell className={cn('text-right tabular-nums', variance < 0 ? 'text-red-600' : 'text-emerald-600')}>{signed(variance)}</TableCell>
+                    <TableCell className="text-xs">{suggestedRecoveryAction(r, asOf)}</TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {/* ── Daily Meeting Action View ──────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Daily Meeting Action View</CardTitle></CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <ControlCell label="Recovery Priority Items" value={recovery.length} hint="Top action list above" tone="danger" />
+          <ControlCell label="Due This Week" value={stats.dueThisWeek} onClick={() => go('due=this_week')} />
+          <ControlCell label="Blocked" value={stats.blocked} tone={stats.blocked ? 'warning' : undefined} onClick={() => go('pre_eng=blocked')} />
+          <ControlCell label="Ready / Not Started" value={stats.readyButNotStarted} onClick={() => go('status=ready_not_started')} />
+          <div className="md:col-span-2 lg:col-span-2 rounded-md border p-3">
+            <div className="text-sm font-medium mb-2">Top Delaying Subcontractors</div>
+            <div className="space-y-1">
+              {topSubcons.length === 0
+                ? <div className="text-xs text-muted-foreground">None.</div>
+                : topSubcons.map((p) => (
+                  <button key={p.key} onClick={() => go(`subcontractor=${encodeURIComponent(p.key)}`)}
+                    className="w-full flex items-baseline justify-between text-xs hover:bg-muted/40 rounded px-1.5 py-1">
+                    <span className="truncate max-w-[60%]">{p.key}</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      <span className="text-red-600">{p.critical}C</span> · <span className="text-amber-600">{p.overdue}O</span> · {p.blocked}B / {p.total}
+                    </span>
+                  </button>
+                ))}
+            </div>
+          </div>
+          <div className="md:col-span-2 lg:col-span-2 rounded-md border p-3">
+            <div className="text-sm font-medium mb-2">Top Responsible HDEC PICs</div>
+            <div className="space-y-1">
+              {topPics.length === 0
+                ? <div className="text-xs text-muted-foreground">None.</div>
+                : topPics.map((p) => (
+                  <button key={p.key} onClick={() => go(`hdecPic=${encodeURIComponent(p.key)}`)}
+                    className="w-full flex items-baseline justify-between text-xs hover:bg-muted/40 rounded px-1.5 py-1">
+                    <span className="truncate max-w-[60%]">{p.key}</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      <span className="text-red-600">{p.critical}C</span> · <span className="text-amber-600">{p.overdue}O</span> · {p.blocked}B / {p.total}
+                    </span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Punch Data Quality ─────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Punch Data Quality</CardTitle></CardHeader>
+        <CardContent className="grid gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          {(Object.keys(PUNCH_DQ_LABEL) as PunchDqKey[]).map((k) => (
+            <ControlCell key={k} label={PUNCH_DQ_LABEL[k]} value={dqCounts[k]}
+              tone={dqCounts[k] ? 'warning' : undefined}
+              onClick={() => go(`dq=${k}`)} />
+          ))}
         </CardContent>
       </Card>
     </div>
