@@ -12,16 +12,23 @@ import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePunchFieldConfig } from '@/hooks/usePunchFieldConfig';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/integrations/supabase/types';
 import {
+  PUNCH_FIELDS,
+  PUNCH_FIELDS_BY_NAME,
   PUNCH_GATE_LABEL,
   PUNCH_HEALTH_LABEL,
+  PUNCH_PROCUREMENT_LABEL,
+  type PunchFieldDef,
   type PunchGateStatus,
   type PunchProcurementStatus,
   type PunchHealthStatus,
 } from '@/lib/punch-field-registry';
+import type { AppRole } from '@/types/enums';
 
 type PunchItem = Database['public']['Tables']['punch_items']['Row'];
 
@@ -47,28 +54,28 @@ const PROC_DOT: Record<PunchProcurementStatus, string> = {
   secured: 'bg-emerald-500',
 };
 
-function GateDots({ row }: { row: PunchItem }) {
-  const items: Array<{ label: string; color: string; status: string }> = [
-    { label: 'Material Approval', color: GATE_DOT[row.material_approval_status], status: PUNCH_GATE_LABEL[row.material_approval_status] },
-    { label: 'Material Procurement', color: PROC_DOT[row.material_procurement_status], status: row.material_procurement_status.replace(/_/g, ' ') },
-    { label: 'Drawing Approval', color: GATE_DOT[row.drawing_approval_status], status: PUNCH_GATE_LABEL[row.drawing_approval_status] },
-    { label: 'MOS Approval', color: GATE_DOT[row.mos_approval_status], status: PUNCH_GATE_LABEL[row.mos_approval_status] },
-  ];
+function GateDot({ status, label, kind }: { status: string | null; label: string; kind: 'gate' | 'proc' }) {
+  if (!status) return <span className="text-muted-foreground">—</span>;
+  const dot = kind === 'gate'
+    ? GATE_DOT[status as PunchGateStatus] ?? 'bg-muted'
+    : PROC_DOT[status as PunchProcurementStatus] ?? 'bg-muted';
+  const text = kind === 'gate'
+    ? PUNCH_GATE_LABEL[status as PunchGateStatus] ?? status
+    : PUNCH_PROCUREMENT_LABEL[status as PunchProcurementStatus] ?? status.replace(/_/g, ' ');
   return (
     <TooltipProvider delayDuration={150}>
-      <div className="flex items-center gap-1">
-        {items.map((it) => (
-          <Tooltip key={it.label}>
-            <TooltipTrigger asChild>
-              <span className={cn('inline-block h-2.5 w-2.5 rounded-full', it.color)} />
-            </TooltipTrigger>
-            <TooltipContent side="top" className="text-xs">
-              <div className="font-medium">{it.label}</div>
-              <div className="text-muted-foreground capitalize">{it.status}</div>
-            </TooltipContent>
-          </Tooltip>
-        ))}
-      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center gap-1.5">
+            <span className={cn('inline-block h-2.5 w-2.5 rounded-full', dot)} />
+            <span className="text-xs capitalize">{text}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          <div className="font-medium">{label}</div>
+          <div className="text-muted-foreground capitalize">{text}</div>
+        </TooltipContent>
+      </Tooltip>
     </TooltipProvider>
   );
 }
@@ -82,21 +89,129 @@ function HealthBadge({ status }: { status: PunchHealthStatus | null }) {
   );
 }
 
-function VarianceCell({ value }: { value: number | null }) {
+function PctCell({ value, variance = false }: { value: number | null; variance?: boolean }) {
   if (value == null) return <span className="text-muted-foreground">—</span>;
-  const cls = value > 0 ? 'text-emerald-600' : value < 0 ? 'text-red-600' : 'text-muted-foreground';
-  const sign = value > 0 ? '+' : '';
-  return <span className={cn('tabular-nums font-medium', cls)}>{sign}{value.toFixed(1)}%</span>;
-}
-
-function PctCell({ value }: { value: number | null }) {
-  if (value == null) return <span className="text-muted-foreground">—</span>;
+  if (variance) {
+    const cls = value > 0 ? 'text-emerald-600' : value < 0 ? 'text-red-600' : 'text-muted-foreground';
+    const sign = value > 0 ? '+' : '';
+    return <span className={cn('tabular-nums font-medium', cls)}>{sign}{value.toFixed(1)}%</span>;
+  }
   return <span className="tabular-nums">{value.toFixed(1)}%</span>;
 }
+
+function ReadyCell({ row }: { row: PunchItem }) {
+  if (row.pre_engineering_ready) {
+    return <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800 text-[10px] dark:bg-emerald-950 dark:text-emerald-200">Ready</Badge>;
+  }
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 text-[10px] dark:bg-amber-950 dark:text-amber-200 gap-1">
+            <AlertCircle className="h-3 w-3" />
+            Blocked
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent side="left">
+          {(row.pre_engineering_blockers || []).length > 0
+            ? row.pre_engineering_blockers.join(', ')
+            : 'Pre-engineering not complete'}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/** Compute cell value for a given (row, field). Falls back to raw_payload / custom_payload for dynamic columns. */
+function getFieldValue(row: PunchItem, field: string, originalHeader: string | null): any {
+  const direct = (row as any)[field];
+  if (direct != null && direct !== '') return direct;
+  const rawP = (row as any).raw_payload;
+  if (rawP && typeof rawP === 'object') {
+    if (originalHeader && rawP[originalHeader] != null) return rawP[originalHeader];
+    if (rawP[field] != null) return rawP[field];
+  }
+  const customP = (row as any).custom_payload;
+  if (customP && typeof customP === 'object') {
+    if (originalHeader && customP[originalHeader] != null) return customP[originalHeader];
+    if (customP[field] != null) return customP[field];
+  }
+  return null;
+}
+
+function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, value: any) {
+  // Specialized renderers for known fields
+  switch (field) {
+    case 'health_status':
+      return <HealthBadge status={(value as PunchHealthStatus) ?? null} />;
+    case 'pre_engineering_ready':
+      return <ReadyCell row={row} />;
+    case 'material_approval_status':
+    case 'drawing_approval_status':
+    case 'mos_approval_status':
+      return <GateDot status={value} label={def?.exportLabel ?? field} kind="gate" />;
+    case 'material_procurement_status':
+      return <GateDot status={value} label={def?.exportLabel ?? field} kind="proc" />;
+    case 'progress_variance_pct':
+      return <PctCell value={value == null ? null : Number(value)} variance />;
+    case 'planned_progress_pct':
+    case 'actual_progress_pct':
+      return <PctCell value={value == null ? null : Number(value)} />;
+    case 'pre_engineering_blockers': {
+      const arr = Array.isArray(value) ? value : [];
+      return arr.length > 0 ? <span className="text-xs">{arr.join(', ')}</span> : <span className="text-muted-foreground">—</span>;
+    }
+  }
+  if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
+  if (def?.dataType === 'date') {
+    return <span className="text-xs">{formatDdMmm(String(value).slice(0, 10))}</span>;
+  }
+  if (def?.dataType === 'number') {
+    return <span className="tabular-nums text-xs">{value}</span>;
+  }
+  if (def?.dataType === 'pct') {
+    return <PctCell value={Number(value)} />;
+  }
+  if (Array.isArray(value)) {
+    return <span className="text-xs">{value.join(', ')}</span>;
+  }
+  return <span className="text-xs block truncate" title={String(value)}>{String(value)}</span>;
+}
+
+const SIZE_BY_FIELD: Record<string, string> = {
+  item_no: 'w-[110px] font-mono text-xs',
+  outstanding_work: 'min-w-[260px] text-sm',
+  location: 'w-[120px]',
+  level: 'w-[80px]',
+  team: 'w-[80px]',
+  subcontractor_name: 'w-[160px] truncate',
+  subsub_name: 'w-[140px] truncate',
+  hdec_pic_name: 'w-[110px]',
+  hdec_eng_name: 'w-[110px]',
+  planned_completion_date: 'w-[110px]',
+  actual_completion_date: 'w-[110px]',
+  planned_start_date: 'w-[110px]',
+  actual_start_date: 'w-[110px]',
+  data_date: 'w-[110px]',
+  planned_progress_pct: 'w-[80px] text-right',
+  actual_progress_pct: 'w-[80px] text-right',
+  progress_variance_pct: 'w-[90px] text-right',
+  health_status: 'w-[90px]',
+  pre_engineering_ready: 'w-[90px]',
+  material_approval_status: 'w-[150px]',
+  material_procurement_status: 'w-[170px]',
+  drawing_approval_status: 'w-[150px]',
+  mos_approval_status: 'w-[140px]',
+  weight: 'w-[70px] text-right',
+};
 
 export default function PunchRawDataPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { roles } = useAuth() as { roles?: AppRole[] };
+  const { fields: configRows, isFieldVisible, getLabel, sortFieldNames, getOriginalHeader, loading: configLoading } =
+    usePunchFieldConfig();
+
   const [rows, setRows] = useState<PunchItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -109,7 +224,6 @@ export default function PunchRawDataPage() {
       setLoading(true);
       const all: PunchItem[] = [];
       let from = 0;
-      // chunked fetch to bypass 1000-row limit
       // eslint-disable-next-line no-constant-condition
       while (true) {
         const { data, error } = await supabase
@@ -135,6 +249,16 @@ export default function PunchRawDataPage() {
     return () => { cancelled = true; };
   }, [toast]);
 
+  /** Final ordered list of visible fields, driven by Field Config + dynamic rows. */
+  const visibleFields = useMemo(() => {
+    const knownFields = new Set(PUNCH_FIELDS.map((f) => f.field));
+    const dynamicFields = configRows
+      .filter((r) => r.is_enabled && !knownFields.has(r.field_name))
+      .map((r) => r.field_name);
+    const allFieldNames = [...PUNCH_FIELDS.map((f) => f.field), ...dynamicFields];
+    return sortFieldNames(allFieldNames).filter((f) => isFieldVisible(f, roles ?? []));
+  }, [configRows, sortFieldNames, isFieldVisible, roles]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
@@ -156,6 +280,9 @@ export default function PunchRawDataPage() {
     behind: rows.filter((r) => r.health_status === 'behind').length,
     blocked: rows.filter((r) => !r.pre_engineering_ready).length,
   }), [rows]);
+
+  const colCount = visibleFields.length || 1;
+  const tableLoading = loading || configLoading;
 
   return (
     <div className="flex h-full flex-col gap-4 p-4">
@@ -212,69 +339,55 @@ export default function PunchRawDataPage() {
         <Table>
           <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
-              <TableHead className="w-[110px]">Item No</TableHead>
-              <TableHead className="min-w-[260px]">Outstanding Work</TableHead>
-              <TableHead className="w-[120px]">Location</TableHead>
-              <TableHead className="w-[80px]">Team</TableHead>
-              <TableHead className="w-[160px]">Subcontractor</TableHead>
-              <TableHead className="w-[110px]">Planned End</TableHead>
-              <TableHead className="w-[110px]">Actual End</TableHead>
-              <TableHead className="w-[80px] text-right">Planned %</TableHead>
-              <TableHead className="w-[80px] text-right">Actual %</TableHead>
-              <TableHead className="w-[80px] text-right">Variance</TableHead>
-              <TableHead className="w-[90px]">Health</TableHead>
-              <TableHead className="w-[140px]">Pre-Eng Gates</TableHead>
-              <TableHead className="w-[90px]">Ready</TableHead>
+              {visibleFields.map((field) => {
+                const label = getLabel(field);
+                const orig = getOriginalHeader(field);
+                const sizeCls = SIZE_BY_FIELD[field] ?? 'min-w-[120px]';
+                return (
+                  <TableHead key={field} className={cn('whitespace-nowrap', sizeCls)}>
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help">{label}</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          <div className="font-medium">{label}</div>
+                          <div className="text-muted-foreground">field: <code>{field}</code></div>
+                          {orig && orig !== label && (
+                            <div className="text-muted-foreground">header: <code>{orig}</code></div>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableHead>
+                );
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && (
-              <TableRow><TableCell colSpan={13} className="text-center py-12 text-muted-foreground text-sm">Loading…</TableCell></TableRow>
+            {tableLoading && (
+              <TableRow><TableCell colSpan={colCount} className="text-center py-12 text-muted-foreground text-sm">Loading…</TableCell></TableRow>
             )}
-            {!loading && filtered.length === 0 && (
-              <TableRow><TableCell colSpan={13} className="text-center py-12 text-muted-foreground text-sm">No punch items match the current filters.</TableCell></TableRow>
+            {!tableLoading && filtered.length === 0 && (
+              <TableRow><TableCell colSpan={colCount} className="text-center py-12 text-muted-foreground text-sm">No punch items match the current filters.</TableCell></TableRow>
             )}
-            {!loading && filtered.map((r) => (
+            {!tableLoading && filtered.map((r) => (
               <TableRow
                 key={r.id}
                 className="cursor-pointer hover:bg-muted/50"
                 onClick={() => navigate(`/punch/${r.id}`)}
               >
-                <TableCell className="font-mono text-xs">{r.item_no || '—'}</TableCell>
-                <TableCell className="text-sm">
-                  <div className="line-clamp-2">{r.outstanding_work}</div>
-                </TableCell>
-                <TableCell className="text-xs">{[r.level, r.location].filter(Boolean).join(' / ') || '—'}</TableCell>
-                <TableCell className="text-xs">{r.team || '—'}</TableCell>
-                <TableCell className="text-xs truncate max-w-[160px]">{r.subcontractor_name || '—'}</TableCell>
-                <TableCell className="text-xs">{r.planned_completion_date ? formatDdMmm(r.planned_completion_date) : '—'}</TableCell>
-                <TableCell className="text-xs">{r.actual_completion_date ? formatDdMmm(r.actual_completion_date) : '—'}</TableCell>
-                <TableCell className="text-right text-xs"><PctCell value={r.planned_progress_pct} /></TableCell>
-                <TableCell className="text-right text-xs"><PctCell value={r.actual_progress_pct} /></TableCell>
-                <TableCell className="text-right text-xs"><VarianceCell value={r.progress_variance_pct} /></TableCell>
-                <TableCell><HealthBadge status={r.health_status} /></TableCell>
-                <TableCell><GateDots row={r} /></TableCell>
-                <TableCell>
-                  {r.pre_engineering_ready ? (
-                    <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800 text-[10px] dark:bg-emerald-950 dark:text-emerald-200">Ready</Badge>
-                  ) : (
-                    <TooltipProvider delayDuration={150}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 text-[10px] dark:bg-amber-950 dark:text-amber-200 gap-1">
-                            <AlertCircle className="h-3 w-3" />
-                            Blocked
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent side="left">
-                          {(r.pre_engineering_blockers || []).length > 0
-                            ? r.pre_engineering_blockers.join(', ')
-                            : 'Pre-engineering not complete'}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-                </TableCell>
+                {visibleFields.map((field) => {
+                  const def = PUNCH_FIELDS_BY_NAME[field] ?? null;
+                  const orig = getOriginalHeader(field);
+                  const value = getFieldValue(r, field, orig);
+                  const sizeCls = SIZE_BY_FIELD[field] ?? '';
+                  return (
+                    <TableCell key={field} className={cn('align-top', sizeCls)}>
+                      {renderCell(r, field, def, value)}
+                    </TableCell>
+                  );
+                })}
               </TableRow>
             ))}
           </TableBody>
