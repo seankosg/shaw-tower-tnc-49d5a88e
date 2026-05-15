@@ -117,7 +117,7 @@ export default function PunchImportPage() {
 
       if (batch) {
         await supabase.from('punch_upload_batches').update({
-          status: result.failed > 0 ? 'partial' : 'done',
+          status: result.failed > 0 ? 'failed' : 'completed',
           processed_rows: item.parsed!.rows.length,
           success_rows: result.inserted + result.updated,
           rejected_rows: result.failed + item.parsed!.errors.length,
