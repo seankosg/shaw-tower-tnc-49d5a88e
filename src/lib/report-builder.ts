@@ -105,36 +105,36 @@ function buildTncSection(rows: SubtestForDashboard[], opts: ReportOptions, dataD
   if (opts.sections.includes('dashboard')) {
     lines.push('### 1.1 Dashboard');
     lines.push(`- Total subtests (active): **${cur.total}**`);
-    lines.push(`- T1 completed: ${cur.t1} (${pct(cur.t1, cur.total)})`);
-    lines.push(`- T2 completed: ${cur.t2} (${pct(cur.t2, cur.total)})`);
-    lines.push(`- R2S completed: ${cur.r2s} (${pct(cur.r2s, cur.total)})`);
+    lines.push(`- Pre-Test (T1) completed: ${cur.t1} (${pct(cur.t1, cur.total)})`);
+    lines.push(`- Actual Test (T2) completed: ${cur.t2} (${pct(cur.t2, cur.total)})`);
+    lines.push(`- Test Report (R2) completed: ${cur.r2s} (${pct(cur.r2s, cur.total)})`);
     lines.push('');
   }
   if (opts.sections.includes('progress')) {
-    lines.push('### 1.2 Progress (Stages: T1 Internal Test, T2 Official Test, R2S Report Submission)');
+    lines.push('### 1.2 Current Status (Stages: Pre-Test, Actual Test, Test Report)');
     lines.push('| Stage | Planned to date | Actual to date | Actual % | Gap (Actual − Planned) |');
     lines.push('|-------|-----------------|----------------|----------|------------------------|');
-    lines.push(`| T1 Internal Test | ${planned.t1} | ${cur.t1} | ${pct(cur.t1, cur.total)} | ${cur.t1 - planned.t1} |`);
-    lines.push(`| T2 Official Test | ${planned.t2} | ${cur.t2} | ${pct(cur.t2, cur.total)} | ${cur.t2 - planned.t2} |`);
-    lines.push(`| R2S Report Submission | ${planned.r2s} | ${cur.r2s} | ${pct(cur.r2s, cur.total)} | ${cur.r2s - planned.r2s} |`);
+    lines.push(`| Pre-Test (T1) | ${planned.t1} | ${cur.t1} | ${pct(cur.t1, cur.total)} | ${cur.t1 - planned.t1} |`);
+    lines.push(`| Actual Test (T2) | ${planned.t2} | ${cur.t2} | ${pct(cur.t2, cur.total)} | ${cur.t2 - planned.t2} |`);
+    lines.push(`| Test Report (R2) | ${planned.r2s} | ${cur.r2s} | ${pct(cur.r2s, cur.total)} | ${cur.r2s - planned.r2s} |`);
     lines.push('');
   }
   if (opts.sections.includes('simulation')) {
-    lines.push('### 1.3 Simulation (vs Project Completion ' + (opts.mcDate ?? MC_DEFAULT) + ')');
+    lines.push('### 1.3 Plan — Required Pace toward Project Completion (' + (opts.mcDate ?? MC_DEFAULT) + ')');
     const mc = opts.mcDate ?? MC_DEFAULT;
     const remT2 = cur.total - cur.t2;
     const remR2S = cur.total - cur.r2s;
     const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
-    lines.push(`- Days remaining to PC: **${days}**`);
-    lines.push(`- T2 remaining: ${remT2} → required pace: ${(remT2 / days).toFixed(2)} / day`);
-    lines.push(`- R2S remaining: ${remR2S} → required pace: ${(remR2S / days).toFixed(2)} / day`);
+    lines.push(`- Days remaining to Project Completion: **${days}**`);
+    lines.push(`- Actual Test remaining: ${remT2} → required pace: ${(remT2 / days).toFixed(2)} / day`);
+    lines.push(`- Test Report remaining: ${remR2S} → required pace: ${(remR2S / days).toFixed(2)} / day`);
     lines.push('');
   }
   if (opts.sections.includes('snapshots')) {
-    lines.push('### 1.4 Stage Progress Snapshots');
-    lines.push(`_Computed via Simulation engine — mode: **${modeLabel}**, data date: **${dataDate}**, sequential: enforced._`);
-    lines.push('| Date | T1 Predicted % (Actual %) | T2 Predicted % (Actual %) | R2S Predicted % (Actual %) |');
-    lines.push('|------|---------------------------|---------------------------|----------------------------|');
+    lines.push('### 1.4 Plan — Stage Progress Snapshots');
+    lines.push(`_Plan computed via Simulation engine — mode: **${modeLabel}**, data date: **${dataDate}**, sequential: enforced._`);
+    lines.push('| Date | Pre-Test Planned % (Actual %) | Actual Test Planned % (Actual %) | Test Report Planned % (Actual %) |');
+    lines.push('|------|-------------------------------|----------------------------------|----------------------------------|');
     const stages: TncSimStage[] = ['t1', 't2', 'r2s'];
     for (const d of opts.snapshotDates) {
       const r = simulateAllTncStages(rows, d, { mode, dataDate, enforceSequential: true }, stages);
@@ -203,7 +203,7 @@ function buildDefectSection(rows: DefectItem[], opts: ReportOptions, dataDate: s
     lines.push('');
   }
   if (opts.sections.includes('progress')) {
-    lines.push('### 2.2 Progress (Stages: Completion, Closure)');
+    lines.push('### 2.2 Current Status (Stages: Completion, Closure)');
     lines.push('| Stage | Planned to date | Actual to date | Actual % | Gap |');
     lines.push('|-------|-----------------|----------------|----------|-----|');
     lines.push(`| Completion | ${planned.completion} | ${cur.completion} | ${pct(cur.completion, cur.total)} | ${cur.completion - planned.completion} |`);
@@ -213,17 +213,17 @@ function buildDefectSection(rows: DefectItem[], opts: ReportOptions, dataDate: s
   if (opts.sections.includes('simulation')) {
     const mc = opts.mcDate ?? MC_DEFAULT;
     const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
-    lines.push('### 2.3 Simulation (vs PC ' + mc + ')');
-    lines.push(`- Days remaining: **${days}**`);
+    lines.push('### 2.3 Plan — Required Pace toward Project Completion (' + mc + ')');
+    lines.push(`- Days remaining to Project Completion: **${days}**`);
     lines.push(`- Completion remaining: ${cur.total - cur.completion} → required: ${((cur.total - cur.completion) / days).toFixed(2)} / day`);
     lines.push(`- Closure remaining: ${cur.total - cur.closure} → required: ${((cur.total - cur.closure) / days).toFixed(2)} / day`);
     lines.push('');
   }
   if (opts.sections.includes('snapshots')) {
-    lines.push('### 2.4 Stage Progress Snapshots');
-    lines.push(`_Computed via Simulation engine — mode: **${modeLabel}**, data date: **${dataDate}**._`);
-    lines.push('| Date | Start Predicted % (Actual %) | Completion Predicted % (Actual %) | Closure Predicted % (Actual %) |');
-    lines.push('|------|------------------------------|-----------------------------------|--------------------------------|');
+    lines.push('### 2.4 Plan — Stage Progress Snapshots');
+    lines.push(`_Plan computed via Simulation engine — mode: **${modeLabel}**, data date: **${dataDate}**._`);
+    lines.push('| Date | Start Planned % (Actual %) | Completion Planned % (Actual %) | Closure Planned % (Actual %) |');
+    lines.push('|------|----------------------------|---------------------------------|------------------------------|');
     const stages: DefectScheduleStage[] = ['start', 'completion', 'closure'];
     for (const d of opts.snapshotDates) {
       const r = simulateAllDefectStages(rows, d, { mode, dataDate }, stages);
@@ -279,7 +279,7 @@ function buildPunchSection(rows: PunchRow[], opts: ReportOptions): string {
     lines.push('');
   }
   if (opts.sections.includes('progress')) {
-    lines.push('### 4.2 Progress (Stage: Completion)');
+    lines.push('### 4.2 Current Status (Stage: Completion)');
     lines.push('| Stage | Planned to date | Actual to date | Actual % | Gap |');
     lines.push('|-------|-----------------|----------------|----------|-----|');
     lines.push(`| Completion | ${planned} | ${cur.completion} | ${pct(cur.completion, cur.total)} | ${cur.completion - planned} |`);
@@ -288,13 +288,13 @@ function buildPunchSection(rows: PunchRow[], opts: ReportOptions): string {
   if (opts.sections.includes('simulation')) {
     const mc = opts.mcDate ?? MC_DEFAULT;
     const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
-    lines.push('### 4.3 Simulation (vs PC ' + mc + ')');
-    lines.push(`- Days remaining: **${days}**`);
+    lines.push('### 4.3 Plan — Required Pace toward Project Completion (' + mc + ')');
+    lines.push(`- Days remaining to Project Completion: **${days}**`);
     lines.push(`- Completion remaining: ${cur.total - cur.completion} → required: ${((cur.total - cur.completion) / days).toFixed(2)} / day`);
     lines.push('');
   }
   if (opts.sections.includes('snapshots')) {
-    lines.push('### 4.4 Stage Progress Snapshots');
+    lines.push('### 4.4 Plan — Stage Progress Snapshots');
     lines.push('| Date | Completion % |');
     lines.push('|------|--------------|');
     for (const d of opts.snapshotDates) {
@@ -367,7 +367,7 @@ async function buildDocsSection(opts: ReportOptions): Promise<string> {
     'sub1_submission_date,sub1_approval_date,sub2_submission_date,sub2_approval_date,sub3_submission_date,sub3_approval_date,sub1_planned_date,sub2_planned_date,sub3_planned_date,approved_date,current_status',
     (q) => q.eq('sub_module', 'as_built'),
   );
-  lines.push('### 3.1 ABD (As-Built Drawings)');
+  lines.push('### 3.1 As Built Drawing (ABD)');
   lines.push(`- Total: **${abd.length}**`);
   if (opts.sections.includes('snapshots')) {
     lines.push('| Date | Sub1 Sub % | Sub1 Apv % | Sub2 Sub % | Sub2 Apv % | Sub3 Sub % | Sub3 Apv % | Approved % |');

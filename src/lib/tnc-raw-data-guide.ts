@@ -15,7 +15,7 @@ The atomic tracking unit is a **Subtest = \`Item No + MOS Code\`**.
 The business workflow has **5 stages**:
 
 \`\`\`
-Predecessor → T1 (Internal) → T2 (Official) → R1 (Sub→HDEC Report) → R2 (HDEC→Client Report)
+Predecessor → Pre-Test (T1) → Actual Test (T2) → R1 (Sub→HDEC Report) → Test Report (R2: HDEC→Client)
 \`\`\`
 
 ---
@@ -38,10 +38,10 @@ Predecessor → T1 (Internal) → T2 (Official) → R1 (Sub→HDEC Report) → R
 | Stage | Meaning | Columns |
 |---|---|---|
 | Pred | Test prerequisites (construction complete, punch cleared, etc.) | \`pred_planned_date\`, \`pred_actual_date\`, \`pred_status\`, \`predecessor_status_raw\` |
-| T1 — Internal Test | Internal test by Subcontractor / HDEC | \`t1_planned_date\`, \`t1_actual_date\`, \`t1_status\` |
-| T2 — Official Test | Official test witnessed by the Client | \`t2_planned_date\`, \`t2_actual_date\`, \`t2_status\` |
+| Pre-Test (T1) | Internal test by Subcontractor / HDEC | \`t1_planned_date\`, \`t1_actual_date\`, \`t1_status\` |
+| Actual Test (T2) | Official test witnessed by the Client | \`t2_planned_date\`, \`t2_actual_date\`, \`t2_status\` |
 | R1 — Sub → HDEC Report | Subcontractor submits the test report to HDEC | \`r1_target_submission_date\`, \`r1_actual_submission_date\`, \`r1_status\` |
-| R2 — HDEC → Client Report | HDEC submits to Client and obtains approval (two milestones: Submission / Approval) | \`r2_target_submission_date\`, \`r2_actual_submission_date\`, \`r2_target_approval_date\`, \`r2_actual_approval_date\`, \`r2_status\` |
+| Test Report (R2) | HDEC issues the final Test Report to the Client and obtains approval | \`r2_target_submission_date\`, \`r2_actual_submission_date\`, \`r2_target_approval_date\`, \`r2_actual_approval_date\`, \`r2_status\` |
 
 **Status values**
 
@@ -52,8 +52,8 @@ Predecessor → T1 (Internal) → T2 (Official) → R1 (Sub→HDEC Report) → R
 
 - T1/T2/Pred: \`status === 'Done'\`
 - R1: Done if \`status\` is in the Done family, OR if \`status\` is empty but \`actual_submission_date\` is present
-- R2S (Submission): Done when \`status\` is \`Submitted\` or higher
-- R2A (Approval): Done only when \`status === 'Approved'\` (hidden in UI; only R2S is exposed)
+- Test Report (R2): Done when \`r2_status\` is \`Submitted\` or higher
+- R2 Approval: Done only when \`r2_status === 'Approved'\` (hidden in UI; only the Test Report stage is exposed)
 
 ---
 
@@ -75,7 +75,7 @@ Every figure is anchored to two reference points:
 | Overdue | \`isOverdue(s, dataDate)\` — any of Pred/T1/T2 with \`planned_date ≤ Data Date\` and not yet Done |
 | At-Risk | \`isAtRisk(s, today, threshold)\` — not Overdue, but a Pred/T1/T2 planned date falls within N days from \`today\` (threshold configured in Settings) |
 
-**Tier 2 — Stage Cards (Pred / T1 / T2 / R1 / R2S)**
+**Tier 2 — Stage Cards (Pred / Pre-Test / Actual Test / R1 / Test Report)**
 
 Each card shows three numbers per stage:
 
@@ -83,7 +83,7 @@ Each card shows three numbers per stage:
 - **OD (Overdue)**: \`planned_date ≤ Data Date\` but stage not yet Done
 - **%**: \`Done / Total × 100\`
 
-The R2 card uses **R2 Submission (R2S)** (Approval is hidden from the UI).
+The R2 card uses the **Test Report (R2)** stage (R2 Approval is hidden from the UI).
 
 **Tier 3 — All-Stage Alert Banner**
 

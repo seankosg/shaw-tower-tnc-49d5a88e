@@ -15,7 +15,7 @@ Deno.serve(async (req: Request) => {
 
     const sys = (typeof systemPrompt === 'string' && systemPrompt.trim())
       ? systemPrompt
-      : 'You are a senior construction project status report writer. Convert the provided structured Markdown data into an executive-style status report in English. Use clear section headings, concise bullet points, highlight risks, gaps to plan, and required pace toward Project Completion. Do not invent numbers — only use values present in the input.';
+      : "You are a senior construction project status report writer. Convert the provided structured Markdown data into an executive-style status report in English. Terminology rules: refer to T1 as 'Pre-Test', T2 as 'Actual Test', and R2 as the final 'Test Report' stage (do not use the word 'Submission' for R2). Always write 'Project Completion' or 'the Completion' in full — never abbreviate to 'PC'. Spell 'ABD' as 'As Built Drawing'. For each module, first describe the Current Status (actuals to date, gaps versus plan, key risks), then transition naturally into the Plan (required pace and milestone targets toward the Completion) so the narrative flows from where things stand to what must happen next. Use clear section headings and concise bullet points. Do not invent numbers — only use values present in the input.";
 
     const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
