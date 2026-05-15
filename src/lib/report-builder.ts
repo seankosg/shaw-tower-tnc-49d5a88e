@@ -203,7 +203,7 @@ function buildDefectSection(rows: DefectItem[], opts: ReportOptions, dataDate: s
     lines.push('');
   }
   if (opts.sections.includes('progress')) {
-    lines.push('### 2.2 Progress (Stages: Completion, Closure)');
+    lines.push('### 2.2 Current Status (Stages: Completion, Closure)');
     lines.push('| Stage | Planned to date | Actual to date | Actual % | Gap |');
     lines.push('|-------|-----------------|----------------|----------|-----|');
     lines.push(`| Completion | ${planned.completion} | ${cur.completion} | ${pct(cur.completion, cur.total)} | ${cur.completion - planned.completion} |`);
@@ -213,17 +213,17 @@ function buildDefectSection(rows: DefectItem[], opts: ReportOptions, dataDate: s
   if (opts.sections.includes('simulation')) {
     const mc = opts.mcDate ?? MC_DEFAULT;
     const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
-    lines.push('### 2.3 Simulation (vs PC ' + mc + ')');
-    lines.push(`- Days remaining: **${days}**`);
+    lines.push('### 2.3 Plan — Required Pace toward Project Completion (' + mc + ')');
+    lines.push(`- Days remaining to Project Completion: **${days}**`);
     lines.push(`- Completion remaining: ${cur.total - cur.completion} → required: ${((cur.total - cur.completion) / days).toFixed(2)} / day`);
     lines.push(`- Closure remaining: ${cur.total - cur.closure} → required: ${((cur.total - cur.closure) / days).toFixed(2)} / day`);
     lines.push('');
   }
   if (opts.sections.includes('snapshots')) {
-    lines.push('### 2.4 Stage Progress Snapshots');
-    lines.push(`_Computed via Simulation engine — mode: **${modeLabel}**, data date: **${dataDate}**._`);
-    lines.push('| Date | Start Predicted % (Actual %) | Completion Predicted % (Actual %) | Closure Predicted % (Actual %) |');
-    lines.push('|------|------------------------------|-----------------------------------|--------------------------------|');
+    lines.push('### 2.4 Plan — Stage Progress Snapshots');
+    lines.push(`_Plan computed via Simulation engine — mode: **${modeLabel}**, data date: **${dataDate}**._`);
+    lines.push('| Date | Start Planned % (Actual %) | Completion Planned % (Actual %) | Closure Planned % (Actual %) |');
+    lines.push('|------|----------------------------|---------------------------------|------------------------------|');
     const stages: DefectScheduleStage[] = ['start', 'completion', 'closure'];
     for (const d of opts.snapshotDates) {
       const r = simulateAllDefectStages(rows, d, { mode, dataDate }, stages);
