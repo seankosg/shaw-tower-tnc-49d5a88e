@@ -7,8 +7,9 @@
 import { differenceInDays, isAfter, parseISO, isValid, startOfDay } from 'date-fns';
 import { classifyWarrantyStageState } from '@/lib/docs-warranty-status';
 import { computeOmmStatus } from '@/lib/docs-omm-status';
+import { procurementProgressLevel, procurementProgressLabel } from '@/lib/spare-part-utils';
 
-export type DocModule = 'abd' | 'omm' | 'warranty';
+export type DocModule = 'abd' | 'omm' | 'warranty' | 'spare_part';
 
 export interface DocsStageRecord {
   /** uuid of the source row */
@@ -222,22 +223,33 @@ export const WARRANTY_STAGE_DEFS: StageDefinition[] = [
   { key: 'warranty.final',        label: 'Final',         order: 4 },
 ];
 
+export const SPARE_PART_STAGE_DEFS: StageDefinition[] = [
+  { key: 'spare_part.confirm',   label: 'Confirm',            order: 1 },
+  { key: 'spare_part.direction', label: 'Direction to Subcon',order: 2 },
+  { key: 'spare_part.po',        label: 'PO Issued',          order: 3 },
+  { key: 'spare_part.eta',       label: 'ETA Confirmed',      order: 4 },
+  { key: 'spare_part.delivered', label: 'Delivered',          order: 5 },
+];
+
 export const ALL_STAGE_DEFS: Record<DocModule, StageDefinition[]> = {
   abd: ABD_STAGE_DEFS,
   omm: OMM_STAGE_DEFS,
   warranty: WARRANTY_STAGE_DEFS,
+  spare_part: SPARE_PART_STAGE_DEFS,
 };
 
 export const MODULE_LABEL: Record<DocModule, string> = {
   abd: 'As-Built Drawings',
   omm: 'Operation & Maintenance Manual',
   warranty: 'Warranty Deeds',
+  spare_part: 'Spare Parts',
 };
 
 export const MODULE_RAW_ROUTE: Record<DocModule, string> = {
   abd: '/docs/abd',
   omm: '/docs/omm',
   warranty: '/docs/warranty',
+  spare_part: '/docs/spare-part',
 };
 
 function safeDate(d: string | null | undefined): Date | null {
@@ -450,7 +462,64 @@ export function buildWarrantyStageRecords(rows: any[], asOf: Date, ): DocsStageR
   return out;
 }
 
-// ─── Aggregate helpers ──────────────────────────────────────────────────
+// ─── Spare Part ──────────────────────────────────────────────────────────
+const SPARE_PART_CURRENT_LABEL: Record<number, string> = {
+  0: 'Not Started',
+  1: 'Confirmed',
+  2: 'Directed',
+  3: 'PO Issued',
+  4: 'ETA Set',
+  5: 'Delivered',
+};
+
+export function buildSparePartStageRecords(rows: any[], asOf: Date): DocsStageRecord[] {
+  const out: DocsStageRecord[] = [];
+  for (const row of rows) {
+    const lvl = procurementProgressLevel(row);
+    const current_stage = SPARE_PART_CURRENT_LABEL[lvl] ?? procurementProgressLabel(row);
+    const base = {
+      item_id: row.id,
+      document_type: 'spare_part' as const,
+      document_no: row.sn ?? (row.item_no != null ? String(row.item_no) : ''),
+      title: row.material ?? row.parent_item ?? row.specification ?? '',
+      trade: row.trade ?? null,
+      team: row.team ?? null,
+      subcontractor: row.subcontractor_name ?? null,
+      hdec_pic: row.hdec_pic_name ?? null,
+      hdec_eng: row.hdec_eng_name ?? null,
+      detail_route: `/docs/spare-part/${row.id}`,
+    };
+
+    const stages = [
+      { def: SPARE_PART_STAGE_DEFS[0], planned: row.planned_confirm_date,        actual: row.actual_confirm_date,
+        done: !!row.actual_confirm_date },
+      { def: SPARE_PART_STAGE_DEFS[1], planned: null,                            actual: row.direction_to_subcon_date,
+        done: !!row.direction_to_subcon_date },
+      { def: SPARE_PART_STAGE_DEFS[2], planned: row.planned_po_date,             actual: row.actual_po_date,
+        done: !!row.actual_po_date },
+      { def: SPARE_PART_STAGE_DEFS[3], planned: row.eta_date,                    actual: row.eta_date,
+        done: !!row.eta_date },
+      { def: SPARE_PART_STAGE_DEFS[4], planned: row.planned_delivery_date,       actual: row.actual_delivery_date,
+        done: !!row.actual_delivery_date },
+    ];
+
+    for (const s of stages) {
+      const cls = classifyStage(s.planned ?? null, s.actual ?? null, s.done, asOf);
+      out.push({
+        ...base,
+        current_stage,
+        stage_key: s.def.key,
+        stage_label: s.def.label,
+        stage_order: s.def.order,
+        planned_date: s.planned ?? null,
+        actual_date: s.actual ?? null,
+        is_done: s.done,
+        ...cls,
+      });
+    }
+  }
+  return out;
+}
 export interface ItemSummary {
   item_id: string;
   document_type: DocModule;
@@ -702,7 +771,7 @@ function pushIssue(map: Map<string, DataQualityIssue>, key: string, init: () => 
 
 export function computeDataQualityIssues(
   records: DocsStageRecord[],
-  rawByModule: { abd: any[]; omm: any[]; warranty: any[] },
+  rawByModule: { abd: any[]; omm: any[]; warranty: any[]; spare_part?: any[] },
 ): DataQualityIssue[] {
   const map = new Map<string, DataQualityIssue>();
 
@@ -734,7 +803,6 @@ export function computeDataQualityIssues(
     }), id);
   };
   for (const row of rawByModule.abd) {
-    // Sub2 submission without Sub1 submission, etc.
     if (row.sub2_submission_date && !row.sub1_submission_date) addInconsistent('abd', row.id);
     else if (row.sub3_submission_date && !row.sub2_submission_date) addInconsistent('abd', row.id);
     else if (row.sub1_approval_date && !row.sub1_submission_date) addInconsistent('abd', row.id);
@@ -748,6 +816,11 @@ export function computeDataQualityIssues(
     if (row.subcon_signing_actual_date && !row.draft_actual_date) addInconsistent('warranty', row.id);
     else if (row.hdec_signing_actual_date && !row.subcon_signing_actual_date) addInconsistent('warranty', row.id);
     else if (row.final_actual_date && !row.hdec_signing_actual_date) addInconsistent('warranty', row.id);
+  }
+  for (const row of rawByModule.spare_part ?? []) {
+    if (row.actual_po_date && !row.actual_confirm_date) addInconsistent('spare_part', row.id);
+    else if (row.actual_delivery_date && !row.actual_po_date) addInconsistent('spare_part', row.id);
+    else if (row.eta_date && !row.actual_po_date) addInconsistent('spare_part', row.id);
   }
 
   return Array.from(map.values()).sort((a, b) => {

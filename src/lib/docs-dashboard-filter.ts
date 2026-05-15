@@ -3,15 +3,18 @@
 
 import {
   buildAbdStageRecords, buildOmmStageRecords, buildWarrantyStageRecords,
+  buildSparePartStageRecords,
   asOfStartOfDay, ALL_STAGE_DEFS, classifyAbdRowBucket,
   classifyOmmSub1Status, classifyOmmSub2Status,
   bucketDelayDays, isDueThisWeek, computeDataQualityIssues,
   type DocModule,
 } from '@/lib/docs-stage-records';
 import { resolveTrade } from '@/lib/docs-trade';
+import { isOverdueSparePart, procurementProgressLevel } from '@/lib/spare-part-utils';
+import { normalizeSparePartStatus } from '@/lib/docs-spare-part-status';
 
 export interface DashboardFilterParams {
-  status?: string | null;   // 'completed'
+  status?: string | null;   // 'completed' | 'short' | 'pending' | 'ordered' | 'stock' | 'unknown'
   overdue?: string | null;  // '1'
   stage?: string | null;
   team?: string | null;
@@ -19,12 +22,17 @@ export interface DashboardFilterParams {
   bucket?: string | null;
   sub1_status?: string | null;
   sub2_status?: string | null;
-  // New extended filters
+  // Extended filters
   subcontractor?: string | null;
   hdec_pic?: string | null;
   due_this_week?: string | null; // '1'
   delay_bucket?: string | null;  // '0-7' | '8-14' | '15-30' | '30+'
-  dq?: string | null;            // data quality issue key (e.g. 'missing_planned')
+  dq?: string | null;            // data quality issue key
+  // Spare-part specific
+  po_status?: string | null;
+  eta_missing?: string | null;       // '1' | 'true'
+  po_pending?: string | null;        // '1' | 'true'
+  delivery_pending?: string | null;  // '1' | 'true'
 }
 
 export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterParams {
@@ -42,19 +50,25 @@ export function readDashboardFilterParams(sp: URLSearchParams): DashboardFilterP
     due_this_week: sp.get('due_this_week'),
     delay_bucket: sp.get('delay_bucket'),
     dq: sp.get('dq'),
+    po_status: sp.get('po_status'),
+    eta_missing: sp.get('eta_missing'),
+    po_pending: sp.get('po_pending'),
+    delivery_pending: sp.get('delivery_pending'),
   };
 }
 
 export function hasAnyDashboardFilter(p: DashboardFilterParams): boolean {
   return !!(p.status || p.overdue || p.stage || p.team || p.trade || p.bucket
     || p.sub1_status || p.sub2_status
-    || p.subcontractor || p.hdec_pic || p.due_this_week || p.delay_bucket || p.dq);
+    || p.subcontractor || p.hdec_pic || p.due_this_week || p.delay_bucket || p.dq
+    || p.po_status || p.eta_missing || p.po_pending || p.delivery_pending);
 }
 
 const BUILDERS: Record<DocModule, (rows: any[], asOf: Date) => any[]> = {
   abd: buildAbdStageRecords,
   omm: buildOmmStageRecords,
   warranty: buildWarrantyStageRecords,
+  spare_part: buildSparePartStageRecords,
 };
 
 /**
@@ -118,11 +132,20 @@ export function computeDashboardFilteredIds(
       abd: module === 'abd' ? rows : [],
       omm: module === 'omm' ? rows : [],
       warranty: module === 'warranty' ? rows : [],
+      spare_part: module === 'spare_part' ? rows : [],
     });
     for (const it of issues) {
       if (it.key === params.dq) for (const id of it.ids) dqIds.add(id);
     }
   }
+
+  // Spare-part raw row map for status / po_status / pending filters
+  const sparePartById = new Map<string, any>();
+  if (module === 'spare_part') {
+    for (const r of rows) sparePartById.set(r.id, r);
+  }
+  const asOfIso = (params.delivery_pending || params.po_pending || params.eta_missing || params.status || params.po_status || params.overdue === '1')
+    ? asOf.toISOString().slice(0, 10) : '';
 
   const out = new Set<string>();
   for (const [id, recs] of byItem) {
@@ -164,9 +187,39 @@ export function computeDashboardFilteredIds(
       const ok = recs.some((r: any) => r.stage_key === lastKey && r.is_done);
       if (!ok) continue;
     }
+    // Spare-part: status filter is procurement status (short/pending/ordered/stock/unknown)
+    if (module === 'spare_part' && params.status && params.status !== 'completed') {
+      const row = sparePartById.get(id);
+      if (!row) continue;
+      if (normalizeSparePartStatus(row.status) !== params.status) continue;
+    }
+    if (module === 'spare_part' && params.po_status) {
+      const row = sparePartById.get(id);
+      if (!row) continue;
+      if (String(row.po_status ?? '').toLowerCase() !== params.po_status.toLowerCase()) continue;
+    }
     if (params.overdue === '1') {
-      const ok = recs.some((r: any) => r.is_overdue);
-      if (!ok) continue;
+      if (module === 'spare_part') {
+        const row = sparePartById.get(id);
+        if (!row || !isOverdueSparePart(row, asOfIso)) continue;
+      } else {
+        const ok = recs.some((r: any) => r.is_overdue);
+        if (!ok) continue;
+      }
+    }
+    if (module === 'spare_part' && params.eta_missing && params.eta_missing !== '0' && params.eta_missing !== 'false') {
+      const row = sparePartById.get(id);
+      if (!row || row.eta_date) continue;
+    }
+    if (module === 'spare_part' && params.po_pending && params.po_pending !== '0' && params.po_pending !== 'false') {
+      const row = sparePartById.get(id);
+      if (!row) continue;
+      // PO pending = no actual_po_date and (planned_po_date passed OR not set)
+      if (row.actual_po_date) continue;
+    }
+    if (module === 'spare_part' && params.delivery_pending && params.delivery_pending !== '0' && params.delivery_pending !== 'false') {
+      const row = sparePartById.get(id);
+      if (!row || row.actual_delivery_date) continue;
     }
     if (params.stage) {
       const stageRec = recs.find((r: any) => r.stage_key === params.stage);

@@ -1,5 +1,5 @@
-// Loads ABD / OMM / Warranty rows in parallel and converts them into the
-// flat stage-record shape consumed by the Document Executive Dashboard.
+// Loads ABD / OMM / Warranty / Spare Part rows in parallel and converts them
+// into the flat stage-record shape consumed by the Document Executive Dashboard.
 
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -7,6 +7,7 @@ import {
   buildAbdStageRecords,
   buildOmmStageRecords,
   buildWarrantyStageRecords,
+  buildSparePartStageRecords,
   type DocsStageRecord,
 } from '@/lib/docs-stage-records';
 
@@ -32,6 +33,8 @@ export interface ExecDashboardSnapshot {
   ommRows: any[];
   /** Raw Warranty rows (active) for Data Quality + warranty step breakdown */
   warrantyRows: any[];
+  /** Raw Spare Part rows (active) for procurement bucket distribution */
+  sparePartRows: any[];
 }
 
 export async function loadExecutiveDashboard(opts: {
@@ -39,7 +42,7 @@ export async function loadExecutiveDashboard(opts: {
 }): Promise<ExecDashboardSnapshot> {
   const asOf = asOfStartOfDay(opts.asOf);
 
-  const [abdRows, ommRows, warrantyRows] = await Promise.all([
+  const [abdRows, ommRows, warrantyRows, sparePartRows] = await Promise.all([
     fetchAll(() =>
       supabase
         .from('docs_drawings')
@@ -83,13 +86,27 @@ export async function loadExecutiveDashboard(opts: {
         )
         .eq('is_active', true),
     ),
+    fetchAll(() =>
+      (supabase as any)
+        .from('docs_spare_part')
+        .select(
+          'id, item_no, sn, category, sub_category, parent_item, material, specification, ' +
+            'team, trade, subcontractor_name, hdec_pic_name, hdec_eng_name, ' +
+            'status, po_status, material_lead_time, ' +
+            'planned_confirm_date, actual_confirm_date, direction_to_subcon_date, ' +
+            'planned_po_date, actual_po_date, eta_date, ' +
+            'planned_delivery_date, actual_delivery_date',
+        )
+        .eq('is_active', true),
+    ),
   ]);
 
   const records = [
     ...buildAbdStageRecords(abdRows, asOf),
     ...buildOmmStageRecords(ommRows, asOf),
     ...buildWarrantyStageRecords(warrantyRows, asOf),
+    ...buildSparePartStageRecords(sparePartRows, asOf),
   ];
 
-  return { records, asOf, abdRows, ommRows, warrantyRows };
+  return { records, asOf, abdRows, ommRows, warrantyRows, sparePartRows };
 }

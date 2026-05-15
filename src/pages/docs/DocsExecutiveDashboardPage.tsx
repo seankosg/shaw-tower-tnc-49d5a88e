@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
-  Calendar as CalendarIcon, FileText, BookOpen, ShieldCheck,
+  Calendar as CalendarIcon, FileText, BookOpen, ShieldCheck, Package,
   AlertTriangle, CheckCircle2, ListChecks, ArrowRight,
-  CalendarClock, Flame, Clock, Layers, AlertCircle,
+  CalendarClock, Flame, Clock, Layers, AlertCircle, Truck,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,21 +30,25 @@ import {
   type OmmSub1StatusBuckets, type OmmSub2StatusBuckets, type OmmStatusBucketKey,
   type DelayBucketKey,
 } from '@/lib/docs-stage-records';
+import { normalizeSparePartStatus, type SparePartStatusNorm } from '@/lib/docs-spare-part-status';
+import { isOverdueSparePart } from '@/lib/spare-part-utils';
 
 const MODULE_ICON: Record<DocModule, typeof FileText> = {
   abd: FileText,
   omm: BookOpen,
   warranty: ShieldCheck,
+  spare_part: Package,
 };
 
 // Distinct accent per module — semantic-friendly Tailwind classes
 const MODULE_ACCENT: Record<DocModule, { bar: string; chip: string; ring: string; text: string }> = {
-  abd:      { bar: 'bg-sky-500',     chip: 'bg-sky-500/10 text-sky-700 dark:text-sky-300',         ring: 'ring-sky-500/30',     text: 'text-sky-600' },
-  omm:      { bar: 'bg-violet-500',  chip: 'bg-violet-500/10 text-violet-700 dark:text-violet-300', ring: 'ring-violet-500/30',  text: 'text-violet-600' },
-  warranty: { bar: 'bg-emerald-500', chip: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300', ring: 'ring-emerald-500/30', text: 'text-emerald-600' },
+  abd:        { bar: 'bg-sky-500',     chip: 'bg-sky-500/10 text-sky-700 dark:text-sky-300',         ring: 'ring-sky-500/30',     text: 'text-sky-600' },
+  omm:        { bar: 'bg-violet-500',  chip: 'bg-violet-500/10 text-violet-700 dark:text-violet-300', ring: 'ring-violet-500/30',  text: 'text-violet-600' },
+  warranty:   { bar: 'bg-emerald-500', chip: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300', ring: 'ring-emerald-500/30', text: 'text-emerald-600' },
+  spare_part: { bar: 'bg-amber-500',   chip: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',   ring: 'ring-amber-500/30',   text: 'text-amber-600' },
 };
 
-const MODULES: DocModule[] = ['abd', 'omm', 'warranty'];
+const MODULES: DocModule[] = ['abd', 'omm', 'warranty', 'spare_part'];
 
 function uniqSorted(values: (string | null | undefined)[]): string[] {
   const set = new Set<string>();
@@ -74,6 +78,7 @@ export default function DocsExecutiveDashboardPage() {
   const abdRows = snap?.abdRows ?? [];
   const ommRows = snap?.ommRows ?? [];
   const warrantyRows = snap?.warrantyRows ?? [];
+  const sparePartRows = snap?.sparePartRows ?? [];
 
   const goRaw = (m: DocModule, params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
@@ -99,8 +104,8 @@ export default function DocsExecutiveDashboardPage() {
   }, [records, asOf]);
 
   const dataQuality = useMemo(
-    () => computeDataQualityIssues(records, { abd: abdRows, omm: ommRows, warranty: warrantyRows }),
-    [records, abdRows, ommRows, warrantyRows],
+    () => computeDataQualityIssues(records, { abd: abdRows, omm: ommRows, warranty: warrantyRows, spare_part: sparePartRows }),
+    [records, abdRows, ommRows, warrantyRows, sparePartRows],
   );
 
   return (
@@ -110,7 +115,7 @@ export default function DocsExecutiveDashboardPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Document Executive Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Close-out documents — As-Built Drawings · Operation &amp; Maintenance Manual · Warranty Deeds
+            Close-out documents — As-Built Drawings · Operation &amp; Maintenance Manual · Warranty Deeds · Spare Parts
           </p>
         </div>
         <Popover>
