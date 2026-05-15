@@ -563,8 +563,69 @@ export default function PunchRawDataPage() {
     return [selectColumn, ...dataColumns];
   }, [visibleFields, getLabel, getOriginalHeader, optionFields, rows]);
 
+  // URL → derived row filtering (status/due/blocker/pre_eng/start_due)
+  const filteredRows = useMemo(() => {
+    let next = rows;
+    const today = new Date().toISOString().slice(0, 10);
+    const horizon = (days: number) => {
+      const d = new Date(today + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() + days);
+      return d.toISOString().slice(0, 10);
+    };
+    const status = searchParams.get('status');
+    if (status) {
+      switch (status) {
+        case 'completed': next = next.filter((r) => !!r.actual_completion_date); break;
+        case 'wip': next = next.filter((r) => !!r.actual_start_date && !r.actual_completion_date); break;
+        case 'not_started': next = next.filter((r) => !r.actual_start_date); break;
+        case 'overdue': next = next.filter((r) => !r.actual_completion_date && r.planned_completion_date && r.planned_completion_date < today); break;
+        case 'start_delayed': next = next.filter((r) => !r.actual_start_date && r.planned_start_date && r.planned_start_date < today); break;
+        case 'critical': next = next.filter((r) => r.health_status === 'critical' || (!r.actual_completion_date && r.planned_completion_date && (Date.parse(today) - Date.parse(r.planned_completion_date)) / 86_400_000 > 14)); break;
+        case 'ready_not_started': next = next.filter((r) => !!r.pre_engineering_ready && !r.actual_start_date); break;
+      }
+    }
+    const due = searchParams.get('due');
+    if (due) {
+      const days = due === 'this_week' ? 7 : due === 'next_14_days' ? 14 : 0;
+      if (days) {
+        const h = horizon(days);
+        next = next.filter((r) => !r.actual_completion_date && r.planned_completion_date && r.planned_completion_date >= today && r.planned_completion_date <= h);
+      }
+    }
+    const startDue = searchParams.get('start_due');
+    if (startDue) {
+      const days = Number(startDue) || 0;
+      if (days > 0) {
+        const h = horizon(days);
+        next = next.filter((r) => !r.actual_start_date && r.planned_start_date && r.planned_start_date >= today && r.planned_start_date <= h);
+      }
+    }
+    if (searchParams.get('pre_eng') === 'blocked') {
+      next = next.filter((r) => !r.pre_engineering_ready);
+    }
+    const blocker = searchParams.get('blocker');
+    if (blocker) {
+      const has = (r: PunchItem, kinds: string[]) => kinds.length > 0 && kinds.every((k) => {
+        if (k === 'material_approval') return r.material_approval_status === 'pending';
+        if (k === 'material_procurement') return r.material_procurement_status === 'pending' || r.material_procurement_status === 'partially_secured';
+        if (k === 'drawing_approval') return r.drawing_approval_status === 'pending';
+        if (k === 'mos_approval') return r.mos_approval_status === 'pending';
+        return false;
+      });
+      const blockersOf = (r: PunchItem) => [
+        r.material_approval_status === 'pending' && 'material_approval',
+        (r.material_procurement_status === 'pending' || r.material_procurement_status === 'partially_secured') && 'material_procurement',
+        r.drawing_approval_status === 'pending' && 'drawing_approval',
+        r.mos_approval_status === 'pending' && 'mos_approval',
+      ].filter(Boolean) as string[];
+      if (blocker === 'multiple') next = next.filter((r) => blockersOf(r).length > 1);
+      else next = next.filter((r) => has(r, [blocker]));
+    }
+    return next;
+  }, [rows, searchParams]);
+
   const table = useReactTable({
-    data: rows,
+    data: filteredRows,
     columns,
     state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, rowSelection },
     onSortingChange: setSorting,
