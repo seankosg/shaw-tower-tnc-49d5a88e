@@ -249,8 +249,8 @@ export default function DefectSimulationPage() {
               <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Subcontractors</SelectItem>
-                {subcontractorOptions.map(o => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                {subconOptions.map(name => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
