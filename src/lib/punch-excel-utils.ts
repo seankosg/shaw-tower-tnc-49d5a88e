@@ -275,6 +275,31 @@ export async function upsertPunchRows(
     change_source: string;
     changed_by: string | null;
   }> = [];
+  const pendingRowLogs: Array<{
+    upload_id: string;
+    raw_row_no: number | null;
+    item_no: string | null;
+    action_taken: 'inserted' | 'updated' | 'skipped' | 'rejected';
+    reason_code: string | null;
+    reason_detail: string | null;
+  }> = [];
+  const pushRowLog = (
+    rawRowNo: number | null,
+    itemNo: string | null,
+    action: 'inserted' | 'updated' | 'skipped' | 'rejected',
+    reasonCode: string | null = null,
+    reasonDetail: string | null = null,
+  ) => {
+    if (!opts.uploadId) return;
+    pendingRowLogs.push({
+      upload_id: opts.uploadId,
+      raw_row_no: rawRowNo,
+      item_no: itemNo,
+      action_taken: action,
+      reason_code: reasonCode,
+      reason_detail: reasonDetail,
+    });
+  };
 
   for (const row of rows) {
     const itemNo = row.values.item_no ?? null;
@@ -293,9 +318,11 @@ export async function upsertPunchRows(
       if (error) {
         result.failed++;
         result.errors.push({ itemNo, reason: error.message });
+        pushRowLog(row.rawRowNo, itemNo, 'rejected', 'db_error', error.message);
         continue;
       }
       result.updated++;
+      pushRowLog(row.rawRowNo, itemNo, 'updated');
 
       // Build field-level diffs
       for (const field of TRACKED_FIELDS) {
@@ -344,9 +371,11 @@ export async function upsertPunchRows(
       if (error) {
         result.failed++;
         result.errors.push({ itemNo, reason: error.message });
+        pushRowLog(row.rawRowNo, itemNo, 'rejected', 'db_error', error.message);
         continue;
       }
       result.inserted++;
+      pushRowLog(row.rawRowNo, itemNo, 'inserted');
 
       // Field logs for inserts (every applied non-empty field)
       const newId = inserted?.id;
@@ -392,6 +421,10 @@ export async function upsertPunchRows(
   if (pendingChangeLogs.length) {
     const { error } = await supabase.from('punch_change_log').insert(pendingChangeLogs as any);
     if (error) console.warn('[punch] change log insert failed:', error.message);
+  }
+  if (opts.uploadId && pendingRowLogs.length) {
+    const { error } = await (supabase as any).from('punch_upload_row_logs').insert(pendingRowLogs);
+    if (error) console.warn('[punch] row log insert failed:', error.message);
   }
 
   return result;

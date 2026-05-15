@@ -134,6 +134,19 @@ export default function PunchImportPage() {
         updatedBy: profile?.user_id ?? null,
       });
 
+      // Log parser-level rejections (rows missing required fields)
+      if (batch && item.parsed!.errors.length > 0) {
+        const rejectionLogs = item.parsed!.errors.map((err) => ({
+          upload_id: batch.id,
+          raw_row_no: err.rawRowNo ?? null,
+          item_no: null,
+          action_taken: 'rejected' as const,
+          reason_code: 'missing_required_field',
+          reason_detail: err.reason,
+        }));
+        await (supabase as any).from('punch_upload_row_logs').insert(rejectionLogs);
+      }
+
       if (batch) {
         await supabase.from('punch_upload_batches').update({
           status: result.failed > 0 ? 'failed' : 'completed',

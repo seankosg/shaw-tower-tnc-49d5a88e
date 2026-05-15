@@ -2370,6 +2370,39 @@ export type Database = {
         }
         Relationships: []
       }
+      punch_upload_row_logs: {
+        Row: {
+          action_taken: Database["public"]["Enums"]["action_taken"] | null
+          id: string
+          item_no: string | null
+          processed_at: string
+          raw_row_no: number | null
+          reason_code: string | null
+          reason_detail: string | null
+          upload_id: string
+        }
+        Insert: {
+          action_taken?: Database["public"]["Enums"]["action_taken"] | null
+          id?: string
+          item_no?: string | null
+          processed_at?: string
+          raw_row_no?: number | null
+          reason_code?: string | null
+          reason_detail?: string | null
+          upload_id: string
+        }
+        Update: {
+          action_taken?: Database["public"]["Enums"]["action_taken"] | null
+          id?: string
+          item_no?: string | null
+          processed_at?: string
+          raw_row_no?: number | null
+          reason_code?: string | null
+          reason_detail?: string | null
+          upload_id?: string
+        }
+        Relationships: []
+      }
       sc_no_history: {
         Row: {
           changed_at: string
