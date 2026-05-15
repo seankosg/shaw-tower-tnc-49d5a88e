@@ -149,6 +149,7 @@ export default function PunchImportLogsPage() {
     } else {
       setDurationsMs({});
     }
+  };
 
   const selectBatch = async (id: string) => {
     setSelectedBatch(id);
