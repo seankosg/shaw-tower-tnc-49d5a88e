@@ -1,105 +1,32 @@
 ## 목표
-Admin 페이지에 **Report** 탭을 추가합니다. 모듈/섹션/스냅샷 날짜를 선택하면 앱 내 데이터를 집계해 **Markdown 보고서**를 생성하고, 외부 LLM(Lovable AI Gateway)과 연동해 자동으로 보고서 본문까지 작성할 수 있도록 합니다.
 
-## 노출 제어
-- `useAuth().isAdmin === true` 일 때만 `Report` 탭 렌더 (Superuser/D.Superuser 비노출).
-- 별도 안내 문구는 표기하지 않음.
+Report 탭의 "Stage Progress Snapshots" 표(날짜별 진도율)가 현재는 단순히 `actual_date ≤ snapshot date` 카운트만 사용 중. 이를 **Simulation 탭과 동일한 로직**(`simulateAllTncStages` / `simulateAllDefectStages`)으로 교체해 미래 날짜에도 예측치(Predicted %)가 같이 나오도록 함.
 
-## UI (`src/pages/admin/ReportTab.tsx`)
+T&C와 Defect만 Simulation 모듈이 존재하므로 두 모듈에 적용. Docs / Punch 스냅샷은 기존 actual-date 기반 로직 유지.
 
-```text
-[Report 탭]
-┌─ Modules ──────────────────────────────────────────────┐
-│ ☑ T&C   ☑ Defect   ☑ Docs (ABD/OMM/Warranty/Spare)    │
-│ ☑ Punch                                                 │
-└────────────────────────────────────────────────────────┘
-┌─ Sections per module ──────────────────────────────────┐
-│ ☑ Dashboard summary (KPI, 상태 분포)                    │
-│ ☑ Progress summary (스테이지별 누적/주간 진도율)         │
-│ ☑ Simulation summary (현재 vs 목표, To-Achieve)         │
-│ ☑ Stage Progress Snapshots (날짜별 스테이지 진도율)     │
-└────────────────────────────────────────────────────────┘
-┌─ Snapshot Dates ───────────────────────────────────────┐
-│ 2026-05-30   2026-06-07   2026-06-14   [+ 날짜 추가]    │
-└────────────────────────────────────────────────────────┘
+## 변경 사항
 
-[ Generate Markdown ]   [ Copy ]   [ Download .md ]
+### 1) `src/lib/report-builder.ts`
 
-┌─ Preview (textarea, MD 원문) ──────────────────────────┐
+- `ReportOptions`에 추가:
+  - `delayMode?: 'optimistic' | 'penalty'` (기본 `'penalty'` — Simulation 페이지 기본값과 동일)
+  - `dataDate?: string` (없으면 자동 결정 — 아래 참조)
+- T&C / Defect fetch를 `select('*')`로 변경 → Simulation 엔진이 요구하는 모든 컬럼(`SubtestForDashboard` / `DefectItem`) 확보. `is_active=true` 필터 유지.
+- `dataDate` 미지정 시 fetch 단계에서 actual 컬럼들 중 가장 최근 ISO를 골라 자동 결정 (Simulation 페이지의 `useLatestSubtestDataDate` / `useLatestDataDate`와 같은 의미). 둘 다 없으면 오늘 날짜 fallback.
+- 스냅샷 표 계산을 다음으로 교체:
+  - T&C: `simulateAllTncStages(rows, snapshot, { mode: delayMode, dataDate, enforceSequential: true }, ['t1','t2','r1','r2s'])`
+  - Defect: `simulateAllDefectStages(rows, snapshot, { mode: delayMode, dataDate }, ['start','completion','closure'])`
+- 표 컬럼: 각 스테이지마다 `Predicted %`(메인) + `Actual %` 부가 표기. 표 위에 `mode = Worst Case`, `data date = YYYY-MM-DD` 메타 한 줄 추가해 LLM이 해석 가능하도록 함.
+- T&C R2S는 Simulation 엔진의 `'r2s'` 키 사용 (기존 단순 `r2_actual_submission_date` 카운트 대체).
+- Docs / Punch 스냅샷, Dashboard / Progress / Simulation 요약 섹션은 그대로 유지.
 
-──── External LLM ────────────────────────────────────────
-Model: [google/gemini-3-flash-preview ▼]  (gemini/gpt-5 계열 선택)
-System prompt: [편집 가능 textarea — 기본값 제공]
-[ Generate Report via LLM ]   [ Copy Report ]   [ Download Report .md ]
+### 2) `src/pages/admin/ReportTab.tsx`
 
-┌─ LLM Output (스트리밍 표시) ───────────────────────────┐
-```
+- "Delay handling" Select 추가 (Best Case / Worst Case, 기본 Worst Case) → `delayMode` 상태로 보관 후 `buildReportMarkdown` 옵션으로 전달.
+- "Data date (override)" date input 추가 — 비워두면 자동 결정. 아래에 헬퍼 텍스트 "leave empty to use latest actual date" 안내.
+- 기존 컨트롤(modules / sections / snapshot dates / MC date)은 그대로.
 
-## MD 출력 구조
+## 검증
 
-```markdown
-# SHAW Project — Status Report
-Generated: YYYY-MM-DD HH:mm (SGT)
-Mechanical Completion D-Day: 2026-06-15
-
-## 1. T&C Management
-### 1.1 Dashboard
-- Total subtests: N / Completed/In Progress/Pending …
-### 1.2 Progress (Stages: T1, T2, R2S)
-- T1 (Internal Test):     planned X / actual Y (xx%)
-- T2 (Official Test):     planned X / actual Y (xx%)
-- R2S (Report Submission): planned X / actual Y (xx%)
-### 1.3 Simulation
-- Current pace, Required pace to MC, Forecast finish, Gap
-### 1.4 Stage Progress Snapshots
-| Date | T1 % | T2 % | R2S % |
-|------|------|------|-------|
-| 2026-05-30 | … | … | … |
-| 2026-06-07 | … | … | … |
-| 2026-06-14 | … | … | … |
-
-## 2. Defect Management
-### Stages: Completion, Closure
-... (Dashboard / Progress / Simulation / Snapshots)
-### Snapshot table
-| Date | Completion % | Closure % |
-
-## 3. Docs Management
-서브모듈별(ABD / OMM / Warranty / Spare Part) 섹션 + 각 서브모듈의 **모든 스테이지** 스냅샷 표.
-
-## 4. Punch Management
-... (Dashboard / Progress / Simulation / Snapshots)
-```
-
-## 데이터 집계 매핑
-
-| 모듈 | Dashboard | Progress | Simulation | Snapshot 스테이지 |
-|------|-----------|----------|------------|-----------------|
-| T&C    | `lib/dashboard-utils.ts` | `lib/stage-metrics.ts` | `lib/tnc-simulation.ts` | **t1, t2, r2s** |
-| Defect | `lib/defect-dashboard-utils.ts` | `lib/defect-progress-calc.ts` | `lib/defect-simulation.ts` | **completion, closure** |
-| Docs   | `lib/docs-dashboard-data.ts`, `lib/docs-executive-dashboard-data.ts` | `lib/docs-stage-records.ts` | (해당 시) | **모든 stage** (서브모듈별) |
-| Punch  | Punch Dashboard 페이지 로직 재사용 | status 기반 카운트 | (없으면 생략) | status 변경일 기반 |
-
-스냅샷 계산: 각 행의 actual 완료일이 snapshotDate 이하인 비율을 백분율로 표기. 데이터 없는 항목은 `_(not available)_` 명시.
-
-## 외부 LLM 연동
-- 신규 edge function: `supabase/functions/report-llm/index.ts`
-  - body: `{ markdown, model, systemPrompt }`
-  - Lovable AI Gateway (`https://ai.gateway.lovable.dev/v1/chat/completions`) 호출, **스트리밍 SSE** 응답
-  - 429/402 에러 토스트로 surface
-  - `verify_jwt` 기본값 사용
-- 클라이언트는 SSE 토큰을 받아 textarea에 점진적 렌더 → Copy / Download 가능
-- 기본 model: `google/gemini-3-flash-preview`, 선택지: gemini-2.5-pro, gpt-5, gpt-5-mini, gpt-5.2
-- 기본 system prompt 예: *"You are a construction project status report writer. Convert the following structured Markdown data into an executive-style status report in English with sections, bullet points, and key risks."* (편집 가능)
-
-## 변경 파일
-1. **신규** `src/pages/admin/ReportTab.tsx` — UI, 상태, MD 생성/LLM 호출
-2. **신규** `src/lib/report-builder.ts` — 모듈별 집계 → MD 빌더 (단위 테스트 가능)
-3. **신규** `supabase/functions/report-llm/index.ts` — Lovable AI 게이트웨이 SSE 프록시
-4. **수정** `src/pages/AdminPage.tsx` — `Report` `TabsTrigger`/`TabsContent` 추가 (admin 한정)
-
-## 범위 외
-- 보고서 결과의 DB 영구 저장 (필요 시 별도 작업)
-- 엑셀/PDF 내보내기 (현재는 .md만)
-
-승인하시면 위 구조대로 구현하겠습니다.
+- Simulation 탭에서 특정 target date의 Predicted %를 확인한 뒤, Report 탭에서 같은 날짜를 스냅샷에 추가하고 동일한 모드(Worst Case)로 생성한 Markdown 표 값과 일치하는지 비교.
+- 과거 날짜(예: 2026-04-01)는 Predicted % ≈ Actual %, 미래 날짜(예: 2026-06-14)는 mode에 따라 값이 달라지는지 확인.
