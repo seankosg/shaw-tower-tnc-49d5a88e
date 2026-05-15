@@ -25,6 +25,7 @@ import SchedulePage from "./pages/SchedulePage";
 import ScheduleRevisionPage from "./pages/ScheduleRevisionPage";
 import AdminPage from "./pages/AdminPage";
 import AdminClassificationPage from "./pages/AdminClassificationPage";
+import AdminReportPage from "./pages/admin/AdminReportPage";
 import DefectDashboardPage from "./pages/DefectDashboardPage";
 import DefectProgressPage from "./pages/DefectProgressPage";
 import DefectSimulationPage from "./pages/DefectSimulationPage";
@@ -161,6 +162,7 @@ const App = () => (
                 <Route path="/comments/defect" element={<AllDefectCommentsPage />} />
                 <Route path="/admin" element={<AdminPage />} />
                 <Route path="/admin/classification" element={<AdminClassificationPage />} />
+                <Route path="/admin/report" element={<AdminReportPage />} />
               </Route>
             </Routes>
           </BrowserRouter>

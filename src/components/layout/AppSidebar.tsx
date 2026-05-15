@@ -66,6 +66,7 @@ const punchNav = [
 
 const adminNav = [
   { label: 'Admin', icon: Shield, path: '/admin' },
+  { label: 'Report', icon: FileText, path: '/admin/report' },
   { label: 'Defect Classification', icon: Tags, path: '/admin/classification' },
 ];
 
