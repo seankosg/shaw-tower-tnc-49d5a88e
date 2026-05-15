@@ -267,7 +267,7 @@ export function AppSidebar() {
                 {visibleAdmin.map((item) => (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
-                      isActive={pathname.startsWith(item.path)}
+                      isActive={item.path === '/admin' ? (pathname === '/admin' || (pathname.startsWith('/admin/') && !pathname.startsWith('/admin/report') && !pathname.startsWith('/admin/classification'))) : pathname.startsWith(item.path)}
                       onClick={() => navigate(safeRoute(item.path, roles))}
                       tooltip={item.label}
                     >
