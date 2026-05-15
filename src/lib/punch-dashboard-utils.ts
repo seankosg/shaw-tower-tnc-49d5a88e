@@ -234,3 +234,109 @@ export function recoveryPriorityScore(r: PunchItem, asOf: string = today()): num
   if (variance < 0) s += Math.min(25, -variance / 2);
   return s;
 }
+
+// ── Suggested recovery action (rule-based) ───────────────────────────────
+
+export function suggestedRecoveryAction(r: PunchItem, asOf: string = today()): string {
+  if (isCompleted(r) && !r.actual_completion_date) return 'Update actual completion date';
+  const bs = blockersFor(r);
+  if (bs.includes('material_approval')) return 'Clear material approval';
+  if (bs.includes('material_procurement')) return 'Expedite material procurement';
+  if (bs.includes('drawing_approval')) return 'Close drawing approval';
+  if (bs.includes('mos_approval')) return 'Close MOS approval';
+  if (isReadyButNotStarted(r)) return 'Mobilize subcontractor';
+  const od = daysOverdue(r, asOf);
+  if (od > 0 && isWip(r)) return 'Increase manpower / close remaining works';
+  if (isStartDelayed(r, asOf)) return 'Start work immediately';
+  const w = Number(r.weight ?? 0);
+  if (w >= 10 && isBehindSchedule(r)) return 'Assign recovery owner and daily target';
+  if (isDueWithin(r, 7, asOf) && ((Number(r.actual_progress_pct) || 0) < (Number(r.planned_progress_pct) || 0))) {
+    return 'Daily follow-up until completion';
+  }
+  if (od > 0) return 'Recover schedule';
+  return '—';
+}
+
+// ── Data quality issues ──────────────────────────────────────────────────
+
+export type PunchDqKey =
+  | 'missing_planned_start' | 'missing_planned_completion'
+  | 'missing_hdec_pic' | 'missing_subcontractor' | 'missing_team'
+  | 'completed_missing_actual_completion'
+  | 'invalid_progress' | 'invalid_dates'
+  | 'missing_weight' | 'missing_health';
+
+export const PUNCH_DQ_LABEL: Record<PunchDqKey, string> = {
+  missing_planned_start: 'Missing planned start',
+  missing_planned_completion: 'Missing planned completion',
+  missing_hdec_pic: 'Missing HDEC PIC',
+  missing_subcontractor: 'Missing subcontractor',
+  missing_team: 'Missing team',
+  completed_missing_actual_completion: 'Completed w/o actual completion',
+  invalid_progress: 'Invalid progress (>100 or <0)',
+  invalid_dates: 'Invalid date order',
+  missing_weight: 'Missing weight',
+  missing_health: 'Missing health status',
+};
+
+export function punchDqMatch(key: PunchDqKey, r: PunchItem): boolean {
+  switch (key) {
+    case 'missing_planned_start': return !r.planned_start_date;
+    case 'missing_planned_completion': return !r.planned_completion_date;
+    case 'missing_hdec_pic': return !String(r.hdec_pic_name ?? '').trim();
+    case 'missing_subcontractor': return !String(r.subcontractor_name ?? '').trim();
+    case 'missing_team': return !String(r.team ?? '').trim();
+    case 'completed_missing_actual_completion':
+      return (Number(r.actual_progress_pct) || 0) >= 100 && !r.actual_completion_date;
+    case 'invalid_progress': {
+      const a = Number(r.actual_progress_pct);
+      const p = Number(r.planned_progress_pct);
+      return (Number.isFinite(a) && (a > 100 || a < 0)) || (Number.isFinite(p) && (p > 100 || p < 0));
+    }
+    case 'invalid_dates': {
+      const ps = r.planned_start_date, pc = r.planned_completion_date;
+      const as_ = r.actual_start_date, ac = r.actual_completion_date;
+      if (ps && pc && pc < ps) return true;
+      if (as_ && ac && ac < as_) return true;
+      return false;
+    }
+    case 'missing_weight': return !(Number(r.weight) > 0);
+    case 'missing_health': return !r.health_status;
+  }
+}
+
+export function computePunchDqCounts(rows: PunchItem[]): Record<PunchDqKey, number> {
+  const keys: PunchDqKey[] = [
+    'missing_planned_start','missing_planned_completion','missing_hdec_pic',
+    'missing_subcontractor','missing_team','completed_missing_actual_completion',
+    'invalid_progress','invalid_dates','missing_weight','missing_health',
+  ];
+  const out = Object.fromEntries(keys.map((k) => [k, 0])) as Record<PunchDqKey, number>;
+  for (const r of rows) {
+    for (const k of keys) if (punchDqMatch(k, r)) out[k]++;
+  }
+  return out;
+}
+
+// ── Top delaying parties ─────────────────────────────────────────────────
+
+export interface TopParty { key: string; total: number; overdue: number; critical: number; blocked: number; score: number; }
+
+export function topDelayingParties(
+  rows: PunchItem[], keyFn: (r: PunchItem) => string, limit = 5, asOf: string = today(),
+): TopParty[] {
+  const m = new Map<string, TopParty>();
+  for (const r of rows) {
+    const k = (keyFn(r) || '').trim();
+    if (!k) continue;
+    let p = m.get(k);
+    if (!p) { p = { key: k, total: 0, overdue: 0, critical: 0, blocked: 0, score: 0 }; m.set(k, p); }
+    p.total++;
+    if (isCompletionOverdue(r, asOf)) p.overdue++;
+    if (isCriticalDelay(r, asOf)) p.critical++;
+    if (isBlockedByPreEng(r)) p.blocked++;
+  }
+  for (const p of m.values()) p.score = p.critical * 3 + p.overdue * 2 + p.blocked;
+  return Array.from(m.values()).filter((p) => p.score > 0)
+    .sort((a, b) => b.score - a.score || b.overdue - a.overdue).slice(0, limit);
+}
