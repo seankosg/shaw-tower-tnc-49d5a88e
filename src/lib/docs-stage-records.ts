@@ -771,7 +771,7 @@ function pushIssue(map: Map<string, DataQualityIssue>, key: string, init: () => 
 
 export function computeDataQualityIssues(
   records: DocsStageRecord[],
-  rawByModule: { abd: any[]; omm: any[]; warranty: any[] },
+  rawByModule: { abd: any[]; omm: any[]; warranty: any[]; spare_part?: any[] },
 ): DataQualityIssue[] {
   const map = new Map<string, DataQualityIssue>();
 
@@ -803,7 +803,6 @@ export function computeDataQualityIssues(
     }), id);
   };
   for (const row of rawByModule.abd) {
-    // Sub2 submission without Sub1 submission, etc.
     if (row.sub2_submission_date && !row.sub1_submission_date) addInconsistent('abd', row.id);
     else if (row.sub3_submission_date && !row.sub2_submission_date) addInconsistent('abd', row.id);
     else if (row.sub1_approval_date && !row.sub1_submission_date) addInconsistent('abd', row.id);
@@ -817,6 +816,11 @@ export function computeDataQualityIssues(
     if (row.subcon_signing_actual_date && !row.draft_actual_date) addInconsistent('warranty', row.id);
     else if (row.hdec_signing_actual_date && !row.subcon_signing_actual_date) addInconsistent('warranty', row.id);
     else if (row.final_actual_date && !row.hdec_signing_actual_date) addInconsistent('warranty', row.id);
+  }
+  for (const row of rawByModule.spare_part ?? []) {
+    if (row.actual_po_date && !row.actual_confirm_date) addInconsistent('spare_part', row.id);
+    else if (row.actual_delivery_date && !row.actual_po_date) addInconsistent('spare_part', row.id);
+    else if (row.eta_date && !row.actual_po_date) addInconsistent('spare_part', row.id);
   }
 
   return Array.from(map.values()).sort((a, b) => {
