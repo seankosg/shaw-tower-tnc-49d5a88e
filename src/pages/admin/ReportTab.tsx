@@ -77,6 +77,7 @@ export default function ReportTab() {
         modules, sections, snapshotDates, mcDate,
         delayMode,
         dataDate: dataDateOverride || undefined,
+        includeTncGuide,
       });
       setMarkdown(md);
       toast({ title: 'Markdown generated', description: `${md.length.toLocaleString()} characters` });
