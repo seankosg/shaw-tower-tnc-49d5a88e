@@ -279,7 +279,7 @@ function buildPunchSection(rows: PunchRow[], opts: ReportOptions): string {
     lines.push('');
   }
   if (opts.sections.includes('progress')) {
-    lines.push('### 4.2 Progress (Stage: Completion)');
+    lines.push('### 4.2 Current Status (Stage: Completion)');
     lines.push('| Stage | Planned to date | Actual to date | Actual % | Gap |');
     lines.push('|-------|-----------------|----------------|----------|-----|');
     lines.push(`| Completion | ${planned} | ${cur.completion} | ${pct(cur.completion, cur.total)} | ${cur.completion - planned} |`);
@@ -288,13 +288,13 @@ function buildPunchSection(rows: PunchRow[], opts: ReportOptions): string {
   if (opts.sections.includes('simulation')) {
     const mc = opts.mcDate ?? MC_DEFAULT;
     const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
-    lines.push('### 4.3 Simulation (vs PC ' + mc + ')');
-    lines.push(`- Days remaining: **${days}**`);
+    lines.push('### 4.3 Plan — Required Pace toward Project Completion (' + mc + ')');
+    lines.push(`- Days remaining to Project Completion: **${days}**`);
     lines.push(`- Completion remaining: ${cur.total - cur.completion} → required: ${((cur.total - cur.completion) / days).toFixed(2)} / day`);
     lines.push('');
   }
   if (opts.sections.includes('snapshots')) {
-    lines.push('### 4.4 Stage Progress Snapshots');
+    lines.push('### 4.4 Plan — Stage Progress Snapshots');
     lines.push('| Date | Completion % |');
     lines.push('|------|--------------|');
     for (const d of opts.snapshotDates) {
