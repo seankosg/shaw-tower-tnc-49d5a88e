@@ -50,6 +50,7 @@ export default function ReportTab() {
   const [mcDate, setMcDate] = useState('2026-06-15');
   const [delayMode, setDelayMode] = useState<'optimistic' | 'penalty'>('penalty');
   const [dataDateOverride, setDataDateOverride] = useState('');
+  const [includeTncGuide, setIncludeTncGuide] = useState(true);
   const [markdown, setMarkdown] = useState('');
   const [generating, setGenerating] = useState(false);
 
@@ -76,6 +77,7 @@ export default function ReportTab() {
         modules, sections, snapshotDates, mcDate,
         delayMode,
         dataDate: dataDateOverride || undefined,
+        includeTncGuide,
       });
       setMarkdown(md);
       toast({ title: 'Markdown generated', description: `${md.length.toLocaleString()} characters` });
@@ -235,6 +237,18 @@ export default function ReportTab() {
               placeholder="auto"
             />
             <span className="text-xs text-muted-foreground">leave empty to use latest actual date</span>
+          </div>
+
+          {/* Appendix toggle */}
+          <div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={includeTncGuide}
+                disabled={!modules.includes('tnc')}
+                onCheckedChange={(v) => setIncludeTncGuide(v === true)}
+              />
+              Include T&amp;C Raw Data Business Guide (Appendix A)
+            </label>
           </div>
 
           {/* Generate */}

@@ -13,6 +13,7 @@ import { simulateAllDefectStages } from '@/lib/defect-simulation';
 import type { SubtestForDashboard } from '@/lib/dashboard-utils';
 import type { DefectItem } from '@/lib/defect-utils';
 import type { DefectScheduleStage } from '@/lib/defect-schedule-utils';
+import { TNC_RAW_DATA_GUIDE_MD } from '@/lib/tnc-raw-data-guide';
 
 export type ReportModule = 'tnc' | 'defect' | 'docs' | 'punch';
 export type ReportSection = 'dashboard' | 'progress' | 'simulation' | 'snapshots';
@@ -26,6 +27,8 @@ export interface ReportOptions {
   delayMode?: DelayMode;
   /** Override Data Date (YYYY-MM-DD). When omitted, latest completed batch date is used. */
   dataDate?: string;
+  /** Append the T&C Raw Data Business Guide as Appendix A. Default true when T&C module selected. */
+  includeTncGuide?: boolean;
 }
 
 // ---------- helpers ----------
@@ -455,6 +458,8 @@ export async function buildReportMarkdown(opts: ReportOptions): Promise<string> 
   head.push(`_Snapshot delay mode: **${modeLabel}**_`);
   if (needsTncDate) head.push(`_T&C data date: ${tncDataDate}_`);
   if (needsDefectDate) head.push(`_Defect data date: ${defectDataDate}_`);
+  const includeGuide = needsTncDate && opts.includeTncGuide !== false;
+  if (includeGuide) head.push(`_T&C guide: included (Appendix A)_`);
   head.push('');
 
   const parts: string[] = [head.join('\n')];
@@ -474,6 +479,8 @@ export async function buildReportMarkdown(opts: ReportOptions): Promise<string> 
     const rows = await fetchPunch();
     parts.push(buildPunchSection(rows, opts));
   }
+
+  if (includeGuide) parts.push(TNC_RAW_DATA_GUIDE_MD);
 
   return parts.join('\n');
 }
