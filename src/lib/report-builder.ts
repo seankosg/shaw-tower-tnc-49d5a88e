@@ -436,22 +436,36 @@ async function buildDocsSection(opts: ReportOptions): Promise<string> {
 
 // ---------- public ----------
 export async function buildReportMarkdown(opts: ReportOptions): Promise<string> {
+  const mode: DelayMode = opts.delayMode ?? 'penalty';
+  const modeLabel = mode === 'penalty' ? 'Worst Case' : 'Best Case';
+
+  // Resolve data dates upfront (used in head + per-module snapshots)
+  const needsTncDate = opts.modules.includes('tnc');
+  const needsDefectDate = opts.modules.includes('defect');
+  const [tncDataDate, defectDataDate] = await Promise.all([
+    needsTncDate ? resolveTncDataDate(opts.dataDate) : Promise.resolve(opts.dataDate ?? ''),
+    needsDefectDate ? resolveDefectDataDate(opts.dataDate) : Promise.resolve(opts.dataDate ?? ''),
+  ]);
+
   const head: string[] = [];
   head.push('# SHAW Project — Status Report');
   head.push(`_Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')} (SGT)_`);
   head.push(`_Mechanical Completion D-Day: ${opts.mcDate ?? MC_DEFAULT}_`);
   head.push(`_Snapshot dates: ${opts.snapshotDates.join(', ') || '(none)'}_`);
+  head.push(`_Snapshot delay mode: **${modeLabel}**_`);
+  if (needsTncDate) head.push(`_T&C data date: ${tncDataDate}_`);
+  if (needsDefectDate) head.push(`_Defect data date: ${defectDataDate}_`);
   head.push('');
 
   const parts: string[] = [head.join('\n')];
 
   if (opts.modules.includes('tnc')) {
     const rows = await fetchTnc();
-    parts.push(buildTncSection(rows, opts));
+    parts.push(buildTncSection(rows, opts, tncDataDate));
   }
   if (opts.modules.includes('defect')) {
     const rows = await fetchDefects();
-    parts.push(buildDefectSection(rows, opts));
+    parts.push(buildDefectSection(rows, opts, defectDataDate));
   }
   if (opts.modules.includes('docs')) {
     parts.push(await buildDocsSection(opts));
