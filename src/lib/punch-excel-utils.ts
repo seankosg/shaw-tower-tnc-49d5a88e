@@ -275,6 +275,31 @@ export async function upsertPunchRows(
     change_source: string;
     changed_by: string | null;
   }> = [];
+  const pendingRowLogs: Array<{
+    upload_id: string;
+    raw_row_no: number | null;
+    item_no: string | null;
+    action_taken: 'inserted' | 'updated' | 'skipped' | 'rejected';
+    reason_code: string | null;
+    reason_detail: string | null;
+  }> = [];
+  const pushRowLog = (
+    rawRowNo: number | null,
+    itemNo: string | null,
+    action: 'inserted' | 'updated' | 'skipped' | 'rejected',
+    reasonCode: string | null = null,
+    reasonDetail: string | null = null,
+  ) => {
+    if (!opts.uploadId) return;
+    pendingRowLogs.push({
+      upload_id: opts.uploadId,
+      raw_row_no: rawRowNo,
+      item_no: itemNo,
+      action_taken: action,
+      reason_code: reasonCode,
+      reason_detail: reasonDetail,
+    });
+  };
 
   for (const row of rows) {
     const itemNo = row.values.item_no ?? null;
