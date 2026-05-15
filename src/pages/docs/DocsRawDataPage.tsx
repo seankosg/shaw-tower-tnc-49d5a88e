@@ -545,7 +545,7 @@ export default function DocsRawDataPage() {
   }, [searchParams, setSearchParams]);
 
   // ─── State persistence (localStorage) ───
-  const DOCS_DRILLDOWN_PARAMS = ['status', 'overdue', 'stage', 'team', 'trade', 'q', 'bucket'];
+  const DOCS_DRILLDOWN_PARAMS = ['status', 'overdue', 'stage', 'team', 'trade', 'q', 'bucket', 'subcontractor', 'hdec_pic', 'due_this_week', 'delay_bucket', 'dq'];
   useEffect(() => {
     setStateLoaded(false);
     const isDrilldown = DOCS_DRILLDOWN_PARAMS.some((p) => searchParams.has(p));
