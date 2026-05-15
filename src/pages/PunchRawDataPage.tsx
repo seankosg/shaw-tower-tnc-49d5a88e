@@ -431,6 +431,145 @@ export default function PunchRawDataPage() {
           </TableBody>
         </Table>
       </div>
+
+      <Dialog
+        open={exportDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && exportBusy) return;
+          setExportDialogOpen(open);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Export Punch Raw Data</DialogTitle>
+            <DialogDescription>Choose how you want to export the currently filtered rows.</DialogDescription>
+          </DialogHeader>
+          {(() => {
+            const subconSet = new Set<string>();
+            for (const r of filtered) {
+              const raw = (r as any)?.subcontractor_name;
+              const key = raw && String(raw).trim() ? String(raw).trim() : 'Unassigned';
+              subconSet.add(key);
+            }
+            const willZip = subconSet.size >= ZIP_THRESHOLD;
+            return (
+              <div className="space-y-4 py-2">
+                <div>
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">Format</div>
+                  <RadioGroup value={exportFormat} onValueChange={(v) => setExportFormat(v as 'view' | 'reimport')} className="gap-2">
+                    <div className="flex items-start gap-3 rounded-md border p-3">
+                      <RadioGroupItem value="view" id="punch-export-format-view" className="mt-0.5" />
+                      <div className="flex-1">
+                        <Label htmlFor="punch-export-format-view" className="cursor-pointer text-sm font-medium">View-friendly</Label>
+                        <p className="mt-1 text-xs text-muted-foreground">Human-readable format (formatted dates, percentages, status labels). Best for sharing or reporting.</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3 rounded-md border p-3">
+                      <RadioGroupItem value="reimport" id="punch-export-format-reimport" className="mt-0.5" />
+                      <div className="flex-1">
+                        <Label htmlFor="punch-export-format-reimport" className="cursor-pointer text-sm font-medium">Re-import ready</Label>
+                        <p className="mt-1 text-xs text-muted-foreground">Includes ID + Item No columns and raw values (YYYY-MM-DD dates, numeric %). Edit values and re-import to update existing rows.</p>
+                      </div>
+                    </div>
+                  </RadioGroup>
+                </div>
+                <div>
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">Output</div>
+                  <RadioGroup value={exportMode} onValueChange={(v) => setExportMode(v as 'single' | 'per-subcon')} className="gap-2">
+                    <div className="flex items-start gap-3 rounded-md border p-3">
+                      <RadioGroupItem value="single" id="punch-export-single" className="mt-0.5" />
+                      <div className="flex-1">
+                        <Label htmlFor="punch-export-single" className="cursor-pointer text-sm font-medium">Single file</Label>
+                        <p className="mt-1 text-xs text-muted-foreground">Exports the current view as one .xlsx file ({filtered.length} rows).</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3 rounded-md border p-3">
+                      <RadioGroupItem value="per-subcon" id="punch-export-per-subcon" className="mt-0.5" />
+                      <div className="flex-1">
+                        <Label htmlFor="punch-export-per-subcon" className="cursor-pointer text-sm font-medium">One file per Subcontractor</Label>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {willZip ? (
+                            <span className="text-amber-600 dark:text-amber-400">
+                              {subconSet.size} Subcontractors detected — files will be packaged into a single .zip to avoid browser download limits. Empty Subcontractor rows go to "Unassigned".
+                            </span>
+                          ) : (
+                            <>Triggers {subconSet.size} download{subconSet.size === 1 ? '' : 's'} (one .xlsx per Subcontractor). Empty Subcontractor rows go to "Unassigned".</>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </RadioGroup>
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(false)} disabled={exportBusy}>Cancel</Button>
+            <Button
+              size="sm"
+              disabled={exportBusy}
+              onClick={async () => {
+                const meta = {
+                  userName: profile?.name || profile?.login_id || 'Unknown',
+                  userType: profile?.user_type ? USER_TYPE_LABELS[profile.user_type as keyof typeof USER_TYPE_LABELS] : '',
+                };
+                const sharedOpts = {
+                  rows: filtered,
+                  fieldNames: visibleFields,
+                  fieldConfig: configRows,
+                  meta,
+                  searchSummary: search.trim() ? `"${search.trim()}"` : '(none)',
+                  filterSummary: [
+                    healthFilter !== 'all' ? `Health=${healthFilter}` : null,
+                    readyFilter !== 'all' ? `Pre-Eng=${readyFilter}` : null,
+                  ].filter(Boolean).join(' · ') || '(none)',
+                  sortSummary: 'Item No ↑',
+                  format: exportFormat,
+                  getOriginalHeader,
+                };
+                try {
+                  if (exportMode === 'single') {
+                    const result = exportPunchRawToExcel(sharedOpts);
+                    toast({ title: 'Export complete', description: `${result.rowCount} rows → ${result.fileName}` });
+                    setExportDialogOpen(false);
+                  } else {
+                    const subconSet = new Set<string>();
+                    for (const r of filtered) {
+                      const raw = (r as any)?.subcontractor_name;
+                      const key = raw && String(raw).trim() ? String(raw).trim() : 'Unassigned';
+                      subconSet.add(key);
+                    }
+                    if (subconSet.size >= ZIP_THRESHOLD) {
+                      toast({
+                        title: 'Packaging into ZIP',
+                        description: `${subconSet.size} Subcontractors detected — bundling into a single .zip to avoid browser download limits.`,
+                      });
+                      setExportBusy(true);
+                      const result = await exportPunchRawToZipBySubcontractor(sharedOpts);
+                      toast({
+                        title: 'Export complete',
+                        description: `${result.fileCount} file${result.fileCount === 1 ? '' : 's'} bundled in ${result.zipFileName} (${result.rowCount} rows total)`,
+                      });
+                      setExportBusy(false);
+                      setExportDialogOpen(false);
+                    } else {
+                      const result = exportPunchRawToExcelBySubcontractor(sharedOpts);
+                      toast({ title: 'Export complete', description: `${result.fileCount} file${result.fileCount === 1 ? '' : 's'} downloaded (${result.rowCount} rows total)` });
+                      setExportDialogOpen(false);
+                    }
+                  }
+                } catch (err) {
+                  console.error('Punch Excel export failed', err);
+                  toast({ title: 'Export failed', description: String((err as Error)?.message ?? err), variant: 'destructive' });
+                  setExportBusy(false);
+                }
+              }}
+            >
+              <Download className="mr-1.5 h-3.5 w-3.5" /> {exportBusy ? 'Exporting…' : 'Export'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
