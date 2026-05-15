@@ -144,6 +144,13 @@ export async function previewBulkDelete(entity: BulkEntity, ids: string[]): Prom
       .in('drawing_id', ids);
     return { drawings: ids.length, change_log: count ?? 0 };
   }
+  if (entity === 'punch') {
+    const { count } = await (supabase as any)
+      .from('punch_change_log')
+      .select('id', { count: 'exact', head: true })
+      .in('punch_id', ids);
+    return { punch_items: ids.length, change_log: count ?? 0 };
+  }
   const fn = entity === 'subtest' ? 'preview_delete_subtests_cascade' : 'preview_delete_defects_cascade';
   const { data, error } = await (supabase as any).rpc(fn, { _ids: ids });
   if (error) throw error;
