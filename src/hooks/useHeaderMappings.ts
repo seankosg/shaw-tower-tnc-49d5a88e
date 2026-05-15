@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { loadHeaderMappingsCache } from '@/lib/header-mappings-cache';
 
-export type HeaderMappingModule = 'tnc' | 'defect' | 'docs';
+export type HeaderMappingModule = 'tnc' | 'defect' | 'docs' | 'punch';
 export type DocsSubModule = 'as_built' | 'warranty' | 'omm' | 'spare_part';
 
 export interface HeaderMappingRow {
