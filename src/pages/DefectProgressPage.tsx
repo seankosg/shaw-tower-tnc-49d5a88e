@@ -191,8 +191,14 @@ export default function DefectProgressPage() {
   // ───── Navigation ─────
   const filterValueFor = (label: string) => label === '(None)' || label === '—' ? '__EMPTY__' : label;
 
+  const persistentFilterParams = (): Record<string, string> => {
+    const out: Record<string, string> = {};
+    if (teamFilter && teamFilter !== 'all') out.team = teamFilter;
+    return out;
+  };
+
   const goRaw = (params: Record<string, string>) => {
-    const sp = new URLSearchParams({ source: 'progress', ...params });
+    const sp = new URLSearchParams({ source: 'progress', ...persistentFilterParams(), ...params });
     navigate(`/defects/raw-data?${sp.toString()}`);
   };
 
