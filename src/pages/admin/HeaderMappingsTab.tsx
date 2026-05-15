@@ -213,17 +213,6 @@ function ctxLabel(ctx: ModuleContext): string {
   return `DOCS / ${DOCS_SUBMODULES.find((s) => s.key === ctx.sub_module)?.label ?? ctx.sub_module}`;
 }
 
-function ctxMatches(row: HeaderMappingRow, ctx: ModuleContext): boolean {
-  if (row.module !== ctx.module) return false;
-  if (ctx.module === 'docs') return (row.sub_module ?? '') === ctx.sub_module;
-  return !row.sub_module;
-}
-
-function ctxLabel(ctx: ModuleContext): string {
-  if (ctx.module === 'tnc') return 'T&C';
-  if (ctx.module === 'defect') return 'DEFECT';
-  return `DOCS / ${DOCS_SUBMODULES.find((s) => s.key === ctx.sub_module)?.label ?? ctx.sub_module}`;
-}
 
 interface AddDialogState {
   open: boolean;
