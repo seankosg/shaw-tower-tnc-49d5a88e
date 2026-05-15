@@ -367,7 +367,7 @@ async function buildDocsSection(opts: ReportOptions): Promise<string> {
     'sub1_submission_date,sub1_approval_date,sub2_submission_date,sub2_approval_date,sub3_submission_date,sub3_approval_date,sub1_planned_date,sub2_planned_date,sub3_planned_date,approved_date,current_status',
     (q) => q.eq('sub_module', 'as_built'),
   );
-  lines.push('### 3.1 ABD (As-Built Drawings)');
+  lines.push('### 3.1 As Built Drawing (ABD)');
   lines.push(`- Total: **${abd.length}**`);
   if (opts.sections.includes('snapshots')) {
     lines.push('| Date | Sub1 Sub % | Sub1 Apv % | Sub2 Sub % | Sub2 Apv % | Sub3 Sub % | Sub3 Apv % | Approved % |');
