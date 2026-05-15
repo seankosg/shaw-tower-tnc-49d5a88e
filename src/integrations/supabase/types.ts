@@ -1965,6 +1965,369 @@ export type Database = {
         }
         Relationships: []
       }
+      punch_change_log: {
+        Row: {
+          change_source: string | null
+          changed_at: string
+          changed_by: string | null
+          changed_field: string
+          id: string
+          new_value: string | null
+          old_value: string | null
+          punch_id: string
+          upload_id: string | null
+        }
+        Insert: {
+          change_source?: string | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_field: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          punch_id: string
+          upload_id?: string | null
+        }
+        Update: {
+          change_source?: string | null
+          changed_at?: string
+          changed_by?: string | null
+          changed_field?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          punch_id?: string
+          upload_id?: string | null
+        }
+        Relationships: []
+      }
+      punch_comment_reads: {
+        Row: {
+          id: string
+          last_read_at: string
+          punch_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          last_read_at?: string
+          punch_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          last_read_at?: string
+          punch_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      punch_comments: {
+        Row: {
+          author_user_id: string
+          created_at: string
+          edited: boolean
+          id: string
+          message: string
+          parent_comment_id: string | null
+          punch_id: string
+          recipients: string[]
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          author_user_id: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          message: string
+          parent_comment_id?: string | null
+          punch_id: string
+          recipients?: string[]
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          author_user_id?: string
+          created_at?: string
+          edited?: boolean
+          id?: string
+          message?: string
+          parent_comment_id?: string | null
+          punch_id?: string
+          recipients?: string[]
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      punch_daily_snapshots: {
+        Row: {
+          actual_progress_pct: number | null
+          completion_status: string | null
+          created_at: string
+          created_by: string | null
+          health_status:
+            | Database["public"]["Enums"]["punch_health_status"]
+            | null
+          id: string
+          planned_progress_pct: number | null
+          pre_engineering_ready: boolean | null
+          punch_id: string
+          snapshot_date: string
+          variance_pct: number | null
+        }
+        Insert: {
+          actual_progress_pct?: number | null
+          completion_status?: string | null
+          created_at?: string
+          created_by?: string | null
+          health_status?:
+            | Database["public"]["Enums"]["punch_health_status"]
+            | null
+          id?: string
+          planned_progress_pct?: number | null
+          pre_engineering_ready?: boolean | null
+          punch_id: string
+          snapshot_date?: string
+          variance_pct?: number | null
+        }
+        Update: {
+          actual_progress_pct?: number | null
+          completion_status?: string | null
+          created_at?: string
+          created_by?: string | null
+          health_status?:
+            | Database["public"]["Enums"]["punch_health_status"]
+            | null
+          id?: string
+          planned_progress_pct?: number | null
+          pre_engineering_ready?: boolean | null
+          punch_id?: string
+          snapshot_date?: string
+          variance_pct?: number | null
+        }
+        Relationships: []
+      }
+      punch_items: {
+        Row: {
+          actual_completion_date: string | null
+          actual_progress_pct: number | null
+          actual_start_date: string | null
+          category1: string | null
+          category2: string | null
+          category3: string | null
+          completion_status: string | null
+          created_at: string
+          critical_level: string | null
+          custom_payload: Json
+          data_date: string | null
+          data_source_type: string | null
+          drawing_approval_date: string | null
+          drawing_approval_status: Database["public"]["Enums"]["punch_gate_status"]
+          hdec_eng_name: string | null
+          hdec_pic_name: string | null
+          health_status:
+            | Database["public"]["Enums"]["punch_health_status"]
+            | null
+          id: string
+          is_active: boolean
+          item_no: string | null
+          level: string | null
+          location: string | null
+          main_trade: string | null
+          material_approval_date: string | null
+          material_approval_status: Database["public"]["Enums"]["punch_gate_status"]
+          material_procurement_date: string | null
+          material_procurement_status: Database["public"]["Enums"]["punch_procurement_status"]
+          mos_approval_date: string | null
+          mos_approval_status: Database["public"]["Enums"]["punch_gate_status"]
+          outstanding_work: string
+          planned_completion_date: string | null
+          planned_progress_pct: number | null
+          planned_start_date: string | null
+          pre_engineering_blockers: string[]
+          pre_engineering_ready: boolean
+          progress_variance_pct: number | null
+          project_id: string
+          raw_payload: Json
+          remarks: string | null
+          row_version: number
+          source_upload_id: string | null
+          sub_trade: string | null
+          subcontractor_name: string | null
+          subsub_name: string | null
+          team: Database["public"]["Enums"]["team_type"] | null
+          updated_at: string
+          updated_by: string | null
+          weight: number
+          work_type: string | null
+        }
+        Insert: {
+          actual_completion_date?: string | null
+          actual_progress_pct?: number | null
+          actual_start_date?: string | null
+          category1?: string | null
+          category2?: string | null
+          category3?: string | null
+          completion_status?: string | null
+          created_at?: string
+          critical_level?: string | null
+          custom_payload?: Json
+          data_date?: string | null
+          data_source_type?: string | null
+          drawing_approval_date?: string | null
+          drawing_approval_status?: Database["public"]["Enums"]["punch_gate_status"]
+          hdec_eng_name?: string | null
+          hdec_pic_name?: string | null
+          health_status?:
+            | Database["public"]["Enums"]["punch_health_status"]
+            | null
+          id?: string
+          is_active?: boolean
+          item_no?: string | null
+          level?: string | null
+          location?: string | null
+          main_trade?: string | null
+          material_approval_date?: string | null
+          material_approval_status?: Database["public"]["Enums"]["punch_gate_status"]
+          material_procurement_date?: string | null
+          material_procurement_status?: Database["public"]["Enums"]["punch_procurement_status"]
+          mos_approval_date?: string | null
+          mos_approval_status?: Database["public"]["Enums"]["punch_gate_status"]
+          outstanding_work: string
+          planned_completion_date?: string | null
+          planned_progress_pct?: number | null
+          planned_start_date?: string | null
+          pre_engineering_blockers?: string[]
+          pre_engineering_ready?: boolean
+          progress_variance_pct?: number | null
+          project_id: string
+          raw_payload?: Json
+          remarks?: string | null
+          row_version?: number
+          source_upload_id?: string | null
+          sub_trade?: string | null
+          subcontractor_name?: string | null
+          subsub_name?: string | null
+          team?: Database["public"]["Enums"]["team_type"] | null
+          updated_at?: string
+          updated_by?: string | null
+          weight?: number
+          work_type?: string | null
+        }
+        Update: {
+          actual_completion_date?: string | null
+          actual_progress_pct?: number | null
+          actual_start_date?: string | null
+          category1?: string | null
+          category2?: string | null
+          category3?: string | null
+          completion_status?: string | null
+          created_at?: string
+          critical_level?: string | null
+          custom_payload?: Json
+          data_date?: string | null
+          data_source_type?: string | null
+          drawing_approval_date?: string | null
+          drawing_approval_status?: Database["public"]["Enums"]["punch_gate_status"]
+          hdec_eng_name?: string | null
+          hdec_pic_name?: string | null
+          health_status?:
+            | Database["public"]["Enums"]["punch_health_status"]
+            | null
+          id?: string
+          is_active?: boolean
+          item_no?: string | null
+          level?: string | null
+          location?: string | null
+          main_trade?: string | null
+          material_approval_date?: string | null
+          material_approval_status?: Database["public"]["Enums"]["punch_gate_status"]
+          material_procurement_date?: string | null
+          material_procurement_status?: Database["public"]["Enums"]["punch_procurement_status"]
+          mos_approval_date?: string | null
+          mos_approval_status?: Database["public"]["Enums"]["punch_gate_status"]
+          outstanding_work?: string
+          planned_completion_date?: string | null
+          planned_progress_pct?: number | null
+          planned_start_date?: string | null
+          pre_engineering_blockers?: string[]
+          pre_engineering_ready?: boolean
+          progress_variance_pct?: number | null
+          project_id?: string
+          raw_payload?: Json
+          remarks?: string | null
+          row_version?: number
+          source_upload_id?: string | null
+          sub_trade?: string | null
+          subcontractor_name?: string | null
+          subsub_name?: string | null
+          team?: Database["public"]["Enums"]["team_type"] | null
+          updated_at?: string
+          updated_by?: string | null
+          weight?: number
+          work_type?: string | null
+        }
+        Relationships: []
+      }
+      punch_upload_batches: {
+        Row: {
+          data_date: string | null
+          id: string
+          note: string | null
+          processed_rows: number | null
+          project_id: string | null
+          rejected_rows: number | null
+          rollback_force: boolean | null
+          rolled_back_at: string | null
+          rolled_back_by: string | null
+          skipped_rows: number | null
+          status: Database["public"]["Enums"]["upload_status"]
+          success_rows: number | null
+          total_rows: number | null
+          uploaded_at: string
+          uploaded_by: string | null
+          uploaded_file_name: string
+        }
+        Insert: {
+          data_date?: string | null
+          id?: string
+          note?: string | null
+          processed_rows?: number | null
+          project_id?: string | null
+          rejected_rows?: number | null
+          rollback_force?: boolean | null
+          rolled_back_at?: string | null
+          rolled_back_by?: string | null
+          skipped_rows?: number | null
+          status?: Database["public"]["Enums"]["upload_status"]
+          success_rows?: number | null
+          total_rows?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+          uploaded_file_name: string
+        }
+        Update: {
+          data_date?: string | null
+          id?: string
+          note?: string | null
+          processed_rows?: number | null
+          project_id?: string | null
+          rejected_rows?: number | null
+          rollback_force?: boolean | null
+          rolled_back_at?: string | null
+          rolled_back_by?: string | null
+          skipped_rows?: number | null
+          status?: Database["public"]["Enums"]["upload_status"]
+          success_rows?: number | null
+          total_rows?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+          uploaded_file_name?: string
+        }
+        Relationships: []
+      }
       sc_no_history: {
         Row: {
           changed_at: string
@@ -3712,6 +4075,13 @@ export type Database = {
         | "standard_import"
         | "admin_edit"
       import_type: "legacy" | "standard"
+      punch_gate_status: "not_required" | "pending" | "approved"
+      punch_health_status: "ahead" | "on_track" | "behind" | "critical"
+      punch_procurement_status:
+        | "not_required"
+        | "pending"
+        | "partially_secured"
+        | "secured"
       report_status:
         | "Planned"
         | "Submitted"
@@ -3886,6 +4256,14 @@ export const Constants = {
         "admin_edit",
       ],
       import_type: ["legacy", "standard"],
+      punch_gate_status: ["not_required", "pending", "approved"],
+      punch_health_status: ["ahead", "on_track", "behind", "critical"],
+      punch_procurement_status: [
+        "not_required",
+        "pending",
+        "partially_secured",
+        "secured",
+      ],
       report_status: [
         "Planned",
         "Submitted",
