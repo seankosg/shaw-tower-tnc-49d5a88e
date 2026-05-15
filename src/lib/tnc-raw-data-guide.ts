@@ -15,7 +15,7 @@ The atomic tracking unit is a **Subtest = \`Item No + MOS Code\`**.
 The business workflow has **5 stages**:
 
 \`\`\`
-Predecessor → T1 (Internal) → T2 (Official) → R1 (Sub→HDEC Report) → R2 (HDEC→Client Report)
+Predecessor → Pre-Test (T1) → Actual Test (T2) → R1 (Sub→HDEC Report) → Test Report (R2: HDEC→Client)
 \`\`\`
 
 ---
