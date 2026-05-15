@@ -30,6 +30,8 @@ export interface ExecDashboardSnapshot {
   abdRows: any[];
   /** Raw OMM rows (active) for Sub1 Status bucket distribution */
   ommRows: any[];
+  /** Raw Warranty rows (active) for Data Quality + warranty step breakdown */
+  warrantyRows: any[];
 }
 
 export async function loadExecutiveDashboard(opts: {
@@ -89,5 +91,5 @@ export async function loadExecutiveDashboard(opts: {
     ...buildWarrantyStageRecords(warrantyRows, asOf),
   ];
 
-  return { records, asOf, abdRows, ommRows };
+  return { records, asOf, abdRows, ommRows, warrantyRows };
 }
