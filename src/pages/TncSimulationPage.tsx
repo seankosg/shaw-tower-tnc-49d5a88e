@@ -80,6 +80,7 @@ export default function TncSimulationPage() {
 
   // ───── Controls ─────
   const [teamFilter, setTeamFilter] = useState<string>(searchParams.get('team') || 'all');
+  const [subconFilter, setSubconFilter] = useState<string>(searchParams.get('subcon') || 'all');
   const [stages, setStages] = useState<TncSimStage[]>(() => {
     const raw = searchParams.get('stages');
     if (!raw) return [...ALL_TNC_SIM_STAGES];
@@ -112,16 +113,40 @@ export default function TncSimulationPage() {
       else next.set(k, v);
     };
     setOrDel('team', teamFilter, 'all');
+    setOrDel('subcon', subconFilter, 'all');
     setOrDel('stages', stages.length === ALL_TNC_SIM_STAGES.length ? '' : stages.join(','), '');
     setOrDel('range', String(rangeDays), '7');
     setOrDel('target', targetIso, defaultTarget);
     setOrDel('delay', delayMode, 'penalty');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [teamFilter, stages, rangeDays, targetIso, defaultTarget, delayMode, searchParams, setSearchParams]);
+  }, [teamFilter, subconFilter, stages, rangeDays, targetIso, defaultTarget, delayMode, searchParams, setSearchParams]);
 
-  const filteredItems = useMemo(
+  const teamFiltered = useMemo(
     () => teamFilter === 'all' ? items : items.filter(it => it.team === teamFilter),
     [items, teamFilter],
+  );
+
+  const subconOptions = useMemo(() => {
+    const set = new Set<string>();
+    teamFiltered.forEach(it => {
+      const v = (it as any).subcontractor_name;
+      if (v && String(v).trim()) set.add(String(v));
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [teamFiltered]);
+
+  // Reset subcon if no longer in available options
+  useEffect(() => {
+    if (subconFilter !== 'all' && !subconOptions.includes(subconFilter)) {
+      setSubconFilter('all');
+    }
+  }, [subconOptions, subconFilter]);
+
+  const filteredItems = useMemo(
+    () => subconFilter === 'all'
+      ? teamFiltered
+      : teamFiltered.filter(it => (it as any).subcontractor_name === subconFilter),
+    [teamFiltered, subconFilter],
   );
 
   const rangeStart = useMemo(
@@ -163,6 +188,7 @@ export default function TncSimulationPage() {
       remaining_asof: targetIso,
     });
     if (teamFilter !== 'all') sp.set('team', teamFilter);
+    if (subconFilter !== 'all') sp.set('subcontractor', subconFilter);
     navigate(`/tc/raw-data?${sp.toString()}`);
   };
 
@@ -188,6 +214,7 @@ export default function TncSimulationPage() {
             {dataDateSource === 'fallback' && ' (fallback)'} · Target{' '}
             <span className="font-medium">{targetIso}</span> · N ={' '}
             <span className="font-medium">{filteredItems.length}</span>
+            {subconFilter !== 'all' && <> · Subcontractor <span className="font-medium">{subconFilter}</span></>}
             {lastCalcAt && (
               <> · Last calculated <span className="font-medium">{lastCalcAt.toLocaleTimeString()}</span></>
             )}
@@ -237,6 +264,19 @@ export default function TncSimulationPage() {
                 <SelectItem value="all">All Teams</SelectItem>
                 {ALL_TEAMS.map(t => (
                   <SelectItem key={t} value={t}>{TEAM_LABELS[t]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Subcontractor</span>
+            <Select value={subconFilter} onValueChange={setSubconFilter}>
+              <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Subcontractors</SelectItem>
+                {subconOptions.map(s => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
