@@ -219,7 +219,7 @@ const SIZE_BY_FIELD: Record<string, string> = {
 export default function PunchRawDataPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { roles } = useAuth() as { roles?: AppRole[] };
+  const { roles, profile } = useAuth() as { roles?: AppRole[]; profile?: any };
   const { fields: configRows, isFieldVisible, getLabel, sortFieldNames, getOriginalHeader, loading: configLoading } =
     usePunchFieldConfig();
 
@@ -228,6 +228,13 @@ export default function PunchRawDataPage() {
   const [search, setSearch] = useState('');
   const [healthFilter, setHealthFilter] = useState<PunchHealthStatus | 'all'>('all');
   const [readyFilter, setReadyFilter] = useState<'all' | 'ready' | 'blocked'>('all');
+
+  // Excel export dialog state
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<'single' | 'per-subcon'>('single');
+  const [exportFormat, setExportFormat] = useState<'view' | 'reimport'>('view');
+  const [exportBusy, setExportBusy] = useState(false);
+  const ZIP_THRESHOLD = 7;
 
   useEffect(() => {
     let cancelled = false;
