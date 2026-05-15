@@ -181,6 +181,7 @@ export default function PunchImportLogsPage() {
         .eq('source_upload_id', batch.id);
       await (supabase as any).from('punch_change_log').delete().eq('upload_id', batch.id);
       await (supabase as any).from('import_field_logs').delete().eq('upload_id', batch.id);
+      await (supabase as any).from('punch_upload_row_logs').delete().eq('upload_id', batch.id);
       const { error } = await (supabase as any)
         .from('punch_upload_batches')
         .delete()
