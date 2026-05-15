@@ -128,11 +128,33 @@ export async function parsePunchWorkbook(
     ? preferredSheet
     : (sheetNames.find((n) => /punch|outstanding|minor/i.test(n)) ?? sheetNames[0]);
   const ws = wb.Sheets[sheetName];
+
+  // Auto-detect header row: scan first 10 rows, pick the one with most registry-matched cells.
+  const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+    header: 1, raw: true, defval: null, blankrows: false,
+  });
+  let headerRowIdx = 0;
+  let bestScore = -1;
+  const scanLimit = Math.min(10, aoa.length);
+  for (let i = 0; i < scanLimit; i++) {
+    const row = aoa[i] ?? [];
+    let score = 0;
+    for (const cell of row) {
+      if (cell == null || cell === '') continue;
+      if (resolveHeader(String(cell))) score++;
+    }
+    if (score > bestScore) { bestScore = score; headerRowIdx = i; }
+  }
+  if (bestScore <= 0) headerRowIdx = 0; // fallback
+
   const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
-    raw: true, defval: null, blankrows: false,
+    raw: true, defval: null, blankrows: false, range: headerRowIdx,
   });
 
-  const headers = Object.keys(json[0] ?? {});
+  // Drop auto-generated empty headers (e.g. __EMPTY, __EMPTY_1) from blank columns.
+  const headers = Object.keys(json[0] ?? {}).filter(
+    (h) => h && h.trim() !== '' && !/^__EMPTY(_\d+)?$/.test(h),
+  );
   const excludedSet = new Set(opts.excludedHeaders ?? []);
   const headerMap = headers.map((h) => ({ header: h, field: resolveHeader(h) }));
 
