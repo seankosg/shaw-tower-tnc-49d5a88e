@@ -113,16 +113,40 @@ export default function TncSimulationPage() {
       else next.set(k, v);
     };
     setOrDel('team', teamFilter, 'all');
+    setOrDel('subcon', subconFilter, 'all');
     setOrDel('stages', stages.length === ALL_TNC_SIM_STAGES.length ? '' : stages.join(','), '');
     setOrDel('range', String(rangeDays), '7');
     setOrDel('target', targetIso, defaultTarget);
     setOrDel('delay', delayMode, 'penalty');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [teamFilter, stages, rangeDays, targetIso, defaultTarget, delayMode, searchParams, setSearchParams]);
+  }, [teamFilter, subconFilter, stages, rangeDays, targetIso, defaultTarget, delayMode, searchParams, setSearchParams]);
 
-  const filteredItems = useMemo(
+  const teamFiltered = useMemo(
     () => teamFilter === 'all' ? items : items.filter(it => it.team === teamFilter),
     [items, teamFilter],
+  );
+
+  const subconOptions = useMemo(() => {
+    const set = new Set<string>();
+    teamFiltered.forEach(it => {
+      const v = (it as any).subcontractor_name;
+      if (v && String(v).trim()) set.add(String(v));
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [teamFiltered]);
+
+  // Reset subcon if no longer in available options
+  useEffect(() => {
+    if (subconFilter !== 'all' && !subconOptions.includes(subconFilter)) {
+      setSubconFilter('all');
+    }
+  }, [subconOptions, subconFilter]);
+
+  const filteredItems = useMemo(
+    () => subconFilter === 'all'
+      ? teamFiltered
+      : teamFiltered.filter(it => (it as any).subcontractor_name === subconFilter),
+    [teamFiltered, subconFilter],
   );
 
   const rangeStart = useMemo(
