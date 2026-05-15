@@ -52,8 +52,8 @@ Predecessor → Pre-Test (T1) → Actual Test (T2) → R1 (Sub→HDEC Report) �
 
 - T1/T2/Pred: \`status === 'Done'\`
 - R1: Done if \`status\` is in the Done family, OR if \`status\` is empty but \`actual_submission_date\` is present
-- R2S (Submission): Done when \`status\` is \`Submitted\` or higher
-- R2A (Approval): Done only when \`status === 'Approved'\` (hidden in UI; only R2S is exposed)
+- Test Report (R2): Done when \`r2_status\` is \`Submitted\` or higher
+- R2 Approval: Done only when \`r2_status === 'Approved'\` (hidden in UI; only the Test Report stage is exposed)
 
 ---
 
