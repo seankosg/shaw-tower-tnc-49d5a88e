@@ -462,7 +462,64 @@ export function buildWarrantyStageRecords(rows: any[], asOf: Date, ): DocsStageR
   return out;
 }
 
-// ─── Aggregate helpers ──────────────────────────────────────────────────
+// ─── Spare Part ──────────────────────────────────────────────────────────
+const SPARE_PART_CURRENT_LABEL: Record<number, string> = {
+  0: 'Not Started',
+  1: 'Confirmed',
+  2: 'Directed',
+  3: 'PO Issued',
+  4: 'ETA Set',
+  5: 'Delivered',
+};
+
+export function buildSparePartStageRecords(rows: any[], asOf: Date): DocsStageRecord[] {
+  const out: DocsStageRecord[] = [];
+  for (const row of rows) {
+    const lvl = procurementProgressLevel(row);
+    const current_stage = SPARE_PART_CURRENT_LABEL[lvl] ?? procurementProgressLabel(row);
+    const base = {
+      item_id: row.id,
+      document_type: 'spare_part' as const,
+      document_no: row.sn ?? (row.item_no != null ? String(row.item_no) : ''),
+      title: row.material ?? row.parent_item ?? row.specification ?? '',
+      trade: row.trade ?? null,
+      team: row.team ?? null,
+      subcontractor: row.subcontractor_name ?? null,
+      hdec_pic: row.hdec_pic_name ?? null,
+      hdec_eng: row.hdec_eng_name ?? null,
+      detail_route: `/docs/spare-part/${row.id}`,
+    };
+
+    const stages = [
+      { def: SPARE_PART_STAGE_DEFS[0], planned: row.planned_confirm_date,        actual: row.actual_confirm_date,
+        done: !!row.actual_confirm_date },
+      { def: SPARE_PART_STAGE_DEFS[1], planned: null,                            actual: row.direction_to_subcon_date,
+        done: !!row.direction_to_subcon_date },
+      { def: SPARE_PART_STAGE_DEFS[2], planned: row.planned_po_date,             actual: row.actual_po_date,
+        done: !!row.actual_po_date },
+      { def: SPARE_PART_STAGE_DEFS[3], planned: row.eta_date,                    actual: row.eta_date,
+        done: !!row.eta_date },
+      { def: SPARE_PART_STAGE_DEFS[4], planned: row.planned_delivery_date,       actual: row.actual_delivery_date,
+        done: !!row.actual_delivery_date },
+    ];
+
+    for (const s of stages) {
+      const cls = classifyStage(s.planned ?? null, s.actual ?? null, s.done, asOf);
+      out.push({
+        ...base,
+        current_stage,
+        stage_key: s.def.key,
+        stage_label: s.def.label,
+        stage_order: s.def.order,
+        planned_date: s.planned ?? null,
+        actual_date: s.actual ?? null,
+        is_done: s.done,
+        ...cls,
+      });
+    }
+  }
+  return out;
+}
 export interface ItemSummary {
   item_id: string;
   document_type: DocModule;
