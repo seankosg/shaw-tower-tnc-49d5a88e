@@ -318,9 +318,11 @@ export async function upsertPunchRows(
       if (error) {
         result.failed++;
         result.errors.push({ itemNo, reason: error.message });
+        pushRowLog(row.rawRowNo, itemNo, 'rejected', 'db_error', error.message);
         continue;
       }
       result.updated++;
+      pushRowLog(row.rawRowNo, itemNo, 'updated');
 
       // Build field-level diffs
       for (const field of TRACKED_FIELDS) {
