@@ -223,22 +223,33 @@ export const WARRANTY_STAGE_DEFS: StageDefinition[] = [
   { key: 'warranty.final',        label: 'Final',         order: 4 },
 ];
 
+export const SPARE_PART_STAGE_DEFS: StageDefinition[] = [
+  { key: 'spare_part.confirm',   label: 'Confirm',            order: 1 },
+  { key: 'spare_part.direction', label: 'Direction to Subcon',order: 2 },
+  { key: 'spare_part.po',        label: 'PO Issued',          order: 3 },
+  { key: 'spare_part.eta',       label: 'ETA Confirmed',      order: 4 },
+  { key: 'spare_part.delivered', label: 'Delivered',          order: 5 },
+];
+
 export const ALL_STAGE_DEFS: Record<DocModule, StageDefinition[]> = {
   abd: ABD_STAGE_DEFS,
   omm: OMM_STAGE_DEFS,
   warranty: WARRANTY_STAGE_DEFS,
+  spare_part: SPARE_PART_STAGE_DEFS,
 };
 
 export const MODULE_LABEL: Record<DocModule, string> = {
   abd: 'As-Built Drawings',
   omm: 'Operation & Maintenance Manual',
   warranty: 'Warranty Deeds',
+  spare_part: 'Spare Parts',
 };
 
 export const MODULE_RAW_ROUTE: Record<DocModule, string> = {
   abd: '/docs/abd',
   omm: '/docs/omm',
   warranty: '/docs/warranty',
+  spare_part: '/docs/spare-part',
 };
 
 function safeDate(d: string | null | undefined): Date | null {
