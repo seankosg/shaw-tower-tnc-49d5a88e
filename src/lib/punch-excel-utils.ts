@@ -61,15 +61,11 @@ function coerceNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Normalize Excel header for header_mapping lookup (lowercase, collapse whitespace). */
+/** Normalize Excel header for header_mapping lookup.
+ * Must match Admin's punch normalizeAlias: lowercase + strip all non-alphanumerics.
+ * So "Main Cat", "main-cat", "Main_Cat" all collapse to "maincat". */
 function normalizeAliasForLookup(raw: string): string {
-  return raw
-    .replace(/[\r\n]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase()
-    .replace(/\.$/, '')
-    .trim();
+  return String(raw ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
 /**
