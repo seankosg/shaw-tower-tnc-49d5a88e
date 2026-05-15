@@ -310,6 +310,21 @@ export default function DocsSparePartRawDataPage() {
     if (searchParams.get('delivery_pending') === 'true') {
       next = next.filter((r) => !(r as any).actual_delivery_date);
     }
+    if (searchParams.get('po_overdue') === 'true') {
+      next = next.filter((r) => {
+        const a = (r as any).actual_po_date;
+        const p = (r as any).planned_po_date;
+        if (a) return false;
+        if (!p) return false;
+        return String(p).slice(0, 10) < asOf;
+      });
+    }
+    if (searchParams.get('missing_subcontractor') === 'true') {
+      next = next.filter((r) => !String(r.subcontractor_name ?? '').trim());
+    }
+    if (searchParams.get('missing_hdec_pic') === 'true') {
+      next = next.filter((r) => !String(r.hdec_pic_name ?? '').trim());
+    }
     return next;
   }, [items, searchParams]);
 
