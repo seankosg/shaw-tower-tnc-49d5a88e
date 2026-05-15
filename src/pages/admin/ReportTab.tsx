@@ -48,6 +48,8 @@ export default function ReportTab() {
   const [snapshotDates, setSnapshotDates] = useState<string[]>(['2026-05-30', '2026-06-07', '2026-06-14']);
   const [newDate, setNewDate] = useState('');
   const [mcDate, setMcDate] = useState('2026-06-15');
+  const [delayMode, setDelayMode] = useState<'optimistic' | 'penalty'>('penalty');
+  const [dataDateOverride, setDataDateOverride] = useState('');
   const [markdown, setMarkdown] = useState('');
   const [generating, setGenerating] = useState(false);
 
@@ -72,6 +74,8 @@ export default function ReportTab() {
     try {
       const md = await buildReportMarkdown({
         modules, sections, snapshotDates, mcDate,
+        delayMode,
+        dataDate: dataDateOverride || undefined,
       });
       setMarkdown(md);
       toast({ title: 'Markdown generated', description: `${md.length.toLocaleString()} characters` });
@@ -209,9 +213,28 @@ export default function ReportTab() {
           </div>
 
           {/* MC date */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Label className="text-sm font-semibold">Mechanical Completion D-Day</Label>
             <Input type="date" value={mcDate} onChange={e => setMcDate(e.target.value)} className="h-8 w-44" />
+
+            <Label className="text-sm font-semibold ml-4">Delay handling</Label>
+            <Select value={delayMode} onValueChange={(v) => setDelayMode(v as 'optimistic' | 'penalty')}>
+              <SelectTrigger className="w-40 h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="penalty">Worst Case</SelectItem>
+                <SelectItem value="optimistic">Best Case</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Label className="text-sm font-semibold ml-4">Data date (override)</Label>
+            <Input
+              type="date"
+              value={dataDateOverride}
+              onChange={e => setDataDateOverride(e.target.value)}
+              className="h-8 w-44"
+              placeholder="auto"
+            />
+            <span className="text-xs text-muted-foreground">leave empty to use latest actual date</span>
           </div>
 
           {/* Generate */}
