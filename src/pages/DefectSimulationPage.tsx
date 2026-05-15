@@ -49,7 +49,6 @@ export default function DefectSimulationPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const today = useMemo(() => todayIso(), []);
   const { dataDate, source: dataDateSource } = useLatestDataDate();
-  const { subcontractorOptions } = useCommonMasters();
 
   const { items: cachedItems, initialLoaded } = useDefectCache();
   const items = cachedItems as unknown as DefectItem[];
@@ -100,12 +99,31 @@ export default function DefectSimulationPage() {
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
   }, [teamFilter, subcontractorFilter, stages, rangeDays, targetIso, defaultTarget, delayMode, searchParams, setSearchParams]);
 
+  const teamFiltered = useMemo(
+    () => items.filter(it => teamFilter === 'all' || it.team === teamFilter),
+    [items, teamFilter],
+  );
+
+  const subconOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of teamFiltered) {
+      const s = (it as any).subcontractor_name;
+      if (s && String(s).trim()) set.add(String(s).trim());
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [teamFiltered]);
+
+  useEffect(() => {
+    if (subcontractorFilter !== 'all' && !subconOptions.includes(subcontractorFilter)) {
+      setSubcontractorFilter('all');
+    }
+  }, [subconOptions, subcontractorFilter]);
+
   const filteredItems = useMemo(
-    () => items.filter(it =>
-      (teamFilter === 'all' || it.team === teamFilter) &&
-      (subcontractorFilter === 'all' || it.subcontractor_name === subcontractorFilter)
-    ),
-    [items, teamFilter, subcontractorFilter],
+    () => subcontractorFilter === 'all'
+      ? teamFiltered
+      : teamFiltered.filter(it => (it as any).subcontractor_name === subcontractorFilter),
+    [teamFiltered, subcontractorFilter],
   );
 
   const rangeStart = useMemo(
@@ -171,6 +189,9 @@ export default function DefectSimulationPage() {
             {dataDateSource === 'fallback' && ' (fallback)'} · Target{' '}
             <span className="font-medium">{targetIso}</span> · N ={' '}
             <span className="font-medium">{filteredItems.length}</span>
+            {subcontractorFilter !== 'all' && (
+              <> · Subcontractor <span className="font-medium">{subcontractorFilter}</span></>
+            )}
             {lastCalcAt && (
               <> · Last calculated <span className="font-medium">{lastCalcAt.toLocaleTimeString()}</span></>
             )}
@@ -231,8 +252,8 @@ export default function DefectSimulationPage() {
               <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Subcontractors</SelectItem>
-                {subcontractorOptions.map(o => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                {subconOptions.map(name => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
