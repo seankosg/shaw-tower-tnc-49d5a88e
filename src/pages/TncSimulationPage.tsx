@@ -188,6 +188,7 @@ export default function TncSimulationPage() {
       remaining_asof: targetIso,
     });
     if (teamFilter !== 'all') sp.set('team', teamFilter);
+    if (subconFilter !== 'all') sp.set('subcontractor', subconFilter);
     navigate(`/tc/raw-data?${sp.toString()}`);
   };
 
