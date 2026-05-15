@@ -99,12 +99,31 @@ export default function DefectSimulationPage() {
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
   }, [teamFilter, subcontractorFilter, stages, rangeDays, targetIso, defaultTarget, delayMode, searchParams, setSearchParams]);
 
+  const teamFiltered = useMemo(
+    () => items.filter(it => teamFilter === 'all' || it.team === teamFilter),
+    [items, teamFilter],
+  );
+
+  const subconOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of teamFiltered) {
+      const s = (it as any).subcontractor_name;
+      if (s && String(s).trim()) set.add(String(s).trim());
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [teamFiltered]);
+
+  useEffect(() => {
+    if (subcontractorFilter !== 'all' && !subconOptions.includes(subcontractorFilter)) {
+      setSubcontractorFilter('all');
+    }
+  }, [subconOptions, subcontractorFilter]);
+
   const filteredItems = useMemo(
-    () => items.filter(it =>
-      (teamFilter === 'all' || it.team === teamFilter) &&
-      (subcontractorFilter === 'all' || it.subcontractor_name === subcontractorFilter)
-    ),
-    [items, teamFilter, subcontractorFilter],
+    () => subcontractorFilter === 'all'
+      ? teamFiltered
+      : teamFiltered.filter(it => (it as any).subcontractor_name === subcontractorFilter),
+    [teamFiltered, subcontractorFilter],
   );
 
   const rangeStart = useMemo(
