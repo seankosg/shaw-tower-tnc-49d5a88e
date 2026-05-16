@@ -62,19 +62,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, newSession) => {
+      (event, newSession) => {
         setSession(newSession);
         if (newSession?.user) {
-          // Keep loading=true until profile + roles are fetched, so RoleGuard
-          // doesn't evaluate access with an empty roles array (causing a blank
-          // "No accessible pages" screen for guests right after login).
-          setLoading(true);
+          // Only flip the global loading flag on the initial sign-in. Token
+          // refreshes and user-updated events fire periodically and would
+          // otherwise replace the whole UI with the RoleGuard "Loading…"
+          // screen, blocking clicks (e.g. on the Admin sidebar item).
+          const needsBlockingLoad = event === 'SIGNED_IN' || event === 'INITIAL_SESSION';
+          if (needsBlockingLoad) setLoading(true);
           // Defer to next tick to avoid deadlocks inside the auth callback.
           setTimeout(async () => {
             try {
               await fetchUserData(newSession.user.id);
             } finally {
-              setLoading(false);
+              if (needsBlockingLoad) setLoading(false);
             }
           }, 0);
         } else {
