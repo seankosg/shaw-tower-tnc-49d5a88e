@@ -1,6 +1,7 @@
 // Markdown status report builder.
 // Aggregates per-module data directly from the backend and produces a
-// structured Markdown document suitable for handing to an external LLM.
+// structured Markdown document (and structured JSON) suitable for handing
+// to an external LLM or for archival / external analysis.
 
 import { supabase } from '@/integrations/supabase/client';
 import { format, parseISO, isValid } from 'date-fns';
@@ -31,6 +32,83 @@ export interface ReportOptions {
   includeTncGuide?: boolean;
 }
 
+// ---------- structured JSON types ----------
+export interface SimStageSnapshot {
+  predictedPct: number;
+  actualPct: number;
+  doneNow: number;
+  forecastAdditional: number;
+  predictedTotal: number;
+  total: number;
+}
+export interface TncSnapshotEntry {
+  date: string;
+  t1: SimStageSnapshot;
+  t2: SimStageSnapshot;
+  r2s: SimStageSnapshot;
+}
+export interface DefectSnapshotEntry {
+  date: string;
+  start: SimStageSnapshot;
+  completion: SimStageSnapshot;
+  closure: SimStageSnapshot;
+}
+export interface TncReportData {
+  dataDate: string;
+  totals: { total: number; t1: number; t2: number; r2s: number };
+  plannedToDate: { t1: number; t2: number; r2s: number };
+  requiredPace?: { daysRemaining: number; t2Remaining: number; r2sRemaining: number; t2PerDay: number; r2sPerDay: number };
+  snapshots?: TncSnapshotEntry[];
+}
+export interface DefectReportData {
+  dataDate: string;
+  totals: { total: number; completion: number; closure: number };
+  plannedToDate: { completion: number; closure: number };
+  requiredPace?: { daysRemaining: number; completionRemaining: number; closureRemaining: number; completionPerDay: number; closurePerDay: number };
+  snapshots?: DefectSnapshotEntry[];
+}
+export interface PunchReportData {
+  totals: { total: number; completion: number };
+  plannedToDate: { completion: number };
+  requiredPace?: { daysRemaining: number; completionRemaining: number; completionPerDay: number };
+  snapshots?: Array<{ date: string; total: number; completion: number; completionPct: number }>;
+}
+export interface DocsTableSnapshot {
+  date: string;
+  total: number;
+  /** counts per column key (column name → row count where date ≤ snapshot) */
+  counts: Record<string, number>;
+}
+export interface DocsSubmoduleData {
+  total: number;
+  snapshots?: DocsTableSnapshot[];
+}
+export interface DocsReportData {
+  abd: DocsSubmoduleData;
+  omm: DocsSubmoduleData;
+  warranty: DocsSubmoduleData;
+  sparePart: DocsSubmoduleData;
+}
+export interface ReportMeta {
+  generatedAt: string;
+  mcDate: string;
+  delayMode: DelayMode;
+  delayModeLabel: string;
+  modules: ReportModule[];
+  sections: ReportSection[];
+  snapshotDates: string[];
+  tncDataDate?: string;
+  defectDataDate?: string;
+  includesTncGuide: boolean;
+}
+export interface ReportData {
+  meta: ReportMeta;
+  tnc?: TncReportData;
+  defect?: DefectReportData;
+  docs?: DocsReportData;
+  punch?: PunchReportData;
+}
+
 // ---------- helpers ----------
 const MC_DEFAULT = '2026-06-15';
 
@@ -49,15 +127,24 @@ function isOnOrBefore(actual: string | null | undefined, snapshot: string): bool
   return actual <= snapshot;
 }
 
+function toSimSnap(r: { predictedPct: number; actualPct: number; doneNow: number; forecastAdditional: number; predictedTotal: number; total: number }): SimStageSnapshot {
+  return {
+    predictedPct: r.predictedPct,
+    actualPct: r.actualPct,
+    doneNow: r.doneNow,
+    forecastAdditional: r.forecastAdditional,
+    predictedTotal: r.predictedTotal,
+    total: r.total,
+  };
+}
+
 // ---------- T&C ----------
 async function fetchTnc(): Promise<SubtestForDashboard[]> {
   const out: SubtestForDashboard[] = [];
   let from = 0; const size = 1000;
   while (true) {
     const { data, error } = await (supabase as any)
-      .from('subtests')
-      .select('*')
-      .eq('is_active', true)
+      .from('subtests').select('*').eq('is_active', true)
       .range(from, from + size - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
@@ -68,91 +155,108 @@ async function fetchTnc(): Promise<SubtestForDashboard[]> {
   return out;
 }
 
-/** Resolve effective Data Date: explicit override → latest completed T&C batch → today. */
 async function resolveTncDataDate(override?: string): Promise<string> {
   if (override) return override;
   const { data } = await (supabase as any)
-    .from('upload_batches')
-    .select('data_date')
-    .eq('status', 'completed')
-    .not('data_date', 'is', null)
-    .order('data_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .from('upload_batches').select('data_date').eq('status', 'completed')
+    .not('data_date', 'is', null).order('data_date', { ascending: false })
+    .limit(1).maybeSingle();
   return (data?.data_date as string | undefined) ?? format(new Date(), 'yyyy-MM-dd');
 }
 
-function tncCurrentCounts(rows: SubtestForDashboard[]) {
+function computeTncData(rows: SubtestForDashboard[], opts: ReportOptions, dataDate: string): TncReportData {
+  const today = format(new Date(), 'yyyy-MM-dd');
   const total = rows.length;
   const t1 = rows.filter(r => !!(r as any).t1_actual_date).length;
   const t2 = rows.filter(r => !!(r as any).t2_actual_date).length;
   const r2s = rows.filter(r => !!(r as any).r2_actual_submission_date).length;
-  return { total, t1, t2, r2s };
-}
-
-function buildTncSection(rows: SubtestForDashboard[], opts: ReportOptions, dataDate: string): string {
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const cur = tncCurrentCounts(rows);
   const planned = {
     t1: rows.filter(r => isOnOrBefore((r as any).t1_planned_date, today)).length,
     t2: rows.filter(r => isOnOrBefore((r as any).t2_planned_date, today)).length,
     r2s: rows.filter(r => isOnOrBefore((r as any).r2_target_submission_date, today)).length,
   };
+  const data: TncReportData = {
+    dataDate,
+    totals: { total, t1, t2, r2s },
+    plannedToDate: planned,
+  };
+  if (opts.sections.includes('simulation')) {
+    const mc = opts.mcDate ?? MC_DEFAULT;
+    const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
+    const remT2 = total - t2;
+    const remR2S = total - r2s;
+    data.requiredPace = {
+      daysRemaining: days,
+      t2Remaining: remT2,
+      r2sRemaining: remR2S,
+      t2PerDay: +(remT2 / days).toFixed(2),
+      r2sPerDay: +(remR2S / days).toFixed(2),
+    };
+  }
+  if (opts.sections.includes('snapshots')) {
+    const mode: DelayMode = opts.delayMode ?? 'penalty';
+    const stages: TncSimStage[] = ['t1', 't2', 'r2s'];
+    data.snapshots = opts.snapshotDates.map(d => {
+      const r = simulateAllTncStages(rows, d, { mode, dataDate, enforceSequential: true }, stages);
+      return { date: d, t1: toSimSnap(r.t1), t2: toSimSnap(r.t2), r2s: toSimSnap(r.r2s) };
+    });
+  }
+  return data;
+}
+
+function renderTncMd(d: TncReportData, opts: ReportOptions): string {
   const mode: DelayMode = opts.delayMode ?? 'penalty';
   const modeLabel = mode === 'penalty' ? 'Worst Case' : 'Best Case';
+  const { total, t1, t2, r2s } = d.totals;
+  const planned = d.plannedToDate;
   const lines: string[] = [];
   lines.push('## 1. T&C Management');
   if (opts.sections.includes('dashboard')) {
     lines.push('### 1.1 Dashboard');
-    lines.push(`- Total subtests (active): **${cur.total}**`);
-    lines.push(`- Pre-Test (T1) completed: ${cur.t1} (${pct(cur.t1, cur.total)})`);
-    lines.push(`- Actual Test (T2) completed: ${cur.t2} (${pct(cur.t2, cur.total)})`);
-    lines.push(`- Test Report (R2) completed: ${cur.r2s} (${pct(cur.r2s, cur.total)})`);
+    lines.push(`- Total subtests (active): **${total}**`);
+    lines.push(`- Pre-Test (T1) completed: ${t1} (${pct(t1, total)})`);
+    lines.push(`- Actual Test (T2) completed: ${t2} (${pct(t2, total)})`);
+    lines.push(`- Test Report (R2) completed: ${r2s} (${pct(r2s, total)})`);
     lines.push('');
   }
   if (opts.sections.includes('progress')) {
     lines.push('### 1.2 Current Status (Stages: Pre-Test, Actual Test, Test Report)');
     lines.push('| Stage | Planned to date | Actual to date | Actual % | Gap (Actual − Planned) |');
     lines.push('|-------|-----------------|----------------|----------|------------------------|');
-    lines.push(`| Pre-Test (T1) | ${planned.t1} | ${cur.t1} | ${pct(cur.t1, cur.total)} | ${cur.t1 - planned.t1} |`);
-    lines.push(`| Actual Test (T2) | ${planned.t2} | ${cur.t2} | ${pct(cur.t2, cur.total)} | ${cur.t2 - planned.t2} |`);
-    lines.push(`| Test Report (R2) | ${planned.r2s} | ${cur.r2s} | ${pct(cur.r2s, cur.total)} | ${cur.r2s - planned.r2s} |`);
+    lines.push(`| Pre-Test (T1) | ${planned.t1} | ${t1} | ${pct(t1, total)} | ${t1 - planned.t1} |`);
+    lines.push(`| Actual Test (T2) | ${planned.t2} | ${t2} | ${pct(t2, total)} | ${t2 - planned.t2} |`);
+    lines.push(`| Test Report (R2) | ${planned.r2s} | ${r2s} | ${pct(r2s, total)} | ${r2s - planned.r2s} |`);
     lines.push('');
   }
-  if (opts.sections.includes('simulation')) {
+  if (opts.sections.includes('simulation') && d.requiredPace) {
+    const p = d.requiredPace;
     lines.push('### 1.3 Plan — Required Pace toward Project Completion (' + (opts.mcDate ?? MC_DEFAULT) + ')');
-    const mc = opts.mcDate ?? MC_DEFAULT;
-    const remT2 = cur.total - cur.t2;
-    const remR2S = cur.total - cur.r2s;
-    const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
-    lines.push(`- Days remaining to Project Completion: **${days}**`);
-    lines.push(`- Actual Test remaining: ${remT2} → required pace: ${(remT2 / days).toFixed(2)} / day`);
-    lines.push(`- Test Report remaining: ${remR2S} → required pace: ${(remR2S / days).toFixed(2)} / day`);
+    lines.push(`- Days remaining to Project Completion: **${p.daysRemaining}**`);
+    lines.push(`- Actual Test remaining: ${p.t2Remaining} → required pace: ${p.t2PerDay.toFixed(2)} / day`);
+    lines.push(`- Test Report remaining: ${p.r2sRemaining} → required pace: ${p.r2sPerDay.toFixed(2)} / day`);
     lines.push('');
   }
-  if (opts.sections.includes('snapshots')) {
+  if (opts.sections.includes('snapshots') && d.snapshots) {
     lines.push('### 1.4 Plan — Stage Progress Snapshots');
-    lines.push(`_Plan computed via Simulation engine — mode: **${modeLabel}**, data date: **${dataDate}**, sequential: enforced._`);
+    lines.push(`_Plan computed via Simulation engine — mode: **${modeLabel}**, data date: **${d.dataDate}**, sequential: enforced._`);
     lines.push('| Date | Pre-Test Planned % (Actual %) | Actual Test Planned % (Actual %) | Test Report Planned % (Actual %) |');
     lines.push('|------|-------------------------------|----------------------------------|----------------------------------|');
-    const stages: TncSimStage[] = ['t1', 't2', 'r2s'];
-    for (const d of opts.snapshotDates) {
-      const r = simulateAllTncStages(rows, d, { mode, dataDate, enforceSequential: true }, stages);
-      const cell = (s: TncSimStage) => `${r[s].predictedPct.toFixed(1)}% (${r[s].actualPct.toFixed(1)}%)`;
-      lines.push(`| ${d} | ${cell('t1')} | ${cell('t2')} | ${cell('r2s')} |`);
+    for (const s of d.snapshots) {
+      const cell = (x: SimStageSnapshot) => `${x.predictedPct.toFixed(1)}% (${x.actualPct.toFixed(1)}%)`;
+      lines.push(`| ${s.date} | ${cell(s.t1)} | ${cell(s.t2)} | ${cell(s.r2s)} |`);
     }
     lines.push('');
   }
   return lines.join('\n');
 }
+
+// ---------- Defect ----------
 async function fetchDefects(): Promise<DefectItem[]> {
   const out: DefectItem[] = [];
   let from = 0; const size = 1000;
   while (true) {
     const { data, error } = await (supabase as any)
-      .from('defect_items')
-      .select('*')
-      .eq('is_active', true)
+      .from('defect_items').select('*').eq('is_active', true)
       .range(from, from + size - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
@@ -163,72 +267,89 @@ async function fetchDefects(): Promise<DefectItem[]> {
   return out;
 }
 
-/** Resolve effective Data Date for Defect: explicit override → latest completed defect batch → today. */
 async function resolveDefectDataDate(override?: string): Promise<string> {
   if (override) return override;
   const { data } = await (supabase as any)
-    .from('defect_upload_batches')
-    .select('data_date')
-    .eq('status', 'completed')
-    .not('data_date', 'is', null)
-    .order('data_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .from('defect_upload_batches').select('data_date').eq('status', 'completed')
+    .not('data_date', 'is', null).order('data_date', { ascending: false })
+    .limit(1).maybeSingle();
   return (data?.data_date as string | undefined) ?? format(new Date(), 'yyyy-MM-dd');
 }
 
-function defectCurrentCounts(rows: DefectItem[]) {
+function computeDefectData(rows: DefectItem[], opts: ReportOptions, dataDate: string): DefectReportData {
+  const today = format(new Date(), 'yyyy-MM-dd');
   const total = rows.length;
   const completion = rows.filter(r => !!(r as any).actual_completion_date).length;
   const closure = rows.filter(r => !!(r as any).actual_closure_date).length;
-  return { total, completion, closure };
-}
-
-function buildDefectSection(rows: DefectItem[], opts: ReportOptions, dataDate: string): string {
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const cur = defectCurrentCounts(rows);
   const planned = {
     completion: rows.filter(r => isOnOrBefore((r as any).planned_completion_date, today)).length,
     closure: rows.filter(r => isOnOrBefore((r as any).planned_closure_date, today)).length,
   };
+  const data: DefectReportData = {
+    dataDate,
+    totals: { total, completion, closure },
+    plannedToDate: planned,
+  };
+  if (opts.sections.includes('simulation')) {
+    const mc = opts.mcDate ?? MC_DEFAULT;
+    const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
+    data.requiredPace = {
+      daysRemaining: days,
+      completionRemaining: total - completion,
+      closureRemaining: total - closure,
+      completionPerDay: +((total - completion) / days).toFixed(2),
+      closurePerDay: +((total - closure) / days).toFixed(2),
+    };
+  }
+  if (opts.sections.includes('snapshots')) {
+    const mode: DelayMode = opts.delayMode ?? 'penalty';
+    const stages: DefectScheduleStage[] = ['start', 'completion', 'closure'];
+    data.snapshots = opts.snapshotDates.map(d => {
+      const r = simulateAllDefectStages(rows, d, { mode, dataDate }, stages);
+      return { date: d, start: toSimSnap(r.start), completion: toSimSnap(r.completion), closure: toSimSnap(r.closure) };
+    });
+  }
+  return data;
+}
+
+function renderDefectMd(d: DefectReportData, opts: ReportOptions): string {
   const mode: DelayMode = opts.delayMode ?? 'penalty';
   const modeLabel = mode === 'penalty' ? 'Worst Case' : 'Best Case';
+  const { total, completion, closure } = d.totals;
+  const planned = d.plannedToDate;
   const lines: string[] = [];
   lines.push('## 2. Defect Management');
   if (opts.sections.includes('dashboard')) {
     lines.push('### 2.1 Dashboard');
-    lines.push(`- Total defects (active): **${cur.total}**`);
-    lines.push(`- Completion done: ${cur.completion} (${pct(cur.completion, cur.total)})`);
-    lines.push(`- Closure done: ${cur.closure} (${pct(cur.closure, cur.total)})`);
+    lines.push(`- Total defects (active): **${total}**`);
+    lines.push(`- Completion done: ${completion} (${pct(completion, total)})`);
+    lines.push(`- Closure done: ${closure} (${pct(closure, total)})`);
     lines.push('');
   }
   if (opts.sections.includes('progress')) {
     lines.push('### 2.2 Current Status (Stages: Completion, Closure)');
     lines.push('| Stage | Planned to date | Actual to date | Actual % | Gap |');
     lines.push('|-------|-----------------|----------------|----------|-----|');
-    lines.push(`| Completion | ${planned.completion} | ${cur.completion} | ${pct(cur.completion, cur.total)} | ${cur.completion - planned.completion} |`);
-    lines.push(`| Closure | ${planned.closure} | ${cur.closure} | ${pct(cur.closure, cur.total)} | ${cur.closure - planned.closure} |`);
+    lines.push(`| Completion | ${planned.completion} | ${completion} | ${pct(completion, total)} | ${completion - planned.completion} |`);
+    lines.push(`| Closure | ${planned.closure} | ${closure} | ${pct(closure, total)} | ${closure - planned.closure} |`);
     lines.push('');
   }
-  if (opts.sections.includes('simulation')) {
-    const mc = opts.mcDate ?? MC_DEFAULT;
-    const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
-    lines.push('### 2.3 Plan — Required Pace toward Project Completion (' + mc + ')');
-    lines.push(`- Days remaining to Project Completion: **${days}**`);
-    lines.push(`- Completion remaining: ${cur.total - cur.completion} → required: ${((cur.total - cur.completion) / days).toFixed(2)} / day`);
-    lines.push(`- Closure remaining: ${cur.total - cur.closure} → required: ${((cur.total - cur.closure) / days).toFixed(2)} / day`);
+  if (opts.sections.includes('simulation') && d.requiredPace) {
+    const p = d.requiredPace;
+    lines.push('### 2.3 Plan — Required Pace toward Project Completion (' + (opts.mcDate ?? MC_DEFAULT) + ')');
+    lines.push(`- Days remaining to Project Completion: **${p.daysRemaining}**`);
+    lines.push(`- Completion remaining: ${p.completionRemaining} → required: ${p.completionPerDay.toFixed(2)} / day`);
+    lines.push(`- Closure remaining: ${p.closureRemaining} → required: ${p.closurePerDay.toFixed(2)} / day`);
     lines.push('');
   }
-  if (opts.sections.includes('snapshots')) {
+  if (opts.sections.includes('snapshots') && d.snapshots) {
     lines.push('### 2.4 Plan — Stage Progress Snapshots');
-    lines.push(`_Plan computed via Simulation engine — mode: **${modeLabel}**, data date: **${dataDate}**._`);
+    lines.push(`_Plan computed via Simulation engine — mode: **${modeLabel}**, data date: **${d.dataDate}**._`);
     lines.push('| Date | Start Planned % (Actual %) | Completion Planned % (Actual %) | Closure Planned % (Actual %) |');
     lines.push('|------|----------------------------|---------------------------------|------------------------------|');
-    const stages: DefectScheduleStage[] = ['start', 'completion', 'closure'];
-    for (const d of opts.snapshotDates) {
-      const r = simulateAllDefectStages(rows, d, { mode, dataDate }, stages);
-      const cell = (s: DefectScheduleStage) => `${r[s].predictedPct.toFixed(1)}% (${r[s].actualPct.toFixed(1)}%)`;
-      lines.push(`| ${d} | ${cell('start')} | ${cell('completion')} | ${cell('closure')} |`);
+    for (const s of d.snapshots) {
+      const cell = (x: SimStageSnapshot) => `${x.predictedPct.toFixed(1)}% (${x.actualPct.toFixed(1)}%)`;
+      lines.push(`| ${s.date} | ${cell(s.start)} | ${cell(s.completion)} | ${cell(s.closure)} |`);
     }
     lines.push('');
   }
@@ -266,40 +387,63 @@ function punchSnapshot(rows: PunchRow[], snap: string) {
   return { total, completion };
 }
 
-function buildPunchSection(rows: PunchRow[], opts: ReportOptions): string {
+function computePunchData(rows: PunchRow[], opts: ReportOptions): PunchReportData {
   const today = format(new Date(), 'yyyy-MM-dd');
   const cur = punchSnapshot(rows, today);
   const planned = rows.filter(r => isOnOrBefore(r.planned_completion_date, today)).length;
+  const data: PunchReportData = {
+    totals: cur,
+    plannedToDate: { completion: planned },
+  };
+  if (opts.sections.includes('simulation')) {
+    const mc = opts.mcDate ?? MC_DEFAULT;
+    const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
+    data.requiredPace = {
+      daysRemaining: days,
+      completionRemaining: cur.total - cur.completion,
+      completionPerDay: +((cur.total - cur.completion) / days).toFixed(2),
+    };
+  }
+  if (opts.sections.includes('snapshots')) {
+    data.snapshots = opts.snapshotDates.map(d => {
+      const s = punchSnapshot(rows, d);
+      return { date: d, total: s.total, completion: s.completion, completionPct: s.total ? +((s.completion / s.total) * 100).toFixed(1) : 0 };
+    });
+  }
+  return data;
+}
+
+function renderPunchMd(d: PunchReportData, opts: ReportOptions): string {
+  const { total, completion } = d.totals;
+  const planned = d.plannedToDate.completion;
   const lines: string[] = [];
   lines.push('## 4. Punch Management');
   if (opts.sections.includes('dashboard')) {
     lines.push('### 4.1 Dashboard');
-    lines.push(`- Total punch items (active): **${cur.total}**`);
-    lines.push(`- Completion done: ${cur.completion} (${pct(cur.completion, cur.total)})`);
+    lines.push(`- Total punch items (active): **${total}**`);
+    lines.push(`- Completion done: ${completion} (${pct(completion, total)})`);
     lines.push('');
   }
   if (opts.sections.includes('progress')) {
     lines.push('### 4.2 Current Status (Stage: Completion)');
     lines.push('| Stage | Planned to date | Actual to date | Actual % | Gap |');
     lines.push('|-------|-----------------|----------------|----------|-----|');
-    lines.push(`| Completion | ${planned} | ${cur.completion} | ${pct(cur.completion, cur.total)} | ${cur.completion - planned} |`);
+    lines.push(`| Completion | ${planned} | ${completion} | ${pct(completion, total)} | ${completion - planned} |`);
     lines.push('');
   }
-  if (opts.sections.includes('simulation')) {
-    const mc = opts.mcDate ?? MC_DEFAULT;
-    const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
-    lines.push('### 4.3 Plan — Required Pace toward Project Completion (' + mc + ')');
-    lines.push(`- Days remaining to Project Completion: **${days}**`);
-    lines.push(`- Completion remaining: ${cur.total - cur.completion} → required: ${((cur.total - cur.completion) / days).toFixed(2)} / day`);
+  if (opts.sections.includes('simulation') && d.requiredPace) {
+    const p = d.requiredPace;
+    lines.push('### 4.3 Plan — Required Pace toward Project Completion (' + (opts.mcDate ?? MC_DEFAULT) + ')');
+    lines.push(`- Days remaining to Project Completion: **${p.daysRemaining}**`);
+    lines.push(`- Completion remaining: ${p.completionRemaining} → required: ${p.completionPerDay.toFixed(2)} / day`);
     lines.push('');
   }
-  if (opts.sections.includes('snapshots')) {
+  if (opts.sections.includes('snapshots') && d.snapshots) {
     lines.push('### 4.4 Plan — Stage Progress Snapshots');
     lines.push('| Date | Completion % |');
     lines.push('|------|--------------|');
-    for (const d of opts.snapshotDates) {
-      const s = punchSnapshot(rows, d);
-      lines.push(`| ${d} | ${pct(s.completion, s.total)} |`);
+    for (const s of d.snapshots) {
+      lines.push(`| ${s.date} | ${pct(s.completion, s.total)} |`);
     }
     lines.push('');
   }
@@ -308,36 +452,22 @@ function buildPunchSection(rows: PunchRow[], opts: ReportOptions): string {
 
 // ---------- Docs ----------
 interface AbdRow {
-  sub1_submission_date: string | null;
-  sub1_approval_date: string | null;
-  sub2_submission_date: string | null;
-  sub2_approval_date: string | null;
-  sub3_submission_date: string | null;
-  sub3_approval_date: string | null;
-  sub1_planned_date: string | null;
-  sub2_planned_date: string | null;
-  sub3_planned_date: string | null;
-  approved_date: string | null;
-  current_status: string | null;
+  sub1_submission_date: string | null; sub1_approval_date: string | null;
+  sub2_submission_date: string | null; sub2_approval_date: string | null;
+  sub3_submission_date: string | null; sub3_approval_date: string | null;
+  sub1_planned_date: string | null; sub2_planned_date: string | null; sub3_planned_date: string | null;
+  approved_date: string | null; current_status: string | null;
 }
 interface OmmRow {
-  sub1_actual_date: string | null;
-  sub2_actual_date: string | null;
-  sub3_actual_date: string | null;
-  final_actual_date: string | null;
-  final_response_actual_date: string | null;
-  draft_actual_date: string | null;
+  sub1_actual_date: string | null; sub2_actual_date: string | null; sub3_actual_date: string | null;
+  final_actual_date: string | null; final_response_actual_date: string | null; draft_actual_date: string | null;
 }
 interface WarrantyRow {
-  draft_actual_date: string | null;
-  subcon_signing_actual_date: string | null;
-  hdec_signing_actual_date: string | null;
-  final_actual_date: string | null;
+  draft_actual_date: string | null; subcon_signing_actual_date: string | null;
+  hdec_signing_actual_date: string | null; final_actual_date: string | null;
 }
 interface SparePartRow {
-  actual_confirm_date: string | null;
-  actual_po_date: string | null;
-  actual_delivery_date: string | null;
+  actual_confirm_date: string | null; actual_po_date: string | null; actual_delivery_date: string | null;
 }
 
 async function fetchAll<T>(table: string, columns: string, filter?: (q: any) => any): Promise<T[]> {
@@ -357,79 +487,92 @@ async function fetchAll<T>(table: string, columns: string, filter?: (q: any) => 
   return out;
 }
 
-async function buildDocsSection(opts: ReportOptions): Promise<string> {
+const ABD_COLS: Array<keyof AbdRow> = ['sub1_submission_date','sub1_approval_date','sub2_submission_date','sub2_approval_date','sub3_submission_date','sub3_approval_date','approved_date'];
+const OMM_COLS: Array<keyof OmmRow> = ['draft_actual_date','sub1_actual_date','sub2_actual_date','sub3_actual_date','final_actual_date','final_response_actual_date'];
+const WARR_COLS: Array<keyof WarrantyRow> = ['draft_actual_date','subcon_signing_actual_date','hdec_signing_actual_date','final_actual_date'];
+const SP_COLS: Array<keyof SparePartRow> = ['actual_confirm_date','actual_po_date','actual_delivery_date'];
+
+function snapshotCounts<T>(rows: T[], cols: Array<keyof T>, date: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const c of cols) {
+    out[c as string] = rows.filter(r => isOnOrBefore(r[c] as unknown as string | null, date)).length;
+  }
+  return out;
+}
+
+async function computeDocsData(opts: ReportOptions): Promise<DocsReportData> {
+  const wantSnap = opts.sections.includes('snapshots');
+  const [abd, omm, warr, sp] = await Promise.all([
+    fetchAll<AbdRow>('docs_drawings', 'sub1_submission_date,sub1_approval_date,sub2_submission_date,sub2_approval_date,sub3_submission_date,sub3_approval_date,sub1_planned_date,sub2_planned_date,sub3_planned_date,approved_date,current_status', (q) => q.eq('sub_module', 'as_built')),
+    fetchAll<OmmRow>('docs_omm', 'sub1_actual_date,sub2_actual_date,sub3_actual_date,final_actual_date,final_response_actual_date,draft_actual_date'),
+    fetchAll<WarrantyRow>('warranty_items', 'draft_actual_date,subcon_signing_actual_date,hdec_signing_actual_date,final_actual_date'),
+    fetchAll<SparePartRow>('docs_spare_part', 'actual_confirm_date,actual_po_date,actual_delivery_date'),
+  ]);
+  const mk = <T,>(rows: T[], cols: Array<keyof T>): DocsSubmoduleData => ({
+    total: rows.length,
+    snapshots: wantSnap ? opts.snapshotDates.map(d => ({ date: d, total: rows.length, counts: snapshotCounts(rows, cols, d) })) : undefined,
+  });
+  return {
+    abd: mk(abd, ABD_COLS),
+    omm: mk(omm, OMM_COLS),
+    warranty: mk(warr, WARR_COLS),
+    sparePart: mk(sp, SP_COLS),
+  };
+}
+
+function renderDocsMd(d: DocsReportData, opts: ReportOptions): string {
   const lines: string[] = [];
   lines.push('## 3. Docs Management');
+  const pctOf = (n: number | undefined, t: number) => pct(n ?? 0, t);
 
   // ABD
-  const abd = await fetchAll<AbdRow>(
-    'docs_drawings',
-    'sub1_submission_date,sub1_approval_date,sub2_submission_date,sub2_approval_date,sub3_submission_date,sub3_approval_date,sub1_planned_date,sub2_planned_date,sub3_planned_date,approved_date,current_status',
-    (q) => q.eq('sub_module', 'as_built'),
-  );
   lines.push('### 3.1 As Built Drawing (ABD)');
-  lines.push(`- Total: **${abd.length}**`);
-  if (opts.sections.includes('snapshots')) {
+  lines.push(`- Total: **${d.abd.total}**`);
+  if (opts.sections.includes('snapshots') && d.abd.snapshots) {
     lines.push('| Date | Sub1 Sub % | Sub1 Apv % | Sub2 Sub % | Sub2 Apv % | Sub3 Sub % | Sub3 Apv % | Approved % |');
     lines.push('|------|-----------|-----------|-----------|-----------|-----------|-----------|-----------|');
-    for (const d of opts.snapshotDates) {
-      const t = abd.length;
-      const c = (k: keyof AbdRow) => abd.filter(r => isOnOrBefore(r[k] as string | null, d)).length;
-      lines.push(`| ${d} | ${pct(c('sub1_submission_date'), t)} | ${pct(c('sub1_approval_date'), t)} | ${pct(c('sub2_submission_date'), t)} | ${pct(c('sub2_approval_date'), t)} | ${pct(c('sub3_submission_date'), t)} | ${pct(c('sub3_approval_date'), t)} | ${pct(c('approved_date'), t)} |`);
+    for (const s of d.abd.snapshots) {
+      const t = s.total;
+      lines.push(`| ${s.date} | ${pctOf(s.counts.sub1_submission_date, t)} | ${pctOf(s.counts.sub1_approval_date, t)} | ${pctOf(s.counts.sub2_submission_date, t)} | ${pctOf(s.counts.sub2_approval_date, t)} | ${pctOf(s.counts.sub3_submission_date, t)} | ${pctOf(s.counts.sub3_approval_date, t)} | ${pctOf(s.counts.approved_date, t)} |`);
     }
   }
   lines.push('');
 
   // OMM
-  const omm = await fetchAll<OmmRow>(
-    'docs_omm',
-    'sub1_actual_date,sub2_actual_date,sub3_actual_date,final_actual_date,final_response_actual_date,draft_actual_date',
-  );
   lines.push('### 3.2 OMM (Operation & Maintenance Manual)');
-  lines.push(`- Total: **${omm.length}**`);
-  if (opts.sections.includes('snapshots')) {
+  lines.push(`- Total: **${d.omm.total}**`);
+  if (opts.sections.includes('snapshots') && d.omm.snapshots) {
     lines.push('| Date | Draft % | Sub1 % | Sub2 % | Sub3 % | Final Sub % | Final Apv % |');
     lines.push('|------|---------|--------|--------|--------|-------------|-------------|');
-    for (const d of opts.snapshotDates) {
-      const t = omm.length;
-      const c = (k: keyof OmmRow) => omm.filter(r => isOnOrBefore(r[k] as string | null, d)).length;
-      lines.push(`| ${d} | ${pct(c('draft_actual_date'), t)} | ${pct(c('sub1_actual_date'), t)} | ${pct(c('sub2_actual_date'), t)} | ${pct(c('sub3_actual_date'), t)} | ${pct(c('final_actual_date'), t)} | ${pct(c('final_response_actual_date'), t)} |`);
+    for (const s of d.omm.snapshots) {
+      const t = s.total;
+      lines.push(`| ${s.date} | ${pctOf(s.counts.draft_actual_date, t)} | ${pctOf(s.counts.sub1_actual_date, t)} | ${pctOf(s.counts.sub2_actual_date, t)} | ${pctOf(s.counts.sub3_actual_date, t)} | ${pctOf(s.counts.final_actual_date, t)} | ${pctOf(s.counts.final_response_actual_date, t)} |`);
     }
   }
   lines.push('');
 
   // Warranty
-  const warr = await fetchAll<WarrantyRow>(
-    'warranty_items',
-    'draft_actual_date,subcon_signing_actual_date,hdec_signing_actual_date,final_actual_date',
-  );
   lines.push('### 3.3 Warranty Deeds');
-  lines.push(`- Total: **${warr.length}**`);
-  if (opts.sections.includes('snapshots')) {
+  lines.push(`- Total: **${d.warranty.total}**`);
+  if (opts.sections.includes('snapshots') && d.warranty.snapshots) {
     lines.push('| Date | Draft % | Subcon Sign % | HDEC Sign % | Final % |');
     lines.push('|------|---------|---------------|-------------|---------|');
-    for (const d of opts.snapshotDates) {
-      const t = warr.length;
-      const c = (k: keyof WarrantyRow) => warr.filter(r => isOnOrBefore(r[k] as string | null, d)).length;
-      lines.push(`| ${d} | ${pct(c('draft_actual_date'), t)} | ${pct(c('subcon_signing_actual_date'), t)} | ${pct(c('hdec_signing_actual_date'), t)} | ${pct(c('final_actual_date'), t)} |`);
+    for (const s of d.warranty.snapshots) {
+      const t = s.total;
+      lines.push(`| ${s.date} | ${pctOf(s.counts.draft_actual_date, t)} | ${pctOf(s.counts.subcon_signing_actual_date, t)} | ${pctOf(s.counts.hdec_signing_actual_date, t)} | ${pctOf(s.counts.final_actual_date, t)} |`);
     }
   }
   lines.push('');
 
   // Spare Part
-  const sp = await fetchAll<SparePartRow>(
-    'docs_spare_part',
-    'actual_confirm_date,actual_po_date,actual_delivery_date',
-  );
   lines.push('### 3.4 Spare Part');
-  lines.push(`- Total: **${sp.length}**`);
-  if (opts.sections.includes('snapshots')) {
+  lines.push(`- Total: **${d.sparePart.total}**`);
+  if (opts.sections.includes('snapshots') && d.sparePart.snapshots) {
     lines.push('| Date | Confirm % | PO % | Delivery % |');
     lines.push('|------|-----------|------|------------|');
-    for (const d of opts.snapshotDates) {
-      const t = sp.length;
-      const c = (k: keyof SparePartRow) => sp.filter(r => isOnOrBefore(r[k] as string | null, d)).length;
-      lines.push(`| ${d} | ${pct(c('actual_confirm_date'), t)} | ${pct(c('actual_po_date'), t)} | ${pct(c('actual_delivery_date'), t)} |`);
+    for (const s of d.sparePart.snapshots) {
+      const t = s.total;
+      lines.push(`| ${s.date} | ${pctOf(s.counts.actual_confirm_date, t)} | ${pctOf(s.counts.actual_po_date, t)} | ${pctOf(s.counts.actual_delivery_date, t)} |`);
     }
   }
   lines.push('');
@@ -438,11 +581,10 @@ async function buildDocsSection(opts: ReportOptions): Promise<string> {
 }
 
 // ---------- public ----------
-export async function buildReportMarkdown(opts: ReportOptions): Promise<string> {
+export async function buildReport(opts: ReportOptions): Promise<{ markdown: string; data: ReportData }> {
   const mode: DelayMode = opts.delayMode ?? 'penalty';
   const modeLabel = mode === 'penalty' ? 'Worst Case' : 'Best Case';
 
-  // Resolve data dates upfront (used in head + per-module snapshots)
   const needsTncDate = opts.modules.includes('tnc');
   const needsDefectDate = opts.modules.includes('defect');
   const [tncDataDate, defectDataDate] = await Promise.all([
@@ -450,6 +592,41 @@ export async function buildReportMarkdown(opts: ReportOptions): Promise<string> 
     needsDefectDate ? resolveDefectDataDate(opts.dataDate) : Promise.resolve(opts.dataDate ?? ''),
   ]);
 
+  const includeGuide = needsTncDate && opts.includeTncGuide !== false;
+
+  const meta: ReportMeta = {
+    generatedAt: new Date().toISOString(),
+    mcDate: opts.mcDate ?? MC_DEFAULT,
+    delayMode: mode,
+    delayModeLabel: modeLabel,
+    modules: opts.modules,
+    sections: opts.sections,
+    snapshotDates: opts.snapshotDates,
+    tncDataDate: needsTncDate ? tncDataDate : undefined,
+    defectDataDate: needsDefectDate ? defectDataDate : undefined,
+    includesTncGuide: includeGuide,
+  };
+
+  const data: ReportData = { meta };
+
+  // Compute data per selected module
+  if (opts.modules.includes('tnc')) {
+    const rows = await fetchTnc();
+    data.tnc = computeTncData(rows, opts, tncDataDate);
+  }
+  if (opts.modules.includes('defect')) {
+    const rows = await fetchDefects();
+    data.defect = computeDefectData(rows, opts, defectDataDate);
+  }
+  if (opts.modules.includes('docs')) {
+    data.docs = await computeDocsData(opts);
+  }
+  if (opts.modules.includes('punch')) {
+    const rows = await fetchPunch();
+    data.punch = computePunchData(rows, opts);
+  }
+
+  // Render markdown from data
   const head: string[] = [];
   head.push('# SHAW Project — Status Report');
   head.push(`_Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')} (SGT)_`);
@@ -458,29 +635,21 @@ export async function buildReportMarkdown(opts: ReportOptions): Promise<string> 
   head.push(`_Snapshot delay mode: **${modeLabel}**_`);
   if (needsTncDate) head.push(`_T&C data date: ${tncDataDate}_`);
   if (needsDefectDate) head.push(`_Defect data date: ${defectDataDate}_`);
-  const includeGuide = needsTncDate && opts.includeTncGuide !== false;
   if (includeGuide) head.push(`_T&C guide: included (Appendix A)_`);
   head.push('');
 
   const parts: string[] = [head.join('\n')];
-
-  if (opts.modules.includes('tnc')) {
-    const rows = await fetchTnc();
-    parts.push(buildTncSection(rows, opts, tncDataDate));
-  }
-  if (opts.modules.includes('defect')) {
-    const rows = await fetchDefects();
-    parts.push(buildDefectSection(rows, opts, defectDataDate));
-  }
-  if (opts.modules.includes('docs')) {
-    parts.push(await buildDocsSection(opts));
-  }
-  if (opts.modules.includes('punch')) {
-    const rows = await fetchPunch();
-    parts.push(buildPunchSection(rows, opts));
-  }
-
+  if (data.tnc) parts.push(renderTncMd(data.tnc, opts));
+  if (data.defect) parts.push(renderDefectMd(data.defect, opts));
+  if (data.docs) parts.push(renderDocsMd(data.docs, opts));
+  if (data.punch) parts.push(renderPunchMd(data.punch, opts));
   if (includeGuide) parts.push(TNC_RAW_DATA_GUIDE_MD);
 
-  return parts.join('\n');
+  return { markdown: parts.join('\n'), data };
+}
+
+/** Backwards-compatible wrapper. */
+export async function buildReportMarkdown(opts: ReportOptions): Promise<string> {
+  const { markdown } = await buildReport(opts);
+  return markdown;
 }
