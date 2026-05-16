@@ -618,7 +618,7 @@ async function fetchAll<T>(table: string, columns: string, filter?: (q: any) => 
   return out;
 }
 
-const ABD_COLS: Array<keyof AbdRow> = ['sub1_submission_date','sub1_approval_date','sub2_submission_date','sub2_approval_date','sub3_submission_date','sub3_approval_date','approved_date'];
+// ABD_COLS는 사용하지 않음 — ABD는 별도 집계 (approval_status='A' 기준).
 const OMM_COLS: Array<keyof OmmRow> = ['draft_actual_date','sub1_actual_date','sub2_actual_date','sub3_actual_date','final_actual_date','final_response_actual_date'];
 const WARR_COLS: Array<keyof WarrantyRow> = ['draft_actual_date','subcon_signing_actual_date','hdec_signing_actual_date','final_actual_date'];
 const SP_COLS: Array<keyof SparePartRow> = ['actual_confirm_date','actual_po_date','actual_delivery_date'];
