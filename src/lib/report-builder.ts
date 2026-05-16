@@ -36,6 +36,8 @@ export interface ReportOptions {
 export interface SimStageSnapshot {
   predictedPct: number;
   actualPct: number;
+  planPct: number;
+  gapPct: number;
   doneNow: number;
   forecastAdditional: number;
   predictedTotal: number;
