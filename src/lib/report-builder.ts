@@ -411,7 +411,7 @@ function computeDefectData(rows: DefectItem[], opts: ReportOptions, dataDate: st
     for (const c of defectChecks) {
       if (c.pct < 1.0) {
         data.actionPlanTriggers.push({ stage: c.stage, status: 'CRITICAL', actualPct: c.pct, reason: `${c.stage} has not started` });
-      } else if (c.v < -20) {
+      } else if (c.v <= -20) {
         data.actionPlanTriggers.push({ stage: c.stage, status: 'AT_RISK', actualPct: c.pct, reason: `${c.stage} is behind plan by ${Math.abs(c.v).toFixed(1)}%` });
       }
     }
