@@ -580,6 +580,21 @@ function computePunchData(rows: PunchRow[], opts: ReportOptions): PunchReportDat
     ).length,
     noPlan: incomplete.filter(r => !r.planned_completion_date).length,
   };
+  const beyondSc = rows
+    .filter(r => !r.actual_completion_date
+               && r.planned_completion_date
+               && r.planned_completion_date > mcDate)
+    .sort((a, b) =>
+      b.planned_completion_date!.localeCompare(a.planned_completion_date!))
+    .slice(0, 3)
+    .map(r => ({
+      itemNo:                r.item_no ?? '',
+      description:           r.outstanding_work ?? '',
+      discipline:            r.main_trade ?? r.work_type ?? r.location ?? '',
+      plannedCompletionDate: r.planned_completion_date!,
+      status:                r.completion_status ?? 'Not Started',
+    }));
+  data.latestItems = beyondSc;
   return data;
 }
 
