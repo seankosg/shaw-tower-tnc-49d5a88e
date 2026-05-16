@@ -13,6 +13,7 @@ const ROUTE_KEYS = [
   '/import',
   '/export',
   '/mobile',
+  '/admin/report',
   '/admin/classification',
   '/admin',
   // T&C system paths
@@ -45,10 +46,17 @@ export function getRememberedRoute(defaultPath: string) {
   return localStorage.getItem(`${MEMORY_PREFIX}${defaultPath}`) || defaultPath;
 }
 
-// One-time cleanup: remove stale '/admin' memory that pointed to '/admin/classification'
+// One-time cleanup: remove stale '/admin' memory that pointed to a child admin page.
 if (typeof window !== 'undefined') {
   const stale = localStorage.getItem(`${MEMORY_PREFIX}/admin`);
-  if (stale && (stale === '/admin/classification' || stale.startsWith('/admin/classification'))) {
+  if (
+    stale && (
+      stale === '/admin/classification' ||
+      stale.startsWith('/admin/classification') ||
+      stale === '/admin/report' ||
+      stale.startsWith('/admin/report')
+    )
+  ) {
     localStorage.removeItem(`${MEMORY_PREFIX}/admin`);
   }
 }
