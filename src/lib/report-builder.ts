@@ -215,16 +215,16 @@ function renderTncMd(d: TncReportData, opts: ReportOptions): string {
     lines.push('### 1.1 Dashboard');
     lines.push(`- Total subtests (active): **${total}**`);
     lines.push(`- Pre-Test (T1) completed: ${t1} (${pct(t1, total)})`);
-    lines.push(`- Actual Test (T2) completed: ${t2} (${pct(t2, total)})`);
+    lines.push(`- Official Test (T2) completed: ${t2} (${pct(t2, total)})`);
     lines.push(`- Test Report (R2) completed: ${r2s} (${pct(r2s, total)})`);
     lines.push('');
   }
   if (opts.sections.includes('progress')) {
-    lines.push('### 1.2 Current Status (Stages: Pre-Test, Actual Test, Test Report)');
+    lines.push('### 1.2 Current Status (Stages: Pre-Test, Official Test, Test Report)');
     lines.push('| Stage | Planned to date | Actual to date | Actual % | Gap (Actual − Planned) |');
     lines.push('|-------|-----------------|----------------|----------|------------------------|');
     lines.push(`| Pre-Test (T1) | ${planned.t1} | ${t1} | ${pct(t1, total)} | ${t1 - planned.t1} |`);
-    lines.push(`| Actual Test (T2) | ${planned.t2} | ${t2} | ${pct(t2, total)} | ${t2 - planned.t2} |`);
+    lines.push(`| Official Test (T2) | ${planned.t2} | ${t2} | ${pct(t2, total)} | ${t2 - planned.t2} |`);
     lines.push(`| Test Report (R2) | ${planned.r2s} | ${r2s} | ${pct(r2s, total)} | ${r2s - planned.r2s} |`);
     lines.push('');
   }
