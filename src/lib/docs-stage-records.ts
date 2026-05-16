@@ -294,10 +294,20 @@ export function buildAbdStageRecords(rows: any[], asOf: Date, ): DocsStageRecord
       detail_route: `/docs/abd/${row.id}`,
     };
 
-    // Determine row-level current stage
-    const finalApproved = String(row.sub3_approval_status ?? '').toUpperCase() === 'A' || !!row.approved_date;
-    const sub2Approved = String(row.sub2_approval_status ?? '').toUpperCase() === 'A';
+    // Determine row-level current stage.
+    // IMPORTANT (planned vs actual): in current data, `approved_date` and `sub1_approval_date`
+    // are populated with planned target dates for nearly all rows, so they cannot be treated as
+    // real approval signals. Trust only `sub*_approval_status` for review/approval completion.
+    const reviewClosed = (s: any) => {
+      const v = String(s ?? '').trim().toUpperCase();
+      return v === 'A' || v === 'B' || v === 'C';
+    };
     const sub1Approved = String(row.sub1_approval_status ?? '').toUpperCase() === 'A';
+    const sub2Approved = String(row.sub2_approval_status ?? '').toUpperCase() === 'A';
+    const sub3Approved = String(row.sub3_approval_status ?? '').toUpperCase() === 'A';
+    const finalApproved = sub1Approved || sub2Approved || sub3Approved;
+    const anySubmission = !!row.sub1_submission_date || !!row.sub2_submission_date || !!row.sub3_submission_date;
+
     let current_stage = 'Planned';
     if (finalApproved) current_stage = 'Approved';
     else if (row.sub3_submission_date) current_stage = 'Under 3rd Review';
@@ -307,26 +317,39 @@ export function buildAbdStageRecords(rows: any[], asOf: Date, ): DocsStageRecord
     else if (row.sub1_submission_date) current_stage = 'Under 1st Review';
     else if (row.sub1_planned_date) current_stage = '1st Submission';
 
+    const sub1ReviewDone = reviewClosed(row.sub1_approval_status);
+    const sub2ReviewDone = reviewClosed(row.sub2_approval_status);
+    const sub3ReviewDone = reviewClosed(row.sub3_approval_status);
+
     const stages = [
       { def: ABD_STAGE_DEFS[0], planned: row.sub1_planned_date, actual: row.sub1_submission_date,
         done: !!row.sub1_submission_date },
-      { def: ABD_STAGE_DEFS[1], planned: row.sub1_planned_date, actual: row.sub1_approval_date,
-        done: !!row.sub1_approval_date },
+      { def: ABD_STAGE_DEFS[1], planned: row.sub1_planned_date,
+        actual: sub1ReviewDone ? row.sub1_approval_date : null,
+        done: sub1ReviewDone },
       { def: ABD_STAGE_DEFS[2], planned: row.sub2_planned_date, actual: row.sub2_submission_date,
         done: !!row.sub2_submission_date,
         applicable: !sub1Approved /* if Sub1 approved, no Sub2 needed */ ? !!row.sub2_planned_date : true },
-      { def: ABD_STAGE_DEFS[3], planned: row.sub2_planned_date, actual: row.sub2_approval_date,
-        done: !!row.sub2_approval_date,
+      { def: ABD_STAGE_DEFS[3], planned: row.sub2_planned_date,
+        actual: sub2ReviewDone ? row.sub2_approval_date : null,
+        done: sub2ReviewDone,
         applicable: !!row.sub2_submission_date || !!row.sub2_planned_date },
       { def: ABD_STAGE_DEFS[4], planned: row.sub3_planned_date, actual: row.sub3_submission_date,
         done: !!row.sub3_submission_date,
         applicable: !!row.sub3_planned_date || !!row.sub3_submission_date },
-      { def: ABD_STAGE_DEFS[5], planned: row.sub3_planned_date, actual: row.sub3_approval_date,
-        done: !!row.sub3_approval_date,
+      { def: ABD_STAGE_DEFS[5], planned: row.sub3_planned_date,
+        actual: sub3ReviewDone ? row.sub3_approval_date : null,
+        done: sub3ReviewDone,
         applicable: !!row.sub3_submission_date || !!row.sub3_planned_date },
       { def: ABD_STAGE_DEFS[6], planned: row.sub3_planned_date ?? row.sub2_planned_date ?? row.sub1_planned_date,
-        actual: row.approved_date ?? (finalApproved ? row.sub3_approval_date : null),
-        done: finalApproved, applicable: true },
+        // "Completed" per user definition = Submitted OR Approved (actual signals only).
+        actual: finalApproved
+          ? (sub3Approved ? row.sub3_approval_date
+             : sub2Approved ? row.sub2_approval_date
+             : row.sub1_approval_date)
+          : null,
+        done: finalApproved || anySubmission,
+        applicable: true },
     ];
 
     for (const s of stages) {

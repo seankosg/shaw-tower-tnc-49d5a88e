@@ -195,18 +195,25 @@ export async function loadDashboardData(opts: {
     else abd.pending++;
 
     // ABD funnel stages: Pending → Sub1 → Sub2 → Sub3 → Approved
+    // NOTE: `approved_date` and `sub1_approval_date` are imported as planned target dates for
+    // nearly all rows, so they cannot be used as actual approval signals. Use only
+    // `sub*_approval_status='A'`.
+    const sub1ApprStatus = String(row.sub1_approval_status ?? '').toUpperCase();
+    const sub2ApprStatus = String(row.sub2_approval_status ?? '').toUpperCase();
+    const sub3ApprStatus = String(row.sub3_approval_status ?? '').toUpperCase();
     let stage: 'Pending' | 'Sub1' | 'Sub2' | 'Sub3' | 'Approved' = 'Pending';
-    if (row.sub3_approval_status?.toString().toUpperCase() === 'A' || row.approved_date) stage = 'Approved';
+    if (sub3ApprStatus === 'A' || sub2ApprStatus === 'A' || sub1ApprStatus === 'A') stage = 'Approved';
     else if (row.sub3_submission_date) stage = 'Sub3';
     else if (row.sub2_submission_date) stage = 'Sub2';
     else if (row.sub1_submission_date) stage = 'Sub1';
     bumpStage(abd, stage);
 
-    // Awaiting response = submitted at any sub but not yet approved at that step
+    // Awaiting response = submitted at a level but that level's approval status is not yet decided
+    const reviewClosed = (s: string) => s === 'A' || s === 'B' || s === 'C';
     const awaiting =
-      (row.sub1_submission_date && !row.sub1_approval_date) ||
-      (row.sub2_submission_date && !row.sub2_approval_date) ||
-      (row.sub3_submission_date && !row.sub3_approval_date);
+      (row.sub1_submission_date && !reviewClosed(sub1ApprStatus)) ||
+      (row.sub2_submission_date && !reviewClosed(sub2ApprStatus)) ||
+      (row.sub3_submission_date && !reviewClosed(sub3ApprStatus));
     if (awaiting && !submitted) abd.awaitingResponse++;
 
     // Risk uses SC date + lead
@@ -259,8 +266,12 @@ export async function loadDashboardData(opts: {
       });
     }
 
-    // Approval trend
-    const approved = safeIso(row.approved_date) ?? safeIso(row.sub3_approval_date);
+    // Approval trend — only count actual approvals (status='A' at that level).
+    const approved =
+      sub3ApprStatus === 'A' ? safeIso(row.sub3_approval_date)
+      : sub2ApprStatus === 'A' ? safeIso(row.sub2_approval_date)
+      : sub1ApprStatus === 'A' ? safeIso(row.sub1_approval_date)
+      : null;
     if (approved) {
       const k = format(approved, 'yyyy-MM-dd');
       abd.approvedByDay.set(k, (abd.approvedByDay.get(k) ?? 0) + 1);
