@@ -712,11 +712,11 @@ function renderDocsMd(d: DocsReportData, opts: ReportOptions): string {
   lines.push('### 3.1 As Built Drawing (ABD)');
   lines.push(`- Total: **${d.abd.total}**`);
   if (opts.sections.includes('snapshots') && d.abd.snapshots) {
-    lines.push('| Date | Sub1 Sub % | Sub1 Apv % | Sub2 Sub % | Sub2 Apv % | Sub3 Sub % | Sub3 Apv % | Approved % |');
-    lines.push('|------|-----------|-----------|-----------|-----------|-----------|-----------|-----------|');
+    lines.push('| Date | Sub1 Sub % | Sub2 Sub % | Sub3 Sub % |');
+    lines.push('|------|-----------|-----------|-----------|');
     for (const s of d.abd.snapshots) {
       const t = s.total;
-      lines.push(`| ${s.date} | ${pctOf(s.counts.sub1_submission_date, t)} | ${pctOf(s.counts.sub1_approval_date, t)} | ${pctOf(s.counts.sub2_submission_date, t)} | ${pctOf(s.counts.sub2_approval_date, t)} | ${pctOf(s.counts.sub3_submission_date, t)} | ${pctOf(s.counts.sub3_approval_date, t)} | ${pctOf(s.counts.approved_date, t)} |`);
+      lines.push(`| ${s.date} | ${pctOf(s.counts.sub1_submission_date, t)} | ${pctOf(s.counts.sub2_submission_date, t)} | ${pctOf(s.counts.sub3_submission_date, t)} |`);
     }
   }
   lines.push('');
