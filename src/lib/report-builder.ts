@@ -55,12 +55,38 @@ export interface DefectSnapshotEntry {
   completion: SimStageSnapshot;
   closure: SimStageSnapshot;
 }
+export interface TncCurrentActual {
+  preTestPct: number;
+  officialTestPct: number;
+  testReportPct: number;
+  preTestVariancePct: number;
+  officialTestVariancePct: number;
+  testReportVariancePct: number;
+}
+export interface TncScurvePoint {
+  date: string;
+  t1PlanPct: number;
+  t1ActualPct: number | null;
+  t2PlanPct: number;
+  t2ActualPct: number | null;
+  r2sPlanPct: number;
+  r2sActualPct: number | null;
+}
+export interface TncActionPlanTrigger {
+  stage: 'preTest' | 'officialTest' | 'testReport';
+  status: 'CRITICAL' | 'AT_RISK';
+  actualPct: number;
+  reason: string;
+}
 export interface TncReportData {
   dataDate: string;
   totals: { total: number; t1: number; t2: number; r2s: number };
   plannedToDate: { t1: number; t2: number; r2s: number };
-  requiredPace?: { daysRemaining: number; t2Remaining: number; r2sRemaining: number; t2PerDay: number; r2sPerDay: number };
+  currentActual?: TncCurrentActual;
+  requiredPace?: { daysRemaining: number; t1Remaining: number; t2Remaining: number; r2sRemaining: number; preTestPerDay: number; t2PerDay: number; r2sPerDay: number };
   snapshots?: TncSnapshotEntry[];
+  scurve?: TncScurvePoint[];
+  actionPlanTriggers?: TncActionPlanTrigger[];
 }
 export interface DefectReportData {
   dataDate: string;
