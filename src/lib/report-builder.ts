@@ -774,6 +774,28 @@ export async function buildReport(opts: ReportOptions): Promise<{ markdown: stri
   if (opts.modules.includes('defect')) {
     const rows = await fetchDefects();
     data.defect = computeDefectData(rows, opts, defectDataDate);
+    if (data.defect) {
+      const sc = buildDefectSCurveAllStages(rows, {
+        granularity: 'day',
+        startDate: addDays(defectDataDate, -35),
+        endDate: opts.mcDate ?? MC_DEFAULT,
+        today: defectDataDate,
+        groupBy: null,
+      });
+      const tot = data.defect.totals.total || 1;
+      data.defect.scurve = sc.buckets.map((b, i) => {
+        const cAct = sc.byStage.completion.actual[i];
+        const zAct = sc.byStage.closure.actual[i];
+        return {
+          date: b,
+          bucketLabel: sc.bucketLabels[i],
+          completionPlanPct:   Math.round((sc.byStage.completion.plan[i] / tot) * 1000) / 10,
+          completionActualPct: cAct != null ? Math.round((cAct / tot) * 1000) / 10 : null,
+          closurePlanPct:      Math.round((sc.byStage.closure.plan[i]    / tot) * 1000) / 10,
+          closureActualPct:    zAct != null ? Math.round((zAct / tot) * 1000) / 10 : null,
+        };
+      });
+    }
   }
   if (opts.modules.includes('docs')) {
     data.docs = await computeDocsData(opts);
