@@ -89,6 +89,14 @@ export interface TncReportData {
   scurve?: TncScurvePoint[];
   actionPlanTriggers?: TncActionPlanTrigger[];
 }
+export interface DefectScurvePoint {
+  date: string;
+  bucketLabel: string;
+  completionPlanPct: number;
+  completionActualPct: number | null;
+  closurePlanPct: number;
+  closureActualPct: number | null;
+}
 export interface DefectReportData {
   dataDate: string;
   totals: { total: number; completion: number; closure: number };
@@ -101,6 +109,7 @@ export interface DefectReportData {
   };
   requiredPace?: { daysRemaining: number; completionRemaining: number; closureRemaining: number; completionPerDay: number; closurePerDay: number };
   snapshots?: DefectSnapshotEntry[];
+  scurve?: DefectScurvePoint[];
   actionPlanTriggers?: Array<{
     stage: 'completion' | 'closure';
     status: 'CRITICAL' | 'AT_RISK';
