@@ -698,6 +698,7 @@ export async function buildReport(opts: ReportOptions): Promise<{ markdown: stri
   const meta: ReportMeta = {
     generatedAt: new Date().toISOString(),
     mcDate: opts.mcDate ?? MC_DEFAULT,
+    daysToCompletion: Math.ceil((+new Date(opts.mcDate ?? MC_DEFAULT) - Date.now()) / 86400000),
     delayMode: mode,
     delayModeLabel: modeLabel,
     modules: opts.modules,
