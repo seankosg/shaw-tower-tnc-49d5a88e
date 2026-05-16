@@ -1,107 +1,40 @@
+# ABD Completed 불일치 — 원인 확인 및 수정안
 
-## 변경 파일
-`src/lib/report-builder.ts` 단일 파일만 수정합니다.
+## 원인 (확인됨)
 
----
+`src/lib/docs-dashboard-data.ts`에 명시된 SSOT 주석:
 
-## [1] Defect S-Curve 추가
+> `approved_date` and `sub1_approval_date` are imported as **planned target dates** for nearly all rows, so they cannot be used as actual approval signals. Use only `sub*_approval_status='A'`.
 
-### 타입 추가
-```ts
-export interface DefectScurvePoint {
-  date: string;
-  bucketLabel: string;
-  completionPlanPct: number;
-  completionActualPct: number | null;
-  closurePlanPct: number;
-  closureActualPct: number | null;
-}
-```
+즉 대시보드는 **승인 판정을 오직 `sub1/2/3_approval_status === 'A'`** 로만 합니다.
 
-### `DefectReportData`에 필드 추가
-```ts
-scurve?: DefectScurvePoint[];
-```
-
-### import 추가
-```ts
-import { buildDefectSCurveAllStages } from '@/lib/defect-dashboard-utils';
-```
-
-### `buildReport()`의 defect 블록(763~766줄) 보강
-T&C scurve 처리와 동일 패턴으로, defect 데이터를 만든 뒤 S-Curve를 계산해 주입합니다.
-
-- `startDate = addDays(defectDataDate, -35)`
-- `endDate = opts.mcDate ?? MC_DEFAULT`
-- `today = defectDataDate` (Data Date 기준 actual 절단 — T&C 패턴과 일치)
-- `granularity: 'day'`
-- `groupBy: null` (총량만 필요)
-- `buildDefectSCurveAllStages`는 stages별로 `total` 시리즈(plan/actual 누적)를 같은 bucket 축으로 반환하므로, completion·closure를 한 번에 받아 % 변환
+그런데 `src/lib/report-builder.ts`의 `computeDocsData` (라인 621, 642~660)는 ABD 모든 컬럼을 일률적으로 "값이 null 아니면 카운트" 방식으로 집계합니다:
 
 ```ts
-const sc = buildDefectSCurveAllStages(rows, {
-  granularity: 'day',
-  startDate: addDays(defectDataDate, -35),
-  endDate: opts.mcDate ?? MC_DEFAULT,
-  today: defectDataDate,
-  groupBy: null,
-});
-const tot = data.defect.totals.total || 1;
-data.defect.scurve = sc.buckets.map((b, i) => ({
-  date: b,
-  bucketLabel: sc.bucketLabels[i],
-  completionPlanPct:   Math.round((sc.byStage.completion.plan[i]   / tot) * 1000) / 10,
-  completionActualPct: sc.byStage.completion.actual[i] != null
-    ? Math.round((sc.byStage.completion.actual[i] as number) / tot * 1000) / 10
-    : null,
-  closurePlanPct:      Math.round((sc.byStage.closure.plan[i]      / tot) * 1000) / 10,
-  closureActualPct: sc.byStage.closure.actual[i] != null
-    ? Math.round((sc.byStage.closure.actual[i] as number) / tot * 1000) / 10
-    : null,
-}));
+const ABD_COLS = ['sub1_submission_date','sub1_approval_date','sub2_submission_date',
+                  'sub2_approval_date','sub3_submission_date','sub3_approval_date',
+                  'approved_date'];
 ```
 
-PPT JSON 전용 — `renderDefectMd`는 변경하지 않음 (UI/Markdown 영향 없음).
+따라서 `approved_date` (= 계획 응답일/Planned)가 채워진 행이 전부 "Approved/Completed"로 잡혀 대시보드보다 **부풀려진 수치**가 리포트에 들어갑니다. 사용자가 의심한 그대로 **Planned Respond Date를 실적으로 미리 셈하고 있던 버그**입니다.
 
----
+OMM/Warranty/Spare Part는 `*_actual_date` 컬럼만 사용 → 영향 없음. 수정은 ABD 한 곳만.
 
-## [2] ABD `statusCounts` 추가
+## 수정안 (단일 파일: `src/lib/report-builder.ts`)
 
-### `DocsSubmoduleData`에 필드 추가
-```ts
-statusCounts?: Record<string, number>;
-```
-
-### `computeDocsData`의 ABD 처리
-이미 `docs_drawings` SELECT에 `current_status`가 포함되어 있고 `AbdRow`에 `current_status` 필드도 있으므로 추가 fetch 불필요.
-
-ABD 결과 생성 후 다음을 부여:
-```ts
-const abdData = mk(abd, ABD_COLS);
-abdData.statusCounts = {
-  under_review:  abd.filter(r => r.current_status === 'Under Review').length,
-  not_submitted: abd.filter(r => !r.sub1_submission_date).length,
-};
-```
-
----
-
-## [3] OMM `statusCounts` 추가
-
-OMM 결과 생성 후:
-```ts
-const ommData = mk(omm, OMM_COLS);
-ommData.statusCounts = {
-  under_review: omm.filter(r => r.sub2_actual_date && !r.final_response_actual_date).length,
-};
-```
-
-최종 return을 `abd: abdData, omm: ommData, …` 형태로 정리.
-
-Warranty / SparePart는 변경 없음. `renderDocsMd`는 변경하지 않음.
-
----
+1. `AbdRow` 인터페이스와 ABD fetch SELECT 절에 `sub1_approval_status, sub2_approval_status, sub3_approval_status` 3개 컬럼 추가.
+2. ABD는 `mk()` 일반 루프 대신 전용 카운트 적용:
+   - `sub1/2/3_submission_date` → 기존대로 `value != null` 로 카운트 (대시보드 funnel의 Sub1/Sub2/Sub3 단계와 동일).
+   - `sub1/2/3_approval_date` → **해당 단계의 `*_approval_status === 'A'`** 인 행 수로 교체.
+   - `approved_date` (= 리포트의 Completed/Approved) → 대시보드 funnel "Approved" 정의와 동일하게 **`sub3_status==='A' OR sub2_status==='A' OR sub1_status==='A'`** 인 행 수로 교체.
+3. `abdData.currentPcts / currentCounts / statusCounts` 모두 위 새 카운트를 따르도록 갱신. `not_submitted = !sub1_submission_date` 는 변경 없음.
+4. **Snapshots 처리**: `*_approval_date`/`approved_date`는 실제 승인일이 아니므로 과거 시점 재구성이 불가합니다. ABD snapshot 테이블에서 Apv 컬럼들을 제거하고 **Sub1/Sub2/Sub3 Submission %만 남깁니다.** (대시보드도 승인 스냅샷을 제공하지 않음.) 다른 처리를 원하시면 알려주세요.
 
 ## 검증
-- `bunx tsc --noEmit` 으로 타입 체크
-- 다른 파일은 일절 수정하지 않음
+
+- `bunx tsc --noEmit` 통과 확인.
+- 리포트 생성 후 ABD Approved/Completed 수치가 대시보드 KPI 카드와 일치하는지 사용자 확인.
+
+## 영향 범위
+
+- `src/lib/report-builder.ts` 만 수정. 대시보드 / 다른 모듈 / DB 변경 없음.

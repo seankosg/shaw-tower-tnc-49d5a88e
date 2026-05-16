@@ -583,9 +583,9 @@ function renderPunchMd(d: PunchReportData, opts: ReportOptions): string {
 
 // ---------- Docs ----------
 interface AbdRow {
-  sub1_submission_date: string | null; sub1_approval_date: string | null;
-  sub2_submission_date: string | null; sub2_approval_date: string | null;
-  sub3_submission_date: string | null; sub3_approval_date: string | null;
+  sub1_submission_date: string | null; sub1_approval_date: string | null; sub1_approval_status: string | null;
+  sub2_submission_date: string | null; sub2_approval_date: string | null; sub2_approval_status: string | null;
+  sub3_submission_date: string | null; sub3_approval_date: string | null; sub3_approval_status: string | null;
   sub1_planned_date: string | null; sub2_planned_date: string | null; sub3_planned_date: string | null;
   approved_date: string | null; current_status: string | null;
 }
@@ -618,7 +618,7 @@ async function fetchAll<T>(table: string, columns: string, filter?: (q: any) => 
   return out;
 }
 
-const ABD_COLS: Array<keyof AbdRow> = ['sub1_submission_date','sub1_approval_date','sub2_submission_date','sub2_approval_date','sub3_submission_date','sub3_approval_date','approved_date'];
+// ABD_COLS는 사용하지 않음 — ABD는 별도 집계 (approval_status='A' 기준).
 const OMM_COLS: Array<keyof OmmRow> = ['draft_actual_date','sub1_actual_date','sub2_actual_date','sub3_actual_date','final_actual_date','final_response_actual_date'];
 const WARR_COLS: Array<keyof WarrantyRow> = ['draft_actual_date','subcon_signing_actual_date','hdec_signing_actual_date','final_actual_date'];
 const SP_COLS: Array<keyof SparePartRow> = ['actual_confirm_date','actual_po_date','actual_delivery_date'];
@@ -634,7 +634,7 @@ function snapshotCounts<T>(rows: T[], cols: Array<keyof T>, date: string): Recor
 async function computeDocsData(opts: ReportOptions): Promise<DocsReportData> {
   const wantSnap = opts.sections.includes('snapshots');
   const [abd, omm, warr, sp] = await Promise.all([
-    fetchAll<AbdRow>('docs_drawings', 'sub1_submission_date,sub1_approval_date,sub2_submission_date,sub2_approval_date,sub3_submission_date,sub3_approval_date,sub1_planned_date,sub2_planned_date,sub3_planned_date,approved_date,current_status', (q) => q.eq('sub_module', 'as_built')),
+    fetchAll<AbdRow>('docs_drawings', 'sub1_submission_date,sub1_approval_date,sub1_approval_status,sub2_submission_date,sub2_approval_date,sub2_approval_status,sub3_submission_date,sub3_approval_date,sub3_approval_status,sub1_planned_date,sub2_planned_date,sub3_planned_date,approved_date,current_status', (q) => q.eq('sub_module', 'as_built')),
     fetchAll<OmmRow>('docs_omm', 'sub1_actual_date,sub2_actual_date,sub3_actual_date,final_actual_date,final_response_actual_date,draft_actual_date'),
     fetchAll<WarrantyRow>('warranty_items', 'draft_actual_date,subcon_signing_actual_date,hdec_signing_actual_date,final_actual_date'),
     fetchAll<SparePartRow>('docs_spare_part', 'actual_confirm_date,actual_po_date,actual_delivery_date'),
@@ -658,10 +658,38 @@ async function computeDocsData(opts: ReportOptions): Promise<DocsReportData> {
       snapshots: wantSnap ? opts.snapshotDates.map(d => ({ date: d, total, counts: snapshotCounts(rows, cols, d) })) : undefined,
     };
   };
-  const abdData = mk(abd, ABD_COLS);
-  abdData.statusCounts = {
-    under_review:  abd.filter(r => r.current_status === 'Under Review').length,
-    not_submitted: abd.filter(r => !r.sub1_submission_date).length,
+  // ABD: approval은 *_approval_status === 'A' 만 실적으로 인정 (대시보드 SSOT와 일치).
+  // approval_date / approved_date 컬럼은 Planned Respond Date로 import되므로 카운트 금지.
+  const abdSubCols: Array<keyof AbdRow> = ['sub1_submission_date','sub2_submission_date','sub3_submission_date'];
+  const abdTotal = abd.length;
+  const abdCounts: Record<string, number> = {};
+  for (const c of abdSubCols) {
+    abdCounts[c as string] = abd.filter(r => r[c] != null && r[c] !== '').length;
+  }
+  abdCounts['sub1_approval_date'] = abd.filter(r => r.sub1_approval_status === 'A').length;
+  abdCounts['sub2_approval_date'] = abd.filter(r => r.sub2_approval_status === 'A').length;
+  abdCounts['sub3_approval_date'] = abd.filter(r => r.sub3_approval_status === 'A').length;
+  abdCounts['approved_date'] = abd.filter(r =>
+    r.sub3_approval_status === 'A' || r.sub2_approval_status === 'A' || r.sub1_approval_status === 'A'
+  ).length;
+  const abdPcts: Record<string, number> = {};
+  for (const k of Object.keys(abdCounts)) {
+    abdPcts[k] = abdTotal ? Math.round((abdCounts[k] / abdTotal) * 1000) / 10 : 0;
+  }
+  const abdData: DocsSubmoduleData = {
+    total: abdTotal,
+    currentPcts: abdPcts,
+    currentCounts: abdCounts,
+    // Snapshots: 승인은 과거 시점 재구성 불가 (실제 승인일 미보유) → Submission만 포함.
+    snapshots: wantSnap ? opts.snapshotDates.map(d => ({
+      date: d,
+      total: abdTotal,
+      counts: snapshotCounts(abd, abdSubCols, d),
+    })) : undefined,
+    statusCounts: {
+      under_review:  abd.filter(r => r.current_status === 'Under Review').length,
+      not_submitted: abd.filter(r => !r.sub1_submission_date).length,
+    },
   };
   const ommData = mk(omm, OMM_COLS);
   ommData.statusCounts = {
@@ -684,11 +712,11 @@ function renderDocsMd(d: DocsReportData, opts: ReportOptions): string {
   lines.push('### 3.1 As Built Drawing (ABD)');
   lines.push(`- Total: **${d.abd.total}**`);
   if (opts.sections.includes('snapshots') && d.abd.snapshots) {
-    lines.push('| Date | Sub1 Sub % | Sub1 Apv % | Sub2 Sub % | Sub2 Apv % | Sub3 Sub % | Sub3 Apv % | Approved % |');
-    lines.push('|------|-----------|-----------|-----------|-----------|-----------|-----------|-----------|');
+    lines.push('| Date | Sub1 Sub % | Sub2 Sub % | Sub3 Sub % |');
+    lines.push('|------|-----------|-----------|-----------|');
     for (const s of d.abd.snapshots) {
       const t = s.total;
-      lines.push(`| ${s.date} | ${pctOf(s.counts.sub1_submission_date, t)} | ${pctOf(s.counts.sub1_approval_date, t)} | ${pctOf(s.counts.sub2_submission_date, t)} | ${pctOf(s.counts.sub2_approval_date, t)} | ${pctOf(s.counts.sub3_submission_date, t)} | ${pctOf(s.counts.sub3_approval_date, t)} | ${pctOf(s.counts.approved_date, t)} |`);
+      lines.push(`| ${s.date} | ${pctOf(s.counts.sub1_submission_date, t)} | ${pctOf(s.counts.sub2_submission_date, t)} | ${pctOf(s.counts.sub3_submission_date, t)} |`);
     }
   }
   lines.push('');
