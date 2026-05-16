@@ -92,14 +92,36 @@ export interface DefectReportData {
   dataDate: string;
   totals: { total: number; completion: number; closure: number };
   plannedToDate: { completion: number; closure: number };
+  currentActual?: {
+    completionPct: number;
+    closurePct: number;
+    completionVariancePct: number;
+    closureVariancePct: number;
+  };
   requiredPace?: { daysRemaining: number; completionRemaining: number; closureRemaining: number; completionPerDay: number; closurePerDay: number };
   snapshots?: DefectSnapshotEntry[];
+  actionPlanTriggers?: Array<{
+    stage: 'completion' | 'closure';
+    status: 'CRITICAL' | 'AT_RISK';
+    actualPct: number;
+    reason: string;
+  }>;
 }
 export interface PunchReportData {
   totals: { total: number; completion: number };
   plannedToDate: { completion: number };
+  currentActual?: {
+    completionPct: number;
+    variancePct: number;
+  };
   requiredPace?: { daysRemaining: number; completionRemaining: number; completionPerDay: number };
   snapshots?: Array<{ date: string; total: number; completion: number; completionPct: number }>;
+  actionPlanTriggers?: Array<{
+    stage: 'completion';
+    status: 'CRITICAL' | 'AT_RISK';
+    actualPct: number;
+    reason: string;
+  }>;
 }
 export interface DocsTableSnapshot {
   date: string;
@@ -109,6 +131,7 @@ export interface DocsTableSnapshot {
 }
 export interface DocsSubmoduleData {
   total: number;
+  currentPcts?: Record<string, number>;
   snapshots?: DocsTableSnapshot[];
 }
 export interface DocsReportData {
