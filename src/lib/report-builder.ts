@@ -156,10 +156,12 @@ function isOnOrBefore(actual: string | null | undefined, snapshot: string): bool
   return actual <= snapshot;
 }
 
-function toSimSnap(r: { predictedPct: number; actualPct: number; doneActual: number; forecast: number; predicted: number; total: number }): SimStageSnapshot {
+function toSimSnap(r: { predictedPct: number; actualPct: number; planPct: number; doneActual: number; forecast: number; predicted: number; total: number }): SimStageSnapshot {
   return {
     predictedPct: r.predictedPct,
     actualPct: r.actualPct,
+    planPct: r.planPct,
+    gapPct: +(r.predictedPct - r.planPct).toFixed(1),
     doneNow: r.doneActual,
     forecastAdditional: r.forecast,
     predictedTotal: r.predicted,
