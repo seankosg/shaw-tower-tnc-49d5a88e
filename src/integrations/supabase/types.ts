@@ -2815,6 +2815,13 @@ export type Database = {
             referencedRelation: "subtests"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "subtest_change_log_subtest_id_fkey"
+            columns: ["subtest_id"]
+            isOneToOne: false
+            referencedRelation: "subtests_active"
+            referencedColumns: ["id"]
+          },
         ]
       }
       subtest_comment_reads: {
@@ -2842,6 +2849,13 @@ export type Database = {
             columns: ["subtest_id"]
             isOneToOne: false
             referencedRelation: "subtests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subtest_comment_reads_subtest_id_fkey"
+            columns: ["subtest_id"]
+            isOneToOne: false
+            referencedRelation: "subtests_active"
             referencedColumns: ["id"]
           },
         ]
@@ -2896,6 +2910,13 @@ export type Database = {
             columns: ["subtest_id"]
             isOneToOne: false
             referencedRelation: "subtests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subtest_comments_subtest_id_fkey"
+            columns: ["subtest_id"]
+            isOneToOne: false
+            referencedRelation: "subtests_active"
             referencedColumns: ["id"]
           },
         ]
@@ -3897,7 +3918,181 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      subtests_active: {
+        Row: {
+          aconex_ref_no: string | null
+          critical_marked_at: string | null
+          critical_marked_by: string | null
+          critical_marked_by_name: string | null
+          custom_payload: Json | null
+          data_source_type: Database["public"]["Enums"]["data_source"] | null
+          description: string | null
+          equipment: string | null
+          hdec_pic_name: string | null
+          id: string | null
+          is_active: boolean | null
+          is_critical: boolean | null
+          item_no: string | null
+          level: string | null
+          mos_code: string | null
+          mos_sequence: number | null
+          pred_actual_date: string | null
+          pred_planned_date: string | null
+          pred_status: Database["public"]["Enums"]["tc_status"] | null
+          predecessor_status_raw: string | null
+          project_id: string | null
+          punchlist_comments: string | null
+          r1_actual_submission_date: string | null
+          r1_report_ref: string | null
+          r1_status: Database["public"]["Enums"]["report_status"] | null
+          r1_target_submission_date: string | null
+          r2_actual_approval_date: string | null
+          r2_actual_submission_date: string | null
+          r2_status: Database["public"]["Enums"]["report_status"] | null
+          r2_target_approval_date: string | null
+          r2_target_submission_date: string | null
+          remarks: string | null
+          row_version: number | null
+          source_upload_id: string | null
+          subcontractor_name: string | null
+          subsub_name: string | null
+          subtest_id: string | null
+          system_id: string | null
+          t1_actual_date: string | null
+          t1_planned_date: string | null
+          t1_status: Database["public"]["Enums"]["tc_status"] | null
+          t2_actual_date: string | null
+          t2_planned_date: string | null
+          t2_status: Database["public"]["Enums"]["tc_status"] | null
+          team: Database["public"]["Enums"]["team_type"] | null
+          test_id: string | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          aconex_ref_no?: string | null
+          critical_marked_at?: string | null
+          critical_marked_by?: string | null
+          critical_marked_by_name?: string | null
+          custom_payload?: Json | null
+          data_source_type?: Database["public"]["Enums"]["data_source"] | null
+          description?: string | null
+          equipment?: string | null
+          hdec_pic_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          is_critical?: boolean | null
+          item_no?: string | null
+          level?: string | null
+          mos_code?: string | null
+          mos_sequence?: number | null
+          pred_actual_date?: string | null
+          pred_planned_date?: string | null
+          pred_status?: Database["public"]["Enums"]["tc_status"] | null
+          predecessor_status_raw?: string | null
+          project_id?: string | null
+          punchlist_comments?: string | null
+          r1_actual_submission_date?: string | null
+          r1_report_ref?: string | null
+          r1_status?: Database["public"]["Enums"]["report_status"] | null
+          r1_target_submission_date?: string | null
+          r2_actual_approval_date?: string | null
+          r2_actual_submission_date?: string | null
+          r2_status?: Database["public"]["Enums"]["report_status"] | null
+          r2_target_approval_date?: string | null
+          r2_target_submission_date?: string | null
+          remarks?: string | null
+          row_version?: number | null
+          source_upload_id?: string | null
+          subcontractor_name?: string | null
+          subsub_name?: string | null
+          subtest_id?: string | null
+          system_id?: string | null
+          t1_actual_date?: string | null
+          t1_planned_date?: string | null
+          t1_status?: Database["public"]["Enums"]["tc_status"] | null
+          t2_actual_date?: string | null
+          t2_planned_date?: string | null
+          t2_status?: Database["public"]["Enums"]["tc_status"] | null
+          team?: Database["public"]["Enums"]["team_type"] | null
+          test_id?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          aconex_ref_no?: string | null
+          critical_marked_at?: string | null
+          critical_marked_by?: string | null
+          critical_marked_by_name?: string | null
+          custom_payload?: Json | null
+          data_source_type?: Database["public"]["Enums"]["data_source"] | null
+          description?: string | null
+          equipment?: string | null
+          hdec_pic_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          is_critical?: boolean | null
+          item_no?: string | null
+          level?: string | null
+          mos_code?: string | null
+          mos_sequence?: number | null
+          pred_actual_date?: string | null
+          pred_planned_date?: string | null
+          pred_status?: Database["public"]["Enums"]["tc_status"] | null
+          predecessor_status_raw?: string | null
+          project_id?: string | null
+          punchlist_comments?: string | null
+          r1_actual_submission_date?: string | null
+          r1_report_ref?: string | null
+          r1_status?: Database["public"]["Enums"]["report_status"] | null
+          r1_target_submission_date?: string | null
+          r2_actual_approval_date?: string | null
+          r2_actual_submission_date?: string | null
+          r2_status?: Database["public"]["Enums"]["report_status"] | null
+          r2_target_approval_date?: string | null
+          r2_target_submission_date?: string | null
+          remarks?: string | null
+          row_version?: number | null
+          source_upload_id?: string | null
+          subcontractor_name?: string | null
+          subsub_name?: string | null
+          subtest_id?: string | null
+          system_id?: string | null
+          t1_actual_date?: string | null
+          t1_planned_date?: string | null
+          t1_status?: Database["public"]["Enums"]["tc_status"] | null
+          t2_actual_date?: string | null
+          t2_planned_date?: string | null
+          t2_status?: Database["public"]["Enums"]["tc_status"] | null
+          team?: Database["public"]["Enums"]["team_type"] | null
+          test_id?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subtests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subtests_system_id_fkey"
+            columns: ["system_id"]
+            isOneToOne: false
+            referencedRelation: "system_master"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subtests_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _canonical_level: { Args: { v: string }; Returns: string }
