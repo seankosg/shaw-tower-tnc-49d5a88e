@@ -264,17 +264,38 @@ export default function ReportTab() {
           <div className="flex flex-wrap gap-2">
             <Button onClick={handleGenerate} disabled={generating || modules.length === 0}>
               {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
-              Generate Markdown
-            </Button>
-            <Button variant="outline" disabled={!markdown} onClick={() => copy(markdown, 'Markdown')}>
-              <Copy className="h-4 w-4 mr-1" /> Copy
-            </Button>
-            <Button variant="outline" disabled={!markdown} onClick={() => download(markdown, `shaw-status-${new Date().toISOString().slice(0, 10)}.md`)}>
-              <Download className="h-4 w-4 mr-1" /> Download .md
+              Generate Report
             </Button>
           </div>
 
-          <Textarea value={markdown} onChange={e => setMarkdown(e.target.value)} placeholder="Click Generate Markdown to populate…" className="min-h-[300px] font-mono text-xs" />
+          <Tabs defaultValue="markdown" className="w-full">
+            <TabsList>
+              <TabsTrigger value="markdown">Markdown</TabsTrigger>
+              <TabsTrigger value="json">JSON</TabsTrigger>
+            </TabsList>
+            <TabsContent value="markdown" className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" disabled={!markdown} onClick={() => copy(markdown, 'Markdown')}>
+                  <Copy className="h-4 w-4 mr-1" /> Copy
+                </Button>
+                <Button variant="outline" size="sm" disabled={!markdown} onClick={() => download(markdown, `shaw-status-${new Date().toISOString().slice(0, 10)}.md`)}>
+                  <Download className="h-4 w-4 mr-1" /> Download .md
+                </Button>
+              </div>
+              <Textarea value={markdown} onChange={e => setMarkdown(e.target.value)} placeholder="Click Generate Report to populate…" className="min-h-[300px] font-mono text-xs" />
+            </TabsContent>
+            <TabsContent value="json" className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" disabled={!jsonText} onClick={() => copy(jsonText, 'JSON')}>
+                  <Copy className="h-4 w-4 mr-1" /> Copy
+                </Button>
+                <Button variant="outline" size="sm" disabled={!jsonText} onClick={() => download(jsonText, `shaw-status-${new Date().toISOString().slice(0, 10)}.json`)}>
+                  <Download className="h-4 w-4 mr-1" /> Download .json
+                </Button>
+              </div>
+              <Textarea value={jsonText} readOnly placeholder="Click Generate Report to populate…" className="min-h-[300px] font-mono text-xs" />
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
