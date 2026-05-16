@@ -76,20 +76,31 @@ export default function ReportTab() {
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const md = await buildReportMarkdown({
+      const { markdown: md, data } = await buildReport({
         modules, sections, snapshotDates, mcDate,
         delayMode,
         dataDate: dataDateOverride || undefined,
         includeTncGuide,
       });
       setMarkdown(md);
-      toast({ title: 'Markdown generated', description: `${md.length.toLocaleString()} characters` });
+      setReportData(data);
+      toast({ title: 'Report generated', description: `${md.length.toLocaleString()} chars · JSON ready` });
     } catch (e) {
       console.error(e);
       toast({ title: 'Generation failed', description: e instanceof Error ? e.message : 'Unknown error', variant: 'destructive' });
     } finally {
       setGenerating(false);
     }
+  };
+
+  const jsonText = reportData ? JSON.stringify(reportData, null, 2) : '';
+
+  const downloadBlob = (text: string, filename: string, mime: string) => {
+    const blob = new Blob([text], { type: `${mime};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
   };
 
   const copy = async (text: string, label: string) => {
