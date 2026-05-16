@@ -65,6 +65,7 @@ export default function TncSimulationPage() {
       const { data } = await (supabase as any)
         .from('subtests')
         .select('*')
+        .eq('is_active', true)
         .order('item_no')
         .range(from, from + PAGE - 1);
       if (!data?.length) break;
