@@ -487,6 +487,7 @@ function renderDefectMd(d: DefectReportData, opts: ReportOptions): string {
 
 // ---------- Punch ----------
 interface PunchRow {
+  actual_start_date: string | null;
   actual_completion_date: string | null;
   planned_completion_date: string | null;
   completion_status: string | null;
