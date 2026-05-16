@@ -142,6 +142,7 @@ export interface DocsTableSnapshot {
 export interface DocsSubmoduleData {
   total: number;
   currentPcts?: Record<string, number>;
+  statusCounts?: Record<string, number>;
   snapshots?: DocsTableSnapshot[];
 }
 export interface DocsReportData {
