@@ -600,6 +600,27 @@ function computePunchData(rows: PunchRow[], opts: ReportOptions): PunchReportDat
       status:                r.completion_status ?? 'Not Started',
     }));
   data.latestItems = beyondSc;
+  const beyondScRows = rows.filter(r =>
+    !r.actual_completion_date
+    && r.planned_completion_date
+    && r.planned_completion_date > mcDate
+  );
+  const monthMap: Record<string, number> = {};
+  beyondScRows.forEach(r => {
+    const ym = r.planned_completion_date!.slice(0, 7);
+    monthMap[ym] = (monthMap[ym] || 0) + 1;
+  });
+  const labelMap: Record<string, string> = {
+    '2026-07': 'Jul', '2026-08': 'Aug', '2026-09': 'Sep',
+    '2026-10': 'Oct', '2026-11': 'Nov', '2026-12': 'Dec',
+  };
+  data.completionDateBreakdown!.monthlyBeyondSc = Object.entries(monthMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ym, count]) => ({
+      yearMonth: ym,
+      label: labelMap[ym] ?? ym.slice(5),
+      count,
+    }));
   return data;
 }
 
