@@ -142,6 +142,13 @@ export interface PunchReportData {
     beyondMcDate: number;
     noPlan: number;
   };
+  latestItems?: Array<{
+    itemNo: string;
+    description: string;
+    discipline: string;
+    plannedCompletionDate: string;
+    status: string;
+  }>;
 }
 export interface DocsTableSnapshot {
   date: string;
@@ -487,6 +494,11 @@ function renderDefectMd(d: DefectReportData, opts: ReportOptions): string {
 
 // ---------- Punch ----------
 interface PunchRow {
+  item_no: string | null;
+  outstanding_work: string | null;
+  main_trade: string | null;
+  work_type: string | null;
+  location: string | null;
   actual_start_date: string | null;
   actual_completion_date: string | null;
   planned_completion_date: string | null;
@@ -499,7 +511,7 @@ async function fetchPunch(): Promise<PunchRow[]> {
   while (true) {
     const { data, error } = await supabase
       .from('punch_items')
-      .select('actual_start_date,actual_completion_date,planned_completion_date,completion_status')
+      .select('item_no,outstanding_work,main_trade,work_type,location,actual_start_date,actual_completion_date,planned_completion_date,completion_status')
       .eq('is_active', true)
       .range(from, from + size - 1);
     if (error) throw error;
@@ -568,6 +580,21 @@ function computePunchData(rows: PunchRow[], opts: ReportOptions): PunchReportDat
     ).length,
     noPlan: incomplete.filter(r => !r.planned_completion_date).length,
   };
+  const beyondSc = rows
+    .filter(r => !r.actual_completion_date
+               && r.planned_completion_date
+               && r.planned_completion_date > mcDate)
+    .sort((a, b) =>
+      b.planned_completion_date!.localeCompare(a.planned_completion_date!))
+    .slice(0, 3)
+    .map(r => ({
+      itemNo:                r.item_no ?? '',
+      description:           r.outstanding_work ?? '',
+      discipline:            r.main_trade ?? r.work_type ?? r.location ?? '',
+      plannedCompletionDate: r.planned_completion_date!,
+      status:                r.completion_status ?? 'Not Started',
+    }));
+  data.latestItems = beyondSc;
   return data;
 }
 
