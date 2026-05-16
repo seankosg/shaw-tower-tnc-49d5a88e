@@ -92,14 +92,36 @@ export interface DefectReportData {
   dataDate: string;
   totals: { total: number; completion: number; closure: number };
   plannedToDate: { completion: number; closure: number };
+  currentActual?: {
+    completionPct: number;
+    closurePct: number;
+    completionVariancePct: number;
+    closureVariancePct: number;
+  };
   requiredPace?: { daysRemaining: number; completionRemaining: number; closureRemaining: number; completionPerDay: number; closurePerDay: number };
   snapshots?: DefectSnapshotEntry[];
+  actionPlanTriggers?: Array<{
+    stage: 'completion' | 'closure';
+    status: 'CRITICAL' | 'AT_RISK';
+    actualPct: number;
+    reason: string;
+  }>;
 }
 export interface PunchReportData {
   totals: { total: number; completion: number };
   plannedToDate: { completion: number };
+  currentActual?: {
+    completionPct: number;
+    variancePct: number;
+  };
   requiredPace?: { daysRemaining: number; completionRemaining: number; completionPerDay: number };
   snapshots?: Array<{ date: string; total: number; completion: number; completionPct: number }>;
+  actionPlanTriggers?: Array<{
+    stage: 'completion';
+    status: 'CRITICAL' | 'AT_RISK';
+    actualPct: number;
+    reason: string;
+  }>;
 }
 export interface DocsTableSnapshot {
   date: string;
@@ -109,6 +131,7 @@ export interface DocsTableSnapshot {
 }
 export interface DocsSubmoduleData {
   total: number;
+  currentPcts?: Record<string, number>;
   snapshots?: DocsTableSnapshot[];
 }
 export interface DocsReportData {
@@ -372,6 +395,27 @@ function computeDefectData(rows: DefectItem[], opts: ReportOptions, dataDate: st
       return { date: d, start: toSimSnap(r.start), completion: toSimSnap(r.completion), closure: toSimSnap(r.closure) };
     });
   }
+  {
+    const r1 = (n: number) => Math.round(n * 10) / 10;
+    data.currentActual = total ? {
+      completionPct:         r1((completion / total) * 100),
+      closurePct:            r1((closure / total) * 100),
+      completionVariancePct: r1(((completion - planned.completion) / total) * 100),
+      closureVariancePct:    r1(((closure    - planned.closure)    / total) * 100),
+    } : { completionPct: 0, closurePct: 0, completionVariancePct: 0, closureVariancePct: 0 };
+    data.actionPlanTriggers = [];
+    const defectChecks = [
+      { stage: 'completion' as const, pct: data.currentActual.completionPct, v: data.currentActual.completionVariancePct },
+      { stage: 'closure'    as const, pct: data.currentActual.closurePct,    v: data.currentActual.closureVariancePct },
+    ];
+    for (const c of defectChecks) {
+      if (c.pct < 1.0) {
+        data.actionPlanTriggers.push({ stage: c.stage, status: 'CRITICAL', actualPct: c.pct, reason: `${c.stage} has not started` });
+      } else if (c.v < -20) {
+        data.actionPlanTriggers.push({ stage: c.stage, status: 'AT_RISK', actualPct: c.pct, reason: `${c.stage} is behind plan by ${Math.abs(c.v).toFixed(1)}%` });
+      }
+    }
+  }
   return data;
 }
 
@@ -473,6 +517,18 @@ function computePunchData(rows: PunchRow[], opts: ReportOptions): PunchReportDat
       return { date: d, total: s.total, completion: s.completion, completionPct: s.total ? +((s.completion / s.total) * 100).toFixed(1) : 0 };
     });
   }
+  {
+    const r1 = (n: number) => Math.round(n * 10) / 10;
+    const completionPct = cur.total ? r1((cur.completion / cur.total) * 100) : 0;
+    const variancePct   = cur.total ? r1(((cur.completion - planned) / cur.total) * 100) : 0;
+    data.currentActual = { completionPct, variancePct };
+    data.actionPlanTriggers = [];
+    if (completionPct < 1.0) {
+      data.actionPlanTriggers.push({ stage: 'completion', status: 'CRITICAL', actualPct: completionPct, reason: 'completion has not started' });
+    } else if (variancePct < -20) {
+      data.actionPlanTriggers.push({ stage: 'completion', status: 'AT_RISK', actualPct: completionPct, reason: `completion is behind plan by ${Math.abs(variancePct).toFixed(1)}%` });
+    }
+  }
   return data;
 }
 
@@ -571,10 +627,22 @@ async function computeDocsData(opts: ReportOptions): Promise<DocsReportData> {
     fetchAll<WarrantyRow>('warranty_items', 'draft_actual_date,subcon_signing_actual_date,hdec_signing_actual_date,final_actual_date'),
     fetchAll<SparePartRow>('docs_spare_part', 'actual_confirm_date,actual_po_date,actual_delivery_date'),
   ]);
-  const mk = <T,>(rows: T[], cols: Array<keyof T>): DocsSubmoduleData => ({
-    total: rows.length,
-    snapshots: wantSnap ? opts.snapshotDates.map(d => ({ date: d, total: rows.length, counts: snapshotCounts(rows, cols, d) })) : undefined,
-  });
+  const mk = <T,>(rows: T[], cols: Array<keyof T>): DocsSubmoduleData => {
+    const total = rows.length;
+    const currentPcts: Record<string, number> = {};
+    for (const c of cols) {
+      const count = rows.filter(r => {
+        const v = r[c] as unknown;
+        return v != null && v !== '';
+      }).length;
+      currentPcts[c as string] = total ? Math.round((count / total) * 1000) / 10 : 0;
+    }
+    return {
+      total,
+      currentPcts,
+      snapshots: wantSnap ? opts.snapshotDates.map(d => ({ date: d, total, counts: snapshotCounts(rows, cols, d) })) : undefined,
+    };
+  };
   return {
     abd: mk(abd, ABD_COLS),
     omm: mk(omm, OMM_COLS),
