@@ -13,6 +13,7 @@ import {
 } from '@/lib/tnc-simulation';
 import { simulateAllDefectStages } from '@/lib/defect-simulation';
 import { buildSCurve, type SubtestForDashboard } from '@/lib/dashboard-utils';
+import { buildDefectSCurveAllStages } from '@/lib/defect-dashboard-utils';
 import type { DefectItem } from '@/lib/defect-utils';
 import type { DefectScheduleStage } from '@/lib/defect-schedule-utils';
 import { TNC_RAW_DATA_GUIDE_MD } from '@/lib/tnc-raw-data-guide';
@@ -88,6 +89,14 @@ export interface TncReportData {
   scurve?: TncScurvePoint[];
   actionPlanTriggers?: TncActionPlanTrigger[];
 }
+export interface DefectScurvePoint {
+  date: string;
+  bucketLabel: string;
+  completionPlanPct: number;
+  completionActualPct: number | null;
+  closurePlanPct: number;
+  closureActualPct: number | null;
+}
 export interface DefectReportData {
   dataDate: string;
   totals: { total: number; completion: number; closure: number };
@@ -100,6 +109,7 @@ export interface DefectReportData {
   };
   requiredPace?: { daysRemaining: number; completionRemaining: number; closureRemaining: number; completionPerDay: number; closurePerDay: number };
   snapshots?: DefectSnapshotEntry[];
+  scurve?: DefectScurvePoint[];
   actionPlanTriggers?: Array<{
     stage: 'completion' | 'closure';
     status: 'CRITICAL' | 'AT_RISK';
@@ -132,6 +142,7 @@ export interface DocsTableSnapshot {
 export interface DocsSubmoduleData {
   total: number;
   currentPcts?: Record<string, number>;
+  statusCounts?: Record<string, number>;
   snapshots?: DocsTableSnapshot[];
 }
 export interface DocsReportData {
@@ -643,9 +654,18 @@ async function computeDocsData(opts: ReportOptions): Promise<DocsReportData> {
       snapshots: wantSnap ? opts.snapshotDates.map(d => ({ date: d, total, counts: snapshotCounts(rows, cols, d) })) : undefined,
     };
   };
+  const abdData = mk(abd, ABD_COLS);
+  abdData.statusCounts = {
+    under_review:  abd.filter(r => r.current_status === 'Under Review').length,
+    not_submitted: abd.filter(r => !r.sub1_submission_date).length,
+  };
+  const ommData = mk(omm, OMM_COLS);
+  ommData.statusCounts = {
+    under_review: omm.filter(r => !!r.sub2_actual_date && !r.final_response_actual_date).length,
+  };
   return {
-    abd: mk(abd, ABD_COLS),
-    omm: mk(omm, OMM_COLS),
+    abd: abdData,
+    omm: ommData,
     warranty: mk(warr, WARR_COLS),
     sparePart: mk(sp, SP_COLS),
   };
@@ -763,6 +783,28 @@ export async function buildReport(opts: ReportOptions): Promise<{ markdown: stri
   if (opts.modules.includes('defect')) {
     const rows = await fetchDefects();
     data.defect = computeDefectData(rows, opts, defectDataDate);
+    if (data.defect) {
+      const sc = buildDefectSCurveAllStages(rows, {
+        granularity: 'day',
+        startDate: addDays(defectDataDate, -35),
+        endDate: opts.mcDate ?? MC_DEFAULT,
+        today: defectDataDate,
+        groupBy: null,
+      });
+      const tot = data.defect.totals.total || 1;
+      data.defect.scurve = sc.buckets.map((b, i) => {
+        const cAct = sc.byStage.completion.actual[i];
+        const zAct = sc.byStage.closure.actual[i];
+        return {
+          date: b,
+          bucketLabel: sc.bucketLabels[i],
+          completionPlanPct:   Math.round((sc.byStage.completion.plan[i] / tot) * 1000) / 10,
+          completionActualPct: cAct != null ? Math.round((cAct / tot) * 1000) / 10 : null,
+          closurePlanPct:      Math.round((sc.byStage.closure.plan[i]    / tot) * 1000) / 10,
+          closureActualPct:    zAct != null ? Math.round((zAct / tot) * 1000) / 10 : null,
+        };
+      });
+    }
   }
   if (opts.modules.includes('docs')) {
     data.docs = await computeDocsData(opts);
