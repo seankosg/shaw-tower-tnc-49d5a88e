@@ -13,6 +13,7 @@ import {
 } from '@/lib/tnc-simulation';
 import { simulateAllDefectStages } from '@/lib/defect-simulation';
 import { buildSCurve, type SubtestForDashboard } from '@/lib/dashboard-utils';
+import { buildDefectSCurveAllStages } from '@/lib/defect-dashboard-utils';
 import type { DefectItem } from '@/lib/defect-utils';
 import type { DefectScheduleStage } from '@/lib/defect-schedule-utils';
 import { TNC_RAW_DATA_GUIDE_MD } from '@/lib/tnc-raw-data-guide';
