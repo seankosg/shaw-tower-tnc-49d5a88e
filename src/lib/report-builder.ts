@@ -120,6 +120,7 @@ export interface DocsReportData {
 export interface ReportMeta {
   generatedAt: string;
   mcDate: string;
+  daysToCompletion: number;
   delayMode: DelayMode;
   delayModeLabel: string;
   modules: ReportModule[];
