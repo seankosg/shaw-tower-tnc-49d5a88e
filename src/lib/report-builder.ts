@@ -654,9 +654,18 @@ async function computeDocsData(opts: ReportOptions): Promise<DocsReportData> {
       snapshots: wantSnap ? opts.snapshotDates.map(d => ({ date: d, total, counts: snapshotCounts(rows, cols, d) })) : undefined,
     };
   };
+  const abdData = mk(abd, ABD_COLS);
+  abdData.statusCounts = {
+    under_review:  abd.filter(r => r.current_status === 'Under Review').length,
+    not_submitted: abd.filter(r => !r.sub1_submission_date).length,
+  };
+  const ommData = mk(omm, OMM_COLS);
+  ommData.statusCounts = {
+    under_review: omm.filter(r => !!r.sub2_actual_date && !r.final_response_actual_date).length,
+  };
   return {
-    abd: mk(abd, ABD_COLS),
-    omm: mk(omm, OMM_COLS),
+    abd: abdData,
+    omm: ommData,
     warranty: mk(warr, WARR_COLS),
     sparePart: mk(sp, SP_COLS),
   };
