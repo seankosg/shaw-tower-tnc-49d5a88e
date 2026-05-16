@@ -179,6 +179,12 @@ export interface DocsReportData {
   sparePart: DocsSubmoduleData;
 }
 export interface ReportMeta {
+  /** Schema version of this JSON payload. v2 = is_active filter + sequential guards + variance@dataDate. */
+  reportVersion: number;
+  /** SQL-style filter applied to all statistics populations. */
+  populationFilter: string;
+  /** Human-readable change notes for downstream LLM consumers. */
+  changeNotes: string[];
   generatedAt: string;
   mcDate: string;
   daysToCompletion: number;
