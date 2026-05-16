@@ -132,6 +132,16 @@ export interface PunchReportData {
     actualPct: number;
     reason: string;
   }>;
+  statusBreakdown?: {
+    completed: number;
+    wip: number;
+    notStarted: number;
+  };
+  completionDateBreakdown?: {
+    withinMcDate: number;
+    beyondMcDate: number;
+    noPlan: number;
+  };
 }
 export interface DocsTableSnapshot {
   date: string;
