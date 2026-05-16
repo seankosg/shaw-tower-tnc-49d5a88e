@@ -142,6 +142,13 @@ export interface PunchReportData {
     beyondMcDate: number;
     noPlan: number;
   };
+  latestItems?: Array<{
+    itemNo: string;
+    description: string;
+    discipline: string;
+    plannedCompletionDate: string;
+    status: string;
+  }>;
 }
 export interface DocsTableSnapshot {
   date: string;
