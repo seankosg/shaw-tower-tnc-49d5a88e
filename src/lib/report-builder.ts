@@ -17,6 +17,10 @@ import { buildDefectSCurveAllStages } from '@/lib/defect-dashboard-utils';
 import type { DefectItem } from '@/lib/defect-utils';
 import type { DefectScheduleStage } from '@/lib/defect-schedule-utils';
 import { TNC_RAW_DATA_GUIDE_MD } from '@/lib/tnc-raw-data-guide';
+import { isStageDone, getStagePlannedDate, type StageMetricRow } from '@/lib/stage-metrics';
+
+/** Schema version of the JSON payload emitted by buildReport(). Bump on breaking changes. */
+export const REPORT_SCHEMA_VERSION = 2;
 
 export type ReportModule = 'tnc' | 'defect' | 'docs' | 'punch';
 export type ReportSection = 'dashboard' | 'progress' | 'simulation' | 'snapshots';
