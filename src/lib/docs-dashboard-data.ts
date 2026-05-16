@@ -266,8 +266,12 @@ export async function loadDashboardData(opts: {
       });
     }
 
-    // Approval trend
-    const approved = safeIso(row.approved_date) ?? safeIso(row.sub3_approval_date);
+    // Approval trend — only count actual approvals (status='A' at that level).
+    const approved =
+      sub3ApprStatus === 'A' ? safeIso(row.sub3_approval_date)
+      : sub2ApprStatus === 'A' ? safeIso(row.sub2_approval_date)
+      : sub1ApprStatus === 'A' ? safeIso(row.sub1_approval_date)
+      : null;
     if (approved) {
       const k = format(approved, 'yyyy-MM-dd');
       abd.approvedByDay.set(k, (abd.approvedByDay.get(k) ?? 0) + 1);
