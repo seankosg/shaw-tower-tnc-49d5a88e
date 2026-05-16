@@ -54,6 +54,7 @@ export default function ReportTab() {
   const [dataDateOverride, setDataDateOverride] = useState('');
   const [includeTncGuide, setIncludeTncGuide] = useState(true);
   const [markdown, setMarkdown] = useState('');
+  const [reportData, setReportData] = useState<ReportData | null>(null);
   const [generating, setGenerating] = useState(false);
 
   const [model, setModel] = useState(MODELS[0]);
