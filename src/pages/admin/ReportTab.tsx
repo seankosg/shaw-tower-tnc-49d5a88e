@@ -112,13 +112,8 @@ export default function ReportTab() {
     }
   };
 
-  const download = (text: string, filename: string) => {
-    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-  };
+  const download = (text: string, filename: string) =>
+    downloadBlob(text, filename, filename.endsWith('.json') ? 'application/json' : 'text/markdown');
 
   const runLlm = async () => {
     if (!markdown.trim()) {
