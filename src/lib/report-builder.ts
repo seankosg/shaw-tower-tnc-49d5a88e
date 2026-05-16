@@ -17,6 +17,10 @@ import { buildDefectSCurveAllStages } from '@/lib/defect-dashboard-utils';
 import type { DefectItem } from '@/lib/defect-utils';
 import type { DefectScheduleStage } from '@/lib/defect-schedule-utils';
 import { TNC_RAW_DATA_GUIDE_MD } from '@/lib/tnc-raw-data-guide';
+import { isStageDone, getStagePlannedDate, type StageMetricRow } from '@/lib/stage-metrics';
+
+/** Schema version of the JSON payload emitted by buildReport(). Bump on breaking changes. */
+export const REPORT_SCHEMA_VERSION = 2;
 
 export type ReportModule = 'tnc' | 'defect' | 'docs' | 'punch';
 export type ReportSection = 'dashboard' | 'progress' | 'simulation' | 'snapshots';
@@ -175,6 +179,12 @@ export interface DocsReportData {
   sparePart: DocsSubmoduleData;
 }
 export interface ReportMeta {
+  /** Schema version of this JSON payload. v2 = is_active filter + sequential guards + variance@dataDate. */
+  reportVersion: number;
+  /** SQL-style filter applied to all statistics populations. */
+  populationFilter: string;
+  /** Human-readable change notes for downstream LLM consumers. */
+  changeNotes: string[];
   generatedAt: string;
   mcDate: string;
   daysToCompletion: number;
@@ -253,15 +263,31 @@ async function resolveTncDataDate(override?: string): Promise<string> {
 }
 
 function computeTncData(rows: SubtestForDashboard[], opts: ReportOptions, dataDate: string): TncReportData {
-  const today = format(new Date(), 'yyyy-MM-dd');
   const total = rows.length;
-  const t1 = rows.filter(r => !!(r as any).t1_actual_date).length;
-  const t2 = rows.filter(r => !!(r as any).t2_actual_date).length;
-  const r2s = rows.filter(r => !!(r as any).r2_actual_submission_date).length;
+  // Done counts — single source of truth = stage-metrics.isStageDone, with
+  // sequential guards that mirror the simulation engine:
+  //   T2 done counts only when T1 is also done (T1 → T2)
+  //   R2S done counts only when R1 is also done (R1 → R2S)
+  // This matches the dashboard "DONE NOW" cards and TncSimulationPage exactly.
+  const t1 = rows.filter(r => isStageDone(r as StageMetricRow, 't1')).length;
+  const t2 = rows.filter(r => {
+    const m = r as StageMetricRow;
+    return isStageDone(m, 't2') && isStageDone(m, 't1');
+  }).length;
+  const r2s = rows.filter(r => {
+    const m = r as StageMetricRow;
+    return isStageDone(m, 'r2s') && isStageDone(m, 'r1');
+  }).length;
+  // Plan-to-date uses dataDate (not today) so variance matches dashboard cards.
+  const plannedOn = (stage: 't1' | 't2' | 'r2s') =>
+    rows.filter(r => {
+      const p = getStagePlannedDate(r as StageMetricRow, stage);
+      return !!p && p <= dataDate;
+    }).length;
   const planned = {
-    t1: rows.filter(r => isOnOrBefore((r as any).t1_planned_date, today)).length,
-    t2: rows.filter(r => isOnOrBefore((r as any).t2_planned_date, today)).length,
-    r2s: rows.filter(r => isOnOrBefore((r as any).r2_target_submission_date, today)).length,
+    t1: plannedOn('t1'),
+    t2: plannedOn('t2'),
+    r2s: plannedOn('r2s'),
   };
   const r1 = (n: number) => +n.toFixed(1);
   const preTestPct = total ? r1((t1 / total) * 100) : 0;
@@ -299,7 +325,7 @@ function computeTncData(rows: SubtestForDashboard[], opts: ReportOptions, dataDa
   };
   if (opts.sections.includes('simulation')) {
     const mc = opts.mcDate ?? MC_DEFAULT;
-    const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
+    const days = Math.max(1, Math.ceil((+new Date(mc) - +new Date(dataDate)) / 86400000));
     const remT1 = total - t1;
     const remT2 = total - t2;
     const remR2S = total - r2s;
@@ -858,6 +884,13 @@ export async function buildReport(opts: ReportOptions): Promise<{ markdown: stri
   const includeGuide = needsTncDate && opts.includeTncGuide !== false;
 
   const meta: ReportMeta = {
+    reportVersion: REPORT_SCHEMA_VERSION,
+    populationFilter: 'is_active = true',
+    changeNotes: [
+      'v2: is_active=false rows excluded from all populations (soft-deleted = effectively removed).',
+      'v2: T&C done counts use isStageDone with sequential guards — T2 requires T1 done; R2S requires R1 done.',
+      'v2: plannedToDate and *VariancePct computed at dataDate (not today) to match dashboard cards.',
+    ],
     generatedAt: new Date().toISOString(),
     mcDate: opts.mcDate ?? MC_DEFAULT,
     daysToCompletion: Math.ceil((+new Date(opts.mcDate ?? MC_DEFAULT) - Date.now()) / 86400000),
