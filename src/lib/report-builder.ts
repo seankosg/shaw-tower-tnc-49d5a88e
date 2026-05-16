@@ -7,11 +7,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { format, parseISO, isValid } from 'date-fns';
 import {
   simulateAllTncStages,
+  addDays,
   type TncSimStage,
   type DelayMode,
 } from '@/lib/tnc-simulation';
 import { simulateAllDefectStages } from '@/lib/defect-simulation';
-import type { SubtestForDashboard } from '@/lib/dashboard-utils';
+import { buildSCurve, type SubtestForDashboard } from '@/lib/dashboard-utils';
 import type { DefectItem } from '@/lib/defect-utils';
 import type { DefectScheduleStage } from '@/lib/defect-schedule-utils';
 import { TNC_RAW_DATA_GUIDE_MD } from '@/lib/tnc-raw-data-guide';
@@ -65,12 +66,11 @@ export interface TncCurrentActual {
 }
 export interface TncScurvePoint {
   date: string;
+  bucketLabel: string;
   t1PlanPct: number;
   t1ActualPct: number | null;
   t2PlanPct: number;
   t2ActualPct: number | null;
-  r2sPlanPct: number;
-  r2sActualPct: number | null;
 }
 export interface TncActionPlanTrigger {
   stage: 'preTest' | 'officialTest' | 'testReport';
@@ -83,7 +83,7 @@ export interface TncReportData {
   totals: { total: number; t1: number; t2: number; r2s: number };
   plannedToDate: { t1: number; t2: number; r2s: number };
   currentActual?: TncCurrentActual;
-  requiredPace?: { daysRemaining: number; t1Remaining: number; t2Remaining: number; r2sRemaining: number; preTestPerDay: number; t2PerDay: number; r2sPerDay: number };
+  requiredPace?: { daysRemaining: number; preTestRemaining: number; t2Remaining: number; r2sRemaining: number; preTestPerDay: number; t2PerDay: number; r2sPerDay: number };
   snapshots?: TncSnapshotEntry[];
   scurve?: TncScurvePoint[];
   actionPlanTriggers?: TncActionPlanTrigger[];
