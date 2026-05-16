@@ -642,16 +642,19 @@ async function computeDocsData(opts: ReportOptions): Promise<DocsReportData> {
   const mk = <T,>(rows: T[], cols: Array<keyof T>): DocsSubmoduleData => {
     const total = rows.length;
     const currentPcts: Record<string, number> = {};
+    const currentCounts: Record<string, number> = {};
     for (const c of cols) {
       const count = rows.filter(r => {
         const v = r[c] as unknown;
         return v != null && v !== '';
       }).length;
       currentPcts[c as string] = total ? Math.round((count / total) * 1000) / 10 : 0;
+      currentCounts[c as string] = count;
     }
     return {
       total,
       currentPcts,
+      currentCounts,
       snapshots: wantSnap ? opts.snapshotDates.map(d => ({ date: d, total, counts: snapshotCounts(rows, cols, d) })) : undefined,
     };
   };
