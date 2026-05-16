@@ -10,10 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Copy, Download, Plus, Sparkles, X, FileText, Loader2 } from 'lucide-react';
 import {
-  buildReportMarkdown,
+  buildReport,
   type ReportModule,
   type ReportSection,
+  type ReportData,
 } from '@/lib/report-builder';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const MODULE_OPTIONS: { id: ReportModule; label: string }[] = [
   { id: 'tnc', label: 'T&C' },
