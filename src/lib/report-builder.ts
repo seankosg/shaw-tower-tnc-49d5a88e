@@ -583,9 +583,9 @@ function renderPunchMd(d: PunchReportData, opts: ReportOptions): string {
 
 // ---------- Docs ----------
 interface AbdRow {
-  sub1_submission_date: string | null; sub1_approval_date: string | null;
-  sub2_submission_date: string | null; sub2_approval_date: string | null;
-  sub3_submission_date: string | null; sub3_approval_date: string | null;
+  sub1_submission_date: string | null; sub1_approval_date: string | null; sub1_approval_status: string | null;
+  sub2_submission_date: string | null; sub2_approval_date: string | null; sub2_approval_status: string | null;
+  sub3_submission_date: string | null; sub3_approval_date: string | null; sub3_approval_status: string | null;
   sub1_planned_date: string | null; sub2_planned_date: string | null; sub3_planned_date: string | null;
   approved_date: string | null; current_status: string | null;
 }
