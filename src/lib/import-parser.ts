@@ -220,13 +220,15 @@ export function splitReportField(val: any): { status: string | null; ref: string
 function normalizeTeam(val: any): string | null {
   if (val == null || val === '') return null;
   const s = String(val).trim();
-  const key = s.toLowerCase();
-  if (key === 'clear') return 'clear';
+  if (s.toLowerCase() === 'clear') return 'clear';
+  const key = s.toLowerCase().replace(/[^a-z]/g, '');
   const map: Record<string, string> = {
-    mech: 'Mech', mechanical: 'Mech',
-    elec: 'Elec', electrical: 'Elec',
-    arch: 'Arch', architecture: 'Arch', architectural: 'Arch',
-    supp: 'Supp', support: 'Supp',
+    mech: 'Mech', mecha: 'Mech', mechanical: 'Mech',
+    elec: 'Elec', electrical: 'Elec', electric: 'Elec',
+    arch: 'Arch', archi: 'Arch', architecture: 'Arch', architectural: 'Arch',
+    facade: 'Arch',
+    supp: 'Supp', support: 'Supp', supplier: 'Supp',
+    external: 'Supp',
     design: 'Design', designer: 'Design',
   };
   return map[key] || null;
