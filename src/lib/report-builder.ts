@@ -195,43 +195,6 @@ async function resolveTncDataDate(override?: string): Promise<string> {
   return (data?.data_date as string | undefined) ?? format(new Date(), 'yyyy-MM-dd');
 }
 
-function addDaysIso(iso: string, days: number): string {
-  const d = new Date(iso + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function buildTncScurveDaily(rows: SubtestForDashboard[], dataDate: string): TncScurvePoint[] {
-  const total = rows.length;
-  const start = addDaysIso(dataDate, -35);
-  const end = addDaysIso(dataDate, 21);
-  const r1 = (n: number) => +n.toFixed(1);
-  const pctOf = (n: number) => total ? r1((n / total) * 100) : 0;
-  const t1Plan = rows.map(r => (r as any).t1_planned_date as string | null);
-  const t2Plan = rows.map(r => (r as any).t2_planned_date as string | null);
-  const r2sPlan = rows.map(r => (r as any).r2_target_submission_date as string | null);
-  const t1Act = rows.map(r => (r as any).t1_actual_date as string | null);
-  const t2Act = rows.map(r => (r as any).t2_actual_date as string | null);
-  const r2sAct = rows.map(r => (r as any).r2_actual_submission_date as string | null);
-  const countLE = (arr: (string | null)[], d: string) => arr.reduce((n, v) => n + (v && v <= d ? 1 : 0), 0);
-  const out: TncScurvePoint[] = [];
-  let cur = start;
-  while (cur <= end) {
-    const isFuture = cur > dataDate;
-    out.push({
-      date: cur,
-      t1PlanPct: pctOf(countLE(t1Plan, cur)),
-      t1ActualPct: isFuture ? null : pctOf(countLE(t1Act, cur)),
-      t2PlanPct: pctOf(countLE(t2Plan, cur)),
-      t2ActualPct: isFuture ? null : pctOf(countLE(t2Act, cur)),
-      r2sPlanPct: pctOf(countLE(r2sPlan, cur)),
-      r2sActualPct: isFuture ? null : pctOf(countLE(r2sAct, cur)),
-    });
-    cur = addDaysIso(cur, 1);
-  }
-  return out;
-}
-
 function computeTncData(rows: SubtestForDashboard[], opts: ReportOptions, dataDate: string): TncReportData {
   const today = format(new Date(), 'yyyy-MM-dd');
   const total = rows.length;
@@ -266,9 +229,9 @@ function computeTncData(rows: SubtestForDashboard[], opts: ReportOptions, dataDa
       triggers.push({ stage, status: 'AT_RISK', actualPct, reason: `${label} is behind plan by ${Math.abs(variancePct).toFixed(1)}%` });
     }
   };
-  evalStage('preTest', 'Pre-Test', preTestPct, preTestVariancePct);
-  evalStage('officialTest', 'Official Test', officialTestPct, officialTestVariancePct);
-  evalStage('testReport', 'Test Report', testReportPct, testReportVariancePct);
+  evalStage('preTest', 'preTest', preTestPct, preTestVariancePct);
+  evalStage('officialTest', 'officialTest', officialTestPct, officialTestVariancePct);
+  evalStage('testReport', 'testReport', testReportPct, testReportVariancePct);
 
   const data: TncReportData = {
     dataDate,
@@ -276,7 +239,6 @@ function computeTncData(rows: SubtestForDashboard[], opts: ReportOptions, dataDa
     plannedToDate: planned,
     currentActual,
     actionPlanTriggers: triggers,
-    scurve: buildTncScurveDaily(rows, dataDate),
   };
   if (opts.sections.includes('simulation')) {
     const mc = opts.mcDate ?? MC_DEFAULT;
@@ -286,7 +248,7 @@ function computeTncData(rows: SubtestForDashboard[], opts: ReportOptions, dataDa
     const remR2S = total - r2s;
     data.requiredPace = {
       daysRemaining: days,
-      t1Remaining: remT1,
+      preTestRemaining: remT1,
       t2Remaining: remT2,
       r2sRemaining: remR2S,
       preTestPerDay: +(remT1 / days).toFixed(2),
