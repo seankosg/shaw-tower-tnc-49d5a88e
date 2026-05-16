@@ -36,6 +36,8 @@ export interface ReportOptions {
 export interface SimStageSnapshot {
   predictedPct: number;
   actualPct: number;
+  planPct: number;
+  gapPct: number;
   doneNow: number;
   forecastAdditional: number;
   predictedTotal: number;
@@ -53,12 +55,38 @@ export interface DefectSnapshotEntry {
   completion: SimStageSnapshot;
   closure: SimStageSnapshot;
 }
+export interface TncCurrentActual {
+  preTestPct: number;
+  officialTestPct: number;
+  testReportPct: number;
+  preTestVariancePct: number;
+  officialTestVariancePct: number;
+  testReportVariancePct: number;
+}
+export interface TncScurvePoint {
+  date: string;
+  t1PlanPct: number;
+  t1ActualPct: number | null;
+  t2PlanPct: number;
+  t2ActualPct: number | null;
+  r2sPlanPct: number;
+  r2sActualPct: number | null;
+}
+export interface TncActionPlanTrigger {
+  stage: 'preTest' | 'officialTest' | 'testReport';
+  status: 'CRITICAL' | 'AT_RISK';
+  actualPct: number;
+  reason: string;
+}
 export interface TncReportData {
   dataDate: string;
   totals: { total: number; t1: number; t2: number; r2s: number };
   plannedToDate: { t1: number; t2: number; r2s: number };
-  requiredPace?: { daysRemaining: number; t2Remaining: number; r2sRemaining: number; t2PerDay: number; r2sPerDay: number };
+  currentActual?: TncCurrentActual;
+  requiredPace?: { daysRemaining: number; t1Remaining: number; t2Remaining: number; r2sRemaining: number; preTestPerDay: number; t2PerDay: number; r2sPerDay: number };
   snapshots?: TncSnapshotEntry[];
+  scurve?: TncScurvePoint[];
+  actionPlanTriggers?: TncActionPlanTrigger[];
 }
 export interface DefectReportData {
   dataDate: string;
@@ -92,6 +120,7 @@ export interface DocsReportData {
 export interface ReportMeta {
   generatedAt: string;
   mcDate: string;
+  daysToCompletion: number;
   delayMode: DelayMode;
   delayModeLabel: string;
   modules: ReportModule[];
@@ -127,10 +156,12 @@ function isOnOrBefore(actual: string | null | undefined, snapshot: string): bool
   return actual <= snapshot;
 }
 
-function toSimSnap(r: { predictedPct: number; actualPct: number; doneActual: number; forecast: number; predicted: number; total: number }): SimStageSnapshot {
+function toSimSnap(r: { predictedPct: number; actualPct: number; planPct: number; doneActual: number; forecast: number; predicted: number; total: number }): SimStageSnapshot {
   return {
     predictedPct: r.predictedPct,
     actualPct: r.actualPct,
+    planPct: r.planPct,
+    gapPct: +(r.predictedPct - r.planPct).toFixed(1),
     doneNow: r.doneActual,
     forecastAdditional: r.forecast,
     predictedTotal: r.predicted,
@@ -164,6 +195,43 @@ async function resolveTncDataDate(override?: string): Promise<string> {
   return (data?.data_date as string | undefined) ?? format(new Date(), 'yyyy-MM-dd');
 }
 
+function addDaysIso(iso: string, days: number): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function buildTncScurveDaily(rows: SubtestForDashboard[], dataDate: string): TncScurvePoint[] {
+  const total = rows.length;
+  const start = addDaysIso(dataDate, -35);
+  const end = addDaysIso(dataDate, 21);
+  const r1 = (n: number) => +n.toFixed(1);
+  const pctOf = (n: number) => total ? r1((n / total) * 100) : 0;
+  const t1Plan = rows.map(r => (r as any).t1_planned_date as string | null);
+  const t2Plan = rows.map(r => (r as any).t2_planned_date as string | null);
+  const r2sPlan = rows.map(r => (r as any).r2_target_submission_date as string | null);
+  const t1Act = rows.map(r => (r as any).t1_actual_date as string | null);
+  const t2Act = rows.map(r => (r as any).t2_actual_date as string | null);
+  const r2sAct = rows.map(r => (r as any).r2_actual_submission_date as string | null);
+  const countLE = (arr: (string | null)[], d: string) => arr.reduce((n, v) => n + (v && v <= d ? 1 : 0), 0);
+  const out: TncScurvePoint[] = [];
+  let cur = start;
+  while (cur <= end) {
+    const isFuture = cur > dataDate;
+    out.push({
+      date: cur,
+      t1PlanPct: pctOf(countLE(t1Plan, cur)),
+      t1ActualPct: isFuture ? null : pctOf(countLE(t1Act, cur)),
+      t2PlanPct: pctOf(countLE(t2Plan, cur)),
+      t2ActualPct: isFuture ? null : pctOf(countLE(t2Act, cur)),
+      r2sPlanPct: pctOf(countLE(r2sPlan, cur)),
+      r2sActualPct: isFuture ? null : pctOf(countLE(r2sAct, cur)),
+    });
+    cur = addDaysIso(cur, 1);
+  }
+  return out;
+}
+
 function computeTncData(rows: SubtestForDashboard[], opts: ReportOptions, dataDate: string): TncReportData {
   const today = format(new Date(), 'yyyy-MM-dd');
   const total = rows.length;
@@ -175,20 +243,53 @@ function computeTncData(rows: SubtestForDashboard[], opts: ReportOptions, dataDa
     t2: rows.filter(r => isOnOrBefore((r as any).t2_planned_date, today)).length,
     r2s: rows.filter(r => isOnOrBefore((r as any).r2_target_submission_date, today)).length,
   };
+  const r1 = (n: number) => +n.toFixed(1);
+  const preTestPct = total ? r1((t1 / total) * 100) : 0;
+  const officialTestPct = total ? r1((t2 / total) * 100) : 0;
+  const testReportPct = total ? r1((r2s / total) * 100) : 0;
+  const preTestVariancePct = total ? r1(((t1 - planned.t1) / total) * 100) : 0;
+  const officialTestVariancePct = total ? r1(((t2 - planned.t2) / total) * 100) : 0;
+  const testReportVariancePct = total ? r1(((r2s - planned.r2s) / total) * 100) : 0;
+  const currentActual: TncCurrentActual = {
+    preTestPct,
+    officialTestPct,
+    testReportPct,
+    preTestVariancePct,
+    officialTestVariancePct,
+    testReportVariancePct,
+  };
+  const triggers: TncActionPlanTrigger[] = [];
+  const evalStage = (stage: TncActionPlanTrigger['stage'], label: string, actualPct: number, variancePct: number) => {
+    if (actualPct < 1.0) {
+      triggers.push({ stage, status: 'CRITICAL', actualPct, reason: `${label} has not started` });
+    } else if (variancePct < -20) {
+      triggers.push({ stage, status: 'AT_RISK', actualPct, reason: `${label} is behind plan by ${Math.abs(variancePct).toFixed(1)}%` });
+    }
+  };
+  evalStage('preTest', 'Pre-Test', preTestPct, preTestVariancePct);
+  evalStage('officialTest', 'Official Test', officialTestPct, officialTestVariancePct);
+  evalStage('testReport', 'Test Report', testReportPct, testReportVariancePct);
+
   const data: TncReportData = {
     dataDate,
     totals: { total, t1, t2, r2s },
     plannedToDate: planned,
+    currentActual,
+    actionPlanTriggers: triggers,
+    scurve: buildTncScurveDaily(rows, dataDate),
   };
   if (opts.sections.includes('simulation')) {
     const mc = opts.mcDate ?? MC_DEFAULT;
     const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
+    const remT1 = total - t1;
     const remT2 = total - t2;
     const remR2S = total - r2s;
     data.requiredPace = {
       daysRemaining: days,
+      t1Remaining: remT1,
       t2Remaining: remT2,
       r2sRemaining: remR2S,
+      preTestPerDay: +(remT1 / days).toFixed(2),
       t2PerDay: +(remT2 / days).toFixed(2),
       r2sPerDay: +(remR2S / days).toFixed(2),
     };
@@ -597,6 +698,7 @@ export async function buildReport(opts: ReportOptions): Promise<{ markdown: stri
   const meta: ReportMeta = {
     generatedAt: new Date().toISOString(),
     mcDate: opts.mcDate ?? MC_DEFAULT,
+    daysToCompletion: Math.ceil((+new Date(opts.mcDate ?? MC_DEFAULT) - Date.now()) / 86400000),
     delayMode: mode,
     delayModeLabel: modeLabel,
     modules: opts.modules,
