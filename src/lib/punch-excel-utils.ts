@@ -20,6 +20,28 @@ import {
   PUNCH_PROCUREMENT_STATUS,
 } from '@/lib/punch-field-registry';
 import { normalizeDate } from '@/lib/date-normalize';
+
+/**
+ * Normalize free-text team values from imported workbooks into the
+ * `team_type` enum (Mech | Elec | Arch | Supp | Design). Returns null when
+ * the value is empty or cannot be mapped — caller then leaves the column
+ * NULL instead of triggering an enum error on insert.
+ */
+function normalizePunchTeam(val: unknown): string | null {
+  if (val == null || val === '') return null;
+  const key = String(val).trim().toLowerCase().replace(/[^a-z]/g, '');
+  if (!key) return null;
+  const map: Record<string, string> = {
+    mech: 'Mech', mecha: 'Mech', mechanical: 'Mech',
+    elec: 'Elec', electrical: 'Elec', electric: 'Elec',
+    arch: 'Arch', archi: 'Arch', architecture: 'Arch', architectural: 'Arch',
+    facade: 'Arch',
+    supp: 'Supp', support: 'Supp', supplier: 'Supp',
+    external: 'Supp',
+    design: 'Design', designer: 'Design',
+  };
+  return map[key] ?? null;
+}
 import { isoToExcelSerial, DATE_NUMFMT } from '@/lib/excel-date-cell';
 import { getMappedField } from '@/lib/header-mappings-cache';
 import {
