@@ -677,6 +677,20 @@ export async function buildReport(opts: ReportOptions): Promise<{ markdown: stri
   if (opts.modules.includes('tnc')) {
     const rows = await fetchTnc();
     data.tnc = computeTncData(rows, opts, tncDataDate);
+    if (data.tnc) {
+      const endDate = opts.mcDate ?? MC_DEFAULT;
+      const startDate = addDays(tncDataDate, -35);
+      const scPoints = buildSCurve(rows, 'day', startDate, endDate, tncDataDate);
+      const tot = data.tnc.totals.total || 1;
+      data.tnc.scurve = scPoints.map(p => ({
+        date: p.bucket,
+        bucketLabel: p.bucketLabel,
+        t1PlanPct: Math.round((p.t1Planned / tot) * 1000) / 10,
+        t1ActualPct: p.t1Actual != null ? Math.round((p.t1Actual / tot) * 1000) / 10 : null,
+        t2PlanPct: Math.round((p.t2Planned / tot) * 1000) / 10,
+        t2ActualPct: p.t2Actual != null ? Math.round((p.t2Actual / tot) * 1000) / 10 : null,
+      }));
+    }
   }
   if (opts.modules.includes('defect')) {
     const rows = await fetchDefects();
