@@ -206,20 +206,53 @@ function computeTncData(rows: SubtestForDashboard[], opts: ReportOptions, dataDa
     t2: rows.filter(r => isOnOrBefore((r as any).t2_planned_date, today)).length,
     r2s: rows.filter(r => isOnOrBefore((r as any).r2_target_submission_date, today)).length,
   };
+  const r1 = (n: number) => +n.toFixed(1);
+  const preTestPct = total ? r1((t1 / total) * 100) : 0;
+  const officialTestPct = total ? r1((t2 / total) * 100) : 0;
+  const testReportPct = total ? r1((r2s / total) * 100) : 0;
+  const preTestVariancePct = total ? r1(((t1 - planned.t1) / total) * 100) : 0;
+  const officialTestVariancePct = total ? r1(((t2 - planned.t2) / total) * 100) : 0;
+  const testReportVariancePct = total ? r1(((r2s - planned.r2s) / total) * 100) : 0;
+  const currentActual: TncCurrentActual = {
+    preTestPct,
+    officialTestPct,
+    testReportPct,
+    preTestVariancePct,
+    officialTestVariancePct,
+    testReportVariancePct,
+  };
+  const triggers: TncActionPlanTrigger[] = [];
+  const evalStage = (stage: TncActionPlanTrigger['stage'], label: string, actualPct: number, variancePct: number) => {
+    if (actualPct < 1.0) {
+      triggers.push({ stage, status: 'CRITICAL', actualPct, reason: `${label} has not started` });
+    } else if (variancePct < -20) {
+      triggers.push({ stage, status: 'AT_RISK', actualPct, reason: `${label} is behind plan by ${Math.abs(variancePct).toFixed(1)}%` });
+    }
+  };
+  evalStage('preTest', 'Pre-Test', preTestPct, preTestVariancePct);
+  evalStage('officialTest', 'Official Test', officialTestPct, officialTestVariancePct);
+  evalStage('testReport', 'Test Report', testReportPct, testReportVariancePct);
+
   const data: TncReportData = {
     dataDate,
     totals: { total, t1, t2, r2s },
     plannedToDate: planned,
+    currentActual,
+    actionPlanTriggers: triggers,
+    scurve: buildTncScurveDaily(rows, dataDate),
   };
   if (opts.sections.includes('simulation')) {
     const mc = opts.mcDate ?? MC_DEFAULT;
     const days = Math.max(1, Math.ceil((+new Date(mc) - Date.now()) / 86400000));
+    const remT1 = total - t1;
     const remT2 = total - t2;
     const remR2S = total - r2s;
     data.requiredPace = {
       daysRemaining: days,
+      t1Remaining: remT1,
       t2Remaining: remT2,
       r2sRemaining: remR2S,
+      preTestPerDay: +(remT1 / days).toFixed(2),
       t2PerDay: +(remT2 / days).toFixed(2),
       r2sPerDay: +(remR2S / days).toFixed(2),
     };
