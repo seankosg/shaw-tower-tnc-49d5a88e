@@ -511,7 +511,7 @@ async function fetchPunch(): Promise<PunchRow[]> {
   while (true) {
     const { data, error } = await supabase
       .from('punch_items')
-      .select('item_no,description,item_description,discipline,system,location,actual_start_date,actual_completion_date,planned_completion_date,completion_status')
+      .select('item_no,outstanding_work,main_trade,work_type,location,actual_start_date,actual_completion_date,planned_completion_date,completion_status')
       .eq('is_active', true)
       .range(from, from + size - 1);
     if (error) throw error;
