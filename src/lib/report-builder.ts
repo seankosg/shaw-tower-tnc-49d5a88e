@@ -141,6 +141,11 @@ export interface PunchReportData {
     withinMcDate: number;
     beyondMcDate: number;
     noPlan: number;
+    monthlyBeyondSc?: Array<{
+      yearMonth: string;
+      label: string;
+      count: number;
+    }>;
   };
   latestItems?: Array<{
     itemNo: string;
