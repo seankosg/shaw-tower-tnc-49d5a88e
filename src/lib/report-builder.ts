@@ -884,6 +884,13 @@ export async function buildReport(opts: ReportOptions): Promise<{ markdown: stri
   const includeGuide = needsTncDate && opts.includeTncGuide !== false;
 
   const meta: ReportMeta = {
+    reportVersion: REPORT_SCHEMA_VERSION,
+    populationFilter: 'is_active = true',
+    changeNotes: [
+      'v2: is_active=false rows excluded from all populations (soft-deleted = effectively removed).',
+      'v2: T&C done counts use isStageDone with sequential guards — T2 requires T1 done; R2S requires R1 done.',
+      'v2: plannedToDate and *VariancePct computed at dataDate (not today) to match dashboard cards.',
+    ],
     generatedAt: new Date().toISOString(),
     mcDate: opts.mcDate ?? MC_DEFAULT,
     daysToCompletion: Math.ceil((+new Date(opts.mcDate ?? MC_DEFAULT) - Date.now()) / 86400000),
