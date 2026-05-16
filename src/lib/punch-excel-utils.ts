@@ -232,7 +232,13 @@ export async function parsePunchWorkbook(
           break;
         }
         default: {
-          (values as any)[field.field] = String(cell).trim();
+          if (field.field === 'team') {
+            const t = normalizePunchTeam(cell);
+            if (t) (values as any).team = t;
+            else errors.push({ rawRowNo, reason: `Unknown team value: "${String(cell).trim()}" (allowed: Mech, Elec, Arch, Supp, Design)` });
+          } else {
+            (values as any)[field.field] = String(cell).trim();
+          }
         }
       }
     }
