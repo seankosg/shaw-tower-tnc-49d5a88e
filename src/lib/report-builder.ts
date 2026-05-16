@@ -552,6 +552,22 @@ function computePunchData(rows: PunchRow[], opts: ReportOptions): PunchReportDat
       data.actionPlanTriggers.push({ stage: 'completion', status: 'AT_RISK', actualPct: completionPct, reason: `completion is behind plan by ${Math.abs(variancePct).toFixed(1)}%` });
     }
   }
+  const mcDate = opts.mcDate ?? MC_DEFAULT;
+  const incomplete = rows.filter(r => !r.actual_completion_date);
+  data.statusBreakdown = {
+    completed:  rows.filter(r => !!r.actual_completion_date).length,
+    wip:        rows.filter(r => !!r.actual_start_date && !r.actual_completion_date).length,
+    notStarted: rows.filter(r => !r.actual_start_date).length,
+  };
+  data.completionDateBreakdown = {
+    withinMcDate: incomplete.filter(r =>
+      r.planned_completion_date && r.planned_completion_date <= mcDate
+    ).length,
+    beyondMcDate: incomplete.filter(r =>
+      r.planned_completion_date && r.planned_completion_date > mcDate
+    ).length,
+    noPlan: incomplete.filter(r => !r.planned_completion_date).length,
+  };
   return data;
 }
 
