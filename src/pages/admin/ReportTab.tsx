@@ -10,10 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Copy, Download, Plus, Sparkles, X, FileText, Loader2 } from 'lucide-react';
 import {
-  buildReportMarkdown,
+  buildReport,
   type ReportModule,
   type ReportSection,
+  type ReportData,
 } from '@/lib/report-builder';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const MODULE_OPTIONS: { id: ReportModule; label: string }[] = [
   { id: 'tnc', label: 'T&C' },
@@ -52,6 +54,7 @@ export default function ReportTab() {
   const [dataDateOverride, setDataDateOverride] = useState('');
   const [includeTncGuide, setIncludeTncGuide] = useState(true);
   const [markdown, setMarkdown] = useState('');
+  const [reportData, setReportData] = useState<ReportData | null>(null);
   const [generating, setGenerating] = useState(false);
 
   const [model, setModel] = useState(MODELS[0]);
@@ -73,20 +76,31 @@ export default function ReportTab() {
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const md = await buildReportMarkdown({
+      const { markdown: md, data } = await buildReport({
         modules, sections, snapshotDates, mcDate,
         delayMode,
         dataDate: dataDateOverride || undefined,
         includeTncGuide,
       });
       setMarkdown(md);
-      toast({ title: 'Markdown generated', description: `${md.length.toLocaleString()} characters` });
+      setReportData(data);
+      toast({ title: 'Report generated', description: `${md.length.toLocaleString()} chars · JSON ready` });
     } catch (e) {
       console.error(e);
       toast({ title: 'Generation failed', description: e instanceof Error ? e.message : 'Unknown error', variant: 'destructive' });
     } finally {
       setGenerating(false);
     }
+  };
+
+  const jsonText = reportData ? JSON.stringify(reportData, null, 2) : '';
+
+  const downloadBlob = (text: string, filename: string, mime: string) => {
+    const blob = new Blob([text], { type: `${mime};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
   };
 
   const copy = async (text: string, label: string) => {
@@ -98,13 +112,8 @@ export default function ReportTab() {
     }
   };
 
-  const download = (text: string, filename: string) => {
-    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-  };
+  const download = (text: string, filename: string) =>
+    downloadBlob(text, filename, filename.endsWith('.json') ? 'application/json' : 'text/markdown');
 
   const runLlm = async () => {
     if (!markdown.trim()) {
@@ -255,17 +264,38 @@ export default function ReportTab() {
           <div className="flex flex-wrap gap-2">
             <Button onClick={handleGenerate} disabled={generating || modules.length === 0}>
               {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
-              Generate Markdown
-            </Button>
-            <Button variant="outline" disabled={!markdown} onClick={() => copy(markdown, 'Markdown')}>
-              <Copy className="h-4 w-4 mr-1" /> Copy
-            </Button>
-            <Button variant="outline" disabled={!markdown} onClick={() => download(markdown, `shaw-status-${new Date().toISOString().slice(0, 10)}.md`)}>
-              <Download className="h-4 w-4 mr-1" /> Download .md
+              Generate Report
             </Button>
           </div>
 
-          <Textarea value={markdown} onChange={e => setMarkdown(e.target.value)} placeholder="Click Generate Markdown to populate…" className="min-h-[300px] font-mono text-xs" />
+          <Tabs defaultValue="markdown" className="w-full">
+            <TabsList>
+              <TabsTrigger value="markdown">Markdown</TabsTrigger>
+              <TabsTrigger value="json">JSON</TabsTrigger>
+            </TabsList>
+            <TabsContent value="markdown" className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" disabled={!markdown} onClick={() => copy(markdown, 'Markdown')}>
+                  <Copy className="h-4 w-4 mr-1" /> Copy
+                </Button>
+                <Button variant="outline" size="sm" disabled={!markdown} onClick={() => download(markdown, `shaw-status-${new Date().toISOString().slice(0, 10)}.md`)}>
+                  <Download className="h-4 w-4 mr-1" /> Download .md
+                </Button>
+              </div>
+              <Textarea value={markdown} onChange={e => setMarkdown(e.target.value)} placeholder="Click Generate Report to populate…" className="min-h-[300px] font-mono text-xs" />
+            </TabsContent>
+            <TabsContent value="json" className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" disabled={!jsonText} onClick={() => copy(jsonText, 'JSON')}>
+                  <Copy className="h-4 w-4 mr-1" /> Copy
+                </Button>
+                <Button variant="outline" size="sm" disabled={!jsonText} onClick={() => download(jsonText, `shaw-status-${new Date().toISOString().slice(0, 10)}.json`)}>
+                  <Download className="h-4 w-4 mr-1" /> Download .json
+                </Button>
+              </div>
+              <Textarea value={jsonText} readOnly placeholder="Click Generate Report to populate…" className="min-h-[300px] font-mono text-xs" />
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
