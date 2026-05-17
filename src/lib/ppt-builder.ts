@@ -24,6 +24,14 @@ import { resolveText, type TextOverrideMap } from '@/lib/text-token-registry';
 let TEXT_OVERRIDES: TextOverrideMap | undefined = undefined;
 const T = (slideKey: string, fieldKey: string, fallback: string) =>
   resolveText(TEXT_OVERRIDES, slideKey, fieldKey, fallback);
+
+// Module-level slide display options (per slide_key → options object), set by buildPpt().
+let DISPLAY_OPTIONS: Record<string, Record<string, unknown>> = {};
+let CURRENT_SLIDE_KEY = '';
+function getOpt<T>(slideKey: string, optKey: string, fallback: T): T {
+  const v = DISPLAY_OPTIONS[slideKey]?.[optKey];
+  return (v === undefined || v === null) ? fallback : (v as T);
+}
 import JSZip from 'jszip';
 import type {
   ReportData,
