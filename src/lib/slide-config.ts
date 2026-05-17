@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { DEFAULT_SLIDE_ORDER, SLIDE_REGISTRY, type SlideKey } from '@/lib/slide-registry';
 import type { SlideConfigItem } from '@/lib/ppt-builder';
+import { fetchCustomSlides } from '@/lib/custom-slides-cache';
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let cache: { items: SlideConfigItem[]; at: number } | null = null;
@@ -13,18 +14,28 @@ function defaultItems(): SlideConfigItem[] {
   return DEFAULT_SLIDE_ORDER.map((k) => ({ key: k, enabled: true }));
 }
 
-/** Normalise stored config against the current registry:
- *  - drop keys we no longer know about
- *  - append any registry keys missing from the stored list (enabled by default)
+/** Normalise stored config against the current registry + custom slides:
+ *  - drop keys that match neither a built-in nor a known custom slide
+ *  - append any missing keys (enabled by default), custom slides last
  */
-function reconcile(stored: SlideConfigItem[]): SlideConfigItem[] {
-  const known = new Set(Object.keys(SLIDE_REGISTRY));
+async function reconcile(stored: SlideConfigItem[]): Promise<SlideConfigItem[]> {
+  const builtins = new Set(Object.keys(SLIDE_REGISTRY));
+  let customKeys: string[] = [];
+  try {
+    customKeys = (await fetchCustomSlides()).map((c) => c.key);
+  } catch {
+    customKeys = [];
+  }
+  const known = new Set<string>([...builtins, ...customKeys]);
   const filtered = stored.filter((i) => known.has(i.key));
   const present = new Set(filtered.map((i) => i.key));
-  const appended = DEFAULT_SLIDE_ORDER
+  const missingBuiltins = DEFAULT_SLIDE_ORDER
     .filter((k) => !present.has(k))
     .map((k) => ({ key: k, enabled: true }));
-  return [...filtered, ...appended];
+  const missingCustoms = customKeys
+    .filter((k) => !present.has(k))
+    .map((k) => ({ key: k, enabled: true }));
+  return [...filtered, ...missingBuiltins, ...missingCustoms];
 }
 
 export async function fetchSlideConfig(force = false): Promise<SlideConfigItem[]> {
@@ -37,7 +48,8 @@ export async function fetchSlideConfig(force = false): Promise<SlideConfigItem[]
       .maybeSingle();
     if (error) throw error;
     const raw = (data?.slides ?? null) as unknown as SlideConfigItem[] | null;
-    const items = raw && Array.isArray(raw) && raw.length > 0 ? reconcile(raw) : defaultItems();
+    const base = raw && Array.isArray(raw) && raw.length > 0 ? raw : defaultItems();
+    const items = await reconcile(base);
     cache = { items, at: Date.now() };
     return items;
   } catch {
@@ -68,6 +80,13 @@ export async function saveSlideConfig(items: SlideConfigItem[]): Promise<void> {
     if (error) throw error;
   }
   invalidateSlideConfigCache();
+}
+
+/** Append a new custom slide key to the stored config (enabled by default). */
+export async function appendSlideKey(key: string): Promise<void> {
+  const current = await fetchSlideConfig(true);
+  if (current.some((i) => i.key === key)) return;
+  await saveSlideConfig([...current, { key, enabled: true }]);
 }
 
 export type { SlideConfigItem };
