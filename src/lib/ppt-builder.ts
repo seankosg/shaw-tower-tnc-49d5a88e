@@ -58,10 +58,10 @@ export const C: Record<string, string> = {
   amber:               'FCD34D',
   magenta:             'F472B6',
   magentaBright:       'EC4899',
-} as const;
+};
 
-const FONT      = 'Pretendard';
-const FONT_MONO = 'Consolas';
+export let FONT      = 'Pretendard';
+export const FONT_MONO = 'Consolas';
 
 // ─────────────────────────────────────────
 // MONTH LABELS
