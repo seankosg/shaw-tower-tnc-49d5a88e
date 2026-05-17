@@ -1379,11 +1379,15 @@ export async function buildAndDownloadPpt(rd: ReportData): Promise<void> {
 // ─────────────────────────────────────────
 // SLIDE ORCHESTRATION
 // ─────────────────────────────────────────
-export type SlideKey =
+export type BuiltInSlideKey =
   | 'cover' | 'dashboard'
   | 'tnc_snapshot' | 'tnc_scurve' | 'tnc_forecast' | 'tnc_action_plan'
   | 'defect_snapshot' | 'defect_scurve' | 'defect_forecast' | 'defect_action_plan'
   | 'docs_snapshot' | 'punch_snapshot';
+
+// Allow custom (runtime-defined) slide keys alongside built-ins.
+// eslint-disable-next-line @typescript-eslint/ban-types
+export type SlideKey = BuiltInSlideKey | (string & {});
 
 export const DEFAULT_SLIDE_ORDER: SlideKey[] = [
   'cover', 'dashboard',
