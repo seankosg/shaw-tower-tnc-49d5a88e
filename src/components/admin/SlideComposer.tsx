@@ -12,6 +12,7 @@ import { GripVertical, Loader2, RotateCcw, Save, Layers } from 'lucide-react';
 import { DEFAULT_SLIDE_ORDER, SLIDE_REGISTRY, type SlideCategory } from '@/lib/slide-registry';
 import { fetchSlideConfig, saveSlideConfig } from '@/lib/slide-config';
 import type { SlideConfigItem } from '@/lib/ppt-builder';
+import SlideTextEditor from '@/components/admin/SlideTextEditor';
 
 interface Props {
   embedded?: boolean;
@@ -196,6 +197,7 @@ export default function SlideComposer({ embedded = false }: Props) {
           <div className="text-sm font-semibold">Slide Composer</div>
         </div>
         {body}
+        <SlideTextEditor embedded />
       </div>
     );
   }
@@ -207,7 +209,10 @@ export default function SlideComposer({ embedded = false }: Props) {
           <Layers className="h-4 w-4" /> Slide Composer
         </CardTitle>
       </CardHeader>
-      <CardContent>{body}</CardContent>
+      <CardContent className="space-y-4">
+        {body}
+        <SlideTextEditor embedded />
+      </CardContent>
     </Card>
   );
 }

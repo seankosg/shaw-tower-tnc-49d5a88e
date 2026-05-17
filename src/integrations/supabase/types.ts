@@ -2661,6 +2661,36 @@ export type Database = {
         }
         Relationships: []
       }
+      slide_text_overrides: {
+        Row: {
+          created_at: string
+          field_key: string
+          id: string
+          slide_key: string
+          updated_at: string
+          updated_by: string | null
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          field_key: string
+          id?: string
+          slide_key: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string
+        }
+        Update: {
+          created_at?: string
+          field_key?: string
+          id?: string
+          slide_key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
       spare_part_comment_reads: {
         Row: {
           id: string
