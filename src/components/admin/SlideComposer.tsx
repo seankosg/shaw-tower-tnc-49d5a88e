@@ -8,10 +8,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { GripVertical, Loader2, RotateCcw, Save, Layers } from 'lucide-react';
-import { DEFAULT_SLIDE_ORDER, SLIDE_REGISTRY, type SlideCategory } from '@/lib/slide-registry';
-import { fetchSlideConfig, saveSlideConfig } from '@/lib/slide-config';
+import { GripVertical, Loader2, RotateCcw, Save, Layers, Trash2 } from 'lucide-react';
+import { DEFAULT_SLIDE_ORDER, loadSlideRegistry, type SlideCategory, type SlideMeta } from '@/lib/slide-registry';
+import { fetchSlideConfig, saveSlideConfig, invalidateSlideConfigCache } from '@/lib/slide-config';
 import type { SlideConfigItem } from '@/lib/ppt-builder';
+import { deleteCustomSlide, invalidateCustomSlidesCache } from '@/lib/custom-slides-cache';
 import SlideTextEditor from '@/components/admin/SlideTextEditor';
 import SlideCodegen from '@/components/admin/SlideCodegen';
 
@@ -20,7 +21,8 @@ interface Props {
 }
 
 const CATEGORY_LABEL: Record<SlideCategory, string> = {
-  intro: 'Intro', overview: 'Overview', tnc: 'T&C', defect: 'Defect', docs: 'Docs', punch: 'Punch',
+  intro: 'Intro', overview: 'Overview', tnc: 'T&C', defect: 'Defect',
+  docs: 'Docs', punch: 'Punch', custom: 'Custom',
 };
 
 function defaultItems(): SlideConfigItem[] {
@@ -28,9 +30,14 @@ function defaultItems(): SlideConfigItem[] {
 }
 
 function SortableRow({
-  item, index, isAdmin, onToggle,
-}: { item: SlideConfigItem; index: number; isAdmin: boolean; onToggle: (k: string, enabled: boolean) => void }) {
-  const meta = SLIDE_REGISTRY[item.key as keyof typeof SLIDE_REGISTRY];
+  item, index, isAdmin, registry, onToggle, onDelete,
+}: {
+  item: SlideConfigItem; index: number; isAdmin: boolean;
+  registry: Record<string, SlideMeta>;
+  onToggle: (k: string, enabled: boolean) => void;
+  onDelete: (meta: SlideMeta) => void;
+}) {
+  const meta = registry[item.key];
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.key, disabled: !isAdmin });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -62,10 +69,24 @@ function SortableRow({
         aria-label={`Enable ${meta.label}`}
       />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate">{meta.label}</div>
+        <div className="text-sm font-medium truncate flex items-center gap-1.5">
+          {meta.label}
+          {meta.isCustom && <Badge variant="secondary" className="h-4 px-1 text-[10px]">Custom</Badge>}
+        </div>
         <div className="text-xs text-muted-foreground truncate">{meta.description}</div>
       </div>
       <Badge variant="outline" className="shrink-0">{CATEGORY_LABEL[meta.category]}</Badge>
+      {meta.isCustom && isAdmin && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="shrink-0 h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+          onClick={() => onDelete(meta)}
+          aria-label={`Delete ${meta.label}`}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
     </div>
   );
 }
@@ -73,6 +94,7 @@ function SortableRow({
 export default function SlideComposer({ embedded = false }: Props) {
   const { toast } = useToast();
   const [items, setItems] = useState<SlideConfigItem[]>([]);
+  const [registry, setRegistry] = useState<Record<string, SlideMeta>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -83,26 +105,30 @@ export default function SlideComposer({ embedded = false }: Props) {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  const reload = async () => {
+    setLoading(true);
+    invalidateCustomSlidesCache();
+    invalidateSlideConfigCache();
+    const [reg, cfg, auth] = await Promise.all([
+      loadSlideRegistry(),
+      fetchSlideConfig(true),
+      supabase.auth.getUser(),
+    ]);
+    let admin = false;
+    const uid = auth.data.user?.id;
+    if (uid) {
+      const { data } = await supabase.rpc('has_role', { _user_id: uid, _role: 'admin' });
+      admin = !!data;
+    }
+    setRegistry(reg);
+    setItems(cfg);
+    setIsAdmin(admin);
+    setLoading(false);
+  };
+
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const [cfg, auth] = await Promise.all([
-        fetchSlideConfig(true),
-        supabase.auth.getUser(),
-      ]);
-      let admin = false;
-      const uid = auth.data.user?.id;
-      if (uid) {
-        const { data } = await supabase.rpc('has_role', { _user_id: uid, _role: 'admin' });
-        admin = !!data;
-      }
-      if (!cancelled) {
-        setItems(cfg);
-        setIsAdmin(admin);
-        setLoading(false);
-      }
-    })();
+    (async () => { if (!cancelled) await reload(); })();
     return () => { cancelled = true; };
   }, []);
 
@@ -138,6 +164,21 @@ export default function SlideComposer({ embedded = false }: Props) {
       toast({ title: 'Save failed', description: e instanceof Error ? e.message : 'Unknown', variant: 'destructive' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onDeleteCustom = async (meta: SlideMeta) => {
+    if (!meta.customId) return;
+    if (!confirm(`Delete custom slide "${meta.label}"? This cannot be undone.`)) return;
+    try {
+      await deleteCustomSlide(meta.customId);
+      // Remove from config too
+      const next = items.filter((i) => i.key !== meta.key);
+      await saveSlideConfig(next);
+      toast({ title: `Deleted "${meta.label}"` });
+      await reload();
+    } catch (e) {
+      toast({ title: 'Delete failed', description: e instanceof Error ? e.message : 'Unknown', variant: 'destructive' });
     }
   };
 
@@ -180,7 +221,9 @@ export default function SlideComposer({ embedded = false }: Props) {
                   item={item}
                   index={idx}
                   isAdmin={isAdmin}
+                  registry={registry}
                   onToggle={onToggle}
+                  onDelete={onDeleteCustom}
                 />
               ))}
             </div>
@@ -199,7 +242,7 @@ export default function SlideComposer({ embedded = false }: Props) {
         </div>
         {body}
         <SlideTextEditor embedded />
-        <SlideCodegen embedded />
+        <SlideCodegen embedded onAdded={reload} />
       </div>
     );
   }
@@ -214,7 +257,7 @@ export default function SlideComposer({ embedded = false }: Props) {
       <CardContent className="space-y-4">
         {body}
         <SlideTextEditor embedded />
-        <SlideCodegen embedded />
+        <SlideCodegen embedded onAdded={reload} />
       </CardContent>
     </Card>
   );

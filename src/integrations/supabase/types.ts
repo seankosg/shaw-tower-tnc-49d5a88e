@@ -116,6 +116,36 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_slides: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          key: string
+          label: string
+          spec: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key: string
+          label: string
+          spec: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key?: string
+          label?: string
+          spec?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       database_snapshots: {
         Row: {
           backup_version: number
