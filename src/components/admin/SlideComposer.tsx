@@ -197,6 +197,7 @@ export default function SlideComposer({ embedded = false }: Props) {
           <div className="text-sm font-semibold">Slide Composer</div>
         </div>
         {body}
+        <SlideTextEditor embedded />
       </div>
     );
   }
@@ -208,7 +209,10 @@ export default function SlideComposer({ embedded = false }: Props) {
           <Layers className="h-4 w-4" /> Slide Composer
         </CardTitle>
       </CardHeader>
-      <CardContent>{body}</CardContent>
+      <CardContent className="space-y-4">
+        {body}
+        <SlideTextEditor embedded />
+      </CardContent>
     </Card>
   );
 }
