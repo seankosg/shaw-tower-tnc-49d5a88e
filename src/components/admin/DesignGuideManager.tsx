@@ -159,6 +159,96 @@ export default function DesignGuideManager({ embedded }: Props) {
     toast({ title: 'Code suggestion copied' });
   };
 
+  const handleNlModify = async () => {
+    if (!active) {
+      toast({ title: 'No active design guide', variant: 'destructive' });
+      return;
+    }
+    if (!nlInstruction.trim()) {
+      toast({ title: 'Enter an instruction', variant: 'destructive' });
+      return;
+    }
+    setNlModifying(true);
+    setNlModified(null);
+    setNlSummary('');
+    try {
+      const yaml = await downloadYaml(active.storage_path);
+      setNlOriginal(yaml);
+      const result = await invokeCodeEditor({
+        fileContent: yaml,
+        instruction: nlInstruction.trim(),
+        fileType: 'yaml',
+      });
+      setNlModified(result.modifiedContent);
+      setNlSummary(result.changeSummary);
+      toast({ title: 'Modified with Claude' });
+    } catch (e) {
+      toast({ title: 'Modification failed', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
+    } finally {
+      setNlModifying(false);
+    }
+  };
+
+  const downloadModifiedYaml = () => {
+    if (!nlModified) return;
+    const blob = new Blob([nlModified], { type: 'text/yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `design-guide-modified-${new Date().toISOString().slice(0, 10)}.yaml`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleApplyNlTokens = async () => {
+    if (!nlModified || !nlOriginal) return;
+    setNlApplying(true);
+    try {
+      const filename = `nl-modified-${new Date().toISOString().replace(/[:.]/g, '-')}.yaml`;
+      const blob = new Blob([nlModified], { type: 'text/yaml' });
+      const file = new File([blob], filename, { type: 'text/yaml' });
+      const { data: userData } = await supabase.auth.getUser();
+      void userData; // not used directly here; uploadNewYaml uses storage upload
+
+      const path = await (await import('@/lib/design-guide-manager')).uploadNewYaml(file);
+      const analysisResult = await analyzeYaml(nlOriginal, nlModified);
+      await applyTokenChanges(analysisResult.colorTokens, analysisResult.fontTokens);
+      const saved = await saveVersion({
+        storage_path: path,
+        version_label: `NL: ${nlInstruction.trim().slice(0, 60)}`,
+        summary_ko: nlSummary || analysisResult.summaryKo,
+      });
+      await setActiveVersion(saved.id);
+      toast({ title: 'Tokens applied & version saved' });
+      setNlInstruction('');
+      setNlModified(null);
+      setNlOriginal(null);
+      setNlSummary('');
+      await refresh();
+    } catch (e) {
+      toast({ title: 'Apply failed', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
+    } finally {
+      setNlApplying(false);
+    }
+  };
+
+  const renderYamlDiff = (oldText: string, newText: string) => {
+    const oldLines = oldText.split('\n');
+    const newLines = newText.split('\n');
+    const oldSet = new Set(oldLines);
+    const newSet = new Set(newLines);
+    const out: { type: 'add' | 'del' | 'same'; text: string }[] = [];
+    // Simple line-level set diff for quick visual feedback
+    newLines.forEach((l) => {
+      if (!oldSet.has(l)) out.push({ type: 'add', text: l });
+      else out.push({ type: 'same', text: l });
+    });
+    oldLines.forEach((l) => {
+      if (!newSet.has(l)) out.push({ type: 'del', text: l });
+    });
+    return out;
+  };
+
   const hex = (v: string) => (v.startsWith('#') ? v : `#${v}`);
 
   const body = (
