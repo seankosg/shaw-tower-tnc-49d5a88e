@@ -15,12 +15,13 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  Check, ChevronDown, Copy, Loader2, RotateCcw, Sparkles, UploadCloud, Wand2,
+  Check, ChevronDown, Loader2, RotateCcw, Sparkles, UploadCloud, Wand2,
 } from 'lucide-react';
 import { SLIDE_REGISTRY, DEFAULT_SLIDE_ORDER } from '@/lib/slide-registry';
+import { fetchCustomSlides } from '@/lib/custom-slides-cache';
 import {
   addSlideToReport,
-  generateSlideCode,
+  generateSlideSpec,
   type SlideCodegenResult,
   type SlideDataSource,
 } from '@/lib/slide-codegen';
@@ -28,6 +29,7 @@ import { cn } from '@/lib/utils';
 
 interface Props {
   embedded?: boolean;
+  onAdded?: () => void | Promise<void>;
 }
 
 const DATA_SOURCES: { key: SlideDataSource; label: string }[] = [
@@ -57,9 +59,9 @@ function StepBadge({ n, label, state }: { n: number; label: string; state: 'pend
   );
 }
 
-export default function SlideCodegen({ embedded = false }: Props) {
+export default function SlideCodegen({ embedded = false, onAdded }: Props) {
   const { toast } = useToast();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [canGen, setCanGen] = useState(false);
   const [title, setTitle] = useState('');
   const [position, setPosition] = useState<number>(DEFAULT_SLIDE_ORDER.length);
   const [sources, setSources] = useState<Record<SlideDataSource, boolean>>({
@@ -78,8 +80,12 @@ export default function SlideCodegen({ embedded = false }: Props) {
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth.user?.id;
       if (!uid) return;
-      const { data } = await supabase.rpc('has_role', { _user_id: uid, _role: 'admin' });
-      if (!cancelled) setIsAdmin(!!data);
+      const [a, s, d] = await Promise.all([
+        supabase.rpc('has_role', { _user_id: uid, _role: 'admin' }),
+        supabase.rpc('has_role', { _user_id: uid, _role: 'superuser' }),
+        supabase.rpc('has_role', { _user_id: uid, _role: 'd_superuser' }),
+      ]);
+      if (!cancelled) setCanGen(!!a.data || !!s.data || !!d.data);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -92,21 +98,20 @@ export default function SlideCodegen({ embedded = false }: Props) {
   const selectedSources = (Object.entries(sources) as [SlideDataSource, boolean][])
     .filter(([, v]) => v).map(([k]) => k);
 
-  const canGenerate = isAdmin && !generating && title.trim().length > 0
+  const canSubmit = canGen && !generating && title.trim().length > 0
     && description.trim().length >= 5 && selectedSources.length > 0;
 
   const onGenerate = async () => {
     setGenerating(true);
     try {
-      const registryDump = JSON.stringify(
-        Object.values(SLIDE_REGISTRY).map((m) => ({ key: m.key, label: m.label, category: m.category })),
-      );
-      const res = await generateSlideCode({
+      const customs = await fetchCustomSlides();
+      const existingKeys = [...Object.keys(SLIDE_REGISTRY), ...customs.map((c) => c.key)];
+      const res = await generateSlideSpec({
         title: title.trim(),
         position,
         dataSources: selectedSources,
         description: description.trim(),
-        slideRegistry: registryDump,
+        existingKeys,
       });
       setResult(res);
       setStage('preview');
@@ -122,22 +127,18 @@ export default function SlideCodegen({ embedded = false }: Props) {
     }
   };
 
-  const lovableInstruction = result
-    ? `Storage의 ppt-builder.ts를 src/lib/ppt-builder.ts로 동기화하고, src/lib/slide-registry.ts의 SLIDE_REGISTRY에 다음 항목을 추가해 주세요:\n  ${result.suggestedKey}: { key: '${result.suggestedKey}', label: '${result.suggestedLabel.replace(/'/g, "\\'")}', number: ${position + 1}, description: '${title.replace(/'/g, "\\'")}', category: '${selectedSources[0] ?? 'tnc'}' }\n그리고 src/lib/ppt-builder.ts의 SlideKey 타입과 DEFAULT_SLIDE_ORDER에도 '${result.suggestedKey}' 키를 추가해 주세요.`
-    : '';
-
   const onAddToReport = async () => {
     if (!result) return;
     setAdding(true);
     try {
       await addSlideToReport({
-        functionCode: result.functionCode,
+        spec: result.spec,
         suggestedKey: result.suggestedKey,
         suggestedLabel: result.suggestedLabel,
-        title: title.trim(),
       });
       setStage('added');
-      toast({ title: '슬라이드가 Storage에 추가되었습니다' });
+      toast({ title: '슬라이드가 Report에 추가되었습니다' });
+      if (onAdded) await onAdded();
     } catch (e) {
       toast({
         title: '추가 실패',
@@ -149,25 +150,6 @@ export default function SlideCodegen({ embedded = false }: Props) {
     }
   };
 
-  const onCopyInstruction = async () => {
-    try {
-      await navigator.clipboard.writeText(lovableInstruction);
-      toast({ title: '안내문을 클립보드에 복사했습니다' });
-    } catch (e) {
-      toast({ title: '복사 실패', description: e instanceof Error ? e.message : 'Unknown', variant: 'destructive' });
-    }
-  };
-
-  const onCopyCode = async () => {
-    if (!result) return;
-    try {
-      await navigator.clipboard.writeText(result.functionCode);
-      toast({ title: '코드를 복사했습니다' });
-    } catch (e) {
-      toast({ title: '복사 실패', description: e instanceof Error ? e.message : 'Unknown', variant: 'destructive' });
-    }
-  };
-
   const onStartOver = () => {
     setResult(null);
     setStage('describe');
@@ -175,9 +157,9 @@ export default function SlideCodegen({ embedded = false }: Props) {
 
   const body = (
     <div className="space-y-4">
-      {!isAdmin && (
+      {!canGen && (
         <div className="rounded-md border border-dashed bg-muted/30 p-2 text-xs text-muted-foreground">
-          Admins only — view-only mode.
+          D.Super User 이상만 새 슬라이드를 만들 수 있습니다.
         </div>
       )}
 
@@ -190,7 +172,7 @@ export default function SlideCodegen({ embedded = false }: Props) {
         <StepBadge n={3} label="Add" state={stage === 'added' ? 'done' : 'pending'} />
       </div>
 
-      {/* STEP 1 — Describe */}
+      {/* STEP 1 */}
       {stage === 'describe' && (
         <div className="space-y-3 rounded-md border p-4">
           <div className="text-sm font-semibold">1. 어떤 슬라이드를 만들고 싶으신가요?</div>
@@ -203,7 +185,7 @@ export default function SlideCodegen({ embedded = false }: Props) {
                 placeholder="예: T&C vs Defect 비교"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                disabled={!isAdmin || generating}
+                disabled={!canGen || generating}
               />
             </div>
             <div className="space-y-1.5">
@@ -211,7 +193,7 @@ export default function SlideCodegen({ embedded = false }: Props) {
               <Select
                 value={String(position)}
                 onValueChange={(v) => setPosition(Number(v))}
-                disabled={!isAdmin || generating}
+                disabled={!canGen || generating}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -233,7 +215,7 @@ export default function SlideCodegen({ embedded = false }: Props) {
                   <Checkbox
                     checked={sources[d.key]}
                     onCheckedChange={(v) => setSources((s) => ({ ...s, [d.key]: !!v }))}
-                    disabled={!isAdmin || generating}
+                    disabled={!canGen || generating}
                   />
                   {d.label}
                 </label>
@@ -249,12 +231,12 @@ export default function SlideCodegen({ embedded = false }: Props) {
               placeholder='예: "T&C와 Defect 진행률을 좌우 카드로 비교, 현재 % 와 목표 pace 표시"'
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              disabled={!isAdmin || generating}
+              disabled={!canGen || generating}
             />
           </div>
 
           <div className="flex justify-end">
-            <Button onClick={onGenerate} disabled={!canGenerate}>
+            <Button onClick={onGenerate} disabled={!canSubmit}>
               {generating ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1.5" />}
               미리보기 만들기
             </Button>
@@ -294,15 +276,23 @@ export default function SlideCodegen({ embedded = false }: Props) {
             </div>
           )}
 
-          <div className="text-xs text-muted-foreground">
-            코드 {result.functionCode.split('\n').length}줄 생성됨 · 자세한 코드는 아래 Advanced에서 확인 가능합니다.
+          <div className="rounded-md border p-3 bg-card space-y-2">
+            <div className="text-xs text-muted-foreground">레이아웃: <code className="font-mono">{result.spec.layout}</code> · 블록 {result.spec.blocks.length}개</div>
+            <div className="flex flex-wrap gap-1">
+              {result.spec.blocks.map((b, i) => (
+                <Badge key={i} variant="outline" className="text-[10px]">{b.type}</Badge>
+              ))}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              실제 PPT 외관은 <b>Report Generator → Export PPT</b> 로 확인할 수 있습니다.
+            </div>
           </div>
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onStartOver} disabled={adding}>
               마음에 안 들어요
             </Button>
-            <Button onClick={onAddToReport} disabled={!isAdmin || adding}>
+            <Button onClick={onAddToReport} disabled={!canGen || adding}>
               {adding ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <UploadCloud className="h-4 w-4 mr-1.5" />}
               Report에 추가하기
             </Button>
@@ -314,28 +304,20 @@ export default function SlideCodegen({ embedded = false }: Props) {
       {stage === 'added' && result && (
         <div className="space-y-3 rounded-md border border-primary/40 bg-primary/5 p-4">
           <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-            <Check className="h-4 w-4" /> 3. 추가 완료 — 마지막 한 단계만 남았습니다
+            <Check className="h-4 w-4" /> 3. 추가 완료 — 바로 사용 가능합니다
           </div>
-
           <p className="text-sm">
-            슬라이드 함수가 Storage에 안전하게 저장되었습니다. 실제로 Report에 나타나려면 아래 안내문을 <b>Lovable 채팅창</b>에 붙여넣어 주세요.
+            "<b>{result.suggestedLabel}</b>" 슬라이드가 리포트에 즉시 추가되었습니다. 
+            위 <b>Slide Composer</b> 목록에서 순서와 표시 여부를 조정할 수 있고, 
+            <b>Export PPT</b> 시 자동으로 포함됩니다.
           </p>
-
-          <div className="rounded-md border bg-background p-3">
-            <pre className="text-xs whitespace-pre-wrap font-mono">{lovableInstruction}</pre>
+          <div className="text-xs text-muted-foreground">
+            수정·삭제는 Admin 권한이 필요합니다.
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={onCopyInstruction}>
-              <Copy className="h-3.5 w-3.5 mr-1.5" /> 안내문 복사
-            </Button>
+          <div>
             <Button variant="outline" onClick={onStartOver}>
               <Sparkles className="h-3.5 w-3.5 mr-1.5" /> 다른 슬라이드 만들기
             </Button>
-          </div>
-
-          <div className="text-xs text-muted-foreground">
-            Lovable이 코드를 적용한 뒤 Slide Composer에서 새 슬라이드의 순서·표시 여부를 조정할 수 있습니다.
           </div>
         </div>
       )}
@@ -346,29 +328,14 @@ export default function SlideCodegen({ embedded = false }: Props) {
           <CollapsibleTrigger asChild>
             <Button variant="ghost" size="sm" className="gap-1.5">
               <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', showAdvanced && 'rotate-180')} />
-              Advanced (개발자용)
+              Advanced (spec JSON)
             </Button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-3 pt-3">
-            <div className="flex items-center justify-between">
-              <div className="text-xs text-muted-foreground">생성된 함수 코드</div>
-              <Button size="sm" variant="outline" onClick={onCopyCode}>
-                <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy
-              </Button>
-            </div>
+          <CollapsibleContent className="space-y-2 pt-3">
+            <div className="text-xs text-muted-foreground">key: <code className="font-mono">{result.suggestedKey}</code></div>
             <pre className="max-h-80 overflow-auto rounded-md border bg-muted/40 p-3 text-xs font-mono whitespace-pre-wrap">
-{result.functionCode}
+{JSON.stringify(result.spec, null, 2)}
             </pre>
-            <div className="grid gap-2 text-xs sm:grid-cols-2">
-              <div>
-                <span className="text-muted-foreground">key: </span>
-                <code className="font-mono">{result.suggestedKey}</code>
-              </div>
-              <div>
-                <span className="text-muted-foreground">label: </span>
-                <span>{result.suggestedLabel}</span>
-              </div>
-            </div>
           </CollapsibleContent>
         </Collapsible>
       )}
