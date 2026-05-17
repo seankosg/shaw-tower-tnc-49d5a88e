@@ -58,20 +58,20 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const { data, error } = await supabase
-        .from('font_registry')
-        .select('*')
-        .order('family_name')
-        .order('style');
-      if (error) {
-        toast({ title: 'Failed to load fonts', description: error.message, variant: 'destructive' });
-        return;
-      }
-      setRows((data ?? []) as FontRow[]);
-    })();
-  }, [toast]);
+  const loadFonts = async () => {
+    const { data, error } = await supabase
+      .from('font_registry')
+      .select('*')
+      .order('family_name')
+      .order('style');
+    if (error) {
+      toast({ title: 'Failed to load fonts', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setRows((data ?? []) as FontRow[]);
+  };
+
+  useEffect(() => { loadFonts(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const families = useMemo<FamilyOption[]>(() => {
     const builtin: FamilyOption = { family: BUILTIN_FAMILY, builtin: true, styles: [], totalBytes: 0 };
