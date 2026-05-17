@@ -18,6 +18,8 @@ import {
   restoreCodeVersion,
   saveCodeVersion,
 } from '@/lib/code-editor';
+// Vite ?raw — 빌드 시점의 src/lib/ppt-builder.ts 원문이 문자열로 번들됨
+import pptBuilderSource from '@/lib/ppt-builder.ts?raw';
 
 const FILE_NAME = 'ppt-builder.ts';
 const PASTE_INSTRUCTION = 'ppt-builder.ts를 업로드한 파일로 교체해주세요';
@@ -52,6 +54,7 @@ export default function CodeEditor() {
   const [bootstrapping, setBootstrapping] = useState(false);
   const [saving, setSaving] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const refresh = async () => {
     setLoading(true);
@@ -188,6 +191,26 @@ export default function CodeEditor() {
     }
   };
 
+  const handleSyncFromCodebase = async () => {
+    const lineCount = pptBuilderSource.split('\n').length;
+    if (!confirm(`Codebase의 ${FILE_NAME} (${lineCount}줄)을 Storage에 새 active 버전으로 저장합니다. 진행할까요?`)) return;
+    setSyncing(true);
+    try {
+      await saveCodeVersion({
+        fileName: FILE_NAME,
+        content: pptBuilderSource,
+        changeSummaryKo: 'Codebase에서 동기화 (Sync from codebase)',
+        instruction: 'Sync from src/lib/ppt-builder.ts via UI button',
+      });
+      toast({ title: 'Synced from codebase', description: `${lineCount} lines uploaded as new active version` });
+      await refresh();
+    } catch (e) {
+      toast({ title: 'Sync failed', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const copyInstruction = async () => {
     await navigator.clipboard.writeText(PASTE_INSTRUCTION);
     toast({ title: 'Copied to clipboard' });
@@ -217,15 +240,30 @@ export default function CodeEditor() {
                   <div className="mt-1 text-xs text-muted-foreground">{active.change_summary_ko}</div>
                 )}
               </div>
-              <Button size="sm" variant="outline" onClick={handleDownloadActive}>
-                <Download className="mr-1 h-3.5 w-3.5" /> Download current
-              </Button>
+              <div className="flex flex-col gap-2 items-end">
+                <Button size="sm" variant="outline" onClick={handleDownloadActive}>
+                  <Download className="mr-1 h-3.5 w-3.5" /> Download current
+                </Button>
+                <Button size="sm" variant="default" onClick={handleSyncFromCodebase} disabled={syncing}>
+                  {syncing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-1 h-3.5 w-3.5" />}
+                  Sync from codebase ({pptBuilderSource.split('\n').length} lines)
+                </Button>
+              </div>
             </div>
           ) : (
-            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-              No file uploaded yet. Use "Upload Initial File" below.
+            <div className="space-y-2">
+              <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                No file uploaded yet. Use "Sync from codebase" or "Upload Initial File" below.
+              </div>
+              <Button size="sm" variant="default" onClick={handleSyncFromCodebase} disabled={syncing}>
+                {syncing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-1 h-3.5 w-3.5" />}
+                Sync from codebase ({pptBuilderSource.split('\n').length} lines)
+              </Button>
             </div>
           )}
+          <p className="mt-2 text-xs text-muted-foreground">
+            "Sync from codebase"는 현재 빌드의 <code>src/lib/ppt-builder.ts</code>를 Storage에 새 active 버전으로 푸시합니다 (잘린 파일 복구용).
+          </p>
         </section>
 
         {/* Bootstrap */}
