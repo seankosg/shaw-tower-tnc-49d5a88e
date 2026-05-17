@@ -207,6 +207,9 @@ function drawCard(pres: pptxgen, s: pptxgen.Slide, x: number, y: number, w: numb
     x: x + 0.25, y: y + 1.65, w: w - 0.5, h: 0.45,
     fontFace: FONT, fontSize: 12, color: card.footerColor, bold: card.alert,
   });
+  if (typeof card.barPct === 'number' && card.barColor) {
+    drawBar(s, pres, x + 0.25, y + h - 0.25, w - 0.5, card.barPct, card.barColor);
+  }
 }
 
 function drawBar(s: pptxgen.Slide, pres: pptxgen, x: number, y: number, w: number, pct: number, color: string) {
