@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Download, Sparkles, Copy, RotateCcw, CheckCircle2 } from 'lucide-react';
+import { Loader2, Upload, Download, Sparkles, Copy, RotateCcw, CheckCircle2, Wand2 } from 'lucide-react';
 import { FinalConfirmDialog } from '@/components/admin/FinalConfirmDialog';
+
 import {
   getActiveVersion,
   listVersions,
@@ -20,6 +22,7 @@ import {
   type DesignGuideVersion,
   type AnalysisResult,
 } from '@/lib/design-guide-manager';
+import { invokeCodeEditor } from '@/lib/code-editor';
 
 interface Props {
   embedded?: boolean;
@@ -40,6 +43,14 @@ export default function DesignGuideManager({ embedded }: Props) {
 
   const [rollbackTarget, setRollbackTarget] = useState<DesignGuideVersion | null>(null);
   const [rolling, setRolling] = useState(false);
+
+  // Natural-language YAML modification
+  const [nlInstruction, setNlInstruction] = useState('');
+  const [nlModifying, setNlModifying] = useState(false);
+  const [nlModified, setNlModified] = useState<string | null>(null);
+  const [nlOriginal, setNlOriginal] = useState<string | null>(null);
+  const [nlSummary, setNlSummary] = useState<string>('');
+  const [nlApplying, setNlApplying] = useState(false);
 
   const refresh = async () => {
     setLoading(true);
@@ -148,6 +159,93 @@ export default function DesignGuideManager({ embedded }: Props) {
     toast({ title: 'Code suggestion copied' });
   };
 
+  const handleNlModify = async () => {
+    if (!active) {
+      toast({ title: 'No active design guide', variant: 'destructive' });
+      return;
+    }
+    if (!nlInstruction.trim()) {
+      toast({ title: 'Enter an instruction', variant: 'destructive' });
+      return;
+    }
+    setNlModifying(true);
+    setNlModified(null);
+    setNlSummary('');
+    try {
+      const yaml = await downloadYaml(active.storage_path);
+      setNlOriginal(yaml);
+      const result = await invokeCodeEditor({
+        fileContent: yaml,
+        instruction: nlInstruction.trim(),
+        fileType: 'yaml',
+      });
+      setNlModified(result.modifiedContent);
+      setNlSummary(result.changeSummary);
+      toast({ title: 'Modified with Claude' });
+    } catch (e) {
+      toast({ title: 'Modification failed', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
+    } finally {
+      setNlModifying(false);
+    }
+  };
+
+  const downloadModifiedYaml = () => {
+    if (!nlModified) return;
+    const blob = new Blob([nlModified], { type: 'text/yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `design-guide-modified-${new Date().toISOString().slice(0, 10)}.yaml`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleApplyNlTokens = async () => {
+    if (!nlModified || !nlOriginal) return;
+    setNlApplying(true);
+    try {
+      const filename = `nl-modified-${new Date().toISOString().replace(/[:.]/g, '-')}.yaml`;
+      const blob = new Blob([nlModified], { type: 'text/yaml' });
+      const file = new File([blob], filename, { type: 'text/yaml' });
+      const path = await uploadNewYaml(file);
+      const analysisResult = await analyzeYaml(nlOriginal, nlModified);
+      await applyTokenChanges(analysisResult.colorTokens, analysisResult.fontTokens);
+      const saved = await saveVersion({
+        storage_path: path,
+        version_label: `NL: ${nlInstruction.trim().slice(0, 60)}`,
+        summary_ko: nlSummary || analysisResult.summaryKo,
+      });
+      await setActiveVersion(saved.id);
+      toast({ title: 'Tokens applied & version saved' });
+      setNlInstruction('');
+      setNlModified(null);
+      setNlOriginal(null);
+      setNlSummary('');
+      await refresh();
+    } catch (e) {
+      toast({ title: 'Apply failed', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
+    } finally {
+      setNlApplying(false);
+    }
+  };
+
+  const renderYamlDiff = (oldText: string, newText: string) => {
+    const oldLines = oldText.split('\n');
+    const newLines = newText.split('\n');
+    const oldSet = new Set(oldLines);
+    const newSet = new Set(newLines);
+    const out: { type: 'add' | 'del' | 'same'; text: string }[] = [];
+    // Simple line-level set diff for quick visual feedback
+    newLines.forEach((l) => {
+      if (!oldSet.has(l)) out.push({ type: 'add', text: l });
+      else out.push({ type: 'same', text: l });
+    });
+    oldLines.forEach((l) => {
+      if (!newSet.has(l)) out.push({ type: 'del', text: l });
+    });
+    return out;
+  };
+
   const hex = (v: string) => (v.startsWith('#') ? v : `#${v}`);
 
   const body = (
@@ -212,7 +310,66 @@ export default function DesignGuideManager({ embedded }: Props) {
         </div>
       </section>
 
-      {/* Analysis Results */}
+      {/* Natural-language YAML modification */}
+      <section>
+        <h3 className="mb-2 text-sm font-semibold">Modify with Natural Language</h3>
+        <div className="space-y-2 rounded-md border p-3">
+          <Textarea
+            value={nlInstruction}
+            onChange={(e) => setNlInstruction(e.target.value)}
+            placeholder="예: primary 색상을 더 진한 네이비로 바꿔줘"
+            className="min-h-[70px] text-sm"
+            disabled={!active}
+          />
+          <Button size="sm" onClick={handleNlModify} disabled={!active || !nlInstruction.trim() || nlModifying}>
+            {nlModifying ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-1 h-3.5 w-3.5" />}
+            Modify with Claude
+          </Button>
+          {!active && (
+            <p className="text-xs text-muted-foreground">Upload an active design guide first.</p>
+          )}
+
+          {nlModified && nlOriginal && (
+            <div className="space-y-2 mt-2">
+              {nlSummary && (
+                <div className="rounded bg-muted/40 p-2 text-sm whitespace-pre-wrap">{nlSummary}</div>
+              )}
+              <details>
+                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                  Diff preview
+                </summary>
+                <pre className="mt-2 max-h-72 overflow-auto rounded bg-muted p-2 text-xs">
+                  {renderYamlDiff(nlOriginal, nlModified).map((l, i) => (
+                    <div
+                      key={i}
+                      className={
+                        l.type === 'add'
+                          ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                          : l.type === 'del'
+                            ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                            : ''
+                      }
+                    >
+                      {l.type === 'add' ? '+ ' : l.type === 'del' ? '- ' : '  '}
+                      {l.text}
+                    </div>
+                  ))}
+                </pre>
+              </details>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={handleApplyNlTokens} disabled={nlApplying}>
+                  {nlApplying ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="mr-1 h-3.5 w-3.5" />}
+                  Apply Tokens
+                </Button>
+                <Button size="sm" variant="outline" onClick={downloadModifiedYaml}>
+                  <Download className="mr-1 h-3.5 w-3.5" /> Download YAML
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
       {analysis && (
         <section>
           <h3 className="mb-2 text-sm font-semibold">Analysis Results</h3>

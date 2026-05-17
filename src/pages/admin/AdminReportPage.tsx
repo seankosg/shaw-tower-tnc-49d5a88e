@@ -1,6 +1,11 @@
 import { Shield } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ReportTab from './ReportTab';
+import DesignTokensEditor from '@/components/admin/DesignTokensEditor';
+import SlideComposer from '@/components/admin/SlideComposer';
+import DesignGuideManager from '@/components/admin/DesignGuideManager';
+import CodeEditor from '@/components/admin/CodeEditor';
 
 export default function AdminReportPage() {
   const { isAdmin } = useAuth();
@@ -19,7 +24,20 @@ export default function AdminReportPage() {
   return (
     <div className="space-y-4 p-4 md:p-6">
       <h1 className="text-2xl font-semibold text-foreground">Report</h1>
-      <ReportTab />
+      <Tabs defaultValue="report">
+        <TabsList className="flex-wrap">
+          <TabsTrigger value="report">Report Generator</TabsTrigger>
+          <TabsTrigger value="tokens">Design Tokens</TabsTrigger>
+          <TabsTrigger value="composer">Slide Composer</TabsTrigger>
+          <TabsTrigger value="guide">Design Guide</TabsTrigger>
+          <TabsTrigger value="code">Code Editor</TabsTrigger>
+        </TabsList>
+        <TabsContent value="report"><ReportTab /></TabsContent>
+        <TabsContent value="tokens"><DesignTokensEditor embedded /></TabsContent>
+        <TabsContent value="composer"><SlideComposer embedded /></TabsContent>
+        <TabsContent value="guide"><DesignGuideManager embedded /></TabsContent>
+        <TabsContent value="code"><CodeEditor /></TabsContent>
+      </Tabs>
     </div>
   );
 }
