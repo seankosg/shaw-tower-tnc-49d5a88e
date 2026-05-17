@@ -148,11 +148,18 @@ function fmtDateShort(iso: string): string {
 }
 
 function drawFooter(pres: pptxgen, s: pptxgen.Slide, pageNum: string) {
-  s.addText('SHAW · Status Report', {
+  // Per-slide show_footer override (defaults to true). Uses CURRENT_SLIDE_KEY
+  // which is set immediately before each builder runs.
+  const show = getOpt(CURRENT_SLIDE_KEY, 'show_footer', true);
+  if (!show) return;
+  void pres;
+  const brand = T('__common', 'footer_brand', 'SHAW · Status Report');
+  const pageFmt = T('__common', 'footer_page_fmt', 'Page {n}');
+  s.addText(brand, {
     x: 0.5, y: 7.1, w: 5, h: 0.3,
     fontFace: FONT_MONO, fontSize: 10, color: C.cyan,
   });
-  s.addText(`Page ${pageNum}`, {
+  s.addText(pageFmt.replace('{n}', pageNum), {
     x: 11, y: 7.1, w: 1.83, h: 0.3,
     fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right',
   });
