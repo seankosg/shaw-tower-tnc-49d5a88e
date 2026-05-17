@@ -121,6 +121,7 @@ export default function FontLibrary({ embedded = false, onChanged }: FontLibrary
     } else {
       toast({ title: `Default set: ${row.family_name} ${row.style}` });
       load();
+      onChanged?.();
     }
   };
 
