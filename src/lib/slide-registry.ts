@@ -2,20 +2,23 @@
 // The actual builder functions live in `ppt-builder.ts`; this file only
 // describes each slide for selection / reordering purposes.
 
-import type { SlideKey } from '@/lib/ppt-builder';
+import type { SlideKey, BuiltInSlideKey } from '@/lib/ppt-builder';
 import { DEFAULT_SLIDE_ORDER } from '@/lib/ppt-builder';
+import { fetchCustomSlides } from '@/lib/custom-slides-cache';
 
-export type SlideCategory = 'intro' | 'overview' | 'tnc' | 'defect' | 'docs' | 'punch';
+export type SlideCategory = 'intro' | 'overview' | 'tnc' | 'defect' | 'docs' | 'punch' | 'custom';
 
 export interface SlideMeta {
   key: SlideKey;
-  number: number;       // 1-based slide number in default order
-  label: string;        // UI label
-  description: string;  // short helper text
+  number: number;
+  label: string;
+  description: string;
   category: SlideCategory;
+  isCustom?: boolean;
+  customId?: string;
 }
 
-export const SLIDE_REGISTRY: Record<SlideKey, SlideMeta> = {
+export const SLIDE_REGISTRY: Record<BuiltInSlideKey, SlideMeta> = {
   cover:              { key: 'cover',              number: 1,  label: 'Cover',                       description: 'Title slide with project & D-day',                category: 'intro' },
   dashboard:          { key: 'dashboard',          number: 2,  label: 'All-Module Dashboard',        description: 'Snapshot of all four workstreams',               category: 'overview' },
   tnc_snapshot:       { key: 'tnc_snapshot',       number: 3,  label: 'T&C Snapshot',                description: 'Pre-Test / Official / Test Report KPIs',         category: 'tnc' },
@@ -29,6 +32,33 @@ export const SLIDE_REGISTRY: Record<SlideKey, SlideMeta> = {
   docs_snapshot:      { key: 'docs_snapshot',      number: 11, label: 'Close Out Documents',         description: 'ABD / OMM / Warranty / Spare Part',              category: 'docs' },
   punch_snapshot:     { key: 'punch_snapshot',     number: 12, label: 'Punch List',                  description: 'Status, completion-date timeline, top 3 latest', category: 'punch' },
 };
+
+/**
+ * Load the full slide registry (built-in + custom from DB).
+ * Returns a Record keyed by slide key.
+ */
+export async function loadSlideRegistry(): Promise<Record<string, SlideMeta>> {
+  const out: Record<string, SlideMeta> = { ...SLIDE_REGISTRY };
+  try {
+    const customs = await fetchCustomSlides();
+    let n = DEFAULT_SLIDE_ORDER.length;
+    for (const c of customs) {
+      n += 1;
+      out[c.key] = {
+        key: c.key,
+        number: n,
+        label: c.label,
+        description: c.spec.subtitle ?? 'Custom slide',
+        category: 'custom',
+        isCustom: true,
+        customId: c.id,
+      };
+    }
+  } catch (err) {
+    console.warn('[slide-registry] failed to load custom slides:', err);
+  }
+  return out;
+}
 
 export { DEFAULT_SLIDE_ORDER };
 export type { SlideKey };
