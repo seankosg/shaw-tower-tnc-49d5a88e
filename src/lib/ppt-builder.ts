@@ -1358,3 +1358,70 @@ export async function buildAndDownloadPpt(rd: ReportData): Promise<void> {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
+
+// ─────────────────────────────────────────
+// SLIDE ORCHESTRATION
+// ─────────────────────────────────────────
+export type SlideKey =
+  | 'cover' | 'dashboard'
+  | 'tnc_snapshot' | 'tnc_scurve' | 'tnc_forecast' | 'tnc_action_plan'
+  | 'defect_snapshot' | 'defect_scurve' | 'defect_forecast' | 'defect_action_plan'
+  | 'docs_snapshot' | 'punch_snapshot';
+
+export const DEFAULT_SLIDE_ORDER: SlideKey[] = [
+  'cover', 'dashboard',
+  'tnc_snapshot', 'tnc_scurve', 'tnc_forecast', 'tnc_action_plan',
+  'defect_snapshot', 'defect_scurve', 'defect_forecast', 'defect_action_plan',
+  'docs_snapshot', 'punch_snapshot',
+];
+
+export interface SlideConfigItem { key: string; enabled: boolean; }
+
+export interface BuildPptOptions {
+  data: ReportData;
+  fontFamily?: string;
+  fontDisplayName?: string;
+  colors?: PptColorTokens;
+  slideConfig?: SlideConfigItem[];
+}
+
+export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
+  const { data, fontFamily, colors, slideConfig } = opts;
+  if (fontFamily) FONT = fontFamily;
+  if (colors) Object.assign(C, colors);
+
+  const { tncKPI, defectKPI, docsKPI, punchKPI } = loadKPIs(data);
+
+  const pres = new pptxgen();
+  pres.layout = 'LAYOUT_WIDE';
+  pres.author = 'HDEC';
+  pres.title  = 'SHAW TOWER Completion Management';
+
+  const config = (slideConfig && slideConfig.length > 0)
+    ? slideConfig
+    : DEFAULT_SLIDE_ORDER.map(k => ({ key: k, enabled: true }));
+
+  const runners: Record<SlideKey, () => void> = {
+    cover:              () => buildCover(pres, tncKPI),
+    dashboard:          () => buildDashboard(pres, tncKPI, defectKPI, docsKPI, punchKPI),
+    tnc_snapshot:       () => buildSnapshot(pres, tncKPI),
+    tnc_scurve:         () => buildPlanVsActual(pres, tncKPI),
+    tnc_forecast:       () => buildForecast(pres, tncKPI),
+    tnc_action_plan:    () => buildActionPlan(pres, tncKPI),
+    defect_snapshot:    () => buildDefectSnapshot(pres, defectKPI),
+    defect_scurve:      () => buildDefectPlanVsActual(pres, defectKPI),
+    defect_forecast:    () => buildDefectForecast(pres, defectKPI),
+    defect_action_plan: () => buildDefectActionPlan(pres, defectKPI),
+    docs_snapshot:      () => buildDocsSnapshot(pres, docsKPI),
+    punch_snapshot:     () => buildPunchSnapshot(pres, punchKPI, data.meta),
+  };
+
+  for (const item of config) {
+    if (!item.enabled) continue;
+    const fn = runners[item.key as SlideKey];
+    if (fn) fn();
+  }
+
+  const raw = await pres.write({ outputType: 'blob' }) as Blob;
+  return await postProcessXml(raw);
+}
