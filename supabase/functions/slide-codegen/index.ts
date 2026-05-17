@@ -19,6 +19,7 @@ const ResultSchema = z.object({
   functionCode: z.string().min(20),
   suggestedKey: z.string().regex(/^[a-z][a-z0-9_]*$/),
   suggestedLabel: z.string().min(1).max(120),
+  summary: z.string().min(1).max(600).optional(),
 });
 
 const SYSTEM_PROMPT = `You are a TypeScript developer working on a pptxgenjs slide builder.
@@ -51,7 +52,8 @@ Respond with ONLY a JSON object (no markdown, no code fences) matching:
 {
   "functionCode": "function buildSlide_xxx(ctx: SlideBuildCtx): void { ... }",
   "suggestedKey": "snake_case_key",
-  "suggestedLabel": "Human Readable Label"
+  "suggestedLabel": "Human Readable Label",
+  "summary": "한국어로 슬라이드가 어떤 데이터를 어떻게 보여주는지 2~3문장 요약"
 }`;
 
 Deno.serve(async (req) => {
@@ -168,6 +170,28 @@ ${slideRegistry}`;
           details: validated.error.flatten(),
           raw: rawText,
         }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // 간단한 sanity check: 함수 시그니처가 suggestedKey와 일치하는지
+    const { functionCode, suggestedKey } = validated.data;
+    const expectedSig = `function buildSlide_${suggestedKey}`;
+    if (!functionCode.includes(expectedSig)) {
+      return new Response(
+        JSON.stringify({
+          error: `생성된 코드의 함수명이 키와 일치하지 않습니다. 다시 시도해 주세요.`,
+          raw: rawText,
+        }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    // 괄호 균형 체크
+    const opens = (functionCode.match(/\{/g) || []).length;
+    const closes = (functionCode.match(/\}/g) || []).length;
+    if (opens !== closes) {
+      return new Response(
+        JSON.stringify({ error: 'AI가 만든 코드의 괄호가 맞지 않습니다. 다시 시도해 주세요.', raw: rawText }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
