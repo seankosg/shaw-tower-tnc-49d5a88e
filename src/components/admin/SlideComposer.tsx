@@ -8,13 +8,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { GripVertical, Loader2, RotateCcw, Save, Layers, Trash2 } from 'lucide-react';
+import { GripVertical, Loader2, RotateCcw, Save, Layers, Trash2, Settings2 } from 'lucide-react';
 import { DEFAULT_SLIDE_ORDER, loadSlideRegistry, type SlideCategory, type SlideMeta } from '@/lib/slide-registry';
 import { fetchSlideConfig, saveSlideConfig, invalidateSlideConfigCache } from '@/lib/slide-config';
 import type { SlideConfigItem } from '@/lib/ppt-builder';
 import { deleteCustomSlide, invalidateCustomSlidesCache } from '@/lib/custom-slides-cache';
 import SlideTextEditor from '@/components/admin/SlideTextEditor';
 import SlideCodegen from '@/components/admin/SlideCodegen';
+import SlideDisplayOptionsDialog from '@/components/admin/SlideDisplayOptionsDialog';
 
 interface Props {
   embedded?: boolean;
