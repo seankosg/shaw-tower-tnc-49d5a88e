@@ -24,6 +24,14 @@ import { resolveText, type TextOverrideMap } from '@/lib/text-token-registry';
 let TEXT_OVERRIDES: TextOverrideMap | undefined = undefined;
 const T = (slideKey: string, fieldKey: string, fallback: string) =>
   resolveText(TEXT_OVERRIDES, slideKey, fieldKey, fallback);
+
+// Module-level slide display options (per slide_key → options object), set by buildPpt().
+let DISPLAY_OPTIONS: Record<string, Record<string, unknown>> = {};
+let CURRENT_SLIDE_KEY = '';
+function getOpt<T>(slideKey: string, optKey: string, fallback: T): T {
+  const v = DISPLAY_OPTIONS[slideKey]?.[optKey];
+  return (v === undefined || v === null) ? fallback : (v as T);
+}
 import JSZip from 'jszip';
 import type {
   ReportData,
@@ -140,11 +148,18 @@ function fmtDateShort(iso: string): string {
 }
 
 function drawFooter(pres: pptxgen, s: pptxgen.Slide, pageNum: string) {
-  s.addText('SHAW · Status Report', {
+  // Per-slide show_footer override (defaults to true). Uses CURRENT_SLIDE_KEY
+  // which is set immediately before each builder runs.
+  const show = getOpt(CURRENT_SLIDE_KEY, 'show_footer', true);
+  if (!show) return;
+  void pres;
+  const brand = T('__common', 'footer_brand', 'SHAW · Status Report');
+  const pageFmt = T('__common', 'footer_page_fmt', 'Page {n}');
+  s.addText(brand, {
     x: 0.5, y: 7.1, w: 5, h: 0.3,
     fontFace: FONT_MONO, fontSize: 10, color: C.cyan,
   });
-  s.addText(`Page ${pageNum}`, {
+  s.addText(pageFmt.replace('{n}', pageNum), {
     x: 11, y: 7.1, w: 1.83, h: 0.3,
     fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right',
   });
@@ -1421,6 +1436,15 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
   if (colors) Object.assign(C, colors);
   TEXT_OVERRIDES = textOverrides;
 
+  // Load per-slide display options (best-effort; falls back to defaults).
+  try {
+    const { fetchAllSlideDisplayOptions } = await import('@/lib/slide-display-options');
+    DISPLAY_OPTIONS = await fetchAllSlideDisplayOptions(true);
+  } catch (err) {
+    console.warn('[ppt-builder] display options unavailable:', err);
+    DISPLAY_OPTIONS = {};
+  }
+
   const { tncKPI, defectKPI, docsKPI, punchKPI } = loadKPIs(data);
 
   const pres = new pptxgen();
@@ -1474,6 +1498,7 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
     for (const item of config) {
       if (!item.enabled) continue;
       if (!isAllowed(item.key)) continue;
+      CURRENT_SLIDE_KEY = item.key;
       const fn = (runners as Record<string, () => void>)[item.key];
       if (fn) {
         fn();
@@ -1492,10 +1517,12 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
     console.warn('[ppt-builder] custom slides unavailable, falling back to built-ins:', err);
     for (const item of config) {
       if (!item.enabled) continue;
+      CURRENT_SLIDE_KEY = item.key;
       const fn = (runners as Record<string, () => void>)[item.key];
       if (fn) fn();
     }
   }
+  CURRENT_SLIDE_KEY = '';
 
   const raw = await pres.write({ outputType: 'blob' }) as Blob;
   return await postProcessXml(raw);

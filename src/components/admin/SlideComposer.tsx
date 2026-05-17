@@ -8,13 +8,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { GripVertical, Loader2, RotateCcw, Save, Layers, Trash2 } from 'lucide-react';
+import { GripVertical, Loader2, RotateCcw, Save, Layers, Trash2, Settings2 } from 'lucide-react';
 import { DEFAULT_SLIDE_ORDER, loadSlideRegistry, type SlideCategory, type SlideMeta } from '@/lib/slide-registry';
 import { fetchSlideConfig, saveSlideConfig, invalidateSlideConfigCache } from '@/lib/slide-config';
 import type { SlideConfigItem } from '@/lib/ppt-builder';
 import { deleteCustomSlide, invalidateCustomSlidesCache } from '@/lib/custom-slides-cache';
 import SlideTextEditor from '@/components/admin/SlideTextEditor';
 import SlideCodegen from '@/components/admin/SlideCodegen';
+import SlideDisplayOptionsDialog from '@/components/admin/SlideDisplayOptionsDialog';
 
 interface Props {
   embedded?: boolean;
@@ -30,15 +31,16 @@ function defaultItems(): SlideConfigItem[] {
 }
 
 function SortableRow({
-  item, index, isAdmin, registry, onToggle, onDelete,
+  item, index, canEdit, registry, onToggle, onDelete, onEditOptions,
 }: {
-  item: SlideConfigItem; index: number; isAdmin: boolean;
+  item: SlideConfigItem; index: number; canEdit: boolean;
   registry: Record<string, SlideMeta>;
   onToggle: (k: string, enabled: boolean) => void;
   onDelete: (meta: SlideMeta) => void;
+  onEditOptions: (meta: SlideMeta) => void;
 }) {
   const meta = registry[item.key];
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.key, disabled: !isAdmin });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.key, disabled: !canEdit });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -54,7 +56,7 @@ function SortableRow({
       <button
         type="button"
         className="flex h-8 w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
-        disabled={!isAdmin}
+        disabled={!canEdit}
         {...attributes}
         {...listeners}
         aria-label="Drag to reorder"
@@ -65,7 +67,7 @@ function SortableRow({
       <Checkbox
         checked={item.enabled}
         onCheckedChange={(v) => onToggle(item.key, !!v)}
-        disabled={!isAdmin}
+        disabled={!canEdit}
         aria-label={`Enable ${meta.label}`}
       />
       <div className="flex-1 min-w-0">
@@ -76,7 +78,19 @@ function SortableRow({
         <div className="text-xs text-muted-foreground truncate">{meta.description}</div>
       </div>
       <Badge variant="outline" className="shrink-0">{CATEGORY_LABEL[meta.category]}</Badge>
-      {meta.isCustom && isAdmin && (
+      {!meta.isCustom && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="shrink-0 h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+          onClick={() => onEditOptions(meta)}
+          aria-label={`Edit display options for ${meta.label}`}
+          title="Edit display options"
+        >
+          <Settings2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {meta.isCustom && canEdit && (
         <Button
           size="sm"
           variant="ghost"
@@ -98,7 +112,9 @@ export default function SlideComposer({ embedded = false }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+  const [, setIsAdmin] = useState(false);
+  const [editOptionsFor, setEditOptionsFor] = useState<SlideMeta | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -115,14 +131,20 @@ export default function SlideComposer({ embedded = false }: Props) {
       supabase.auth.getUser(),
     ]);
     let admin = false;
+    let senior = false;
     const uid = auth.data.user?.id;
     if (uid) {
-      const { data } = await supabase.rpc('has_role', { _user_id: uid, _role: 'admin' });
-      admin = !!data;
+      const [adminR, seniorR] = await Promise.all([
+        supabase.rpc('has_role', { _user_id: uid, _role: 'admin' }),
+        supabase.rpc('is_senior_or_above', { _user_id: uid }),
+      ]);
+      admin = !!adminR.data;
+      senior = !!seniorR.data;
     }
     setRegistry(reg);
     setItems(cfg);
     setIsAdmin(admin);
+    setCanEdit(senior || admin);
     setLoading(false);
   };
 
@@ -191,19 +213,19 @@ export default function SlideComposer({ embedded = false }: Props) {
           {enabledCount} of {items.length} slides enabled · drag to reorder
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={onReset} disabled={!isAdmin || saving}>
+          <Button size="sm" variant="outline" onClick={onReset} disabled={!canEdit || saving}>
             <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reset
           </Button>
-          <Button size="sm" onClick={onSave} disabled={!isAdmin || saving || !dirty}>
+          <Button size="sm" onClick={onSave} disabled={!canEdit || saving || !dirty}>
             {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
             Save
           </Button>
         </div>
       </div>
 
-      {!isAdmin && !loading && (
+      {!canEdit && !loading && (
         <div className="rounded-md border border-dashed bg-muted/30 p-2 text-xs text-muted-foreground">
-          Admins only — view-only mode.
+          Senior User role or higher required to edit — view-only mode.
         </div>
       )}
 
@@ -220,15 +242,26 @@ export default function SlideComposer({ embedded = false }: Props) {
                   key={item.key}
                   item={item}
                   index={idx}
-                  isAdmin={isAdmin}
+                  canEdit={canEdit}
                   registry={registry}
                   onToggle={onToggle}
                   onDelete={onDeleteCustom}
+                  onEditOptions={(m) => setEditOptionsFor(m)}
                 />
               ))}
             </div>
           </SortableContext>
         </DndContext>
+      )}
+
+      {editOptionsFor && (
+        <SlideDisplayOptionsDialog
+          slideKey={editOptionsFor.key}
+          slideLabel={editOptionsFor.label}
+          open={!!editOptionsFor}
+          onOpenChange={(o) => { if (!o) setEditOptionsFor(null); }}
+          canEdit={canEdit}
+        />
       )}
     </div>
   );

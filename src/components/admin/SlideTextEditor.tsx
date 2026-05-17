@@ -4,11 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, RotateCcw, Save, Type } from 'lucide-react';
-import { TEXT_TOKEN_REGISTRY } from '@/lib/text-token-registry';
+import { Loader2, RotateCcw, Save, Search, Type } from 'lucide-react';
+import {
+  TEXT_TOKEN_REGISTRY, COMMON_TOKENS, COMMON_SLIDE_KEY, type TextToken,
+} from '@/lib/text-token-registry';
 import type { SlideKey } from '@/lib/ppt-builder';
 import { SLIDE_REGISTRY } from '@/lib/slide-registry';
 import {
@@ -24,22 +27,26 @@ interface Props {
 export default function SlideTextEditor({ embedded = false }: Props) {
   const { toast } = useToast();
 
-  // Slides that actually have overridable fields
-  const slideOptions = useMemo(
-    () =>
-      (Object.keys(TEXT_TOKEN_REGISTRY) as SlideKey[])
-        .filter((k) => TEXT_TOKEN_REGISTRY[k].length > 0)
-        .map((k) => ({ key: k, meta: SLIDE_REGISTRY[k] }))
-        .sort((a, b) => (a.meta?.number ?? 99) - (b.meta?.number ?? 99)),
-    [],
-  );
+  // Slides that actually have overridable fields, plus the special "Common" section
+  const slideOptions = useMemo(() => {
+    const real = (Object.keys(TEXT_TOKEN_REGISTRY) as SlideKey[])
+      .filter((k) => TEXT_TOKEN_REGISTRY[k].length > 0)
+      .map((k) => ({ key: k as string, label: SLIDE_REGISTRY[k]?.label ?? k, number: SLIDE_REGISTRY[k]?.number ?? 99 }))
+      .sort((a, b) => a.number - b.number);
+    return [
+      { key: COMMON_SLIDE_KEY, label: 'Common (all slides)', number: 0 },
+      ...real,
+    ];
+  }, []);
 
-  const [slideKey, setSlideKey] = useState<SlideKey>(slideOptions[0]?.key ?? 'cover');
+  const [slideKey, setSlideKey] = useState<string>(COMMON_SLIDE_KEY);
   const [overrides, setOverrides] = useState<Record<string, Record<string, string>>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [overriddenOnly, setOverriddenOnly] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,15 +56,15 @@ export default function SlideTextEditor({ embedded = false }: Props) {
         fetchTextOverrides(true),
         supabase.auth.getUser(),
       ]);
-      let admin = false;
+      let senior = false;
       const uid = auth.data.user?.id;
       if (uid) {
-        const { data: r } = await supabase.rpc('has_role', { _user_id: uid, _role: 'admin' });
-        admin = !!r;
+        const { data: r } = await supabase.rpc('is_senior_or_above', { _user_id: uid });
+        senior = !!r;
       }
       if (!cancelled) {
         setOverrides(data);
-        setIsAdmin(admin);
+        setCanEdit(senior);
         setLoading(false);
       }
     })();
@@ -67,17 +74,31 @@ export default function SlideTextEditor({ embedded = false }: Props) {
   // Reset drafts when slide changes / overrides reload
   useEffect(() => {
     const slideOv = overrides[slideKey] ?? {};
-    const fields = TEXT_TOKEN_REGISTRY[slideKey] ?? [];
+    const fields = slideKey === COMMON_SLIDE_KEY ? COMMON_TOKENS : (TEXT_TOKEN_REGISTRY[slideKey] ?? []);
     const next: Record<string, string> = {};
     for (const f of fields) next[f.key] = slideOv[f.key] ?? '';
     setDrafts(next);
   }, [slideKey, overrides]);
 
-  const fields = TEXT_TOKEN_REGISTRY[slideKey] ?? [];
+  const allFields: TextToken[] = slideKey === COMMON_SLIDE_KEY
+    ? COMMON_TOKENS
+    : (TEXT_TOKEN_REGISTRY[slideKey] ?? []);
+
+  const fields = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allFields.filter((f) => {
+      if (q && !`${f.label} ${f.key}`.toLowerCase().includes(q)) return false;
+      if (overriddenOnly) {
+        const v = overrides[slideKey]?.[f.key];
+        if (!(typeof v === 'string' && v.length > 0)) return false;
+      }
+      return true;
+    });
+  }, [allFields, search, overriddenOnly, overrides, slideKey]);
 
   const onChange = (k: string, v: string) => setDrafts((d) => ({ ...d, [k]: v }));
 
-  const onSave = async (fieldKey: string, fallback: string) => {
+  const onSave = async (fieldKey: string) => {
     const value = drafts[fieldKey] ?? '';
     if (value.trim().length === 0) {
       toast({ title: 'Empty value — use Reset to clear', variant: 'destructive' });
@@ -92,7 +113,6 @@ export default function SlideTextEditor({ embedded = false }: Props) {
       toast({ title: 'Save failed', description: e instanceof Error ? e.message : 'Unknown', variant: 'destructive' });
     } finally {
       setBusyKey(null);
-      void fallback;
     }
   };
 
@@ -104,6 +124,7 @@ export default function SlideTextEditor({ embedded = false }: Props) {
         const next = { ...o };
         if (next[slideKey]) {
           const { [fieldKey]: _drop, ...rest } = next[slideKey];
+          void _drop;
           next[slideKey] = rest;
         }
         return next;
@@ -119,27 +140,49 @@ export default function SlideTextEditor({ embedded = false }: Props) {
 
   const body = (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex-1">
+      <div className="grid gap-2 sm:grid-cols-[1fr,1fr,auto] sm:items-end">
+        <div>
           <Label className="text-xs text-muted-foreground">Slide</Label>
-          <Select value={slideKey} onValueChange={(v) => setSlideKey(v as SlideKey)} disabled={loading}>
+          <Select value={slideKey} onValueChange={(v) => setSlideKey(v)} disabled={loading}>
             <SelectTrigger className="mt-1">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {slideOptions.map(({ key, meta }) => (
+              {slideOptions.map(({ key, label, number }) => (
                 <SelectItem key={key} value={key}>
-                  {String(meta?.number ?? '').padStart(2, '0')} · {meta?.label ?? key}
+                  {key === COMMON_SLIDE_KEY ? '★' : String(number).padStart(2, '0')} · {label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Search fields</Label>
+          <div className="relative mt-1">
+            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter by label / key"
+              className="pl-7"
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-2 pb-1">
+          <Switch
+            id="overridden-only"
+            checked={overriddenOnly}
+            onCheckedChange={setOverriddenOnly}
+          />
+          <Label htmlFor="overridden-only" className="text-xs text-muted-foreground">
+            Overridden only
+          </Label>
+        </div>
       </div>
 
-      {!isAdmin && !loading && (
+      {!canEdit && !loading && (
         <div className="rounded-md border border-dashed bg-muted/30 p-2 text-xs text-muted-foreground">
-          Admins only — view-only mode.
+          Senior User role or higher required to edit — view-only mode.
         </div>
       )}
 
@@ -149,7 +192,9 @@ export default function SlideTextEditor({ embedded = false }: Props) {
         </div>
       ) : fields.length === 0 ? (
         <div className="text-sm text-muted-foreground p-4">
-          No overridable fields for this slide.
+          {allFields.length === 0
+            ? 'No overridable fields for this slide.'
+            : 'No fields match your filter.'}
         </div>
       ) : (
         <div className="space-y-4">
@@ -173,7 +218,7 @@ export default function SlideTextEditor({ embedded = false }: Props) {
                     value={draft}
                     onChange={(e) => onChange(f.key, e.target.value)}
                     placeholder={f.default}
-                    disabled={!isAdmin || busyKey === f.key}
+                    disabled={!canEdit || busyKey === f.key}
                     rows={2}
                   />
                 ) : (
@@ -181,26 +226,26 @@ export default function SlideTextEditor({ embedded = false }: Props) {
                     value={draft}
                     onChange={(e) => onChange(f.key, e.target.value)}
                     placeholder={f.default}
-                    disabled={!isAdmin || busyKey === f.key}
+                    disabled={!canEdit || busyKey === f.key}
                   />
                 )}
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs text-muted-foreground truncate">
-                    Default: <span className="italic">{f.default}</span>
+                    Default: <span className="italic">{f.default || '(empty)'}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => onReset(f.key)}
-                      disabled={!isAdmin || busyKey === f.key || !isOverridden}
+                      disabled={!canEdit || busyKey === f.key || !isOverridden}
                     >
                       <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reset
                     </Button>
                     <Button
                       size="sm"
-                      onClick={() => onSave(f.key, f.default)}
-                      disabled={!isAdmin || busyKey === f.key || !dirty}
+                      onClick={() => onSave(f.key)}
+                      disabled={!canEdit || busyKey === f.key || !dirty}
                     >
                       {busyKey === f.key
                         ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />

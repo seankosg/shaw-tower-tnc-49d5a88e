@@ -26,7 +26,7 @@ const ROLE_RANK: Record<AppRole, number> = {
 
 /** Minimum role rank required for each route */
 const ROUTE_MIN_RANK: [RegExp, number][] = [
-  [/^\/admin\/report/, 6],   // admin only
+  [/^\/admin\/report/, 3],   // senior_user+ (Code Editor tab inside is gated to admin only)
   [/^\/admin/, 5],           // superuser / admin only (d_superuser blocked)
   [/^\/tc\/import/, 2],      // user+
   [/^\/tc\/export/, 2],      // user+
