@@ -15,8 +15,10 @@ import { buildPpt } from '@/lib/ppt-builder';
 import { bundlePptWithFonts, downloadBlob } from '@/lib/ppt-bundler';
 import { ensureFontFaces, type FontFile } from '@/lib/font-loader';
 import { fetchPptColorTokens } from '@/lib/design-tokens';
+import { fetchSlideConfig } from '@/lib/slide-config';
 import FontLibrary from '@/components/admin/FontLibrary';
 import DesignTokensEditor from '@/components/admin/DesignTokensEditor';
+import SlideComposer from '@/components/admin/SlideComposer';
 
 interface FontRow {
   id: string;
@@ -118,8 +120,8 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
     setDownloading(true);
     try {
       const dateStr = new Date().toISOString().slice(0, 10);
-      const colors = await fetchPptColorTokens();
-      const pptxBlob = await buildPpt({ data: reportData, fontFamily: selected.family, colors });
+      const [colors, slideConfig] = await Promise.all([fetchPptColorTokens(), fetchSlideConfig()]);
+      const pptxBlob = await buildPpt({ data: reportData, fontFamily: selected.family, colors, slideConfig });
       const pptxName = `SHAW_Report_${dateStr}.pptx`;
       if (selected.builtin) {
         downloadBlob(pptxBlob, pptxName);
@@ -183,6 +185,9 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
 
           {/* Design tokens — edit PPT color palette */}
           <DesignTokensEditor embedded />
+
+          {/* Slide composer — select & reorder slides */}
+          <SlideComposer embedded />
 
           {/* Live preview */}
           <div className="rounded-md border bg-muted/30 p-4">
