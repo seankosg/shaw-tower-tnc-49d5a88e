@@ -224,13 +224,13 @@ function getBadge(triggers: Array<{ status: string }>) {
 // ─────────────────────────────────────────
 // DATA MAPPING: ReportData → KPI objects
 // ─────────────────────────────────────────
-export function loadKPIs(rd: ReportData): { tncKPI: TncKPI; defectKPI: DefectKPI; docsKPI: DocsKPI; punchKPI: PunchKPI; } {
+export function loadKPIs(rd: ReportData): { tncKPI?: TncKPI; defectKPI?: DefectKPI; docsKPI?: DocsKPI; punchKPI?: PunchKPI; } {
   const meta = rd.meta;
   const today = meta.generatedAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
 
   // ── T&C ──
-  const tnc = rd.tnc!;
-  const tncKPI: TncKPI = {
+  const tnc = rd.tnc;
+  const tncKPI: TncKPI | undefined = tnc ? {
     total:      tnc.totals.total,
     preTest:    { pct: tnc.currentActual!.preTestPct,      done: tnc.totals.t1,  variance: tnc.currentActual!.preTestVariancePct },
     official:   { pct: tnc.currentActual!.officialTestPct, done: tnc.totals.t2,  variance: tnc.currentActual!.officialTestVariancePct },
@@ -243,11 +243,11 @@ export function loadKPIs(rd: ReportData): { tncKPI: TncKPI; defectKPI: DefectKPI
     dataDate:    tnc.dataDate,
     dDay:        meta.mcDate,
     today,
-  };
+  } : undefined;
 
   // ── Defect ──
-  const defect = rd.defect!;
-  const defectKPI: DefectKPI = {
+  const defect = rd.defect;
+  const defectKPI: DefectKPI | undefined = defect ? {
     total:      defect.totals.total,
     completion: { pct: defect.currentActual!.completionPct, done: defect.totals.completion, variance: defect.currentActual!.completionVariancePct },
     closure:    { pct: defect.currentActual!.closurePct,    done: defect.totals.closure,    variance: defect.currentActual!.closureVariancePct },
@@ -255,26 +255,26 @@ export function loadKPIs(rd: ReportData): { tncKPI: TncKPI; defectKPI: DefectKPI
     snapshots:          defect.snapshots   ?? [],
     scurve:             defect.scurve      ?? [],
     actionPlanTriggers: defect.actionPlanTriggers ?? [],
-  };
+  } : undefined;
 
   // ── Docs ──
-  const docs = rd.docs!;
-  const mkDocs = (sub: typeof docs.abd) => ({
+  const docs = rd.docs;
+  const mkDocs = (sub: NonNullable<typeof docs>['abd']) => ({
     total:        sub.total,
     pcts:         sub.currentPcts        ?? {},
     statusCounts: sub.statusCounts       ?? {},
     currentCounts:sub.currentCounts      ?? {},
   });
-  const docsKPI: DocsKPI = {
+  const docsKPI: DocsKPI | undefined = docs ? {
     abd:       mkDocs(docs.abd),
     omm:       mkDocs(docs.omm),
     warranty:  mkDocs(docs.warranty),
     sparePart: mkDocs(docs.sparePart),
-  };
+  } : undefined;
 
   // ── Punch ──
-  const punch = rd.punch!;
-  const punchKPI: PunchKPI = {
+  const punch = rd.punch;
+  const punchKPI: PunchKPI | undefined = punch ? {
     total:      punch.totals.total,
     completion: { pct: punch.currentActual!.completionPct, done: punch.totals.completion, variance: punch.currentActual!.variancePct },
     requiredPace:            punch.requiredPace!,
@@ -284,7 +284,7 @@ export function loadKPIs(rd: ReportData): { tncKPI: TncKPI; defectKPI: DefectKPI
     monthlyBeyondSc:         punch.completionDateBreakdown?.monthlyBeyondSc ?? [],
     latestItems:             punch.latestItems ?? [],
     actionPlanTriggers:      punch.actionPlanTriggers ?? [],
-  };
+  } : undefined;
 
   return { tncKPI, defectKPI, docsKPI, punchKPI };
 }
@@ -1345,18 +1345,22 @@ export async function buildAndDownloadPpt(rd: ReportData): Promise<void> {
   pres.author  = 'HDEC';
   pres.title   = 'SHAW TOWER Completion Management';
 
-  buildCover(pres, tncKPI);
-  buildDashboard(pres, tncKPI, defectKPI, docsKPI, punchKPI);
-  buildSnapshot(pres, tncKPI);
-  buildPlanVsActual(pres, tncKPI);
-  buildForecast(pres, tncKPI);
-  buildActionPlan(pres, tncKPI);
-  buildDefectSnapshot(pres, defectKPI);
-  buildDefectPlanVsActual(pres, defectKPI);
-  buildDefectForecast(pres, defectKPI);
-  buildDefectActionPlan(pres, defectKPI);
-  buildDocsSnapshot(pres, docsKPI);
-  buildPunchSnapshot(pres, punchKPI, rd.meta);
+  if (tncKPI) buildCover(pres, tncKPI);
+  if (tncKPI && defectKPI && docsKPI && punchKPI) buildDashboard(pres, tncKPI, defectKPI, docsKPI, punchKPI);
+  if (tncKPI) {
+    buildSnapshot(pres, tncKPI);
+    buildPlanVsActual(pres, tncKPI);
+    buildForecast(pres, tncKPI);
+    buildActionPlan(pres, tncKPI);
+  }
+  if (defectKPI) {
+    buildDefectSnapshot(pres, defectKPI);
+    buildDefectPlanVsActual(pres, defectKPI);
+    buildDefectForecast(pres, defectKPI);
+    buildDefectActionPlan(pres, defectKPI);
+  }
+  if (docsKPI) buildDocsSnapshot(pres, docsKPI);
+  if (punchKPI) buildPunchSnapshot(pres, punchKPI, rd.meta);
 
   // Write → Blob → JSZip XML post-processing → download
   const rawBlob = await pres.write({ outputType: 'blob' }) as Blob;
@@ -1419,18 +1423,18 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
     : DEFAULT_SLIDE_ORDER.map(k => ({ key: k, enabled: true }));
 
   const runners: Record<SlideKey, () => void> = {
-    cover:              () => buildCover(pres, tncKPI),
-    dashboard:          () => buildDashboard(pres, tncKPI, defectKPI, docsKPI, punchKPI),
-    tnc_snapshot:       () => buildSnapshot(pres, tncKPI),
-    tnc_scurve:         () => buildPlanVsActual(pres, tncKPI),
-    tnc_forecast:       () => buildForecast(pres, tncKPI),
-    tnc_action_plan:    () => buildActionPlan(pres, tncKPI),
-    defect_snapshot:    () => buildDefectSnapshot(pres, defectKPI),
-    defect_scurve:      () => buildDefectPlanVsActual(pres, defectKPI),
-    defect_forecast:    () => buildDefectForecast(pres, defectKPI),
-    defect_action_plan: () => buildDefectActionPlan(pres, defectKPI),
-    docs_snapshot:      () => buildDocsSnapshot(pres, docsKPI),
-    punch_snapshot:     () => buildPunchSnapshot(pres, punchKPI, data.meta),
+    cover:              () => { if (tncKPI) buildCover(pres, tncKPI); },
+    dashboard:          () => { if (tncKPI && defectKPI && docsKPI && punchKPI) buildDashboard(pres, tncKPI, defectKPI, docsKPI, punchKPI); },
+    tnc_snapshot:       () => { if (tncKPI) buildSnapshot(pres, tncKPI); },
+    tnc_scurve:         () => { if (tncKPI) buildPlanVsActual(pres, tncKPI); },
+    tnc_forecast:       () => { if (tncKPI) buildForecast(pres, tncKPI); },
+    tnc_action_plan:    () => { if (tncKPI) buildActionPlan(pres, tncKPI); },
+    defect_snapshot:    () => { if (defectKPI) buildDefectSnapshot(pres, defectKPI); },
+    defect_scurve:      () => { if (defectKPI) buildDefectPlanVsActual(pres, defectKPI); },
+    defect_forecast:    () => { if (defectKPI) buildDefectForecast(pres, defectKPI); },
+    defect_action_plan: () => { if (defectKPI) buildDefectActionPlan(pres, defectKPI); },
+    docs_snapshot:      () => { if (docsKPI) buildDocsSnapshot(pres, docsKPI); },
+    punch_snapshot:     () => { if (punchKPI) buildPunchSnapshot(pres, punchKPI, data.meta); },
   };
 
   for (const item of config) {
