@@ -216,7 +216,7 @@ function getBadge(triggers: Array<{ status: string }>) {
 // ─────────────────────────────────────────
 // DATA MAPPING: ReportData → KPI objects
 // ─────────────────────────────────────────
-function loadKPIs(rd: ReportData): { tncKPI: TncKPI; defectKPI: DefectKPI; docsKPI: DocsKPI; punchKPI: PunchKPI; } {
+export function loadKPIs(rd: ReportData): { tncKPI: TncKPI; defectKPI: DefectKPI; docsKPI: DocsKPI; punchKPI: PunchKPI; } {
   const meta = rd.meta;
   const today = meta.generatedAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
 
@@ -284,7 +284,7 @@ function loadKPIs(rd: ReportData): { tncKPI: TncKPI; defectKPI: DefectKPI; docsK
 // ─────────────────────────────────────────
 // SLIDE 01: COVER
 // ─────────────────────────────────────────
-function buildCover(pres: pptxgen, tncKPI: TncKPI) {
+export function buildCover(pres: pptxgen, tncKPI: TncKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -340,7 +340,7 @@ function buildCover(pres: pptxgen, tncKPI: TncKPI) {
 // ─────────────────────────────────────────
 // SLIDE 02: DASHBOARD (all modules)
 // ─────────────────────────────────────────
-function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectKPI, docsKPI: DocsKPI, punchKPI: PunchKPI) {
+export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectKPI, docsKPI: DocsKPI, punchKPI: PunchKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -493,7 +493,7 @@ function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectKPI, doc
 // ─────────────────────────────────────────
 // SLIDE 03: T&C SNAPSHOT
 // ─────────────────────────────────────────
-function buildSnapshot(pres: pptxgen, tncKPI: TncKPI) {
+export function buildSnapshot(pres: pptxgen, tncKPI: TncKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -546,7 +546,7 @@ function buildSnapshot(pres: pptxgen, tncKPI: TncKPI) {
 // ─────────────────────────────────────────
 // SLIDE 04: T&C S-CURVE (Plan vs Actual)
 // ─────────────────────────────────────────
-function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
+export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -593,7 +593,7 @@ function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
     showLegend: true, legendPos: 't', legendFontSize: 10, legendColor: C.textSecondary,
     catAxisLabelColor: C.textMuted, valAxisLabelColor: C.textMuted,
     catAxisLabelFontSize: 9, valAxisLabelFontSize: 9,
-    catAxisLabelFrequency: 7,
+    catAxisLabelFrequency: 7 as unknown as string,
     valGridLine: { color: C.cardBorder, size: 0.5 }, catGridLine: { style: 'none' } as pptxgen.OptsChartGridLine,
     valAxisMaxVal: 100, valAxisMinVal: 0,
     valAxisLabelFormatCode: '0"%"',
@@ -632,7 +632,7 @@ function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
 // ─────────────────────────────────────────
 // SLIDE 05: T&C FORECAST
 // ─────────────────────────────────────────
-function buildForecast(pres: pptxgen, tncKPI: TncKPI) {
+export function buildForecast(pres: pptxgen, tncKPI: TncKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -687,7 +687,7 @@ function buildForecast(pres: pptxgen, tncKPI: TncKPI) {
 // ─────────────────────────────────────────
 // SLIDE 06: T&C ACTION PLAN
 // ─────────────────────────────────────────
-function buildActionPlan(pres: pptxgen, tncKPI: TncKPI) {
+export function buildActionPlan(pres: pptxgen, tncKPI: TncKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -757,7 +757,7 @@ function buildActionPlan(pres: pptxgen, tncKPI: TncKPI) {
 // ─────────────────────────────────────────
 // SLIDE 07: DEFECT SNAPSHOT
 // ─────────────────────────────────────────
-function buildDefectSnapshot(pres: pptxgen, defectKPI: DefectKPI) {
+export function buildDefectSnapshot(pres: pptxgen, defectKPI: DefectKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -808,7 +808,7 @@ function buildDefectSnapshot(pres: pptxgen, defectKPI: DefectKPI) {
 // ─────────────────────────────────────────
 // SLIDE 08: DEFECT S-CURVE (Plan vs Actual)
 // ─────────────────────────────────────────
-function buildDefectPlanVsActual(pres: pptxgen, defectKPI: DefectKPI) {
+export function buildDefectPlanVsActual(pres: pptxgen, defectKPI: DefectKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -838,7 +838,7 @@ function buildDefectPlanVsActual(pres: pptxgen, defectKPI: DefectKPI) {
     showLegend: true, legendPos: 't', legendFontSize: 11, legendColor: C.textSecondary,
     valAxisMinVal: 0, valAxisMaxVal: 100, valAxisLabelFormatCode: '0"%"',
     valAxisLabelColor: C.textMuted, catAxisLabelColor: C.textSecondary,
-    catAxisLabelFontSize: 10, catAxisLabelFrequency: 7,
+    catAxisLabelFontSize: 10, catAxisLabelFrequency: 7 as unknown as string,
     valGridLine: { color: C.cardBorder, size: 0.5 }, catGridLine: { style: 'none' } as pptxgen.OptsChartGridLine,
     plotArea: { fill: { color: C.bgBody } }, chartArea: { fill: { color: C.bgBody } },
   });
@@ -878,7 +878,7 @@ function buildDefectPlanVsActual(pres: pptxgen, defectKPI: DefectKPI) {
 // ─────────────────────────────────────────
 // SLIDE 09: DEFECT FORECAST
 // ─────────────────────────────────────────
-function buildDefectForecast(pres: pptxgen, defectKPI: DefectKPI) {
+export function buildDefectForecast(pres: pptxgen, defectKPI: DefectKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -941,7 +941,7 @@ function buildDefectForecast(pres: pptxgen, defectKPI: DefectKPI) {
 // ─────────────────────────────────────────
 // SLIDE 10: DEFECT ACTION PLAN
 // ─────────────────────────────────────────
-function buildDefectActionPlan(pres: pptxgen, defectKPI: DefectKPI) {
+export function buildDefectActionPlan(pres: pptxgen, defectKPI: DefectKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
   const rp = defectKPI.requiredPace;
@@ -997,7 +997,7 @@ function buildDefectActionPlan(pres: pptxgen, defectKPI: DefectKPI) {
 // ─────────────────────────────────────────
 // SLIDE 11: CLOSE OUT DOCUMENTS
 // ─────────────────────────────────────────
-function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
+export function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -1100,7 +1100,7 @@ function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
 // ─────────────────────────────────────────
 // SLIDE 12: PUNCH LIST
 // ─────────────────────────────────────────
-function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: ReportData['meta']) {
+export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: ReportData['meta']) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
