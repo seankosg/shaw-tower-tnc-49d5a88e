@@ -52,10 +52,11 @@ function fmtBytes(n: number) {
 }
 
 interface PptExportCardProps {
-  reportData: ReportData | null;
+  getReportData: () => Promise<ReportData>;
+  canBuild: boolean;
 }
 
-export default function PptExportCard({ reportData }: PptExportCardProps) {
+export default function PptExportCard({ getReportData, canBuild }: PptExportCardProps) {
   const { toast } = useToast();
   const [rows, setRows] = useState<FontRow[]>([]);
   const [selectedFamily, setSelectedFamily] = useState<string>(BUILTIN_FAMILY);
