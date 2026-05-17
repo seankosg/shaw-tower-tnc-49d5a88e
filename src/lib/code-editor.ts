@@ -21,9 +21,24 @@ export interface CodeEditorResult {
   changeSummary: string;
 }
 
-export async function invokeCodeEditor(input: {
+/** Function-targeted TS edit (preferred for large files). */
+export async function invokeCodeEditorFunction(input: {
   functionSource: string;
   functionName: string;
+  instruction: string;
+  fileType?: 'ts';
+}): Promise<CodeEditorResult> {
+  const { data, error } = await supabase.functions.invoke('code-editor', {
+    body: { ...input, fileType: input.fileType ?? 'ts' },
+  });
+  if (error) throw new Error(error.message || 'code-editor invoke failed');
+  if ((data as any)?.error) throw new Error((data as any).error);
+  return data as CodeEditorResult;
+}
+
+/** Whole-file edit (used for yaml or small files). */
+export async function invokeCodeEditor(input: {
+  fileContent: string;
   instruction: string;
   fileType: 'ts' | 'yaml';
 }): Promise<CodeEditorResult> {
