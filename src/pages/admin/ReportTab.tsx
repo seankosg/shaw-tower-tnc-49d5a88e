@@ -277,6 +277,7 @@ export default function ReportTab() {
           });
           return data;
         }}
+        modules={modules}
         canBuild={modules.length > 0}
       />
 
