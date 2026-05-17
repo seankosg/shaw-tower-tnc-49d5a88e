@@ -310,7 +310,66 @@ export default function DesignGuideManager({ embedded }: Props) {
         </div>
       </section>
 
-      {/* Analysis Results */}
+      {/* Natural-language YAML modification */}
+      <section>
+        <h3 className="mb-2 text-sm font-semibold">Modify with Natural Language</h3>
+        <div className="space-y-2 rounded-md border p-3">
+          <Textarea
+            value={nlInstruction}
+            onChange={(e) => setNlInstruction(e.target.value)}
+            placeholder="예: primary 색상을 더 진한 네이비로 바꿔줘"
+            className="min-h-[70px] text-sm"
+            disabled={!active}
+          />
+          <Button size="sm" onClick={handleNlModify} disabled={!active || !nlInstruction.trim() || nlModifying}>
+            {nlModifying ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-1 h-3.5 w-3.5" />}
+            Modify with Claude
+          </Button>
+          {!active && (
+            <p className="text-xs text-muted-foreground">Upload an active design guide first.</p>
+          )}
+
+          {nlModified && nlOriginal && (
+            <div className="space-y-2 mt-2">
+              {nlSummary && (
+                <div className="rounded bg-muted/40 p-2 text-sm whitespace-pre-wrap">{nlSummary}</div>
+              )}
+              <details>
+                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                  Diff preview
+                </summary>
+                <pre className="mt-2 max-h-72 overflow-auto rounded bg-muted p-2 text-xs">
+                  {renderYamlDiff(nlOriginal, nlModified).map((l, i) => (
+                    <div
+                      key={i}
+                      className={
+                        l.type === 'add'
+                          ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                          : l.type === 'del'
+                            ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                            : ''
+                      }
+                    >
+                      {l.type === 'add' ? '+ ' : l.type === 'del' ? '- ' : '  '}
+                      {l.text}
+                    </div>
+                  ))}
+                </pre>
+              </details>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={handleApplyNlTokens} disabled={nlApplying}>
+                  {nlApplying ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="mr-1 h-3.5 w-3.5" />}
+                  Apply Tokens
+                </Button>
+                <Button size="sm" variant="outline" onClick={downloadModifiedYaml}>
+                  <Download className="mr-1 h-3.5 w-3.5" /> Download YAML
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
       {analysis && (
         <section>
           <h3 className="mb-2 text-sm font-semibold">Analysis Results</h3>
