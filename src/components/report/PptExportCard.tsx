@@ -14,7 +14,7 @@ import type { ReportData } from '@/lib/report-builder';
 import { buildPpt } from '@/lib/ppt-builder';
 import { bundlePptWithFonts, downloadBlob } from '@/lib/ppt-bundler';
 import { ensureFontFaces, type FontFile } from '@/lib/font-loader';
-import { fetchPptColorTokens } from '@/lib/design-tokens';
+import { fetchPptColorTokens, fetchPptFontTokens } from '@/lib/design-tokens';
 import { fetchSlideConfig } from '@/lib/slide-config';
 import { fetchTextOverrides } from '@/lib/slide-text-overrides';
 import FontLibrary from '@/components/admin/FontLibrary';
@@ -122,14 +122,21 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
     setDownloading(true);
     try {
       const dateStr = new Date().toISOString().slice(0, 10);
-      const [colors, slideConfig, textOverrides] = await Promise.all([
-        fetchPptColorTokens(), fetchSlideConfig(), fetchTextOverrides(),
+      const [colors, slideConfig, textOverrides, fontTokens] = await Promise.all([
+        fetchPptColorTokens(), fetchSlideConfig(), fetchTextOverrides(), fetchPptFontTokens(),
       ]);
-      const pptxBlob = await buildPpt({ data: reportData, fontFamily: selected.family, colors, slideConfig, textOverrides });
+      const resolvedFontFamily = selected.family ?? fontTokens?.body ?? 'Malgun Gothic';
+      const resolvedFontMono = fontTokens?.mono ?? 'Consolas';
+      const pptxBlob = await buildPpt({
+        data: reportData,
+        fontFamily: resolvedFontFamily,
+        fontMono: resolvedFontMono,
+        colors, slideConfig, textOverrides,
+      });
       const pptxName = `SHAW_Report_${dateStr}.pptx`;
       if (selected.builtin) {
         downloadBlob(pptxBlob, pptxName);
-        toast({ title: 'PPTX downloaded', description: `Font: ${selected.family} (built-in)` });
+        toast({ title: 'PPTX downloaded', description: `Font: ${resolvedFontFamily} (built-in)` });
       } else {
         const files: FontFile[] = selected.styles.map((s) => ({
           family_name: s.family_name, style: s.style, public_url: s.public_url, storage_path: s.storage_path,
@@ -137,7 +144,7 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
         const zipBlob = await bundlePptWithFonts({
           pptxBlob,
           pptxFileName: pptxName,
-          fontFamily: selected.family,
+          fontFamily: resolvedFontFamily,
           fontFiles: files,
           originalFontName: ORIGINAL_TEMPLATE_FONT,
         });
