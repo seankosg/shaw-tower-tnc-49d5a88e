@@ -2760,6 +2760,33 @@ export type Database = {
         }
         Relationships: []
       }
+      slide_display_options: {
+        Row: {
+          created_at: string
+          id: string
+          options: Json
+          slide_key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          options?: Json
+          slide_key: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          options?: Json
+          slide_key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       slide_text_overrides: {
         Row: {
           created_at: string
@@ -4503,6 +4530,7 @@ export type Database = {
         Args: { _field_name: string; _module: string }
         Returns: boolean
       }
+      is_senior_or_above: { Args: { _user_id: string }; Returns: boolean }
       normalize_owner_code: { Args: { _value: string }; Returns: string }
       preview_delete_defects_cascade: {
         Args: { _ids: string[] }
