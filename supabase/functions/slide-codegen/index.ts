@@ -52,7 +52,8 @@ Respond with ONLY a JSON object (no markdown, no code fences) matching:
 {
   "functionCode": "function buildSlide_xxx(ctx: SlideBuildCtx): void { ... }",
   "suggestedKey": "snake_case_key",
-  "suggestedLabel": "Human Readable Label"
+  "suggestedLabel": "Human Readable Label",
+  "summary": "한국어로 슬라이드가 어떤 데이터를 어떻게 보여주는지 2~3문장 요약"
 }`;
 
 Deno.serve(async (req) => {
