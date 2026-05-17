@@ -23,6 +23,7 @@ const MODULE_OPTIONS: { id: ReportModule; label: string }[] = [
   { id: 'defect', label: 'Defect' },
   { id: 'docs', label: 'Docs (ABD/OMM/Warranty/Spare Part)' },
   { id: 'punch', label: 'Punch' },
+  { id: 'custom', label: 'Custom Slides' },
 ];
 
 const SECTION_OPTIONS: { id: ReportSection; label: string }[] = [
@@ -48,7 +49,7 @@ const DEFAULT_SYSTEM_PROMPT =
 
 export default function ReportTab() {
   const { toast } = useToast();
-  const [modules, setModules] = useState<ReportModule[]>(['tnc', 'defect', 'docs', 'punch']);
+  const [modules, setModules] = useState<ReportModule[]>(['tnc', 'defect', 'docs', 'punch', 'custom']);
   const [sections, setSections] = useState<ReportSection[]>(['dashboard', 'progress', 'simulation', 'snapshots']);
   const [snapshotDates, setSnapshotDates] = useState<string[]>(['2026-05-30', '2026-06-07', '2026-06-14']);
   const [newDate, setNewDate] = useState('');
@@ -276,6 +277,7 @@ export default function ReportTab() {
           });
           return data;
         }}
+        modules={modules}
         canBuild={modules.length > 0}
       />
 

@@ -22,7 +22,7 @@ import { isStageDone, getStagePlannedDate, type StageMetricRow } from '@/lib/sta
 /** Schema version of the JSON payload emitted by buildReport(). Bump on breaking changes. */
 export const REPORT_SCHEMA_VERSION = 2;
 
-export type ReportModule = 'tnc' | 'defect' | 'docs' | 'punch';
+export type ReportModule = 'tnc' | 'defect' | 'docs' | 'punch' | 'custom';
 export type ReportSection = 'dashboard' | 'progress' | 'simulation' | 'snapshots';
 
 export interface ReportOptions {

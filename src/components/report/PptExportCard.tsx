@@ -10,7 +10,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Download, Loader2, Presentation } from 'lucide-react';
-import type { ReportData } from '@/lib/report-builder';
+import type { ReportData, ReportModule } from '@/lib/report-builder';
 import { buildPpt } from '@/lib/ppt-builder';
 import { bundlePptWithFonts, downloadBlob } from '@/lib/ppt-bundler';
 import { ensureFontFaces, type FontFile } from '@/lib/font-loader';
@@ -51,9 +51,10 @@ function fmtBytes(n: number) {
 interface PptExportCardProps {
   getReportData: () => Promise<ReportData>;
   canBuild: boolean;
+  modules?: ReportModule[];
 }
 
-export default function PptExportCard({ getReportData, canBuild }: PptExportCardProps) {
+export default function PptExportCard({ getReportData, canBuild, modules }: PptExportCardProps) {
   const { toast } = useToast();
   const [rows, setRows] = useState<FontRow[]>([]);
   const [selectedFamily, setSelectedFamily] = useState<string>(BUILTIN_FAMILY);
@@ -131,6 +132,7 @@ export default function PptExportCard({ getReportData, canBuild }: PptExportCard
         fontFamily: resolvedFontFamily,
         fontMono: resolvedFontMono,
         colors, slideConfig, textOverrides,
+        modules,
       });
       const pptxName = `SHAW_Report_${dateStr}.pptx`;
       if (selected.builtin) {
