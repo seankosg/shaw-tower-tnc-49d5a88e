@@ -138,9 +138,7 @@ export default function FontLibrary() {
     }
   };
 
-  if (!isAdmin) {
-    return <div className="text-sm text-muted-foreground">Admin only.</div>;
-  }
+  // Access control is enforced by the parent page (AdminReportPage) and DB RLS.
 
   // Group by family for display
   const grouped = new Map<string, FontRow[]>();
