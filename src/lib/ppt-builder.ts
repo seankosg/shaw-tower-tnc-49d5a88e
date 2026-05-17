@@ -161,6 +161,8 @@ interface CardConfig {
   accentColor: string | null;
   alert:       boolean;
   alertLabel?: string;
+  barPct?:     number;
+  barColor?:   string;
 }
 
 function drawCard(pres: pptxgen, s: pptxgen.Slide, x: number, y: number, w: number, h: number, card: CardConfig) {
