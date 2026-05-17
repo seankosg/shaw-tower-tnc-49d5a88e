@@ -7,16 +7,22 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
-  Code2, Download, Loader2, RotateCcw, Save, Sparkles, Upload, Copy, FileText,
+  Code2, Download, Loader2, RotateCcw, Save, Sparkles, Upload, Copy,
 } from 'lucide-react';
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
   type CodeFileVersion,
+  type FunctionRange,
   downloadActiveCodeFile,
   downloadCodeVersion,
-  invokeCodeEditor,
+  invokeCodeEditorFunction,
   listCodeVersions,
+  parseTopLevelFunctions,
   restoreCodeVersion,
   saveCodeVersion,
+  spliceFunction,
 } from '@/lib/code-editor';
 
 const FILE_NAME = 'ppt-builder.ts';
