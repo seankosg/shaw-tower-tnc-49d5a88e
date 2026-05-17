@@ -4,14 +4,12 @@
 
 import pptxgen from 'pptxgenjs';
 import type { ReportData } from '@/lib/report-builder';
+import { DEFAULT_PPT_COLORS, type PptColorTokens } from '@/lib/design-tokens';
 
-const C.primary = '1E2761';
-const C.accent = '4F46E5';
-const C.text = '1F2937';
-const C.muted = '6B7280';
-const C.bg_soft = 'F1F5F9';
-const C.danger = 'DC2626';
-const C.ok = '16A34A';
+// Mutable per-build color holder. Assigned at the start of buildPpt() and read
+// by the helper functions below. Safe because pptx generation is synchronous
+// within a single buildPpt() call.
+const C: PptColorTokens = { ...DEFAULT_PPT_COLORS };
 
 function fmtPct(n: number | undefined): string {
   if (n === undefined || n === null || Number.isNaN(n)) return '–';
@@ -32,6 +30,8 @@ export interface BuildPptOptions {
   fontFamily: string;
   /** Display name shown on the cover ("Pretendard", "Malgun Gothic", etc.) */
   fontDisplayName?: string;
+  /** Optional color overrides (loaded from `design_tokens`). */
+  colors?: PptColorTokens;
 }
 
 export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
