@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Download, Sparkles, Copy, RotateCcw, CheckCircle2 } from 'lucide-react';
+import { Loader2, Upload, Download, Sparkles, Copy, RotateCcw, CheckCircle2, Wand2 } from 'lucide-react';
 import { FinalConfirmDialog } from '@/components/admin/FinalConfirmDialog';
+import { supabase } from '@/integrations/supabase/client';
 import {
   getActiveVersion,
   listVersions,
@@ -20,6 +22,7 @@ import {
   type DesignGuideVersion,
   type AnalysisResult,
 } from '@/lib/design-guide-manager';
+import { invokeCodeEditor } from '@/lib/code-editor';
 
 interface Props {
   embedded?: boolean;
