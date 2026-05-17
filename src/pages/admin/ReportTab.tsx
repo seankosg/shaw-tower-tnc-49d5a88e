@@ -366,7 +366,6 @@ export default function ReportTab() {
         </Card>
       </details>
 
-      <PptExportCard reportData={reportData} />
     </div>
   );
 }
