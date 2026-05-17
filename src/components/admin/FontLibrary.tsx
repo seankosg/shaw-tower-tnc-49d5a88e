@@ -33,7 +33,12 @@ function formatBytes(n: number) {
   return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${u[i]}`;
 }
 
-export default function FontLibrary() {
+interface FontLibraryProps {
+  embedded?: boolean;
+  onChanged?: () => void;
+}
+
+export default function FontLibrary({ embedded = false, onChanged }: FontLibraryProps = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [rows, setRows] = useState<FontRow[]>([]);
