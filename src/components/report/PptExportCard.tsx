@@ -14,6 +14,7 @@ import type { ReportData } from '@/lib/report-builder';
 import { buildPpt } from '@/lib/ppt-builder';
 import { bundlePptWithFonts, downloadBlob } from '@/lib/ppt-bundler';
 import { ensureFontFaces, type FontFile } from '@/lib/font-loader';
+import FontLibrary from '@/components/admin/FontLibrary';
 
 interface FontRow {
   id: string;
