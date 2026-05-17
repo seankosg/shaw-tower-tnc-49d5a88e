@@ -193,6 +193,9 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
           {/* Slide composer — select & reorder slides */}
           <SlideComposer embedded />
 
+          {/* Design Guide Manager — upload YAML & analyze with Claude */}
+          <DesignGuideManager embedded />
+
           {/* Live preview */}
           <div className="rounded-md border bg-muted/30 p-4">
             <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
