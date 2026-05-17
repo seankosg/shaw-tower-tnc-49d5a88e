@@ -302,37 +302,47 @@ export default function ReportTab() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4" /> External LLM Report</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <Label className="text-sm font-semibold">Model</Label>
-            <Select value={model} onValueChange={setModel}>
-              <SelectTrigger className="w-72 h-8"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {MODELS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-sm font-semibold">System Prompt</Label>
-            <Textarea value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} className="mt-1 min-h-[100px] text-xs" />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={runLlm} disabled={llmRunning || !markdown}>
-              {llmRunning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
-              Generate Report via LLM
-            </Button>
-            <Button variant="outline" disabled={!llmOutput} onClick={() => copy(llmOutput, 'Report')}>
-              <Copy className="h-4 w-4 mr-1" /> Copy Report
-            </Button>
-            <Button variant="outline" disabled={!llmOutput} onClick={() => download(llmOutput, `shaw-report-${new Date().toISOString().slice(0, 10)}.md`)}>
-              <Download className="h-4 w-4 mr-1" /> Download Report .md
-            </Button>
-          </div>
-          <Textarea value={llmOutput} readOnly placeholder="LLM output will stream here…" className="min-h-[300px] font-mono text-xs" />
-        </CardContent>
-      </Card>
+      <details className="rounded-lg border bg-card">
+        <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground">
+          External LLM Report {EXTERNAL_LLM_ENABLED ? '' : '(disabled)'}
+        </summary>
+        <Card className="border-0 shadow-none">
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4" /> External LLM Report</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            {!EXTERNAL_LLM_ENABLED && (
+              <div className="rounded-md border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                This feature is currently disabled. Preserved for future use.
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-3">
+              <Label className="text-sm font-semibold">Model</Label>
+              <Select value={model} onValueChange={setModel} disabled={!EXTERNAL_LLM_ENABLED}>
+                <SelectTrigger className="w-72 h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MODELS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-sm font-semibold">System Prompt</Label>
+              <Textarea value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} disabled={!EXTERNAL_LLM_ENABLED} className="mt-1 min-h-[100px] text-xs" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={runLlm} disabled={!EXTERNAL_LLM_ENABLED || llmRunning || !markdown}>
+                {llmRunning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                Generate Report via LLM
+              </Button>
+              <Button variant="outline" disabled={!EXTERNAL_LLM_ENABLED || !llmOutput} onClick={() => copy(llmOutput, 'Report')}>
+                <Copy className="h-4 w-4 mr-1" /> Copy Report
+              </Button>
+              <Button variant="outline" disabled={!EXTERNAL_LLM_ENABLED || !llmOutput} onClick={() => download(llmOutput, `shaw-report-${new Date().toISOString().slice(0, 10)}.md`)}>
+                <Download className="h-4 w-4 mr-1" /> Download Report .md
+              </Button>
+            </div>
+            <Textarea value={llmOutput} readOnly placeholder="LLM output will stream here…" className="min-h-[300px] font-mono text-xs" />
+          </CardContent>
+        </Card>
+      </details>
 
       <PptExportCard reportData={reportData} />
     </div>
