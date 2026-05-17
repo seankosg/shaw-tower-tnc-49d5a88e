@@ -1,26 +1,33 @@
+// One-off: upload local src/lib/ppt-builder.ts as the new active version
+// in the "code-files" storage bucket, deactivating prior active rows.
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
-import { createHash } from 'crypto';
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const FILE = 'ppt-builder.ts';
 
-// 1) Get active version
-const { data: ver, error: e1 } = await sb
-  .from('code_file_versions')
-  .select('*')
-  .eq('file_name', 'ppt-builder.ts')
-  .eq('is_active', true)
-  .maybeSingle();
-if (e1) throw e1;
-console.log('active:', ver.storage_path, 'uploaded_at:', ver.uploaded_at);
+const src = readFileSync('src/lib/ppt-builder.ts', 'utf8');
+const ts = new Date();
+const pad = (n) => String(n).padStart(2, '0');
+const stamp = `${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())}_${pad(ts.getHours())}-${pad(ts.getMinutes())}`;
+const path = `history/ppt-builder_${stamp}_sync.ts`;
 
-// 2) Download
-const { data: blob, error: e2 } = await sb.storage.from('code-files').download(ver.storage_path);
-if (e2) throw e2;
-const storageText = await blob.text();
-const srcText = readFileSync('src/lib/ppt-builder.ts', 'utf8');
+const { error: upErr } = await sb.storage.from('code-files').upload(path, new Blob([src], { type: 'text/plain' }), {
+  contentType: 'text/plain', upsert: false,
+});
+if (upErr) throw upErr;
 
-const h = (s) => createHash('sha256').update(s).digest('hex').slice(0, 16);
-console.log('storage lines:', storageText.split('\n').length, 'hash:', h(storageText));
-console.log('src     lines:', srcText.split('\n').length,     'hash:', h(srcText));
-console.log('identical:', storageText === srcText);
+const { error: deErr } = await sb.from('code_file_versions').update({ is_active: false }).eq('file_name', FILE).eq('is_active', true);
+if (deErr) throw deErr;
+
+const { data: ins, error: insErr } = await sb.from('code_file_versions').insert({
+  file_name: FILE,
+  storage_path: path,
+  change_summary_ko: '로컬 src/lib/ppt-builder.ts와 동기화 (이전 활성본이 truncated 상태였음)',
+  instruction: 'sync from local src',
+  is_active: true,
+  uploaded_by: null,
+}).select().single();
+if (insErr) throw insErr;
+
+console.log('synced:', ins.id, path, src.split('\n').length, 'lines');
