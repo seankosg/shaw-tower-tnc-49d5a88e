@@ -35,6 +35,39 @@ export type Database = {
         }
         Relationships: []
       }
+      code_file_versions: {
+        Row: {
+          change_summary_ko: string | null
+          file_name: string
+          id: string
+          instruction: string | null
+          is_active: boolean
+          storage_path: string
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          change_summary_ko?: string | null
+          file_name: string
+          id?: string
+          instruction?: string | null
+          is_active?: boolean
+          storage_path: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          change_summary_ko?: string | null
+          file_name?: string
+          id?: string
+          instruction?: string | null
+          is_active?: boolean
+          storage_path?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
       custom_field_definitions: {
         Row: {
           created_at: string
