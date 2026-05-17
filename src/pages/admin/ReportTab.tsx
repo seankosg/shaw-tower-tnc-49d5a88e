@@ -49,7 +49,7 @@ const DEFAULT_SYSTEM_PROMPT =
 
 export default function ReportTab() {
   const { toast } = useToast();
-  const [modules, setModules] = useState<ReportModule[]>(['tnc', 'defect', 'docs', 'punch']);
+  const [modules, setModules] = useState<ReportModule[]>(['tnc', 'defect', 'docs', 'punch', 'custom']);
   const [sections, setSections] = useState<ReportSection[]>(['dashboard', 'progress', 'simulation', 'snapshots']);
   const [snapshotDates, setSnapshotDates] = useState<string[]>(['2026-05-30', '2026-06-07', '2026-06-14']);
   const [newDate, setNewDate] = useState('');
