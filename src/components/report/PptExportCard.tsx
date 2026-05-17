@@ -10,7 +10,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Download, Loader2, Presentation } from 'lucide-react';
-import type { ReportData } from '@/lib/report-builder';
+import type { ReportData, ReportModule } from '@/lib/report-builder';
 import { buildPpt } from '@/lib/ppt-builder';
 import { bundlePptWithFonts, downloadBlob } from '@/lib/ppt-bundler';
 import { ensureFontFaces, type FontFile } from '@/lib/font-loader';
