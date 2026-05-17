@@ -34,7 +34,7 @@ function formatBytes(n: number) {
 }
 
 export default function FontLibrary() {
-  const { isAdmin, user } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [rows, setRows] = useState<FontRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -138,9 +138,7 @@ export default function FontLibrary() {
     }
   };
 
-  if (!isAdmin) {
-    return <div className="text-sm text-muted-foreground">Admin only.</div>;
-  }
+  // Access control is enforced by the parent page (AdminReportPage) and DB RLS.
 
   // Group by family for display
   const grouped = new Map<string, FontRow[]>();
