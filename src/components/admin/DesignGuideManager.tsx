@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Upload, Download, Sparkles, Copy, RotateCcw, CheckCircle2, Wand2 } from 'lucide-react';
 import { FinalConfirmDialog } from '@/components/admin/FinalConfirmDialog';
-import { supabase } from '@/integrations/supabase/client';
+
 import {
   getActiveVersion,
   listVersions,
