@@ -26,11 +26,13 @@ import type {
   DocsReportData,
   PunchReportData,
 } from '@/lib/report-builder';
+import type { PptColorTokens } from '@/lib/design-tokens';
 
 // ─────────────────────────────────────────
 // DESIGN TOKENS  (mirrors design_guide_v4.yaml)
+// Mutable — overridable per-build via buildPpt({ colors }).
 // ─────────────────────────────────────────
-const C = {
+export const C: Record<string, string> = {
   gapShortfall:        'F87171',
   gapExcess:           'A3E635',
   bgBody:              '0A1A40',
