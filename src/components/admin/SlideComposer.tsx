@@ -213,19 +213,19 @@ export default function SlideComposer({ embedded = false }: Props) {
           {enabledCount} of {items.length} slides enabled · drag to reorder
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={onReset} disabled={!isAdmin || saving}>
+          <Button size="sm" variant="outline" onClick={onReset} disabled={!canEdit || saving}>
             <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reset
           </Button>
-          <Button size="sm" onClick={onSave} disabled={!isAdmin || saving || !dirty}>
+          <Button size="sm" onClick={onSave} disabled={!canEdit || saving || !dirty}>
             {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
             Save
           </Button>
         </div>
       </div>
 
-      {!isAdmin && !loading && (
+      {!canEdit && !loading && (
         <div className="rounded-md border border-dashed bg-muted/30 p-2 text-xs text-muted-foreground">
-          Admins only — view-only mode.
+          Senior User role or higher required to edit — view-only mode.
         </div>
       )}
 
@@ -242,15 +242,26 @@ export default function SlideComposer({ embedded = false }: Props) {
                   key={item.key}
                   item={item}
                   index={idx}
-                  isAdmin={isAdmin}
+                  canEdit={canEdit}
                   registry={registry}
                   onToggle={onToggle}
                   onDelete={onDeleteCustom}
+                  onEditOptions={(m) => setEditOptionsFor(m)}
                 />
               ))}
             </div>
           </SortableContext>
         </DndContext>
+      )}
+
+      {editOptionsFor && (
+        <SlideDisplayOptionsDialog
+          slideKey={editOptionsFor.key}
+          slideLabel={editOptionsFor.label}
+          open={!!editOptionsFor}
+          onOpenChange={(o) => { if (!o) setEditOptionsFor(null); }}
+          canEdit={canEdit}
+        />
       )}
     </div>
   );
