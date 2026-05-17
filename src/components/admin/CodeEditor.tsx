@@ -103,32 +103,30 @@ export default function CodeEditor() {
       toast({ title: 'No active file', description: 'Upload an initial ppt-builder.ts first.', variant: 'destructive' });
       return;
     }
-    if (!selectedRange) {
-      toast({ title: 'Select a function to modify', variant: 'destructive' });
-      return;
-    }
     if (!instruction.trim()) {
       toast({ title: 'Enter an instruction', variant: 'destructive' });
       return;
     }
     setModifying(true);
     setModifiedContent(null);
-    setModifiedFunctionSource(null);
+    setTargetFunction(null);
+    setTargetRange(null);
+    setIdentifyReason('');
     setChangeSummary('');
     setDownloadedOnce(false);
     try {
-      const result = await invokeCodeEditorFunction({
-        functionSource: selectedRange.source,
-        functionName: selectedRange.name,
+      const result = await invokeCodeEditorAuto({
+        fileName: FILE_NAME,
         instruction: instruction.trim(),
       });
-      const splicedFull = spliceFunction(activeContent, selectedRange, result.modifiedContent);
-      setModifiedFunctionSource(result.modifiedContent);
-      setModifiedContent(splicedFull);
+      setModifiedContent(result.modifiedContent);
+      setTargetFunction(result.targetFunction);
+      setTargetRange(result.targetRange);
+      setIdentifyReason(result.identifyReason ?? '');
       setChangeSummary(result.changeSummary);
       toast({
         title: 'Modified by Claude',
-        description: `${selectedRange.name}: ${selectedRange.source.length.toLocaleString()} → ${result.modifiedContent.length.toLocaleString()} chars`,
+        description: `${result.targetFunction} (L${result.targetRange.startLine}–${result.targetRange.endLine})`,
       });
     } catch (e) {
       toast({ title: 'Modification failed', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
