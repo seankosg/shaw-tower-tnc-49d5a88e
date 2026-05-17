@@ -385,7 +385,7 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
 
   const cardW = 6.0, gapX = 0.3, gapY = 0.2;
   const col1 = 0.5, col2 = col1 + cardW + gapX;
-  const tier1H = 2.35, tier2H = 3.45;
+  const tier1H = 2.35, tier2H = 2.95;
   const row1 = 1.5, row2 = row1 + tier1H + gapY;
 
   // T&C card
@@ -421,7 +421,7 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   cardHeader(col1, row2, cardW, 'Close Out Document',
     `ABD ${docsKPI.abd.total.toLocaleString()} · OMM ${docsKPI.omm.total} · Warranty ${docsKPI.warranty.total} · Spare ${docsKPI.sparePart.total}`,
     docTriggers, C.cyan);
-  ry = row2 + 0.72;
+  ry = row2 + 0.62;
   [
     { label: 'ABD Submitted',    pct: abdSubPct, color: C.cyanDim },
     { label: 'ABD Approved',     pct: abdApvPct, color: C.cyan },
@@ -429,7 +429,7 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
     { label: 'OMM Under Review', pct: ommUrPct,  color: C.amber },
     { label: 'Warranty Final',   pct: warFinal,  color: warFinal < 50 ? C.amber : C.green },
     { label: 'Spare Delivery',   pct: spDel,     color: spDel < 1 ? C.magentaBright : C.green },
-  ].forEach(r => { progressRow(col1, ry, cardW, r.label, r.pct, r.color, null); ry += 0.42; });
+  ].forEach(r => { progressRow(col1, ry, cardW, r.label, r.pct, r.color, null); ry += 0.36; });
 
   // Punch card
   const sb   = punchKPI.statusBreakdown;
@@ -474,7 +474,7 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   s.addShape(pres.ShapeType.rect, { x: tlX2, y: axisY2, w: tlW2, h: 0.015, fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 } });
   s.addShape(pres.ShapeType.rect, { x: tlX2, y: axisY2 - 0.05, w: 0.02, h: 0.08, fill: { color: C.textMuted }, line: { color: C.textMuted, width: 0 } });
 
-  const rowH2 = 0.3, rowGap2 = 0.22;
+  const rowH2 = 0.28, rowGap2 = 0.18;
   const markerH2 = rowH2 * 3 + rowGap2 * 2 + 0.04;
   s.addShape(pres.ShapeType.rect, { x: mcX2-0.012, y: axisY2, w: 0.024, h: markerH2, fill: { color: C.cyan }, line: { color: C.cyan, width: 0 } });
   s.addShape(pres.ShapeType.rect, { x: mcX2-0.012, y: axisY2-0.05, w: 0.024, h: 0.08, fill: { color: C.cyan }, line: { color: C.cyan, width: 0 } });
