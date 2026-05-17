@@ -193,14 +193,7 @@ export default function PptExportCard({ getReportData, canBuild }: PptExportCard
           {/* Font management — upload/manage custom fonts */}
           <FontLibrary embedded onChanged={loadFonts} />
 
-          {/* Design tokens — edit PPT color palette */}
-          <DesignTokensEditor embedded />
 
-          {/* Slide composer — select & reorder slides */}
-          <SlideComposer embedded />
-
-          {/* Design Guide Manager — upload YAML & analyze with Claude */}
-          <DesignGuideManager embedded />
 
           {/* Live preview */}
           <div className="rounded-md border bg-muted/30 p-4">
