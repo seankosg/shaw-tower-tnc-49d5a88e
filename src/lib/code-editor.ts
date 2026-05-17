@@ -164,8 +164,7 @@ export function parseTopLevelFunctions(source: string): FunctionRange[] {
     let parenDepth = 0;
     let angleDepth = 0;
     let typeBraceDepth = 0;
-    let paramsClosed = false; // true once parenDepth has gone positive then back to 0
-    let inReturnType = false; // true between `):` (after params) and the body `{`
+    let lastMeaningful = ''; // last non-whitespace, non-comment char seen
     const n = source.length;
     while (i < n) {
       const c = source[i];
@@ -180,6 +179,7 @@ export function parseTopLevelFunctions(source: string): FunctionRange[] {
           if (cc === c || cc === '\n') { i++; break; }
           i++;
         }
+        lastMeaningful = c;
         continue;
       }
       if (c === '`') {
@@ -189,37 +189,29 @@ export function parseTopLevelFunctions(source: string): FunctionRange[] {
           i++;
         }
         if (i < n) i++;
+        lastMeaningful = '`';
         continue;
       }
-      if (c === '(') { parenDepth++; i++; continue; }
-      if (c === ')') {
-        parenDepth--;
-        if (parenDepth === 0) paramsClosed = true;
-        i++; continue;
-      }
-      if (c === '<') { angleDepth++; i++; continue; }
-      if (c === '>') { angleDepth = Math.max(0, angleDepth - 1); i++; continue; }
-      if (c === ':' && paramsClosed && parenDepth === 0 && angleDepth === 0 && typeBraceDepth === 0) {
-        inReturnType = true; i++; continue;
-      }
       if (c === '{') {
-        if (parenDepth > 0 || angleDepth > 0 || inReturnType || typeBraceDepth > 0) {
-          if (inReturnType || typeBraceDepth > 0) typeBraceDepth++;
-          i++; continue;
-        }
+        // A `{` is a TYPE brace (not the function body) if it's inside parens/angles,
+        // or already inside a type-brace, or its preceding meaningful char is one of
+        // the type-position tokens: `:`, `|`, `&`, `,`, `<`, `(`.
+        const isTypePos = parenDepth > 0 || angleDepth > 0 || typeBraceDepth > 0
+          || lastMeaningful === ':' || lastMeaningful === '|' || lastMeaningful === '&'
+          || lastMeaningful === ',' || lastMeaningful === '<' || lastMeaningful === '(';
+        if (isTypePos) { typeBraceDepth++; lastMeaningful = '{'; i++; continue; }
         braceIdx = i; break;
       }
       if (c === '}') {
-        if (typeBraceDepth > 0) {
-          typeBraceDepth--;
-          if (typeBraceDepth === 0) inReturnType = false;
-        }
-        i++; continue;
+        if (typeBraceDepth > 0) typeBraceDepth--;
+        lastMeaningful = '}'; i++; continue;
       }
-      // Any other char while in return type — if we hit `=>` after return type, we're heading to arrow body.
-      if (inReturnType && typeBraceDepth === 0 && c === '=' && next === '>') {
-        inReturnType = false; i += 2; continue;
-      }
+      if (c === '(') { parenDepth++; lastMeaningful = '('; i++; continue; }
+      if (c === ')') { parenDepth--; lastMeaningful = ')'; i++; continue; }
+      if (c === '<') { angleDepth++; lastMeaningful = '<'; i++; continue; }
+      if (c === '>') { angleDepth = Math.max(0, angleDepth - 1); lastMeaningful = '>'; i++; continue; }
+      if (c === ' ' || c === '\t' || c === '\n' || c === '\r') { i++; continue; }
+      lastMeaningful = c;
       i++;
     }
     if (braceIdx === -1) continue;
