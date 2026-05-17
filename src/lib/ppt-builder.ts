@@ -1406,10 +1406,16 @@ export interface BuildPptOptions {
   colors?: PptColorTokens;
   slideConfig?: SlideConfigItem[];
   textOverrides?: TextOverrideMap;
+  /**
+   * Module filter. When provided, only slides whose `category` is in this list
+   * are rendered. `intro` and `overview` categories are always included if any
+   * module is selected. When omitted, all enabled slides render (legacy behavior).
+   */
+  modules?: Array<'tnc' | 'defect' | 'docs' | 'punch' | 'custom'>;
 }
 
 export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
-  const { data, fontFamily, fontMono, colors, slideConfig, textOverrides } = opts;
+  const { data, fontFamily, fontMono, colors, slideConfig, textOverrides, modules } = opts;
   if (fontFamily) FONT = fontFamily;
   if (fontMono) FONT_MONO = fontMono;
   if (colors) Object.assign(C, colors);
