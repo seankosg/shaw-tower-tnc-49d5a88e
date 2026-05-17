@@ -1423,18 +1423,18 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
     : DEFAULT_SLIDE_ORDER.map(k => ({ key: k, enabled: true }));
 
   const runners: Record<SlideKey, () => void> = {
-    cover:              () => buildCover(pres, tncKPI),
-    dashboard:          () => buildDashboard(pres, tncKPI, defectKPI, docsKPI, punchKPI),
-    tnc_snapshot:       () => buildSnapshot(pres, tncKPI),
-    tnc_scurve:         () => buildPlanVsActual(pres, tncKPI),
-    tnc_forecast:       () => buildForecast(pres, tncKPI),
-    tnc_action_plan:    () => buildActionPlan(pres, tncKPI),
-    defect_snapshot:    () => buildDefectSnapshot(pres, defectKPI),
-    defect_scurve:      () => buildDefectPlanVsActual(pres, defectKPI),
-    defect_forecast:    () => buildDefectForecast(pres, defectKPI),
-    defect_action_plan: () => buildDefectActionPlan(pres, defectKPI),
-    docs_snapshot:      () => buildDocsSnapshot(pres, docsKPI),
-    punch_snapshot:     () => buildPunchSnapshot(pres, punchKPI, data.meta),
+    cover:              () => { if (tncKPI) buildCover(pres, tncKPI); },
+    dashboard:          () => { if (tncKPI && defectKPI && docsKPI && punchKPI) buildDashboard(pres, tncKPI, defectKPI, docsKPI, punchKPI); },
+    tnc_snapshot:       () => { if (tncKPI) buildSnapshot(pres, tncKPI); },
+    tnc_scurve:         () => { if (tncKPI) buildPlanVsActual(pres, tncKPI); },
+    tnc_forecast:       () => { if (tncKPI) buildForecast(pres, tncKPI); },
+    tnc_action_plan:    () => { if (tncKPI) buildActionPlan(pres, tncKPI); },
+    defect_snapshot:    () => { if (defectKPI) buildDefectSnapshot(pres, defectKPI); },
+    defect_scurve:      () => { if (defectKPI) buildDefectPlanVsActual(pres, defectKPI); },
+    defect_forecast:    () => { if (defectKPI) buildDefectForecast(pres, defectKPI); },
+    defect_action_plan: () => { if (defectKPI) buildDefectActionPlan(pres, defectKPI); },
+    docs_snapshot:      () => { if (docsKPI) buildDocsSnapshot(pres, docsKPI); },
+    punch_snapshot:     () => { if (punchKPI) buildPunchSnapshot(pres, punchKPI, data.meta); },
   };
 
   for (const item of config) {
