@@ -7,17 +7,29 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const InputSchema = z.object({
+// Two input modes:
+//  - Function-targeted (preferred for large TS files): { functionSource, functionName, instruction, fileType:'ts' }
+//  - Whole-file (yaml or small files):                  { fileContent, instruction, fileType }
+const FunctionModeSchema = z.object({
+  functionSource: z.string().min(1).max(60_000),
+  functionName: z.string().min(1).max(200),
+  instruction: z.string().min(1).max(8000),
+  fileType: z.literal('ts').optional().default('ts'),
+});
+const FileModeSchema = z.object({
   fileContent: z.string().min(1).max(500_000),
   instruction: z.string().min(1).max(8000),
   fileType: z.enum(['ts', 'yaml']),
 });
 
-const EDIT_SYSTEM_PROMPT =
+const FUNCTION_EDIT_SYSTEM_PROMPT =
+  'You are a TypeScript code editor. You will receive a SINGLE function declaration and an instruction. Modify only this function according to the instruction. Return the complete modified function declaration, preserving its name, signature shape, leading export/async modifiers, and indentation. Do not add surrounding code, do not include any explanation, and do not wrap the output in markdown fences.';
+
+const FILE_EDIT_SYSTEM_PROMPT =
   'You are a code editor. Modify the provided file exactly as instructed. Return only the complete modified file content, no explanation, no markdown.';
 
 const SUMMARY_SYSTEM_PROMPT =
-  'You summarize code diffs in Korean. Given the user instruction and the modified file, write 1-2 concise Korean sentences describing what changed. Return plain text only.';
+  'You summarize code diffs in Korean. Given the user instruction and the modified content, write 1-2 concise Korean sentences describing what changed. Return plain text only.';
 
 function stripFence(text: string, lang: string): string {
   let s = text.trim();
@@ -88,14 +100,6 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const parsed = InputSchema.safeParse(body);
-    if (!parsed.success) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid input', details: parsed.error.flatten() }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
-    const { fileContent, instruction, fileType } = parsed.data;
 
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!apiKey) {
@@ -105,10 +109,49 @@ Deno.serve(async (req) => {
       });
     }
 
+    const fnParsed = FunctionModeSchema.safeParse(body);
+    if (fnParsed.success) {
+      const { functionSource, functionName, instruction } = fnParsed.data;
+      const userMsg =
+        `Instruction:\n${instruction}\n\n` +
+        `Function to modify (name: ${functionName}):\n` +
+        `\`\`\`typescript\n${functionSource}\n\`\`\``;
+      const rawModified = await callAnthropic(apiKey, FUNCTION_EDIT_SYSTEM_PROMPT, userMsg, 8192);
+      const modifiedContent = stripFence(rawModified, 'typescript');
+
+      let changeSummary = '';
+      try {
+        const summaryMsg =
+          `Instruction:\n${instruction}\n\n` +
+          `Modified function (${functionName}):\n` +
+          `\`\`\`typescript\n${modifiedContent.slice(0, 8000)}\n\`\`\``;
+        changeSummary = (await callAnthropic(apiKey, SUMMARY_SYSTEM_PROMPT, summaryMsg, 300)).trim();
+      } catch (e) {
+        console.error('[code-editor] summary failed:', e);
+        changeSummary = '요약 생성에 실패했습니다. 변경 내용을 직접 검토해 주세요.';
+      }
+
+      return new Response(JSON.stringify({ modifiedContent, changeSummary }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Fall back to whole-file mode (yaml or small ts files).
+    const fileParsed = FileModeSchema.safeParse(body);
+    if (!fileParsed.success) {
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid input',
+          details: { function_mode: fnParsed.error.flatten(), file_mode: fileParsed.error.flatten() },
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    const { fileContent, instruction, fileType } = fileParsed.data;
     const langTag = fileType === 'ts' ? 'typescript' : 'yaml';
     const userMsg = `Instruction:\n${instruction}\n\nCurrent file (${fileType}):\n\`\`\`${langTag}\n${fileContent}\n\`\`\``;
-
-    const rawModified = await callAnthropic(apiKey, EDIT_SYSTEM_PROMPT, userMsg, 4000);
+    const rawModified = await callAnthropic(apiKey, FILE_EDIT_SYSTEM_PROMPT, userMsg, 8192);
     const modifiedContent = stripFence(rawModified, langTag);
 
     let changeSummary = '';

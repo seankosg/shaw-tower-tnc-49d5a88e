@@ -21,6 +21,22 @@ export interface CodeEditorResult {
   changeSummary: string;
 }
 
+/** Function-targeted TS edit (preferred for large files). */
+export async function invokeCodeEditorFunction(input: {
+  functionSource: string;
+  functionName: string;
+  instruction: string;
+  fileType?: 'ts';
+}): Promise<CodeEditorResult> {
+  const { data, error } = await supabase.functions.invoke('code-editor', {
+    body: { ...input, fileType: input.fileType ?? 'ts' },
+  });
+  if (error) throw new Error(error.message || 'code-editor invoke failed');
+  if ((data as any)?.error) throw new Error((data as any).error);
+  return data as CodeEditorResult;
+}
+
+/** Whole-file edit (used for yaml or small files). */
 export async function invokeCodeEditor(input: {
   fileContent: string;
   instruction: string;
@@ -30,6 +46,198 @@ export async function invokeCodeEditor(input: {
   if (error) throw new Error(error.message || 'code-editor invoke failed');
   if ((data as any)?.error) throw new Error((data as any).error);
   return data as CodeEditorResult;
+}
+
+// ─────────────────────────────────────────
+// Top-level function parser (regex + brace counter, comment/string aware).
+// Supports:
+//   [export] [async] function NAME(...) { ... }
+//   [export] const NAME = [async] (...) => { ... }
+//   [export] const NAME = [async] function (...) { ... }
+// Only matches declarations that start at column 0 (top-level).
+// ─────────────────────────────────────────
+
+export interface FunctionRange {
+  name: string;
+  kind: 'function' | 'arrow' | 'const-function';
+  start: number; // char index in source (inclusive)
+  end: number;   // char index in source (exclusive)
+  startLine: number; // 1-indexed
+  endLine: number;   // 1-indexed
+  source: string;    // substring source.slice(start, end)
+}
+
+/** Find the matching closing brace for an opening brace at index openIdx.
+ *  Skips braces inside line comments, block comments, and string/template literals.
+ *  Returns the index AFTER the closing brace, or -1 if not found. */
+function findMatchingBraceEnd(src: string, openIdx: number): number {
+  let depth = 0;
+  let i = openIdx;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i];
+    const next = src[i + 1];
+    // Line comment
+    if (c === '/' && next === '/') {
+      const nl = src.indexOf('\n', i + 2);
+      i = nl === -1 ? n : nl + 1;
+      continue;
+    }
+    // Block comment
+    if (c === '/' && next === '*') {
+      const end = src.indexOf('*/', i + 2);
+      i = end === -1 ? n : end + 2;
+      continue;
+    }
+    // String literals
+    if (c === '"' || c === "'") {
+      i++;
+      while (i < n) {
+        const cc = src[i];
+        if (cc === '\\') { i += 2; continue; }
+        if (cc === c) { i++; break; }
+        if (cc === '\n') break; // unterminated; bail
+        i++;
+      }
+      continue;
+    }
+    // Template literal
+    if (c === '`') {
+      i++;
+      while (i < n) {
+        const cc = src[i];
+        if (cc === '\\') { i += 2; continue; }
+        if (cc === '`') { i++; break; }
+        if (cc === '$' && src[i + 1] === '{') {
+          // Skip nested ${ ... } by recursive brace counting (treat as code).
+          i += 2;
+          let nestedDepth = 1;
+          while (i < n && nestedDepth > 0) {
+            const x = src[i];
+            if (x === '{') nestedDepth++;
+            else if (x === '}') nestedDepth--;
+            if (nestedDepth > 0) i++;
+          }
+          if (i < n) i++; // consume closing }
+          continue;
+        }
+        i++;
+      }
+      continue;
+    }
+    if (c === '{') { depth++; i++; continue; }
+    if (c === '}') {
+      depth--;
+      i++;
+      if (depth === 0) return i;
+      continue;
+    }
+    i++;
+  }
+  return -1;
+}
+
+function lineOf(src: string, idx: number): number {
+  let line = 1;
+  for (let i = 0; i < idx && i < src.length; i++) if (src[i] === '\n') line++;
+  return line;
+}
+
+export function parseTopLevelFunctions(source: string): FunctionRange[] {
+  const ranges: FunctionRange[] = [];
+  // Match at start of line only (top-level, no indentation).
+  // We scan line-by-line for declaration starts, then brace-count for end.
+  const re = /^(export\s+)?(async\s+)?function\s+([A-Za-z_$][\w$]*)\s*[(<]|^(export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::\s*[^=]+)?=\s*(?:async\s+)?(?:function\s*\*?\s*[(<]|\([^)]*\)\s*(?::\s*[^={]+)?=>\s*\{|[A-Za-z_$][\w$]*\s*=>\s*\{)/gm;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source)) !== null) {
+    const declStart = m.index;
+    const name = m[3] || m[5];
+    if (!name) continue;
+    const isFunctionKw = !!m[3];
+    // Find the first opening brace AFTER the declaration line that belongs to the body.
+    // For arrow functions our regex ends exactly at `{`; for function/const-function we
+    // need to find the first { after the parameter list.
+    // Simple approach: start scanning from declStart, skip until first `{` that is at
+    // brace-depth 0 considering parentheses/angle brackets in the signature.
+    let i = declStart;
+    let braceIdx = -1;
+    let parenDepth = 0;
+    let angleDepth = 0;
+    let typeBraceDepth = 0;
+    let lastMeaningful = ''; // last non-whitespace, non-comment char seen
+    const n = source.length;
+    while (i < n) {
+      const c = source[i];
+      const next = source[i + 1];
+      if (c === '/' && next === '/') { const nl = source.indexOf('\n', i + 2); i = nl === -1 ? n : nl + 1; continue; }
+      if (c === '/' && next === '*') { const end = source.indexOf('*/', i + 2); i = end === -1 ? n : end + 2; continue; }
+      if (c === '"' || c === "'") {
+        i++;
+        while (i < n) {
+          const cc = source[i];
+          if (cc === '\\') { i += 2; continue; }
+          if (cc === c || cc === '\n') { i++; break; }
+          i++;
+        }
+        lastMeaningful = c;
+        continue;
+      }
+      if (c === '`') {
+        i++;
+        while (i < n && source[i] !== '`') {
+          if (source[i] === '\\') { i += 2; continue; }
+          i++;
+        }
+        if (i < n) i++;
+        lastMeaningful = '`';
+        continue;
+      }
+      if (c === '{') {
+        // A `{` is a TYPE brace (not the function body) if it's inside parens/angles,
+        // or already inside a type-brace, or its preceding meaningful char is one of
+        // the type-position tokens: `:`, `|`, `&`, `,`, `<`, `(`.
+        const isTypePos = parenDepth > 0 || angleDepth > 0 || typeBraceDepth > 0
+          || lastMeaningful === ':' || lastMeaningful === '|' || lastMeaningful === '&'
+          || lastMeaningful === ',' || lastMeaningful === '<' || lastMeaningful === '(';
+        if (isTypePos) { typeBraceDepth++; lastMeaningful = '{'; i++; continue; }
+        braceIdx = i; break;
+      }
+      if (c === '}') {
+        if (typeBraceDepth > 0) typeBraceDepth--;
+        lastMeaningful = '}'; i++; continue;
+      }
+      if (c === '(') { parenDepth++; lastMeaningful = '('; i++; continue; }
+      if (c === ')') { parenDepth--; lastMeaningful = ')'; i++; continue; }
+      if (c === '<') { angleDepth++; lastMeaningful = '<'; i++; continue; }
+      if (c === '>') { angleDepth = Math.max(0, angleDepth - 1); lastMeaningful = '>'; i++; continue; }
+      if (c === ' ' || c === '\t' || c === '\n' || c === '\r') { i++; continue; }
+      lastMeaningful = c;
+      i++;
+    }
+    if (braceIdx === -1) continue;
+    const end = findMatchingBraceEnd(source, braceIdx);
+    if (end === -1) continue;
+    const isArrow = !isFunctionKw && /=>\s*\{$/.test(source.slice(declStart, braceIdx + 1));
+    ranges.push({
+      name,
+      kind: isFunctionKw ? 'function' : (isArrow ? 'arrow' : 'const-function'),
+      start: declStart,
+      end,
+      startLine: lineOf(source, declStart),
+      endLine: lineOf(source, end - 1),
+      source: source.slice(declStart, end),
+    });
+    re.lastIndex = end; // continue scanning after this function
+  }
+  return ranges;
+}
+
+export function spliceFunction(
+  fullSource: string,
+  range: FunctionRange,
+  newFunctionSource: string,
+): string {
+  return fullSource.slice(0, range.start) + newFunctionSource + fullSource.slice(range.end);
 }
 
 export async function downloadActiveCodeFile(fileName: string): Promise<{ content: string; version: CodeFileVersion } | null> {

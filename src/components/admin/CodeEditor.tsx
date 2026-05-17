@@ -7,16 +7,22 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
-  Code2, Download, Loader2, RotateCcw, Save, Sparkles, Upload, Copy, FileText,
+  Code2, Download, Loader2, RotateCcw, Save, Sparkles, Upload, Copy,
 } from 'lucide-react';
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
   type CodeFileVersion,
+  type FunctionRange,
   downloadActiveCodeFile,
   downloadCodeVersion,
-  invokeCodeEditor,
+  invokeCodeEditorFunction,
   listCodeVersions,
+  parseTopLevelFunctions,
   restoreCodeVersion,
   saveCodeVersion,
+  spliceFunction,
 } from '@/lib/code-editor';
 
 const FILE_NAME = 'ppt-builder.ts';
@@ -42,8 +48,12 @@ export default function CodeEditor() {
   const [instruction, setInstruction] = useState('');
   const [modifying, setModifying] = useState(false);
   const [modifiedContent, setModifiedContent] = useState<string | null>(null);
+  const [modifiedFunctionSource, setModifiedFunctionSource] = useState<string | null>(null);
   const [changeSummary, setChangeSummary] = useState<string>('');
   const [downloadedOnce, setDownloadedOnce] = useState(false);
+
+  const [functions, setFunctions] = useState<FunctionRange[]>([]);
+  const [selectedFnName, setSelectedFnName] = useState<string>('');
 
   const [bootstrapFile, setBootstrapFile] = useState<File | null>(null);
   const [bootstrapping, setBootstrapping] = useState(false);
@@ -60,12 +70,17 @@ export default function CodeEditor() {
       setActive(a?.version ?? null);
       setActiveContent(a?.content ?? null);
       setVersions(v);
+      const fns = a?.content ? parseTopLevelFunctions(a.content) : [];
+      setFunctions(fns);
+      setSelectedFnName((prev) => (fns.some((f) => f.name === prev) ? prev : ''));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => { refresh(); }, []);
+
+  const selectedRange = functions.find((f) => f.name === selectedFnName) ?? null;
 
   const handleBootstrap = async () => {
     if (!bootstrapFile) {
@@ -100,23 +115,33 @@ export default function CodeEditor() {
       toast({ title: 'No active file', description: 'Upload an initial ppt-builder.ts first.', variant: 'destructive' });
       return;
     }
+    if (!selectedRange) {
+      toast({ title: 'Select a function to modify', variant: 'destructive' });
+      return;
+    }
     if (!instruction.trim()) {
       toast({ title: 'Enter an instruction', variant: 'destructive' });
       return;
     }
     setModifying(true);
     setModifiedContent(null);
+    setModifiedFunctionSource(null);
     setChangeSummary('');
     setDownloadedOnce(false);
     try {
-      const result = await invokeCodeEditor({
-        fileContent: activeContent,
+      const result = await invokeCodeEditorFunction({
+        functionSource: selectedRange.source,
+        functionName: selectedRange.name,
         instruction: instruction.trim(),
-        fileType: 'ts',
       });
-      setModifiedContent(result.modifiedContent);
+      const splicedFull = spliceFunction(activeContent, selectedRange, result.modifiedContent);
+      setModifiedFunctionSource(result.modifiedContent);
+      setModifiedContent(splicedFull);
       setChangeSummary(result.changeSummary);
-      toast({ title: 'Modified by Claude', description: `${result.modifiedContent.length.toLocaleString()} chars` });
+      toast({
+        title: 'Modified by Claude',
+        description: `${selectedRange.name}: ${selectedRange.source.length.toLocaleString()} → ${result.modifiedContent.length.toLocaleString()} chars`,
+      });
     } catch (e) {
       toast({ title: 'Modification failed', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
     } finally {
@@ -240,21 +265,59 @@ export default function CodeEditor() {
           </section>
         )}
 
-        {/* Instruction */}
+        {/* Function selector + Instruction */}
         <section>
           <h3 className="mb-2 text-sm font-semibold">Describe the change you want</h3>
-          <div className="space-y-2 rounded-md border p-3">
+          <div className="space-y-3 rounded-md border p-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Target function</Label>
+              <Select
+                value={selectedFnName}
+                onValueChange={setSelectedFnName}
+                disabled={!active || functions.length === 0}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder={functions.length === 0 ? 'No functions parsed' : 'Select a function to modify'} />
+                </SelectTrigger>
+                <SelectContent className="max-h-80">
+                  {functions.map((f) => (
+                    <SelectItem key={f.name} value={f.name}>
+                      <span className="font-mono text-xs">{f.name}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        (lines {f.startLine}–{f.endLine}, {f.source.length.toLocaleString()} chars)
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedRange && (
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                    Preview selected function (read-only)
+                  </summary>
+                  <pre className="mt-1 max-h-64 overflow-auto rounded bg-muted p-2 text-xs">{selectedRange.source}</pre>
+                </details>
+              )}
+            </div>
+
             <Textarea
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
-              placeholder="예: Defect Snapshot 슬라이드의 제목을 더 크게 표시해줘"
+              placeholder="예: Defect Snapshot 슬라이드의 제목 폰트 크기를 24pt로 키워줘"
               className="min-h-[80px] text-sm"
               disabled={!active}
             />
-            <Button size="sm" onClick={handleModify} disabled={!active || !instruction.trim() || modifying}>
+            <Button
+              size="sm"
+              onClick={handleModify}
+              disabled={!active || !selectedRange || !instruction.trim() || modifying}
+            >
               {modifying ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}
-              Modify with Claude
+              Modify Selected Function with Claude
             </Button>
+            <p className="text-xs text-muted-foreground">
+              전체 파일이 아닌 선택한 함수만 Claude에 전송하고, 응답을 원본 파일에 splice 합니다 (토큰 한도 회피).
+            </p>
           </div>
         </section>
 
@@ -265,8 +328,15 @@ export default function CodeEditor() {
             <div className="space-y-3 rounded-md border p-3">
               <div className="rounded bg-muted/40 p-2 text-sm whitespace-pre-wrap">{changeSummary || '(no summary)'}</div>
               <div className="text-xs text-muted-foreground">
-                {activeContent ? `${activeContent.split('\n').length} → ${modifiedContent.split('\n').length} lines` : ''}
-                · {modifiedContent.length.toLocaleString()} chars
+                {selectedRange && modifiedFunctionSource && (
+                  <>
+                    Function <span className="font-mono">{selectedRange.name}</span>:{' '}
+                    {selectedRange.source.split('\n').length} → {modifiedFunctionSource.split('\n').length} lines
+                    <span className="mx-2">·</span>
+                  </>
+                )}
+                {activeContent ? `File: ${activeContent.split('\n').length} → ${modifiedContent.split('\n').length} lines` : ''}
+                · {modifiedContent.length.toLocaleString()} chars total
               </div>
 
               <div className="flex flex-wrap gap-2">

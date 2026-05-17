@@ -18,6 +18,12 @@
  */
 
 import pptxgen from 'pptxgenjs';
+import { resolveText, type TextOverrideMap } from '@/lib/text-token-registry';
+
+// Module-level text overrides, set by buildPpt() and read by builder functions.
+let TEXT_OVERRIDES: TextOverrideMap | undefined = undefined;
+const T = (slideKey: string, fieldKey: string, fallback: string) =>
+  resolveText(TEXT_OVERRIDES, slideKey, fieldKey, fallback);
 import JSZip from 'jszip';
 import type {
   ReportData,
@@ -26,11 +32,13 @@ import type {
   DocsReportData,
   PunchReportData,
 } from '@/lib/report-builder';
+import type { PptColorTokens } from '@/lib/design-tokens';
 
 // ─────────────────────────────────────────
 // DESIGN TOKENS  (mirrors design_guide_v4.yaml)
+// Mutable — overridable per-build via buildPpt({ colors }).
 // ─────────────────────────────────────────
-const C = {
+export const C: Record<string, string> = {
   gapShortfall:        'F87171',
   gapExcess:           'A3E635',
   bgBody:              '0A1A40',
@@ -56,10 +64,10 @@ const C = {
   amber:               'FCD34D',
   magenta:             'F472B6',
   magentaBright:       'EC4899',
-} as const;
+};
 
-const FONT      = 'Pretendard';
-const FONT_MONO = 'Consolas';
+export let FONT      = 'Pretendard';
+export let FONT_MONO = 'Consolas';
 
 // ─────────────────────────────────────────
 // MONTH LABELS
@@ -216,13 +224,13 @@ function getBadge(triggers: Array<{ status: string }>) {
 // ─────────────────────────────────────────
 // DATA MAPPING: ReportData → KPI objects
 // ─────────────────────────────────────────
-function loadKPIs(rd: ReportData): { tncKPI: TncKPI; defectKPI: DefectKPI; docsKPI: DocsKPI; punchKPI: PunchKPI; } {
+export function loadKPIs(rd: ReportData): { tncKPI?: TncKPI; defectKPI?: DefectKPI; docsKPI?: DocsKPI; punchKPI?: PunchKPI; } {
   const meta = rd.meta;
   const today = meta.generatedAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
 
   // ── T&C ──
-  const tnc = rd.tnc!;
-  const tncKPI: TncKPI = {
+  const tnc = rd.tnc;
+  const tncKPI: TncKPI | undefined = tnc ? {
     total:      tnc.totals.total,
     preTest:    { pct: tnc.currentActual!.preTestPct,      done: tnc.totals.t1,  variance: tnc.currentActual!.preTestVariancePct },
     official:   { pct: tnc.currentActual!.officialTestPct, done: tnc.totals.t2,  variance: tnc.currentActual!.officialTestVariancePct },
@@ -235,11 +243,11 @@ function loadKPIs(rd: ReportData): { tncKPI: TncKPI; defectKPI: DefectKPI; docsK
     dataDate:    tnc.dataDate,
     dDay:        meta.mcDate,
     today,
-  };
+  } : undefined;
 
   // ── Defect ──
-  const defect = rd.defect!;
-  const defectKPI: DefectKPI = {
+  const defect = rd.defect;
+  const defectKPI: DefectKPI | undefined = defect ? {
     total:      defect.totals.total,
     completion: { pct: defect.currentActual!.completionPct, done: defect.totals.completion, variance: defect.currentActual!.completionVariancePct },
     closure:    { pct: defect.currentActual!.closurePct,    done: defect.totals.closure,    variance: defect.currentActual!.closureVariancePct },
@@ -247,26 +255,26 @@ function loadKPIs(rd: ReportData): { tncKPI: TncKPI; defectKPI: DefectKPI; docsK
     snapshots:          defect.snapshots   ?? [],
     scurve:             defect.scurve      ?? [],
     actionPlanTriggers: defect.actionPlanTriggers ?? [],
-  };
+  } : undefined;
 
   // ── Docs ──
-  const docs = rd.docs!;
-  const mkDocs = (sub: typeof docs.abd) => ({
+  const docs = rd.docs;
+  const mkDocs = (sub: NonNullable<typeof docs>['abd']) => ({
     total:        sub.total,
     pcts:         sub.currentPcts        ?? {},
     statusCounts: sub.statusCounts       ?? {},
     currentCounts:sub.currentCounts      ?? {},
   });
-  const docsKPI: DocsKPI = {
+  const docsKPI: DocsKPI | undefined = docs ? {
     abd:       mkDocs(docs.abd),
     omm:       mkDocs(docs.omm),
     warranty:  mkDocs(docs.warranty),
     sparePart: mkDocs(docs.sparePart),
-  };
+  } : undefined;
 
   // ── Punch ──
-  const punch = rd.punch!;
-  const punchKPI: PunchKPI = {
+  const punch = rd.punch;
+  const punchKPI: PunchKPI | undefined = punch ? {
     total:      punch.totals.total,
     completion: { pct: punch.currentActual!.completionPct, done: punch.totals.completion, variance: punch.currentActual!.variancePct },
     requiredPace:            punch.requiredPace!,
@@ -276,7 +284,7 @@ function loadKPIs(rd: ReportData): { tncKPI: TncKPI; defectKPI: DefectKPI; docsK
     monthlyBeyondSc:         punch.completionDateBreakdown?.monthlyBeyondSc ?? [],
     latestItems:             punch.latestItems ?? [],
     actionPlanTriggers:      punch.actionPlanTriggers ?? [],
-  };
+  } : undefined;
 
   return { tncKPI, defectKPI, docsKPI, punchKPI };
 }
@@ -284,7 +292,7 @@ function loadKPIs(rd: ReportData): { tncKPI: TncKPI; defectKPI: DefectKPI; docsK
 // ─────────────────────────────────────────
 // SLIDE 01: COVER
 // ─────────────────────────────────────────
-function buildCover(pres: pptxgen, tncKPI: TncKPI) {
+export function buildCover(pres: pptxgen, tncKPI: TncKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -302,11 +310,11 @@ function buildCover(pres: pptxgen, tncKPI: TncKPI) {
     x: 0.65, y: 1.4, w: 10, h: 1.8,
     fontFace: FONT, fontSize: 80, bold: true, color: C.textPrimary, margin: 0,
   });
-  s.addText('Completion Management status —', {
+  s.addText(T('cover', 'subtitle_line1', 'Completion Management status —'), {
     x: 0.65, y: 3.4, w: 8, h: 0.5,
     fontFace: FONT, fontSize: 22, color: C.textSecondary,
   });
-  s.addText(`D-${tncKPI.daysToPC} readiness review.`, {
+  s.addText(T('cover', 'subtitle_line2', `D-${tncKPI.daysToPC} readiness review.`), {
     x: 0.65, y: 3.9, w: 8, h: 0.5,
     fontFace: FONT, fontSize: 22, color: C.textSecondary,
   });
@@ -340,7 +348,7 @@ function buildCover(pres: pptxgen, tncKPI: TncKPI) {
 // ─────────────────────────────────────────
 // SLIDE 02: DASHBOARD (all modules)
 // ─────────────────────────────────────────
-function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectKPI, docsKPI: DocsKPI, punchKPI: PunchKPI) {
+export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectKPI, docsKPI: DocsKPI, punchKPI: PunchKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -350,7 +358,7 @@ function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectKPI, doc
   s.addText('30-Day Completion Readiness', {
     x: 7, y: 0.4, w: 4.1, h: 0.3, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right',
   });
-  s.addText('Four workstreams — four risk profiles', {
+  s.addText(T('dashboard', 'headline', 'Four workstreams — four risk profiles'), {
     x: 0.5, y: 0.75, w: 12.3, h: 0.65,
     fontFace: FONT, fontSize: 30, bold: true, color: C.textPrimary, margin: 0,
   });
@@ -493,7 +501,7 @@ function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectKPI, doc
 // ─────────────────────────────────────────
 // SLIDE 03: T&C SNAPSHOT
 // ─────────────────────────────────────────
-function buildSnapshot(pres: pptxgen, tncKPI: TncKPI) {
+export function buildSnapshot(pres: pptxgen, tncKPI: TncKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -502,11 +510,12 @@ function buildSnapshot(pres: pptxgen, tncKPI: TncKPI) {
   });
   s.addText('Worst-case simulation', { x: 7, y: 0.45, w: 4.1, h: 0.35, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right' });
 
-  const headline = tncKPI.testReport.pct < 1
+  const headlineDefault = tncKPI.testReport.pct < 1
     ? 'Tests running ahead — Test Report has not started.'
     : tncKPI.testReport.variance < -10
     ? `Tests ahead — Test Report critically behind at ${tncKPI.testReport.pct.toFixed(1)}%.`
     : 'Tests and reports are progressing.';
+  const headline = T('tnc_snapshot', 'headline', headlineDefault);
   s.addText(headline, { x: 0.5, y: 0.85, w: 12, h: 0.8, fontFace: FONT, fontSize: 36, bold: true, color: C.textPrimary, margin: 0 });
 
   const cards: CardConfig[] = [
@@ -546,7 +555,7 @@ function buildSnapshot(pres: pptxgen, tncKPI: TncKPI) {
 // ─────────────────────────────────────────
 // SLIDE 04: T&C S-CURVE (Plan vs Actual)
 // ─────────────────────────────────────────
-function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
+export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -561,9 +570,10 @@ function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
     x: 7, y: 0.45, w: 4.1, h: 0.35, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right',
   });
 
-  const headline = tncKPI.testReport.pct < 1
+  const headlineDefault = tncKPI.testReport.pct < 1
     ? 'Tests are running ahead — reports have not started.'
     : `Tests ahead of plan — Test Report at ${tncKPI.testReport.pct.toFixed(1)}%.`;
+  const headline = T('tnc_scurve', 'headline', headlineDefault);
   s.addText(headline, { x: 0.5, y: 0.85, w: 12.5, h: 0.8, fontFace: FONT, fontSize: 32, bold: true, color: C.textPrimary, margin: 0 });
 
   const cats    = pts.map((p, i) => i % 7 === 0 ? p.bucketLabel : '');
@@ -593,7 +603,7 @@ function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
     showLegend: true, legendPos: 't', legendFontSize: 10, legendColor: C.textSecondary,
     catAxisLabelColor: C.textMuted, valAxisLabelColor: C.textMuted,
     catAxisLabelFontSize: 9, valAxisLabelFontSize: 9,
-    catAxisLabelFrequency: 7,
+    catAxisLabelFrequency: 7 as unknown as string,
     valGridLine: { color: C.cardBorder, size: 0.5 }, catGridLine: { style: 'none' } as pptxgen.OptsChartGridLine,
     valAxisMaxVal: 100, valAxisMinVal: 0,
     valAxisLabelFormatCode: '0"%"',
@@ -632,13 +642,13 @@ function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
 // ─────────────────────────────────────────
 // SLIDE 05: T&C FORECAST
 // ─────────────────────────────────────────
-function buildForecast(pres: pptxgen, tncKPI: TncKPI) {
+export function buildForecast(pres: pptxgen, tncKPI: TncKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
   s.addText('T&C  ·  FORECAST  ·  PLANNED COMPLETION', { x: 0.5, y: 0.45, w: 7, h: 0.35, fontFace: FONT_MONO, fontSize: 11, color: C.cyan, charSpacing: 3 });
   s.addText('Planned % · ' + tncKPI.snapshots.map(sn => fmtDateShort(sn.date)).join(' → '), { x: 7, y: 0.45, w: 4.1, h: 0.35, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right' });
-  s.addText('Plan trajectory by milestone date', { x: 0.5, y: 0.85, w: 12.5, h: 0.8, fontFace: FONT, fontSize: 32, bold: true, color: C.textPrimary, margin: 0 });
+  s.addText(T('tnc_forecast', 'headline', 'Plan trajectory by milestone date'), { x: 0.5, y: 0.85, w: 12.5, h: 0.8, fontFace: FONT, fontSize: 32, bold: true, color: C.textPrimary, margin: 0 });
 
   const snaps = tncKPI.snapshots;
   const milestones = snaps.map(sn => fmtDateShort(sn.date));
@@ -687,7 +697,7 @@ function buildForecast(pres: pptxgen, tncKPI: TncKPI) {
 // ─────────────────────────────────────────
 // SLIDE 06: T&C ACTION PLAN
 // ─────────────────────────────────────────
-function buildActionPlan(pres: pptxgen, tncKPI: TncKPI) {
+export function buildActionPlan(pres: pptxgen, tncKPI: TncKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -703,7 +713,7 @@ function buildActionPlan(pres: pptxgen, tncKPI: TncKPI) {
 
   s.addText('T&C  ·  REPORTING RISK', { x: 0.5, y: 0.4, w: 6, h: 0.3, fontFace: FONT_MONO, fontSize: 11, color: C.magenta, charSpacing: 3 });
   s.addText(rp ? `Required pace · ${Math.ceil(rp.r2sPerDay)} / day` : '', { x: 7, y: 0.4, w: 4.1, h: 0.3, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right' });
-  s.addText('Test Report submission requires immediate start', { x: 0.5, y: 0.75, w: 12.3, h: 0.65, fontFace: FONT, fontSize: 26, bold: true, color: C.textPrimary, margin: 0 });
+  s.addText(T('tnc_action_plan', 'headline', 'Test Report submission requires immediate start'), { x: 0.5, y: 0.75, w: 12.3, h: 0.65, fontFace: FONT, fontSize: 26, bold: true, color: C.textPrimary, margin: 0 });
 
   // Top 3 panels
   const topY = 1.55, topH = 1.7;
@@ -727,7 +737,7 @@ function buildActionPlan(pres: pptxgen, tncKPI: TncKPI) {
 
   const colY = apY + 0.4, colH = 2.85, colW = 6.1;
   s.addShape(pres.ShapeType.rect, { x: 0.5, y: colY, w: colW, h: colH, fill: { color: C.cardBody }, line: { color: C.cardBorder, width: 0.75 } });
-  s.addText('Key Causes & Action Items', { x: 0.7, y: colY+0.15, w: colW-0.4, h: 0.35, fontFace: FONT, fontSize: 13, bold: true, color: C.cyan });
+  s.addText(T('tnc_action_plan', 'left_panel_title', 'Key Causes & Action Items'), { x: 0.7, y: colY+0.15, w: colW-0.4, h: 0.35, fontFace: FONT, fontSize: 13, bold: true, color: C.cyan });
   s.addText([
     { text: 'Key Causes', options: { bold: true, color: C.textPrimary, fontSize: 12, breakLine: true } },
     { text: '   • [원인 1 — 작성 필요]', options: { color: C.textDim, italic: true, breakLine: true } },
@@ -740,7 +750,7 @@ function buildActionPlan(pres: pptxgen, tncKPI: TncKPI) {
   ] as pptxgen.TextProps[], { x: 0.7, y: colY+0.55, w: colW-0.4, h: colH-0.65, fontFace: FONT, fontSize: 11, paraSpaceAfter: 4 });
 
   s.addShape(pres.ShapeType.rect, { x: 6.7, y: colY, w: colW, h: colH, fill: { color: C.cardBody }, line: { color: C.cardBorder, width: 0.75 } });
-  s.addText('Cooperation Requests & Owners', { x: 6.9, y: colY+0.15, w: colW-0.4, h: 0.35, fontFace: FONT, fontSize: 13, bold: true, color: C.green });
+  s.addText(T('tnc_action_plan', 'right_panel_title', 'Cooperation Requests & Owners'), { x: 6.9, y: colY+0.15, w: colW-0.4, h: 0.35, fontFace: FONT, fontSize: 13, bold: true, color: C.green });
   s.addText([
     { text: 'Cooperation Requests', options: { bold: true, color: C.textPrimary, fontSize: 12, breakLine: true } },
     { text: '   • [협조 요청 1 — 작성 필요]', options: { color: C.textDim, italic: true, breakLine: true } },
@@ -757,18 +767,19 @@ function buildActionPlan(pres: pptxgen, tncKPI: TncKPI) {
 // ─────────────────────────────────────────
 // SLIDE 07: DEFECT SNAPSHOT
 // ─────────────────────────────────────────
-function buildDefectSnapshot(pres: pptxgen, defectKPI: DefectKPI) {
+export function buildDefectSnapshot(pres: pptxgen, defectKPI: DefectKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
   s.addText('DEFECT MANAGEMENT', { x: 0.5, y: 0.4, w: 7, h: 0.3, fontFace: FONT_MONO, fontSize: 11, color: C.stageOfficial, charSpacing: 3 });
   s.addText(`Actual %  ·  ${fmtLong(defectKPI.snapshots[0]?.date ?? '')}`, { x: 7, y: 0.4, w: 4.1, h: 0.3, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right' });
 
-  const headline = defectKPI.closure.variance <= -20
+  const headlineDefault = defectKPI.closure.variance <= -20
     ? 'Completion is ahead — Closure is critically behind plan.'
     : defectKPI.closure.variance < 0
     ? `Completion ahead — Closure behind plan by ${Math.abs(defectKPI.closure.variance).toFixed(1)}%.`
     : 'Defect completion and closure both on track.';
+  const headline = T('defect_snapshot', 'headline', headlineDefault);
   s.addText(headline, { x: 0.5, y: 0.75, w: 12.3, h: 0.7, fontFace: FONT, fontSize: 30, bold: true, color: C.textPrimary, margin: 0 });
 
   const cards: CardConfig[] = [
@@ -808,7 +819,7 @@ function buildDefectSnapshot(pres: pptxgen, defectKPI: DefectKPI) {
 // ─────────────────────────────────────────
 // SLIDE 08: DEFECT S-CURVE (Plan vs Actual)
 // ─────────────────────────────────────────
-function buildDefectPlanVsActual(pres: pptxgen, defectKPI: DefectKPI) {
+export function buildDefectPlanVsActual(pres: pptxgen, defectKPI: DefectKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -816,11 +827,12 @@ function buildDefectPlanVsActual(pres: pptxgen, defectKPI: DefectKPI) {
   s.addText('DEFECT MANAGEMENT  ·  PROGRESS TREND', { x: 0.5, y: 0.4, w: 8, h: 0.3, fontFace: FONT_MONO, fontSize: 11, color: C.stageOfficial, charSpacing: 3 });
   s.addText(`Plan vs Actual · ${fmtDateShort(pts[0]?.date ?? '')} → ${fmtDateShort(pts.at(-1)?.date ?? '')}`, { x: 7, y: 0.4, w: 4.1, h: 0.3, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right' });
 
-  const headline = defectKPI.closure.variance <= -20
+  const headlineDefault = defectKPI.closure.variance <= -20
     ? 'Completion is ahead — Closure is critically behind plan.'
     : defectKPI.closure.variance < 0
     ? `Completion ahead — Closure behind plan by ${Math.abs(defectKPI.closure.variance).toFixed(1)}%.`
     : 'Defect completion and closure both on track.';
+  const headline = T('defect_scurve', 'headline', headlineDefault);
   s.addText(headline, { x: 0.5, y: 0.75, w: 12.3, h: 0.65, fontFace: FONT, fontSize: 28, bold: true, color: C.textPrimary, margin: 0 });
 
   const cats = pts.map((p, i) => i % 7 === 0 ? p.bucketLabel : '');
@@ -838,7 +850,7 @@ function buildDefectPlanVsActual(pres: pptxgen, defectKPI: DefectKPI) {
     showLegend: true, legendPos: 't', legendFontSize: 11, legendColor: C.textSecondary,
     valAxisMinVal: 0, valAxisMaxVal: 100, valAxisLabelFormatCode: '0"%"',
     valAxisLabelColor: C.textMuted, catAxisLabelColor: C.textSecondary,
-    catAxisLabelFontSize: 10, catAxisLabelFrequency: 7,
+    catAxisLabelFontSize: 10, catAxisLabelFrequency: 7 as unknown as string,
     valGridLine: { color: C.cardBorder, size: 0.5 }, catGridLine: { style: 'none' } as pptxgen.OptsChartGridLine,
     plotArea: { fill: { color: C.bgBody } }, chartArea: { fill: { color: C.bgBody } },
   });
@@ -878,16 +890,17 @@ function buildDefectPlanVsActual(pres: pptxgen, defectKPI: DefectKPI) {
 // ─────────────────────────────────────────
 // SLIDE 09: DEFECT FORECAST
 // ─────────────────────────────────────────
-function buildDefectForecast(pres: pptxgen, defectKPI: DefectKPI) {
+export function buildDefectForecast(pres: pptxgen, defectKPI: DefectKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
   s.addText('DEFECT  ·  FORECAST  ·  PLANNED COMPLETION', { x: 0.5, y: 0.4, w: 9, h: 0.3, fontFace: FONT_MONO, fontSize: 11, color: C.stageOfficial, charSpacing: 3 });
   s.addText('Planned %  ·  ' + defectKPI.snapshots.map(sn => fmtDateShort(sn.date)).join(' → '), { x: 7, y: 0.4, w: 4.1, h: 0.3, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right' });
 
-  const headline = defectKPI.closure.variance <= -20
+  const headlineDefault = defectKPI.closure.variance <= -20
     ? `Closure shortfall growing — ${defectKPI.requiredPace.closurePerDay.toFixed(0)}/day recovery required.`
     : 'Defect plan trajectory by milestone.';
+  const headline = T('defect_forecast', 'headline', headlineDefault);
   s.addText(headline, { x: 0.5, y: 0.75, w: 12.3, h: 0.65, fontFace: FONT, fontSize: 26, bold: true, color: C.textPrimary, margin: 0 });
 
   const snaps = defectKPI.snapshots;
@@ -941,14 +954,14 @@ function buildDefectForecast(pres: pptxgen, defectKPI: DefectKPI) {
 // ─────────────────────────────────────────
 // SLIDE 10: DEFECT ACTION PLAN
 // ─────────────────────────────────────────
-function buildDefectActionPlan(pres: pptxgen, defectKPI: DefectKPI) {
+export function buildDefectActionPlan(pres: pptxgen, defectKPI: DefectKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
   const rp = defectKPI.requiredPace;
 
   s.addText('DEFECT  ·  REPORTING RISK', { x: 0.5, y: 0.4, w: 7, h: 0.3, fontFace: FONT_MONO, fontSize: 11, color: C.amber, charSpacing: 3 });
   s.addText(`Closure at ${defectKPI.closure.pct.toFixed(1)}% — ${rp.closurePerDay.toFixed(0)}/day required`, { x: 7, y: 0.4, w: 4.1, h: 0.3, fontFace: FONT_MONO, fontSize: 9, color: C.textMuted, align: 'right' });
-  s.addText('Defect Closure is critically behind', { x: 0.5, y: 0.75, w: 12.3, h: 0.65, fontFace: FONT, fontSize: 30, bold: true, color: C.textPrimary, margin: 0 });
+  s.addText(T('defect_action_plan', 'headline', 'Defect Closure is critically behind'), { x: 0.5, y: 0.75, w: 12.3, h: 0.65, fontFace: FONT, fontSize: 30, bold: true, color: C.textPrimary, margin: 0 });
 
   // Top 3 panels
   const topY = 1.55, topH = 1.7;
@@ -972,7 +985,7 @@ function buildDefectActionPlan(pres: pptxgen, defectKPI: DefectKPI) {
 
   const colY = apY + 0.4, colH = 2.85, colW = 6.0;
   s.addShape(pres.ShapeType.rect, { x: 0.5, y: colY, w: colW, h: colH, fill: { color: C.cardBody }, line: { color: C.amber, width: 0.75 } });
-  s.addText('Suggested Alternatives', { x: 0.7, y: colY+0.15, w: colW-0.4, h: 0.35, fontFace: FONT, fontSize: 13, bold: true, color: C.amber });
+  s.addText(T('defect_action_plan', 'left_panel_title', 'Suggested Alternatives'), { x: 0.7, y: colY+0.15, w: colW-0.4, h: 0.35, fontFace: FONT, fontSize: 13, bold: true, color: C.amber });
   s.addText([
     { text: `• Dedicate closure teams to ${Math.ceil(rp.closurePerDay * 14).toLocaleString()} closures in first 14 days (50% milestone).`, options: { breakLine: true, color: C.textSecondary } },
     { text: '', options: { breakLine: true } },
@@ -982,7 +995,7 @@ function buildDefectActionPlan(pres: pptxgen, defectKPI: DefectKPI) {
   ] as pptxgen.TextProps[], { x: 0.7, y: colY+0.58, w: colW-0.4, h: colH-0.7, fontFace: FONT, fontSize: 11, paraSpaceAfter: 2 });
 
   s.addShape(pres.ShapeType.rect, { x: 6.8, y: colY, w: colW+0.3, h: colH, fill: { color: C.cardBody }, line: { color: C.cardBorder, width: 0.75 } });
-  s.addText('Cooperation Requests & Owners', { x: 7.0, y: colY+0.15, w: colW, h: 0.35, fontFace: FONT, fontSize: 13, bold: true, color: C.green });
+  s.addText(T('defect_action_plan', 'right_panel_title', 'Cooperation Requests & Owners'), { x: 7.0, y: colY+0.15, w: colW, h: 0.35, fontFace: FONT, fontSize: 13, bold: true, color: C.green });
   s.addText([
     { text: 'Cooperation Requests', options: { bold: true, color: C.textPrimary, fontSize: 12, breakLine: true } },
     { text: '   • [협조 요청 — 작성 필요]', options: { color: C.textDim, italic: true, breakLine: true } },
@@ -997,7 +1010,7 @@ function buildDefectActionPlan(pres: pptxgen, defectKPI: DefectKPI) {
 // ─────────────────────────────────────────
 // SLIDE 11: CLOSE OUT DOCUMENTS
 // ─────────────────────────────────────────
-function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
+export function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -1022,9 +1035,10 @@ function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
   const spPo    = docsKPI.sparePart.pcts['actual_po_date']       ?? 0;
   const spConf  = docsKPI.sparePart.pcts['actual_confirm_date']  ?? 0;
 
-  const headline = abdUr > 500
+  const headlineDefault = abdUr > 500
     ? 'ABD and OMM complete — Warranty and Spare Parts require urgent action.'
     : 'Document submissions progressing — Warranty and Spare Parts lagging.';
+  const headline = T('docs_snapshot', 'headline', headlineDefault);
   s.addText(headline, { x: 0.5, y: 0.75, w: 12.3, h: 0.65, fontFace: FONT, fontSize: 24, bold: true, color: C.textPrimary, margin: 0 });
 
   function barRow(sx: number, sy: number, sw: number, pct: number, color: string) {
@@ -1100,7 +1114,7 @@ function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
 // ─────────────────────────────────────────
 // SLIDE 12: PUNCH LIST
 // ─────────────────────────────────────────
-function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: ReportData['meta']) {
+export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: ReportData['meta']) {
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
@@ -1117,11 +1131,12 @@ function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: ReportData[
   const scDateStr = meta.mcDate;
 
   s.addText('PUNCH LIST', { x: 0.5, y: 0.4, w: 6, h: 0.3, fontFace: FONT_MONO, fontSize: 11, color: C.stageTestReport, charSpacing: 3 });
-  s.addText(`SC · Substantial Completion · ${fmtLong(scDateStr)}`, { x: 6, y: 0.4, w: 6.83, h: 0.3, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right' });
+  s.addText(T('punch_snapshot', 'deadline_label', `SC · Substantial Completion · ${fmtLong(scDateStr)}`), { x: 6, y: 0.4, w: 6.83, h: 0.3, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right' });
 
-  const headline = beyond > 0
+  const headlineDefault = beyond > 0
     ? `${sb.notStarted} items not started — ${beyond} will be over SC.`
     : `${punchKPI.total} punch items — all within Substantial Completion date.`;
+  const headline = T('punch_snapshot', 'headline', headlineDefault);
   s.addText(headline, { x: 0.5, y: 0.75, w: 12.3, h: 0.65, fontFace: FONT, fontSize: 26, bold: true, color: C.textPrimary, margin: 0 });
 
   // Status cards
@@ -1330,18 +1345,22 @@ export async function buildAndDownloadPpt(rd: ReportData): Promise<void> {
   pres.author  = 'HDEC';
   pres.title   = 'SHAW TOWER Completion Management';
 
-  buildCover(pres, tncKPI);
-  buildDashboard(pres, tncKPI, defectKPI, docsKPI, punchKPI);
-  buildSnapshot(pres, tncKPI);
-  buildPlanVsActual(pres, tncKPI);
-  buildForecast(pres, tncKPI);
-  buildActionPlan(pres, tncKPI);
-  buildDefectSnapshot(pres, defectKPI);
-  buildDefectPlanVsActual(pres, defectKPI);
-  buildDefectForecast(pres, defectKPI);
-  buildDefectActionPlan(pres, defectKPI);
-  buildDocsSnapshot(pres, docsKPI);
-  buildPunchSnapshot(pres, punchKPI, rd.meta);
+  if (tncKPI) buildCover(pres, tncKPI);
+  if (tncKPI && defectKPI && docsKPI && punchKPI) buildDashboard(pres, tncKPI, defectKPI, docsKPI, punchKPI);
+  if (tncKPI) {
+    buildSnapshot(pres, tncKPI);
+    buildPlanVsActual(pres, tncKPI);
+    buildForecast(pres, tncKPI);
+    buildActionPlan(pres, tncKPI);
+  }
+  if (defectKPI) {
+    buildDefectSnapshot(pres, defectKPI);
+    buildDefectPlanVsActual(pres, defectKPI);
+    buildDefectForecast(pres, defectKPI);
+    buildDefectActionPlan(pres, defectKPI);
+  }
+  if (docsKPI) buildDocsSnapshot(pres, docsKPI);
+  if (punchKPI) buildPunchSnapshot(pres, punchKPI, rd.meta);
 
   // Write → Blob → JSZip XML post-processing → download
   const rawBlob = await pres.write({ outputType: 'blob' }) as Blob;
@@ -1355,4 +1374,75 @@ export async function buildAndDownloadPpt(rd: ReportData): Promise<void> {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ─────────────────────────────────────────
+// SLIDE ORCHESTRATION
+// ─────────────────────────────────────────
+export type SlideKey =
+  | 'cover' | 'dashboard'
+  | 'tnc_snapshot' | 'tnc_scurve' | 'tnc_forecast' | 'tnc_action_plan'
+  | 'defect_snapshot' | 'defect_scurve' | 'defect_forecast' | 'defect_action_plan'
+  | 'docs_snapshot' | 'punch_snapshot';
+
+export const DEFAULT_SLIDE_ORDER: SlideKey[] = [
+  'cover', 'dashboard',
+  'tnc_snapshot', 'tnc_scurve', 'tnc_forecast', 'tnc_action_plan',
+  'defect_snapshot', 'defect_scurve', 'defect_forecast', 'defect_action_plan',
+  'docs_snapshot', 'punch_snapshot',
+];
+
+export interface SlideConfigItem { key: string; enabled: boolean; }
+
+export interface BuildPptOptions {
+  data: ReportData;
+  fontFamily?: string;
+  fontMono?: string;
+  fontDisplayName?: string;
+  colors?: PptColorTokens;
+  slideConfig?: SlideConfigItem[];
+  textOverrides?: TextOverrideMap;
+}
+
+export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
+  const { data, fontFamily, fontMono, colors, slideConfig, textOverrides } = opts;
+  if (fontFamily) FONT = fontFamily;
+  if (fontMono) FONT_MONO = fontMono;
+  if (colors) Object.assign(C, colors);
+  TEXT_OVERRIDES = textOverrides;
+
+  const { tncKPI, defectKPI, docsKPI, punchKPI } = loadKPIs(data);
+
+  const pres = new pptxgen();
+  pres.layout = 'LAYOUT_WIDE';
+  pres.author = 'HDEC';
+  pres.title  = 'SHAW TOWER Completion Management';
+
+  const config = (slideConfig && slideConfig.length > 0)
+    ? slideConfig
+    : DEFAULT_SLIDE_ORDER.map(k => ({ key: k, enabled: true }));
+
+  const runners: Record<SlideKey, () => void> = {
+    cover:              () => { if (tncKPI) buildCover(pres, tncKPI); },
+    dashboard:          () => { if (tncKPI && defectKPI && docsKPI && punchKPI) buildDashboard(pres, tncKPI, defectKPI, docsKPI, punchKPI); },
+    tnc_snapshot:       () => { if (tncKPI) buildSnapshot(pres, tncKPI); },
+    tnc_scurve:         () => { if (tncKPI) buildPlanVsActual(pres, tncKPI); },
+    tnc_forecast:       () => { if (tncKPI) buildForecast(pres, tncKPI); },
+    tnc_action_plan:    () => { if (tncKPI) buildActionPlan(pres, tncKPI); },
+    defect_snapshot:    () => { if (defectKPI) buildDefectSnapshot(pres, defectKPI); },
+    defect_scurve:      () => { if (defectKPI) buildDefectPlanVsActual(pres, defectKPI); },
+    defect_forecast:    () => { if (defectKPI) buildDefectForecast(pres, defectKPI); },
+    defect_action_plan: () => { if (defectKPI) buildDefectActionPlan(pres, defectKPI); },
+    docs_snapshot:      () => { if (docsKPI) buildDocsSnapshot(pres, docsKPI); },
+    punch_snapshot:     () => { if (punchKPI) buildPunchSnapshot(pres, punchKPI, data.meta); },
+  };
+
+  for (const item of config) {
+    if (!item.enabled) continue;
+    const fn = runners[item.key as SlideKey];
+    if (fn) fn();
+  }
+
+  const raw = await pres.write({ outputType: 'blob' }) as Blob;
+  return await postProcessXml(raw);
 }
