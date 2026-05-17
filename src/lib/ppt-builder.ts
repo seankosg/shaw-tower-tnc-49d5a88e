@@ -1436,6 +1436,15 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
   if (colors) Object.assign(C, colors);
   TEXT_OVERRIDES = textOverrides;
 
+  // Load per-slide display options (best-effort; falls back to defaults).
+  try {
+    const { fetchAllSlideDisplayOptions } = await import('@/lib/slide-display-options');
+    DISPLAY_OPTIONS = await fetchAllSlideDisplayOptions(true);
+  } catch (err) {
+    console.warn('[ppt-builder] display options unavailable:', err);
+    DISPLAY_OPTIONS = {};
+  }
+
   const { tncKPI, defectKPI, docsKPI, punchKPI } = loadKPIs(data);
 
   const pres = new pptxgen();
