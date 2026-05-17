@@ -1389,7 +1389,7 @@ export type BuiltInSlideKey =
 // eslint-disable-next-line @typescript-eslint/ban-types
 export type SlideKey = BuiltInSlideKey | (string & {});
 
-export const DEFAULT_SLIDE_ORDER: SlideKey[] = [
+export const DEFAULT_SLIDE_ORDER: BuiltInSlideKey[] = [
   'cover', 'dashboard',
   'tnc_snapshot', 'tnc_scurve', 'tnc_forecast', 'tnc_action_plan',
   'defect_snapshot', 'defect_scurve', 'defect_forecast', 'defect_action_plan',
