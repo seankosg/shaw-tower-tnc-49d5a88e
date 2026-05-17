@@ -219,7 +219,7 @@ export default function PptExportCard({ getReportData, canBuild }: PptExportCard
           <div>
             <Button onClick={handleDownloadClick} disabled={!canBuild || downloading}>
               <Download className="h-4 w-4 mr-2" />
-              Download PPT
+              Create PPT
             </Button>
             {!canBuild && (
               <span className="ml-3 text-xs text-muted-foreground">Select at least one module above.</span>
