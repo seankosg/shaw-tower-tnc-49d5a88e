@@ -48,8 +48,12 @@ export default function CodeEditor() {
   const [instruction, setInstruction] = useState('');
   const [modifying, setModifying] = useState(false);
   const [modifiedContent, setModifiedContent] = useState<string | null>(null);
+  const [modifiedFunctionSource, setModifiedFunctionSource] = useState<string | null>(null);
   const [changeSummary, setChangeSummary] = useState<string>('');
   const [downloadedOnce, setDownloadedOnce] = useState(false);
+
+  const [functions, setFunctions] = useState<FunctionRange[]>([]);
+  const [selectedFnName, setSelectedFnName] = useState<string>('');
 
   const [bootstrapFile, setBootstrapFile] = useState<File | null>(null);
   const [bootstrapping, setBootstrapping] = useState(false);
@@ -66,12 +70,17 @@ export default function CodeEditor() {
       setActive(a?.version ?? null);
       setActiveContent(a?.content ?? null);
       setVersions(v);
+      const fns = a?.content ? parseTopLevelFunctions(a.content) : [];
+      setFunctions(fns);
+      setSelectedFnName((prev) => (fns.some((f) => f.name === prev) ? prev : ''));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => { refresh(); }, []);
+
+  const selectedRange = functions.find((f) => f.name === selectedFnName) ?? null;
 
   const handleBootstrap = async () => {
     if (!bootstrapFile) {
