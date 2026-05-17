@@ -1396,12 +1396,14 @@ export interface BuildPptOptions {
   fontDisplayName?: string;
   colors?: PptColorTokens;
   slideConfig?: SlideConfigItem[];
+  textOverrides?: TextOverrideMap;
 }
 
 export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
-  const { data, fontFamily, colors, slideConfig } = opts;
+  const { data, fontFamily, colors, slideConfig, textOverrides } = opts;
   if (fontFamily) FONT = fontFamily;
   if (colors) Object.assign(C, colors);
+  TEXT_OVERRIDES = textOverrides;
 
   const { tncKPI, defectKPI, docsKPI, punchKPI } = loadKPIs(data);
 
