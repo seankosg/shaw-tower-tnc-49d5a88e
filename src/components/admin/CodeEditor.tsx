@@ -240,15 +240,30 @@ export default function CodeEditor() {
                   <div className="mt-1 text-xs text-muted-foreground">{active.change_summary_ko}</div>
                 )}
               </div>
-              <Button size="sm" variant="outline" onClick={handleDownloadActive}>
-                <Download className="mr-1 h-3.5 w-3.5" /> Download current
-              </Button>
+              <div className="flex flex-col gap-2 items-end">
+                <Button size="sm" variant="outline" onClick={handleDownloadActive}>
+                  <Download className="mr-1 h-3.5 w-3.5" /> Download current
+                </Button>
+                <Button size="sm" variant="default" onClick={handleSyncFromCodebase} disabled={syncing}>
+                  {syncing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-1 h-3.5 w-3.5" />}
+                  Sync from codebase ({pptBuilderSource.split('\n').length} lines)
+                </Button>
+              </div>
             </div>
           ) : (
-            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-              No file uploaded yet. Use "Upload Initial File" below.
+            <div className="space-y-2">
+              <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                No file uploaded yet. Use "Sync from codebase" or "Upload Initial File" below.
+              </div>
+              <Button size="sm" variant="default" onClick={handleSyncFromCodebase} disabled={syncing}>
+                {syncing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-1 h-3.5 w-3.5" />}
+                Sync from codebase ({pptBuilderSource.split('\n').length} lines)
+              </Button>
             </div>
           )}
+          <p className="mt-2 text-xs text-muted-foreground">
+            "Sync from codebase"는 현재 빌드의 <code>src/lib/ppt-builder.ts</code>를 Storage에 새 active 버전으로 푸시합니다 (잘린 파일 복구용).
+          </p>
         </section>
 
         {/* Bootstrap */}
