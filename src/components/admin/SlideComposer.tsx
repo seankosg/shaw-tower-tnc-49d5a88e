@@ -112,7 +112,9 @@ export default function SlideComposer({ embedded = false }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [editOptionsFor, setEditOptionsFor] = useState<SlideMeta | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -129,14 +131,20 @@ export default function SlideComposer({ embedded = false }: Props) {
       supabase.auth.getUser(),
     ]);
     let admin = false;
+    let senior = false;
     const uid = auth.data.user?.id;
     if (uid) {
-      const { data } = await supabase.rpc('has_role', { _user_id: uid, _role: 'admin' });
-      admin = !!data;
+      const [adminR, seniorR] = await Promise.all([
+        supabase.rpc('has_role', { _user_id: uid, _role: 'admin' }),
+        supabase.rpc('is_senior_or_above', { _user_id: uid }),
+      ]);
+      admin = !!adminR.data;
+      senior = !!seniorR.data;
     }
     setRegistry(reg);
     setItems(cfg);
     setIsAdmin(admin);
+    setCanEdit(senior || admin);
     setLoading(false);
   };
 
