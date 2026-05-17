@@ -67,7 +67,7 @@ export const C: Record<string, string> = {
 };
 
 export let FONT      = 'Pretendard';
-export const FONT_MONO = 'Consolas';
+export let FONT_MONO = 'Consolas';
 
 // ─────────────────────────────────────────
 // MONTH LABELS
@@ -1393,6 +1393,7 @@ export interface SlideConfigItem { key: string; enabled: boolean; }
 export interface BuildPptOptions {
   data: ReportData;
   fontFamily?: string;
+  fontMono?: string;
   fontDisplayName?: string;
   colors?: PptColorTokens;
   slideConfig?: SlideConfigItem[];
@@ -1400,8 +1401,9 @@ export interface BuildPptOptions {
 }
 
 export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
-  const { data, fontFamily, colors, slideConfig, textOverrides } = opts;
+  const { data, fontFamily, fontMono, colors, slideConfig, textOverrides } = opts;
   if (fontFamily) FONT = fontFamily;
+  if (fontMono) FONT_MONO = fontMono;
   if (colors) Object.assign(C, colors);
   TEXT_OVERRIDES = textOverrides;
 
