@@ -18,6 +18,12 @@
  */
 
 import pptxgen from 'pptxgenjs';
+import { resolveText, type TextOverrideMap } from '@/lib/text-token-registry';
+
+// Module-level text overrides, set by buildPpt() and read by builder functions.
+let TEXT_OVERRIDES: TextOverrideMap | undefined = undefined;
+const T = (slideKey: string, fieldKey: string, fallback: string) =>
+  resolveText(TEXT_OVERRIDES, slideKey, fieldKey, fallback);
 import JSZip from 'jszip';
 import type {
   ReportData,
