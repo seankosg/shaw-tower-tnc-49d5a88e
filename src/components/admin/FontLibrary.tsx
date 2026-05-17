@@ -34,7 +34,7 @@ function formatBytes(n: number) {
 }
 
 export default function FontLibrary() {
-  const { isAdmin, user } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [rows, setRows] = useState<FontRow[]>([]);
   const [loading, setLoading] = useState(false);
