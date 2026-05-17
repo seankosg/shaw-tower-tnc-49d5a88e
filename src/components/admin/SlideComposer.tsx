@@ -113,7 +113,7 @@ export default function SlideComposer({ embedded = false }: Props) {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [, setIsAdmin] = useState(false);
   const [editOptionsFor, setEditOptionsFor] = useState<SlideMeta | null>(null);
 
   const sensors = useSensors(
