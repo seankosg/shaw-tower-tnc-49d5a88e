@@ -44,6 +44,14 @@ export default function DesignGuideManager({ embedded }: Props) {
   const [rollbackTarget, setRollbackTarget] = useState<DesignGuideVersion | null>(null);
   const [rolling, setRolling] = useState(false);
 
+  // Natural-language YAML modification
+  const [nlInstruction, setNlInstruction] = useState('');
+  const [nlModifying, setNlModifying] = useState(false);
+  const [nlModified, setNlModified] = useState<string | null>(null);
+  const [nlOriginal, setNlOriginal] = useState<string | null>(null);
+  const [nlSummary, setNlSummary] = useState<string>('');
+  const [nlApplying, setNlApplying] = useState(false);
+
   const refresh = async () => {
     setLoading(true);
     const [a, v] = await Promise.all([getActiveVersion(), listVersions()]);
