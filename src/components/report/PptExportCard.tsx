@@ -20,6 +20,7 @@ import { fetchTextOverrides } from '@/lib/slide-text-overrides';
 import FontLibrary from '@/components/admin/FontLibrary';
 import DesignTokensEditor from '@/components/admin/DesignTokensEditor';
 import SlideComposer from '@/components/admin/SlideComposer';
+import DesignGuideManager from '@/components/admin/DesignGuideManager';
 
 interface FontRow {
   id: string;
@@ -191,6 +192,9 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
 
           {/* Slide composer — select & reorder slides */}
           <SlideComposer embedded />
+
+          {/* Design Guide Manager — upload YAML & analyze with Claude */}
+          <DesignGuideManager embedded />
 
           {/* Live preview */}
           <div className="rounded-md border bg-muted/30 p-4">

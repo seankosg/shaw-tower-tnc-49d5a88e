@@ -880,6 +880,42 @@ export type Database = {
         }
         Relationships: []
       }
+      design_guide_versions: {
+        Row: {
+          id: string
+          is_active: boolean
+          public_url: string | null
+          storage_path: string
+          summary_ko: string | null
+          tokens_snapshot: Json
+          uploaded_at: string
+          uploaded_by: string | null
+          version_label: string | null
+        }
+        Insert: {
+          id?: string
+          is_active?: boolean
+          public_url?: string | null
+          storage_path: string
+          summary_ko?: string | null
+          tokens_snapshot: Json
+          uploaded_at?: string
+          uploaded_by?: string | null
+          version_label?: string | null
+        }
+        Update: {
+          id?: string
+          is_active?: boolean
+          public_url?: string | null
+          storage_path?: string
+          summary_ko?: string | null
+          tokens_snapshot?: Json
+          uploaded_at?: string
+          uploaded_by?: string | null
+          version_label?: string | null
+        }
+        Relationships: []
+      }
       design_tokens: {
         Row: {
           category: string

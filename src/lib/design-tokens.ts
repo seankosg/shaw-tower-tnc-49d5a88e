@@ -98,3 +98,39 @@ export async function fetchPptColorTokens(): Promise<PptColorTokens> {
   cache = { at: Date.now(), data: merged };
   return merged;
 }
+
+export interface PptFontTokens {
+  body: string;
+  mono: string;
+}
+
+export const DEFAULT_PPT_FONTS: PptFontTokens = {
+  body: 'Pretendard',
+  mono: 'Consolas',
+};
+
+let fontCache: { at: number; data: PptFontTokens } | null = null;
+
+export function invalidatePptFontCache() {
+  fontCache = null;
+}
+
+export async function fetchPptFontTokens(): Promise<PptFontTokens> {
+  if (fontCache && Date.now() - fontCache.at < CACHE_TTL_MS) return fontCache.data;
+  const { data, error } = await supabase
+    .from('design_tokens')
+    .select('key, value')
+    .in('key', ['ppt.font.body', 'ppt.font.mono']);
+  if (error) {
+    console.error('[design-tokens] font fetch failed, using defaults:', error);
+    return { ...DEFAULT_PPT_FONTS };
+  }
+  const merged: PptFontTokens = { ...DEFAULT_PPT_FONTS };
+  for (const row of data ?? []) {
+    if (row.key === 'ppt.font.body' && typeof row.value === 'string') merged.body = row.value;
+    if (row.key === 'ppt.font.mono' && typeof row.value === 'string') merged.mono = row.value;
+  }
+  fontCache = { at: Date.now(), data: merged };
+  return merged;
+}
+
