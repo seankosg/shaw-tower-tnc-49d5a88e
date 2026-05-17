@@ -1426,7 +1426,7 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
     ? slideConfig
     : DEFAULT_SLIDE_ORDER.map(k => ({ key: k, enabled: true }));
 
-  const runners: Record<SlideKey, () => void> = {
+  const runners: Record<BuiltInSlideKey, () => void> = {
     cover:              () => { if (tncKPI) buildCover(pres, tncKPI); },
     dashboard:          () => { if (tncKPI && defectKPI && docsKPI && punchKPI) buildDashboard(pres, tncKPI, defectKPI, docsKPI, punchKPI); },
     tnc_snapshot:       () => { if (tncKPI) buildSnapshot(pres, tncKPI); },
@@ -1441,10 +1441,42 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
     punch_snapshot:     () => { if (punchKPI) buildPunchSnapshot(pres, punchKPI, data.meta); },
   };
 
-  for (const item of config) {
-    if (!item.enabled) continue;
-    const fn = runners[item.key as SlideKey];
-    if (fn) fn();
+  // Load custom slides (runtime-defined via New Slide Generator).
+  // Imported dynamically to avoid pulling supabase into this module's top-level graph
+  // when used in non-browser contexts.
+  let customMap = new Map<string, import('@/lib/custom-slide-spec').SlideSpec>();
+  try {
+    const [{ fetchCustomSlides }, { renderCustomSlide }] = await Promise.all([
+      import('@/lib/custom-slides-cache'),
+      import('@/lib/custom-slide-renderer'),
+    ]);
+    const customs = await fetchCustomSlides();
+    customMap = new Map(customs.map(c => [c.key, c.spec]));
+    const kpiBag = { tnc: tncKPI, defect: defectKPI, docs: docsKPI, punch: punchKPI, data, meta: data.meta };
+
+    for (const item of config) {
+      if (!item.enabled) continue;
+      const fn = (runners as Record<string, () => void>)[item.key];
+      if (fn) {
+        fn();
+        continue;
+      }
+      const spec = customMap.get(item.key);
+      if (spec) {
+        try {
+          renderCustomSlide({ pres, spec, kpis: kpiBag, C, FONT, FONT_MONO });
+        } catch (err) {
+          console.error(`[ppt-builder] custom slide ${item.key} failed:`, err);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[ppt-builder] custom slides unavailable, falling back to built-ins:', err);
+    for (const item of config) {
+      if (!item.enabled) continue;
+      const fn = (runners as Record<string, () => void>)[item.key];
+      if (fn) fn();
+    }
   }
 
   const raw = await pres.write({ outputType: 'blob' }) as Blob;
