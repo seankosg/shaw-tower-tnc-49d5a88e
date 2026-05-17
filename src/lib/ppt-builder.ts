@@ -1498,6 +1498,7 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
     for (const item of config) {
       if (!item.enabled) continue;
       if (!isAllowed(item.key)) continue;
+      CURRENT_SLIDE_KEY = item.key;
       const fn = (runners as Record<string, () => void>)[item.key];
       if (fn) {
         fn();
@@ -1516,10 +1517,12 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
     console.warn('[ppt-builder] custom slides unavailable, falling back to built-ins:', err);
     for (const item of config) {
       if (!item.enabled) continue;
+      CURRENT_SLIDE_KEY = item.key;
       const fn = (runners as Record<string, () => void>)[item.key];
       if (fn) fn();
     }
   }
+  CURRENT_SLIDE_KEY = '';
 
   const raw = await pres.write({ outputType: 'blob' }) as Blob;
   return await postProcessXml(raw);
