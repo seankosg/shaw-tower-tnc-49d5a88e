@@ -60,16 +60,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (session?.user) await fetchUserData(session.user.id);
   };
 
+  const initialLoadDoneRef = useRef(false);
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
         setSession(newSession);
         if (newSession?.user) {
-          // Only flip the global loading flag on the initial sign-in. Token
-          // refreshes and user-updated events fire periodically and would
-          // otherwise replace the whole UI with the RoleGuard "Loading…"
-          // screen, blocking clicks (e.g. on the Admin sidebar item).
-          const needsBlockingLoad = event === 'SIGNED_IN' || event === 'INITIAL_SESSION';
+          // Only flip the global loading flag on the VERY FIRST session resolution.
+          // Subsequent SIGNED_IN / INITIAL_SESSION events (e.g. fired when the
+          // tab regains visibility and Supabase recovers the session) would
+          // otherwise unmount the whole app tree via ProtectedRoute/RoleGuard
+          // and wipe local component state (Report Tab inputs, etc.).
+          const needsBlockingLoad =
+            !initialLoadDoneRef.current &&
+            (event === 'SIGNED_IN' || event === 'INITIAL_SESSION');
           if (needsBlockingLoad) setLoading(true);
           // Defer to next tick to avoid deadlocks inside the auth callback.
           setTimeout(async () => {
@@ -77,12 +82,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               await fetchUserData(newSession.user.id);
             } finally {
               if (needsBlockingLoad) setLoading(false);
+              initialLoadDoneRef.current = true;
             }
           }, 0);
         } else {
           setProfile(null);
           setRoles([]);
           setLoading(false);
+          initialLoadDoneRef.current = true;
         }
       }
     );
@@ -94,9 +101,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await fetchUserData(s.user.id);
         } finally {
           setLoading(false);
+          initialLoadDoneRef.current = true;
         }
       } else {
         setLoading(false);
+        initialLoadDoneRef.current = true;
       }
     });
 
