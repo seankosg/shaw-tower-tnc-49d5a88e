@@ -14,7 +14,9 @@ import type { ReportData } from '@/lib/report-builder';
 import { buildPpt } from '@/lib/ppt-builder';
 import { bundlePptWithFonts, downloadBlob } from '@/lib/ppt-bundler';
 import { ensureFontFaces, type FontFile } from '@/lib/font-loader';
+import { fetchPptColorTokens } from '@/lib/design-tokens';
 import FontLibrary from '@/components/admin/FontLibrary';
+import DesignTokensEditor from '@/components/admin/DesignTokensEditor';
 
 interface FontRow {
   id: string;
@@ -116,7 +118,8 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
     setDownloading(true);
     try {
       const dateStr = new Date().toISOString().slice(0, 10);
-      const pptxBlob = await buildPpt({ data: reportData, fontFamily: selected.family });
+      const colors = await fetchPptColorTokens();
+      const pptxBlob = await buildPpt({ data: reportData, fontFamily: selected.family, colors });
       const pptxName = `SHAW_Report_${dateStr}.pptx`;
       if (selected.builtin) {
         downloadBlob(pptxBlob, pptxName);
@@ -177,6 +180,9 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
 
           {/* Font management — upload/manage custom fonts */}
           <FontLibrary embedded onChanged={loadFonts} />
+
+          {/* Design tokens — edit PPT color palette */}
+          <DesignTokensEditor embedded />
 
           {/* Live preview */}
           <div className="rounded-md border bg-muted/30 p-4">

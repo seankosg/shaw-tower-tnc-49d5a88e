@@ -4,14 +4,12 @@
 
 import pptxgen from 'pptxgenjs';
 import type { ReportData } from '@/lib/report-builder';
+import { DEFAULT_PPT_COLORS, type PptColorTokens } from '@/lib/design-tokens';
 
-const COLOR_PRIMARY = '1E2761';
-const COLOR_ACCENT = '4F46E5';
-const COLOR_TEXT = '1F2937';
-const COLOR_MUTED = '6B7280';
-const COLOR_BG_SOFT = 'F1F5F9';
-const COLOR_DANGER = 'DC2626';
-const COLOR_OK = '16A34A';
+// Mutable per-build color holder. Assigned at the start of buildPpt() and read
+// by the helper functions below. Safe because pptx generation is synchronous
+// within a single buildPpt() call.
+const C: PptColorTokens = { ...DEFAULT_PPT_COLORS };
 
 function fmtPct(n: number | undefined): string {
   if (n === undefined || n === null || Number.isNaN(n)) return '–';
@@ -23,8 +21,8 @@ function fmtSignedPct(n: number | undefined): string {
   return `${sign}${n.toFixed(1)}%`;
 }
 function varianceColor(n: number | undefined): string {
-  if (n === undefined || n === null || Number.isNaN(n)) return COLOR_MUTED;
-  return n >= 0 ? COLOR_OK : COLOR_DANGER;
+  if (n === undefined || n === null || Number.isNaN(n)) return C.muted;
+  return n >= 0 ? C.ok : C.danger;
 }
 
 export interface BuildPptOptions {
@@ -32,10 +30,13 @@ export interface BuildPptOptions {
   fontFamily: string;
   /** Display name shown on the cover ("Pretendard", "Malgun Gothic", etc.) */
   fontDisplayName?: string;
+  /** Optional color overrides (loaded from `design_tokens`). */
+  colors?: PptColorTokens;
 }
 
 export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
-  const { data, fontFamily } = opts;
+  const { data, fontFamily, colors } = opts;
+  Object.assign(C, DEFAULT_PPT_COLORS, colors ?? {});
   const pptx = new pptxgen();
   pptx.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5
   pptx.title = 'SHAW Tower — Completion Management Report';
@@ -46,7 +47,7 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
   // ---------- Cover ----------
   {
     const s = pptx.addSlide();
-    s.background = { color: COLOR_PRIMARY };
+    s.background = { color: C.primary };
     s.addText('SHAW TOWER', {
       x: 0.6, y: 2.4, w: 12, h: 0.8,
       fontFace: tFace, fontSize: 44, bold: true, color: 'FFFFFF',
@@ -91,7 +92,7 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
   // ---------- Closing ----------
   {
     const s = pptx.addSlide();
-    s.background = { color: COLOR_PRIMARY };
+    s.background = { color: C.primary };
     s.addText('Thank You', {
       x: 0.6, y: 3.0, w: 12, h: 1.0,
       fontFace: tFace, fontSize: 48, bold: true, color: 'FFFFFF', align: 'center',
@@ -109,7 +110,7 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
 function addModuleHeader(pptx: pptxgen, tFace: string, title: string, subtitle: string) {
   const s = pptx.addSlide();
   s.background = { color: 'FFFFFF' };
-  s.addShape('rect', { x: 0, y: 0, w: 13.33, h: 1.1, fill: { color: COLOR_PRIMARY } });
+  s.addShape('rect', { x: 0, y: 0, w: 13.33, h: 1.1, fill: { color: C.primary } });
   s.addText(title, {
     x: 0.5, y: 0.2, w: 12, h: 0.5,
     fontFace: tFace, fontSize: 24, bold: true, color: 'FFFFFF',
@@ -128,10 +129,10 @@ function addTncSlide(pptx: pptxgen, tFace: string, t: NonNullable<ReportData['tn
   // Header
   s.addText('T&C — Current Status', {
     x: 0.5, y: 0.3, w: 12, h: 0.4,
-    fontFace: tFace, fontSize: 20, bold: true, color: COLOR_PRIMARY,
+    fontFace: tFace, fontSize: 20, bold: true, color: C.primary,
   });
   s.addText(`Total Subtests: ${t.totals.total.toLocaleString()}`, {
-    x: 0.5, y: 0.75, w: 12, h: 0.3, fontFace: tFace, fontSize: 12, color: COLOR_MUTED,
+    x: 0.5, y: 0.75, w: 12, h: 0.3, fontFace: tFace, fontSize: 12, color: C.muted,
   });
 
   // Stage cards
@@ -144,11 +145,11 @@ function addTncSlide(pptx: pptxgen, tFace: string, t: NonNullable<ReportData['tn
   const cardW = 4.0; const gap = 0.27; const startX = 0.5; const y = 1.3; const h = 2.4;
   stages.forEach((st, i) => {
     const x = startX + i * (cardW + gap);
-    s.addShape('roundRect', { x, y, w: cardW, h, fill: { color: COLOR_BG_SOFT }, line: { color: COLOR_BG_SOFT }, rectRadius: 0.08 });
-    s.addText(st.label, { x: x + 0.25, y: y + 0.2, w: cardW - 0.5, h: 0.4, fontFace: tFace, fontSize: 14, bold: true, color: COLOR_PRIMARY });
-    s.addText(fmtPct(st.actualPct), { x: x + 0.25, y: y + 0.6, w: cardW - 0.5, h: 0.9, fontFace: tFace, fontSize: 40, bold: true, color: COLOR_TEXT });
+    s.addShape('roundRect', { x, y, w: cardW, h, fill: { color: C.bg_soft }, line: { color: C.bg_soft }, rectRadius: 0.08 });
+    s.addText(st.label, { x: x + 0.25, y: y + 0.2, w: cardW - 0.5, h: 0.4, fontFace: tFace, fontSize: 14, bold: true, color: C.primary });
+    s.addText(fmtPct(st.actualPct), { x: x + 0.25, y: y + 0.6, w: cardW - 0.5, h: 0.9, fontFace: tFace, fontSize: 40, bold: true, color: C.text });
     s.addText(`Done ${st.done.toLocaleString()} / Plan ${st.plan.toLocaleString()}`, {
-      x: x + 0.25, y: y + 1.55, w: cardW - 0.5, h: 0.3, fontFace: tFace, fontSize: 11, color: COLOR_MUTED,
+      x: x + 0.25, y: y + 1.55, w: cardW - 0.5, h: 0.3, fontFace: tFace, fontSize: 11, color: C.muted,
     });
     s.addText(`Variance vs plan: ${fmtSignedPct(st.variancePct)}`, {
       x: x + 0.25, y: y + 1.85, w: cardW - 0.5, h: 0.3, fontFace: tFace, fontSize: 11, bold: true, color: varianceColor(st.variancePct),
@@ -159,7 +160,7 @@ function addTncSlide(pptx: pptxgen, tFace: string, t: NonNullable<ReportData['tn
   if (t.requiredPace) {
     const r = t.requiredPace;
     s.addText('Required Pace to Completion', {
-      x: 0.5, y: 4.0, w: 12, h: 0.4, fontFace: tFace, fontSize: 16, bold: true, color: COLOR_PRIMARY,
+      x: 0.5, y: 4.0, w: 12, h: 0.4, fontFace: tFace, fontSize: 16, bold: true, color: C.primary,
     });
     const rows = [
       ['Days remaining', String(r.daysRemaining)],
@@ -169,8 +170,8 @@ function addTncSlide(pptx: pptxgen, tFace: string, t: NonNullable<ReportData['tn
     ];
     rows.forEach(([k, v], i) => {
       const yy = 4.5 + i * 0.42;
-      s.addText(k, { x: 0.6, y: yy, w: 3.0, h: 0.4, fontFace: tFace, fontSize: 12, color: COLOR_MUTED });
-      s.addText(v, { x: 3.6, y: yy, w: 9, h: 0.4, fontFace: tFace, fontSize: 13, bold: true, color: COLOR_TEXT });
+      s.addText(k, { x: 0.6, y: yy, w: 3.0, h: 0.4, fontFace: tFace, fontSize: 12, color: C.muted });
+      s.addText(v, { x: 3.6, y: yy, w: 9, h: 0.4, fontFace: tFace, fontSize: 13, bold: true, color: C.text });
     });
   }
 
@@ -179,17 +180,17 @@ function addTncSlide(pptx: pptxgen, tFace: string, t: NonNullable<ReportData['tn
     const s2 = pptx.addSlide();
     s2.background = { color: 'FFFFFF' };
     s2.addText('T&C — Action Triggers', {
-      x: 0.5, y: 0.3, w: 12, h: 0.4, fontFace: tFace, fontSize: 20, bold: true, color: COLOR_PRIMARY,
+      x: 0.5, y: 0.3, w: 12, h: 0.4, fontFace: tFace, fontSize: 20, bold: true, color: C.primary,
     });
     t.actionPlanTriggers.forEach((trig, i) => {
       const y = 1.0 + i * 0.95;
-      const color = trig.status === 'CRITICAL' ? COLOR_DANGER : 'D97706';
-      s2.addShape('roundRect', { x: 0.5, y, w: 12.3, h: 0.8, fill: { color: COLOR_BG_SOFT }, line: { color }, rectRadius: 0.06 });
+      const color = trig.status === 'CRITICAL' ? C.danger : 'D97706';
+      s2.addShape('roundRect', { x: 0.5, y, w: 12.3, h: 0.8, fill: { color: C.bg_soft }, line: { color }, rectRadius: 0.06 });
       s2.addText(`${trig.status} · ${trig.stage} (${fmtPct(trig.actualPct)})`, {
         x: 0.7, y: y + 0.1, w: 12, h: 0.3, fontFace: tFace, fontSize: 13, bold: true, color,
       });
       s2.addText(trig.reason, {
-        x: 0.7, y: y + 0.4, w: 12, h: 0.4, fontFace: tFace, fontSize: 11, color: COLOR_TEXT,
+        x: 0.7, y: y + 0.4, w: 12, h: 0.4, fontFace: tFace, fontSize: 11, color: C.text,
       });
     });
   }
@@ -199,10 +200,10 @@ function addDefectSlide(pptx: pptxgen, tFace: string, d: NonNullable<ReportData[
   const s = pptx.addSlide();
   s.background = { color: 'FFFFFF' };
   s.addText('Defect — Current Status', {
-    x: 0.5, y: 0.3, w: 12, h: 0.4, fontFace: tFace, fontSize: 20, bold: true, color: COLOR_PRIMARY,
+    x: 0.5, y: 0.3, w: 12, h: 0.4, fontFace: tFace, fontSize: 20, bold: true, color: C.primary,
   });
   s.addText(`Total Defects: ${d.totals.total.toLocaleString()}`, {
-    x: 0.5, y: 0.75, w: 12, h: 0.3, fontFace: tFace, fontSize: 12, color: COLOR_MUTED,
+    x: 0.5, y: 0.75, w: 12, h: 0.3, fontFace: tFace, fontSize: 12, color: C.muted,
   });
 
   const stages = [
@@ -212,11 +213,11 @@ function addDefectSlide(pptx: pptxgen, tFace: string, d: NonNullable<ReportData[
   const cardW = 6.1; const gap = 0.3; const y = 1.3; const h = 2.4;
   stages.forEach((st, i) => {
     const x = 0.5 + i * (cardW + gap);
-    s.addShape('roundRect', { x, y, w: cardW, h, fill: { color: COLOR_BG_SOFT }, line: { color: COLOR_BG_SOFT }, rectRadius: 0.08 });
-    s.addText(st.label, { x: x + 0.3, y: y + 0.2, w: cardW - 0.6, h: 0.4, fontFace: tFace, fontSize: 14, bold: true, color: COLOR_PRIMARY });
-    s.addText(fmtPct(st.actualPct), { x: x + 0.3, y: y + 0.6, w: cardW - 0.6, h: 0.9, fontFace: tFace, fontSize: 40, bold: true, color: COLOR_TEXT });
+    s.addShape('roundRect', { x, y, w: cardW, h, fill: { color: C.bg_soft }, line: { color: C.bg_soft }, rectRadius: 0.08 });
+    s.addText(st.label, { x: x + 0.3, y: y + 0.2, w: cardW - 0.6, h: 0.4, fontFace: tFace, fontSize: 14, bold: true, color: C.primary });
+    s.addText(fmtPct(st.actualPct), { x: x + 0.3, y: y + 0.6, w: cardW - 0.6, h: 0.9, fontFace: tFace, fontSize: 40, bold: true, color: C.text });
     s.addText(`Done ${st.done.toLocaleString()} / Plan ${st.plan.toLocaleString()}`, {
-      x: x + 0.3, y: y + 1.55, w: cardW - 0.6, h: 0.3, fontFace: tFace, fontSize: 11, color: COLOR_MUTED,
+      x: x + 0.3, y: y + 1.55, w: cardW - 0.6, h: 0.3, fontFace: tFace, fontSize: 11, color: C.muted,
     });
     s.addText(`Variance vs plan: ${fmtSignedPct(st.variancePct)}`, {
       x: x + 0.3, y: y + 1.85, w: cardW - 0.6, h: 0.3, fontFace: tFace, fontSize: 11, bold: true, color: varianceColor(st.variancePct),
@@ -226,7 +227,7 @@ function addDefectSlide(pptx: pptxgen, tFace: string, d: NonNullable<ReportData[
   if (d.requiredPace) {
     const r = d.requiredPace;
     s.addText('Required Pace to Completion', {
-      x: 0.5, y: 4.0, w: 12, h: 0.4, fontFace: tFace, fontSize: 16, bold: true, color: COLOR_PRIMARY,
+      x: 0.5, y: 4.0, w: 12, h: 0.4, fontFace: tFace, fontSize: 16, bold: true, color: C.primary,
     });
     const rows = [
       ['Days remaining', String(r.daysRemaining)],
@@ -235,8 +236,8 @@ function addDefectSlide(pptx: pptxgen, tFace: string, d: NonNullable<ReportData[
     ];
     rows.forEach(([k, v], i) => {
       const yy = 4.5 + i * 0.42;
-      s.addText(k, { x: 0.6, y: yy, w: 3.0, h: 0.4, fontFace: tFace, fontSize: 12, color: COLOR_MUTED });
-      s.addText(v, { x: 3.6, y: yy, w: 9, h: 0.4, fontFace: tFace, fontSize: 13, bold: true, color: COLOR_TEXT });
+      s.addText(k, { x: 0.6, y: yy, w: 3.0, h: 0.4, fontFace: tFace, fontSize: 12, color: C.muted });
+      s.addText(v, { x: 3.6, y: yy, w: 9, h: 0.4, fontFace: tFace, fontSize: 13, bold: true, color: C.text });
     });
   }
 }
@@ -245,7 +246,7 @@ function addDocsSlide(pptx: pptxgen, tFace: string, d: NonNullable<ReportData['d
   const s = pptx.addSlide();
   s.background = { color: 'FFFFFF' };
   s.addText('Docs — Totals & Status', {
-    x: 0.5, y: 0.3, w: 12, h: 0.4, fontFace: tFace, fontSize: 20, bold: true, color: COLOR_PRIMARY,
+    x: 0.5, y: 0.3, w: 12, h: 0.4, fontFace: tFace, fontSize: 20, bold: true, color: C.primary,
   });
   const subs: Array<[string, ReturnType<() => NonNullable<ReportData['docs']>['abd']>]> = [
     ['As Built Drawing', d.abd], ['OMM', d.omm], ['Warranty', d.warranty], ['Spare Part', d.sparePart],
@@ -253,23 +254,23 @@ function addDocsSlide(pptx: pptxgen, tFace: string, d: NonNullable<ReportData['d
   const cardW = 3.0; const gap = 0.2; const y = 1.1; const h = 2.0;
   subs.forEach(([label, sub], i) => {
     const x = 0.5 + i * (cardW + gap);
-    s.addShape('roundRect', { x, y, w: cardW, h, fill: { color: COLOR_BG_SOFT }, line: { color: COLOR_BG_SOFT }, rectRadius: 0.08 });
-    s.addText(label, { x: x + 0.2, y: y + 0.15, w: cardW - 0.4, h: 0.4, fontFace: tFace, fontSize: 13, bold: true, color: COLOR_PRIMARY });
-    s.addText(sub.total.toLocaleString(), { x: x + 0.2, y: y + 0.55, w: cardW - 0.4, h: 0.7, fontFace: tFace, fontSize: 28, bold: true, color: COLOR_TEXT });
-    s.addText('Total items', { x: x + 0.2, y: y + 1.3, w: cardW - 0.4, h: 0.3, fontFace: tFace, fontSize: 10, color: COLOR_MUTED });
+    s.addShape('roundRect', { x, y, w: cardW, h, fill: { color: C.bg_soft }, line: { color: C.bg_soft }, rectRadius: 0.08 });
+    s.addText(label, { x: x + 0.2, y: y + 0.15, w: cardW - 0.4, h: 0.4, fontFace: tFace, fontSize: 13, bold: true, color: C.primary });
+    s.addText(sub.total.toLocaleString(), { x: x + 0.2, y: y + 0.55, w: cardW - 0.4, h: 0.7, fontFace: tFace, fontSize: 28, bold: true, color: C.text });
+    s.addText('Total items', { x: x + 0.2, y: y + 1.3, w: cardW - 0.4, h: 0.3, fontFace: tFace, fontSize: 10, color: C.muted });
   });
 
   // Status counts (ABD as example detail)
   if (d.abd.statusCounts) {
     s.addText('ABD — Status Breakdown', {
-      x: 0.5, y: 3.5, w: 12, h: 0.4, fontFace: tFace, fontSize: 16, bold: true, color: COLOR_PRIMARY,
+      x: 0.5, y: 3.5, w: 12, h: 0.4, fontFace: tFace, fontSize: 16, bold: true, color: C.primary,
     });
     const entries = Object.entries(d.abd.statusCounts).slice(0, 6);
     entries.forEach(([k, v], i) => {
       const yy = 4.0 + Math.floor(i / 3) * 0.5;
       const xx = 0.6 + (i % 3) * 4.2;
-      s.addText(k, { x: xx, y: yy, w: 2.4, h: 0.4, fontFace: tFace, fontSize: 12, color: COLOR_MUTED });
-      s.addText(String(v), { x: xx + 2.4, y: yy, w: 1.6, h: 0.4, fontFace: tFace, fontSize: 13, bold: true, color: COLOR_TEXT });
+      s.addText(k, { x: xx, y: yy, w: 2.4, h: 0.4, fontFace: tFace, fontSize: 12, color: C.muted });
+      s.addText(String(v), { x: xx + 2.4, y: yy, w: 1.6, h: 0.4, fontFace: tFace, fontSize: 13, bold: true, color: C.text });
     });
   }
 }
@@ -278,19 +279,19 @@ function addPunchSlide(pptx: pptxgen, tFace: string, p: NonNullable<ReportData['
   const s = pptx.addSlide();
   s.background = { color: 'FFFFFF' };
   s.addText('Punch — Current Status', {
-    x: 0.5, y: 0.3, w: 12, h: 0.4, fontFace: tFace, fontSize: 20, bold: true, color: COLOR_PRIMARY,
+    x: 0.5, y: 0.3, w: 12, h: 0.4, fontFace: tFace, fontSize: 20, bold: true, color: C.primary,
   });
   s.addText(`Total: ${p.totals.total.toLocaleString()}`, {
-    x: 0.5, y: 0.75, w: 12, h: 0.3, fontFace: tFace, fontSize: 12, color: COLOR_MUTED,
+    x: 0.5, y: 0.75, w: 12, h: 0.3, fontFace: tFace, fontSize: 12, color: C.muted,
   });
 
   const cardW = 6.1; const gap = 0.3; const y = 1.3; const h = 2.4;
   // Completion card
-  s.addShape('roundRect', { x: 0.5, y, w: cardW, h, fill: { color: COLOR_BG_SOFT }, line: { color: COLOR_BG_SOFT }, rectRadius: 0.08 });
-  s.addText('Completion', { x: 0.8, y: y + 0.2, w: cardW - 0.6, h: 0.4, fontFace: tFace, fontSize: 14, bold: true, color: COLOR_PRIMARY });
-  s.addText(fmtPct(p.currentActual?.completionPct), { x: 0.8, y: y + 0.6, w: cardW - 0.6, h: 0.9, fontFace: tFace, fontSize: 40, bold: true, color: COLOR_TEXT });
+  s.addShape('roundRect', { x: 0.5, y, w: cardW, h, fill: { color: C.bg_soft }, line: { color: C.bg_soft }, rectRadius: 0.08 });
+  s.addText('Completion', { x: 0.8, y: y + 0.2, w: cardW - 0.6, h: 0.4, fontFace: tFace, fontSize: 14, bold: true, color: C.primary });
+  s.addText(fmtPct(p.currentActual?.completionPct), { x: 0.8, y: y + 0.6, w: cardW - 0.6, h: 0.9, fontFace: tFace, fontSize: 40, bold: true, color: C.text });
   s.addText(`Done ${p.totals.completion.toLocaleString()} / Plan ${p.plannedToDate.completion.toLocaleString()}`, {
-    x: 0.8, y: y + 1.55, w: cardW - 0.6, h: 0.3, fontFace: tFace, fontSize: 11, color: COLOR_MUTED,
+    x: 0.8, y: y + 1.55, w: cardW - 0.6, h: 0.3, fontFace: tFace, fontSize: 11, color: C.muted,
   });
   s.addText(`Variance vs plan: ${fmtSignedPct(p.currentActual?.variancePct)}`, {
     x: 0.8, y: y + 1.85, w: cardW - 0.6, h: 0.3, fontFace: tFace, fontSize: 11, bold: true, color: varianceColor(p.currentActual?.variancePct),
@@ -299,8 +300,8 @@ function addPunchSlide(pptx: pptxgen, tFace: string, p: NonNullable<ReportData['
   // Status breakdown card
   if (p.statusBreakdown) {
     const x2 = 0.5 + cardW + gap;
-    s.addShape('roundRect', { x: x2, y, w: cardW, h, fill: { color: COLOR_BG_SOFT }, line: { color: COLOR_BG_SOFT }, rectRadius: 0.08 });
-    s.addText('Status Breakdown', { x: x2 + 0.3, y: y + 0.2, w: cardW - 0.6, h: 0.4, fontFace: tFace, fontSize: 14, bold: true, color: COLOR_PRIMARY });
+    s.addShape('roundRect', { x: x2, y, w: cardW, h, fill: { color: C.bg_soft }, line: { color: C.bg_soft }, rectRadius: 0.08 });
+    s.addText('Status Breakdown', { x: x2 + 0.3, y: y + 0.2, w: cardW - 0.6, h: 0.4, fontFace: tFace, fontSize: 14, bold: true, color: C.primary });
     const rows = [
       ['Completed', p.statusBreakdown.completed],
       ['WIP', p.statusBreakdown.wip],
@@ -308,21 +309,21 @@ function addPunchSlide(pptx: pptxgen, tFace: string, p: NonNullable<ReportData['
     ];
     rows.forEach(([k, v], i) => {
       const yy = y + 0.7 + i * 0.5;
-      s.addText(String(k), { x: x2 + 0.3, y: yy, w: 3.0, h: 0.4, fontFace: tFace, fontSize: 13, color: COLOR_MUTED });
-      s.addText(String(v), { x: x2 + 3.3, y: yy, w: 2.5, h: 0.4, fontFace: tFace, fontSize: 16, bold: true, color: COLOR_TEXT });
+      s.addText(String(k), { x: x2 + 0.3, y: yy, w: 3.0, h: 0.4, fontFace: tFace, fontSize: 13, color: C.muted });
+      s.addText(String(v), { x: x2 + 3.3, y: yy, w: 2.5, h: 0.4, fontFace: tFace, fontSize: 16, bold: true, color: C.text });
     });
   }
 
   if (p.requiredPace) {
     const r = p.requiredPace;
     s.addText('Required Pace to Completion', {
-      x: 0.5, y: 4.0, w: 12, h: 0.4, fontFace: tFace, fontSize: 16, bold: true, color: COLOR_PRIMARY,
+      x: 0.5, y: 4.0, w: 12, h: 0.4, fontFace: tFace, fontSize: 16, bold: true, color: C.primary,
     });
     s.addText(`Days remaining: ${r.daysRemaining}`, {
-      x: 0.6, y: 4.5, w: 12, h: 0.4, fontFace: tFace, fontSize: 12, color: COLOR_TEXT,
+      x: 0.6, y: 4.5, w: 12, h: 0.4, fontFace: tFace, fontSize: 12, color: C.text,
     });
     s.addText(`Completion: ${r.completionRemaining.toLocaleString()} remaining · ${r.completionPerDay.toFixed(1)} / day`, {
-      x: 0.6, y: 4.85, w: 12, h: 0.4, fontFace: tFace, fontSize: 12, color: COLOR_TEXT,
+      x: 0.6, y: 4.85, w: 12, h: 0.4, fontFace: tFace, fontSize: 12, color: C.text,
     });
   }
 }
