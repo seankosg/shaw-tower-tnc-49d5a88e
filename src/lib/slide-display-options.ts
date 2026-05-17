@@ -169,7 +169,7 @@ export async function saveSlideDisplayOptions(
   const { error } = await supabase
     .from('slide_display_options')
     .upsert(
-      { slide_key: slideKey, options: parsed as object, updated_by: uid },
+      [{ slide_key: slideKey, options: parsed as object, updated_by: uid ?? undefined }],
       { onConflict: 'slide_key' },
     );
   if (error) throw error;
