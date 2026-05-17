@@ -103,6 +103,7 @@ export default function FontLibrary({ embedded = false, onChanged }: FontLibrary
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       load();
+      onChanged?.();
     } catch (e) {
       toast({ title: 'Upload failed', description: e instanceof Error ? e.message : 'Unknown', variant: 'destructive' });
     } finally {
