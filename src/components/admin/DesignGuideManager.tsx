@@ -207,10 +207,7 @@ export default function DesignGuideManager({ embedded }: Props) {
       const filename = `nl-modified-${new Date().toISOString().replace(/[:.]/g, '-')}.yaml`;
       const blob = new Blob([nlModified], { type: 'text/yaml' });
       const file = new File([blob], filename, { type: 'text/yaml' });
-      const { data: userData } = await supabase.auth.getUser();
-      void userData; // not used directly here; uploadNewYaml uses storage upload
-
-      const path = await (await import('@/lib/design-guide-manager')).uploadNewYaml(file);
+      const path = await uploadNewYaml(file);
       const analysisResult = await analyzeYaml(nlOriginal, nlModified);
       await applyTokenChanges(analysisResult.colorTokens, analysisResult.fontTokens);
       const saved = await saveVersion({
