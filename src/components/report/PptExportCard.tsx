@@ -120,8 +120,8 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
     setDownloading(true);
     try {
       const dateStr = new Date().toISOString().slice(0, 10);
-      const colors = await fetchPptColorTokens();
-      const pptxBlob = await buildPpt({ data: reportData, fontFamily: selected.family, colors });
+      const [colors, slideConfig] = await Promise.all([fetchPptColorTokens(), fetchSlideConfig()]);
+      const pptxBlob = await buildPpt({ data: reportData, fontFamily: selected.family, colors, slideConfig });
       const pptxName = `SHAW_Report_${dateStr}.pptx`;
       if (selected.builtin) {
         downloadBlob(pptxBlob, pptxName);
