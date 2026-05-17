@@ -16,6 +16,7 @@ import { bundlePptWithFonts, downloadBlob } from '@/lib/ppt-bundler';
 import { ensureFontFaces, type FontFile } from '@/lib/font-loader';
 import { fetchPptColorTokens } from '@/lib/design-tokens';
 import { fetchSlideConfig } from '@/lib/slide-config';
+import { fetchTextOverrides } from '@/lib/slide-text-overrides';
 import FontLibrary from '@/components/admin/FontLibrary';
 import DesignTokensEditor from '@/components/admin/DesignTokensEditor';
 import SlideComposer from '@/components/admin/SlideComposer';
@@ -120,8 +121,10 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
     setDownloading(true);
     try {
       const dateStr = new Date().toISOString().slice(0, 10);
-      const [colors, slideConfig] = await Promise.all([fetchPptColorTokens(), fetchSlideConfig()]);
-      const pptxBlob = await buildPpt({ data: reportData, fontFamily: selected.family, colors, slideConfig });
+      const [colors, slideConfig, textOverrides] = await Promise.all([
+        fetchPptColorTokens(), fetchSlideConfig(), fetchTextOverrides(),
+      ]);
+      const pptxBlob = await buildPpt({ data: reportData, fontFamily: selected.family, colors, slideConfig, textOverrides });
       const pptxName = `SHAW_Report_${dateStr}.pptx`;
       if (selected.builtin) {
         downloadBlob(pptxBlob, pptxName);
