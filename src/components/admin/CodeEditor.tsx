@@ -54,6 +54,7 @@ export default function CodeEditor() {
   const [bootstrapping, setBootstrapping] = useState(false);
   const [saving, setSaving] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const refresh = async () => {
     setLoading(true);
