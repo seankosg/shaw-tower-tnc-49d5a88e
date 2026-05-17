@@ -12,6 +12,7 @@ import { GripVertical, Loader2, RotateCcw, Save, Layers } from 'lucide-react';
 import { DEFAULT_SLIDE_ORDER, SLIDE_REGISTRY, type SlideCategory } from '@/lib/slide-registry';
 import { fetchSlideConfig, saveSlideConfig } from '@/lib/slide-config';
 import type { SlideConfigItem } from '@/lib/ppt-builder';
+import SlideTextEditor from '@/components/admin/SlideTextEditor';
 
 interface Props {
   embedded?: boolean;
