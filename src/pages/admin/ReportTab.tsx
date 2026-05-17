@@ -331,6 +331,8 @@ export default function ReportTab() {
           <Textarea value={llmOutput} readOnly placeholder="LLM output will stream here…" className="min-h-[300px] font-mono text-xs" />
         </CardContent>
       </Card>
+
+      <PptExportCard reportData={reportData} />
     </div>
   );
 }
