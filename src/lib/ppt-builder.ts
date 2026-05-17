@@ -1027,9 +1027,9 @@ export function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
   const ommSub    = docsKPI.omm.pcts['sub2_actual_date']       ?? 0;
   const ommUrPct  = docsKPI.omm.total > 0 ? (ommUr / docsKPI.omm.total) * 100 : 0;
 
-  const warFinal  = docsKPI.warranty.pcts['final_actual_date']           ?? 0;
-  const warHdec   = docsKPI.warranty.pcts['hdec_signing_actual_date']    ?? 0;
-  const warSub    = docsKPI.warranty.pcts['draft_actual_date']           ?? 0;
+  const warFinal  = docsKPI.warranty.pcts['final_actual_date']            ?? 0;
+  const warHdec   = docsKPI.warranty.pcts['hdec_signing_actual_date']     ?? 0;
+  const warSubcon = docsKPI.warranty.pcts['subcon_signing_actual_date']   ?? 0;
 
   const spDel   = docsKPI.sparePart.pcts['actual_delivery_date'] ?? 0;
   const spPo    = docsKPI.sparePart.pcts['actual_po_date']       ?? 0;
