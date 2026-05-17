@@ -35,7 +35,8 @@ export interface BuildPptOptions {
 }
 
 export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
-  const { data, fontFamily } = opts;
+  const { data, fontFamily, colors } = opts;
+  Object.assign(C, DEFAULT_PPT_COLORS, colors ?? {});
   const pptx = new pptxgen();
   pptx.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5
   pptx.title = 'SHAW Tower — Completion Management Report';
