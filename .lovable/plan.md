@@ -1,83 +1,73 @@
-## 문제 진단
+# New Slide Generator 일반 사용자화 계획
 
-현재 `src/components/admin/CodeEditor.tsx` 는 5개 섹션(Current Version / Bootstrap / Instruction / Result / Version History)이 평면적으로 나열되어 있어, 처음 쓰는 사람이 "어디서 시작해서 무엇을 눌러야 적용이 끝나는지" 파악하기 어렵습니다. 특히:
+## 현재 문제
 
-- **Current Version** 박스가 맨 위에 있고 "Sync from codebase" 같은 복구용 고급 버튼이 가장 눈에 띄게 노출됨 → 일반 사용자는 무엇부터 눌러야 할지 혼란.
-- 핵심 흐름(지시 → AI 수정 → 저장/다운로드 → Lovable 채팅창에 적용 안내)이 페이지 중간~하단에 분산됨.
-- 수정 결과에서 "Download Modified File" 와 "Save to Storage" 두 버튼이 동등하게 보여 어느 것을 먼저 눌러야 하는지 알 수 없음. 실제로는 **저장 → 다운로드 → Lovable 채팅창에 붙여넣기** 순서가 자연스러움.
-- 다운로드 후 나타나는 "Lovable에 적용하는 방법" 안내가 details 박스 안에 갇혀 있어, 마지막 한 걸음을 놓침.
+지금의 `SlideCodegen`은 결과로 **TypeScript 함수 코드**와 "ppt-builder.ts에 붙여넣고, slide-registry.ts에 등록하세요"라는 **개발자용 안내**를 보여줍니다. 코드를 모르는 사용자는:
 
-## 새로운 흐름 (3-Step Wizard)
+1. `src/lib/ppt-builder.ts`를 직접 열 수 없음
+2. `SLIDE_REGISTRY`에 항목을 추가할 줄 모름
+3. Lovable 채팅에 파일을 업로드/교체하는 절차를 알아야 함
+4. 빌드 에러가 나면 복구 불가
 
-상단에 항상 보이는 작은 상태바 + 아래로 진행되는 3단계 카드로 재구성합니다.
+즉, 지금은 **개발자 보조 도구**일 뿐 일반 사용자용이 아닙니다.
 
-```text
-┌─ Status bar ───────────────────────────────────────────────┐
-│  ppt-builder.ts · Active: 2026-05-17 07:00 · 1,449 lines    │
-│  [Download current]  [⚙ Advanced ▾]                          │
-└─────────────────────────────────────────────────────────────┘
+## 제안: "Describe → Preview → Add" 3단계 자동화
 
-┌─ Step 1. Describe your change ─────────────────────────────┐
-│  ▢ Textarea (예시 placeholder 포함)                          │
-│  [✨ Generate edit with Claude]                              │
-└─────────────────────────────────────────────────────────────┘
-        ↓ (after AI runs)
-┌─ Step 2. Review the proposed edit ─────────────────────────┐
-│  Target: createSlide11_CloseOut (L1023–1187)                │
-│  Summary: warranty draft → subcon Signed, 카드 높이 …       │
-│  [Preview file ▾]                                            │
-│  [↺ Discard]      [Looks good → Continue]                   │
-└─────────────────────────────────────────────────────────────┘
-        ↓
-┌─ Step 3. Apply to your app ────────────────────────────────┐
-│  1) [💾 Save as new active version] ✅                      │
-│  2) [⬇ Download updated ppt-builder.ts] ✅                  │
-│  3) Lovable 채팅창에 파일 업로드 + 아래 문구 전송           │
-│     ┌──────────────────────────────────────────────────┐    │
-│     │ ppt-builder.ts를 업로드한 파일로 교체해주세요  📋│    │
-│     └──────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
+코드 노출 없이, 자연어 → 미리보기 → 한 번의 "Add slide" 버튼으로 완결되는 흐름으로 바꿉니다.
 
-▾ Advanced  (collapsed by default)
-   • Sync from codebase  (잘린 파일 복구용)
-   • Upload initial file (active 없을 때만 자동 노출)
-   • Version history table  +  Restore
+### Step 1. Describe (지금과 비슷)
+- Slide title, 삽입 위치, 데이터 소스 체크박스, 자연어 설명
+- "Generate preview" 버튼
+
+### Step 2. Preview (새로 추가)
+- AI가 만든 슬라이드를 **실제 PPT 썸네일**(또는 단일 슬라이드 PPTX 다운로드 미리보기)로 렌더링
+- "AI가 어떤 데이터를 썼는지" 한국어 요약 표시 (예: "T&C 진행률과 Defect Closure %를 좌우 비교 카드로 배치")
+- 코드는 **숨김 처리** (Advanced에서만 열람 가능)
+
+### Step 3. Add to report (새로 추가, 핵심)
+사용자가 "Add to report" 한 번만 누르면 시스템이 자동으로:
+
+1. 생성된 함수 코드를 Storage `code-files/ppt-builder.ts`의 끝에 **append** (Code Editor가 이미 쓰는 Storage 경로)
+2. 새 슬라이드 키를 `ppt_slide_config` 테이블의 `slides` JSON 배열에 추가 (Slide Composer가 읽는 그 설정)
+3. 사용자 화면에는 다음 안내만:
+   > "슬라이드가 추가되었습니다. 적용을 완료하려면 Lovable 채팅에 'Storage의 ppt-builder.ts를 코드베이스에 동기화해주세요'라고 입력하세요."
+   + 한 번의 클릭으로 위 문구를 클립보드 복사
+
+이렇게 하면 사용자는 **코드 한 줄도 보지 않고** 슬라이드를 추가할 수 있고, 마지막 동기화 단계만 채팅에 붙여넣으면 됩니다.
+
+### 추가 안전장치
+- **Dry-run validation**: 생성된 코드가 TypeScript로 파싱 가능한지 Edge Function에서 사전 검증, 실패 시 사용자에게 친절한 메시지("AI가 만든 코드가 형식 오류라 다시 시도가 필요합니다") 표시
+- **Undo**: 최근 추가한 슬라이드 1개를 한 클릭으로 제거 (Storage append를 되돌리고 `ppt_slide_config`에서 키 제거)
+- **Slide Composer에 자동 반영**: 추가된 슬라이드가 Slide Composer 목록에 즉시 나타나 enable/순서 조정 가능
+
+### Advanced (개발자용, 접힘)
+- 생성된 함수 코드 보기/복사 (지금 화면)
+- `SLIDE_REGISTRY` 등록용 스니펫 (수동 등록을 원하는 경우)
+
+## 작업 범위 (technical)
+
+수정 파일:
+- `src/components/admin/SlideCodegen.tsx` — UI를 3단계 stepper로 재구성, 코드/등록 안내 영역을 Advanced collapsible로 이동, "Add to report" 버튼 추가
+- `src/lib/slide-codegen.ts` — `addSlideToReport({functionCode, slideKey, slideLabel, position})` 함수 추가 (Storage append + `ppt_slide_config` upsert + `invalidateSlideConfigCache`)
+- `supabase/functions/slide-codegen/index.ts` — 응답에 간단한 TS 파싱 검증 추가, 한국어 요약 필드(`summary`) 반환
+- `src/lib/slide-config.ts` — 이미 존재. 그대로 사용
+
+DB/Storage 변경: 없음 (기존 `ppt_slide_config` 테이블과 `code-files` 버킷 재사용)
+
+미리보기(Step 2)는 두 가지 옵션:
+- **A안 (간단)**: 사용자가 사용한 데이터 소스 + AI가 만든 한국어 요약 + 코드 길이만 표시
+- **B안 (완전)**: 새 함수를 격리 환경에서 실제 실행해 1슬라이드 PPTX 생성 후 썸네일 변환
+
+→ 1차 구현은 **A안**, B안은 후속 작업으로 보류 권장
+
+## 결과물
+
+일반 사용자 입장에서 흐름:
+```
+"T&C와 Defect 진행률을 비교하는 슬라이드 추가해줘"
+  → Generate preview (한국어 요약 확인)
+  → Add to report (자동 추가)
+  → 안내문 복사 → Lovable 채팅에 붙여넣기 → 완료
 ```
 
-### 단계별 인터랙션 규칙
-
-- **Step 1** 은 active 파일이 있을 때만 활성화. active 없으면 "먼저 Advanced → Sync from codebase 를 눌러 초기화하세요" 안내 후 자동으로 Advanced 패널을 펼침.
-- **Step 2** 카드는 `modifiedContent` 가 있을 때만 나타남. 비어 있을 땐 회색의 "Generate edit 를 먼저 실행하세요" 플레이스홀더.
-- **Step 3** 카드는 Step 2 에서 "Looks good" 을 누른 뒤에만 활성. 내부 3개 단계(Save → Download → Apply) 는 체크리스트 형태로 순서대로 활성화 — 이전 단계가 끝나야 다음 버튼이 enable.
-- 완료 시 "🎉 Done — Lovable 채팅창에 알려주면 적용이 끝납니다" 토스트 + 모든 단계 리셋.
-- **Advanced 패널**: shadcn `<Collapsible>` 로 접기. 기본 닫힘. Current version 의 메타데이터 표시, Sync from codebase, Version history, Bootstrap upload 가 여기로 이동.
-
-### 시각적 처리
-
-- 각 Step 카드 헤더에 번호 배지(`1`, `2`, `3`) + 상태(점선/실선/✓) 로 진행감 표현.
-- 비활성 단계는 `opacity-60 pointer-events-none` 로 흐리게.
-- 핵심 액션 버튼은 primary, 보조 액션은 outline/ghost 로 통일 — 현재처럼 동등한 무게로 두 개가 나란히 놓이지 않게.
-
-## 기술 변경 사항
-
-수정 파일은 `src/components/admin/CodeEditor.tsx` 단 1개 (UI 재구성만; 로직 함수 `handleModify` / `handleSave` / `handleDownload` / `handleSyncFromCodebase` / `handleBootstrap` / `handleRestore` 는 그대로 재사용).
-
-- 새 상태: `step3Step: 'save' | 'download' | 'apply' | 'done'` — Step 3 내 체크리스트 진행 추적.
-- `<Collapsible>` (shadcn 이미 있음, 없으면 단순 `useState` 토글 + 화살표 아이콘).
-- 토스트 메시지는 한국어 유지(현 코드와 동일).
-- shadcn 디자인 토큰만 사용 (직접 색상 X).
-
-## 변경하지 않는 것
-
-- `src/lib/code-editor.ts` (helper 들 그대로)
-- `code-editor` edge function
-- DB 스키마 / Storage 버킷 정책
-- `src/lib/ppt-builder.ts` 본문
-
-## 검증
-
-1. Admin → Report → Code Editor 진입 시 상태바 + Step 1 만 활성, Step 2/3 흐리게.
-2. instruction 입력 → "Generate edit" → Step 2 활성, 요약·대상 함수 표시.
-3. "Looks good" → Step 3 활성, Save → Download → Apply 순서로 enable.
-4. Advanced 토글 클릭 시 Sync / Version history / Bootstrap 노출.
-5. active 파일이 없는 상태로 진입하면 Advanced 가 자동 펼쳐지고 "Sync from codebase" 가 강조됨.
+코드 노출 0줄, 수동 파일 편집 0회.
