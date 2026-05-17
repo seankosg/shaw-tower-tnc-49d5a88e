@@ -16,6 +16,7 @@ import {
   type ReportData,
 } from '@/lib/report-builder';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import PptExportCard from '@/components/report/PptExportCard';
 
 const MODULE_OPTIONS: { id: ReportModule; label: string }[] = [
   { id: 'tnc', label: 'T&C' },
