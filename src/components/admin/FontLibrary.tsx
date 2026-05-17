@@ -142,6 +142,7 @@ export default function FontLibrary({ embedded = false, onChanged }: FontLibrary
     } else {
       toast({ title: 'Font deleted' });
       load();
+      onChanged?.();
     }
   };
 
