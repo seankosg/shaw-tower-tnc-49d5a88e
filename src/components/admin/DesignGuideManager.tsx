@@ -102,7 +102,7 @@ export default function DesignGuideManager({ embedded }: Props) {
       await applyTokenChanges(analysis.colorTokens, analysis.fontTokens);
       const saved = await saveVersion({
         storage_path: uploadedPath,
-        version_label: versionLabel || null,
+        version_label: versionLabel || undefined,
         summary_ko: analysis.summaryKo,
       });
       await setActiveVersion(saved.id);
