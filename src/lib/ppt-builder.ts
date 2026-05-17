@@ -224,13 +224,13 @@ function getBadge(triggers: Array<{ status: string }>) {
 // ─────────────────────────────────────────
 // DATA MAPPING: ReportData → KPI objects
 // ─────────────────────────────────────────
-export function loadKPIs(rd: ReportData): { tncKPI: TncKPI; defectKPI: DefectKPI; docsKPI: DocsKPI; punchKPI: PunchKPI; } {
+export function loadKPIs(rd: ReportData): { tncKPI?: TncKPI; defectKPI?: DefectKPI; docsKPI?: DocsKPI; punchKPI?: PunchKPI; } {
   const meta = rd.meta;
   const today = meta.generatedAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
 
   // ── T&C ──
-  const tnc = rd.tnc!;
-  const tncKPI: TncKPI = {
+  const tnc = rd.tnc;
+  const tncKPI: TncKPI | undefined = tnc ? {
     total:      tnc.totals.total,
     preTest:    { pct: tnc.currentActual!.preTestPct,      done: tnc.totals.t1,  variance: tnc.currentActual!.preTestVariancePct },
     official:   { pct: tnc.currentActual!.officialTestPct, done: tnc.totals.t2,  variance: tnc.currentActual!.officialTestVariancePct },
