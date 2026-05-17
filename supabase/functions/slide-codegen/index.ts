@@ -19,6 +19,7 @@ const ResultSchema = z.object({
   functionCode: z.string().min(20),
   suggestedKey: z.string().regex(/^[a-z][a-z0-9_]*$/),
   suggestedLabel: z.string().min(1).max(120),
+  summary: z.string().min(1).max(600).optional(),
 });
 
 const SYSTEM_PROMPT = `You are a TypeScript developer working on a pptxgenjs slide builder.
