@@ -251,41 +251,10 @@ export default function CodeEditor() {
           </section>
         )}
 
-        {/* Function selector + Instruction */}
+        {/* Instruction */}
         <section>
           <h3 className="mb-2 text-sm font-semibold">Describe the change you want</h3>
           <div className="space-y-3 rounded-md border p-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Target function</Label>
-              <Select
-                value={selectedFnName}
-                onValueChange={setSelectedFnName}
-                disabled={!active || functions.length === 0}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder={functions.length === 0 ? 'No functions parsed' : 'Select a function to modify'} />
-                </SelectTrigger>
-                <SelectContent className="max-h-80">
-                  {functions.map((f) => (
-                    <SelectItem key={f.name} value={f.name}>
-                      <span className="font-mono text-xs">{f.name}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        (lines {f.startLine}–{f.endLine}, {f.source.length.toLocaleString()} chars)
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedRange && (
-                <details className="mt-1">
-                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                    Preview selected function (read-only)
-                  </summary>
-                  <pre className="mt-1 max-h-64 overflow-auto rounded bg-muted p-2 text-xs">{selectedRange.source}</pre>
-                </details>
-              )}
-            </div>
-
             <Textarea
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
@@ -296,13 +265,13 @@ export default function CodeEditor() {
             <Button
               size="sm"
               onClick={handleModify}
-              disabled={!active || !selectedRange || !instruction.trim() || modifying}
+              disabled={!active || !instruction.trim() || modifying}
             >
               {modifying ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}
-              Modify Selected Function with Claude
+              Modify with Claude
             </Button>
             <p className="text-xs text-muted-foreground">
-              전체 파일이 아닌 선택한 함수만 Claude에 전송하고, 응답을 원본 파일에 splice 합니다 (토큰 한도 회피).
+              Claude가 지시 내용을 분석해 수정 대상 함수를 자동으로 식별하고, 해당 함수만 수정한 뒤 전체 파일에 splice 합니다 (토큰 한도 회피).
             </p>
           </div>
         </section>
@@ -312,15 +281,19 @@ export default function CodeEditor() {
           <section>
             <h3 className="mb-2 text-sm font-semibold">Modification Result</h3>
             <div className="space-y-3 rounded-md border p-3">
+              {targetFunction && targetRange && (
+                <div className="rounded border bg-muted/30 p-2 text-xs">
+                  <div>
+                    Target: <span className="font-mono font-semibold">{targetFunction}</span>{' '}
+                    <span className="text-muted-foreground">(L{targetRange.startLine}–{targetRange.endLine})</span>
+                  </div>
+                  {identifyReason && (
+                    <div className="mt-0.5 text-muted-foreground">Why: {identifyReason}</div>
+                  )}
+                </div>
+              )}
               <div className="rounded bg-muted/40 p-2 text-sm whitespace-pre-wrap">{changeSummary || '(no summary)'}</div>
               <div className="text-xs text-muted-foreground">
-                {selectedRange && modifiedFunctionSource && (
-                  <>
-                    Function <span className="font-mono">{selectedRange.name}</span>:{' '}
-                    {selectedRange.source.split('\n').length} → {modifiedFunctionSource.split('\n').length} lines
-                    <span className="mx-2">·</span>
-                  </>
-                )}
                 {activeContent ? `File: ${activeContent.split('\n').length} → ${modifiedContent.split('\n').length} lines` : ''}
                 · {modifiedContent.length.toLocaleString()} chars total
               </div>
