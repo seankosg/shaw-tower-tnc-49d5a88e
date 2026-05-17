@@ -23,6 +23,7 @@ const MODULE_OPTIONS: { id: ReportModule; label: string }[] = [
   { id: 'defect', label: 'Defect' },
   { id: 'docs', label: 'Docs (ABD/OMM/Warranty/Spare Part)' },
   { id: 'punch', label: 'Punch' },
+  { id: 'custom', label: 'Custom Slides' },
 ];
 
 const SECTION_OPTIONS: { id: ReportSection; label: string }[] = [
