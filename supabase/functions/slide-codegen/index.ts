@@ -174,6 +174,28 @@ ${slideRegistry}`;
       );
     }
 
+    // 간단한 sanity check: 함수 시그니처가 suggestedKey와 일치하는지
+    const { functionCode, suggestedKey } = validated.data;
+    const expectedSig = `function buildSlide_${suggestedKey}`;
+    if (!functionCode.includes(expectedSig)) {
+      return new Response(
+        JSON.stringify({
+          error: `생성된 코드의 함수명이 키와 일치하지 않습니다. 다시 시도해 주세요.`,
+          raw: rawText,
+        }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    // 괄호 균형 체크
+    const opens = (functionCode.match(/\{/g) || []).length;
+    const closes = (functionCode.match(/\}/g) || []).length;
+    if (opens !== closes) {
+      return new Response(
+        JSON.stringify({ error: 'AI가 만든 코드의 괄호가 맞지 않습니다. 다시 시도해 주세요.', raw: rawText }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     return new Response(JSON.stringify(validated.data), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
