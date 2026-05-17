@@ -1,39 +1,118 @@
-## 목적
 
-Defect 393개(planned_completion) / 382개(planned_closure) 누락 원인을 **데이터 변경 없이** 정확히 파악하여, 다음 단계(B 재계획 / 데이터 보완 / 리포트 문구 수정) 결정에 필요한 근거를 만든다.
+# PPT Font Management & Bundled Download Plan
 
-## DB 조사 결과 (is_active=true, N=5,712)
+전체적으로 계획은 좋고 그대로 진행 가능합니다. 이전 논의에서 합의된 개선사항(가상 entry, family 묶음, 단일 버튼, 캐싱 등)을 반영한 최종 계획입니다.
 
-planned_completion_date 누락 **393건** 분포:
+---
 
-| 카테고리 | 건수 | 의미 |
-|---|---|---|
-| **A. 미계획 Open** (status=Open, completion/closure_status·계획·실적 모두 NULL) | **332** | Subcon이 계획을 아예 입력 안 한 상태 — 데이터 입력 공백 |
-| B. In dispute (분쟁중) | 19 | 책임 협의 중이라 계획 미수립 — 업무 프로세스상 정상 |
-| C. 이미 Closed/Work Done인데 계획만 누락 | 23 | 실적 있음·계획 없음 (역추적 가능) |
-| D. completion=Done이나 closure 미완 + 계획 누락 | 21 | 작업은 끝났으나 계획 입력 누락 |
+## 1. Backend (Supabase)
 
-팀 분포: Arch ~242, Elec ~67, Mech ~58 (Arch가 압도적).
+### Storage
+- `fonts` 버킷 (public) 생성
+- MIME 허용: `font/ttf`, `font/otf`, `application/octet-stream`
+- RLS: admin만 INSERT/DELETE, 모두 SELECT
 
-## 산출물
+### Table: `font_registry`
+```
+id              uuid PK
+family_name     text       -- e.g. "Pretendard"
+style           text       -- "Regular" | "Bold" | "Light" | ...
+storage_path    text
+public_url      text
+language        text       -- "korean" | "english" | "mixed" (표시용 배지)
+file_size_bytes bigint
+is_default      boolean    -- 부분 UNIQUE INDEX로 1개만 허용
+uploaded_by     uuid
+uploaded_at     timestamptz
+UNIQUE(family_name, style)
+```
+- **Malgun Gothic은 가상 entry** — 테이블 행 없음, 코드 상수로만 존재 (`builtin: true`)
+- 삭제 보호 트리거: `is_default = true` 행 DELETE 차단
 
-`/mnt/documents/defect_missing_planned_dates_analysis.md` — 다음을 포함:
+---
 
-1. 393/382 누락의 카테고리 분류표 (위 4유형)
-2. 팀×카테고리 매트릭스
-3. **샘플 issue_no 목록** (각 카테고리당 10개) — 현장 확인용
-4. Top 10 subcontractor / hdec_pic 별 누락 건수 — 책임자 추적용
-5. 각 카테고리별 **권장 처리 방향**:
-   - A(332): Subcon에 일괄 재계획 요청 → 이후 B 옵션 실행
-   - B(19): 분쟁 해소 전까지는 분모에서 제외(soft-exclude) 검토
-   - C(23): actual_completion_date를 planned로 백필(backfill) 가능
-   - D(21): 동일하게 백필 가능
-6. **리포트 영향 시뮬레이션**: 카테고리별로 분모에서 빼거나 백필했을 때 Plan S-curve 최대치가 얼마까지 올라가는지 (예: A만 해결 시 ~98.9%, A+B 시 ~99.2% 등)
+## 2. Admin UI — `FontLibrary.tsx` (Admin 탭 내 신규 섹션)
 
-## 코드/DB 변경 없음
+- family_name 으로 그룹화된 폰트 목록
+- 각 family 카드: style 목록, language 배지, 총 파일 크기, default 토글
+- 업로드: family_name + style + 파일 선택 (여러 style 한 번에 업로드 가능)
+- 삭제: default 폰트는 차단
+- Malgun Gothic은 표시만 되고 수정/삭제 불가
 
-순수 read-only 조사. 결과 .md 파일만 `/mnt/documents`에 생성하여 사용자가 검토 후 다음 단계(B 재계획 / 데이터 정정 / 리포트 단서 추가) 결정.
+---
 
-## 참고
+## 3. PPT Download UI — `PptExportCard.tsx` (Report 탭 내)
 
-`defect_items` 테이블만 사용. RLS·스키마 변경 없음. `report-builder.ts`는 수정하지 않음.
+### Font Selection
+- Radio 목록 (상단 고정: Malgun Gothic `default · Windows built-in`)
+- 그 아래 font_registry 등록 폰트 family 단위로 표시
+- 각 항목: `Pretendard (Korean · 4 styles · 4.2 MB)`
+
+### Live Preview
+- 선택 시 `@font-face` 동적 주입 + `document.fonts.load()` await
+- 샘플 텍스트:
+  ```
+  SHAW TOWER · Completion Management
+  87.6% · Pre-Test · 2026-06-15
+  협조 요청 — 작성 필요
+  ```
+- 캐싱: `Map<family, ArrayBuffer[]>` 로 재선택 시 재fetch 방지
+
+### 단일 Download 버튼
+- 내부 분기:
+  - **Malgun Gothic** → `.pptx` 단독 다운로드
+  - **기타 폰트** → ZIP 패키징
+- 다운로드 시작 직전 안내 Dialog:
+  > **Font notice / 폰트 안내**
+  > Original template font: `Malgun Gothic`
+  > Selected font: `Pretendard` (4 styles, 4.2 MB)
+  >
+  > The ZIP contains the PPTX and font files.
+  > Please install the fonts before opening the PPT.
+  > 한글: ZIP 안의 폰트를 먼저 설치한 뒤 PPT를 여세요.
+  >
+  > [Cancel] [Download]
+
+---
+
+## 4. ZIP 구조
+
+```
+SHAW_Report_2026-05-17.zip
+├── 1_INSTALL_FONTS_FIRST.txt   ← 파일명으로 강조 (한/영 병기)
+├── SHAW_External_v4.pptx
+└── fonts/
+    ├── Pretendard-Regular.otf
+    ├── Pretendard-Bold.otf
+    ├── Pretendard-Light.otf
+    └── Pretendard-SemiBold.otf
+```
+
+선택한 family의 **모든 style 파일 자동 포함** → pptxgenjs의 Bold/Regular 자동 매칭 보장.
+
+---
+
+## 5. 신규 파일
+
+```text
+src/lib/font-loader.ts        -- @font-face 주입 + 캐싱
+src/lib/ppt-builder.ts        -- pptxgenjs 빌드
+src/lib/ppt-bundler.ts        -- JSZip 패키징 + README 생성
+src/components/admin/FontLibrary.tsx
+src/components/report/PptExportCard.tsx
+```
+
+신규 마이그레이션: `font_registry` 테이블 + `fonts` 버킷 + RLS + 삭제 보호 트리거
+신규 의존성: `pptxgenjs` (JSZip은 이미 존재)
+
+---
+
+## 6. 사용자 질문에 대한 답변 (재확인)
+
+1. **Storage에 .ttf/.otf 저장** — ✅ 문제 없음 (public bucket + MIME 명시)
+2. **ArrayBuffer fetch + JSZip 번들링** — ✅ 표준 패턴, 1~2초 내 생성
+3. **개선사항** — 위 계획에 모두 반영 (가상 entry, family 묶음, 단일 버튼, 캐싱, install 파일명 강조, 안내 Dialog)
+
+---
+
+이 계획대로 진행해도 될까요? "Implement plan" 누르면 마이그레이션부터 시작합니다.
