@@ -191,6 +191,26 @@ export default function CodeEditor() {
     }
   };
 
+  const handleSyncFromCodebase = async () => {
+    const lineCount = pptBuilderSource.split('\n').length;
+    if (!confirm(`Codebase의 ${FILE_NAME} (${lineCount}줄)을 Storage에 새 active 버전으로 저장합니다. 진행할까요?`)) return;
+    setSyncing(true);
+    try {
+      await saveCodeVersion({
+        fileName: FILE_NAME,
+        content: pptBuilderSource,
+        changeSummaryKo: 'Codebase에서 동기화 (Sync from codebase)',
+        instruction: 'Sync from src/lib/ppt-builder.ts via UI button',
+      });
+      toast({ title: 'Synced from codebase', description: `${lineCount} lines uploaded as new active version` });
+      await refresh();
+    } catch (e) {
+      toast({ title: 'Sync failed', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const copyInstruction = async () => {
     await navigator.clipboard.writeText(PASTE_INSTRUCTION);
     toast({ title: 'Copied to clipboard' });
