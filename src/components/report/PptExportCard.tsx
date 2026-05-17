@@ -132,6 +132,7 @@ export default function PptExportCard({ getReportData, canBuild, modules }: PptE
         fontFamily: resolvedFontFamily,
         fontMono: resolvedFontMono,
         colors, slideConfig, textOverrides,
+        modules,
       });
       const pptxName = `SHAW_Report_${dateStr}.pptx`;
       if (selected.builtin) {
