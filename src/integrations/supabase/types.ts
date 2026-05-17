@@ -1680,6 +1680,51 @@ export type Database = {
         }
         Relationships: []
       }
+      font_registry: {
+        Row: {
+          created_at: string
+          family_name: string
+          file_size_bytes: number
+          id: string
+          is_default: boolean
+          language: string
+          public_url: string
+          storage_path: string
+          style: string
+          updated_at: string
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          family_name: string
+          file_size_bytes?: number
+          id?: string
+          is_default?: boolean
+          language?: string
+          public_url: string
+          storage_path: string
+          style?: string
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          family_name?: string
+          file_size_bytes?: number
+          id?: string
+          is_default?: boolean
+          language?: string
+          public_url?: string
+          storage_path?: string
+          style?: string
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
       hdec_eng_master: {
         Row: {
           created_at: string
