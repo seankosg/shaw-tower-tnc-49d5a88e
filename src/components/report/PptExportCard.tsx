@@ -175,6 +175,9 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
             </RadioGroup>
           </div>
 
+          {/* Font management — upload/manage custom fonts */}
+          <FontLibrary embedded onChanged={loadFonts} />
+
           {/* Live preview */}
           <div className="rounded-md border bg-muted/30 p-4">
             <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
