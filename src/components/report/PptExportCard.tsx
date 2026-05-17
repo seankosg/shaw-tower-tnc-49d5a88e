@@ -14,6 +14,7 @@ import type { ReportData } from '@/lib/report-builder';
 import { buildPpt } from '@/lib/ppt-builder';
 import { bundlePptWithFonts, downloadBlob } from '@/lib/ppt-bundler';
 import { ensureFontFaces, type FontFile } from '@/lib/font-loader';
+import FontLibrary from '@/components/admin/FontLibrary';
 
 interface FontRow {
   id: string;
@@ -57,20 +58,20 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const { data, error } = await supabase
-        .from('font_registry')
-        .select('*')
-        .order('family_name')
-        .order('style');
-      if (error) {
-        toast({ title: 'Failed to load fonts', description: error.message, variant: 'destructive' });
-        return;
-      }
-      setRows((data ?? []) as FontRow[]);
-    })();
-  }, [toast]);
+  const loadFonts = async () => {
+    const { data, error } = await supabase
+      .from('font_registry')
+      .select('*')
+      .order('family_name')
+      .order('style');
+    if (error) {
+      toast({ title: 'Failed to load fonts', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setRows((data ?? []) as FontRow[]);
+  };
+
+  useEffect(() => { loadFonts(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const families = useMemo<FamilyOption[]>(() => {
     const builtin: FamilyOption = { family: BUILTIN_FAMILY, builtin: true, styles: [], totalBytes: 0 };
@@ -173,6 +174,9 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
               ))}
             </RadioGroup>
           </div>
+
+          {/* Font management — upload/manage custom fonts */}
+          <FontLibrary embedded onChanged={loadFonts} />
 
           {/* Live preview */}
           <div className="rounded-md border bg-muted/30 p-4">
