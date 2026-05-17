@@ -788,12 +788,14 @@ export function buildDefectSnapshot(pres: pptxgen, defectKPI: DefectKPI) {
       footer: `${defectKPI.completion.variance >= 0 ? '+' : ''}${defectKPI.completion.variance.toFixed(1)}% vs plan`,
       footerColor: defectKPI.completion.variance >= 0 ? C.green : C.magentaBright, numberColor: C.textPrimary,
       bg: C.cardBody, accentColor: C.stageOfficial, alert: false,
+      barPct: defectKPI.completion.pct, barColor: C.stageOfficial,
     },
     {
       label: 'Closure', bigNumber: defectKPI.closure.pct.toFixed(1), unit: '%',
       footer: `${defectKPI.closure.variance.toFixed(1)}% vs plan`,
       footerColor: C.magentaBright, numberColor: C.magentaBright,
       bg: C.cardAlert, accentColor: C.amber, alert: defectKPI.closure.variance <= -10,
+      barPct: defectKPI.closure.pct, barColor: C.amber,
     },
   ];
   const cardW = 5.9;
