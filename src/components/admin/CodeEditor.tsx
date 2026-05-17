@@ -18,6 +18,8 @@ import {
   restoreCodeVersion,
   saveCodeVersion,
 } from '@/lib/code-editor';
+// Vite ?raw — 빌드 시점의 src/lib/ppt-builder.ts 원문이 문자열로 번들됨
+import pptBuilderSource from '@/lib/ppt-builder.ts?raw';
 
 const FILE_NAME = 'ppt-builder.ts';
 const PASTE_INSTRUCTION = 'ppt-builder.ts를 업로드한 파일로 교체해주세요';
