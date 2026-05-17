@@ -156,121 +156,126 @@ export default function FontLibrary({ embedded = false, onChanged }: FontLibrary
     grouped.set(r.family_name, list);
   }
 
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Font Library</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Built-in entry */}
-          <div className="rounded-md border bg-muted/30 p-3 text-sm">
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">built-in</Badge>
-              <span className="font-semibold">Malgun Gothic</span>
-              <span className="text-muted-foreground">— Windows default, no upload required, always available.</span>
-            </div>
+  const body = (
+    <div className="space-y-6">
+      {!embedded && (
+        <div className="rounded-md border bg-muted/30 p-3 text-sm">
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary">built-in</Badge>
+            <span className="font-semibold">Malgun Gothic</span>
+            <span className="text-muted-foreground">— Windows default, no upload required, always available.</span>
           </div>
+        </div>
+      )}
 
-          {/* Upload form */}
-          <div className="rounded-md border p-4 space-y-3">
-            <div className="text-sm font-semibold">Upload Font</div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <div>
-                <Label className="text-xs">Family name</Label>
-                <Input value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="e.g. Pretendard" />
-              </div>
-              <div>
-                <Label className="text-xs">Style</Label>
-                <Input value={style} onChange={(e) => setStyle(e.target.value)} placeholder="Regular / Bold / Light / ..." />
-              </div>
-              <div>
-                <Label className="text-xs">Language</Label>
-                <Select value={language} onValueChange={(v) => setLanguage(v as typeof language)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="mixed">Mixed</SelectItem>
-                    <SelectItem value="korean">Korean</SelectItem>
-                    <SelectItem value="english">English</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">File (.ttf / .otf)</Label>
-                <Input ref={fileInputRef} type="file" accept=".ttf,.otf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-              </div>
-            </div>
-            <div>
-              <Button onClick={upload} disabled={uploading || !file}>
-                {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-                Upload
-              </Button>
-            </div>
-          </div>
-
-          {/* List */}
+      {/* Upload form */}
+      <div className="rounded-md border p-4 space-y-3">
+        <div className="text-sm font-semibold">Upload Font</div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <div>
-            <div className="mb-2 text-sm font-semibold">Registered Fonts</div>
-            {loading ? (
-              <div className="text-sm text-muted-foreground">Loading…</div>
-            ) : grouped.size === 0 ? (
-              <div className="text-sm text-muted-foreground">No custom fonts uploaded yet.</div>
-            ) : (
-              <div className="space-y-4">
-                {Array.from(grouped.entries()).map(([family, styles]) => {
-                  const totalSize = styles.reduce((s, r) => s + (r.file_size_bytes ?? 0), 0);
-                  const lang = styles[0]?.language ?? 'mixed';
-                  return (
-                    <div key={family} className="rounded-md border">
-                      <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">{family}</span>
-                          <Badge variant="outline">{lang}</Badge>
-                          <span className="text-xs text-muted-foreground">{styles.length} styles · {formatBytes(totalSize)}</span>
-                        </div>
-                      </div>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Style</TableHead>
-                            <TableHead>Size</TableHead>
-                            <TableHead>Uploaded</TableHead>
-                            <TableHead>Default</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {styles.map((r) => (
-                            <TableRow key={r.id}>
-                              <TableCell>{r.style}</TableCell>
-                              <TableCell>{formatBytes(r.file_size_bytes)}</TableCell>
-                              <TableCell>{new Date(r.uploaded_at).toLocaleDateString()}</TableCell>
-                              <TableCell>
-                                {r.is_default ? (
-                                  <Badge><Star className="h-3 w-3 mr-1" /> default</Badge>
-                                ) : (
-                                  <Button size="sm" variant="outline" onClick={() => setDefault(r)}>
-                                    Set default
-                                  </Button>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button size="sm" variant="ghost" disabled={r.is_default} onClick={() => remove(r)}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <Label className="text-xs">Family name</Label>
+            <Input value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="e.g. Pretendard" />
           </div>
-        </CardContent>
-      </Card>
+          <div>
+            <Label className="text-xs">Style</Label>
+            <Input value={style} onChange={(e) => setStyle(e.target.value)} placeholder="Regular / Bold / Light / ..." />
+          </div>
+          <div>
+            <Label className="text-xs">Language</Label>
+            <Select value={language} onValueChange={(v) => setLanguage(v as typeof language)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mixed">Mixed</SelectItem>
+                <SelectItem value="korean">Korean</SelectItem>
+                <SelectItem value="english">English</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">File (.ttf / .otf)</Label>
+            <Input ref={fileInputRef} type="file" accept=".ttf,.otf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </div>
+        </div>
+        <div>
+          <Button onClick={upload} disabled={uploading || !file}>
+            {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+            Upload
+          </Button>
+        </div>
+      </div>
+
+      {/* List */}
+      <div>
+        <div className="mb-2 text-sm font-semibold">Registered Fonts</div>
+        {loading ? (
+          <div className="text-sm text-muted-foreground">Loading…</div>
+        ) : grouped.size === 0 ? (
+          <div className="text-sm text-muted-foreground">No custom fonts uploaded yet.</div>
+        ) : (
+          <div className="space-y-4">
+            {Array.from(grouped.entries()).map(([family, styles]) => {
+              const totalSize = styles.reduce((s, r) => s + (r.file_size_bytes ?? 0), 0);
+              const lang = styles[0]?.language ?? 'mixed';
+              return (
+                <div key={family} className="rounded-md border">
+                  <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{family}</span>
+                      <Badge variant="outline">{lang}</Badge>
+                      <span className="text-xs text-muted-foreground">{styles.length} styles · {formatBytes(totalSize)}</span>
+                    </div>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Style</TableHead>
+                        <TableHead>Size</TableHead>
+                        <TableHead>Uploaded</TableHead>
+                        <TableHead>Default</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {styles.map((r) => (
+                        <TableRow key={r.id}>
+                          <TableCell>{r.style}</TableCell>
+                          <TableCell>{formatBytes(r.file_size_bytes)}</TableCell>
+                          <TableCell>{new Date(r.uploaded_at).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            {r.is_default ? (
+                              <Badge><Star className="h-3 w-3 mr-1" /> default</Badge>
+                            ) : (
+                              <Button size="sm" variant="outline" onClick={() => setDefault(r)}>
+                                Set default
+                              </Button>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button size="sm" variant="ghost" disabled={r.is_default} onClick={() => remove(r)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Font Library</CardTitle>
+      </CardHeader>
+      <CardContent>{body}</CardContent>
+    </Card>
   );
 }
