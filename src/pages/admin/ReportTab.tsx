@@ -32,6 +32,8 @@ const SECTION_OPTIONS: { id: ReportSection; label: string }[] = [
   { id: 'snapshots', label: 'Stage Progress Snapshots' },
 ];
 
+const EXTERNAL_LLM_ENABLED = false;
+
 const MODELS = [
   'google/gemini-3-flash-preview',
   'google/gemini-2.5-pro',
