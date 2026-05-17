@@ -1965,6 +1965,30 @@ export type Database = {
           },
         ]
       }
+      ppt_slide_config: {
+        Row: {
+          created_at: string
+          id: string
+          slides: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          slides?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          slides?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
