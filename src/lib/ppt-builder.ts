@@ -161,6 +161,8 @@ interface CardConfig {
   accentColor: string | null;
   alert:       boolean;
   alertLabel?: string;
+  barPct?:     number;
+  barColor?:   string;
 }
 
 function drawCard(pres: pptxgen, s: pptxgen.Slide, x: number, y: number, w: number, h: number, card: CardConfig) {
@@ -205,6 +207,9 @@ function drawCard(pres: pptxgen, s: pptxgen.Slide, x: number, y: number, w: numb
     x: x + 0.25, y: y + 1.65, w: w - 0.5, h: 0.45,
     fontFace: FONT, fontSize: 12, color: card.footerColor, bold: card.alert,
   });
+  if (typeof card.barPct === 'number' && card.barColor) {
+    drawBar(s, pres, x + 0.25, y + h - 0.25, w - 0.5, card.barPct, card.barColor);
+  }
 }
 
 function drawBar(s: pptxgen.Slide, pres: pptxgen, x: number, y: number, w: number, pct: number, color: string) {
@@ -788,12 +793,14 @@ export function buildDefectSnapshot(pres: pptxgen, defectKPI: DefectKPI) {
       footer: `${defectKPI.completion.variance >= 0 ? '+' : ''}${defectKPI.completion.variance.toFixed(1)}% vs plan`,
       footerColor: defectKPI.completion.variance >= 0 ? C.green : C.magentaBright, numberColor: C.textPrimary,
       bg: C.cardBody, accentColor: C.stageOfficial, alert: false,
+      barPct: defectKPI.completion.pct, barColor: C.stageOfficial,
     },
     {
       label: 'Closure', bigNumber: defectKPI.closure.pct.toFixed(1), unit: '%',
       footer: `${defectKPI.closure.variance.toFixed(1)}% vs plan`,
       footerColor: C.magentaBright, numberColor: C.magentaBright,
       bg: C.cardAlert, accentColor: C.amber, alert: defectKPI.closure.variance <= -10,
+      barPct: defectKPI.closure.pct, barColor: C.amber,
     },
   ];
   const cardW = 5.9;
