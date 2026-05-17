@@ -15,8 +15,10 @@ import { buildPpt } from '@/lib/ppt-builder';
 import { bundlePptWithFonts, downloadBlob } from '@/lib/ppt-bundler';
 import { ensureFontFaces, type FontFile } from '@/lib/font-loader';
 import { fetchPptColorTokens } from '@/lib/design-tokens';
+import { fetchSlideConfig } from '@/lib/slide-config';
 import FontLibrary from '@/components/admin/FontLibrary';
 import DesignTokensEditor from '@/components/admin/DesignTokensEditor';
+import SlideComposer from '@/components/admin/SlideComposer';
 
 interface FontRow {
   id: string;
