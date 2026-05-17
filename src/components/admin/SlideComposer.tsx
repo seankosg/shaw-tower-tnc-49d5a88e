@@ -13,6 +13,7 @@ import { DEFAULT_SLIDE_ORDER, SLIDE_REGISTRY, type SlideCategory } from '@/lib/s
 import { fetchSlideConfig, saveSlideConfig } from '@/lib/slide-config';
 import type { SlideConfigItem } from '@/lib/ppt-builder';
 import SlideTextEditor from '@/components/admin/SlideTextEditor';
+import SlideCodegen from '@/components/admin/SlideCodegen';
 
 interface Props {
   embedded?: boolean;
@@ -198,6 +199,7 @@ export default function SlideComposer({ embedded = false }: Props) {
         </div>
         {body}
         <SlideTextEditor embedded />
+        <SlideCodegen embedded />
       </div>
     );
   }
@@ -212,6 +214,7 @@ export default function SlideComposer({ embedded = false }: Props) {
       <CardContent className="space-y-4">
         {body}
         <SlideTextEditor embedded />
+        <SlideCodegen embedded />
       </CardContent>
     </Card>
   );
