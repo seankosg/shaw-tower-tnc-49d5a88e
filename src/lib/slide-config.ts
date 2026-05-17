@@ -36,7 +36,7 @@ export async function fetchSlideConfig(force = false): Promise<SlideConfigItem[]
       .limit(1)
       .maybeSingle();
     if (error) throw error;
-    const raw = (data?.slides as SlideConfigItem[] | null) ?? null;
+    const raw = (data?.slides ?? null) as unknown as SlideConfigItem[] | null;
     const items = raw && Array.isArray(raw) && raw.length > 0 ? reconcile(raw) : defaultItems();
     cache = { items, at: Date.now() };
     return items;
@@ -46,25 +46,25 @@ export async function fetchSlideConfig(force = false): Promise<SlideConfigItem[]
 }
 
 export async function saveSlideConfig(items: SlideConfigItem[]): Promise<void> {
-  // single-row config; pick a stable id so upsert hits the same row
   const { data: existing } = await supabase
     .from('ppt_slide_config')
     .select('id')
     .limit(1)
     .maybeSingle();
   const auth = await supabase.auth.getUser();
-  const updated_by = auth.data.user?.id ?? null;
+  const updated_by = auth.data.user?.id ?? undefined;
+  const slides = items as unknown as never;
 
   if (existing?.id) {
     const { error } = await supabase
       .from('ppt_slide_config')
-      .update({ slides: items as unknown as object, updated_by })
+      .update({ slides, updated_by } as never)
       .eq('id', existing.id);
     if (error) throw error;
   } else {
     const { error } = await supabase
       .from('ppt_slide_config')
-      .insert({ slides: items as unknown as object, updated_by });
+      .insert({ slides, updated_by } as never);
     if (error) throw error;
   }
   invalidateSlideConfigCache();
