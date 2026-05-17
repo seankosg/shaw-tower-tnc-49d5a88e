@@ -31,15 +31,16 @@ function defaultItems(): SlideConfigItem[] {
 }
 
 function SortableRow({
-  item, index, isAdmin, registry, onToggle, onDelete,
+  item, index, canEdit, registry, onToggle, onDelete, onEditOptions,
 }: {
-  item: SlideConfigItem; index: number; isAdmin: boolean;
+  item: SlideConfigItem; index: number; canEdit: boolean;
   registry: Record<string, SlideMeta>;
   onToggle: (k: string, enabled: boolean) => void;
   onDelete: (meta: SlideMeta) => void;
+  onEditOptions: (meta: SlideMeta) => void;
 }) {
   const meta = registry[item.key];
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.key, disabled: !isAdmin });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.key, disabled: !canEdit });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -55,7 +56,7 @@ function SortableRow({
       <button
         type="button"
         className="flex h-8 w-6 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
-        disabled={!isAdmin}
+        disabled={!canEdit}
         {...attributes}
         {...listeners}
         aria-label="Drag to reorder"
@@ -66,7 +67,7 @@ function SortableRow({
       <Checkbox
         checked={item.enabled}
         onCheckedChange={(v) => onToggle(item.key, !!v)}
-        disabled={!isAdmin}
+        disabled={!canEdit}
         aria-label={`Enable ${meta.label}`}
       />
       <div className="flex-1 min-w-0">
@@ -77,7 +78,19 @@ function SortableRow({
         <div className="text-xs text-muted-foreground truncate">{meta.description}</div>
       </div>
       <Badge variant="outline" className="shrink-0">{CATEGORY_LABEL[meta.category]}</Badge>
-      {meta.isCustom && isAdmin && (
+      {!meta.isCustom && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="shrink-0 h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+          onClick={() => onEditOptions(meta)}
+          aria-label={`Edit display options for ${meta.label}`}
+          title="Edit display options"
+        >
+          <Settings2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {meta.isCustom && canEdit && (
         <Button
           size="sm"
           variant="ghost"
