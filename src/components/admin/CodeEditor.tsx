@@ -10,19 +10,13 @@ import {
   Code2, Download, Loader2, RotateCcw, Save, Sparkles, Upload, Copy,
 } from 'lucide-react';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
-import {
   type CodeFileVersion,
-  type FunctionRange,
   downloadActiveCodeFile,
   downloadCodeVersion,
-  invokeCodeEditorFunction,
+  invokeCodeEditorAuto,
   listCodeVersions,
-  parseTopLevelFunctions,
   restoreCodeVersion,
   saveCodeVersion,
-  spliceFunction,
 } from '@/lib/code-editor';
 
 const FILE_NAME = 'ppt-builder.ts';
