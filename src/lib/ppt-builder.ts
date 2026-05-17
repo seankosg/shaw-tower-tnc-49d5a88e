@@ -243,11 +243,11 @@ export function loadKPIs(rd: ReportData): { tncKPI?: TncKPI; defectKPI?: DefectK
     dataDate:    tnc.dataDate,
     dDay:        meta.mcDate,
     today,
-  };
+  } : undefined;
 
   // ── Defect ──
-  const defect = rd.defect!;
-  const defectKPI: DefectKPI = {
+  const defect = rd.defect;
+  const defectKPI: DefectKPI | undefined = defect ? {
     total:      defect.totals.total,
     completion: { pct: defect.currentActual!.completionPct, done: defect.totals.completion, variance: defect.currentActual!.completionVariancePct },
     closure:    { pct: defect.currentActual!.closurePct,    done: defect.totals.closure,    variance: defect.currentActual!.closureVariancePct },
@@ -255,26 +255,26 @@ export function loadKPIs(rd: ReportData): { tncKPI?: TncKPI; defectKPI?: DefectK
     snapshots:          defect.snapshots   ?? [],
     scurve:             defect.scurve      ?? [],
     actionPlanTriggers: defect.actionPlanTriggers ?? [],
-  };
+  } : undefined;
 
   // ── Docs ──
-  const docs = rd.docs!;
-  const mkDocs = (sub: typeof docs.abd) => ({
+  const docs = rd.docs;
+  const mkDocs = (sub: NonNullable<typeof docs>['abd']) => ({
     total:        sub.total,
     pcts:         sub.currentPcts        ?? {},
     statusCounts: sub.statusCounts       ?? {},
     currentCounts:sub.currentCounts      ?? {},
   });
-  const docsKPI: DocsKPI = {
+  const docsKPI: DocsKPI | undefined = docs ? {
     abd:       mkDocs(docs.abd),
     omm:       mkDocs(docs.omm),
     warranty:  mkDocs(docs.warranty),
     sparePart: mkDocs(docs.sparePart),
-  };
+  } : undefined;
 
   // ── Punch ──
-  const punch = rd.punch!;
-  const punchKPI: PunchKPI = {
+  const punch = rd.punch;
+  const punchKPI: PunchKPI | undefined = punch ? {
     total:      punch.totals.total,
     completion: { pct: punch.currentActual!.completionPct, done: punch.totals.completion, variance: punch.currentActual!.variancePct },
     requiredPace:            punch.requiredPace!,
@@ -284,7 +284,7 @@ export function loadKPIs(rd: ReportData): { tncKPI?: TncKPI; defectKPI?: DefectK
     monthlyBeyondSc:         punch.completionDateBreakdown?.monthlyBeyondSc ?? [],
     latestItems:             punch.latestItems ?? [],
     actionPlanTriggers:      punch.actionPlanTriggers ?? [],
-  };
+  } : undefined;
 
   return { tncKPI, defectKPI, docsKPI, punchKPI };
 }
