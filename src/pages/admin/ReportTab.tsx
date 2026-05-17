@@ -334,6 +334,7 @@ export default function ReportTab() {
       </Card>
 
       <PptExportCard reportData={reportData} />
+      <FontLibrary />
     </div>
   );
 }
