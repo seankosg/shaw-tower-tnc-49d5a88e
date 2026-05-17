@@ -1,7 +1,7 @@
 // Design Guide Manager — orchestrates YAML upload, Claude analysis, token application, and rollback.
 
 import { supabase } from '@/integrations/supabase/client';
-import { invalidatePptColorCache, fetchPptColorTokens } from '@/lib/design-tokens';
+import { invalidatePptColorCache, invalidatePptFontCache, fetchPptColorTokens } from '@/lib/design-tokens';
 
 const BUCKET = 'design-guides';
 
@@ -134,6 +134,7 @@ export async function applyTokenChanges(
   if (error) throw new Error(`Token apply failed: ${error.message}`);
 
   invalidatePptColorCache();
+  invalidatePptFontCache();
 }
 
 export async function saveVersion(meta: {
