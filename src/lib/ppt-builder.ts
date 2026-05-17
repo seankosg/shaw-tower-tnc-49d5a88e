@@ -1452,16 +1452,28 @@ export async function buildPpt(opts: BuildPptOptions): Promise<Blob> {
   // when used in non-browser contexts.
   let customMap = new Map<string, import('@/lib/custom-slide-spec').SlideSpec>();
   try {
-    const [{ fetchCustomSlides }, { renderCustomSlide }] = await Promise.all([
+    const [{ fetchCustomSlides }, { renderCustomSlide }, { loadSlideRegistry }] = await Promise.all([
       import('@/lib/custom-slides-cache'),
       import('@/lib/custom-slide-renderer'),
+      import('@/lib/slide-registry'),
     ]);
     const customs = await fetchCustomSlides();
     customMap = new Map(customs.map(c => [c.key, c.spec]));
     const kpiBag = { tnc: tncKPI, defect: defectKPI, docs: docsKPI, punch: punchKPI, data, meta: data.meta };
 
+    // Category filter (only applied when modules option is provided)
+    const registry = await loadSlideRegistry();
+    const isAllowed = (key: string): boolean => {
+      if (!modules || modules.length === 0) return true;
+      const cat = registry[key]?.category;
+      if (!cat) return true; // unknown key — let downstream skip silently
+      if (cat === 'intro' || cat === 'overview') return true;
+      return (modules as string[]).includes(cat);
+    };
+
     for (const item of config) {
       if (!item.enabled) continue;
+      if (!isAllowed(item.key)) continue;
       const fn = (runners as Record<string, () => void>)[item.key];
       if (fn) {
         fn();
