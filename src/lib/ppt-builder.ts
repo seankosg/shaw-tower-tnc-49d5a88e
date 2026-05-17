@@ -385,7 +385,7 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
 
   const cardW = 6.0, gapX = 0.3, gapY = 0.2;
   const col1 = 0.5, col2 = col1 + cardW + gapX;
-  const tier1H = 2.35, tier2H = 3.45;
+  const tier1H = 2.35, tier2H = 2.95;
   const row1 = 1.5, row2 = row1 + tier1H + gapY;
 
   // T&C card

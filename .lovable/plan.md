@@ -1,103 +1,84 @@
-## 배경
+## 점검 결과 요약
 
-Slide 11 (Close Out Documents)의 현재 문제:
+`buildDocsSnapshot` 직전·직후 슬라이드(3~12)와 종합 대시보드(2)의 카드/콘텐츠 영역을 슬라이드 캔버스(13.33 × 7.5 inch, 푸터 y=7.1) 기준으로 검산했습니다.
 
-1. **데이터 변경 요청**: Warranty Deeds 카드의 첫 행이 "Draft Issued"(`draft_actual_date` 기반)로 표시되고 있음. 이를 "Subcon Signed"(`subcon_signing_actual_date` 기반)로 교체.
-2. **슬라이드 영역 초과**: 슬라이드 캔버스는 LAYOUT_WIDE = 13.33 × 7.5 inch, 푸터는 y=7.1에 배치됨. 현재 카드 배치는
-   - row1 y=1.55, row2 y=4.90, cH=3.20 → row2 하단 = **8.10"**
-   - 즉 카드 하단이 슬라이드 밖으로 **약 1.1" 튀어나오고 푸터까지 가림**.
+| 슬라이드 | 함수 | 콘텐츠 최하단 y | 결과 |
+|---|---|---|---|
+| 02 Dashboard | `buildDashboard` | **7.50 (카드 박스) / ~7.17 (텍스트)** | ❌ 푸터 침범 |
+| 03 T&C Snapshot | `buildSnapshot` | 4.20 | ✓ |
+| 04 T&C S-Curve | `buildPlanVsActual` | 6.65 | ✓ |
+| 05 T&C Forecast | `buildForecast` | 6.90 | ✓ |
+| 06 T&C Action Plan | `buildActionPlan` | 6.75 | ✓ |
+| 07 Defect Snapshot | `buildDefectSnapshot` | 5.90 | ✓ |
+| 08 Defect S-Curve | `buildDefectPlanVsActual` | 6.45 | ✓ |
+| 09 Defect Forecast | `buildDefectForecast` | 7.00 | ✓ (한계) |
+| 10 Defect Action Plan | `buildDefectActionPlan` | 6.75 | ✓ |
+| 11 Close Out (직전 수정) | `buildDocsSnapshot` | 7.00 | ✓ |
+| 12 Punch List | `buildPunchSnapshot` | 6.70 | ✓ |
 
-## 변경 대상
+→ **Slide 02만** 카드 박스(tier2)가 y=7.50까지 내려가 푸터(7.1)와 슬라이드 하단(7.5)을 침범합니다.
 
-**파일**: `src/lib/ppt-builder.ts` — `buildDocsSnapshot()` 함수 (라인 1013–1112)
-
-### 1) 데이터 소스 변경 (Warranty)
-
-`subcon_signing_actual_date`는 이미 `report-builder.ts`의 `WARR_COLS`에 포함되어 `docsKPI.warranty.pcts`에 집계되어 있으므로 신규 쿼리는 불필요.
-
-```ts
-// before (line 1032)
-const warSub    = docsKPI.warranty.pcts['draft_actual_date']        ?? 0;
-
-// after
-const warSubcon = docsKPI.warranty.pcts['subcon_signing_actual_date'] ?? 0;
-```
-
-Warranty rows 정의 (line 1078):
-```ts
-// before
-{ label: 'Draft Issued', val: warSub.toFixed(1), unit: '%', color: C.textSecondary, isPct: true, pct: warSub },
-
-// after
-{ label: 'Subcon Signed', val: warSubcon.toFixed(1), unit: '%', color: C.textSecondary, isPct: true, pct: warSubcon },
-```
-
-`HDEC Signed`, `Final Submission` 두 행은 그대로 유지.
-
-### 2) 카드 높이/배치 재조정
-
-가용 수직 공간: y=1.55 (헤드라인 하단) ~ y=7.0 (푸터 직전) = **5.45"**
-2행 카드 + 행간 0.15" → 카드 높이 **cH = 2.65**
+## 문제 상세 (Slide 02)
 
 ```ts
-// before (line 1055-1056)
-const cW = 5.9, cH = 3.2;
-const positions: [number,number][] = [[0.5, 1.55], [6.9, 1.55], [0.5, 4.9], [6.9, 4.9]];
-
-// after
-const cW = 5.9, cH = 2.65;
-const positions: [number,number][] = [[0.5, 1.55], [6.9, 1.55], [0.5, 4.35], [6.9, 4.35]];
+const tier1H = 2.35, tier2H = 3.45;
+const row1 = 1.5, row2 = row1 + tier1H + gapY; // = 4.05
+// row2 bottom = 4.05 + 3.45 = 7.50  ← 슬라이드 끝과 일치, 푸터 위에 겹침
 ```
-→ 하단 = 4.35 + 2.65 = **7.00"** ✓ 푸터(7.1)와 안 겹침.
 
-### 3) 카드 내부 행 간격 미세 조정
+- 왼쪽 Close Out Document 카드: 6개 progressRow가 ry=row2+0.72=4.77부터 +0.42 간격 → 마지막 행 시작 6.87, 텍스트 하단 약 7.17 ❌
+- 오른쪽 Punch List 카드: mini status(row2+0.73~1.36) + timeline 3행(rowH=0.30, rowGap=0.22) → 마지막 행 하단 row2+3.07 ≈ 7.12 ❌
 
-새 cH=2.65에 맞추기 위해 행 시작점과 간격을 약간 줄임 (line 1099–1107):
+## 변경안 (`src/lib/ppt-builder.ts` · `buildDashboard`)
+
+### 1) tier2 카드 박스 높이 축소 (line 388)
 
 ```ts
 // before
-let ry = cy + 0.78;
-m.rows.forEach(row => {
-  kpiRow(cx, ry, cW, row.label, row.val, row.unit, row.color);
-  if (row.isPct && 'pct' in row) {
-    barRow(cx+0.15, ry+0.3, cW-0.3, row.pct as number, row.color);
-    ry += 0.62;
-  } else {
-    ry += 0.5;
-  }
-});
+const tier1H = 2.35, tier2H = 3.45;
 
 // after
-let ry = cy + 0.72;
-m.rows.forEach(row => {
-  kpiRow(cx, ry, cW, row.label, row.val, row.unit, row.color);
-  if (row.isPct && 'pct' in row) {
-    barRow(cx+0.15, ry+0.28, cW-0.3, row.pct as number, row.color);
-    ry += 0.56;
-  } else {
-    ry += 0.44;
-  }
-});
+const tier1H = 2.35, tier2H = 2.95;
 ```
+→ row2 bottom = 4.05 + 2.95 = **7.00** ✓ (푸터 7.1과 안전 0.10 여백)
 
-각 카드의 마지막 행 하단 검증 (cy 기준 상대):
-- **ABD** (4 non-pct rows): 0.72 + 4×0.44 = 2.48 ≤ 2.65 ✓
-- **OMM** (2 pct rows): 0.72 + 2×0.56 + 0.1 (bar) = 1.94 ≤ 2.65 ✓
-- **Warranty** (3 pct rows): 0.72 + 3×0.56 + 0.1 = 2.50 ≤ 2.65 ✓
-- **Spare Parts** (3 pct rows): 동일 2.50 ≤ 2.65 ✓
+### 2) 왼쪽 Close Out Document 카드 행 간격 축소 (line 424, 432)
 
-헤더 영역(name, subtitle)도 그대로 cy+0.1 / cy+0.46에 들어가 ry=cy+0.72와 충돌 없음.
+```ts
+// before
+ry = row2 + 0.72;
+// ...
+].forEach(r => { progressRow(col1, ry, cardW, r.label, r.pct, r.color, null); ry += 0.42; });
+
+// after
+ry = row2 + 0.62;
+// ...
+].forEach(r => { progressRow(col1, ry, cardW, r.label, r.pct, r.color, null); ry += 0.36; });
+```
+→ 6행 종료 y = 0.62 + 5×0.36 + 0.3 ≈ row2+2.72 ≤ 2.95 ✓
+
+### 3) 오른쪽 Punch List 타임라인 행 컴팩트화 (line 477)
+
+```ts
+// before
+const rowH2 = 0.3, rowGap2 = 0.22;
+
+// after
+const rowH2 = 0.28, rowGap2 = 0.18;
+```
+→ 마지막 row3 종료 y ≈ row2+2.93 ≤ 2.95 ✓
+(mini status, axis 위치는 변경 불필요)
 
 ## 변경하지 않는 것
 
-- 카드 너비/가로 배치, 색상 토큰, 헤드라인/푸터 코드
-- `report-builder.ts` (이미 `subcon_signing_actual_date` 집계됨)
-- 다른 슬라이드, text overrides 등록 (이미 동적 라벨 미적용 행이므로 기존 override 키 영향 없음)
+- 슬라이드 3~12 (이번 점검에서 안전 마진 확보 확인됨)
+- 카드 색상·라벨·폰트 크기·헤드라인
+- `progressRow` 내부 구현 (외부에서 y 간격만 조절)
 
 ## 검증
 
-1. 빌드 통과 확인.
-2. Admin → Report → PPT 다운로드 → 11페이지 열어서:
-   - Warranty Deeds 카드 첫 행이 "Subcon Signed XX.X%"로 표시되는지
-   - 4개 카드 모두 슬라이드 안에 들어오고 푸터("SHAW · Status Report" / "Page 11")가 가려지지 않는지
-   - 카드 내부 KPI 행과 진행 바가 잘리지 않는지
+1. 빌드 통과 확인
+2. PPT 다운로드 → 2페이지에서:
+   - Close Out Document 카드의 6개 progress 행이 카드 박스 안에 모두 들어오는지
+   - Punch List 카드의 3행 타임라인(Within / Beyond / No Plan)이 박스 안에 들어오는지
+   - 두 카드 박스 하단이 푸터("SHAW · Status Report")와 겹치지 않는지
