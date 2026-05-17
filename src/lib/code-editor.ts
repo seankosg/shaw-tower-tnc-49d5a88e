@@ -21,7 +21,29 @@ export interface CodeEditorResult {
   changeSummary: string;
 }
 
-/** Function-targeted TS edit (preferred for large files). */
+export interface CodeEditorAutoResult extends CodeEditorResult {
+  targetFunction: string;
+  targetRange: { startLine: number; endLine: number };
+  identifyReason?: string;
+}
+
+/** Auto mode: edge function downloads active version, identifies target function
+ *  via Claude, edits it, and splices back. Returns the full modified file. */
+export async function invokeCodeEditorAuto(input: {
+  fileName: string;
+  instruction: string;
+}): Promise<CodeEditorAutoResult> {
+  const { data, error } = await supabase.functions.invoke('code-editor', { body: input });
+  if (error) throw new Error(error.message || 'code-editor invoke failed');
+  if ((data as any)?.error) {
+    const avail = (data as any).availableFunctions as string[] | undefined;
+    const hint = avail ? `\nAvailable functions: ${avail.slice(0, 20).join(', ')}${avail.length > 20 ? '…' : ''}` : '';
+    throw new Error(((data as any).error as string) + hint);
+  }
+  return data as CodeEditorAutoResult;
+}
+
+/** Function-targeted TS edit (legacy — kept for backward compatibility). */
 export async function invokeCodeEditorFunction(input: {
   functionSource: string;
   functionName: string;
