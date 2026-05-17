@@ -52,10 +52,11 @@ function fmtBytes(n: number) {
 }
 
 interface PptExportCardProps {
-  reportData: ReportData | null;
+  getReportData: () => Promise<ReportData>;
+  canBuild: boolean;
 }
 
-export default function PptExportCard({ reportData }: PptExportCardProps) {
+export default function PptExportCard({ getReportData, canBuild }: PptExportCardProps) {
   const { toast } = useToast();
   const [rows, setRows] = useState<FontRow[]>([]);
   const [selectedFamily, setSelectedFamily] = useState<string>(BUILTIN_FAMILY);
@@ -110,18 +111,19 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
   }, [selected, toast]);
 
   const handleDownloadClick = () => {
-    if (!reportData) {
-      toast({ title: 'Generate the report first', variant: 'destructive' });
+    if (!canBuild) {
+      toast({ title: 'Select at least one module', variant: 'destructive' });
       return;
     }
     setConfirmOpen(true);
   };
 
   const handleConfirmDownload = async () => {
-    if (!reportData || !selected) return;
+    if (!selected) return;
     setDownloading(true);
     try {
       const dateStr = new Date().toISOString().slice(0, 10);
+      const reportData = await getReportData();
       const [colors, slideConfig, textOverrides, fontTokens] = await Promise.all([
         fetchPptColorTokens(), fetchSlideConfig(), fetchTextOverrides(), fetchPptFontTokens(),
       ]);
@@ -225,12 +227,12 @@ export default function PptExportCard({ reportData }: PptExportCardProps) {
           </div>
 
           <div>
-            <Button onClick={handleDownloadClick} disabled={!reportData || downloading}>
+            <Button onClick={handleDownloadClick} disabled={!canBuild || downloading}>
               <Download className="h-4 w-4 mr-2" />
               Download PPT
             </Button>
-            {!reportData && (
-              <span className="ml-3 text-xs text-muted-foreground">Generate the report first.</span>
+            {!canBuild && (
+              <span className="ml-3 text-xs text-muted-foreground">Select at least one module above.</span>
             )}
           </div>
         </CardContent>

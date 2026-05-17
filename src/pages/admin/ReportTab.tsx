@@ -263,14 +263,36 @@ export default function ReportTab() {
             </label>
           </div>
 
-          {/* Generate */}
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={handleGenerate} disabled={generating || modules.length === 0}>
-              {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
-              Generate Report
-            </Button>
-          </div>
+        </CardContent>
+      </Card>
 
+      <PptExportCard
+        getReportData={async () => {
+          const { data } = await buildReport({
+            modules, sections, snapshotDates, mcDate,
+            delayMode,
+            dataDate: dataDateOverride || undefined,
+            includeTncGuide,
+          });
+          return data;
+        }}
+        canBuild={modules.length > 0}
+      />
+
+      <details className="rounded-lg border bg-card">
+        <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground">
+          Debug: Markdown / JSON (검수용)
+        </summary>
+        <div className="space-y-3 p-4 pt-0">
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={handleGenerate} disabled={generating || modules.length === 0}>
+              {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+              Refresh Preview
+            </Button>
+            <span className="text-xs text-muted-foreground self-center">
+              Rebuilds Markdown/JSON below from the current settings. PPT download does not depend on this.
+            </span>
+          </div>
           <Tabs defaultValue="markdown" className="w-full">
             <TabsList>
               <TabsTrigger value="markdown">Markdown</TabsTrigger>
@@ -285,7 +307,7 @@ export default function ReportTab() {
                   <Download className="h-4 w-4 mr-1" /> Download .md
                 </Button>
               </div>
-              <Textarea value={markdown} onChange={e => setMarkdown(e.target.value)} placeholder="Click Generate Report to populate…" className="min-h-[300px] font-mono text-xs" />
+              <Textarea value={markdown} onChange={e => setMarkdown(e.target.value)} placeholder="Click Refresh Preview to populate…" className="min-h-[300px] font-mono text-xs" />
             </TabsContent>
             <TabsContent value="json" className="space-y-2">
               <div className="flex flex-wrap gap-2">
@@ -296,11 +318,11 @@ export default function ReportTab() {
                   <Download className="h-4 w-4 mr-1" /> Download .json
                 </Button>
               </div>
-              <Textarea value={jsonText} readOnly placeholder="Click Generate Report to populate…" className="min-h-[300px] font-mono text-xs" />
+              <Textarea value={jsonText} readOnly placeholder="Click Refresh Preview to populate…" className="min-h-[300px] font-mono text-xs" />
             </TabsContent>
           </Tabs>
-        </CardContent>
-      </Card>
+        </div>
+      </details>
 
       <details className="rounded-lg border bg-card">
         <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground">
@@ -344,7 +366,6 @@ export default function ReportTab() {
         </Card>
       </details>
 
-      <PptExportCard reportData={reportData} />
     </div>
   );
 }
