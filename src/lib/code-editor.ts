@@ -163,6 +163,9 @@ export function parseTopLevelFunctions(source: string): FunctionRange[] {
     let braceIdx = -1;
     let parenDepth = 0;
     let angleDepth = 0;
+    let typeBraceDepth = 0;
+    let paramsClosed = false; // true once parenDepth has gone positive then back to 0
+    let inReturnType = false; // true between `):` (after params) and the body `{`
     const n = source.length;
     while (i < n) {
       const c = source[i];
@@ -188,11 +191,35 @@ export function parseTopLevelFunctions(source: string): FunctionRange[] {
         if (i < n) i++;
         continue;
       }
-      if (c === '(') parenDepth++;
-      else if (c === ')') parenDepth--;
-      else if (c === '<') angleDepth++;
-      else if (c === '>') angleDepth = Math.max(0, angleDepth - 1);
-      else if (c === '{' && parenDepth === 0 && angleDepth === 0) { braceIdx = i; break; }
+      if (c === '(') { parenDepth++; i++; continue; }
+      if (c === ')') {
+        parenDepth--;
+        if (parenDepth === 0) paramsClosed = true;
+        i++; continue;
+      }
+      if (c === '<') { angleDepth++; i++; continue; }
+      if (c === '>') { angleDepth = Math.max(0, angleDepth - 1); i++; continue; }
+      if (c === ':' && paramsClosed && parenDepth === 0 && angleDepth === 0 && typeBraceDepth === 0) {
+        inReturnType = true; i++; continue;
+      }
+      if (c === '{') {
+        if (parenDepth > 0 || angleDepth > 0 || inReturnType || typeBraceDepth > 0) {
+          if (inReturnType || typeBraceDepth > 0) typeBraceDepth++;
+          i++; continue;
+        }
+        braceIdx = i; break;
+      }
+      if (c === '}') {
+        if (typeBraceDepth > 0) {
+          typeBraceDepth--;
+          if (typeBraceDepth === 0) inReturnType = false;
+        }
+        i++; continue;
+      }
+      // Any other char while in return type — if we hit `=>` after return type, we're heading to arrow body.
+      if (inReturnType && typeBraceDepth === 0 && c === '=' && next === '>') {
+        inReturnType = false; i += 2; continue;
+      }
       i++;
     }
     if (braceIdx === -1) continue;
