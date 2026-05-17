@@ -1027,9 +1027,9 @@ export function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
   const ommSub    = docsKPI.omm.pcts['sub2_actual_date']       ?? 0;
   const ommUrPct  = docsKPI.omm.total > 0 ? (ommUr / docsKPI.omm.total) * 100 : 0;
 
-  const warFinal  = docsKPI.warranty.pcts['final_actual_date']           ?? 0;
-  const warHdec   = docsKPI.warranty.pcts['hdec_signing_actual_date']    ?? 0;
-  const warSub    = docsKPI.warranty.pcts['draft_actual_date']           ?? 0;
+  const warFinal  = docsKPI.warranty.pcts['final_actual_date']            ?? 0;
+  const warHdec   = docsKPI.warranty.pcts['hdec_signing_actual_date']     ?? 0;
+  const warSubcon = docsKPI.warranty.pcts['subcon_signing_actual_date']   ?? 0;
 
   const spDel   = docsKPI.sparePart.pcts['actual_delivery_date'] ?? 0;
   const spPo    = docsKPI.sparePart.pcts['actual_po_date']       ?? 0;
@@ -1052,8 +1052,8 @@ export function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
     s.addText(value + unit, { x: sx+sw-1.5, y: sy, w: 1.35, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color, align: 'right' });
   }
 
-  const cW = 5.9, cH = 3.2;
-  const positions: [number,number][] = [[0.5, 1.55], [6.9, 1.55], [0.5, 4.9], [6.9, 4.9]];
+  const cW = 5.9, cH = 2.65;
+  const positions: [number,number][] = [[0.5, 1.55], [6.9, 1.55], [0.5, 4.35], [6.9, 4.35]];
 
   const modules = [
     {
@@ -1075,9 +1075,9 @@ export function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
     {
       name: 'Warranty Deeds', subtitle: `${docsKPI.warranty.total} warranty deeds`, accent: C.amber,
       rows: [
-        { label: 'Draft Issued',      val: warSub.toFixed(1),   unit: '%', color: C.textSecondary, isPct: true, pct: warSub },
-        { label: 'HDEC Signed',       val: warHdec.toFixed(1),  unit: '%', color: C.cyan,          isPct: true, pct: warHdec },
-        { label: 'Final Submission',  val: warFinal.toFixed(1), unit: '%', color: warFinal < 50 ? C.magentaBright : C.green, isPct: true, pct: warFinal },
+        { label: 'Subcon Signed',     val: warSubcon.toFixed(1), unit: '%', color: C.textSecondary, isPct: true, pct: warSubcon },
+        { label: 'HDEC Signed',       val: warHdec.toFixed(1),   unit: '%', color: C.cyan,          isPct: true, pct: warHdec },
+        { label: 'Final Submission',  val: warFinal.toFixed(1),  unit: '%', color: warFinal < 50 ? C.magentaBright : C.green, isPct: true, pct: warFinal },
       ],
     },
     {
@@ -1096,14 +1096,14 @@ export function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
     s.addShape(pres.ShapeType.rect, { x: cx, y: cy, w: cW, h: 0.04, fill: { color: m.accent }, line: { color: m.accent, width: 0 } });
     s.addText(m.name,     { x: cx+0.15, y: cy+0.1,  w: 3.5, h: 0.35, fontFace: FONT, fontSize: 14, bold: true, color: C.textPrimary });
     s.addText(m.subtitle, { x: cx+0.15, y: cy+0.46, w: cW-0.3, h: 0.25, fontFace: FONT, fontSize: 10, color: C.textMuted });
-    let ry = cy + 0.78;
+    let ry = cy + 0.72;
     m.rows.forEach(row => {
       kpiRow(cx, ry, cW, row.label, row.val, row.unit, row.color);
       if (row.isPct && 'pct' in row) {
-        barRow(cx+0.15, ry+0.3, cW-0.3, row.pct as number, row.color);
-        ry += 0.62;
+        barRow(cx+0.15, ry+0.28, cW-0.3, row.pct as number, row.color);
+        ry += 0.56;
       } else {
-        ry += 0.5;
+        ry += 0.44;
       }
     });
   });
