@@ -184,7 +184,7 @@ function addTncSlide(pptx: pptxgen, tFace: string, t: NonNullable<ReportData['tn
     });
     t.actionPlanTriggers.forEach((trig, i) => {
       const y = 1.0 + i * 0.95;
-      const color = trig.status === 'CRITICAL' ? C.magentaBright : 'D97706';
+      const color = trig.status === 'CRITICAL' ? C.magentaBright : C.amber;
       s2.addShape('roundRect', { x: 0.5, y, w: 12.3, h: 0.8, fill: { color: C.cardBody }, line: { color }, rectRadius: 0.06 });
       s2.addText(`${trig.status} · ${trig.stage} (${fmtPct(trig.actualPct)})`, {
         x: 0.7, y: y + 0.1, w: 12, h: 0.3, fontFace: tFace, fontSize: 13, bold: true, color,
