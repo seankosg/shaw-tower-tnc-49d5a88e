@@ -40,7 +40,7 @@ export async function getActiveVersion(): Promise<DesignGuideVersion | null> {
     console.error('[design-guide] getActiveVersion error:', error);
     return null;
   }
-  return data as DesignGuideVersion | null;
+  return data as unknown as DesignGuideVersion | null;
 }
 
 export async function listVersions(): Promise<DesignGuideVersion[]> {
@@ -52,7 +52,7 @@ export async function listVersions(): Promise<DesignGuideVersion[]> {
     console.error('[design-guide] listVersions error:', error);
     return [];
   }
-  return (data ?? []) as DesignGuideVersion[];
+  return (data ?? []) as unknown as DesignGuideVersion[];
 }
 
 export async function downloadYaml(storagePath: string): Promise<string> {
@@ -158,7 +158,7 @@ export async function saveVersion(meta: {
     .select()
     .single();
   if (error) throw new Error(`saveVersion failed: ${error.message}`);
-  return data as DesignGuideVersion;
+  return data as unknown as DesignGuideVersion;
 }
 
 export async function setActiveVersion(id: string): Promise<void> {
