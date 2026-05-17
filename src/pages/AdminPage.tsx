@@ -118,7 +118,6 @@ export default function AdminPage() {
           <TabsTrigger value="modules">Module Control</TabsTrigger>
           <TabsTrigger value="mappings">Header Mappings</TabsTrigger>
           <TabsTrigger value="custom-fields">Custom Fields</TabsTrigger>
-          <TabsTrigger value="fonts">Fonts</TabsTrigger>
           <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
           <TabsTrigger value="events">Event Log</TabsTrigger>
