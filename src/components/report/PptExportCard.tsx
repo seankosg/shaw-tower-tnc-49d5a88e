@@ -18,9 +18,6 @@ import { fetchPptColorTokens, fetchPptFontTokens } from '@/lib/design-tokens';
 import { fetchSlideConfig } from '@/lib/slide-config';
 import { fetchTextOverrides } from '@/lib/slide-text-overrides';
 import FontLibrary from '@/components/admin/FontLibrary';
-import DesignTokensEditor from '@/components/admin/DesignTokensEditor';
-import SlideComposer from '@/components/admin/SlideComposer';
-import DesignGuideManager from '@/components/admin/DesignGuideManager';
 
 interface FontRow {
   id: string;
