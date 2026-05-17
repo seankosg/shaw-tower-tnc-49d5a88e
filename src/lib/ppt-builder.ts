@@ -1345,18 +1345,22 @@ export async function buildAndDownloadPpt(rd: ReportData): Promise<void> {
   pres.author  = 'HDEC';
   pres.title   = 'SHAW TOWER Completion Management';
 
-  buildCover(pres, tncKPI);
-  buildDashboard(pres, tncKPI, defectKPI, docsKPI, punchKPI);
-  buildSnapshot(pres, tncKPI);
-  buildPlanVsActual(pres, tncKPI);
-  buildForecast(pres, tncKPI);
-  buildActionPlan(pres, tncKPI);
-  buildDefectSnapshot(pres, defectKPI);
-  buildDefectPlanVsActual(pres, defectKPI);
-  buildDefectForecast(pres, defectKPI);
-  buildDefectActionPlan(pres, defectKPI);
-  buildDocsSnapshot(pres, docsKPI);
-  buildPunchSnapshot(pres, punchKPI, rd.meta);
+  if (tncKPI) buildCover(pres, tncKPI);
+  if (tncKPI && defectKPI && docsKPI && punchKPI) buildDashboard(pres, tncKPI, defectKPI, docsKPI, punchKPI);
+  if (tncKPI) {
+    buildSnapshot(pres, tncKPI);
+    buildPlanVsActual(pres, tncKPI);
+    buildForecast(pres, tncKPI);
+    buildActionPlan(pres, tncKPI);
+  }
+  if (defectKPI) {
+    buildDefectSnapshot(pres, defectKPI);
+    buildDefectPlanVsActual(pres, defectKPI);
+    buildDefectForecast(pres, defectKPI);
+    buildDefectActionPlan(pres, defectKPI);
+  }
+  if (docsKPI) buildDocsSnapshot(pres, docsKPI);
+  if (punchKPI) buildPunchSnapshot(pres, punchKPI, rd.meta);
 
   // Write → Blob → JSZip XML post-processing → download
   const rawBlob = await pres.write({ outputType: 'blob' }) as Blob;
