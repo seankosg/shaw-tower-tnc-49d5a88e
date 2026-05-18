@@ -518,7 +518,7 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   if (withinW2 > 0.01) {
     s.addShape(pres.ShapeType.rect, { x: tlX2, y: r1Y, w: withinW2, h: rowH2, fill: { color: C.green }, line: { color: C.green, width: 0 } });
   }
-  drawTimelineLabel(`Within MC Date  ·  ${within} items`, tlX2, r1Y, withinW2, C.textPrimary);
+  drawTimelineLabel(`Within SC Date  ·  ${within} items`, tlX2, r1Y, withinW2, C.textPrimary);
 
   const r2Y2 = r1Y + rowH2 + rowGap2;
   const beyondW2 = (beyond / incompleteN) * tlW2;
@@ -529,13 +529,6 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
     s.addShape(pres.ShapeType.rect, { x: mcX2, y: r2Y2, w: beyondW2, h: rowH2, fill: { color: C.magentaBright }, line: { color: C.magentaBright, width: 0 } });
   }
   drawTimelineLabel(`Beyond  ·  ${beyond} items`, mcX2, r2Y2, beyondW2, C.textPrimary);
-
-  const r3Y2 = r2Y2 + rowH2 + rowGap2;
-  const noPlanW2 = (noPlan / incompleteN) * tlW2;
-  if (noPlanW2 > 0.01) {
-    s.addShape(pres.ShapeType.rect, { x: tlX2, y: r3Y2, w: noPlanW2, h: rowH2, fill: { color: '4A4A6A' }, line: { color: '4A4A6A', width: 0 } });
-  }
-  drawTimelineLabel(`No Plan  ·  ${noPlan} items`, tlX2, r3Y2, noPlanW2, C.textPrimary);
 
   drawFooter(pres, s, '02');
 }
