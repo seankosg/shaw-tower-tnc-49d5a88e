@@ -88,6 +88,11 @@ export default function PunchDashboardPage() {
     onRefresh: () => fetchData({ silent: true }),
   });
 
+  useHeaderSlot(
+    <AutoRefreshControl state={autoRefresh} />,
+    [autoRefresh.enabled, autoRefresh.intervalMs, autoRefresh.lastUpdatedAt, autoRefresh.isRefreshing],
+  );
+
   const asOf = new Date().toISOString().slice(0, 10);
 
   const stats = useMemo(() => {
