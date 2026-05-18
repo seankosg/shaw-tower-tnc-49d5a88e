@@ -779,6 +779,118 @@ function ProgressLine({ label, value, accent }: { label: string; value: number; 
   );
 }
 
+function pctNum(n: number, d: number): number {
+  return d > 0 ? (n / d) * 100 : 0;
+}
+
+function ProgressKpiCard({ label, percent, sub, barTone, onClick }: {
+  label: string; percent: number; sub?: string;
+  barTone?: 'emerald' | 'neutral'; onClick?: () => void;
+}) {
+  const pctSafe = Math.max(0, Math.min(100, percent));
+  const barColor = barTone === 'emerald' ? 'bg-emerald-500' : 'bg-foreground/60';
+  const interactive = onClick ? 'cursor-pointer hover:bg-muted/40 transition-colors' : '';
+  return (
+    <Card className={cn(interactive)} onClick={onClick}>
+      <CardContent className="p-4">
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+        <div className="mt-1 text-3xl font-semibold tabular-nums">{pctSafe.toFixed(1)}%</div>
+        {sub && <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>}
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div className={cn('h-full transition-all', barColor)} style={{ width: `${pctSafe}%` }} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function VarianceKpiCard({ label, value, sub }: { label: string; value: number; sub?: string }) {
+  const positive = value >= 0;
+  const color = positive ? 'text-emerald-600' : 'text-red-600';
+  const stripe = positive ? 'border-l-emerald-500' : 'border-l-red-500';
+  return (
+    <Card className={cn('border-l-4', stripe)}>
+      <CardContent className="p-4">
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+        <div className={cn('mt-1 text-3xl font-semibold tabular-nums', color)}>
+          {positive ? '+' : ''}{value.toFixed(1)}%
+        </div>
+        {sub && <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>}
+        <div className="mt-3 text-[11px] text-muted-foreground">
+          {positive ? 'Ahead of plan' : 'Behind plan'}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RiskKpiCard({ label, count, percent, sub, tone, onClick }: {
+  label: string; count: number; percent: number; sub?: string;
+  tone?: 'danger' | 'warning'; onClick?: () => void;
+}) {
+  const stripe = tone === 'danger' ? 'border-l-red-500' : tone === 'warning' ? 'border-l-amber-500' : 'border-l-muted-foreground/30';
+  const countColor = tone === 'danger' ? 'text-red-600' : tone === 'warning' ? 'text-amber-700 dark:text-amber-500' : '';
+  const interactive = onClick ? 'cursor-pointer hover:bg-muted/40 transition-colors' : '';
+  return (
+    <Card className={cn('border-l-4', stripe, interactive)} onClick={onClick}>
+      <CardContent className="p-4">
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+        <div className="mt-1 flex items-baseline gap-2">
+          <div className={cn('text-3xl font-semibold tabular-nums', countColor)}>{count.toLocaleString()}</div>
+          <div className="text-sm text-muted-foreground tabular-nums">{percent.toFixed(1)}%</div>
+        </div>
+        {sub && <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function StatusMixBar({ total, completed, wip, notStarted, onSegmentClick }: {
+  total: number; completed: number; wip: number; notStarted: number;
+  onSegmentClick?: (seg: 'completed' | 'wip' | 'not_started') => void;
+}) {
+  const pCompleted = pctNum(completed, total);
+  const pWip = pctNum(wip, total);
+  const pNot = pctNum(notStarted, total);
+  const segments: Array<{ key: 'completed' | 'wip' | 'not_started'; label: string; count: number; pct: number; color: string }> = [
+    { key: 'completed', label: 'Completed', count: completed, pct: pCompleted, color: 'bg-emerald-500' },
+    { key: 'wip', label: 'WIP', count: wip, pct: pWip, color: 'bg-blue-500' },
+    { key: 'not_started', label: 'Not Started', count: notStarted, pct: pNot, color: 'bg-muted-foreground/40' },
+  ];
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-baseline justify-between">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Status Mix</div>
+          <div className="text-xs text-muted-foreground tabular-nums">Total {total.toLocaleString()}</div>
+        </div>
+        <div className="mt-2 flex h-3 w-full overflow-hidden rounded-full bg-muted">
+          {segments.map((s) => s.pct > 0 && (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => onSegmentClick?.(s.key)}
+              className={cn('h-full transition-opacity hover:opacity-80', s.color)}
+              style={{ width: `${s.pct}%` }}
+              title={`${s.label}: ${s.count} (${s.pct.toFixed(1)}%)`}
+            />
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
+          {segments.map((s) => (
+            <div key={s.key} className="flex items-center gap-1.5">
+              <span className={cn('h-2 w-2 rounded-sm', s.color)} />
+              <span className="text-muted-foreground">{s.label}</span>
+              <span className="font-medium tabular-nums">{s.count.toLocaleString()}</span>
+              <span className="text-muted-foreground tabular-nums">({s.pct.toFixed(1)}%)</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function GateBreakdown({ title, data, total }: { title: string; data: Record<string, number>; total: number }) {
   return (
     <div className="rounded-md border p-3">
