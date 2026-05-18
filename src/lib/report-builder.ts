@@ -128,6 +128,17 @@ export interface PunchReportData {
     completionPct: number;
     variancePct: number;
   };
+  progressKpi?: {
+    completionPct: number;
+    weightedActualPct: number;
+    weightedPlannedPct: number;
+    weightedVariancePct: number;
+  };
+  riskKpi?: {
+    blocked: number;
+    overdue: number;
+    criticalDelay: number;
+  };
   requiredPace?: { daysRemaining: number; completionRemaining: number; completionPerDay: number };
   snapshots?: Array<{ date: string; total: number; completion: number; completionPct: number }>;
   actionPlanTriggers?: Array<{
