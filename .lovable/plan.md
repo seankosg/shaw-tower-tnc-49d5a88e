@@ -1,43 +1,40 @@
-## 가능 여부: 가능합니다
+## 대상
+`src/pages/docs/DocsExecutiveDashboardPage.tsx` 내 `ModuleSection`의 6/7-KPI 행. 변경은 **ABD 모듈**에만 적용 (Trade 개념이 ABD에만 존재, 또한 "Submitted" 라벨도 ABD 전용). OMM/Warranty/Spare Part는 기존 레이아웃 유지.
 
-ABD/OMM의 스테이지 키가 이미 `*_submission`(우리 제출)과 `*_review` / `*_response` / `*_approval`(상대 응답) 두 그룹으로 명확히 나뉘어 있어 분리 집계가 가능합니다.
+## 변경 사항
 
-`src/lib/docs-stage-records.ts` line 57-75:
-- ABD: `sub1_submission`, `sub1_review`, `sub2_submission`, `sub2_review`, `sub3_submission`, `sub3_review`, `approved`
-- OMM: `sub1_submission`, `sub1_review(Status)`, `sub2_submission`, `sub2_response`, … , `final_submission`, `final_approval`
+### 1. 숨김
+- `Critical Delay (>30d)` 카드 제거
+- `Due This Week` 카드 제거
+- (관련 계산 `kpiDueIds`, `kpiCriticalIds`는 다른 곳에서 미사용 시 함께 정리)
 
-`summariseByItem()`(line 564)에서 각 stage record를 순회하며 `is_overdue`를 합산할 때 stage_key suffix로 둘을 분리할 수 있습니다.
+### 2. ABD KPI 영역 — 2개 그룹으로 재구성
 
----
+```text
+┌─ Overview ──────────────────────────┐  ┌─ Overdue Response by Trade ───────────────────┐
+│  [Total]  [Submitted]  [Remaining]  │  │  [Arch] [Struct] [Mech] [Elec] [Plumb] [Fire]…│
+└─────────────────────────────────────┘  └───────────────────────────────────────────────┘
+```
 
-## 변경 계획
+- **그룹 1 (Overview)**: 기존 `SummaryTile` 3개 (Total / Submitted / Remaining) — 현재 스타일·크기 유지
+- **그룹 2 (Overdue Response by Trade)**: 현재 ABD에 존재하는 Trade들에 대해 작은 카드로 분할
+  - 각 카드: Trade 단축 라벨(Arch/Mech/Elec 등) + Overdue Response 건수
+  - 0건인 Trade도 표시할지 여부 → **0건은 숨김** (혼잡 방지)
+  - 클릭 시 Raw Data로 `trade=<Trade>&overdue=1&overdue_type=response` 파라미터로 이동
+  - "Overdue — Submission" 통합 카드도 그룹 1 옆 또는 그룹 2 헤더에 총합(badge)으로 한 줄 표시 → **별도 카드로 그룹 1 우측에 1개 유지** (Submission 지연도 가시성 필요)
 
-### 1. 데이터 모델 확장
-`src/lib/docs-stage-records.ts`
-- `ItemSummary`에 필드 2개 추가:
-  - `is_overdue_submission: boolean` — 우리 제출 지연 (`*_submission` 스테이지 overdue)
-  - `is_overdue_response: boolean` — 상대 응답 지연 (`*_review` / `*_response` / `*_approval` / `approved` 스테이지 overdue)
-- `summariseByItem()` 내부 line 588-592: stage_key 끝이 `_submission`이면 submission 버킷, 그 외(`_review`, `_response`, `_approval`, `approved`)는 response 버킷으로 분기 합산.
-- 기존 `is_overdue`(전체 합)는 호환을 위해 그대로 유지.
+### 3. OMM / Warranty / Spare Part
+- Critical Delay & Due This Week 카드만 제거
+- 나머지는 현재 레이아웃 그대로 (Total / Completed / Remaining / Overdue 등)
 
-(Warranty / Spare Part는 제출-응답 개념이 없으므로 전체를 submission 측으로 보거나 분리 없이 기존 `is_overdue`만 사용 — UI에서도 ABD/OMM에서만 분리 표시.)
+## 구현 메모
+- 그룹은 `<div className="space-y-3">` 안에 두 개의 grid 블록으로 구성
+- Trade별 집계는 기존 `filteredItems` 대신 `filteredRecords` 기반으로 `summariseByItem` 후 `recordTrade` map으로 Trade별 그룹화하여 `is_overdue_response` 카운트
+- 소형 카드 컴포넌트는 기존 `SummaryTile`을 `size="sm"` variant로 사용하거나 간단한 인라인 카드(`rounded-md border px-3 py-2`)로 신규 작성
 
-### 2. UI 변경 (ABD / OMM 한정)
-`src/pages/docs/DocsExecutiveDashboardPage.tsx`
-- 기존 단일 `Overdue` SummaryTile(line ~407 부근)을 **Overdue — Submission** / **Overdue — Response** 두 개의 타일로 교체.
-  - 값: `filteredItems.filter(i => i.is_overdue_submission).length` / `i.is_overdue_response`
-  - 아이콘/톤은 기존 Overdue 톤(red) 동일, 두 번째는 amber로 차등 가능.
-- Warranty / Spare Part 모듈은 기존 단일 Overdue 카드 유지.
-- KPI 그리드 컬럼 수 영향 검토 — 카드가 1→2개 늘어나므로 그리드 `grid-cols-*` 조정 필요(예: 6열 → 7열 또는 줄바꿈 허용).
+## 확인 사항
+1. Overdue — Submission 통합 카드: **유지** vs **제거** — 본 플랜은 "유지" 가정
+2. Trade 소형 카드에서 0건 Trade: **숨김** 가정
+3. 변경 범위: **ABD만** vs **모든 모듈에 동일 패턴 (Trade가 없으면 Team으로 대체)**
 
-### 3. 영향 범위
-- 라우팅: Overdue 타일 클릭 시 Raw Data 이동 쿼리에 `overdueType=submission|response` 추가 가능 (선택 — 별도 요청 시 진행)
-- DB / Edge Function / PPT 리포트 / 다른 페이지 변경 없음
-
-### 기술 메모
-- 분기 기준 함수 예:
-  ```ts
-  const isResponseStage = (k: string) =>
-    /_review$|_response$|_approval$|\.approved$/.test(k);
-  ```
-- `summariseByItem`만 수정하면 다른 곳(필터/리포트)에서 추가 정보 자동 활용 가능.
+위 3가지에 다른 의견 있으시면 알려주세요. 없으시면 가정대로 진행합니다.
