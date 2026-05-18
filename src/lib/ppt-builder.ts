@@ -352,8 +352,12 @@ export function buildCover(pres: pptxgen, tncKPI: TncKPI) {
     fontFace: FONT_MONO, fontSize: 11, color: C.cyan,
   });
 
-  // Bottom-right metadata
+  // Bottom-right metadata (with a solid background plate so decorative circles don't bleed through the text)
   const snapshotLabels = tncKPI.snapshots.map(sn => fmtDateShort(sn.date)).join(' / ');
+  s.addShape(pres.ShapeType.rect, {
+    x: 7.4, y: 6.5, w: 5.55, h: 1.0,
+    fill: { color: C.bgBody }, line: { color: C.bgBody, width: 0 },
+  });
   s.addText([
     { text: `Data date · ${fmtLong(tncKPI.dataDate)}`, options: { color: C.textMuted, breakLine: true } },
     { text: 'Simulation mode · Worst Case',              options: { color: C.textMuted, breakLine: true } },
