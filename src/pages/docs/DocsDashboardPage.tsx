@@ -64,23 +64,26 @@ export default function DocsDashboardPage() {
             As-Built / O&amp;M / Spare Part / Warranty submission status
           </p>
         </div>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className={cn('justify-start gap-2 font-normal')}>
-              <CalendarIcon className="h-4 w-4" />
-              Data Date: {format(asOf, 'yyyy-MM-dd')}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="end">
-            <Calendar
-              mode="single"
-              selected={asOf}
-              onSelect={(d) => d && setAsOf(d)}
-              initialFocus
-              className={cn('p-3 pointer-events-auto')}
-            />
-          </PopoverContent>
-        </Popover>
+        <div className="flex items-center gap-3">
+          <AutoRefreshControl state={autoRefresh} />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className={cn('justify-start gap-2 font-normal')}>
+                <CalendarIcon className="h-4 w-4" />
+                Data Date: {format(asOf, 'yyyy-MM-dd')}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={asOf}
+                onSelect={(d) => d && setAsOf(d)}
+                initialFocus
+                className={cn('p-3 pointer-events-auto')}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
 
       {/* Section 1 — Portfolio Health Strip */}
