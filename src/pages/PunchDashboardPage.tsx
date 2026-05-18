@@ -534,11 +534,11 @@ export default function PunchDashboardPage() {
       </Card>
       )}
 
-      {/* ── Critical Level Summary ────────────────────────────────────── */}
+      {/* ── Critical Level Summary (Summary of Work) ───────────────────── */}
       {criticalLevelSummary.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Critical Level Summary</CardTitle>
+            <CardTitle className="text-base">Summary of Work</CardTitle>
             <p className="text-xs text-muted-foreground">
               Items grouped by Critical Level with main category, Pre-Engineering readiness,
               schedule window and overall weighted progress.
