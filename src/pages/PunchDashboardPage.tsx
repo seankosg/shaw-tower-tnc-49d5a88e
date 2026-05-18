@@ -225,6 +225,24 @@ export default function PunchDashboardPage() {
           accent={signed(stats.w.variance) + '%'} accentTone={stats.w.variance >= 0 ? 'pos' : 'neg'} />
       </div>
 
+      {/* ── Critical Level Summary (Summary of Work) ───────────────────── */}
+      {criticalLevelSummary.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Summary of Work</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Items grouped by Critical Level with main category, Pre-Engineering readiness,
+              schedule window and overall weighted progress.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {criticalLevelSummary.map((s) => (
+              <CriticalLevelRowCard key={s.level} summary={s} go={go} />
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Progress Overview + Health ─────────────────────────────────── */}
       <div className="grid gap-3 lg:grid-cols-2">
         <Card>
