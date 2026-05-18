@@ -12,6 +12,7 @@ import {
   type ColumnSizingState,
   type RowSelectionState,
   type SortingState,
+  type VisibilityState,
   useReactTable,
 } from '@tanstack/react-table';
 import { AlertCircle, Download, Filter, Search, Upload } from 'lucide-react';
@@ -88,19 +89,41 @@ const ENUM_FIELDS = new Set(
   PUNCH_FIELDS.filter((f) => f.dataType === 'enum').map((f) => f.field),
 );
 
-/** Fields that are short codes / enums best served by multi-select. */
+/** Fields backed by enum/select-like values — best served by multi-select filter. */
 const MULTI_SELECT_FIELDS = new Set<string>([
+  // enum dataType (derived from registry)
+  ...PUNCH_FIELDS.filter((f) => f.dataType === 'enum' || f.dataType === 'bool').map((f) => f.field),
+  // select-like text fields
   'team', 'work_type', 'main_trade', 'sub_trade', 'category1', 'category2', 'category3',
   'critical_level', 'level', 'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'hdec_eng_name',
-  'completion_status', 'health_status', 'pre_engineering_ready',
-  'material_approval_status', 'material_procurement_status', 'drawing_approval_status', 'mos_approval_status',
+  'completion_status',
 ]);
 
-const TEXT_SEARCH_FIELDS: (keyof PunchItem)[] = [
-  'item_no', 'outstanding_work', 'location', 'level', 'subcontractor_name',
-  'subsub_name', 'hdec_pic_name', 'hdec_eng_name', 'team', 'work_type',
-  'main_trade', 'sub_trade', 'category1', 'category2', 'category3', 'remarks',
-];
+/** Free-text searchable fields — derived from registry text dataType minus pure-id/numeric ones. */
+const TEXT_SEARCH_FIELDS: (keyof PunchItem)[] = PUNCH_FIELDS
+  .filter((f) => f.dataType === 'text')
+  .map((f) => f.field as keyof PunchItem);
+
+/** Pinned columns (always visible, fixed at left). */
+const PINNED_COLUMN_IDS = ['__select', 'item_no'];
+
+/** Group label for display in Bulk-edit dialog. */
+const GROUP_LABELS: Record<string, string> = {
+  identity: 'Identity',
+  classification: 'Classification',
+  people: 'People',
+  schedule: 'Schedule',
+  progress: 'Progress',
+  pre_engineering: 'Pre-Engineering',
+  meta: 'Notes',
+};
+
+/** Source-origin badge class. */
+const ORIGIN_BADGE: Record<string, string> = {
+  system: 'bg-muted text-muted-foreground border-border',
+  derived: 'bg-primary/10 text-primary border-primary/30',
+  custom: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-200',
+};
 
 const HEALTH_BADGE_CLASS: Record<PunchHealthStatus, string> = {
   ahead: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-200',
@@ -299,7 +322,8 @@ export default function PunchRawDataPage() {
   const { user, roles, profile } = useAuth() as { user?: any; roles?: AppRole[]; profile?: any };
   const [searchParams, setSearchParams] = useSearchParams();
   const {
-    fields: configRows, isFieldVisible, getLabel, sortFieldNames, getOriginalHeader, loading: configLoading,
+    fields: configRows, isFieldVisible, getLabel, sortFieldNames,
+    getOriginalHeader, getSourceOrigin, loading: configLoading,
   } = usePunchFieldConfig();
 
   const storageKey = user?.id ? `punch-raw-data-state:${user.id}` : 'punch-raw-data-state:anon';
@@ -457,15 +481,15 @@ export default function PunchRawDataPage() {
     return () => window.clearTimeout(t);
   }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter, columnSizing]);
 
-  // ── Visible field list (Field Config + dynamic) ──────────────────────────
-  const visibleFields = useMemo(() => {
+  // ── All field ids (registry + Field Config dynamic), regardless of visibility.
+  //    Visibility/order is applied via React Table state below, mirroring DefectRawDataPage.
+  const allFieldIds = useMemo(() => {
     const known = new Set(PUNCH_FIELDS.map((f) => f.field));
     const dynamic = configRows
       .filter((r) => r.is_enabled && !known.has(r.field_name))
       .map((r) => r.field_name);
-    const all = [...PUNCH_FIELDS.map((f) => f.field), ...dynamic];
-    return sortFieldNames(all).filter((f) => isFieldVisible(f, roles ?? []));
-  }, [configRows, sortFieldNames, isFieldVisible, roles]);
+    return [...PUNCH_FIELDS.map((f) => f.field), ...dynamic];
+  }, [configRows]);
 
   // ── Option fields for multi-select filters ───────────────────────────────
   const optionFields = useMemo(() => {
@@ -519,9 +543,10 @@ export default function PunchRawDataPage() {
       ),
     };
 
-    const dataColumns: ColumnDef<PunchItem>[] = visibleFields.map((field) => {
+    const dataColumns: ColumnDef<PunchItem>[] = allFieldIds.map((field) => {
       const def = PUNCH_FIELDS_BY_NAME[field] ?? null;
       const orig = getOriginalHeader(field);
+      const origin = getSourceOrigin(field);
       const isDate = DATE_FIELDS.has(field);
       const isMulti = MULTI_SELECT_FIELDS.has(field);
       const isPct = PCT_FIELDS.has(field);
@@ -544,10 +569,27 @@ export default function PunchRawDataPage() {
           .sort((a, b) => a.localeCompare(b))
           .map((v) => ({ value: v, label: v }));
       }
+      const label = getLabel(field);
+      const headerNode = (
+        <span className="inline-flex items-center gap-1">
+          <span className="truncate">{label}</span>
+          {origin && origin !== 'system' && (
+            <span
+              title={orig ? `Source: ${origin} · Original header: ${orig}` : `Source: ${origin}`}
+              className={cn(
+                'inline-flex items-center rounded border px-1 py-0 text-[9px] font-semibold uppercase leading-tight',
+                ORIGIN_BADGE[origin] ?? ORIGIN_BADGE.custom,
+              )}
+            >
+              {origin === 'derived' ? 'D' : origin === 'custom' ? 'C' : origin.charAt(0).toUpperCase()}
+            </span>
+          )}
+        </span>
+      );
       return {
         id: field,
         accessorFn,
-        header: getLabel(field),
+        header: () => headerNode,
         size: SIZE_BY_FIELD[field] ?? 130,
         enableSorting: true,
         enableColumnFilter: true,
@@ -555,13 +597,15 @@ export default function PunchRawDataPage() {
         meta: {
           filterType: inferred,
           filterOptions: dynamicOptions,
+          headerLabel: label,
+          originalHeader: orig,
         },
         cell: ({ row, getValue }) => renderCell(row.original, field, def, getValue()),
       } as ColumnDef<PunchItem>;
     });
 
     return [selectColumn, ...dataColumns];
-  }, [visibleFields, getLabel, getOriginalHeader, optionFields, rows]);
+  }, [allFieldIds, getLabel, getOriginalHeader, getSourceOrigin, optionFields, rows]);
 
   // URL → derived row filtering (status/due/blocker/pre_eng/start_due)
   const filteredRows = useMemo(() => {
@@ -647,10 +691,26 @@ export default function PunchRawDataPage() {
     return next;
   }, [rows, searchParams]);
 
+  // ── Column visibility & order (driven by Field Config) ──────────────────
+  const columnVisibility = useMemo<VisibilityState>(() => {
+    const vis: VisibilityState = { __select: true };
+    for (const id of allFieldIds) {
+      // item_no is pinned-always-visible (primary identifier)
+      if (id === 'item_no') { vis[id] = true; continue; }
+      vis[id] = isFieldVisible(id, roles ?? []);
+    }
+    return vis;
+  }, [allFieldIds, isFieldVisible, roles]);
+
+  const columnOrder = useMemo<string[]>(() => {
+    const remaining = allFieldIds.filter((id) => !PINNED_COLUMN_IDS.includes(id));
+    return [...PINNED_COLUMN_IDS, ...sortFieldNames(remaining)];
+  }, [allFieldIds, sortFieldNames]);
+
   const table = useReactTable({
     data: filteredRows,
     columns,
-    state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, rowSelection },
+    state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,
@@ -682,39 +742,37 @@ export default function PunchRawDataPage() {
     [rowSelection, rows],
   );
 
-  // ── Bulk-edit field definitions ──────────────────────────────────────────
-  const bulkFields = useMemo<BulkEditableField[]>(() => [
-    // Identity
-    { field: 'location', label: getLabel('location'), inputType: 'text', group: 'Identity' },
-    { field: 'level', label: getLabel('level'), inputType: 'select', group: 'Identity', options: optionFields.level },
-    // Classification
-    { field: 'team', label: getLabel('team'), inputType: 'select', group: 'Classification', options: optionFields.team },
-    { field: 'work_type', label: getLabel('work_type'), inputType: 'select', group: 'Classification', options: optionFields.work_type },
-    { field: 'main_trade', label: getLabel('main_trade'), inputType: 'select', group: 'Classification', options: optionFields.main_trade },
-    { field: 'sub_trade', label: getLabel('sub_trade'), inputType: 'select', group: 'Classification', options: optionFields.sub_trade },
-    { field: 'category1', label: getLabel('category1'), inputType: 'select', group: 'Classification', options: optionFields.category1 },
-    { field: 'category2', label: getLabel('category2'), inputType: 'select', group: 'Classification', options: optionFields.category2 },
-    { field: 'critical_level', label: getLabel('critical_level'), inputType: 'select', group: 'Classification', options: optionFields.critical_level },
-    // People
-    { field: 'subcontractor_name', label: getLabel('subcontractor_name'), inputType: 'select', group: 'People', options: optionFields.subcontractor_name },
-    { field: 'subsub_name', label: getLabel('subsub_name'), inputType: 'select', group: 'People', options: optionFields.subsub_name },
-    { field: 'hdec_pic_name', label: getLabel('hdec_pic_name'), inputType: 'select', group: 'People', options: optionFields.hdec_pic_name },
-    { field: 'hdec_eng_name', label: getLabel('hdec_eng_name'), inputType: 'select', group: 'People', options: optionFields.hdec_eng_name },
-    // Schedule
-    { field: 'planned_start_date', label: getLabel('planned_start_date'), inputType: 'date', group: 'Schedule' },
-    { field: 'planned_completion_date', label: getLabel('planned_completion_date'), inputType: 'date', group: 'Schedule' },
-    { field: 'actual_start_date', label: getLabel('actual_start_date'), inputType: 'date', group: 'Schedule' },
-    { field: 'actual_completion_date', label: getLabel('actual_completion_date'), inputType: 'date', group: 'Schedule' },
-    // Pre-engineering
-    { field: 'material_approval_status', label: getLabel('material_approval_status'), inputType: 'select', group: 'Pre-Engineering', options: optionFields.material_approval_status },
-    { field: 'material_procurement_status', label: getLabel('material_procurement_status'), inputType: 'select', group: 'Pre-Engineering', options: optionFields.material_procurement_status },
-    { field: 'drawing_approval_status', label: getLabel('drawing_approval_status'), inputType: 'select', group: 'Pre-Engineering', options: optionFields.drawing_approval_status },
-    { field: 'mos_approval_status', label: getLabel('mos_approval_status'), inputType: 'select', group: 'Pre-Engineering', options: optionFields.mos_approval_status },
-    // Status
-    { field: 'completion_status', label: getLabel('completion_status'), inputType: 'select', group: 'Status', options: optionFields.completion_status },
-    // Notes
-    { field: 'remarks', label: getLabel('remarks'), inputType: 'text', group: 'Notes' },
-  ], [getLabel, optionFields]);
+  // ── Bulk-edit field definitions — derived from PUNCH_FIELDS registry +
+  //    Field Config (label, visibility, sort_order). Read-only fields and
+  //    identity primary keys are excluded.
+  const bulkFields = useMemo<BulkEditableField[]>(() => {
+    const EXCLUDED = new Set<string>([
+      'item_no', 'outstanding_work', // primary identifier / required body
+      'data_date', // import-only timestamp
+    ]);
+    const eligible = PUNCH_FIELDS
+      .filter((f) => !f.readOnly && !EXCLUDED.has(f.field))
+      .filter((f) => isFieldVisible(f.field, roles ?? []));
+    const ordered = sortFieldNames(eligible.map((f) => f.field));
+    const byField = new Map(eligible.map((f) => [f.field, f]));
+    return ordered.flatMap<BulkEditableField>((field) => {
+      const def = byField.get(field);
+      if (!def) return [];
+      const group = GROUP_LABELS[def.group] ?? def.group;
+      const inputType: BulkEditableField['inputType'] =
+        def.dataType === 'date' ? 'date'
+        : def.dataType === 'number' || def.dataType === 'pct' ? 'text'
+        : MULTI_SELECT_FIELDS.has(field) ? 'select'
+        : 'text';
+      return [{
+        field,
+        label: getLabel(field),
+        inputType,
+        group,
+        options: inputType === 'select' ? (optionFields[field] ?? []) : undefined,
+      }];
+    });
+  }, [getLabel, sortFieldNames, isFieldVisible, roles, optionFields]);
 
   const handleBulkApplied = useCallback(({ field, value, ids }: { field: string; value: string | number | null; ids: string[] }) => {
     setRows((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, [field]: value } as PunchItem : r)));
@@ -772,7 +830,8 @@ export default function PunchRawDataPage() {
   // Header click sort handler
   const renderHeader = (header: any) => {
     const headerDef = header.column.columnDef.header;
-    const headerText = typeof headerDef === 'string' ? headerDef : header.column.id;
+    const meta = header.column.columnDef.meta as any;
+    const headerText = (meta?.headerLabel as string) || (typeof headerDef === 'string' ? headerDef : header.column.id);
     return (
       <TableHead
         key={header.id}
@@ -827,7 +886,7 @@ export default function PunchRawDataPage() {
   const totalWidth = useMemo(
     () => table.getVisibleLeafColumns().reduce((s, c) => s + c.getSize(), 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [columnSizing, columns, visibleFields],
+    [columnSizing, columns, columnVisibility, columnOrder],
   );
 
   return (
@@ -917,24 +976,9 @@ export default function PunchRawDataPage() {
         fields={bulkFields}
         table="punch_items"
         entity="punch"
-        exportColumns={[
-          { id: 'item_no', label: 'Item No' },
-          { id: 'outstanding_work', label: 'Outstanding Works' },
-          { id: 'location', label: 'Location' },
-          { id: 'level', label: 'Level' },
-          { id: 'team', label: 'Team' },
-          { id: 'work_type', label: 'Work Type' },
-          { id: 'subcontractor_name', label: 'Subcontractor' },
-          { id: 'subsub_name', label: 'Sub-Sub' },
-          { id: 'hdec_pic_name', label: 'HDEC PIC' },
-          { id: 'planned_completion_date', label: 'Planned Completion' },
-          { id: 'actual_completion_date', label: 'Actual Completion' },
-          { id: 'planned_progress_pct', label: 'Planned %' },
-          { id: 'actual_progress_pct', label: 'Actual %' },
-          { id: 'health_status', label: 'Health' },
-          { id: 'completion_status', label: 'Completion Status' },
-          { id: 'remarks', label: 'Remarks' },
-        ]}
+        exportColumns={columnOrder
+          .filter((id) => id !== '__select' && columnVisibility[id] !== false)
+          .map((id) => ({ id, label: getLabel(id) }))}
         reassignFields={[
           { field: 'subcontractor_name', label: getLabel('subcontractor_name'), options: optionFields.subcontractor_name ?? [] },
           { field: 'subsub_name', label: getLabel('subsub_name'), options: optionFields.subsub_name ?? [] },
@@ -1075,7 +1119,7 @@ export default function PunchRawDataPage() {
                   : '(none)';
                 const sharedOpts = {
                   rows: sortedRows,
-                  fieldNames: visibleFields,
+                  fieldNames: columnOrder.filter((id) => id !== '__select' && columnVisibility[id] !== false),
                   fieldConfig: configRows,
                   meta,
                   searchSummary: globalFilter.trim() ? `"${globalFilter.trim()}"` : '(none)',

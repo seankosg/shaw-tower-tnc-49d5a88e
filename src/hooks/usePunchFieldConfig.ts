@@ -31,7 +31,7 @@ export function usePunchFieldConfig() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const load = async () => {
       const { data } = await (supabase as any)
         .from('punch_field_config')
         .select('*')
@@ -40,8 +40,19 @@ export function usePunchFieldConfig() {
         setFields((data ?? []) as PunchFieldConfigRow[]);
         setLoading(false);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    load();
+    // Realtime: refetch whenever an admin edits punch_field_config.
+    const channel = supabase
+      .channel('punch-field-config-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'punch_field_config' }, () => {
+        load();
+      })
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fieldMap = useMemo(
