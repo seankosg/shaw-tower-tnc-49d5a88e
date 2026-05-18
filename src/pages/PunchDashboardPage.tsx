@@ -171,6 +171,7 @@ export default function PunchDashboardPage() {
   }, [rows, asOf]);
 
   const dqCounts = useMemo(() => computePunchDqCounts(rows), [rows]);
+  const criticalLevelSummary = useMemo(() => summarizeByCriticalLevel(rows), [rows]);
   const topSubcons = useMemo(() => topDelayingParties(rows, (r) => r.subcontractor_name ?? '', 5, asOf), [rows, asOf]);
   const topPics = useMemo(() => topDelayingParties(rows, (r) => r.hdec_pic_name ?? '', 5, asOf), [rows, asOf]);
 
