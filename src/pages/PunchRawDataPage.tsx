@@ -12,6 +12,7 @@ import {
   type ColumnSizingState,
   type RowSelectionState,
   type SortingState,
+  type VisibilityState,
   useReactTable,
 } from '@tanstack/react-table';
 import { AlertCircle, Download, Filter, Search, Upload } from 'lucide-react';
