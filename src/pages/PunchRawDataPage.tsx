@@ -481,15 +481,15 @@ export default function PunchRawDataPage() {
     return () => window.clearTimeout(t);
   }, [stateLoaded, storageKey, sorting, columnFilters, globalFilter, columnSizing]);
 
-  // ── Visible field list (Field Config + dynamic) ──────────────────────────
-  const visibleFields = useMemo(() => {
+  // ── All field ids (registry + Field Config dynamic), regardless of visibility.
+  //    Visibility/order is applied via React Table state below, mirroring DefectRawDataPage.
+  const allFieldIds = useMemo(() => {
     const known = new Set(PUNCH_FIELDS.map((f) => f.field));
     const dynamic = configRows
       .filter((r) => r.is_enabled && !known.has(r.field_name))
       .map((r) => r.field_name);
-    const all = [...PUNCH_FIELDS.map((f) => f.field), ...dynamic];
-    return sortFieldNames(all).filter((f) => isFieldVisible(f, roles ?? []));
-  }, [configRows, sortFieldNames, isFieldVisible, roles]);
+    return [...PUNCH_FIELDS.map((f) => f.field), ...dynamic];
+  }, [configRows]);
 
   // ── Option fields for multi-select filters ───────────────────────────────
   const optionFields = useMemo(() => {
