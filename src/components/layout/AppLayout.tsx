@@ -18,6 +18,7 @@ import { APP_NAME } from '@/lib/constants';
 import { AppUpdateBanner } from './AppUpdateBanner';
 import { BuildInfoChip } from './BuildInfoChip';
 import { ModulePausedBanner } from './ModulePausedBanner';
+import { HeaderSlotProvider, useHeaderSlotValue } from '@/contexts/HeaderSlotContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouteMemory } from '@/hooks/useRouteMemory';
 
