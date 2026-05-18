@@ -975,24 +975,9 @@ export default function PunchRawDataPage() {
         fields={bulkFields}
         table="punch_items"
         entity="punch"
-        exportColumns={[
-          { id: 'item_no', label: 'Item No' },
-          { id: 'outstanding_work', label: 'Outstanding Works' },
-          { id: 'location', label: 'Location' },
-          { id: 'level', label: 'Level' },
-          { id: 'team', label: 'Team' },
-          { id: 'work_type', label: 'Work Type' },
-          { id: 'subcontractor_name', label: 'Subcontractor' },
-          { id: 'subsub_name', label: 'Sub-Sub' },
-          { id: 'hdec_pic_name', label: 'HDEC PIC' },
-          { id: 'planned_completion_date', label: 'Planned Completion' },
-          { id: 'actual_completion_date', label: 'Actual Completion' },
-          { id: 'planned_progress_pct', label: 'Planned %' },
-          { id: 'actual_progress_pct', label: 'Actual %' },
-          { id: 'health_status', label: 'Health' },
-          { id: 'completion_status', label: 'Completion Status' },
-          { id: 'remarks', label: 'Remarks' },
-        ]}
+        exportColumns={columnOrder
+          .filter((id) => id !== '__select' && columnVisibility[id] !== false)
+          .map((id) => ({ id, label: getLabel(id) }))}
         reassignFields={[
           { field: 'subcontractor_name', label: getLabel('subcontractor_name'), options: optionFields.subcontractor_name ?? [] },
           { field: 'subsub_name', label: getLabel('subsub_name'), options: optionFields.subsub_name ?? [] },
