@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle, AlertTriangle, CheckCircle2, Clock, CalendarDays,
