@@ -1093,14 +1093,19 @@ export function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
   const cW = 5.9, cH = 2.65;
   const positions: [number,number][] = [[0.5, 1.55], [6.9, 1.55], [0.5, 4.35], [6.9, 4.35]];
 
+  const abdTot     = docsKPI.abd.total || 1;
+  const abdSubPctC = (abdSub / abdTot) * 100;
+  const abdUrPctC  = (abdUr  / abdTot) * 100;
+  const abdNsPctC  = (abdNs  / abdTot) * 100;
+  void abdApvPct; void abdApv;
+
   const modules = [
     {
       name: 'ABD', subtitle: `${docsKPI.abd.total.toLocaleString()} as-built drawings`, accent: C.cyan,
       rows: [
-        { label: 'Submitted',     val: abdSub.toLocaleString(), unit: ' dwgs', color: C.cyan,         isPct: false },
-        { label: 'Approved',      val: abdApv.toLocaleString(), unit: ' dwgs', color: abdApvPct < 50 ? C.amber : C.green, isPct: false },
-        { label: 'Under Review',  val: abdUr.toLocaleString(),  unit: ' dwgs', color: C.stageOfficial, isPct: false },
-        { label: 'Not Submitted', val: abdNs.toLocaleString(),  unit: ' dwgs', color: C.magentaBright, isPct: false },
+        { label: 'Submitted',     val: abdSub.toLocaleString(), unit: ' dwgs', color: C.cyan,          isPct: true, pct: abdSubPctC },
+        { label: 'Under Review',  val: abdUr.toLocaleString(),  unit: ' dwgs', color: C.stageOfficial, isPct: true, pct: abdUrPctC },
+        { label: 'Not Submitted', val: abdNs.toLocaleString(),  unit: ' dwgs', color: C.magentaBright, isPct: true, pct: abdNsPctC },
       ],
     },
     {
