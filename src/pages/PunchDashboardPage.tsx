@@ -283,6 +283,7 @@ export default function PunchDashboardPage() {
           </CardContent>
         </Card>
 
+        {false && (
         <Card>
           <CardHeader className="pb-3"><CardTitle className="text-base">Health Distribution</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -303,9 +304,10 @@ export default function PunchDashboardPage() {
             })}
           </CardContent>
         </Card>
+        )}
       </div>
 
-      {/* ── Schedule Control ────────────────────────────────────────────── */}
+      {false && (
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Schedule Control</CardTitle></CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -315,8 +317,10 @@ export default function PunchDashboardPage() {
           <ControlCell label="Critical Delay" value={stats.critical} hint=">14 days overdue or Critical health" tone="danger" onClick={() => go('status=critical')} />
         </CardContent>
       </Card>
+      )}
 
       {/* ── Pre-Engineering Readiness ──────────────────────────────────── */}
+      {false && (
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Pre-Engineering Readiness</CardTitle></CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -340,6 +344,7 @@ export default function PunchDashboardPage() {
             onClick={() => go('status=ready_not_started')} />
         </CardContent>
       </Card>
+      )}
 
       {/* Existing detailed gate breakdown */}
       <Card>
@@ -565,7 +570,7 @@ export default function PunchDashboardPage() {
 
 
 
-      {/* ── Punch Data Quality ─────────────────────────────────────────── */}
+      {false && (
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Punch Data Quality</CardTitle></CardHeader>
         <CardContent className="grid gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
@@ -576,6 +581,7 @@ export default function PunchDashboardPage() {
           ))}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }
