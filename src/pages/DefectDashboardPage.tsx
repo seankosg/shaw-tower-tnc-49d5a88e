@@ -141,22 +141,35 @@ export default function DefectDashboardPage() {
   const [subTradeTextFilter, setSubTradeTextFilter] = useState(searchParams.get('sub_trade_text') || '');
   const [selectedSubTradeFilters, setSelectedSubTradeFilters] = useState<string[]>(searchParams.get('sub_trades')?.split(',').filter(Boolean) || []);
 
+  const refetchDataDate = useCallback(async () => {
+    const latestImport = await (supabase as any)
+      .from('defect_upload_batches')
+      .select('data_date')
+      .eq('status', 'completed')
+      .not('data_date', 'is', null)
+      .order('data_date', { ascending: false })
+      .order('uploaded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latestImport.data?.data_date) setDataDate(latestImport.data.data_date);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const latestImport = await (supabase as any)
-        .from('defect_upload_batches')
-        .select('data_date')
-        .eq('status', 'completed')
-        .not('data_date', 'is', null)
-        .order('data_date', { ascending: false })
-        .order('uploaded_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!cancelled && latestImport.data?.data_date) setDataDate(latestImport.data.data_date);
+      await refetchDataDate();
+      if (cancelled) return;
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [refetchDataDate]);
+
+  const autoRefresh = useAutoRefresh({
+    storageKey: 'defect',
+    onRefresh: async () => {
+      refreshDefectCache();
+      await refetchDataDate();
+    },
+  });
 
   const today = todayIso();
   const dataDateLabel = formatDdMmm(dataDate);
