@@ -309,17 +309,22 @@ function ModuleSection({
   const kpiOverdueResponse = filteredItems.filter((i) => i.is_overdue_response).length;
   const splitOverdue = isAbd || isOmm;
 
-  const kpiDueIds = useMemo(() => isDueThisWeek(
-    filteredRecords
-      .filter((r) => subFilter === '__all__' || (r.subcontractor ?? '') === subFilter)
-      .filter((r) => picFilter === '__all__' || (r.hdec_pic ?? '') === picFilter),
-    asOf,
-  ), [filteredRecords, subFilter, picFilter, asOf]);
-  const kpiCriticalIds = useMemo(() => criticalDelayItemIds(
-    filteredRecords
-      .filter((r) => subFilter === '__all__' || (r.subcontractor ?? '') === subFilter)
-      .filter((r) => picFilter === '__all__' || (r.hdec_pic ?? '') === picFilter),
-  ), [filteredRecords, subFilter, picFilter]);
+  // ABD: Overdue Response 분포 by Trade
+  const tradeOverdueResponse = useMemo(() => {
+    if (!isAbd) return [] as { trade: TradeCategory | 'Other'; count: number }[];
+    const counts = new Map<string, number>();
+    for (const it of filteredItems) {
+      if (!it.is_overdue_response) continue;
+      const t = resolveTrade({ trade: it.trade, sheet_name: it.document_no });
+      const key = t === '—' ? 'Other' : (t as string);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const ordered: (TradeCategory | 'Other')[] = [...TRADE_OPTIONS];
+    return ordered
+      .map((t) => ({ trade: t, count: counts.get(t as string) ?? 0 }))
+      .filter((x) => x.count > 0);
+  }, [isAbd, filteredItems]);
+
   const delayBuckets = useMemo(() => computeDelaySeverityBuckets(
     filteredRecords
       .filter((r) => subFilter === '__all__' || (r.subcontractor ?? '') === subFilter)
