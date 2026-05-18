@@ -4,9 +4,8 @@ import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertCircle, AlertTriangle, CheckCircle2, Clock, CalendarDays,
-  Flame, GaugeCircle, ListChecks, PauseCircle, Rocket, ShieldAlert, TrendingUp,
-  Layers, Wrench, CalendarArrowUp, CalendarArrowDown,
+  ListChecks,
+  Wrench, CalendarArrowUp, CalendarArrowDown,
   Package, Hammer, PencilRuler,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
