@@ -26,7 +26,7 @@ import {
   weightedProgress, simpleAverageProgress, groupProgressMatrix, recoveryPriorityScore,
   suggestedRecoveryAction, computePunchDqCounts, PUNCH_DQ_LABEL, topDelayingParties,
   summarizeByCriticalLevel, GATE_SHORT_LABEL, CRITICAL_LEVEL_ACCENT,
-  type PunchBlockerKind, type PunchDqKey, type CriticalLevelSummary, type GateKey, type CriticalLevel,
+  type PunchBlockerKind, type PunchDqKey, type CriticalLevelSummary, type GateKey,
 } from '@/lib/punch-dashboard-utils';
 
 const PAGE_SIZE = 1000;
