@@ -1133,7 +1133,7 @@ export default function PunchRawDataPage() {
                   : '(none)';
                 const sharedOpts = {
                   rows: sortedRows,
-                  fieldNames: visibleFields,
+                  fieldNames: columnOrder.filter((id) => id !== '__select' && columnVisibility[id] !== false),
                   fieldConfig: configRows,
                   meta,
                   searchSummary: globalFilter.trim() ? `"${globalFilter.trim()}"` : '(none)',
