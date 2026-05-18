@@ -299,6 +299,7 @@ export default function PunchDashboardPage() {
       )}
 
       {/* ── Progress Overview + Health ─────────────────────────────────── */}
+      {false && (
       <div className="grid gap-3 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-3">
@@ -326,30 +327,8 @@ export default function PunchDashboardPage() {
             </div>
           </CardContent>
         </Card>
-
-        {false && (
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-base">Health Distribution</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {(Object.keys(stats.health) as PunchHealthStatus[]).map((h) => {
-              const count = stats.health[h];
-              const p = stats.total ? (count / stats.total) * 100 : 0;
-              return (
-                <button key={h} onClick={() => go(`health=${h}`)} className="w-full text-left">
-                  <div className="flex items-baseline justify-between text-sm">
-                    <span>{PUNCH_HEALTH_LABEL[h]}</span>
-                    <span className="text-muted-foreground tabular-nums">{count} ({p.toFixed(0)}%)</span>
-                  </div>
-                  <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-muted">
-                    <div className={cn('h-full transition-all', HEALTH_COLORS[h])} style={{ width: `${p}%` }} />
-                  </div>
-                </button>
-              );
-            })}
-          </CardContent>
-        </Card>
-        )}
       </div>
+      )}
 
       {false && (
       <Card>
