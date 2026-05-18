@@ -31,6 +31,17 @@ import {
 } from '@/lib/punch-dashboard-utils';
 
 const PAGE_SIZE = 1000;
+
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function formatDashDate(iso?: string | null): string {
+  if (!iso) return '—';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const [, y, mo, d] = m;
+  const mon = MONTH_ABBR[Number(mo) - 1] ?? mo;
+  const currentYear = new Date().getFullYear();
+  return Number(y) === currentYear ? `${d}-${mon}` : `${d}-${mon}-${y}`;
+}
 const HEALTH_COLORS: Record<PunchHealthStatus, string> = {
   ahead: 'bg-emerald-500',
   on_track: 'bg-blue-500',
@@ -488,7 +499,7 @@ export default function PunchDashboardPage() {
                     <TableCell className="text-xs">{(r as any).main_trade || '—'}</TableCell>
                     <TableCell className="text-xs">{r.subcontractor_name || '—'}</TableCell>
                     <TableCell className="text-xs">{r.hdec_pic_name || '—'}</TableCell>
-                    <TableCell className="text-xs tabular-nums">{r.planned_completion_date || '—'}</TableCell>
+                    <TableCell className="text-xs tabular-nums">{formatDashDate(r.planned_completion_date)}</TableCell>
                     <TableCell className="text-right tabular-nums">{plan.toFixed(0)}</TableCell>
                     <TableCell className="text-right tabular-nums">{act.toFixed(0)}</TableCell>
                     <TableCell className={cn('text-right tabular-nums', variance < 0 ? 'text-red-600' : 'text-emerald-600')}>{signed(variance)}</TableCell>
@@ -612,8 +623,8 @@ function CriticalLevelRowCard({
             <MetaChip icon={<ListChecks className="h-3.5 w-3.5" />} label="Items" value={summary.total.toLocaleString()} className="min-w-[6.5rem]" />
             <MetaChip icon={<Layers className="h-3.5 w-3.5" />} label="Main Cat" value={catLabel} className="min-w-[10rem] flex-1" title={cats.map(c => `${c.name} (${c.count})`).join(', ')} />
             <MetaChip icon={<Wrench className="h-3.5 w-3.5" />} label="Pre-Eng" value={`${summary.preEngReady}/${summary.total}`} className="min-w-[7rem]" />
-            <MetaChip icon={<CalendarArrowUp className="h-3.5 w-3.5" />} label="Earliest" value={summary.earliestStart ?? '—'} className="min-w-[8.5rem]" />
-            <MetaChip icon={<CalendarArrowDown className="h-3.5 w-3.5" />} label="Latest" value={summary.latestFinish ?? '—'} className="min-w-[8.5rem]" />
+            <MetaChip icon={<CalendarArrowUp className="h-3.5 w-3.5" />} label="Earliest" value={formatDashDate(summary.earliestStart)} className="min-w-[8.5rem]" />
+            <MetaChip icon={<CalendarArrowDown className="h-3.5 w-3.5" />} label="Latest" value={formatDashDate(summary.latestFinish)} className="min-w-[8.5rem]" />
           </div>
         </div>
         <div className="flex items-center gap-3">
