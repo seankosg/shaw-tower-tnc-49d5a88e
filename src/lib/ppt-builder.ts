@@ -129,6 +129,8 @@ interface PunchKPI {
   monthlyBeyondSc:         NonNullable<NonNullable<PunchReportData['completionDateBreakdown']>['monthlyBeyondSc']>;
   latestItems:             NonNullable<PunchReportData['latestItems']>;
   actionPlanTriggers:      NonNullable<PunchReportData['actionPlanTriggers']>;
+  progressKpi:             NonNullable<PunchReportData['progressKpi']>;
+  riskKpi:                 NonNullable<PunchReportData['riskKpi']>;
 }
 
 // ─────────────────────────────────────────
@@ -299,6 +301,8 @@ export function loadKPIs(rd: ReportData): { tncKPI?: TncKPI; defectKPI?: DefectK
     monthlyBeyondSc:         punch.completionDateBreakdown?.monthlyBeyondSc ?? [],
     latestItems:             punch.latestItems ?? [],
     actionPlanTriggers:      punch.actionPlanTriggers ?? [],
+    progressKpi:             punch.progressKpi ?? { completionPct: 0, weightedActualPct: 0, weightedPlannedPct: 0, weightedVariancePct: 0 },
+    riskKpi:                 punch.riskKpi ?? { blocked: 0, overdue: 0, criticalDelay: 0 },
   } : undefined;
 
   return { tncKPI, defectKPI, docsKPI, punchKPI };
@@ -1133,158 +1137,186 @@ export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: Repo
   const s = pres.addSlide();
   s.background = { color: C.bgBody };
 
-  const sb      = punchKPI.statusBreakdown;
-  const cdb     = punchKPI.completionDateBreakdown;
-  const within  = cdb.withinMcDate ?? 0;
-  const beyond  = cdb.beyondMcDate ?? 0;
-  const noPlan  = cdb.noPlan       ?? 0;
-  const incomplete = within + beyond + noPlan;
-  const monthly = punchKPI.monthlyBeyondSc;
-  const latest  = punchKPI.latestItems;
+  const sb       = punchKPI.statusBreakdown;
+  const cdb      = punchKPI.completionDateBreakdown;
+  const beyond   = cdb.beyondMcDate ?? 0;
+  void punchKPI.monthlyBeyondSc; // reserved for future month breakdown
+  const latest   = punchKPI.latestItems;
+  const prog     = punchKPI.progressKpi;
+  const risk     = punchKPI.riskKpi;
+  const total    = punchKPI.total;
 
-  const todayStr = meta.generatedAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
   const scDateStr = meta.mcDate;
 
-  s.addText('PUNCH LIST', { x: 0.5, y: 0.4, w: 6, h: 0.3, fontFace: FONT_MONO, fontSize: 11, color: C.stageTestReport, charSpacing: 3 });
-  s.addText(T('punch_snapshot', 'deadline_label', `SC · Substantial Completion · ${fmtLong(scDateStr)}`), { x: 6, y: 0.4, w: 6.83, h: 0.3, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right' });
+  // ── Header (slide 3/7/10 pattern) ──
+  s.addText('PUNCH LIST', {
+    x: 0.5, y: 0.4, w: 6, h: 0.3,
+    fontFace: FONT_MONO, fontSize: 11, color: C.stageTestReport, charSpacing: 3,
+  });
+  s.addText(
+    T('punch_snapshot', 'deadline_label', `SC · Substantial Completion · ${fmtLong(scDateStr)}`),
+    { x: 6, y: 0.4, w: 6.83, h: 0.3, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted, align: 'right' },
+  );
 
+  // ── Headline ──
   const headlineDefault = beyond > 0
     ? `${sb.notStarted} items not started — ${beyond} will be over SC.`
-    : `${punchKPI.total} punch items — all within Substantial Completion date.`;
+    : prog.weightedVariancePct < -10
+    ? `Progress behind plan by ${Math.abs(prog.weightedVariancePct).toFixed(1)}% — recovery required.`
+    : `${total} punch items — all within Substantial Completion date.`;
   const headline = T('punch_snapshot', 'headline', headlineDefault);
-  s.addText(headline, { x: 0.5, y: 0.75, w: 12.3, h: 0.65, fontFace: FONT, fontSize: 26, bold: true, color: C.textPrimary, margin: 0 });
-
-  // Status cards
-  const msW = (12.3 - 0.4) / 3 - 0.1, msH = 0.9, msY = 1.55;
-  [
-    { label: 'Completed',   value: sb.completed,  color: C.green,         bg: '0F2E20' },
-    { label: 'In Progress', value: sb.wip,        color: C.cyan,          bg: C.cardBody },
-    { label: 'Not Started', value: sb.notStarted, color: C.magentaBright, bg: C.cardAlert },
-  ].forEach((m, i) => {
-    const mx = 0.5 + i * (msW + 0.1);
-    s.addShape(pres.ShapeType.rect, { x: mx, y: msY, w: msW, h: msH, fill: { color: m.bg }, line: { color: C.cardBorder, width: 0.75 } });
-    s.addShape(pres.ShapeType.rect, { x: mx, y: msY, w: msW, h: 0.04, fill: { color: m.color }, line: { color: m.color, width: 0 } });
-    s.addText(m.label,       { x: mx+0.2, y: msY+0.1,  w: msW-0.4, h: 0.25, fontFace: FONT, fontSize: 12, color: m.color });
-    s.addText(String(m.value),{ x: mx+0.2, y: msY+0.28, w: msW-0.4, h: 0.52, fontFace: FONT, fontSize: 56, bold: true, color: m.color, margin: 0, valign: 'middle' });
-    s.addText(`of ${punchKPI.total}`, { x: mx+msW-1.0, y: msY+msH-0.28, w: 0.8, h: 0.22, fontFace: FONT, fontSize: 11, color: C.textSecondary, align: 'right' });
+  s.addText(headline, {
+    x: 0.5, y: 0.8, w: 12.3, h: 0.65,
+    fontFace: FONT, fontSize: 26, bold: true, color: C.textPrimary, margin: 0,
   });
 
-  // Timeline banner
-  const tlX = 0.5, tlW = 12.3, axisY = 2.75;
-  const D_TODAY = new Date(todayStr + 'T00:00:00Z');
-  const D_SC    = new Date(scDateStr + 'T00:00:00Z');
-  let endYM = '2026-09';
-  if (monthly.length > 0) endYM = monthly[monthly.length - 1].yearMonth;
-  const [endY, endM] = endYM.split('-').map(Number);
-  const D_END     = new Date(Date.UTC(endY, endM, 0));
-  const totalDays = (D_END.getTime() - D_TODAY.getTime()) / 86400000;
-  const scDays    = (D_SC.getTime()  - D_TODAY.getTime()) / 86400000;
-  const scRatio   = Math.min(1, scDays / Math.max(totalDays, 1));
-  const scX       = tlX + scRatio * tlW;
+  // ── Hero row: 3 cards (slide 3 pattern) ──
+  const heroY = 1.6, heroH = 2.2, heroGap = 0.13;
+  const heroW = (12.3 - 2 * heroGap) / 3;
 
-  function monthX(yearMonth: string): number {
-    const [y, m] = yearMonth.split('-').map(Number);
-    const d = new Date(Date.UTC(y, m, 0));
-    const days = (d.getTime() - D_TODAY.getTime()) / 86400000;
-    return tlX + Math.min(1, days / Math.max(totalDays, 1)) * tlW;
-  }
+  const completionAlert = prog.completionPct < 5 || prog.weightedVariancePct < -20;
+  const beyondAlert = beyond > 0;
+  const varianceSign = prog.weightedVariancePct >= 0 ? '+' : '';
 
-  // Axis labels
-  s.addText(`Today  ${fmtLong(todayStr)}`, { x: tlX, y: axisY-0.22, w: 1.35, h: 0.18, fontFace: FONT_MONO, fontSize: 8, color: C.textMuted });
-  s.addText(`SC  ${fmtLong(scDateStr)}`,   { x: scX-1.3, y: axisY-0.22, w: 1.25, h: 0.18, fontFace: FONT_MONO, fontSize: 8, color: C.cyan, align: 'right' });
+  const heroCards: CardConfig[] = [
+    {
+      label: 'Completion',
+      bigNumber: prog.completionPct.toFixed(1),
+      unit: '%',
+      footer: `${sb.completed} / ${total} items`,
+      footerColor: completionAlert ? C.magentaBright : C.textSecondary,
+      numberColor: completionAlert ? C.magentaBright : C.textPrimary,
+      bg: completionAlert ? C.cardAlert : C.cardBody,
+      accentColor: completionAlert ? C.magentaBright : C.green,
+      alert: completionAlert,
+    },
+    {
+      label: 'Weighted Actual',
+      bigNumber: prog.weightedActualPct.toFixed(1),
+      unit: '%',
+      footer: `${varianceSign}${prog.weightedVariancePct.toFixed(1)}% vs plan ${prog.weightedPlannedPct.toFixed(1)}%`,
+      footerColor: prog.weightedVariancePct >= 0 ? C.green : C.magentaBright,
+      numberColor: C.textPrimary,
+      bg: C.cardBody,
+      accentColor: prog.weightedVariancePct >= 0 ? C.green : C.amber,
+      alert: false,
+    },
+    {
+      label: 'Beyond SC',
+      bigNumber: String(beyond),
+      unit: beyond === 1 ? 'item' : 'items',
+      footer: beyondAlert ? 'scope review required' : 'all within SC date',
+      footerColor: beyondAlert ? C.magentaBright : C.green,
+      numberColor: beyondAlert ? C.magentaBright : C.textPrimary,
+      bg: beyondAlert ? C.cardAlert : C.cardBody,
+      accentColor: beyondAlert ? C.magentaBright : C.green,
+      alert: beyondAlert,
+    },
+  ];
+  heroCards.forEach((c, i) => drawCard(pres, s, 0.5 + i * (heroW + heroGap), heroY, heroW, heroH, c));
 
-  // Month labels
-  const monthLabelMap: Record<string,string> = { '06':'Jun','07':'Jul','08':'Aug','09':'Sep','10':'Oct','11':'Nov','12':'Dec' };
-  if (monthly.length > 0) {
-    monthly.forEach((seg, i) => {
-      const x = monthX(seg.yearMonth);
-      const prevX = i === 0 ? scX : monthX(monthly[i-1].yearMonth);
-      const midX = (prevX + x) / 2;
-      s.addText(monthLabelMap[seg.yearMonth.slice(5)] ?? seg.label, { x: midX-0.4, y: axisY-0.22, w: 0.8, h: 0.2, fontFace: FONT_MONO, fontSize: 9, color: C.textMuted, align: 'center' });
+  // ── Detail row: 2 list cards (slide 11 pattern) ──
+  const listY = heroY + heroH + 0.25, listH = 2.05;
+  const listW = (12.3 - 0.25) / 2;
+
+  const pct = (n: number) => total > 0 ? (n / total) * 100 : 0;
+
+  type ListRow = { label: string; count: number; color: string };
+  const statusRows: ListRow[] = [
+    { label: 'Completed',   count: sb.completed,  color: C.green },
+    { label: 'In Progress', count: sb.wip,        color: C.cyan },
+    { label: 'Not Started', count: sb.notStarted, color: C.magentaBright },
+  ];
+  const riskRows: ListRow[] = [
+    { label: 'Pre-Eng Blocked', count: risk.blocked,       color: C.amber },
+    { label: 'Overdue',         count: risk.overdue,       color: C.magentaBright },
+    { label: 'Critical Delay',  count: risk.criticalDelay, color: C.magentaBright },
+  ];
+
+  function drawListCard(cx: number, cy: number, title: string, accent: string, rows: ListRow[], alert: boolean) {
+    // Card body + top stripe
+    s.addShape(pres.ShapeType.rect, {
+      x: cx, y: cy, w: listW, h: listH,
+      fill: { color: alert ? C.cardAlert : C.cardBody },
+      line: alert ? { color: C.cardAlertBorder, width: 1.5 } : { color: C.cardBorder, width: 0.75 },
+    });
+    s.addShape(pres.ShapeType.rect, {
+      x: cx, y: cy, w: listW, h: alert ? 0.08 : 0.05,
+      fill: { color: accent }, line: { color: accent, width: 0 },
+    });
+    s.addText(title, {
+      x: cx + 0.25, y: cy + 0.2, w: listW - 0.5, h: 0.3,
+      fontFace: FONT, fontSize: 13, bold: true, color: C.textPrimary,
+    });
+    // Rows
+    const rowsTop = cy + 0.65;
+    const rowH = (listH - 0.85) / rows.length;
+    rows.forEach((r, i) => {
+      const ry = rowsTop + i * rowH;
+      s.addText(r.label, {
+        x: cx + 0.25, y: ry, w: listW * 0.55, h: 0.28,
+        fontFace: FONT, fontSize: 12, color: C.textSecondary,
+      });
+      const pctText = total > 0 ? `${r.count}  (${pct(r.count).toFixed(0)}%)` : `${r.count}`;
+      s.addText(pctText, {
+        x: cx + listW - 1.8, y: ry, w: 1.55, h: 0.28,
+        fontFace: FONT, fontSize: 13, bold: true, color: r.color, align: 'right',
+      });
+      // Mini bar
+      const barY = ry + 0.32;
+      const barW = listW - 0.5;
+      s.addShape(pres.ShapeType.rect, {
+        x: cx + 0.25, y: barY, w: barW, h: 0.06,
+        fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 },
+      });
+      const fw = Math.max(0.01, (pct(r.count) / 100) * barW);
+      s.addShape(pres.ShapeType.rect, {
+        x: cx + 0.25, y: barY, w: fw, h: 0.06,
+        fill: { color: r.color }, line: { color: r.color, width: 0 },
+      });
     });
   }
 
-  // Axis line + SC marker
-  s.addShape(pres.ShapeType.rect, { x: tlX, y: axisY, w: tlW, h: 0.015, fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 } });
-  s.addShape(pres.ShapeType.rect, { x: tlX, y: axisY-0.06, w: 0.02, h: 0.08, fill: { color: C.textMuted }, line: { color: C.textMuted, width: 0 } });
+  drawListCard(0.5, listY, 'Status Mix', C.cyan, statusRows, false);
+  drawListCard(0.5 + listW + 0.25, listY, 'Risk Watch', C.magentaBright, riskRows,
+    risk.overdue > 0 || risk.criticalDelay > 0);
 
-  const rowH = 0.44, rowGap = 0.2;
-  const markerH = rowH * 2 + rowGap * 1 + 0.04;
-  s.addShape(pres.ShapeType.rect, { x: scX-0.015, y: axisY, w: 0.03, h: markerH+rowH+rowGap+0.04, fill: { color: C.cyan }, line: { color: C.cyan, width: 0 } });
-  s.addShape(pres.ShapeType.rect, { x: scX-0.015, y: axisY-0.06, w: 0.03, h: 0.08, fill: { color: C.cyan }, line: { color: C.cyan, width: 0 } });
+  // ── TOP 3 LATEST table ──
+  const t3Y = listY + listH + 0.3;
+  s.addText('TOP 3 LATEST  ·  Beyond SC  ·  Scope Review Required', {
+    x: 0.5, y: t3Y, w: 10, h: 0.28,
+    fontFace: FONT_MONO, fontSize: 11, color: C.magentaBright, charSpacing: 2,
+  });
+  s.addShape(pres.ShapeType.rect, {
+    x: 0.5, y: t3Y + 0.32, w: 12.3, h: 0.015,
+    fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 },
+  });
 
-  // Month dividers
-  if (monthly.length > 1) {
-    monthly.slice(0, -1).forEach(seg => {
-      const mx2 = monthX(seg.yearMonth);
-      s.addShape(pres.ShapeType.rect, { x: mx2-0.01, y: axisY, w: 0.02, h: markerH, fill: { color: '1A2A4A' }, line: { color: '1A2A4A', width: 0 } });
+  const rowItems = latest.length > 0
+    ? latest.slice(0, 3).map((item, i) => ({ idx: i + 1, item }))
+    : [1, 2, 3].map((n) => ({ idx: n, item: null as null | typeof latest[0] }));
+
+  rowItems.forEach(({ idx, item }, i) => {
+    const iy = t3Y + 0.4 + i * 0.42;
+    s.addShape(pres.ShapeType.rect, {
+      x: 0.5, y: iy, w: 12.3, h: 0.38,
+      fill: { color: i % 2 === 0 ? C.cardBody : '0D1A35' },
+      line: { color: C.cardBorder, width: 0.5 },
     });
-  }
-
-  // Row 1: Within SC
-  const r1Y = axisY + 0.03;
-  s.addShape(pres.ShapeType.rect, { x: tlX, y: r1Y, w: scX-tlX, h: rowH, fill: { color: C.green }, line: { color: C.green, width: 0 } });
-  s.addText(`Within SC  ·  ${within} items`, { x: tlX+0.15, y: r1Y+0.1, w: scX-tlX-0.2, h: 0.25, fontFace: FONT, fontSize: 13, bold: true, color: C.textPrimary });
-
-  // Row 2: Beyond SC — monthly segments
-  const r2Y = r1Y + rowH + rowGap;
-  s.addShape(pres.ShapeType.rect, { x: tlX, y: r2Y, w: scX-tlX, h: rowH, fill: { color: '1E0812' }, line: { color: '1E0812', width: 0 } });
-  s.addText('← scope review required', { x: tlX+0.1, y: r2Y+0.11, w: scX-tlX-0.15, h: 0.22, fontFace: FONT, fontSize: 9, color: C.magentaBright, italic: true, align: 'right' });
-
-  if (monthly.length > 0) {
-    const monthColors = ['CC3377', C.magentaBright, 'FF6699'];
-    let segStartX = scX;
-    monthly.forEach((seg, i) => {
-      const segEndX = monthX(seg.yearMonth);
-      const segW = segEndX - segStartX;
-      const col = monthColors[i % monthColors.length];
-      s.addShape(pres.ShapeType.rect, { x: segStartX, y: r2Y, w: segW, h: rowH, fill: { color: col }, line: { color: col, width: 0 } });
-      s.addText(`${seg.count} Items`, { x: segStartX+0.1, y: r2Y+0.1, w: segW-0.15, h: 0.25, fontFace: FONT, fontSize: 13, bold: true, color: C.textPrimary, align: 'center' });
-      segStartX = segEndX;
-    });
-  } else {
-    const beyondW = tlW - (scX - tlX);
-    const segW = beyondW / 3;
-    ['Jul  ?', 'Aug  ?', 'Sep  ?'].forEach((lbl, i) => {
-      const col = ['CC3377', C.magentaBright, 'FF6699'][i];
-      s.addShape(pres.ShapeType.rect, { x: scX+i*segW, y: r2Y, w: segW, h: rowH, fill: { color: col }, line: { color: col, width: 0 } });
-      s.addText(lbl, { x: scX+i*segW+0.1, y: r2Y+0.1, w: segW-0.15, h: 0.25, fontFace: FONT, fontSize: 12, bold: true, color: C.textPrimary, align: 'center' });
-    });
-  }
-
-  // Row 3: No Plan
-  const r3Y = r2Y + rowH + rowGap;
-  const noPlanBoxW = 0.75;
-  s.addShape(pres.ShapeType.rect, { x: tlX, y: r3Y, w: noPlanBoxW, h: rowH, fill: { color: '4A4A6A' }, line: { color: '4A4A6A', width: 0 } });
-  s.addText(`No Plan\n${noPlan} items`, { x: tlX+0.06, y: r3Y+0.05, w: noPlanBoxW-0.08, h: rowH-0.06, fontFace: FONT, fontSize: 9, bold: true, color: C.textPrimary, align: 'center', valign: 'middle' });
-  s.addText('completion date not set  ·  untracked risk', { x: tlX+noPlanBoxW+0.15, y: r3Y+0.12, w: scX-tlX-noPlanBoxW-0.25, h: 0.22, fontFace: FONT, fontSize: 10, color: C.textMuted, italic: true });
-
-  // Top 3 Latest
-  const t3Y = r3Y + rowH + 0.3;
-  s.addText('TOP 3 LATEST  ·  Beyond SC  ·  Scope Review Required', { x: 0.5, y: t3Y, w: 10, h: 0.28, fontFace: FONT_MONO, fontSize: 11, color: C.magentaBright, charSpacing: 2 });
-  s.addShape(pres.ShapeType.rect, { x: 0.5, y: t3Y+0.32, w: 12.3, h: 0.015, fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 } });
-
-  if (latest.length > 0) {
-    latest.forEach((item, i) => {
-      const iy = t3Y + 0.4 + i * 0.52;
-      s.addShape(pres.ShapeType.rect, { x: 0.5, y: iy, w: 12.3, h: 0.46, fill: { color: i%2===0 ? C.cardBody : '0D1A35' }, line: { color: C.cardBorder, width: 0.5 } });
-      s.addText(String(i+1), { x: 0.6, y: iy+0.11, w: 0.35, h: 0.25, fontFace: FONT, fontSize: 13, bold: true, color: C.magentaBright });
-      s.addText(item.itemNo || '-', { x: 1.0, y: iy+0.11, w: 1.5, h: 0.25, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted });
-      s.addText(item.description || '(no description)', { x: 2.6, y: iy+0.11, w: 6.2, h: 0.25, fontFace: FONT, fontSize: 11, color: C.textPrimary });
-      s.addText(item.discipline || '-', { x: 8.9, y: iy+0.11, w: 2.0, h: 0.25, fontFace: FONT, fontSize: 10, color: C.textSecondary });
-      s.addText(fmtLong(item.plannedCompletionDate) || '-', { x: 11.0, y: iy+0.11, w: 1.8, h: 0.25, fontFace: FONT_MONO, fontSize: 10, color: C.magentaBright, align: 'right' });
-    });
-  } else {
-    [1, 2, 3].forEach((n, i) => {
-      const iy = t3Y + 0.4 + i * 0.52;
-      s.addShape(pres.ShapeType.rect, { x: 0.5, y: iy, w: 12.3, h: 0.46, fill: { color: i%2===0 ? C.cardBody : '0D1A35' }, line: { color: C.cardBorder, width: 0.5 } });
-      s.addText(String(n), { x: 0.6, y: iy+0.11, w: 0.35, h: 0.25, fontFace: FONT, fontSize: 13, bold: true, color: C.magentaBright });
-      s.addText('— Awaiting data (latestItems) —', { x: 1.0, y: iy+0.11, w: 10, h: 0.25, fontFace: FONT, fontSize: 11, color: C.textMuted, italic: true });
-    });
-  }
+    s.addText(String(idx), { x: 0.6, y: iy + 0.08, w: 0.35, h: 0.25, fontFace: FONT, fontSize: 13, bold: true, color: C.magentaBright });
+    if (item) {
+      s.addText(item.itemNo || '-', { x: 1.0, y: iy + 0.08, w: 1.5, h: 0.25, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted });
+      s.addText(item.description || '(no description)', { x: 2.6, y: iy + 0.08, w: 6.2, h: 0.25, fontFace: FONT, fontSize: 11, color: C.textPrimary });
+      s.addText(item.discipline || '-', { x: 8.9, y: iy + 0.08, w: 2.0, h: 0.25, fontFace: FONT, fontSize: 10, color: C.textSecondary });
+      s.addText(fmtLong(item.plannedCompletionDate) || '-', { x: 11.0, y: iy + 0.08, w: 1.8, h: 0.25, fontFace: FONT_MONO, fontSize: 10, color: C.magentaBright, align: 'right' });
+    } else {
+      s.addText('— Awaiting data —', { x: 1.0, y: iy + 0.08, w: 10, h: 0.25, fontFace: FONT, fontSize: 11, color: C.textMuted, italic: true });
+    }
+  });
 
   drawFooter(pres, s, '12');
 }
+
 
 // ─────────────────────────────────────────
 // XML POST-PROCESSING (JSZip — replaces execSync+unzip)

@@ -18,6 +18,13 @@ import type { DefectItem } from '@/lib/defect-utils';
 import type { DefectScheduleStage } from '@/lib/defect-schedule-utils';
 import { TNC_RAW_DATA_GUIDE_MD } from '@/lib/tnc-raw-data-guide';
 import { isStageDone, getStagePlannedDate, type StageMetricRow } from '@/lib/stage-metrics';
+import {
+  weightedProgress as punchWeightedProgress,
+  isCompletionOverdue as punchIsCompletionOverdue,
+  isCriticalDelay as punchIsCriticalDelay,
+  isBlockedByPreEng as punchIsBlockedByPreEng,
+} from '@/lib/punch-dashboard-utils';
+import type { PunchItem } from '@/lib/punch-excel-utils';
 
 /** Schema version of the JSON payload emitted by buildReport(). Bump on breaking changes. */
 export const REPORT_SCHEMA_VERSION = 2;
@@ -127,6 +134,17 @@ export interface PunchReportData {
   currentActual?: {
     completionPct: number;
     variancePct: number;
+  };
+  progressKpi?: {
+    completionPct: number;
+    weightedActualPct: number;
+    weightedPlannedPct: number;
+    weightedVariancePct: number;
+  };
+  riskKpi?: {
+    blocked: number;
+    overdue: number;
+    criticalDelay: number;
   };
   requiredPace?: { daysRemaining: number; completionRemaining: number; completionPerDay: number };
   snapshots?: Array<{ date: string; total: number; completion: number; completionPct: number }>;
@@ -532,8 +550,19 @@ interface PunchRow {
   location: string | null;
   actual_start_date: string | null;
   actual_completion_date: string | null;
+  planned_start_date: string | null;
   planned_completion_date: string | null;
   completion_status: string | null;
+  // Extended fields for slide 12 (weighted progress + risk classification)
+  weight: number | null;
+  actual_progress_pct: number | null;
+  planned_progress_pct: number | null;
+  pre_engineering_ready: boolean | null;
+  material_approval_status: string | null;
+  material_procurement_status: string | null;
+  drawing_approval_status: string | null;
+  mos_approval_status: string | null;
+  health_status: string | null;
 }
 
 async function fetchPunch(): Promise<PunchRow[]> {
@@ -542,17 +571,18 @@ async function fetchPunch(): Promise<PunchRow[]> {
   while (true) {
     const { data, error } = await supabase
       .from('punch_items')
-      .select('item_no,outstanding_work,main_trade,work_type,location,actual_start_date,actual_completion_date,planned_completion_date,completion_status')
+      .select('item_no,outstanding_work,main_trade,work_type,location,actual_start_date,actual_completion_date,planned_start_date,planned_completion_date,completion_status,weight,actual_progress_pct,planned_progress_pct,pre_engineering_ready,material_approval_status,material_procurement_status,drawing_approval_status,mos_approval_status,health_status')
       .eq('is_active', true)
       .range(from, from + size - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
-    out.push(...(data as PunchRow[]));
+    out.push(...(data as unknown as PunchRow[]));
     if (data.length < size) break;
     from += size;
   }
   return out;
 }
+
 
 function punchSnapshot(rows: PunchRow[], snap: string) {
   const total = rows.length;
@@ -594,6 +624,24 @@ function computePunchData(rows: PunchRow[], opts: ReportOptions): PunchReportDat
     } else if (variancePct < -20) {
       data.actionPlanTriggers.push({ stage: 'completion', status: 'AT_RISK', actualPct: completionPct, reason: `completion is behind plan by ${Math.abs(variancePct).toFixed(1)}%` });
     }
+  }
+  // ── Weighted progress + risk KPIs (slide 12) ──
+  {
+    const items = rows as unknown as PunchItem[];
+    const wp = punchWeightedProgress(items);
+    const r1 = (n: number) => Math.round(n * 10) / 10;
+    data.progressKpi = {
+      completionPct: cur.total ? r1((cur.completion / cur.total) * 100) : 0,
+      weightedActualPct: r1(wp.actual),
+      weightedPlannedPct: r1(wp.planned),
+      weightedVariancePct: r1(wp.variance),
+    };
+    const asOf = today;
+    data.riskKpi = {
+      blocked: items.filter(punchIsBlockedByPreEng).length,
+      overdue: items.filter((r) => punchIsCompletionOverdue(r, asOf)).length,
+      criticalDelay: items.filter((r) => punchIsCriticalDelay(r, asOf)).length,
+    };
   }
   const mcDate = opts.mcDate ?? MC_DEFAULT;
   const incomplete = rows.filter(r => !r.actual_completion_date);
