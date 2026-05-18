@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
+import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle, AlertTriangle, CheckCircle2, Clock, CalendarDays,
@@ -86,6 +87,11 @@ export default function PunchDashboardPage() {
     storageKey: 'punch',
     onRefresh: () => fetchData({ silent: true }),
   });
+
+  useHeaderSlot(
+    <AutoRefreshControl state={autoRefresh} />,
+    [autoRefresh.enabled, autoRefresh.intervalMs, autoRefresh.lastUpdatedAt, autoRefresh.isRefreshing],
+  );
 
   const asOf = new Date().toISOString().slice(0, 10);
 
@@ -179,7 +185,6 @@ export default function PunchDashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <AutoRefreshControl state={autoRefresh} />
           <Button variant="outline" size="sm" onClick={() => navigate('/punch/raw-data')}>Open Raw Data</Button>
         </div>
       </div>

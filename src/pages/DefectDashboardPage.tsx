@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
+import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { exportDefectSCurveToExcel } from '@/lib/scurve-excel-export';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -170,6 +171,11 @@ export default function DefectDashboardPage() {
       await refetchDataDate();
     },
   });
+
+  useHeaderSlot(
+    <AutoRefreshControl state={autoRefresh} />,
+    [autoRefresh.enabled, autoRefresh.intervalMs, autoRefresh.lastUpdatedAt, autoRefresh.isRefreshing],
+  );
 
   const today = todayIso();
   const dataDateLabel = formatDdMmm(dataDate);
@@ -350,7 +356,6 @@ export default function DefectDashboardPage() {
             ))}
           </ToggleGroup>
           <p className="text-xs text-muted-foreground">At-Risk threshold: ≤ {atRiskDays} day{atRiskDays === 1 ? '' : 's'}</p>
-          <AutoRefreshControl state={autoRefresh} />
         </div>
       </div>
 

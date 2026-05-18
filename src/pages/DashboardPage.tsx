@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
+import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { exportTncSCurveToExcel } from '@/lib/scurve-excel-export';
 import { ALL_TEAMS, TEAM_LABELS, type TeamType } from '@/types/enums';
@@ -117,6 +118,11 @@ export default function DashboardPage() {
     storageKey: 'tnc',
     onRefresh: () => fetchData({ silent: true }),
   });
+
+  useHeaderSlot(
+    <AutoRefreshControl state={autoRefresh} />,
+    [autoRefresh.enabled, autoRefresh.intervalMs, autoRefresh.lastUpdatedAt, autoRefresh.isRefreshing],
+  );
 
 
   const today = todayIso();
@@ -379,7 +385,6 @@ export default function DashboardPage() {
           <p className="text-xs text-muted-foreground">
             At-Risk threshold: ≤ {atRiskDays} day{atRiskDays === 1 ? '' : 's'}
           </p>
-          <AutoRefreshControl state={autoRefresh} />
         </div>
       </div>
 
