@@ -305,6 +305,10 @@ function ModuleSection({
   const kpiTotal = filteredItems.length;
   const kpiCompleted = filteredItems.filter((i) => i.is_completed).length;
   const kpiOverdue = filteredItems.filter((i) => i.is_overdue).length;
+  const kpiOverdueSubmission = filteredItems.filter((i) => i.is_overdue_submission).length;
+  const kpiOverdueResponse = filteredItems.filter((i) => i.is_overdue_response).length;
+  const splitOverdue = isAbd || isOmm;
+
   const kpiDueIds = useMemo(() => isDueThisWeek(
     filteredRecords
       .filter((r) => subFilter === '__all__' || (r.subcontractor ?? '') === subFilter)
@@ -392,10 +396,10 @@ function ModuleSection({
         </div>
 
         {/* Module 6-KPI row */}
-        <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        <div className={cn('grid gap-3 grid-cols-2 md:grid-cols-3', splitOverdue ? 'lg:grid-cols-7' : 'lg:grid-cols-6')}>
           <SummaryTile icon={ListChecks} label="Total" value={kpiTotal} accent={accent}
             onClick={() => onNavigate(module, extraParams())} />
-          <SummaryTile icon={CheckCircle2} label="Completed" value={kpiCompleted}
+          <SummaryTile icon={CheckCircle2} label={isAbd ? 'Submitted' : 'Completed'} value={kpiCompleted}
             sublabel={kpiTotal ? `${Math.round((kpiCompleted / kpiTotal) * 100)}%` : '—'}
             accent={accent} tone="green"
             onClick={() => onNavigate(module, { ...extraParams(), ...(isAbd ? { bucket: 'done' } : { status: 'completed' }) })}>
@@ -403,9 +407,22 @@ function ModuleSection({
           </SummaryTile>
           <SummaryTile icon={Clock} label="Remaining" value={kpiTotal - kpiCompleted} accent={accent}
             onClick={() => onNavigate(module, extraParams())} />
-          <SummaryTile icon={AlertTriangle} label="Overdue" value={kpiOverdue} accent={accent}
-            tone={kpiOverdue > 0 ? 'red' : 'muted'}
-            onClick={() => onNavigate(module, { ...extraParams(), overdue: '1' })} />
+          {splitOverdue ? (
+            <>
+              <SummaryTile icon={AlertTriangle} label="Overdue — Submission" value={kpiOverdueSubmission} accent={accent}
+                sublabel="Our side"
+                tone={kpiOverdueSubmission > 0 ? 'red' : 'muted'}
+                onClick={() => onNavigate(module, { ...extraParams(), overdue: '1', overdue_type: 'submission' })} />
+              <SummaryTile icon={AlertTriangle} label="Overdue — Response" value={kpiOverdueResponse} accent={accent}
+                sublabel="Counterparty"
+                tone={kpiOverdueResponse > 0 ? 'amber' : 'muted'}
+                onClick={() => onNavigate(module, { ...extraParams(), overdue: '1', overdue_type: 'response' })} />
+            </>
+          ) : (
+            <SummaryTile icon={AlertTriangle} label="Overdue" value={kpiOverdue} accent={accent}
+              tone={kpiOverdue > 0 ? 'red' : 'muted'}
+              onClick={() => onNavigate(module, { ...extraParams(), overdue: '1' })} />
+          )}
           <SummaryTile icon={CalendarClock} label="Due This Week" value={kpiDueIds.size} accent={accent}
             tone="amber"
             onClick={() => onNavigate(module, { ...extraParams(), due_this_week: '1' })} />
@@ -414,6 +431,7 @@ function ModuleSection({
             sublabel=">30 days"
             onClick={() => onNavigate(module, { ...extraParams(), delay_bucket: '30+' })} />
         </div>
+
 
         {/* Delay Severity Buckets */}
         <DelaySeverityRow
