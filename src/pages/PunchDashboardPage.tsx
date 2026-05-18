@@ -534,23 +534,6 @@ export default function PunchDashboardPage() {
       </Card>
       )}
 
-      {/* ── Critical Level Summary (Summary of Work) ───────────────────── */}
-      {criticalLevelSummary.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Summary of Work</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Items grouped by Critical Level with main category, Pre-Engineering readiness,
-              schedule window and overall weighted progress.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {criticalLevelSummary.map((s) => (
-              <CriticalLevelRowCard key={s.level} summary={s} go={go} />
-            ))}
-          </CardContent>
-        </Card>
-      )}
 
 
       {/* ── Punch Data Quality ─────────────────────────────────────────── */}
