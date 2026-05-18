@@ -625,6 +625,24 @@ function computePunchData(rows: PunchRow[], opts: ReportOptions): PunchReportDat
       data.actionPlanTriggers.push({ stage: 'completion', status: 'AT_RISK', actualPct: completionPct, reason: `completion is behind plan by ${Math.abs(variancePct).toFixed(1)}%` });
     }
   }
+  // ── Weighted progress + risk KPIs (slide 12) ──
+  {
+    const items = rows as unknown as PunchItem[];
+    const wp = punchWeightedProgress(items);
+    const r1 = (n: number) => Math.round(n * 10) / 10;
+    data.progressKpi = {
+      completionPct: cur.total ? r1((cur.completion / cur.total) * 100) : 0,
+      weightedActualPct: r1(wp.actual),
+      weightedPlannedPct: r1(wp.planned),
+      weightedVariancePct: r1(wp.variance),
+    };
+    const asOf = today;
+    data.riskKpi = {
+      blocked: items.filter(punchIsBlockedByPreEng).length,
+      overdue: items.filter((r) => punchIsCompletionOverdue(r, asOf)).length,
+      criticalDelay: items.filter((r) => punchIsCriticalDelay(r, asOf)).length,
+    };
+  }
   const mcDate = opts.mcDate ?? MC_DEFAULT;
   const incomplete = rows.filter(r => !r.actual_completion_date);
   data.statusBreakdown = {
