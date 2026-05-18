@@ -307,6 +307,7 @@ export default function PunchDashboardPage() {
         )}
       </div>
 
+      {false && (
       {/* ── Schedule Control ────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Schedule Control</CardTitle></CardHeader>
@@ -317,6 +318,7 @@ export default function PunchDashboardPage() {
           <ControlCell label="Critical Delay" value={stats.critical} hint=">14 days overdue or Critical health" tone="danger" onClick={() => go('status=critical')} />
         </CardContent>
       </Card>
+      )}
 
       {/* ── Pre-Engineering Readiness ──────────────────────────────────── */}
       <Card>
