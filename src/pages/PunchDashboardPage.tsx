@@ -7,6 +7,7 @@ import {
   AlertCircle, AlertTriangle, CheckCircle2, Clock, CalendarDays,
   Flame, GaugeCircle, ListChecks, PauseCircle, Rocket, ShieldAlert, TrendingUp,
   Layers, Wrench, CalendarArrowUp, CalendarArrowDown,
+  Package, Hammer, PencilRuler,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -598,14 +599,12 @@ function CriticalLevelRowCard({
   const accent = CRITICAL_LEVEL_ACCENT[summary.level];
   const levelParam = `criticalLevel=${encodeURIComponent(summary.level)}`;
 
-  const cats = summary.mainCategories;
-  const topCats = cats.slice(0, 3).map((c) => c.name);
-  const extra = cats.length - topCats.length;
-  const catLabel = cats.length === 0
-    ? '—'
-    : topCats.join(', ') + (extra > 0 ? ` +${extra}` : '');
+  const catCount = (name: string) =>
+    summary.mainCategories.find((c) => c.name === name)?.count ?? 0;
 
   const actual = Math.max(0, Math.min(100, Math.round(summary.progressActual)));
+
+  const chipWidth = 'min-w-[8.5rem]';
 
   return (
     <div
@@ -621,16 +620,22 @@ function CriticalLevelRowCard({
     >
       <span className={cn('absolute inset-y-0 left-0 w-1.5', accent.bar)} />
       <div className="pl-3 flex flex-col gap-3">
-        <div className="flex items-center gap-4">
+        <div className="flex items-start gap-4">
           <span className="text-2xl font-bold tracking-tight text-foreground w-28 shrink-0">
             {summary.level}
           </span>
-          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-            <MetaChip icon={<ListChecks className="h-3.5 w-3.5" />} label="Items" value={summary.total.toLocaleString()} className="min-w-[6.5rem]" />
-            <MetaChip icon={<Layers className="h-3.5 w-3.5" />} label="Main Cat" value={catLabel} className="min-w-[10rem] flex-1" title={cats.map(c => `${c.name} (${c.count})`).join(', ')} />
-            <MetaChip icon={<Wrench className="h-3.5 w-3.5" />} label="Pre-Eng" value={`${summary.preEngReady}/${summary.total}`} className="min-w-[7rem]" />
-            <MetaChip icon={<CalendarArrowUp className="h-3.5 w-3.5" />} label="Earliest" value={formatDashDate(summary.earliestStart)} className="min-w-[8.5rem]" />
-            <MetaChip icon={<CalendarArrowDown className="h-3.5 w-3.5" />} label="Latest" value={formatDashDate(summary.latestFinish)} className="min-w-[8.5rem]" />
+          <div className="flex flex-col gap-2 flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <MetaChip icon={<ListChecks className="h-3.5 w-3.5" />} label="Items" value={summary.total.toLocaleString()} className={chipWidth} />
+              <MetaChip icon={<Package className="h-3.5 w-3.5" />} label="Material" value={catCount('Material').toLocaleString()} className={chipWidth} />
+              <MetaChip icon={<Hammer className="h-3.5 w-3.5" />} label="Physical Work" value={catCount('Physical Work').toLocaleString()} className={chipWidth} />
+              <MetaChip icon={<PencilRuler className="h-3.5 w-3.5" />} label="Design" value={catCount('Design').toLocaleString()} className={chipWidth} />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <MetaChip icon={<Wrench className="h-3.5 w-3.5" />} label="Pre-Eng" value={`${summary.preEngReady}/${summary.total}`} className={chipWidth} />
+              <MetaChip icon={<CalendarArrowUp className="h-3.5 w-3.5" />} label="Earliest" value={formatDashDate(summary.earliestStart)} className={chipWidth} />
+              <MetaChip icon={<CalendarArrowDown className="h-3.5 w-3.5" />} label="Latest" value={formatDashDate(summary.latestFinish)} className={chipWidth} />
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-3">

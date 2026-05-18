@@ -1,55 +1,38 @@
-## Critical Level Summary — 메타 칩화 + 정렬 일관성
+# Summary of Work 칩 레이아웃 정리
 
-현재 한 줄 메타 영역(items / Main Cat / Pre-Eng / Earliest / Latest)을 각각 **개별 칩(badge)** 형태로 변환하고, 모든 카드에서 칩 위치가 동일한 그리드 컬럼에 정렬되도록 한다.
+## 목적
+`CriticalLevelRowCard`의 메타 칩을 두 행으로 일관성 있게 정렬한다. "Main Cat" 통합 칩을 제거하고 카테고리별 개별 칩으로 분리, Pre-Eng는 하단 행의 첫 위치로 이동.
 
-### 변경 사항 (`src/pages/PunchDashboardPage.tsx` — `CriticalLevelRowCard`만 수정)
+## 변경 사항 (`src/pages/PunchDashboardPage.tsx`, `CriticalLevelRowCard` 컴포넌트, 약 623–635행)
 
-1. **레이아웃 재구성**
-   - 카드 내부를 `grid grid-cols-[auto_1fr_auto]` 형태로 정렬:
-     - 좌측: Critical Level 레이블 (고정 폭 `w-28`, `text-2xl font-bold`)
-     - 중앙: 메타 칩 영역 (5개 칩, 고정 순서)
-     - 우측: Progress bar + %
-   - 카드마다 동일한 컬럼 폭 → 시각적으로 모든 칩이 수직 정렬됨
+### 1. Main Cat 칩 제거 및 카테고리별 칩으로 분리
+- 기존 `MetaChip label="Main Cat" value={catLabel}` 한 줄을 제거.
+- 고정 3개 카테고리(`Material`, `Physical Work`, `Design`) 각각을 별도 `MetaChip`으로 렌더링.
+- 값은 해당 카테고리의 개수(`summary.mainCategories`에서 이름으로 매칭, 없으면 `0`).
+- 세 칩의 너비를 동일하게 적용(`min-w-[8.5rem]`)하여 일관된 디자인.
+- `cats`, `topCats`, `extra`, `catLabel` 로컬 변수와 `Layers` 아이콘 임포트 정리.
 
-2. **메타 → 칩(Chip) 5종 (고정 순서, 고정 너비)**
-   각 칩은 `inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-xs`로 통일된 스타일. 칩 내부 구성: `아이콘 + 레이블(uppercase, muted) + 값(font-medium, tabular-nums)`.
-   
-   | # | 아이콘 | 레이블 | 값 | 최소 폭 |
-   |---|---|---|---|---|
-   | 1 | `ListChecks` | Items | `{total}` | `min-w-[6.5rem]` |
-   | 2 | `Layers` | Main Cat | `{topCats join + N}` | `min-w-[10rem]` (flex-1 허용) |
-   | 3 | `Wrench` | Pre-Eng | `{ready}/{total}` | `min-w-[7rem]` |
-   | 4 | `CalendarArrowUp` | Earliest | `{date or —}` | `min-w-[8.5rem]` |
-   | 5 | `CalendarArrowDown` | Latest | `{date or —}` | `min-w-[8.5rem]` |
-
-   - 칩 컨테이너: `flex flex-wrap items-center gap-2`
-   - 모든 카드에서 같은 순서·최소 폭이라 동일 위치에 정렬됨
-
-3. **Progress 영역**
-   - 두 번째 줄 유지 (`mt-3`)
-   - 좌측 라벨 `Overall Progress` 너비 통일 (`w-32 shrink-0`)
-   - 우측 `%` 텍스트 `w-12 text-right` 유지
-
-4. **상호작용**
-   - 카드 전체 클릭으로 RawData 드릴다운 (`criticalLevel=...`) — 기존 동작 유지
-   - 칩은 시각 요소로만 사용 (클릭 이벤트 없음)
-
-### 변경하지 않는 것
-
-- `punch-dashboard-utils.ts` 데이터 모델/계산 로직
-- 다른 카드/대시보드 영역
-- 상위 그리드 (`sm:grid-cols-2 xl:grid-cols-3`)
-- 백엔드/DB/라우팅
-
-### 결과 미리보기 (ASCII)
+### 2. 두 행 구조로 재배치
+하나의 `flex-wrap` 행을 두 개의 행으로 분리:
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ High    │ [☑ Items 240] [▤ Main Cat E,M,I +2] [⚙ Pre-Eng 180/240] ...      │
-│         │ Overall Progress ▓▓▓▓▓▓▓▓░░░░░░░  62%                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ mid-High│ [☑ Items 120] [▤ Main Cat E,P]      [⚙ Pre-Eng  90/120] ...      │
-│         │ Overall Progress ▓▓▓▓▓▓▓▓▓▓▓░░░░  75%                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+Row 1 (카운트):  [Items]  [Material]  [Physical Work]  [Design]
+Row 2 (속성):    [Pre-Eng] [Earliest] [Latest]
 ```
-각 칩이 동일한 컬럼 위치에서 시작되어 카드 간 비교가 쉬워진다.
+
+- 두 행 모두 동일 칸 너비(`min-w-[8.5rem]` 또는 통일된 값)로 시각적 정렬.
+- 각 행은 `flex flex-wrap items-center gap-2`로 감싸고, 상위 컨테이너는 `flex flex-col gap-2`.
+
+### 3. 아이콘 매핑
+- Material → `Package` 또는 기존 `Layers` 재사용
+- Physical Work → `Wrench` 대신 `Hammer` 등 (Pre-Eng와 구분 위해 Pre-Eng는 `ShieldCheck`로 변경 검토)
+- Design → `PencilRuler` 또는 `Compass`
+- (이미 임포트된 lucide 아이콘 우선 사용, 부족하면 추가 import)
+
+### 4. 영향 범위
+- 시각적 정렬/라벨만 변경, 데이터·필터·라우팅 로직 변경 없음.
+- `Overall Progress` 행은 그대로 유지.
+
+## 확인 포인트
+- 카테고리에 데이터가 없을 때 0으로 표기되는지
+- 1050px 뷰포트에서 두 행이 깔끔하게 정렬되는지
