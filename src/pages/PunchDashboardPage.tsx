@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { formatDdMmmSmart } from '@/lib/format';
 import type { PunchItem } from '@/lib/punch-excel-utils';
 import { PUNCH_HEALTH_LABEL, PUNCH_GATE_LABEL, type PunchHealthStatus } from '@/lib/punch-field-registry';
 import {
