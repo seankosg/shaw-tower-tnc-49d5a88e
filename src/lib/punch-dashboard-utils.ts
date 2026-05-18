@@ -340,3 +340,106 @@ export function topDelayingParties(
   return Array.from(m.values()).filter((p) => p.score > 0)
     .sort((a, b) => b.score - a.score || b.overdue - a.overdue).slice(0, limit);
 }
+
+// ── Critical Level Summary ───────────────────────────────────────────────
+
+export const CRITICAL_LEVEL_ORDER = [
+  'High', 'mid-High', 'Medium', 'mid-Low', 'Low', 'Unspecified',
+] as const;
+export type CriticalLevel = typeof CRITICAL_LEVEL_ORDER[number];
+
+export type GateKey =
+  | 'material_approval'
+  | 'material_procurement'
+  | 'drawing_approval'
+  | 'mos_approval';
+
+export interface GateCount { approved: number; pending: number; total: number; }
+
+export interface CriticalLevelSummary {
+  level: CriticalLevel;
+  total: number;
+  earliestStart: string | null;
+  latestFinish: string | null;
+  gates: Record<GateKey, GateCount>;
+}
+
+const isApprovalApproved = (v: string | null | undefined): boolean =>
+  v === 'approved' || v === 'not_required';
+
+const isProcurementApproved = (v: string | null | undefined): boolean =>
+  v === 'secured' || v === 'not_required';
+
+function normalizeCriticalLevel(v: string | null | undefined): CriticalLevel {
+  if (!v) return 'Unspecified';
+  const hit = (CRITICAL_LEVEL_ORDER as readonly string[]).find(
+    (k) => k.toLowerCase() === v.toLowerCase(),
+  );
+  return (hit as CriticalLevel | undefined) ?? 'Unspecified';
+}
+
+export function summarizeByCriticalLevel(items: PunchItem[]): CriticalLevelSummary[] {
+  const buckets = new Map<CriticalLevel, CriticalLevelSummary>();
+  const ensure = (lvl: CriticalLevel): CriticalLevelSummary => {
+    let b = buckets.get(lvl);
+    if (!b) {
+      b = {
+        level: lvl,
+        total: 0,
+        earliestStart: null,
+        latestFinish: null,
+        gates: {
+          material_approval: { approved: 0, pending: 0, total: 0 },
+          material_procurement: { approved: 0, pending: 0, total: 0 },
+          drawing_approval: { approved: 0, pending: 0, total: 0 },
+          mos_approval: { approved: 0, pending: 0, total: 0 },
+        },
+      };
+      buckets.set(lvl, b);
+    }
+    return b;
+  };
+
+  for (const r of items) {
+    const lvl = normalizeCriticalLevel(r.critical_level);
+    const b = ensure(lvl);
+    b.total++;
+
+    if (r.planned_start_date && (!b.earliestStart || r.planned_start_date < b.earliestStart)) {
+      b.earliestStart = r.planned_start_date;
+    }
+    if (r.planned_completion_date && (!b.latestFinish || r.planned_completion_date > b.latestFinish)) {
+      b.latestFinish = r.planned_completion_date;
+    }
+
+    const tally = (key: GateKey, approved: boolean) => {
+      const g = b.gates[key];
+      g.total++;
+      if (approved) g.approved++; else g.pending++;
+    };
+    tally('material_approval', isApprovalApproved(r.material_approval_status));
+    tally('material_procurement', isProcurementApproved(r.material_procurement_status));
+    tally('drawing_approval', isApprovalApproved(r.drawing_approval_status));
+    tally('mos_approval', isApprovalApproved(r.mos_approval_status));
+  }
+
+  return CRITICAL_LEVEL_ORDER
+    .map((lvl) => buckets.get(lvl))
+    .filter((b): b is CriticalLevelSummary => !!b && b.total > 0);
+}
+
+export const GATE_SHORT_LABEL: Record<GateKey, string> = {
+  material_approval: 'MTL',
+  material_procurement: 'PROC',
+  drawing_approval: 'DWG',
+  mos_approval: 'MOS',
+};
+
+export const CRITICAL_LEVEL_ACCENT: Record<CriticalLevel, { bar: string; ring: string }> = {
+  'High':        { bar: 'bg-red-500',     ring: 'focus-visible:ring-red-500' },
+  'mid-High':    { bar: 'bg-orange-500',  ring: 'focus-visible:ring-orange-500' },
+  'Medium':      { bar: 'bg-amber-500',   ring: 'focus-visible:ring-amber-500' },
+  'mid-Low':     { bar: 'bg-sky-500',     ring: 'focus-visible:ring-sky-500' },
+  'Low':         { bar: 'bg-emerald-500', ring: 'focus-visible:ring-emerald-500' },
+  'Unspecified': { bar: 'bg-muted-foreground', ring: 'focus-visible:ring-ring' },
+};
