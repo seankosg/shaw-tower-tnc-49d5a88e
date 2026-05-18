@@ -169,6 +169,16 @@ export interface PunchReportData {
       count: number;
     }>;
   };
+  criticalLevelSummary?: Array<{
+    level: string;
+    total: number;
+    earliestStart: string | null;
+    latestFinish: string | null;
+    preEngReady: number;
+    topCategory: string;
+    progressActual: number;
+    progressPlanned: number;
+  }>;
   latestItems?: Array<{
     itemNo: string;
     description: string;
