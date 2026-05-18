@@ -25,7 +25,7 @@ import {
   computeStageProgress, summariseByItem, computeAbdBucketDistribution,
   computeOmmSub1StatusBuckets, computeOmmSub2StatusBuckets, OMM_VISIBLE_STAGE_KEYS,
   computeDelaySeverityBuckets, isDueThisWeek, criticalDelayItemIds,
-  computeDataQualityIssues, DELAY_BUCKETS,
+  DELAY_BUCKETS,
   type DocModule, type DocsStageRecord, type AbdBucketDistribution,
   type OmmSub1StatusBuckets, type OmmSub2StatusBuckets, type OmmStatusBucketKey,
   type DelayBucketKey,
@@ -103,10 +103,6 @@ export default function DocsExecutiveDashboardPage() {
     };
   }, [records, asOf]);
 
-  const dataQuality = useMemo(
-    () => computeDataQualityIssues(records, { abd: abdRows, omm: ommRows, warranty: warrantyRows, spare_part: sparePartRows }),
-    [records, abdRows, ommRows, warrantyRows, sparePartRows],
-  );
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -141,8 +137,6 @@ export default function DocsExecutiveDashboardPage() {
         <ModuleSection key={m} module={m} records={records} abdRows={abdRows} ommRows={ommRows} asOf={asOf} onNavigate={goRaw} />
       ))}
 
-      {/* Data Quality Panel */}
-      <DataQualityPanel issues={dataQuality} onNavigate={goRaw} />
     </div>
   );
 }
@@ -915,59 +909,3 @@ function DelaySeverityRow({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────
-function DataQualityPanel({
-  issues,
-  onNavigate,
-}: {
-  issues: { key: string; module: DocModule; label: string; count: number; ids: string[] }[];
-  onNavigate: (m: DocModule, params?: Record<string, string>) => void;
-}) {
-  if (!issues.length) {
-    return (
-      <Card>
-        <CardContent className="flex items-center gap-3 p-5">
-          <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-          <div>
-            <h3 className="text-sm font-semibold">Data Quality</h3>
-            <p className="text-xs text-muted-foreground">No issues detected.</p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-  return (
-    <Card>
-      <div className="flex items-center gap-3 border-b px-5 py-4">
-        <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-        <div className="flex-1">
-          <h2 className="text-base font-semibold leading-tight">Data Quality</h2>
-          <p className="text-xs text-muted-foreground">
-            {issues.length.toLocaleString()} issue group(s) detected — click View to inspect.
-          </p>
-        </div>
-      </div>
-      <CardContent className="divide-y p-0">
-        {issues.map((it) => (
-          <div key={it.key} className="flex items-center gap-3 px-5 py-3">
-            <span className={cn('rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide', MODULE_ACCENT[it.module].chip)}>
-              {MODULE_LABEL[it.module]}
-            </span>
-            <span className="flex-1 text-sm text-foreground">{it.label}</span>
-            <span className="text-sm font-semibold tabular-nums text-amber-700 dark:text-amber-300">
-              {it.count.toLocaleString()}
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs"
-              onClick={() => onNavigate(it.module, { dq: it.key.split(':')[1] ?? it.key })}
-            >
-              View <ArrowRight className="ml-1 h-3 w-3" />
-            </Button>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
