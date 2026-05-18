@@ -489,7 +489,7 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   s.addText(`Today  ${fmtLong(tncKPI.dataDate)}`, {
     x: tlX2, y: divY, w: 1.6, h: 0.2, fontFace: FONT_MONO, fontSize: 8, color: C.textMuted,
   });
-  s.addText(`MC Date  ${fmtLong(tncKPI.dDay)}`, {
+  s.addText(`SC Date  ${fmtLong(tncKPI.dDay)}`, {
     x: Math.max(tlX2 + 1.7, mcX2 - 1.5), y: divY, w: 1.45, h: 0.2, fontFace: FONT_MONO, fontSize: 8, color: C.cyan, align: 'right',
   });
   s.addShape(pres.ShapeType.rect, { x: tlX2, y: axisY2, w: tlW2, h: 0.015, fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 } });
