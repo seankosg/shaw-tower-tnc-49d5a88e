@@ -308,7 +308,6 @@ export default function PunchDashboardPage() {
       </div>
 
       {false && (
-      {/* ── Schedule Control ────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Schedule Control</CardTitle></CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
