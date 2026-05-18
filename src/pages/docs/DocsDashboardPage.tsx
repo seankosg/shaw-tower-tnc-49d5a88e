@@ -50,6 +50,11 @@ export default function DocsDashboardPage() {
     onRefresh: () => fetchData({ silent: true }),
   });
 
+  useHeaderSlot(
+    <AutoRefreshControl state={autoRefresh} />,
+    [autoRefresh.enabled, autoRefresh.intervalMs, autoRefresh.lastUpdatedAt, autoRefresh.isRefreshing],
+  );
+
   const modules = useMemo(
     () => (data ? [data.abd, data.omm, data.spare_part, data.warranty] : []),
     [data],
@@ -66,7 +71,6 @@ export default function DocsDashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <AutoRefreshControl state={autoRefresh} />
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className={cn('justify-start gap-2 font-normal')}>
