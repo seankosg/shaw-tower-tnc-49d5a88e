@@ -410,6 +410,7 @@ export default function PunchDashboardPage() {
       </Card>
 
       {/* ── Progress Matrix ────────────────────────────────────────────── */}
+      {false && (
       <Card>
         <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 gap-3 flex-wrap">
           <CardTitle className="text-base">Progress Matrix</CardTitle>
@@ -480,6 +481,7 @@ export default function PunchDashboardPage() {
           </Table>
         </CardContent>
       </Card>
+      )}
 
       {/* ── Recovery Priority (hidden) ───────────────────────────────── */}
       {false && (
