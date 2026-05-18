@@ -520,7 +520,7 @@ export default function PunchDashboardPage() {
                     <TableCell className="text-xs">{(r as any).main_trade || '—'}</TableCell>
                     <TableCell className="text-xs">{r.subcontractor_name || '—'}</TableCell>
                     <TableCell className="text-xs">{r.hdec_pic_name || '—'}</TableCell>
-                    <TableCell className="text-xs tabular-nums">{formatDashDate(r.planned_completion_date)}</TableCell>
+                    <TableCell className="text-xs tabular-nums">{formatDdMmmSmart(r.planned_completion_date)}</TableCell>
                     <TableCell className="text-right tabular-nums">{plan.toFixed(0)}</TableCell>
                     <TableCell className="text-right tabular-nums">{act.toFixed(0)}</TableCell>
                     <TableCell className={cn('text-right tabular-nums', variance < 0 ? 'text-red-600' : 'text-emerald-600')}>{signed(variance)}</TableCell>
@@ -650,8 +650,8 @@ function CriticalLevelRowCard({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <MetaChip icon={<Wrench className="h-3.5 w-3.5" />} label="Pre-Eng" value={`${summary.preEngReady}/${summary.total}`} className={chipWidth} />
-              <MetaChip icon={<CalendarArrowUp className="h-3.5 w-3.5" />} label="Earliest" value={formatDashDate(summary.earliestStart)} className={chipWidth} />
-              <MetaChip icon={<CalendarArrowDown className="h-3.5 w-3.5" />} label="Latest" value={formatDashDate(summary.latestFinish)} className={chipWidth} />
+              <MetaChip icon={<CalendarArrowUp className="h-3.5 w-3.5" />} label="Earliest" value={formatDdMmmSmart(summary.earliestStart)} className={chipWidth} />
+              <MetaChip icon={<CalendarArrowDown className="h-3.5 w-3.5" />} label="Latest" value={formatDdMmmSmart(summary.latestFinish)} className={chipWidth} />
             </div>
           </div>
         </div>
