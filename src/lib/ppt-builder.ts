@@ -1240,7 +1240,6 @@ export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: Repo
   heroCards.forEach((c, i) => drawCard(pres, s, 0.5 + i * (heroW + heroGap), heroY, heroW, heroH, c));
 
   void latest; void risk; void total;
-  });
 
   drawFooter(pres, s, '12');
 }
