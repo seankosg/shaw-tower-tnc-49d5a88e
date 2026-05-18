@@ -31,6 +31,17 @@ import {
 } from '@/lib/punch-dashboard-utils';
 
 const PAGE_SIZE = 1000;
+
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function formatDashDate(iso?: string | null): string {
+  if (!iso) return '—';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const [, y, mo, d] = m;
+  const mon = MONTH_ABBR[Number(mo) - 1] ?? mo;
+  const currentYear = new Date().getFullYear();
+  return Number(y) === currentYear ? `${d}-${mon}` : `${d}-${mon}-${y}`;
+}
 const HEALTH_COLORS: Record<PunchHealthStatus, string> = {
   ahead: 'bg-emerald-500',
   on_track: 'bg-blue-500',
