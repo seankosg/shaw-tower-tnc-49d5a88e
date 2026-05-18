@@ -496,7 +496,7 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   s.addShape(pres.ShapeType.rect, { x: tlX2, y: axisY2 - 0.05, w: 0.02, h: 0.08, fill: { color: C.textMuted }, line: { color: C.textMuted, width: 0 } });
 
   const rowH2 = 0.24, rowGap2 = 0.10;
-  const markerH2 = rowH2 * 3 + rowGap2 * 2 + 0.04;
+  const markerH2 = rowH2 * 2 + rowGap2 + 0.04;
   s.addShape(pres.ShapeType.rect, { x: mcX2-0.012, y: axisY2, w: 0.024, h: markerH2, fill: { color: C.cyan }, line: { color: C.cyan, width: 0 } });
   s.addShape(pres.ShapeType.rect, { x: mcX2-0.012, y: axisY2-0.05, w: 0.024, h: 0.08, fill: { color: C.cyan }, line: { color: C.cyan, width: 0 } });
 
