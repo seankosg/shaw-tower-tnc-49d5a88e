@@ -77,42 +77,50 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      // page through subtests in batches of 1000
-      let all: SubtestForDashboard[] = [];
-      let from = 0;
-      const PAGE = 1000;
-      while (true) {
-        const { data } = await supabase
-          .from('subtests')
-          .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, team, r1_status, r1_target_submission_date, r1_actual_submission_date, r2_status, r2_target_submission_date, r2_actual_submission_date, r2_target_approval_date, r2_actual_approval_date, is_critical, critical_marked_at, critical_marked_by_name' as any)
-          .eq('is_active', true)
-          .range(from, from + PAGE - 1);
-        if (!data || data.length === 0) break;
-        all = all.concat(data as unknown as SubtestForDashboard[]);
-        if (data.length < PAGE) break;
-        from += PAGE;
-      }
-      const sysRes = await supabase.from('system_master').select('id, system_code').eq('is_active', true);
-      const latestImport = await supabase
-        .from('upload_batches')
-        .select('data_date')
-        .eq('status', 'completed')
-        .not('data_date', 'is', null)
-        .order('data_date', { ascending: false })
-        .order('uploaded_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!cancelled) {
-        setSubtests(all);
-        setSystems(sysRes.data ?? []);
-        if (latestImport.data?.data_date) setDataDate(latestImport.data.data_date);
-        setLoading(false);
-      }
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
+  const fetchData = useCallback(async (opts: { silent?: boolean } = {}) => {
+    let all: SubtestForDashboard[] = [];
+    let from = 0;
+    const PAGE = 1000;
+    while (true) {
+      const { data } = await supabase
+        .from('subtests')
+        .select('id, item_no, mos_code, system_id, subcontractor_name, subsub_name, hdec_pic_name, t1_status, t2_status, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date, predecessor_status_raw, pred_status, pred_planned_date, pred_actual_date, team, r1_status, r1_target_submission_date, r1_actual_submission_date, r2_status, r2_target_submission_date, r2_actual_submission_date, r2_target_approval_date, r2_actual_approval_date, is_critical, critical_marked_at, critical_marked_by_name' as any)
+        .eq('is_active', true)
+        .range(from, from + PAGE - 1);
+      if (!data || data.length === 0) break;
+      all = all.concat(data as unknown as SubtestForDashboard[]);
+      if (data.length < PAGE) break;
+      from += PAGE;
     }
-    load();
-    return () => { cancelled = true; };
+    const sysRes = await supabase.from('system_master').select('id, system_code').eq('is_active', true);
+    const latestImport = await supabase
+      .from('upload_batches')
+      .select('data_date')
+      .eq('status', 'completed')
+      .not('data_date', 'is', null)
+      .order('data_date', { ascending: false })
+      .order('uploaded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!mountedRef.current) return;
+    setSubtests(all);
+    setSystems(sysRes.data ?? []);
+    if (latestImport.data?.data_date) setDataDate(latestImport.data.data_date);
+    if (!opts.silent) setLoading(false);
   }, []);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
+
+  const autoRefresh = useAutoRefresh({
+    storageKey: 'tnc',
+    onRefresh: () => fetchData({ silent: true }),
+  });
+
 
   const today = todayIso();
   const dataDateLabel = formatDdMmm(dataDate);
