@@ -1,175 +1,97 @@
-
-# 일반 사용자 PPT 커스터마이즈 통합 구현
-
 ## 목표
-Code Editor (Lovable 채팅 의존) 없이도 일반 사용자(`user` 이상)가 PPT 보고서의 **색/폰트/문구/레이아웃/표시 옵션**을 직접 편집할 수 있게 한다.
+
+대시보드 화면 상단에 **자동 새로고침 토글**을 추가하여, 사용자가 켜두면 설정한 주기마다 **데이터만 다시 불러와서**(soft refresh) 최신 현황을 자동으로 반영합니다. 페이지 전체 리로드가 아니므로 스크롤/필터/입력 상태가 보존됩니다.
 
 ---
 
-## A. 권한 개방 — Report 메뉴를 일반 사용자에게 공개
+## 사전 답변
 
-### A-1. 라우트/메뉴 권한 변경
-- `/admin/report` 페이지를 `AdminReportPage` 에서 분리해 **일반 사용자 접근 가능한 새 경로 `/report`** 로 이동
-- 사이드바(`AppSidebar`)에 "Report" 메뉴 노출 — `user` 이상 모두 표시
-- `/admin/report` 는 admin 전용 항목(Code Editor 등)만 남기거나 redirect
-
-### A-2. 탭별 권한 차등
-| 탭 | 접근 | 편집 |
-|---|---|---|
-| Report Generator (PPT 다운로드) | user 이상 | user 이상 |
-| Design Tokens | user 이상 | senior_user 이상 |
-| Slide Composer | user 이상 | senior_user 이상 (본인 팀 슬라이드만 d_superuser 규칙 적용) |
-| Slide Text Overrides | user 이상 | senior_user 이상 |
-| Design Guide | user 이상 | admin |
-| Code Editor | admin | admin (그대로) |
-
-### A-3. DB RLS 정책 업데이트
-- `design_tokens` — SELECT all, UPDATE는 `senior_user` 이상
-- `slide_text_overrides` — SELECT all, INSERT/UPDATE/DELETE는 `senior_user` 이상
-- `slide_config` (Slide Composer) — 동일 정책
-- `custom_slides` — INSERT/UPDATE는 본인 row + Admin은 전체
+**Q. 대시보드만 리로드해도 실시간 raw data 값을 가져오나요?**
+네. 현재 대시보드는 페이지 진입 시 `supabase.from('subtests')` 등으로 Supabase에서 직접 데이터를 페치합니다. 별도 캐시 레이어가 없기 때문에, **동일한 로드 함수를 다시 호출**하면 그 시점의 최신 raw data 가 그대로 반영됩니다. (사용자가 Raw Data 페이지에서 수정/저장한 값도 즉시 반영됨)
 
 ---
 
-## B. 텍스트 토큰 레지스트리 확장
+## 적용 대상 화면
 
-### B-1. `src/lib/text-token-registry.ts` 항목 추가
-현재 12개 슬라이드에 ~20개 필드만 등록 → **약 50~60개로 확장**:
-
-- **공통 푸터**: `footer.company`, `footer.report_no`, `footer.page_format` (모든 슬라이드에 공유)
-- **Cover**: `title` (현재 서브타이틀만 있음), `date_label`, `project_name`
-- **Dashboard**: 4개 컬럼 헤더 (`col_tnc`, `col_defect`, `col_docs`, `col_punch`)
-- **T&C / Defect / Docs / Punch Snapshot**: subhead, footnote
-- **S-Curve**: Y축 라벨, 범례 (Plan / Actual / Forecast)
-- **Action Plan**: 좌/우 패널 기본 안내 문장, 푸터 강조 텍스트
-- **Forecast**: 마일스톤 라벨 (SC, MC, TOP 등)
-
-### B-2. 푸터 같은 "공통 토큰" 지원
-- 레지스트리에 `__common` slide key 도입
-- `resolveText` 가 slide-specific → common → default 순서로 해석
-- 모든 슬라이드 빌더가 푸터를 그릴 때 동일한 함수로 조회
-
-### B-3. `SlideTextEditor` UI 개선
-- 슬라이드 선택 위에 **"Common (all slides)"** 옵션 추가
-- 검색창 추가 (필드명/슬라이드명 부분 일치)
-- "Overridden only" 토글 — 커스텀된 것만 빠르게 확인
+1. `src/pages/DashboardPage.tsx` — T&C Dashboard
+2. `src/pages/DefectDashboardPage.tsx` — Defect Dashboard
+3. `src/pages/docs/DocsDashboardPage.tsx` — Docs Dashboard
+4. `src/pages/PunchDashboardPage.tsx` — Punch Dashboard (존재 시 동일 패턴)
 
 ---
 
-## C. Slide Composer 카드별 "Edit" 버튼 + 표시 옵션
+## UI
 
-### C-1. 새 테이블 `slide_display_options`
+각 Dashboard 페이지 **상단 헤더 영역 우측**에 컴팩트한 자동 새로고침 컨트롤 1세트를 배치합니다:
+
 ```text
-id              uuid pk
-slide_key       text     -- 'tnc_snapshot' 등 (custom slide 는 custom_slides.id)
-options         jsonb    -- 슬라이드별 옵션 객체
-updated_by      uuid
-updated_at      timestamptz
-unique(slide_key)
+[ Auto-refresh ⏻ ]  [ 30s ▾ ]   Last updated: 14:23:05
 ```
-RLS: SELECT all, INSERT/UPDATE는 senior_user 이상.
 
-### C-2. 슬라이드별 옵션 스키마 (Zod)
-표준 12개 슬라이드 각각에 대해 어떤 옵션을 노출할지 정의:
-
-- **공통 옵션** (모든 슬라이드):
-  - `visible`: boolean (이미 Slide Composer 에 있음 — 통합)
-  - `show_footer`: boolean
-  - `headline_font_size_offset`: number (-4 ~ +4)
-
-- **Snapshot 류**:
-  - `show_stage_progress`: boolean
-  - `show_kpi_strip`: boolean
-  - `kpi_selection`: string[] (KPI 키 배열, 최대 4개)
-  - `kpi_order`: string[]
-
-- **S-Curve 류**:
-  - `chart_type`: 'line' | 'area' | 'bar'
-  - `show_forecast`: boolean
-  - `y_axis_zero_based`: boolean
-  - `date_range`: 'all' | 'last_30d' | 'last_90d' | 'custom'
-
-- **Forecast**:
-  - `milestones`: string[] (표시할 마일스톤)
-  - `bar_orientation`: 'horizontal' | 'vertical'
-
-- **Action Plan**:
-  - `panels`: ('left' | 'right')[]
-  - `max_items_per_panel`: number (3~10)
-
-- **Critical Watchlist 포함 슬라이드**:
-  - `watchlist_top_n`: number (5~20)
-  - `watchlist_sort`: 'delay_days' | 'dday' | 'priority'
-  - `filter_team`: string | null
-  - `filter_system`: string | null
-
-### C-3. UI — Slide Composer 카드에 "Edit" 아이콘 추가
-- 각 슬라이드 카드 우측에 ⚙️ 버튼
-- 클릭 시 `<Dialog>` 열림 — 슬라이드 타입별 폼 (react-hook-form + zod)
-- 폼 필드는 C-2 스키마 기반으로 자동 렌더 (체크박스/select/슬라이더/multi-select)
-- 우측에 **실시간 프리뷰 영역** (선택 사항, 초기엔 미니맵 없이 "Save & Regenerate" 만)
-- "Reset to default" 버튼
-
-### C-4. PPT 빌더에서 옵션 적용
-- `src/lib/ppt-builder.ts` 각 슬라이드 함수 시작부에서 `fetchSlideDisplayOptions(slideKey)` 호출
-- 캐시는 `design-tokens` 와 동일한 5분 TTL
-- 각 옵션을 분기 처리 (e.g. `if (!opts.show_stage_progress) skip; }`)
-- 기존 동작은 모든 옵션 기본값일 때 그대로 유지 (하위 호환)
-
-### C-5. `src/lib/slide-display-options.ts` 신규 파일
-- `fetchSlideDisplayOptions()`, `saveSlideDisplayOptions()`, `resetSlideDisplayOptions()`
-- Zod 스키마 export
-- 캐시 invalidate 함수
+- **토글 스위치**: Auto-refresh on/off (Switch 컴포넌트)
+- **주기 드롭다운**: 15s / 30s / 1m / 2m / 5m / 10m (Select 컴포넌트)
+- **Last updated**: 마지막 페치 성공 시각 (HH:mm:ss)
+- 토글이 off 일 때는 주기 드롭다운 비활성화
+- 페치가 진행 중일 땐 작은 스피너 아이콘 표시
 
 ---
 
-## 작업 순서 (한 번에 진행)
+## 동작
 
-1. **DB 마이그레이션** — `slide_display_options` 테이블 + 5개 테이블 RLS 정책 업데이트
-2. **레지스트리/라이브러리**
-   - `text-token-registry.ts` 확장 + `__common` 지원
-   - `slide-display-options.ts` 신규
-   - `resolveText` 공통 토큰 fallback 로직
-3. **PPT 빌더** — 12개 슬라이드 빌더에 옵션 분기 추가, 푸터에 공통 토큰 적용
-4. **UI**
-   - `AppSidebar` 에 Report 메뉴 추가, 권한 가드 완화
-   - 새 페이지 `src/pages/ReportPage.tsx` (탭 구조는 `AdminReportPage` 복사 + Code Editor 제외)
-   - `SlideTextEditor` — 공통 탭/검색/오버라이드 필터
-   - `SlideComposer` 카드에 ⚙️ Edit 버튼 + `SlideDisplayOptionsDialog` 신규
-   - 역할 기반 read-only 모드 (편집 권한 없는 사용자는 보기만)
-5. **검증** — 각 슬라이드 기본 출력이 변하지 않는지, 옵션 변경 시 즉시 반영되는지
+1. 토글 on → `setInterval` 로 주기마다 기존 데이터 로드 함수(`load()`) 호출 → state 만 갱신, 페이지 리로드 없음
+2. 토글 off → interval 해제
+3. 페이지를 벗어나면 cleanup
+4. **탭이 백그라운드**일 때는 페치 일시중단 (`document.visibilityState`), 다시 보이면 즉시 1회 페치 후 주기 재개
+5. 페치 중 사용자가 필터/스크롤을 바꿔도 영향 없음 (state 갱신만, 스크롤 복원은 기존 `useMainScrollRestoration` 에 의존하지 않고 그대로 두면 됨 — 초기 로드 플래그만 사용하므로)
 
 ---
 
-## 변경/추가 파일 요약
+## 설정 저장 (사용자별)
+
+브라우저 단위로 사용자마다 다르게:
+
+- `localStorage` 키:
+  - `dashboard.autoRefresh.enabled` ("1" | "0")
+  - `dashboard.autoRefresh.intervalMs` (number)
+- 각 대시보드(T&C / Defect / Docs / Punch)별로 별도 키 사용:
+  - `dashboard.autoRefresh.tnc.enabled` 등 prefix 분리
+- 기본값: **off, 30초**
+
+서버 저장(`profiles` 테이블) 은 하지 않습니다. 디바이스마다 다른 환경(공용 PC, 개인 PC)에서 동작이 달라야 하므로 localStorage 가 더 자연스럽습니다. 추후 필요하면 확장 가능.
+
+---
+
+## 신규/수정 파일
 
 **신규**
-- `supabase/migrations/<timestamp>_*.sql` (테이블 + RLS)
-- `src/pages/ReportPage.tsx`
-- `src/lib/slide-display-options.ts`
-- `src/components/admin/SlideDisplayOptionsDialog.tsx`
+- `src/hooks/useAutoRefresh.ts`
+  - 인자: `{ storageKey: string; defaultIntervalMs?: number; onRefresh: () => Promise<void> | void; }`
+  - 반환: `{ enabled, setEnabled, intervalMs, setIntervalMs, lastUpdatedAt, isRefreshing, refreshNow }`
+  - 내부: localStorage I/O, setInterval 관리, visibility 처리
+- `src/components/dashboard/AutoRefreshControl.tsx`
+  - 위 훅의 반환값을 prop 으로 받아 Switch + Select + "Last updated" 표기
 
 **수정**
-- `src/App.tsx` (라우트 추가)
-- `src/components/layout/AppSidebar.tsx` (메뉴 항목)
-- `src/pages/admin/AdminReportPage.tsx` (탭 정리)
-- `src/components/admin/SlideComposer.tsx` (Edit 버튼)
-- `src/components/admin/SlideTextEditor.tsx` (공통/검색)
-- `src/components/admin/DesignTokensEditor.tsx` (권한 조건 완화)
-- `src/lib/text-token-registry.ts` (토큰 ~40개 추가)
-- `src/lib/ppt-builder.ts` (12개 슬라이드 함수에 옵션 분기)
-- `src/lib/slide-text-overrides.ts` (공통 토큰 처리)
+- `src/pages/DashboardPage.tsx` — `load()` 를 `useCallback` 으로 빼고 `useAutoRefresh` 연결, 헤더에 `<AutoRefreshControl />` 배치
+- `src/pages/DefectDashboardPage.tsx` — 동일
+- `src/pages/docs/DocsDashboardPage.tsx` — 동일 (`loadDashboardData` 호출부)
+- `src/pages/PunchDashboardPage.tsx` — 동일 (해당 페이지가 있을 경우)
 
 ---
 
-## 비기능 요건
-- 모든 UI 라벨/버튼은 영어 (메모리 규칙)
-- 기존 PPT 출력과 100% 하위 호환 (옵션 없으면 현재와 동일)
-- D.Super User 는 본인 팀 데이터만 편집 가능 (memory의 d_superuser 규칙 유지)
+## 기술 세부
 
-## 범위 제외
-- Code Editor 자체는 손대지 않음 (admin 전용으로 그대로)
-- 자유 콘텐츠/이미지 슬라이드 (D 범위) — New Slide Generator로 이미 대체 가능
-- 실시간 PPT 프리뷰 — 후속 작업으로 분리
+- 자동 새로고침 시에는 `setLoading(true)` 를 **호출하지 않음**. 대신 `isRefreshing` 만 표시 → 화면 깜빡임 방지.
+- 첫 진입은 기존 로직 그대로 (`loading` 스피너).
+- `onRefresh` 가 던지는 에러는 toast 로 1회만 표시하고 다음 주기 계속 시도.
+- Import/Defect Import 진행 중일 때도 자동 새로고침은 그대로 동작 (서로 독립적).
+- 코드 변경은 프론트엔드/표시 레이어에 한정 — 데이터 페치 로직, 비즈니스 규칙, RLS, DB 스키마 변경 없음.
 
-승인 시 위 순서대로 한 번에 구현하겠습니다.
+---
+
+## 비범위 (이번에는 안 함)
+
+- 페이지 전체 hard reload, 비활성 상태 감지 후 리로드
+- Realtime 구독(Supabase channels) — 후속 단계에서 검토 가능
+- 다른 페이지(Progress, Raw Data, Schedule 등)로 확장 — 이번에는 Dashboard 만
+- 서버 저장형 사용자 환경설정
