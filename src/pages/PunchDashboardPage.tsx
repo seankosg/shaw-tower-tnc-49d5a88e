@@ -247,6 +247,14 @@ export default function PunchDashboardPage() {
       {/* ── Tier 2: Risk & Delay (우려사항) ─────────────────────────────── */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <RiskKpiCard
+          label="Pre-Eng Blocked"
+          count={stats.blocked}
+          percent={pctNum(stats.blocked, stats.total)}
+          sub="Awaiting pre-engineering"
+          tone="warning"
+          onClick={() => go('pre_eng=blocked')}
+        />
+        <RiskKpiCard
           label="Overdue"
           count={stats.overdue}
           percent={pctNum(stats.overdue, stats.total)}
@@ -269,14 +277,6 @@ export default function PunchDashboardPage() {
           sub="Health = behind"
           tone="warning"
           onClick={() => go('health=behind')}
-        />
-        <RiskKpiCard
-          label="Pre-Eng Blocked"
-          count={stats.blocked}
-          percent={pctNum(stats.blocked, stats.total)}
-          sub="Awaiting pre-engineering"
-          tone="warning"
-          onClick={() => go('pre_eng=blocked')}
         />
       </div>
 
