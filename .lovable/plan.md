@@ -1,27 +1,75 @@
-# T&C 대시보드 guest 접근 권한 수정
+## Critical Level Summary 컴포넌트 (OMM Stage Progress 스타일)
 
-## 배경 점검 결과
-- **subtests**: SELECT 정책이 `can_view_subtest(...)` 호출이며, 함수 내부에 `guest` 분기가 없어 false 반환 → guest는 대시보드 데이터 0건
-- **defect_items**: SELECT 정책이 `USING (true)`로 모든 인증 사용자 허용 → guest 정상 조회 가능 (수정 불필요)
+Punch Dashboard에 Critical Level별로 그룹화된 카드 묶음을 추가합니다. 각 그룹은 OMM Executive Dashboard의 "Stage Progress" 1st Status 카드처럼 **좌측 accent bar + chip 그리드** 패턴을 그대로 차용해 4 gate의 Approved / Pending 현황을 보여줍니다.
 
-따라서 이번 작업은 `subtests`의 `can_view_subtest` 함수만 수정합니다.
+### 데이터 규칙
 
-## 수정 내용
-### `can_view_subtest` 함수에 guest 분기 추가
-- 기존 흐름에서 `super_guest` 분기 바로 아래에 `guest` 분기를 추가하여 `RETURN true` 처리
-- T&C 대시보드 집계 데이터(KPI 카드, 차트)가 guest에게도 표시되도록 허용
-- Raw Data 상세 페이지는 라우팅 레벨(`role-permissions.ts`)에서 여전히 super_guest+로 제한되므로 영향 없음
+- **Approved 처리 (Pre-Engineering 완료 간주)**
+  - Approval 계열(`material_approval_status`, `drawing_approval_status`, `mos_approval_status`): `approved` 또는 `not_required`
+  - Procurement(`material_procurement_status`): `secured` 또는 `not_required`
+- **Pending 처리**
+  - Approval 계열: `pending`
+  - Procurement: `pending` 또는 `partially_secured`
+- 각 gate에서 Approved + Pending = 그룹 Total
+- Critical Level 정렬: High → mid-High → Medium → mid-Low → Low → Unspecified
 
-### 변경 후 함수 흐름
+### UI 구조 (OMM 스타일 차용)
+
+`PunchDashboardPage.tsx`의 Data Quality 카드 위에 단일 카드 **"Critical Level Summary"** 추가. 카드 헤더 아래에 Critical Level 그룹 카드를 `grid sm:grid-cols-2 xl:grid-cols-3 gap-3`로 배치합니다.
+
+각 그룹 카드는 OMM `OmmSubStatusCard`와 동일한 외관:
+
 ```text
-admin/superuser    → true
-super_guest        → true
-guest              → true   ← 추가
-hdec/pm_pd/admin   → true
-subsub/subcontractor → 자신 관련 행만
-그 외              → false
+┌─ ▌(accent bar) ────────────────────────────────┐
+│ High                              12 items     │
+│ Earliest 2026-04-01 · Latest 2026-06-30        │
+│ ┌────┬────┬────┬────┐                          │
+│ │MTL │PROC│DWG │MOS │   (라벨, 상단)          │
+│ │10/12│ 8/12│12/12│11/12│ (Approved/Total)    │
+│ └────┴────┴────┴────┘                          │
+└────────────────────────────────────────────────┘
 ```
 
-## 검증
-- guest 계정으로 로그인하여 T&C Dashboard 진입 시 Total Items / Completion Rate / 차트가 정상 표시되는지 확인
-- Defect Dashboard는 RLS상 이미 열려 있으므로 별도 수정 없이 정상 표시 확인
+- accent bar 색상은 Critical Level별 매핑 (High=red, mid-High=orange, Medium=amber, mid-Low=sky, Low=emerald, Unspecified=muted)
+- 4 gate chip 톤은 OMM과 동일한 의미 색상 사용: gate가 **all approved** → emerald 톤, **pending 존재** → amber 톤, **pending 다수(>50%)** → rose 톤
+- chip 클릭 시 해당 critical level + gate pending 필터로 RawData 이동 (`?criticalLevel=High&gate=material_approval&status=pending`)
+- 카드 본문 클릭 시 해당 critical level만 필터로 RawData 이동 (`?criticalLevel=High`)
+- 그룹에 항목이 0개이면 카드 자체를 렌더하지 않음
+
+### 기술 구현
+
+**`src/lib/punch-dashboard-utils.ts`** 추가:
+
+```ts
+export const CRITICAL_LEVEL_ORDER = ['High','mid-High','Medium','mid-Low','Low','Unspecified'] as const;
+export type CriticalLevel = typeof CRITICAL_LEVEL_ORDER[number];
+
+export type GateKey = 'material_approval' | 'procurement' | 'drawing_approval' | 'mos_approval';
+export interface GateCount { approved: number; pending: number; total: number; }
+
+export interface CriticalLevelSummary {
+  level: CriticalLevel;
+  total: number;
+  earliestStart: string | null;
+  latestFinish: string | null;
+  gates: Record<GateKey, GateCount>;
+}
+
+export function summarizeByCriticalLevel(items: PunchItem[]): CriticalLevelSummary[];
+```
+
+- 헬퍼: `isApprovalApproved(v) = v==='approved'||v==='not_required'`, `isProcurementApproved(v) = v==='secured'||v==='not_required'`
+- null/빈 `critical_level`은 `Unspecified` 버킷
+
+**`src/pages/PunchDashboardPage.tsx`**:
+- `summarizeByCriticalLevel(items)` useMemo
+- 새 `CriticalLevelGroupCard` 서브 컴포넌트 (OMM `OmmSubStatusCard`의 마크업/클래스 패턴을 복제)
+- 4 gate 라벨: `MTL`, `PROC`, `DWG`, `MOS` (전체 라벨은 `title` tooltip)
+- 기존 `go()` 헬퍼로 RawData 라우팅
+
+### 변경 파일
+
+- `src/lib/punch-dashboard-utils.ts`
+- `src/pages/PunchDashboardPage.tsx`
+
+DB/RLS/백엔드 변경 없음.
