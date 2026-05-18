@@ -621,12 +621,14 @@ function CriticalLevelRowCard({
       <span className={cn('absolute inset-y-0 left-0 w-1.5', accent.bar)} />
       <div className="pl-3 flex flex-col gap-3">
         <div className="flex items-start gap-4">
-          <span className="text-2xl font-bold tracking-tight text-foreground w-28 shrink-0">
-            {summary.level}
-          </span>
+          <div className="flex flex-col gap-2 w-28 shrink-0">
+            <span className="text-2xl font-bold tracking-tight text-foreground leading-tight">
+              {summary.level}
+            </span>
+            <MetaChip icon={<ListChecks className="h-3.5 w-3.5" />} label="Items" value={summary.total.toLocaleString()} />
+          </div>
           <div className="flex flex-col gap-2 flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <MetaChip icon={<ListChecks className="h-3.5 w-3.5" />} label="Items" value={summary.total.toLocaleString()} className={chipWidth} />
               <MetaChip icon={<Package className="h-3.5 w-3.5" />} label="Material" value={catCount('Material').toLocaleString()} className={chipWidth} />
               <MetaChip icon={<Hammer className="h-3.5 w-3.5" />} label="Physical Work" value={catCount('Physical Work').toLocaleString()} className={chipWidth} />
               <MetaChip icon={<PencilRuler className="h-3.5 w-3.5" />} label="Design" value={catCount('Design').toLocaleString()} className={chipWidth} />
