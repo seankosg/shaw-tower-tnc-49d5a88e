@@ -18,6 +18,13 @@ import type { DefectItem } from '@/lib/defect-utils';
 import type { DefectScheduleStage } from '@/lib/defect-schedule-utils';
 import { TNC_RAW_DATA_GUIDE_MD } from '@/lib/tnc-raw-data-guide';
 import { isStageDone, getStagePlannedDate, type StageMetricRow } from '@/lib/stage-metrics';
+import {
+  weightedProgress as punchWeightedProgress,
+  isCompletionOverdue as punchIsCompletionOverdue,
+  isCriticalDelay as punchIsCriticalDelay,
+  isBlockedByPreEng as punchIsBlockedByPreEng,
+} from '@/lib/punch-dashboard-utils';
+import type { PunchItem } from '@/lib/punch-excel-utils';
 
 /** Schema version of the JSON payload emitted by buildReport(). Bump on breaking changes. */
 export const REPORT_SCHEMA_VERSION = 2;
