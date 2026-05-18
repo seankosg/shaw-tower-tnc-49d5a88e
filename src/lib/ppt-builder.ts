@@ -129,6 +129,8 @@ interface PunchKPI {
   monthlyBeyondSc:         NonNullable<NonNullable<PunchReportData['completionDateBreakdown']>['monthlyBeyondSc']>;
   latestItems:             NonNullable<PunchReportData['latestItems']>;
   actionPlanTriggers:      NonNullable<PunchReportData['actionPlanTriggers']>;
+  progressKpi:             NonNullable<PunchReportData['progressKpi']>;
+  riskKpi:                 NonNullable<PunchReportData['riskKpi']>;
 }
 
 // ─────────────────────────────────────────
