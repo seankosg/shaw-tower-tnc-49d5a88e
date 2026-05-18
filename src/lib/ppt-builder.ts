@@ -444,15 +444,14 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   cardHeader(col1, row2, cardW, 'Close Out Document',
     `ABD ${docsKPI.abd.total.toLocaleString()} · OMM ${docsKPI.omm.total} · Warranty ${docsKPI.warranty.total} · Spare ${docsKPI.sparePart.total}`,
     docTriggers, C.cyan);
-  ry = row2 + 0.62;
+  ry = row2 + 0.72;
   [
-    { label: 'ABD Submitted',    pct: abdSubPct, color: C.cyanDim },
-    { label: 'ABD Approved',     pct: abdApvPct, color: C.cyan },
-    { label: 'OMM Submitted',    pct: ommSubPct, color: C.stageOfficialLight },
-    { label: 'OMM Under Review', pct: ommUrPct,  color: C.amber },
-    { label: 'Warranty Final',   pct: warFinal,  color: warFinal < 50 ? C.amber : C.green },
-    { label: 'Spare Delivery',   pct: spDel,     color: spDel < 1 ? C.magentaBright : C.green },
-  ].forEach(r => { progressRow(col1, ry, cardW, r.label, r.pct, r.color, null); ry += 0.36; });
+    { label: 'ABD Submitted',        pct: abdSubPct, color: C.cyan },
+    { label: 'OMM Draft Submitted',  pct: ommSubPct, color: C.stageOfficialLight },
+    { label: 'Warranty Final',       pct: warFinal,  color: warFinal < 50 ? C.amber : C.green },
+    { label: 'Spare Delivery',       pct: spDel,     color: spDel < 1 ? C.magentaBright : C.green },
+  ].forEach(r => { progressRow(col1, ry, cardW, r.label, r.pct, r.color, null); ry += 0.45; });
+  void abdApvPct; void ommUrPct;
 
   // Punch card
   const sb   = punchKPI.statusBreakdown;
