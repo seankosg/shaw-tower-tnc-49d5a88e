@@ -1192,7 +1192,7 @@ export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: Repo
   });
 
   // ── Hero row: 3 cards (slide 3 pattern) ──
-  const heroY = 1.6, heroH = 2.2, heroGap = 0.13;
+  const heroY = 1.55, heroH = 1.85, heroGap = 0.13;
   const heroW = (12.3 - 2 * heroGap) / 3;
 
   const completionAlert = prog.completionPct < 5 || prog.weightedVariancePct < -20;
