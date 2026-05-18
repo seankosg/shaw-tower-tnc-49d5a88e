@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { formatDdMmmSmart } from '@/lib/format';
 import type { PunchItem } from '@/lib/punch-excel-utils';
 import { PUNCH_HEALTH_LABEL, PUNCH_GATE_LABEL, type PunchHealthStatus } from '@/lib/punch-field-registry';
 import {
@@ -32,16 +33,6 @@ import {
 
 const PAGE_SIZE = 1000;
 
-const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function formatDashDate(iso?: string | null): string {
-  if (!iso) return '—';
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!m) return iso;
-  const [, y, mo, d] = m;
-  const mon = MONTH_ABBR[Number(mo) - 1] ?? mo;
-  const currentYear = new Date().getFullYear();
-  return Number(y) === currentYear ? `${d}-${mon}` : `${d}-${mon}-${y}`;
-}
 const HEALTH_COLORS: Record<PunchHealthStatus, string> = {
   ahead: 'bg-emerald-500',
   on_track: 'bg-blue-500',
@@ -529,7 +520,7 @@ export default function PunchDashboardPage() {
                     <TableCell className="text-xs">{(r as any).main_trade || '—'}</TableCell>
                     <TableCell className="text-xs">{r.subcontractor_name || '—'}</TableCell>
                     <TableCell className="text-xs">{r.hdec_pic_name || '—'}</TableCell>
-                    <TableCell className="text-xs tabular-nums">{formatDashDate(r.planned_completion_date)}</TableCell>
+                    <TableCell className="text-xs tabular-nums">{formatDdMmmSmart(r.planned_completion_date)}</TableCell>
                     <TableCell className="text-right tabular-nums">{plan.toFixed(0)}</TableCell>
                     <TableCell className="text-right tabular-nums">{act.toFixed(0)}</TableCell>
                     <TableCell className={cn('text-right tabular-nums', variance < 0 ? 'text-red-600' : 'text-emerald-600')}>{signed(variance)}</TableCell>
@@ -659,8 +650,8 @@ function CriticalLevelRowCard({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <MetaChip icon={<Wrench className="h-3.5 w-3.5" />} label="Pre-Eng" value={`${summary.preEngReady}/${summary.total}`} className={chipWidth} />
-              <MetaChip icon={<CalendarArrowUp className="h-3.5 w-3.5" />} label="Earliest" value={formatDashDate(summary.earliestStart)} className={chipWidth} />
-              <MetaChip icon={<CalendarArrowDown className="h-3.5 w-3.5" />} label="Latest" value={formatDashDate(summary.latestFinish)} className={chipWidth} />
+              <MetaChip icon={<CalendarArrowUp className="h-3.5 w-3.5" />} label="Earliest" value={formatDdMmmSmart(summary.earliestStart)} className={chipWidth} />
+              <MetaChip icon={<CalendarArrowDown className="h-3.5 w-3.5" />} label="Latest" value={formatDdMmmSmart(summary.latestFinish)} className={chipWidth} />
             </div>
           </div>
         </div>

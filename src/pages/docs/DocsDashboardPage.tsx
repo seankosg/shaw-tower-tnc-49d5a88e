@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
-import { format } from 'date-fns';
+import { formatDdMmmSmart } from '@/lib/format';
 import { CalendarIcon, FileText, BookOpen, Boxes, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -75,7 +75,7 @@ export default function DocsDashboardPage() {
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className={cn('justify-start gap-2 font-normal')}>
                 <CalendarIcon className="h-4 w-4" />
-                Data Date: {format(asOf, 'yyyy-MM-dd')}
+                Data Date: {formatDdMmmSmart(asOf.toISOString().slice(0, 10))}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end">

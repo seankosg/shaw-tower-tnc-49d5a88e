@@ -19,6 +19,31 @@ export const formatDdMmm = (v: string | null | undefined): string => {
   return `${String(d.getDate()).padStart(2, '0')}-${MONTH_ABBR[d.getMonth()]}`;
 };
 
+/**
+ * Smart formatter for dashboards.
+ * Current calendar year → `dd-MMM` (e.g. "15-Jan").
+ * Other years → `dd-MMM-yyyy` (e.g. "15-Jan-2027").
+ * Returns "—" for null/empty, original string if not parsable.
+ */
+export const formatDdMmmSmart = (v: string | null | undefined): string => {
+  if (!v) return '—';
+  const currentYear = new Date().getFullYear();
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
+  if (isoMatch) {
+    const year = isoMatch[1];
+    const day = isoMatch[3];
+    const month = MONTH_ABBR[parseInt(isoMatch[2], 10) - 1];
+    if (!month) return v;
+    return parseInt(year, 10) === currentYear ? `${day}-${month}` : `${day}-${month}-${year}`;
+  }
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return v;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = MONTH_ABBR[d.getMonth()];
+  const year = d.getFullYear();
+  return year === currentYear ? `${day}-${month}` : `${day}-${month}-${year}`;
+};
+
 export const formatDdMmmYyyy = (v: string | null | undefined): string => {
   if (!v) return '—';
   const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);

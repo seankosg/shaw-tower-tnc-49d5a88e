@@ -1,89 +1,66 @@
+# Dashboard 날짜 포맷 통일 계획
 
-# Punch Dashboard 최상단 재설계 — 진도율 + 우려사항 중심
+## 목표
 
-## 목적
+모든 Dashboard의 날짜 표시를 한 가지 규칙으로 통일:
+- **올해 날짜** → `dd-MMM` (예: `15-Jan`)
+- **올해가 아닌 날짜** → `dd-MMM-yyyy` (예: `15-Jan-2027`)
 
-현재 14개의 작은 숫자 KPI 카드가 2줄로 나열되어 있어 "지금 얼마나 진행됐고 어디가 걱정인가"를 한눈에 읽기 어렵다. 숫자만 잔뜩이고 백분율은 묻혀 있다. TnC 대시보드(`DashboardPage.tsx`)의 Tier 구조를 참고해 **Tier 1: 진도율(%) 중심**, **Tier 2: 지연·우려(건수) 중심**으로 줄이고, 장식용 아이콘은 모두 제거한다.
+현재 Punch Dashboard에만 이 "smart" 규칙이 로컬 함수로 들어가 있고, 나머지 Dashboard들은 `formatDdMmm`(연도 없음) 또는 `date-fns`의 `yyyy-MM-dd`를 섞어 쓰고 있어 일관성이 없습니다.
 
-## 변경 범위
+## 현재 상태 (점검 결과)
 
-- 파일: `src/pages/PunchDashboardPage.tsx`만 수정
-- 데이터/계산 로직(`stats`, `weightedProgress` 등) 변경 없음 — 카드 구성과 시각화만 재배치
-- Summary of Work, Pre-Engineering Gates(Detail), Lookahead, Progress Matrix, Recovery 등 하단 섹션은 그대로 유지
+| 파일 | 사용 함수 | 문제 |
+|---|---|---|
+| `src/pages/PunchDashboardPage.tsx` | 로컬 `formatDashDate` (smart) | 로컬 함수 — 공용화 필요 |
+| `src/pages/DashboardPage.tsx` (TnC) | `formatDdMmm` | 연도 없음 — 다른 해 일정 혼동 |
+| `src/pages/DefectDashboardPage.tsx` | `formatDdMmm` | 연도 없음 — 동일 |
+| `src/pages/docs/DocsDashboardPage.tsx` | `date-fns format('yyyy-MM-dd')` | 포맷 다름 |
+| `src/pages/docs/DocsExecutiveDashboardPage.tsx` | `date-fns format('yyyy-MM-dd')` | 포맷 다름 |
 
-## Tier 1 — Progress (진도율, 4 카드)
+## 변경 사항
 
-큰 카드 4개. 각 카드는 **큰 백분율 + 보조 분수/숫자 + 얇은 progress bar** 조합. 아이콘 없음.
+### 1. 공용 util 추가 — `src/lib/format.ts`
 
-```text
-┌──────────────────┬──────────────────┬──────────────────┬──────────────────┐
-│ Completion       │ Weighted Actual  │ Weighted Planned │ Variance         │
-│  62.4%           │  58.1%           │  64.3%           │  −6.2%           │
-│  312 / 500       │  ▓▓▓▓▓▓░░░░ 58%  │  ▓▓▓▓▓▓▓░░░ 64%  │  Actual − Plan   │
-│  (progress bar)  │                  │                  │  (red/green)     │
-└──────────────────┴──────────────────┴──────────────────┴──────────────────┘
+```ts
+export const formatDdMmmSmart = (v: string | null | undefined): string => {
+  // 올해 → dd-MMM, 그 외 → dd-MMM-yyyy
+}
 ```
+기존 `formatDdMmm`, `formatDdMmmYyyy`는 그대로 유지 (S-Curve 축, 윈도우 라벨처럼 항상 dd-MMM이어야 하는 곳에 계속 사용).
 
-- **Completion %** — `stats.completed / stats.total` (큰 %, 부제 "312 / 500 items", 클릭 → `completionStatus=Completed`)
-- **Weighted Actual %** — `stats.w.actual` (progress bar, emerald)
-- **Weighted Planned %** — `stats.w.planned` (progress bar, neutral)
-- **Variance** — `stats.w.variance` (큰 +/−%, 양수 emerald / 음수 red, 부제 "Actual vs Planned")
+### 2. Dashboard 페이지 일괄 교체
 
-→ 기존 `Total / Completed / WIP / Not Started / Completion% / Weighted Planned / Weighted Actual` 7개 카드를 4개로 통합. WIP/Not Started/Total은 Tier 1.5 mini-strip(아래)으로 강등.
+**A. PunchDashboardPage.tsx**
+- 로컬 `formatDashDate` / `MONTH_ABBR` 제거 → `formatDdMmmSmart`로 대체
+- 적용 위치: 헤더 메타칩(Earliest/Latest), Top Overdue 테이블의 Planned date
 
-## Tier 1.5 — Status Mix (한 줄, 얇은 stacked bar)
+**B. DashboardPage.tsx (TnC)**
+- KPI/표/매트릭스 등 **개별 날짜 셀** 표시는 `formatDdMmm` → `formatDdMmmSmart`
+- **S-Curve 축 라벨/Today 라인/Data Date·Today 칩**은 기존 `formatDdMmm` 유지 (축 가독성)
 
-진도 카드 바로 아래 1줄짜리 가로 stacked bar로 상태 구성을 시각화:
+**C. DefectDashboardPage.tsx**
+- 동일 원칙: 개별 날짜 셀은 `formatDdMmmSmart`, Data Date/Today 칩과 윈도우 라벨(`windowStart ~ windowEnd`)은 기존 `formatDdMmm` 유지
 
-```text
-Status Mix  ▓▓▓▓▓▓▓▓ Completed 312 (62%)  ▓▓▓▓ WIP 120 (24%)  ▓▓ Not Started 68 (14%)   Total 500
-```
+**D. DocsDashboardPage.tsx / DocsExecutiveDashboardPage.tsx**
+- 헤더 `Data Date: yyyy-MM-dd` → `formatDdMmmSmart(asOf)` 사용
+- `date-fns` import 제거 (다른 용도 없으면)
 
-- 클릭 가능한 3개 세그먼트(Completed/WIP/Not Started). 색상은 emerald/blue/muted.
-- 별도 카드 4개 자리를 1줄로 압축 → 공간 절약 + 비율 직관화.
+### 3. 적용 범위 경계
 
-## Tier 2 — Risk & Delay (우려사항, 4 카드 + % 보조표시)
+- **개별 일정 날짜 셀**(Planned/Actual/Earliest/Latest 등)은 모두 `formatDdMmmSmart`로 통일.
+- **차트 X축 라벨, 누적 윈도우 라벨, S-Curve Today 표시** 등 "공간 절약·차트 가독성"이 우선인 곳은 기존 `formatDdMmm`(연도 없음) 유지 — 사용자의 "현재 방식 유지" 의도는 메타/표 영역의 smart 포맷이 핵심이므로.
+- Raw Data 페이지, Detail 페이지, Export, Import 페이지는 범위 외 (요청은 Dashboard).
 
-지연·블로커 관련 카드만 모아 별도 행으로. 각 카드는 **건수 + 전체 대비 %** 동시 표기.
+## 검증
 
-```text
-┌──────────────────┬──────────────────┬──────────────────┬──────────────────┐
-│ Overdue          │ Critical Delay   │ Behind Schedule  │ Pre-Eng Blocked  │
-│  47   9.4%       │  12   2.4%       │  38   7.6%       │  64   12.8%      │
-│  past planned    │  >14d or critical│  health=behind   │  awaiting pre-eng│
-│  (red tone)      │  (red tone)      │  (amber tone)    │  (amber tone)    │
-└──────────────────┴──────────────────┴──────────────────┴──────────────────┘
-```
+- 빌드 통과 확인
+- Punch / TnC / Defect / Docs 각 Dashboard 프리뷰에서 다음 확인:
+  - 올해 날짜 = `15-Jan` 형식으로 표시
+  - 내년·작년 날짜 = `15-Jan-2027` 형식으로 표시
+  - 차트 X축은 기존처럼 연도 없는 라벨 유지
 
-- **Overdue** — `stats.overdue` + `pct(overdue, total)` (red, → `status=overdue`)
-- **Critical Delay** — `stats.critical` + % (red, → `health=critical`)
-- **Behind Schedule** — `stats.behind` + % (amber, → `health=behind`)
-- **Pre-Eng Blocked** — `stats.blocked` + % (amber, → `pre_eng=blocked`)
+## 영향 받지 않는 영역
 
-→ 기존 두 번째 KPI 행의 `Behind / Start Delayed / Due This Week / Ready·Not Started` 등은 이미 하단 **Lookahead** 카드와 중복되므로 Tier 2에서 제거. Start Delayed / Due This Week는 Lookahead 7d 탭에 이미 존재.
-
-## 제거할 요소
-
-1. **Tier 1·2 카드 내부 lucide 아이콘** 전체 삭제 (`Clock`, `CheckCircle2`, `Rocket`, `PauseCircle`, `AlertTriangle`, `Flame`, `ShieldAlert`, `TrendingUp`, `AlertCircle`, `CalendarDays`, `ListChecks`, `GaugeCircle` 등 — Tier KPI 영역에서만)
-2. 기존 7+7 = 14개 KPI 카드 그리드 두 줄 → Tier1(4) + Tier1.5(1줄 bar) + Tier2(4) 구조로 교체
-3. `KpiCard` 컴포넌트의 `icon` prop은 유지하되 호출부에서 전달하지 않음 (Summary of Work 내부 MetaChip 아이콘은 의미가 있으므로 유지)
-
-## 유지
-
-- Summary of Work 카드(아이콘 포함 MetaChip — 카테고리/Pre-Eng/일정 정보 식별 필수)
-- Progress Overview 카드(상세 weighted/avg 분해표시)
-- Pre-Engineering Gates(Detail), Lookahead, Progress Matrix, Recovery, Top Delaying Parties, DQ 등 하단 섹션
-
-## 시각 규칙
-
-- 큰 % 값: `text-3xl font-semibold tabular-nums`
-- 진도 카드: `bg-card`, subtle border, 4px progress bar
-- 우려 카드: 좌측 4px 컬러 스트라이프(red/amber)로 톤 구분 (아이콘 대신)
-- 모든 색상은 semantic 토큰(`emerald-600`, `red-600`, `amber-600`은 기존 코드 패턴 유지)
-
-## 구현 메모 (기술)
-
-- `KpiCard` 호출부만 교체 — 컴포넌트 정의는 유지(기존 다른 톤/accent 로직 재활용 가능)
-- 필요 시 Tier 1용 `ProgressKpiCard`와 Tier 2용 `RiskKpiCard` 로컬 컴포넌트 신규 추가 (한 파일 내). 둘 다 아이콘 없음.
-- Tier 1.5 stacked bar는 `div` flex + width % 만으로 구현 (라이브러리 불필요)
-- `lucide-react` import에서 Tier KPI 전용 아이콘 제거(다른 곳에서 쓰이면 유지)
+- 데이터베이스, 비즈니스 로직, RLS, Edge Function — 변경 없음
+- `formatDdMmm` / `formatDdMmmYyyy` 자체 — 그대로 유지 (다른 곳에서 사용 중)
