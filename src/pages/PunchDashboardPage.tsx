@@ -570,7 +570,7 @@ export default function PunchDashboardPage() {
 
 
 
-      {/* ── Punch Data Quality ─────────────────────────────────────────── */}
+      {false && (
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Punch Data Quality</CardTitle></CardHeader>
         <CardContent className="grid gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
@@ -581,6 +581,7 @@ export default function PunchDashboardPage() {
           ))}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }
