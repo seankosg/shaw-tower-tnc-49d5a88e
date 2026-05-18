@@ -54,30 +54,38 @@ export default function PunchDashboardPage() {
   const [sortKey, setSortKey] = useState<SortKey>('overdue');
   const [lookahead, setLookahead] = useState<'7' | '14'>('7');
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const all: PunchItem[] = [];
-      let from = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from('punch_items').select('*').eq('is_active', true)
-          .order('item_no', { ascending: true })
-          .range(from, from + PAGE_SIZE - 1);
-        if (error) {
-          toast({ title: 'Load failed', description: error.message, variant: 'destructive' });
-          break;
-        }
-        if (!data || data.length === 0) break;
-        all.push(...(data as PunchItem[]));
-        if (data.length < PAGE_SIZE) break;
-        from += PAGE_SIZE;
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
+  const fetchData = useCallback(async (opts: { silent?: boolean } = {}) => {
+    if (!opts.silent) setLoading(true);
+    const all: PunchItem[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('punch_items').select('*').eq('is_active', true)
+        .order('item_no', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) {
+        toast({ title: 'Load failed', description: error.message, variant: 'destructive' });
+        break;
       }
-      if (!cancelled) { setRows(all); setLoading(false); }
-    })();
-    return () => { cancelled = true; };
+      if (!data || data.length === 0) break;
+      all.push(...(data as PunchItem[]));
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+    if (!mountedRef.current) return;
+    setRows(all);
+    if (!opts.silent) setLoading(false);
   }, [toast]);
+
+  useEffect(() => { void fetchData(); }, [fetchData]);
+
+  const autoRefresh = useAutoRefresh({
+    storageKey: 'punch',
+    onRefresh: () => fetchData({ silent: true }),
+  });
 
   const asOf = new Date().toISOString().slice(0, 10);
 
