@@ -301,6 +301,8 @@ export function loadKPIs(rd: ReportData): { tncKPI?: TncKPI; defectKPI?: DefectK
     monthlyBeyondSc:         punch.completionDateBreakdown?.monthlyBeyondSc ?? [],
     latestItems:             punch.latestItems ?? [],
     actionPlanTriggers:      punch.actionPlanTriggers ?? [],
+    progressKpi:             punch.progressKpi ?? { completionPct: 0, weightedActualPct: 0, weightedPlannedPct: 0, weightedVariancePct: 0 },
+    riskKpi:                 punch.riskKpi ?? { blocked: 0, overdue: 0, criticalDelay: 0 },
   } : undefined;
 
   return { tncKPI, defectKPI, docsKPI, punchKPI };
