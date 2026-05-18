@@ -691,10 +691,26 @@ export default function PunchRawDataPage() {
     return next;
   }, [rows, searchParams]);
 
+  // ── Column visibility & order (driven by Field Config) ──────────────────
+  const columnVisibility = useMemo<VisibilityState>(() => {
+    const vis: VisibilityState = { __select: true };
+    for (const id of allFieldIds) {
+      // item_no is pinned-always-visible (primary identifier)
+      if (id === 'item_no') { vis[id] = true; continue; }
+      vis[id] = isFieldVisible(id, roles ?? []);
+    }
+    return vis;
+  }, [allFieldIds, isFieldVisible, roles]);
+
+  const columnOrder = useMemo<string[]>(() => {
+    const remaining = allFieldIds.filter((id) => !PINNED_COLUMN_IDS.includes(id));
+    return [...PINNED_COLUMN_IDS, ...sortFieldNames(remaining)];
+  }, [allFieldIds, sortFieldNames]);
+
   const table = useReactTable({
     data: filteredRows,
     columns,
-    state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, rowSelection },
+    state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,
