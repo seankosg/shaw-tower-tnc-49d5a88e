@@ -407,61 +407,122 @@ function ModuleSection({
 
         {/* Module KPI rows */}
         {isAbd ? (
-          <div className="space-y-3">
-            {/* Group 1 — Overview */}
-            <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-              <SummaryTile icon={ListChecks} label="Total" value={kpiTotal} accent={accent}
-                onClick={() => onNavigate(module, extraParams())} />
-              <SummaryTile icon={CheckCircle2} label="Submitted" value={kpiCompleted}
-                sublabel={kpiTotal ? `${Math.round((kpiCompleted / kpiTotal) * 100)}%` : '—'}
-                accent={accent} tone="green"
-                onClick={() => onNavigate(module, { ...extraParams(), bucket: 'done' })}>
-                <Progress value={kpiTotal ? Math.round((kpiCompleted / kpiTotal) * 100) : 0} className="mt-2 h-1.5" />
-              </SummaryTile>
-              <SummaryTile icon={Clock} label="Remaining" value={kpiTotal - kpiCompleted} accent={accent}
-                onClick={() => onNavigate(module, extraParams())} />
-              <SummaryTile icon={AlertTriangle} label="Overdue — Submission" value={kpiOverdueSubmission} accent={accent}
-                sublabel="Our side"
-                tone={kpiOverdueSubmission > 0 ? 'red' : 'muted'}
-                onClick={() => onNavigate(module, { ...extraParams(), overdue: '1', overdue_type: 'submission' })} />
-            </div>
-
-            {/* Group 2 — Overdue Response by Trade */}
+          <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
+            {/* Card 1 — Overview */}
             <div className="rounded-xl border bg-card p-3.5">
               <div className="mb-2 flex items-baseline justify-between">
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Overdue — Response by Trade
+                  Overview
                 </span>
                 <span className="text-xs text-muted-foreground tabular-nums">
-                  Total {kpiOverdueResponse.toLocaleString()}
+                  {kpiTotal.toLocaleString()} items
                 </span>
               </div>
-              {tradeOverdueResponse.length === 0 ? (
-                <p className="px-1 py-2 text-xs text-muted-foreground">No overdue responses.</p>
-              ) : (
-                <div className="grid gap-2 grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                  {tradeOverdueResponse.map(({ trade, count }) => (
-                    <button
-                      key={trade}
-                      type="button"
-                      onClick={() => onNavigate(module, { ...extraParams(), trade, overdue: '1', overdue_type: 'response' })}
-                      className={cn(
-                        'flex flex-col items-start rounded-md border bg-muted/30 px-2.5 py-2 text-left transition',
-                        'hover:-translate-y-0.5 hover:shadow-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2',
-                        accent.ring,
-                      )}
-                      title={`${trade}: ${count} overdue response`}
-                    >
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        {TRADE_SHORT[trade as TradeCategory] ?? trade}
-                      </span>
-                      <span className="mt-0.5 text-lg font-semibold tabular-nums text-amber-600 dark:text-amber-400">
-                        {count.toLocaleString()}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="grid grid-cols-3 divide-x divide-border">
+                <button
+                  type="button"
+                  onClick={() => onNavigate(module, extraParams())}
+                  className={cn(
+                    'flex flex-col items-start px-3 py-2 text-left transition',
+                    'hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 rounded-l-md',
+                    accent.ring,
+                  )}
+                >
+                  <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <ListChecks className="h-3 w-3" /> Total
+                  </span>
+                  <span className="mt-1 text-2xl font-semibold tabular-nums">
+                    {kpiTotal.toLocaleString()}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate(module, { ...extraParams(), bucket: 'done' })}
+                  className={cn(
+                    'flex flex-col items-start px-3 py-2 text-left transition',
+                    'hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2',
+                    accent.ring,
+                  )}
+                >
+                  <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <CheckCircle2 className="h-3 w-3" /> Submitted
+                  </span>
+                  <span className="mt-1 flex items-baseline gap-1.5">
+                    <span className="text-2xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                      {kpiCompleted.toLocaleString()}
+                    </span>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {kpiTotal ? `${Math.round((kpiCompleted / kpiTotal) * 100)}%` : '—'}
+                    </span>
+                  </span>
+                  <Progress value={kpiTotal ? Math.round((kpiCompleted / kpiTotal) * 100) : 0} className="mt-1.5 h-1.5 w-full" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate(module, extraParams())}
+                  className={cn(
+                    'flex flex-col items-start px-3 py-2 text-left transition',
+                    'hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 rounded-r-md',
+                    accent.ring,
+                  )}
+                >
+                  <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <Clock className="h-3 w-3" /> Remaining
+                  </span>
+                  <span className="mt-1 text-2xl font-semibold tabular-nums">
+                    {(kpiTotal - kpiCompleted).toLocaleString()}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Card 2 — Overdue by Discipline */}
+            <div className="rounded-xl border bg-card p-3.5">
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Overdue by Discipline
+                </span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  Sub {kpiOverdueSubmission.toLocaleString()} · Resp {kpiOverdueResponse.toLocaleString()}
+                </span>
+              </div>
+              {(['submission', 'response'] as const).map((kind) => {
+                const rows = disciplineOverdue?.[kind] ?? [];
+                const isSubmission = kind === 'submission';
+                const labelText = isSubmission ? 'Submission' : 'Response';
+                const valueColor = isSubmission
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-amber-600 dark:text-amber-400';
+                return (
+                  <div key={kind} className={cn(kind === 'response' && 'mt-2')}>
+                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <AlertTriangle className="h-3 w-3" /> {labelText}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {rows.map(({ trade, count }) => (
+                        <button
+                          key={trade}
+                          type="button"
+                          onClick={() => onNavigate(module, { ...extraParams(), trade, overdue: '1', overdue_type: kind })}
+                          className={cn(
+                            'flex flex-col items-start rounded-md border bg-muted/30 px-2.5 py-1.5 text-left transition',
+                            'hover:-translate-y-0.5 hover:shadow-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2',
+                            accent.ring,
+                          )}
+                          title={`${trade}: ${count} overdue ${kind}`}
+                        >
+                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                            {TRADE_SHORT[trade as TradeCategory] ?? trade}
+                          </span>
+                          <span className={cn('mt-0.5 text-lg font-semibold tabular-nums', count > 0 ? valueColor : 'text-muted-foreground')}>
+                            {count.toLocaleString()}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : (
