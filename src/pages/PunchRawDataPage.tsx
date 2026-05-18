@@ -543,9 +543,10 @@ export default function PunchRawDataPage() {
       ),
     };
 
-    const dataColumns: ColumnDef<PunchItem>[] = visibleFields.map((field) => {
+    const dataColumns: ColumnDef<PunchItem>[] = allFieldIds.map((field) => {
       const def = PUNCH_FIELDS_BY_NAME[field] ?? null;
       const orig = getOriginalHeader(field);
+      const origin = getSourceOrigin(field);
       const isDate = DATE_FIELDS.has(field);
       const isMulti = MULTI_SELECT_FIELDS.has(field);
       const isPct = PCT_FIELDS.has(field);
@@ -568,10 +569,27 @@ export default function PunchRawDataPage() {
           .sort((a, b) => a.localeCompare(b))
           .map((v) => ({ value: v, label: v }));
       }
+      const label = getLabel(field);
+      const headerNode = (
+        <span className="inline-flex items-center gap-1">
+          <span className="truncate">{label}</span>
+          {origin && origin !== 'system' && (
+            <span
+              title={orig ? `Source: ${origin} · Original header: ${orig}` : `Source: ${origin}`}
+              className={cn(
+                'inline-flex items-center rounded border px-1 py-0 text-[9px] font-semibold uppercase leading-tight',
+                ORIGIN_BADGE[origin] ?? ORIGIN_BADGE.custom,
+              )}
+            >
+              {origin === 'derived' ? 'D' : origin === 'custom' ? 'C' : origin.charAt(0).toUpperCase()}
+            </span>
+          )}
+        </span>
+      );
       return {
         id: field,
         accessorFn,
-        header: getLabel(field),
+        header: () => headerNode,
         size: SIZE_BY_FIELD[field] ?? 130,
         enableSorting: true,
         enableColumnFilter: true,
@@ -579,13 +597,15 @@ export default function PunchRawDataPage() {
         meta: {
           filterType: inferred,
           filterOptions: dynamicOptions,
+          headerLabel: label,
+          originalHeader: orig,
         },
         cell: ({ row, getValue }) => renderCell(row.original, field, def, getValue()),
       } as ColumnDef<PunchItem>;
     });
 
     return [selectColumn, ...dataColumns];
-  }, [visibleFields, getLabel, getOriginalHeader, optionFields, rows]);
+  }, [allFieldIds, getLabel, getOriginalHeader, getSourceOrigin, optionFields, rows]);
 
   // URL → derived row filtering (status/due/blocker/pre_eng/start_due)
   const filteredRows = useMemo(() => {
