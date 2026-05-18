@@ -458,8 +458,7 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   const cdb  = punchKPI.completionDateBreakdown;
   const within    = cdb.withinMcDate ?? 0;
   const beyond    = cdb.beyondMcDate ?? 0;
-  const noPlan    = cdb.noPlan ?? 0;
-  const incomplete = within + beyond + noPlan;
+  const incomplete = within + beyond;
   const punchTriggers = beyond > 0 ? [{ status: 'AT_RISK' }] : [];
 
   s.addShape(pres.ShapeType.rect, { x: col2, y: row2, w: cardW, h: tier2H, fill: { color: C.cardBody }, line: { color: C.cardBorder, width: 0.75 } });
