@@ -885,7 +885,7 @@ export default function PunchRawDataPage() {
   const totalWidth = useMemo(
     () => table.getVisibleLeafColumns().reduce((s, c) => s + c.getSize(), 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [columnSizing, columns, visibleFields],
+    [columnSizing, columns, columnVisibility, columnOrder],
   );
 
   return (
