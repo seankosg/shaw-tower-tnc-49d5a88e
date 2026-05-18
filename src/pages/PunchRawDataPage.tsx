@@ -830,7 +830,8 @@ export default function PunchRawDataPage() {
   // Header click sort handler
   const renderHeader = (header: any) => {
     const headerDef = header.column.columnDef.header;
-    const headerText = typeof headerDef === 'string' ? headerDef : header.column.id;
+    const meta = header.column.columnDef.meta as any;
+    const headerText = (meta?.headerLabel as string) || (typeof headerDef === 'string' ? headerDef : header.column.id);
     return (
       <TableHead
         key={header.id}
