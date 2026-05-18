@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
 import { format } from 'date-fns';
 import { CalendarIcon, FileText, BookOpen, Boxes, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
