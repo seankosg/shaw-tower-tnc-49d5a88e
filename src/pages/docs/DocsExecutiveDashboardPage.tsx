@@ -400,16 +400,6 @@ function ModuleSection({
           )}
         </div>
 
-        {/* Module 6-KPI row */}
-        <div className={cn('grid gap-3 grid-cols-2 md:grid-cols-3', splitOverdue ? 'lg:grid-cols-7' : 'lg:grid-cols-6')}>
-          <SummaryTile icon={ListChecks} label="Total" value={kpiTotal} accent={accent}
-            onClick={() => onNavigate(module, extraParams())} />
-          <SummaryTile icon={CheckCircle2} label={isAbd ? 'Submitted' : 'Completed'} value={kpiCompleted}
-            sublabel={kpiTotal ? `${Math.round((kpiCompleted / kpiTotal) * 100)}%` : '—'}
-            accent={accent} tone="green"
-            onClick={() => onNavigate(module, { ...extraParams(), ...(isAbd ? { bucket: 'done' } : { status: 'completed' }) })}>
-            <Progress value={kpiTotal ? Math.round((kpiCompleted / kpiTotal) * 100) : 0} className="mt-2 h-1.5" />
-          </SummaryTile>
         {/* Module KPI rows */}
         {isAbd ? (
           <div className="space-y-3">
