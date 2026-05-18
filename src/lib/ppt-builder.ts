@@ -1140,7 +1140,7 @@ export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: Repo
   const sb       = punchKPI.statusBreakdown;
   const cdb      = punchKPI.completionDateBreakdown;
   const beyond   = cdb.beyondMcDate ?? 0;
-  const monthly  = punchKPI.monthlyBeyondSc;
+  void punchKPI.monthlyBeyondSc; // reserved for future month breakdown
   const latest   = punchKPI.latestItems;
   const prog     = punchKPI.progressKpi;
   const risk     = punchKPI.riskKpi;
