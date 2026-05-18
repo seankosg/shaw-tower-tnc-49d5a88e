@@ -655,6 +655,17 @@ function computePunchData(rows: PunchRow[], opts: ReportOptions): PunchReportDat
       overdue: items.filter((r) => punchIsCompletionOverdue(r, asOf)).length,
       criticalDelay: items.filter((r) => punchIsCriticalDelay(r, asOf)).length,
     };
+    const cls = punchSummarizeByCriticalLevel(items);
+    data.criticalLevelSummary = cls.map((s) => ({
+      level: s.level,
+      total: s.total,
+      earliestStart: s.earliestStart,
+      latestFinish: s.latestFinish,
+      preEngReady: s.preEngReady,
+      topCategory: s.mainCategories[0]?.name ?? '—',
+      progressActual: Math.round(s.progressActual * 10) / 10,
+      progressPlanned: Math.round(s.progressPlanned * 10) / 10,
+    }));
   }
   const mcDate = opts.mcDate ?? MC_DEFAULT;
   const incomplete = rows.filter(r => !r.actual_completion_date);
