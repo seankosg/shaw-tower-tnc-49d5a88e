@@ -181,41 +181,51 @@ function GreetingHost() {
   return <LoginGreetingDialog open={open} name={name} onClose={() => setOpen(false)} />;
 }
 
-export function AppLayout() {
+function AppHeader() {
   const pageLabel = useCurrentPageLabel();
-  useRouteMemory();
   useDocumentTitle(pageLabel);
+  const headerSlot = useHeaderSlotValue();
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
-          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
-            <span className="text-muted-foreground">{APP_NAME}</span>
-            {pageLabel && (
-              <>
-                <span className="text-muted-foreground/50">/</span>
-                <span className="font-medium text-foreground">{pageLabel}</span>
-              </>
-            )}
-          </nav>
-          <div className="ml-auto flex items-center gap-2">
-            <GlobalImportIndicator />
-            <GlobalDefectImportIndicator />
-            <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">© {new Date().getFullYear()} Sean B. KO. All rights reserved.</span>
-            <BuildInfoChip />
-            <AccountMenu />
-          </div>
-        </header>
-        <AppUpdateBanner />
-        <ModulePausedBanner />
-        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4">
-          <Outlet />
-        </main>
-      </SidebarInset>
-      <GreetingHost />
-    </SidebarProvider>
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+      <SidebarTrigger className="-ml-1" />
+      <Separator orientation="vertical" className="mr-2 h-4" />
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
+        <span className="text-muted-foreground">{APP_NAME}</span>
+        {pageLabel && (
+          <>
+            <span className="text-muted-foreground/50">/</span>
+            <span className="font-medium text-foreground">{pageLabel}</span>
+          </>
+        )}
+      </nav>
+      <div className="ml-auto flex items-center gap-2">
+        <GlobalImportIndicator />
+        <GlobalDefectImportIndicator />
+        {headerSlot}
+        <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">© {new Date().getFullYear()} Sean B. KO. All rights reserved.</span>
+        <BuildInfoChip />
+        <AccountMenu />
+      </div>
+    </header>
+  );
+}
+
+export function AppLayout() {
+  useRouteMemory();
+  return (
+    <HeaderSlotProvider>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <AppHeader />
+          <AppUpdateBanner />
+          <ModulePausedBanner />
+          <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4">
+            <Outlet />
+          </main>
+        </SidebarInset>
+        <GreetingHost />
+      </SidebarProvider>
+    </HeaderSlotProvider>
   );
 }
