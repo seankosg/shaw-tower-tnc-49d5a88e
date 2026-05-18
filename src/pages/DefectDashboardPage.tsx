@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
 import { useAuth } from '@/contexts/AuthContext';
 import { exportDefectSCurveToExcel } from '@/lib/scurve-excel-export';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -6,7 +8,7 @@ import { AlertCircle, AlertTriangle, CalendarIcon, CheckCircle2, ChevronDown, Ch
 import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { supabase } from '@/integrations/supabase/client';
-import { useDefectCache } from '@/lib/defect-cache';
+import { useDefectCache, refreshDefectCache } from '@/lib/defect-cache';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -139,22 +141,35 @@ export default function DefectDashboardPage() {
   const [subTradeTextFilter, setSubTradeTextFilter] = useState(searchParams.get('sub_trade_text') || '');
   const [selectedSubTradeFilters, setSelectedSubTradeFilters] = useState<string[]>(searchParams.get('sub_trades')?.split(',').filter(Boolean) || []);
 
+  const refetchDataDate = useCallback(async () => {
+    const latestImport = await (supabase as any)
+      .from('defect_upload_batches')
+      .select('data_date')
+      .eq('status', 'completed')
+      .not('data_date', 'is', null)
+      .order('data_date', { ascending: false })
+      .order('uploaded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latestImport.data?.data_date) setDataDate(latestImport.data.data_date);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const latestImport = await (supabase as any)
-        .from('defect_upload_batches')
-        .select('data_date')
-        .eq('status', 'completed')
-        .not('data_date', 'is', null)
-        .order('data_date', { ascending: false })
-        .order('uploaded_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!cancelled && latestImport.data?.data_date) setDataDate(latestImport.data.data_date);
+      await refetchDataDate();
+      if (cancelled) return;
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [refetchDataDate]);
+
+  const autoRefresh = useAutoRefresh({
+    storageKey: 'defect',
+    onRefresh: async () => {
+      refreshDefectCache();
+      await refetchDataDate();
+    },
+  });
 
   const today = todayIso();
   const dataDateLabel = formatDdMmm(dataDate);
@@ -335,6 +350,7 @@ export default function DefectDashboardPage() {
             ))}
           </ToggleGroup>
           <p className="text-xs text-muted-foreground">At-Risk threshold: ≤ {atRiskDays} day{atRiskDays === 1 ? '' : 's'}</p>
+          <AutoRefreshControl state={autoRefresh} />
         </div>
       </div>
 

@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
 import { format } from 'date-fns';
 import { CalendarIcon, FileText, BookOpen, Boxes, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -23,20 +25,29 @@ export default function DocsDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchData = useCallback(async (opts: { silent?: boolean } = {}) => {
+    if (!opts.silent) setLoading(true);
+    try {
+      const d = await loadDashboardData({ asOf });
+      setData(d);
+    } finally {
+      if (!opts.silent) setLoading(false);
+    }
+  }, [asOf]);
+
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    loadDashboardData({ asOf })
-      .then((d) => {
-        if (!cancelled) setData(d);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [asOf]);
+    void (async () => {
+      if (cancelled) return;
+      await fetchData();
+    })();
+    return () => { cancelled = true; };
+  }, [fetchData]);
+
+  const autoRefresh = useAutoRefresh({
+    storageKey: 'docs',
+    onRefresh: () => fetchData({ silent: true }),
+  });
 
   const modules = useMemo(
     () => (data ? [data.abd, data.omm, data.spare_part, data.warranty] : []),
@@ -53,23 +64,26 @@ export default function DocsDashboardPage() {
             As-Built / O&amp;M / Spare Part / Warranty submission status
           </p>
         </div>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className={cn('justify-start gap-2 font-normal')}>
-              <CalendarIcon className="h-4 w-4" />
-              Data Date: {format(asOf, 'yyyy-MM-dd')}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="end">
-            <Calendar
-              mode="single"
-              selected={asOf}
-              onSelect={(d) => d && setAsOf(d)}
-              initialFocus
-              className={cn('p-3 pointer-events-auto')}
-            />
-          </PopoverContent>
-        </Popover>
+        <div className="flex items-center gap-3">
+          <AutoRefreshControl state={autoRefresh} />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className={cn('justify-start gap-2 font-normal')}>
+                <CalendarIcon className="h-4 w-4" />
+                Data Date: {format(asOf, 'yyyy-MM-dd')}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={asOf}
+                onSelect={(d) => d && setAsOf(d)}
+                initialFocus
+                className={cn('p-3 pointer-events-auto')}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
 
       {/* Section 1 — Portfolio Health Strip */}

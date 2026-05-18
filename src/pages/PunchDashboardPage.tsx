@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle, AlertTriangle, CheckCircle2, Clock, CalendarDays,
@@ -52,30 +54,38 @@ export default function PunchDashboardPage() {
   const [sortKey, setSortKey] = useState<SortKey>('overdue');
   const [lookahead, setLookahead] = useState<'7' | '14'>('7');
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const all: PunchItem[] = [];
-      let from = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from('punch_items').select('*').eq('is_active', true)
-          .order('item_no', { ascending: true })
-          .range(from, from + PAGE_SIZE - 1);
-        if (error) {
-          toast({ title: 'Load failed', description: error.message, variant: 'destructive' });
-          break;
-        }
-        if (!data || data.length === 0) break;
-        all.push(...(data as PunchItem[]));
-        if (data.length < PAGE_SIZE) break;
-        from += PAGE_SIZE;
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
+  const fetchData = useCallback(async (opts: { silent?: boolean } = {}) => {
+    if (!opts.silent) setLoading(true);
+    const all: PunchItem[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('punch_items').select('*').eq('is_active', true)
+        .order('item_no', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) {
+        toast({ title: 'Load failed', description: error.message, variant: 'destructive' });
+        break;
       }
-      if (!cancelled) { setRows(all); setLoading(false); }
-    })();
-    return () => { cancelled = true; };
+      if (!data || data.length === 0) break;
+      all.push(...(data as PunchItem[]));
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+    if (!mountedRef.current) return;
+    setRows(all);
+    if (!opts.silent) setLoading(false);
   }, [toast]);
+
+  useEffect(() => { void fetchData(); }, [fetchData]);
+
+  const autoRefresh = useAutoRefresh({
+    storageKey: 'punch',
+    onRefresh: () => fetchData({ silent: true }),
+  });
 
   const asOf = new Date().toISOString().slice(0, 10);
 
@@ -168,7 +178,10 @@ export default function PunchDashboardPage() {
             {loading ? 'Loading…' : `${stats.total} items tracked · as of ${asOf}`}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate('/punch/raw-data')}>Open Raw Data</Button>
+        <div className="flex items-center gap-2">
+          <AutoRefreshControl state={autoRefresh} />
+          <Button variant="outline" size="sm" onClick={() => navigate('/punch/raw-data')}>Open Raw Data</Button>
+        </div>
       </div>
 
       {/* ── Headline KPI grid ───────────────────────────────────────────── */}
