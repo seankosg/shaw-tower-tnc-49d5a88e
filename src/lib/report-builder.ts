@@ -23,6 +23,7 @@ import {
   isCompletionOverdue as punchIsCompletionOverdue,
   isCriticalDelay as punchIsCriticalDelay,
   isBlockedByPreEng as punchIsBlockedByPreEng,
+  summarizeByCriticalLevel as punchSummarizeByCriticalLevel,
 } from '@/lib/punch-dashboard-utils';
 import type { PunchItem } from '@/lib/punch-excel-utils';
 
@@ -169,6 +170,16 @@ export interface PunchReportData {
       count: number;
     }>;
   };
+  criticalLevelSummary?: Array<{
+    level: string;
+    total: number;
+    earliestStart: string | null;
+    latestFinish: string | null;
+    preEngReady: number;
+    topCategory: string;
+    progressActual: number;
+    progressPlanned: number;
+  }>;
   latestItems?: Array<{
     itemNo: string;
     description: string;
@@ -563,6 +574,8 @@ interface PunchRow {
   drawing_approval_status: string | null;
   mos_approval_status: string | null;
   health_status: string | null;
+  critical_level: string | null;
+  category1: string | null;
 }
 
 async function fetchPunch(): Promise<PunchRow[]> {
@@ -571,7 +584,7 @@ async function fetchPunch(): Promise<PunchRow[]> {
   while (true) {
     const { data, error } = await supabase
       .from('punch_items')
-      .select('item_no,outstanding_work,main_trade,work_type,location,actual_start_date,actual_completion_date,planned_start_date,planned_completion_date,completion_status,weight,actual_progress_pct,planned_progress_pct,pre_engineering_ready,material_approval_status,material_procurement_status,drawing_approval_status,mos_approval_status,health_status')
+      .select('item_no,outstanding_work,main_trade,work_type,location,actual_start_date,actual_completion_date,planned_start_date,planned_completion_date,completion_status,weight,actual_progress_pct,planned_progress_pct,pre_engineering_ready,material_approval_status,material_procurement_status,drawing_approval_status,mos_approval_status,health_status,critical_level,category1')
       .eq('is_active', true)
       .range(from, from + size - 1);
     if (error) throw error;
@@ -642,6 +655,17 @@ function computePunchData(rows: PunchRow[], opts: ReportOptions): PunchReportDat
       overdue: items.filter((r) => punchIsCompletionOverdue(r, asOf)).length,
       criticalDelay: items.filter((r) => punchIsCriticalDelay(r, asOf)).length,
     };
+    const cls = punchSummarizeByCriticalLevel(items);
+    data.criticalLevelSummary = cls.map((s) => ({
+      level: s.level,
+      total: s.total,
+      earliestStart: s.earliestStart,
+      latestFinish: s.latestFinish,
+      preEngReady: s.preEngReady,
+      topCategory: s.mainCategories[0]?.name ?? '—',
+      progressActual: Math.round(s.progressActual * 10) / 10,
+      progressPlanned: Math.round(s.progressPlanned * 10) / 10,
+    }));
   }
   const mcDate = opts.mcDate ?? MC_DEFAULT;
   const incomplete = rows.filter(r => !r.actual_completion_date);
