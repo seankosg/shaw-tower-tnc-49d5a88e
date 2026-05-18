@@ -185,7 +185,6 @@ export default function PunchDashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <AutoRefreshControl state={autoRefresh} />
           <Button variant="outline" size="sm" onClick={() => navigate('/punch/raw-data')}>Open Raw Data</Button>
         </div>
       </div>
