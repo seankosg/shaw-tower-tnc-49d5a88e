@@ -75,11 +75,8 @@ export default function DashboardPage() {
   const [systemTextFilter, setSystemTextFilter] = useState(searchParams.get('system_text') || '');
   const [selectedSystemFilters, setSelectedSystemFilters] = useState<string[]>(searchParams.get('systems')?.split(',').filter(Boolean) || []);
 
-  useEffect(() => {
-    let cancelled = false;
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
-
   const fetchData = useCallback(async (opts: { silent?: boolean } = {}) => {
     let all: SubtestForDashboard[] = [];
     let from = 0;
