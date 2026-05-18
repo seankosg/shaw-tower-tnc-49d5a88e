@@ -1243,6 +1243,129 @@ export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: Repo
 
   void latest; void risk; void total;
 
+  // ── Summary of Work by Critical Level (compact card) ──
+  const cls = punchKPI.criticalLevelSummary ?? [];
+  if (cls.length > 0) {
+    const cardX = 0.5;
+    const cardY = 3.6;
+    const cardW = 12.3;
+    const headerH = 0.55;
+    const rowH = 0.42;
+    const maxRows = Math.min(cls.length, 6);
+    const cardH = headerH + maxRows * rowH + 0.25;
+
+    // card background
+    s.addShape(pres.ShapeType.rect, {
+      x: cardX, y: cardY, w: cardW, h: cardH,
+      fill: { color: C.cardBody },
+      line: { color: C.cardBorder, width: 0.75 },
+    });
+    // accent stripe
+    s.addShape(pres.ShapeType.rect, {
+      x: cardX, y: cardY, w: cardW, h: 0.05,
+      fill: { color: C.stageTestReport }, line: { color: C.stageTestReport, width: 0 },
+    });
+
+    s.addText('SUMMARY OF WORK · by Critical Level', {
+      x: cardX + 0.25, y: cardY + 0.18, w: cardW - 0.5, h: 0.3,
+      fontFace: FONT_MONO, fontSize: 10, color: C.stageTestReport, charSpacing: 2, bold: true,
+    });
+
+    // Column header
+    const colHdrY = cardY + 0.5;
+    const cols = {
+      level:    { x: cardX + 0.25, w: 1.30 },
+      items:    { x: cardX + 1.60, w: 0.70 },
+      category: { x: cardX + 2.35, w: 2.80 },
+      window:   { x: cardX + 5.20, w: 2.30 },
+      preEng:   { x: cardX + 7.55, w: 1.70 },
+      progress: { x: cardX + 9.30, w: 3.20 },
+    };
+    const hdrOpts = { fontFace: FONT_MONO, fontSize: 8, color: C.textMuted, charSpacing: 1, valign: 'middle' as const, margin: 0, h: 0.22 };
+    s.addText('LEVEL',     { ...hdrOpts, x: cols.level.x,    y: colHdrY, w: cols.level.w });
+    s.addText('ITEMS',     { ...hdrOpts, x: cols.items.x,    y: colHdrY, w: cols.items.w, align: 'right' });
+    s.addText('TOP CATEGORY', { ...hdrOpts, x: cols.category.x, y: colHdrY, w: cols.category.w });
+    s.addText('PLANNED WINDOW', { ...hdrOpts, x: cols.window.x, y: colHdrY, w: cols.window.w });
+    s.addText('PRE-ENG READY', { ...hdrOpts, x: cols.preEng.x, y: colHdrY, w: cols.preEng.w });
+    s.addText('WEIGHTED ACTUAL · vs PLAN', { ...hdrOpts, x: cols.progress.x, y: colHdrY, w: cols.progress.w });
+
+    const levelColor = (lvl: string): string => {
+      const k = lvl.toLowerCase();
+      if (k === 'high') return C.magentaBright;
+      if (k === 'mid-high') return C.magenta;
+      if (k === 'medium') return C.amber;
+      if (k === 'mid-low') return C.cyan;
+      if (k === 'low') return C.green;
+      return C.textDim;
+    };
+
+    cls.slice(0, maxRows).forEach((row, i) => {
+      const ry = cardY + headerH + 0.05 + i * rowH;
+      const lc = levelColor(row.level);
+
+      // Row divider (subtle)
+      if (i > 0) {
+        s.addShape(pres.ShapeType.rect, {
+          x: cardX + 0.25, y: ry - 0.02, w: cardW - 0.5, h: 0.01,
+          fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 },
+        });
+      }
+
+      // Level pill: small colored bar + label
+      s.addShape(pres.ShapeType.rect, {
+        x: cols.level.x, y: ry + 0.08, w: 0.12, h: 0.22,
+        fill: { color: lc }, line: { color: lc, width: 0 },
+      });
+      s.addText(row.level, {
+        x: cols.level.x + 0.18, y: ry, w: cols.level.w - 0.18, h: rowH,
+        fontFace: FONT, fontSize: 11, color: C.textPrimary, bold: true, valign: 'middle', margin: 0,
+      });
+
+      // Items count
+      s.addText(String(row.total), {
+        x: cols.items.x, y: ry, w: cols.items.w, h: rowH,
+        fontFace: FONT, fontSize: 13, bold: true, color: C.textPrimary, align: 'right', valign: 'middle', margin: 0,
+      });
+
+      // Top category (truncated by box width)
+      s.addText(row.topCategory || '—', {
+        x: cols.category.x, y: ry, w: cols.category.w, h: rowH,
+        fontFace: FONT, fontSize: 10, color: C.textSecondary, valign: 'middle', margin: 0,
+      });
+
+      // Window
+      const win = row.earliestStart && row.latestFinish
+        ? `${fmtDateShort(row.earliestStart.slice(0,10))} → ${fmtDateShort(row.latestFinish.slice(0,10))}`
+        : '—';
+      s.addText(win, {
+        x: cols.window.x, y: ry, w: cols.window.w, h: rowH,
+        fontFace: FONT_MONO, fontSize: 10, color: C.textSecondary, valign: 'middle', margin: 0,
+      });
+
+      // Pre-Eng Ready: n/total + mini bar
+      const peRatio = row.total > 0 ? (row.preEngReady / row.total) * 100 : 0;
+      s.addText(`${row.preEngReady}/${row.total}`, {
+        x: cols.preEng.x, y: ry, w: 0.85, h: rowH,
+        fontFace: FONT_MONO, fontSize: 10, color: C.textSecondary, valign: 'middle', margin: 0,
+      });
+      drawBar(s, pres, cols.preEng.x + 0.85, ry + 0.18, cols.preEng.w - 0.85, peRatio, C.cyan);
+
+      // Weighted Actual % vs Plan: value + bar
+      const variance = row.progressActual - row.progressPlanned;
+      const varColor = variance >= 0 ? C.green : C.magentaBright;
+      const sign = variance >= 0 ? '+' : '';
+      s.addText([
+        { text: `${row.progressActual.toFixed(1)}%`, options: { fontSize: 11, bold: true, color: C.textPrimary } },
+        { text: `  ${sign}${variance.toFixed(1)} vs ${row.progressPlanned.toFixed(1)}%`, options: { fontSize: 9, color: varColor } },
+      ] as pptxgen.TextProps[], {
+        x: cols.progress.x, y: ry, w: cols.progress.w, h: 0.22,
+        fontFace: FONT, valign: 'middle', margin: 0,
+      });
+      const barColor = variance >= 0 ? C.green : C.amber;
+      drawBar(s, pres, cols.progress.x, ry + 0.26, cols.progress.w, Math.min(100, row.progressActual), barColor);
+    });
+  }
+
   drawFooter(pres, s, '12');
 }
 
