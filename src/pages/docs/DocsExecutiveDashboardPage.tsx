@@ -493,33 +493,44 @@ function ModuleSection({
                 const valueColor = isSubmission
                   ? 'text-red-600 dark:text-red-400'
                   : 'text-amber-600 dark:text-amber-400';
+                const allZero = rows.every((r) => r.count === 0);
                 return (
                   <div key={kind} className={cn(kind === 'response' && 'mt-2')}>
                     <div className="mb-1 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                       <AlertTriangle className="h-3 w-3" /> {labelText}
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {rows.map(({ trade, count }) => (
-                        <button
-                          key={trade}
-                          type="button"
-                          onClick={() => onNavigate(module, { ...extraParams(), trade, overdue: '1', overdue_type: kind })}
-                          className={cn(
-                            'flex flex-col items-start rounded-md border bg-muted/30 px-2.5 py-1.5 text-left transition',
-                            'hover:-translate-y-0.5 hover:shadow-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2',
-                            accent.ring,
-                          )}
-                          title={`${trade}: ${count} overdue ${kind}`}
-                        >
-                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                            {TRADE_SHORT[trade as TradeCategory] ?? trade}
-                          </span>
-                          <span className={cn('mt-0.5 text-lg font-semibold tabular-nums', count > 0 ? valueColor : 'text-muted-foreground')}>
-                            {count.toLocaleString()}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+                    {allZero ? (
+                      <div className="flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span>No overdue {kind}</span>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2">
+                        {rows.map(({ trade, count }) => (
+                          <button
+                            key={trade}
+                            type="button"
+                            onClick={() => onNavigate(module, { ...extraParams(), trade, overdue: '1', overdue_type: kind })}
+                            disabled={count === 0}
+                            className={cn(
+                              'flex flex-col items-start rounded-md border bg-muted/30 px-2.5 py-1.5 text-left transition',
+                              count > 0
+                                ? 'hover:-translate-y-0.5 hover:shadow-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2'
+                                : 'opacity-50 cursor-default',
+                              accent.ring,
+                            )}
+                            title={`${trade}: ${count} overdue ${kind}`}
+                          >
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              {TRADE_SHORT[trade as TradeCategory] ?? trade}
+                            </span>
+                            <span className={cn('mt-0.5 text-lg font-semibold tabular-nums', count > 0 ? valueColor : 'text-muted-foreground')}>
+                              {count > 0 ? count.toLocaleString() : '—'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
