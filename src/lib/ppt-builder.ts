@@ -1303,13 +1303,13 @@ export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: Repo
     risk.overdue > 0 || risk.criticalDelay > 0);
 
   // ── TOP 3 LATEST table ──
-  const t3Y = listY + listH + 0.3;
+  const t3Y = listY + listH + 0.2;
   s.addText('TOP 3 LATEST  ·  Beyond SC  ·  Scope Review Required', {
-    x: 0.5, y: t3Y, w: 10, h: 0.28,
+    x: 0.5, y: t3Y, w: 10, h: 0.24,
     fontFace: FONT_MONO, fontSize: 11, color: C.magentaBright, charSpacing: 2,
   });
   s.addShape(pres.ShapeType.rect, {
-    x: 0.5, y: t3Y + 0.32, w: 12.3, h: 0.015,
+    x: 0.5, y: t3Y + 0.27, w: 12.3, h: 0.015,
     fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 },
   });
 
@@ -1317,21 +1317,22 @@ export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: Repo
     ? latest.slice(0, 3).map((item, i) => ({ idx: i + 1, item }))
     : [1, 2, 3].map((n) => ({ idx: n, item: null as null | typeof latest[0] }));
 
+  const ROW_H = 0.30;
   rowItems.forEach(({ idx, item }, i) => {
-    const iy = t3Y + 0.4 + i * 0.42;
+    const iy = t3Y + 0.32 + i * (ROW_H + 0.02);
     s.addShape(pres.ShapeType.rect, {
-      x: 0.5, y: iy, w: 12.3, h: 0.38,
+      x: 0.5, y: iy, w: 12.3, h: ROW_H,
       fill: { color: i % 2 === 0 ? C.cardBody : '0D1A35' },
       line: { color: C.cardBorder, width: 0.5 },
     });
-    s.addText(String(idx), { x: 0.6, y: iy + 0.08, w: 0.35, h: 0.25, fontFace: FONT, fontSize: 13, bold: true, color: C.magentaBright });
+    s.addText(String(idx), { x: 0.6, y: iy + 0.04, w: 0.35, h: 0.22, fontFace: FONT, fontSize: 12, bold: true, color: C.magentaBright });
     if (item) {
-      s.addText(item.itemNo || '-', { x: 1.0, y: iy + 0.08, w: 1.5, h: 0.25, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted });
-      s.addText(item.description || '(no description)', { x: 2.6, y: iy + 0.08, w: 6.2, h: 0.25, fontFace: FONT, fontSize: 11, color: C.textPrimary });
-      s.addText(item.discipline || '-', { x: 8.9, y: iy + 0.08, w: 2.0, h: 0.25, fontFace: FONT, fontSize: 10, color: C.textSecondary });
-      s.addText(fmtLong(item.plannedCompletionDate) || '-', { x: 11.0, y: iy + 0.08, w: 1.8, h: 0.25, fontFace: FONT_MONO, fontSize: 10, color: C.magentaBright, align: 'right' });
+      s.addText(item.itemNo || '-', { x: 1.0, y: iy + 0.04, w: 1.5, h: 0.22, fontFace: FONT_MONO, fontSize: 9, color: C.textMuted });
+      s.addText(item.description || '(no description)', { x: 2.6, y: iy + 0.04, w: 6.2, h: 0.22, fontFace: FONT, fontSize: 10, color: C.textPrimary });
+      s.addText(item.discipline || '-', { x: 8.9, y: iy + 0.04, w: 2.0, h: 0.22, fontFace: FONT, fontSize: 9, color: C.textSecondary });
+      s.addText(fmtLong(item.plannedCompletionDate) || '-', { x: 11.0, y: iy + 0.04, w: 1.8, h: 0.22, fontFace: FONT_MONO, fontSize: 9, color: C.magentaBright, align: 'right' });
     } else {
-      s.addText('— Awaiting data —', { x: 1.0, y: iy + 0.08, w: 10, h: 0.25, fontFace: FONT, fontSize: 11, color: C.textMuted, italic: true });
+      s.addText('— Awaiting data —', { x: 1.0, y: iy + 0.04, w: 10, h: 0.22, fontFace: FONT, fontSize: 10, color: C.textMuted, italic: true });
     }
   });
 
