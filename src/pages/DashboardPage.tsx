@@ -385,7 +385,6 @@ export default function DashboardPage() {
           <p className="text-xs text-muted-foreground">
             At-Risk threshold: ≤ {atRiskDays} day{atRiskDays === 1 ? '' : 's'}
           </p>
-          <AutoRefreshControl state={autoRefresh} />
         </div>
       </div>
 
