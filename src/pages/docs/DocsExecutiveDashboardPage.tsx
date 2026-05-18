@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import {
   Calendar as CalendarIcon, FileText, BookOpen, ShieldCheck, Package,
   AlertTriangle, CheckCircle2, ListChecks, ArrowRight,
-  CalendarClock, Flame, Clock, Layers, AlertCircle, Truck,
+  CalendarClock, Flame, Clock, Layers, Truck,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
