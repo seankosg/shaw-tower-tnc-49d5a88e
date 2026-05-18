@@ -172,6 +172,11 @@ export default function DefectDashboardPage() {
     },
   });
 
+  useHeaderSlot(
+    <AutoRefreshControl state={autoRefresh} />,
+    [autoRefresh.enabled, autoRefresh.intervalMs, autoRefresh.lastUpdatedAt, autoRefresh.isRefreshing],
+  );
+
   const today = todayIso();
   const dataDateLabel = formatDdMmm(dataDate);
   const todayLabel = formatDdMmm(today);
