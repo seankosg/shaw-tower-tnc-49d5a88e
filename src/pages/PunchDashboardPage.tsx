@@ -598,22 +598,18 @@ function CriticalLevelRowCard({
       onKeyDown={(e) => { if (e.key === 'Enter') go(levelParam); }}
     >
       <span className={cn('absolute inset-y-0 left-0 w-1.5', accent.bar)} />
-      <div className="pl-3 flex flex-col gap-2">
-        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <span className="text-2xl font-bold tracking-tight text-foreground">
+      <div className="pl-3 flex flex-col gap-3">
+        <div className="flex items-center gap-4">
+          <span className="text-2xl font-bold tracking-tight text-foreground w-28 shrink-0">
             {summary.level}
           </span>
-          <span className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 tabular-nums">
-            <span className="font-medium text-foreground">{summary.total.toLocaleString()} items</span>
-            <span aria-hidden>·</span>
-            <span title="Main Category (category1)">{catLabel}</span>
-            <span aria-hidden>·</span>
-            <span>Pre-Eng <span className="font-medium text-foreground">{summary.preEngReady}/{summary.total}</span> Ready</span>
-            <span aria-hidden>·</span>
-            <span>Earliest {summary.earliestStart ?? '—'}</span>
-            <span aria-hidden>·</span>
-            <span>Latest {summary.latestFinish ?? '—'}</span>
-          </span>
+          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+            <MetaChip icon={<ListChecks className="h-3.5 w-3.5" />} label="Items" value={summary.total.toLocaleString()} className="min-w-[6.5rem]" />
+            <MetaChip icon={<Layers className="h-3.5 w-3.5" />} label="Main Cat" value={catLabel} className="min-w-[10rem] flex-1" title={cats.map(c => `${c.name} (${c.count})`).join(', ')} />
+            <MetaChip icon={<Wrench className="h-3.5 w-3.5" />} label="Pre-Eng" value={`${summary.preEngReady}/${summary.total}`} className="min-w-[7rem]" />
+            <MetaChip icon={<CalendarArrowUp className="h-3.5 w-3.5" />} label="Earliest" value={summary.earliestStart ?? '—'} className="min-w-[8.5rem]" />
+            <MetaChip icon={<CalendarArrowDown className="h-3.5 w-3.5" />} label="Latest" value={summary.latestFinish ?? '—'} className="min-w-[8.5rem]" />
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs uppercase tracking-wide text-muted-foreground w-32 shrink-0">
@@ -624,6 +620,30 @@ function CriticalLevelRowCard({
         </div>
       </div>
     </div>
+  );
+}
+
+function MetaChip({
+  icon, label, value, className, title,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-xs',
+        className,
+      )}
+      title={title}
+    >
+      <span className="text-muted-foreground">{icon}</span>
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="font-medium tabular-nums text-foreground truncate">{value}</span>
+    </span>
   );
 }
 
