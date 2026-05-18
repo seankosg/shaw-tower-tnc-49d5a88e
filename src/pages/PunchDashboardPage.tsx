@@ -529,23 +529,24 @@ export default function PunchDashboardPage() {
         </CardContent>
       </Card>
 
-      {/* ── Critical Level Summary (Pre-Engineering Gates) ─────────────── */}
+      {/* ── Critical Level Summary ────────────────────────────────────── */}
       {criticalLevelSummary.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Critical Level Summary</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Pre-Engineering gate readiness per Critical Level. "Not Required" counts as Approved.
-              Click a chip to drill into pending items.
+              Items grouped by Critical Level with main category, Pre-Engineering readiness,
+              schedule window and overall weighted progress.
             </p>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <CardContent className="space-y-3">
             {criticalLevelSummary.map((s) => (
-              <CriticalLevelGroupCard key={s.level} summary={s} go={go} />
+              <CriticalLevelRowCard key={s.level} summary={s} go={go} />
             ))}
           </CardContent>
         </Card>
       )}
+
 
       {/* ── Punch Data Quality ─────────────────────────────────────────── */}
       <Card>
