@@ -1237,7 +1237,7 @@ export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: Repo
   heroCards.forEach((c, i) => drawCard(pres, s, 0.5 + i * (heroW + heroGap), heroY, heroW, heroH, c));
 
   // ── Detail row: 2 list cards (slide 11 pattern) ──
-  const listY = heroY + heroH + 0.25, listH = 2.05;
+  const listY = heroY + heroH + 0.2, listH = 1.75;
   const listW = (12.3 - 0.25) / 2;
 
   const pct = (n: number) => total > 0 ? (n / total) * 100 : 0;
