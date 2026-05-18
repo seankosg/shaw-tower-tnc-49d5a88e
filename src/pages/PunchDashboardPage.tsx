@@ -499,7 +499,7 @@ export default function PunchDashboardPage() {
                     <TableCell className="text-xs">{(r as any).main_trade || '—'}</TableCell>
                     <TableCell className="text-xs">{r.subcontractor_name || '—'}</TableCell>
                     <TableCell className="text-xs">{r.hdec_pic_name || '—'}</TableCell>
-                    <TableCell className="text-xs tabular-nums">{r.planned_completion_date || '—'}</TableCell>
+                    <TableCell className="text-xs tabular-nums">{formatDashDate(r.planned_completion_date)}</TableCell>
                     <TableCell className="text-right tabular-nums">{plan.toFixed(0)}</TableCell>
                     <TableCell className="text-right tabular-nums">{act.toFixed(0)}</TableCell>
                     <TableCell className={cn('text-right tabular-nums', variance < 0 ? 'text-red-600' : 'text-emerald-600')}>{signed(variance)}</TableCell>
