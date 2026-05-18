@@ -89,19 +89,41 @@ const ENUM_FIELDS = new Set(
   PUNCH_FIELDS.filter((f) => f.dataType === 'enum').map((f) => f.field),
 );
 
-/** Fields that are short codes / enums best served by multi-select. */
+/** Fields backed by enum/select-like values — best served by multi-select filter. */
 const MULTI_SELECT_FIELDS = new Set<string>([
+  // enum dataType (derived from registry)
+  ...PUNCH_FIELDS.filter((f) => f.dataType === 'enum' || f.dataType === 'bool').map((f) => f.field),
+  // select-like text fields
   'team', 'work_type', 'main_trade', 'sub_trade', 'category1', 'category2', 'category3',
   'critical_level', 'level', 'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'hdec_eng_name',
-  'completion_status', 'health_status', 'pre_engineering_ready',
-  'material_approval_status', 'material_procurement_status', 'drawing_approval_status', 'mos_approval_status',
+  'completion_status',
 ]);
 
-const TEXT_SEARCH_FIELDS: (keyof PunchItem)[] = [
-  'item_no', 'outstanding_work', 'location', 'level', 'subcontractor_name',
-  'subsub_name', 'hdec_pic_name', 'hdec_eng_name', 'team', 'work_type',
-  'main_trade', 'sub_trade', 'category1', 'category2', 'category3', 'remarks',
-];
+/** Free-text searchable fields — derived from registry text dataType minus pure-id/numeric ones. */
+const TEXT_SEARCH_FIELDS: (keyof PunchItem)[] = PUNCH_FIELDS
+  .filter((f) => f.dataType === 'text')
+  .map((f) => f.field as keyof PunchItem);
+
+/** Pinned columns (always visible, fixed at left). */
+const PINNED_COLUMN_IDS = ['__select', 'item_no'];
+
+/** Group label for display in Bulk-edit dialog. */
+const GROUP_LABELS: Record<string, string> = {
+  identity: 'Identity',
+  classification: 'Classification',
+  people: 'People',
+  schedule: 'Schedule',
+  progress: 'Progress',
+  pre_engineering: 'Pre-Engineering',
+  meta: 'Notes',
+};
+
+/** Source-origin badge class. */
+const ORIGIN_BADGE: Record<string, string> = {
+  system: 'bg-muted text-muted-foreground border-border',
+  derived: 'bg-primary/10 text-primary border-primary/30',
+  custom: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-200',
+};
 
 const HEALTH_BADGE_CLASS: Record<PunchHealthStatus, string> = {
   ahead: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-200',
