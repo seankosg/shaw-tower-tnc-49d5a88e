@@ -742,39 +742,37 @@ export default function PunchRawDataPage() {
     [rowSelection, rows],
   );
 
-  // ── Bulk-edit field definitions ──────────────────────────────────────────
-  const bulkFields = useMemo<BulkEditableField[]>(() => [
-    // Identity
-    { field: 'location', label: getLabel('location'), inputType: 'text', group: 'Identity' },
-    { field: 'level', label: getLabel('level'), inputType: 'select', group: 'Identity', options: optionFields.level },
-    // Classification
-    { field: 'team', label: getLabel('team'), inputType: 'select', group: 'Classification', options: optionFields.team },
-    { field: 'work_type', label: getLabel('work_type'), inputType: 'select', group: 'Classification', options: optionFields.work_type },
-    { field: 'main_trade', label: getLabel('main_trade'), inputType: 'select', group: 'Classification', options: optionFields.main_trade },
-    { field: 'sub_trade', label: getLabel('sub_trade'), inputType: 'select', group: 'Classification', options: optionFields.sub_trade },
-    { field: 'category1', label: getLabel('category1'), inputType: 'select', group: 'Classification', options: optionFields.category1 },
-    { field: 'category2', label: getLabel('category2'), inputType: 'select', group: 'Classification', options: optionFields.category2 },
-    { field: 'critical_level', label: getLabel('critical_level'), inputType: 'select', group: 'Classification', options: optionFields.critical_level },
-    // People
-    { field: 'subcontractor_name', label: getLabel('subcontractor_name'), inputType: 'select', group: 'People', options: optionFields.subcontractor_name },
-    { field: 'subsub_name', label: getLabel('subsub_name'), inputType: 'select', group: 'People', options: optionFields.subsub_name },
-    { field: 'hdec_pic_name', label: getLabel('hdec_pic_name'), inputType: 'select', group: 'People', options: optionFields.hdec_pic_name },
-    { field: 'hdec_eng_name', label: getLabel('hdec_eng_name'), inputType: 'select', group: 'People', options: optionFields.hdec_eng_name },
-    // Schedule
-    { field: 'planned_start_date', label: getLabel('planned_start_date'), inputType: 'date', group: 'Schedule' },
-    { field: 'planned_completion_date', label: getLabel('planned_completion_date'), inputType: 'date', group: 'Schedule' },
-    { field: 'actual_start_date', label: getLabel('actual_start_date'), inputType: 'date', group: 'Schedule' },
-    { field: 'actual_completion_date', label: getLabel('actual_completion_date'), inputType: 'date', group: 'Schedule' },
-    // Pre-engineering
-    { field: 'material_approval_status', label: getLabel('material_approval_status'), inputType: 'select', group: 'Pre-Engineering', options: optionFields.material_approval_status },
-    { field: 'material_procurement_status', label: getLabel('material_procurement_status'), inputType: 'select', group: 'Pre-Engineering', options: optionFields.material_procurement_status },
-    { field: 'drawing_approval_status', label: getLabel('drawing_approval_status'), inputType: 'select', group: 'Pre-Engineering', options: optionFields.drawing_approval_status },
-    { field: 'mos_approval_status', label: getLabel('mos_approval_status'), inputType: 'select', group: 'Pre-Engineering', options: optionFields.mos_approval_status },
-    // Status
-    { field: 'completion_status', label: getLabel('completion_status'), inputType: 'select', group: 'Status', options: optionFields.completion_status },
-    // Notes
-    { field: 'remarks', label: getLabel('remarks'), inputType: 'text', group: 'Notes' },
-  ], [getLabel, optionFields]);
+  // ── Bulk-edit field definitions — derived from PUNCH_FIELDS registry +
+  //    Field Config (label, visibility, sort_order). Read-only fields and
+  //    identity primary keys are excluded.
+  const bulkFields = useMemo<BulkEditableField[]>(() => {
+    const EXCLUDED = new Set<string>([
+      'item_no', 'outstanding_work', // primary identifier / required body
+      'data_date', // import-only timestamp
+    ]);
+    const eligible = PUNCH_FIELDS
+      .filter((f) => !f.readOnly && !EXCLUDED.has(f.field))
+      .filter((f) => isFieldVisible(f.field, roles ?? []));
+    const ordered = sortFieldNames(eligible.map((f) => f.field));
+    const byField = new Map(eligible.map((f) => [f.field, f]));
+    return ordered.flatMap<BulkEditableField>((field) => {
+      const def = byField.get(field);
+      if (!def) return [];
+      const group = GROUP_LABELS[def.group] ?? def.group;
+      const inputType: BulkEditableField['inputType'] =
+        def.dataType === 'date' ? 'date'
+        : def.dataType === 'number' || def.dataType === 'pct' ? 'text'
+        : MULTI_SELECT_FIELDS.has(field) ? 'select'
+        : 'text';
+      return [{
+        field,
+        label: getLabel(field),
+        inputType,
+        group,
+        options: inputType === 'select' ? (optionFields[field] ?? []) : undefined,
+      }];
+    });
+  }, [getLabel, sortFieldNames, isFieldVisible, roles, optionFields]);
 
   const handleBulkApplied = useCallback(({ field, value, ids }: { field: string; value: string | number | null; ids: string[] }) => {
     setRows((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, [field]: value } as PunchItem : r)));
