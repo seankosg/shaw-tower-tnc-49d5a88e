@@ -352,8 +352,12 @@ export function buildCover(pres: pptxgen, tncKPI: TncKPI) {
     fontFace: FONT_MONO, fontSize: 11, color: C.cyan,
   });
 
-  // Bottom-right metadata
+  // Bottom-right metadata (with a solid background plate so decorative circles don't bleed through the text)
   const snapshotLabels = tncKPI.snapshots.map(sn => fmtDateShort(sn.date)).join(' / ');
+  s.addShape(pres.ShapeType.rect, {
+    x: 7.4, y: 6.5, w: 5.55, h: 1.0,
+    fill: { color: C.bgBody }, line: { color: C.bgBody, width: 0 },
+  });
   s.addText([
     { text: `Data date · ${fmtLong(tncKPI.dataDate)}`, options: { color: C.textMuted, breakLine: true } },
     { text: 'Simulation mode · Worst Case',              options: { color: C.textMuted, breakLine: true } },
@@ -480,39 +484,60 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   // Timeline mini-banner
   const tlX2 = col2 + 0.2, tlW2 = cardW - 0.4;
   const divY = msY + msH + 0.12;
-  const axisY2 = divY + 0.22;
+  const axisY2 = divY + 0.28;
   const incompleteN = incomplete > 0 ? incomplete : 1;
   const mcX2 = tlX2 + (within / incompleteN) * tlW2;
 
   s.addText(`Today  ${fmtLong(tncKPI.dataDate)}`, {
-    x: tlX2, y: divY + 0.02, w: 1.5, h: 0.17, fontFace: FONT_MONO, fontSize: 8, color: C.textMuted,
+    x: tlX2, y: divY, w: 1.6, h: 0.2, fontFace: FONT_MONO, fontSize: 8, color: C.textMuted,
   });
   s.addText(`MC Date  ${fmtLong(tncKPI.dDay)}`, {
-    x: mcX2 - 1.5, y: divY + 0.02, w: 1.45, h: 0.17, fontFace: FONT_MONO, fontSize: 8, color: C.cyan, align: 'right',
+    x: Math.max(tlX2 + 1.7, mcX2 - 1.5), y: divY, w: 1.45, h: 0.2, fontFace: FONT_MONO, fontSize: 8, color: C.cyan, align: 'right',
   });
   s.addShape(pres.ShapeType.rect, { x: tlX2, y: axisY2, w: tlW2, h: 0.015, fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 } });
   s.addShape(pres.ShapeType.rect, { x: tlX2, y: axisY2 - 0.05, w: 0.02, h: 0.08, fill: { color: C.textMuted }, line: { color: C.textMuted, width: 0 } });
 
-  const rowH2 = 0.28, rowGap2 = 0.18;
+  const rowH2 = 0.24, rowGap2 = 0.10;
   const markerH2 = rowH2 * 3 + rowGap2 * 2 + 0.04;
   s.addShape(pres.ShapeType.rect, { x: mcX2-0.012, y: axisY2, w: 0.024, h: markerH2, fill: { color: C.cyan }, line: { color: C.cyan, width: 0 } });
   s.addShape(pres.ShapeType.rect, { x: mcX2-0.012, y: axisY2-0.05, w: 0.024, h: 0.08, fill: { color: C.cyan }, line: { color: C.cyan, width: 0 } });
 
-  const r1Y = axisY2 + 0.03;
+  // Helper: render a timeline row label safely even when the bar width is 0 or tiny.
+  // Falls back to placing the label next to the row baseline so PPT never gets a negative-width text box.
+  const MIN_LABEL_W = 1.6;
+  function drawTimelineLabel(text: string, barX: number, barY: number, barW: number, color: string) {
+    if (barW >= MIN_LABEL_W) {
+      s.addText(text, { x: barX+0.1, y: barY+0.03, w: barW-0.15, h: rowH2-0.04, fontFace: FONT, fontSize: 9, bold: true, color, margin: 0 });
+    } else {
+      // Place label to the right of the (possibly tiny) bar, clamped inside the card
+      const lx = Math.min(barX + Math.max(barW, 0.05) + 0.05, col2 + cardW - MIN_LABEL_W - 0.1);
+      s.addText(text, { x: lx, y: barY+0.03, w: MIN_LABEL_W, h: rowH2-0.04, fontFace: FONT, fontSize: 9, bold: true, color, margin: 0 });
+    }
+  }
+
+  const r1Y = axisY2 + 0.06;
   const withinW2 = (within / incompleteN) * tlW2;
-  s.addShape(pres.ShapeType.rect, { x: tlX2, y: r1Y, w: withinW2, h: rowH2, fill: { color: C.green }, line: { color: C.green, width: 0 } });
-  s.addText(`Within MC Date  ·  ${within} items`, { x: tlX2+0.1, y: r1Y+0.05, w: withinW2-0.15, h: 0.2, fontFace: FONT, fontSize: 9, bold: true, color: C.textPrimary });
+  if (withinW2 > 0.01) {
+    s.addShape(pres.ShapeType.rect, { x: tlX2, y: r1Y, w: withinW2, h: rowH2, fill: { color: C.green }, line: { color: C.green, width: 0 } });
+  }
+  drawTimelineLabel(`Within MC Date  ·  ${within} items`, tlX2, r1Y, withinW2, C.textPrimary);
 
   const r2Y2 = r1Y + rowH2 + rowGap2;
   const beyondW2 = (beyond / incompleteN) * tlW2;
-  s.addShape(pres.ShapeType.rect, { x: tlX2, y: r2Y2, w: withinW2, h: rowH2, fill: { color: '2A1020' }, line: { color: '2A1020', width: 0 } });
-  s.addShape(pres.ShapeType.rect, { x: mcX2, y: r2Y2, w: beyondW2, h: rowH2, fill: { color: C.magentaBright }, line: { color: C.magentaBright, width: 0 } });
-  s.addText(`Beyond  ·  ${beyond} items`, { x: mcX2+0.08, y: r2Y2+0.05, w: beyondW2-0.12, h: 0.2, fontFace: FONT, fontSize: 9, bold: true, color: C.textPrimary });
+  if (withinW2 > 0.01) {
+    s.addShape(pres.ShapeType.rect, { x: tlX2, y: r2Y2, w: withinW2, h: rowH2, fill: { color: '2A1020' }, line: { color: '2A1020', width: 0 } });
+  }
+  if (beyondW2 > 0.01) {
+    s.addShape(pres.ShapeType.rect, { x: mcX2, y: r2Y2, w: beyondW2, h: rowH2, fill: { color: C.magentaBright }, line: { color: C.magentaBright, width: 0 } });
+  }
+  drawTimelineLabel(`Beyond  ·  ${beyond} items`, mcX2, r2Y2, beyondW2, C.textPrimary);
 
   const r3Y2 = r2Y2 + rowH2 + rowGap2;
   const noPlanW2 = (noPlan / incompleteN) * tlW2;
-  s.addShape(pres.ShapeType.rect, { x: tlX2, y: r3Y2, w: noPlanW2, h: rowH2, fill: { color: '4A4A6A' }, line: { color: '4A4A6A', width: 0 } });
-  s.addText(`No Plan  ·  ${noPlan} items`, { x: tlX2+0.08, y: r3Y2+0.05, w: noPlanW2-0.12, h: 0.2, fontFace: FONT, fontSize: 9, bold: true, color: C.textPrimary });
+  if (noPlanW2 > 0.01) {
+    s.addShape(pres.ShapeType.rect, { x: tlX2, y: r3Y2, w: noPlanW2, h: rowH2, fill: { color: '4A4A6A' }, line: { color: '4A4A6A', width: 0 } });
+  }
+  drawTimelineLabel(`No Plan  ·  ${noPlan} items`, tlX2, r3Y2, noPlanW2, C.textPrimary);
 
   drawFooter(pres, s, '02');
 }
@@ -642,17 +667,20 @@ export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
   const yT1 = PLOT_T + (1 - lastT1 / 100) * PLOT_H;
   const yT2 = PLOT_T + (1 - lastT2 / 100) * PLOT_H;
 
-  s.addText(`${Math.round(lastT1)}%`, { x: xDD+0.1, y: yT1-0.2, w: 0.7, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stagePreTest, margin: 0 });
-  s.addText(`${Math.round(lastT2)}%`, { x: xDD+0.1, y: yT2-0.2, w: 0.7, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stageOfficial, margin: 0 });
+  s.addText(`${Math.round(lastT1)}%`, { x: xDD+0.15, y: yT1-0.18, w: 0.8, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stagePreTest, margin: 0 });
+  s.addText(`${Math.round(lastT2)}%`, { x: xDD+0.15, y: yT2-0.18, w: 0.8, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stageOfficial, margin: 0 });
 
   const yT1Plan = PLOT_T + (1 - (pts[lastIdx]?.t1PlanPct ?? 0) / 100) * PLOT_H;
   const yT2Plan = PLOT_T + (1 - (pts[lastIdx]?.t2PlanPct ?? 0) / 100) * PLOT_H;
-  const xVar = xDD - 1.9;
+  const xVar = xDD - 2.3;
+  // Stack variance label above the endpoint label to avoid overlap when plan & actual are close
   if (tncKPI.preTest.variance > 0) {
-    s.addText(`▲ +${tncKPI.preTest.variance.toFixed(1)}%`, { x: xVar, y: (yT1+yT1Plan)/2-0.18, w: 1.8, h: 0.3, fontFace: FONT, fontSize: 13, bold: true, color: C.green, align: 'right', margin: 0 });
+    const yVar1 = Math.min((yT1+yT1Plan)/2 - 0.18, yT1 - 0.55);
+    s.addText(`▲ +${tncKPI.preTest.variance.toFixed(1)}%`, { x: xVar, y: yVar1, w: 1.8, h: 0.3, fontFace: FONT, fontSize: 13, bold: true, color: C.green, align: 'right', margin: 0 });
   }
   if (tncKPI.official.variance > 0) {
-    s.addText(`▲ +${tncKPI.official.variance.toFixed(1)}%`, { x: xVar, y: (yT2+yT2Plan)/2-0.18, w: 1.8, h: 0.3, fontFace: FONT, fontSize: 13, bold: true, color: C.green, align: 'right', margin: 0 });
+    const yVar2 = Math.min((yT2+yT2Plan)/2 - 0.18, yT2 - 0.55);
+    s.addText(`▲ +${tncKPI.official.variance.toFixed(1)}%`, { x: xVar, y: yVar2, w: 1.8, h: 0.3, fontFace: FONT, fontSize: 13, bold: true, color: C.green, align: 'right', margin: 0 });
   }
 
   drawFooter(pres, s, '04');
@@ -1171,7 +1199,7 @@ export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: Repo
   });
 
   // ── Hero row: 3 cards (slide 3 pattern) ──
-  const heroY = 1.6, heroH = 2.2, heroGap = 0.13;
+  const heroY = 1.55, heroH = 1.85, heroGap = 0.13;
   const heroW = (12.3 - 2 * heroGap) / 3;
 
   const completionAlert = prog.completionPct < 5 || prog.weightedVariancePct < -20;
@@ -1216,7 +1244,7 @@ export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: Repo
   heroCards.forEach((c, i) => drawCard(pres, s, 0.5 + i * (heroW + heroGap), heroY, heroW, heroH, c));
 
   // ── Detail row: 2 list cards (slide 11 pattern) ──
-  const listY = heroY + heroH + 0.25, listH = 2.05;
+  const listY = heroY + heroH + 0.2, listH = 1.75;
   const listW = (12.3 - 0.25) / 2;
 
   const pct = (n: number) => total > 0 ? (n / total) * 100 : 0;
@@ -1282,13 +1310,13 @@ export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: Repo
     risk.overdue > 0 || risk.criticalDelay > 0);
 
   // ── TOP 3 LATEST table ──
-  const t3Y = listY + listH + 0.3;
+  const t3Y = listY + listH + 0.2;
   s.addText('TOP 3 LATEST  ·  Beyond SC  ·  Scope Review Required', {
-    x: 0.5, y: t3Y, w: 10, h: 0.28,
+    x: 0.5, y: t3Y, w: 10, h: 0.24,
     fontFace: FONT_MONO, fontSize: 11, color: C.magentaBright, charSpacing: 2,
   });
   s.addShape(pres.ShapeType.rect, {
-    x: 0.5, y: t3Y + 0.32, w: 12.3, h: 0.015,
+    x: 0.5, y: t3Y + 0.27, w: 12.3, h: 0.015,
     fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 },
   });
 
@@ -1296,21 +1324,22 @@ export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: Repo
     ? latest.slice(0, 3).map((item, i) => ({ idx: i + 1, item }))
     : [1, 2, 3].map((n) => ({ idx: n, item: null as null | typeof latest[0] }));
 
+  const ROW_H = 0.30;
   rowItems.forEach(({ idx, item }, i) => {
-    const iy = t3Y + 0.4 + i * 0.42;
+    const iy = t3Y + 0.32 + i * (ROW_H + 0.02);
     s.addShape(pres.ShapeType.rect, {
-      x: 0.5, y: iy, w: 12.3, h: 0.38,
+      x: 0.5, y: iy, w: 12.3, h: ROW_H,
       fill: { color: i % 2 === 0 ? C.cardBody : '0D1A35' },
       line: { color: C.cardBorder, width: 0.5 },
     });
-    s.addText(String(idx), { x: 0.6, y: iy + 0.08, w: 0.35, h: 0.25, fontFace: FONT, fontSize: 13, bold: true, color: C.magentaBright });
+    s.addText(String(idx), { x: 0.6, y: iy + 0.04, w: 0.35, h: 0.22, fontFace: FONT, fontSize: 12, bold: true, color: C.magentaBright });
     if (item) {
-      s.addText(item.itemNo || '-', { x: 1.0, y: iy + 0.08, w: 1.5, h: 0.25, fontFace: FONT_MONO, fontSize: 10, color: C.textMuted });
-      s.addText(item.description || '(no description)', { x: 2.6, y: iy + 0.08, w: 6.2, h: 0.25, fontFace: FONT, fontSize: 11, color: C.textPrimary });
-      s.addText(item.discipline || '-', { x: 8.9, y: iy + 0.08, w: 2.0, h: 0.25, fontFace: FONT, fontSize: 10, color: C.textSecondary });
-      s.addText(fmtLong(item.plannedCompletionDate) || '-', { x: 11.0, y: iy + 0.08, w: 1.8, h: 0.25, fontFace: FONT_MONO, fontSize: 10, color: C.magentaBright, align: 'right' });
+      s.addText(item.itemNo || '-', { x: 1.0, y: iy + 0.04, w: 1.5, h: 0.22, fontFace: FONT_MONO, fontSize: 9, color: C.textMuted });
+      s.addText(item.description || '(no description)', { x: 2.6, y: iy + 0.04, w: 6.2, h: 0.22, fontFace: FONT, fontSize: 10, color: C.textPrimary });
+      s.addText(item.discipline || '-', { x: 8.9, y: iy + 0.04, w: 2.0, h: 0.22, fontFace: FONT, fontSize: 9, color: C.textSecondary });
+      s.addText(fmtLong(item.plannedCompletionDate) || '-', { x: 11.0, y: iy + 0.04, w: 1.8, h: 0.22, fontFace: FONT_MONO, fontSize: 9, color: C.magentaBright, align: 'right' });
     } else {
-      s.addText('— Awaiting data —', { x: 1.0, y: iy + 0.08, w: 10, h: 0.25, fontFace: FONT, fontSize: 11, color: C.textMuted, italic: true });
+      s.addText('— Awaiting data —', { x: 1.0, y: iy + 0.04, w: 10, h: 0.22, fontFace: FONT, fontSize: 10, color: C.textMuted, italic: true });
     }
   });
 
