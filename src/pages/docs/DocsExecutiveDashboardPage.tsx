@@ -410,32 +410,95 @@ function ModuleSection({
             onClick={() => onNavigate(module, { ...extraParams(), ...(isAbd ? { bucket: 'done' } : { status: 'completed' }) })}>
             <Progress value={kpiTotal ? Math.round((kpiCompleted / kpiTotal) * 100) : 0} className="mt-2 h-1.5" />
           </SummaryTile>
-          <SummaryTile icon={Clock} label="Remaining" value={kpiTotal - kpiCompleted} accent={accent}
-            onClick={() => onNavigate(module, extraParams())} />
-          {splitOverdue ? (
-            <>
+        {/* Module KPI rows */}
+        {isAbd ? (
+          <div className="space-y-3">
+            {/* Group 1 — Overview */}
+            <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+              <SummaryTile icon={ListChecks} label="Total" value={kpiTotal} accent={accent}
+                onClick={() => onNavigate(module, extraParams())} />
+              <SummaryTile icon={CheckCircle2} label="Submitted" value={kpiCompleted}
+                sublabel={kpiTotal ? `${Math.round((kpiCompleted / kpiTotal) * 100)}%` : '—'}
+                accent={accent} tone="green"
+                onClick={() => onNavigate(module, { ...extraParams(), bucket: 'done' })}>
+                <Progress value={kpiTotal ? Math.round((kpiCompleted / kpiTotal) * 100) : 0} className="mt-2 h-1.5" />
+              </SummaryTile>
+              <SummaryTile icon={Clock} label="Remaining" value={kpiTotal - kpiCompleted} accent={accent}
+                onClick={() => onNavigate(module, extraParams())} />
               <SummaryTile icon={AlertTriangle} label="Overdue — Submission" value={kpiOverdueSubmission} accent={accent}
                 sublabel="Our side"
                 tone={kpiOverdueSubmission > 0 ? 'red' : 'muted'}
                 onClick={() => onNavigate(module, { ...extraParams(), overdue: '1', overdue_type: 'submission' })} />
-              <SummaryTile icon={AlertTriangle} label="Overdue — Response" value={kpiOverdueResponse} accent={accent}
-                sublabel="Counterparty"
-                tone={kpiOverdueResponse > 0 ? 'amber' : 'muted'}
-                onClick={() => onNavigate(module, { ...extraParams(), overdue: '1', overdue_type: 'response' })} />
-            </>
-          ) : (
-            <SummaryTile icon={AlertTriangle} label="Overdue" value={kpiOverdue} accent={accent}
-              tone={kpiOverdue > 0 ? 'red' : 'muted'}
-              onClick={() => onNavigate(module, { ...extraParams(), overdue: '1' })} />
-          )}
-          <SummaryTile icon={CalendarClock} label="Due This Week" value={kpiDueIds.size} accent={accent}
-            tone="amber"
-            onClick={() => onNavigate(module, { ...extraParams(), due_this_week: '1' })} />
-          <SummaryTile icon={Flame} label="Critical Delay" value={kpiCriticalIds.size} accent={accent}
-            tone={kpiCriticalIds.size > 0 ? 'red' : 'muted'}
-            sublabel=">30 days"
-            onClick={() => onNavigate(module, { ...extraParams(), delay_bucket: '30+' })} />
-        </div>
+            </div>
+
+            {/* Group 2 — Overdue Response by Trade */}
+            <div className="rounded-xl border bg-card p-3.5">
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Overdue — Response by Trade
+                </span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  Total {kpiOverdueResponse.toLocaleString()}
+                </span>
+              </div>
+              {tradeOverdueResponse.length === 0 ? (
+                <p className="px-1 py-2 text-xs text-muted-foreground">No overdue responses.</p>
+              ) : (
+                <div className="grid gap-2 grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                  {tradeOverdueResponse.map(({ trade, count }) => (
+                    <button
+                      key={trade}
+                      type="button"
+                      onClick={() => onNavigate(module, { ...extraParams(), trade, overdue: '1', overdue_type: 'response' })}
+                      className={cn(
+                        'flex flex-col items-start rounded-md border bg-muted/30 px-2.5 py-2 text-left transition',
+                        'hover:-translate-y-0.5 hover:shadow-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2',
+                        accent.ring,
+                      )}
+                      title={`${trade}: ${count} overdue response`}
+                    >
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {TRADE_SHORT[trade as TradeCategory] ?? trade}
+                      </span>
+                      <span className="mt-0.5 text-lg font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                        {count.toLocaleString()}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className={cn('grid gap-3 grid-cols-2 md:grid-cols-3', splitOverdue ? 'lg:grid-cols-5' : 'lg:grid-cols-4')}>
+            <SummaryTile icon={ListChecks} label="Total" value={kpiTotal} accent={accent}
+              onClick={() => onNavigate(module, extraParams())} />
+            <SummaryTile icon={CheckCircle2} label="Completed" value={kpiCompleted}
+              sublabel={kpiTotal ? `${Math.round((kpiCompleted / kpiTotal) * 100)}%` : '—'}
+              accent={accent} tone="green"
+              onClick={() => onNavigate(module, { ...extraParams(), status: 'completed' })}>
+              <Progress value={kpiTotal ? Math.round((kpiCompleted / kpiTotal) * 100) : 0} className="mt-2 h-1.5" />
+            </SummaryTile>
+            <SummaryTile icon={Clock} label="Remaining" value={kpiTotal - kpiCompleted} accent={accent}
+              onClick={() => onNavigate(module, extraParams())} />
+            {splitOverdue ? (
+              <>
+                <SummaryTile icon={AlertTriangle} label="Overdue — Submission" value={kpiOverdueSubmission} accent={accent}
+                  sublabel="Our side"
+                  tone={kpiOverdueSubmission > 0 ? 'red' : 'muted'}
+                  onClick={() => onNavigate(module, { ...extraParams(), overdue: '1', overdue_type: 'submission' })} />
+                <SummaryTile icon={AlertTriangle} label="Overdue — Response" value={kpiOverdueResponse} accent={accent}
+                  sublabel="Counterparty"
+                  tone={kpiOverdueResponse > 0 ? 'amber' : 'muted'}
+                  onClick={() => onNavigate(module, { ...extraParams(), overdue: '1', overdue_type: 'response' })} />
+              </>
+            ) : (
+              <SummaryTile icon={AlertTriangle} label="Overdue" value={kpiOverdue} accent={accent}
+                tone={kpiOverdue > 0 ? 'red' : 'muted'}
+                onClick={() => onNavigate(module, { ...extraParams(), overdue: '1' })} />
+            )}
+          </div>
+        )}
 
 
         {/* Delay Severity Buckets */}
