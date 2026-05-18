@@ -663,17 +663,20 @@ export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
   const yT1 = PLOT_T + (1 - lastT1 / 100) * PLOT_H;
   const yT2 = PLOT_T + (1 - lastT2 / 100) * PLOT_H;
 
-  s.addText(`${Math.round(lastT1)}%`, { x: xDD+0.1, y: yT1-0.2, w: 0.7, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stagePreTest, margin: 0 });
-  s.addText(`${Math.round(lastT2)}%`, { x: xDD+0.1, y: yT2-0.2, w: 0.7, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stageOfficial, margin: 0 });
+  s.addText(`${Math.round(lastT1)}%`, { x: xDD+0.15, y: yT1-0.18, w: 0.8, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stagePreTest, margin: 0 });
+  s.addText(`${Math.round(lastT2)}%`, { x: xDD+0.15, y: yT2-0.18, w: 0.8, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stageOfficial, margin: 0 });
 
   const yT1Plan = PLOT_T + (1 - (pts[lastIdx]?.t1PlanPct ?? 0) / 100) * PLOT_H;
   const yT2Plan = PLOT_T + (1 - (pts[lastIdx]?.t2PlanPct ?? 0) / 100) * PLOT_H;
-  const xVar = xDD - 1.9;
+  const xVar = xDD - 2.3;
+  // Stack variance label above the endpoint label to avoid overlap when plan & actual are close
   if (tncKPI.preTest.variance > 0) {
-    s.addText(`▲ +${tncKPI.preTest.variance.toFixed(1)}%`, { x: xVar, y: (yT1+yT1Plan)/2-0.18, w: 1.8, h: 0.3, fontFace: FONT, fontSize: 13, bold: true, color: C.green, align: 'right', margin: 0 });
+    const yVar1 = Math.min((yT1+yT1Plan)/2 - 0.18, yT1 - 0.55);
+    s.addText(`▲ +${tncKPI.preTest.variance.toFixed(1)}%`, { x: xVar, y: yVar1, w: 1.8, h: 0.3, fontFace: FONT, fontSize: 13, bold: true, color: C.green, align: 'right', margin: 0 });
   }
   if (tncKPI.official.variance > 0) {
-    s.addText(`▲ +${tncKPI.official.variance.toFixed(1)}%`, { x: xVar, y: (yT2+yT2Plan)/2-0.18, w: 1.8, h: 0.3, fontFace: FONT, fontSize: 13, bold: true, color: C.green, align: 'right', margin: 0 });
+    const yVar2 = Math.min((yT2+yT2Plan)/2 - 0.18, yT2 - 0.55);
+    s.addText(`▲ +${tncKPI.official.variance.toFixed(1)}%`, { x: xVar, y: yVar2, w: 1.8, h: 0.3, fontFace: FONT, fontSize: 13, bold: true, color: C.green, align: 'right', margin: 0 });
   }
 
   drawFooter(pres, s, '04');
