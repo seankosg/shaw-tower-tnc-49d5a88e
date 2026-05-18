@@ -204,37 +204,81 @@ export default function PunchDashboardPage() {
         </div>
       </div>
 
-      {/* ── Headline KPI grid ───────────────────────────────────────────── */}
-      <div className="grid gap-2 grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
-        <KpiCard label="Total" value={stats.total} icon={<Clock className="h-3.5 w-3.5 text-muted-foreground" />} />
-        <KpiCard label="Completed" value={stats.completed} accent={pct(stats.completed, stats.total)}
-          icon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />} onClick={() => go('completionStatus=Completed')} />
-        <KpiCard label="WIP" value={stats.wip} icon={<Rocket className="h-3.5 w-3.5 text-blue-600" />} />
-        <KpiCard label="Not Started" value={stats.notStarted} icon={<PauseCircle className="h-3.5 w-3.5 text-muted-foreground" />} />
-        <KpiCard label="Overdue" value={stats.overdue} tone={stats.overdue ? 'danger' : undefined}
-          icon={<AlertTriangle className="h-3.5 w-3.5 text-red-600" />} onClick={() => go('status=overdue')} />
-        <KpiCard label="Critical" value={stats.critical} tone={stats.critical ? 'danger' : undefined}
-          icon={<Flame className="h-3.5 w-3.5 text-red-700" />} onClick={() => go('health=critical')} />
-        <KpiCard label="Pre-Eng Blocked" value={stats.blocked} tone={stats.blocked ? 'warning' : undefined}
-          icon={<ShieldAlert className="h-3.5 w-3.5 text-amber-600" />} onClick={() => go('pre_eng=blocked')} />
+      {/* ── Tier 1: Progress (진도율) ───────────────────────────────────── */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <ProgressKpiCard
+          label="Completion"
+          percent={stats.total ? (stats.completed / stats.total) * 100 : 0}
+          sub={`${stats.completed.toLocaleString()} / ${stats.total.toLocaleString()} items`}
+          barTone="emerald"
+          onClick={() => go('completionStatus=Completed')}
+        />
+        <ProgressKpiCard
+          label="Weighted Actual"
+          percent={stats.w.actual}
+          sub="Progress (weighted by qty)"
+          barTone="emerald"
+        />
+        <ProgressKpiCard
+          label="Weighted Planned"
+          percent={stats.w.planned}
+          sub="Plan as of today"
+          barTone="neutral"
+        />
+        <VarianceKpiCard
+          label="Variance"
+          value={stats.w.variance}
+          sub="Actual − Planned"
+        />
       </div>
 
-      <div className="grid gap-2 grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
-        <KpiCard label="Behind" value={stats.behind} tone={stats.behind ? 'warning' : undefined}
-          icon={<TrendingUp className="h-3.5 w-3.5 text-amber-600 rotate-180" />} onClick={() => go('health=behind')} />
-        <KpiCard label="Start Delayed" value={stats.startDelayed} tone={stats.startDelayed ? 'warning' : undefined}
-          icon={<AlertCircle className="h-3.5 w-3.5 text-amber-600" />} onClick={() => go('status=start_delayed')} />
-        <KpiCard label="Due This Week" value={stats.dueThisWeek}
-          icon={<CalendarDays className="h-3.5 w-3.5 text-blue-600" />} onClick={() => go('due=this_week')} />
-        <KpiCard label="Ready / Not Started" value={stats.readyButNotStarted}
-          icon={<ListChecks className="h-3.5 w-3.5 text-muted-foreground" />} onClick={() => go('status=ready_not_started')} />
-        <KpiCard label="Completion %" value={`${pct(stats.completed, stats.total)}`}
-          icon={<GaugeCircle className="h-3.5 w-3.5 text-emerald-600" />} />
-        <KpiCard label="Weighted Planned" value={`${stats.w.planned.toFixed(1)}%`}
-          icon={<GaugeCircle className="h-3.5 w-3.5 text-blue-600" />} />
-        <KpiCard label="Weighted Actual" value={`${stats.w.actual.toFixed(1)}%`}
-          icon={<GaugeCircle className="h-3.5 w-3.5 text-emerald-600" />}
-          accent={signed(stats.w.variance) + '%'} accentTone={stats.w.variance >= 0 ? 'pos' : 'neg'} />
+      {/* ── Tier 1.5: Status Mix ────────────────────────────────────────── */}
+      <StatusMixBar
+        total={stats.total}
+        completed={stats.completed}
+        wip={stats.wip}
+        notStarted={stats.notStarted}
+        onSegmentClick={(seg) => {
+          if (seg === 'completed') go('completionStatus=Completed');
+          else if (seg === 'wip') go('completionStatus=WIP');
+          else go('completionStatus=Not Started');
+        }}
+      />
+
+      {/* ── Tier 2: Risk & Delay (우려사항) ─────────────────────────────── */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <RiskKpiCard
+          label="Overdue"
+          count={stats.overdue}
+          percent={pctNum(stats.overdue, stats.total)}
+          sub="Past planned completion"
+          tone="danger"
+          onClick={() => go('status=overdue')}
+        />
+        <RiskKpiCard
+          label="Critical Delay"
+          count={stats.critical}
+          percent={pctNum(stats.critical, stats.total)}
+          sub=">14d overdue or Critical"
+          tone="danger"
+          onClick={() => go('health=critical')}
+        />
+        <RiskKpiCard
+          label="Behind Schedule"
+          count={stats.behind}
+          percent={pctNum(stats.behind, stats.total)}
+          sub="Health = behind"
+          tone="warning"
+          onClick={() => go('health=behind')}
+        />
+        <RiskKpiCard
+          label="Pre-Eng Blocked"
+          count={stats.blocked}
+          percent={pctNum(stats.blocked, stats.total)}
+          sub="Awaiting pre-engineering"
+          tone="warning"
+          onClick={() => go('pre_eng=blocked')}
+        />
       </div>
 
       {/* ── Critical Level Summary (Summary of Work) ───────────────────── */}
