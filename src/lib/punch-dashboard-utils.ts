@@ -361,6 +361,10 @@ export interface CriticalLevelSummary {
   total: number;
   earliestStart: string | null;
   latestFinish: string | null;
+  preEngReady: number;
+  mainCategories: Array<{ name: string; count: number }>;
+  progressActual: number;
+  progressPlanned: number;
   gates: Record<GateKey, GateCount>;
 }
 
