@@ -23,6 +23,7 @@ import {
   isCompletionOverdue as punchIsCompletionOverdue,
   isCriticalDelay as punchIsCriticalDelay,
   isBlockedByPreEng as punchIsBlockedByPreEng,
+  summarizeByCriticalLevel as punchSummarizeByCriticalLevel,
 } from '@/lib/punch-dashboard-utils';
 import type { PunchItem } from '@/lib/punch-excel-utils';
 
