@@ -1,75 +1,68 @@
-## Critical Level Summary 컴포넌트 (OMM Stage Progress 스타일)
+## Critical Level Summary 재설계 (한 줄 메타 + 진도율 바)
 
-Punch Dashboard에 Critical Level별로 그룹화된 카드 묶음을 추가합니다. 각 그룹은 OMM Executive Dashboard의 "Stage Progress" 1st Status 카드처럼 **좌측 accent bar + chip 그리드** 패턴을 그대로 차용해 4 gate의 Approved / Pending 현황을 보여줍니다.
+기존 chip 그리드 형태를 폐기하고, Critical Level 별로 **한 줄 헤더 + 진도율 바** 형태의 카드 목록으로 다시 그립니다. 카드 헤더의 큰 레이블이 Critical Level (High / mid-High / Medium / mid-Low / Low / Unspecified)이고, 그 옆으로 메타 정보가 한 줄에 표시됩니다.
 
-### 데이터 규칙
-
-- **Approved 처리 (Pre-Engineering 완료 간주)**
-  - Approval 계열(`material_approval_status`, `drawing_approval_status`, `mos_approval_status`): `approved` 또는 `not_required`
-  - Procurement(`material_procurement_status`): `secured` 또는 `not_required`
-- **Pending 처리**
-  - Approval 계열: `pending`
-  - Procurement: `pending` 또는 `partially_secured`
-- 각 gate에서 Approved + Pending = 그룹 Total
-- Critical Level 정렬: High → mid-High → Medium → mid-Low → Low → Unspecified
-
-### UI 구조 (OMM 스타일 차용)
-
-`PunchDashboardPage.tsx`의 Data Quality 카드 위에 단일 카드 **"Critical Level Summary"** 추가. 카드 헤더 아래에 Critical Level 그룹 카드를 `grid sm:grid-cols-2 xl:grid-cols-3 gap-3`로 배치합니다.
-
-각 그룹 카드는 OMM `OmmSubStatusCard`와 동일한 외관:
+### 시각 구조 (한 카드)
 
 ```text
-┌─ ▌(accent bar) ────────────────────────────────┐
-│ High                              12 items     │
-│ Earliest 2026-04-01 · Latest 2026-06-30        │
-│ ┌────┬────┬────┬────┐                          │
-│ │MTL │PROC│DWG │MOS │   (라벨, 상단)          │
-│ │10/12│ 8/12│12/12│11/12│ (Approved/Total)    │
-│ └────┴────┴────┴────┘                          │
-└────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│ ▌ High                                                                 │
+│   ─────────────────────────────────────────────────────────────────    │
+│   12 items · Civil, MEP, Architecture · Pre-Eng 8/12 Ready             │
+│   Earliest 2026-04-01 · Latest 2026-06-30                              │
+│                                                                        │
+│   Overall Progress              [████████░░░░░░░░] 62%                 │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-- accent bar 색상은 Critical Level별 매핑 (High=red, mid-High=orange, Medium=amber, mid-Low=sky, Low=emerald, Unspecified=muted)
-- 4 gate chip 톤은 OMM과 동일한 의미 색상 사용: gate가 **all approved** → emerald 톤, **pending 존재** → amber 톤, **pending 다수(>50%)** → rose 톤
-- chip 클릭 시 해당 critical level + gate pending 필터로 RawData 이동 (`?criticalLevel=High&gate=material_approval&status=pending`)
-- 카드 본문 클릭 시 해당 critical level만 필터로 RawData 이동 (`?criticalLevel=High`)
-- 그룹에 항목이 0개이면 카드 자체를 렌더하지 않음
+- **레이블 (Critical Level)**: 큰 글자(`text-2xl font-bold`)로 강조, 좌측 색상 막대(accent bar) 유지
+- **메타 한 줄**: `{total} items · {Main Cat 요약} · Pre-Eng {ready}/{total} Ready · Earliest {date} · Latest {date}`
+  - `Main Cat`은 `category1` 기준으로 그룹 내 distinct 값을 빈도 순으로 최대 3개 표시 (`Civil, MEP, Architecture`), 초과시 `+N`
+  - 줄 길이 보호를 위해 `flex-wrap` + `text-sm text-muted-foreground`
+- **진도율 바**: `weightedProgress(items)` 의 `actual` 값을 사용해 `Progress` 컴포넌트로 표시, 우측에 `XX%` 텍스트
+- 4 gate chip 그리드 / earliest·latest 라벨 별도 표시는 제거 (한 줄 메타로 통합)
 
-### 기술 구현
+### 레이아웃
 
-**`src/lib/punch-dashboard-utils.ts`** 추가:
+- 카드 1개의 너비는 전체 폭(또는 `xl:grid-cols-2`)을 활용. chip 카드 형태가 아니므로 좌→우로 정보가 흐르게.
+- 카드 전체 클릭 시 `?criticalLevel={level}` 로 RawData 이동 (기존 동작 유지)
+- chip 클릭 드릴다운 제거 → 4 gate 별 pending 드릴다운은 기존 Pre-Engineering Pipeline 카드에 위임
+
+### 데이터 (`src/lib/punch-dashboard-utils.ts`)
+
+`CriticalLevelSummary` 확장:
 
 ```ts
-export const CRITICAL_LEVEL_ORDER = ['High','mid-High','Medium','mid-Low','Low','Unspecified'] as const;
-export type CriticalLevel = typeof CRITICAL_LEVEL_ORDER[number];
-
-export type GateKey = 'material_approval' | 'procurement' | 'drawing_approval' | 'mos_approval';
-export interface GateCount { approved: number; pending: number; total: number; }
-
 export interface CriticalLevelSummary {
   level: CriticalLevel;
   total: number;
   earliestStart: string | null;
   latestFinish: string | null;
-  gates: Record<GateKey, GateCount>;
+  preEngReady: number;          // pre_engineering_ready = true 카운트
+  mainCategories: Array<{ name: string; count: number }>; // category1 빈도, 내림차순
+  progressActual: number;       // weightedProgress(items).actual
+  progressPlanned: number;      // 참고용 (variance 표시는 하지 않음)
+  gates: Record<GateKey, GateCount>; // 호환용으로 남겨두되 UI에서 미사용
 }
-
-export function summarizeByCriticalLevel(items: PunchItem[]): CriticalLevelSummary[];
 ```
 
-- 헬퍼: `isApprovalApproved(v) = v==='approved'||v==='not_required'`, `isProcurementApproved(v) = v==='secured'||v==='not_required'`
-- null/빈 `critical_level`은 `Unspecified` 버킷
+`summarizeByCriticalLevel(items)`에 위 필드 채우는 로직 추가:
 
-**`src/pages/PunchDashboardPage.tsx`**:
-- `summarizeByCriticalLevel(items)` useMemo
-- 새 `CriticalLevelGroupCard` 서브 컴포넌트 (OMM `OmmSubStatusCard`의 마크업/클래스 패턴을 복제)
-- 4 gate 라벨: `MTL`, `PROC`, `DWG`, `MOS` (전체 라벨은 `title` tooltip)
-- 기존 `go()` 헬퍼로 RawData 라우팅
+- `preEngReady`: `items.filter(r => r.pre_engineering_ready).length`
+- `mainCategories`: `category1` 정규화(`trim`, 빈 값은 `Uncategorized`), Map으로 카운트 후 `count` 내림차순 정렬
+- `progressActual` / `progressPlanned`: 기존 `weightedProgress` 재사용 (이 파일 내 import)
+
+### UI (`src/pages/PunchDashboardPage.tsx`)
+
+- 기존 `CriticalLevelGroupCard` (chip 그리드) 컴포넌트 제거
+- 새 `CriticalLevelRowCard` 컴포넌트로 위 시각 구조 렌더
+- `summarizeByCriticalLevel`은 `items`만 받도록 시그니처 유지(이미 통과)
+- 상위 컨테이너는 `space-y-3` (또는 `xl:grid-cols-2 gap-3`) — 한 줄 메타가 길어질 수 있으므로 기본은 단일 컬럼
+- Pre-Engineering Pipeline / Critical Level Summary 위치 관계는 그대로 유지 (Data Quality 카드 위)
 
 ### 변경 파일
 
-- `src/lib/punch-dashboard-utils.ts`
-- `src/pages/PunchDashboardPage.tsx`
+- `src/lib/punch-dashboard-utils.ts` — `CriticalLevelSummary` 확장 + `summarizeByCriticalLevel` 로직
+- `src/pages/PunchDashboardPage.tsx` — 카드 렌더링 컴포넌트 교체
 
 DB/RLS/백엔드 변경 없음.

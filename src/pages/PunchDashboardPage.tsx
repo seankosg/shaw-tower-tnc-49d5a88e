@@ -25,8 +25,8 @@ import {
   isDueWithin, isPlannedToStartWithin, dominantBlocker, blockersFor,
   weightedProgress, simpleAverageProgress, groupProgressMatrix, recoveryPriorityScore,
   suggestedRecoveryAction, computePunchDqCounts, PUNCH_DQ_LABEL, topDelayingParties,
-  summarizeByCriticalLevel, GATE_SHORT_LABEL, CRITICAL_LEVEL_ACCENT,
-  type PunchBlockerKind, type PunchDqKey, type CriticalLevelSummary, type GateKey,
+  summarizeByCriticalLevel, CRITICAL_LEVEL_ACCENT,
+  type PunchBlockerKind, type PunchDqKey, type CriticalLevelSummary,
 } from '@/lib/punch-dashboard-utils';
 
 const PAGE_SIZE = 1000;
@@ -529,23 +529,24 @@ export default function PunchDashboardPage() {
         </CardContent>
       </Card>
 
-      {/* ── Critical Level Summary (Pre-Engineering Gates) ─────────────── */}
+      {/* ── Critical Level Summary ────────────────────────────────────── */}
       {criticalLevelSummary.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Critical Level Summary</CardTitle>
             <p className="text-xs text-muted-foreground">
-              Pre-Engineering gate readiness per Critical Level. "Not Required" counts as Approved.
-              Click a chip to drill into pending items.
+              Items grouped by Critical Level with main category, Pre-Engineering readiness,
+              schedule window and overall weighted progress.
             </p>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <CardContent className="space-y-3">
             {criticalLevelSummary.map((s) => (
-              <CriticalLevelGroupCard key={s.level} summary={s} go={go} />
+              <CriticalLevelRowCard key={s.level} summary={s} go={go} />
             ))}
           </CardContent>
         </Card>
       )}
+
 
       {/* ── Punch Data Quality ─────────────────────────────────────────── */}
       <Card>
@@ -564,7 +565,7 @@ export default function PunchDashboardPage() {
 
 // ── Sub-components ────────────────────────────────────────────────────────
 
-function CriticalLevelGroupCard({
+function CriticalLevelRowCard({
   summary,
   go,
 }: {
@@ -573,19 +574,21 @@ function CriticalLevelGroupCard({
 }) {
   const accent = CRITICAL_LEVEL_ACCENT[summary.level];
   const levelParam = `criticalLevel=${encodeURIComponent(summary.level)}`;
-  const gates: GateKey[] = ['material_approval', 'material_procurement', 'drawing_approval', 'mos_approval'];
 
-  const chipTone = (g: { approved: number; pending: number; total: number }) => {
-    if (g.pending === 0) return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20';
-    if (g.pending * 2 > g.total) return 'bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20';
-    return 'bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20';
-  };
+  const cats = summary.mainCategories;
+  const topCats = cats.slice(0, 3).map((c) => c.name);
+  const extra = cats.length - topCats.length;
+  const catLabel = cats.length === 0
+    ? '—'
+    : topCats.join(', ') + (extra > 0 ? ` +${extra}` : '');
+
+  const actual = Math.max(0, Math.min(100, Math.round(summary.progressActual)));
 
   return (
     <div
       className={cn(
-        'relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-card p-3.5',
-        'cursor-pointer transition hover:bg-muted/30 focus-visible:ring-2',
+        'relative overflow-hidden rounded-xl border bg-card p-4',
+        'cursor-pointer transition hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2',
         accent.ring,
       )}
       onClick={() => go(levelParam)}
@@ -593,51 +596,31 @@ function CriticalLevelGroupCard({
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') go(levelParam); }}
     >
-      <span className={cn('absolute inset-y-0 left-0 w-1', accent.bar)} />
-      <div className="flex items-baseline justify-between gap-2 pl-1">
-        <span className="text-sm font-semibold leading-tight text-foreground">
-          {summary.level}
-        </span>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {summary.total.toLocaleString()} items
-        </span>
-      </div>
-      <div className="pl-1 text-[11px] text-muted-foreground tabular-nums">
-        Earliest {summary.earliestStart ?? '—'} · Latest {summary.latestFinish ?? '—'}
-      </div>
-      <div className="grid grid-cols-4 gap-1 pl-1">
-        {gates.map((gk) => {
-          const g = summary.gates[gk];
-          return (
-            <button
-              key={gk}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (g.pending > 0) {
-                  go(`${levelParam}&blocker=${gk}`);
-                } else {
-                  go(levelParam);
-                }
-              }}
-              title={`${gk.replace(/_/g, ' ')}: ${g.approved}/${g.total} approved, ${g.pending} pending`}
-              className={cn(
-                'flex flex-col items-center justify-center rounded-md px-1 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                chipTone(g),
-              )}
-            >
-              <span className="text-[10px] font-semibold uppercase tracking-wide leading-none">
-                {GATE_SHORT_LABEL[gk]}
-              </span>
-              <span className="mt-1 text-sm font-semibold tabular-nums leading-none">
-                {g.approved}/{g.total}
-              </span>
-              <span className="mt-0.5 text-[9px] uppercase tracking-wide leading-none opacity-80">
-                {g.pending} pending
-              </span>
-            </button>
-          );
-        })}
+      <span className={cn('absolute inset-y-0 left-0 w-1.5', accent.bar)} />
+      <div className="pl-3 flex flex-col gap-2">
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <span className="text-2xl font-bold tracking-tight text-foreground">
+            {summary.level}
+          </span>
+          <span className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 tabular-nums">
+            <span className="font-medium text-foreground">{summary.total.toLocaleString()} items</span>
+            <span aria-hidden>·</span>
+            <span title="Main Category (category1)">{catLabel}</span>
+            <span aria-hidden>·</span>
+            <span>Pre-Eng <span className="font-medium text-foreground">{summary.preEngReady}/{summary.total}</span> Ready</span>
+            <span aria-hidden>·</span>
+            <span>Earliest {summary.earliestStart ?? '—'}</span>
+            <span aria-hidden>·</span>
+            <span>Latest {summary.latestFinish ?? '—'}</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs uppercase tracking-wide text-muted-foreground w-32 shrink-0">
+            Overall Progress
+          </span>
+          <Progress value={actual} className="h-2 flex-1" />
+          <span className="text-sm font-semibold tabular-nums w-12 text-right">{actual}%</span>
+        </div>
       </div>
     </div>
   );
