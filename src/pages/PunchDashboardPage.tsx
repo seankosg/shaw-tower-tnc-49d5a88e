@@ -283,6 +283,7 @@ export default function PunchDashboardPage() {
           </CardContent>
         </Card>
 
+        {false && (
         <Card>
           <CardHeader className="pb-3"><CardTitle className="text-base">Health Distribution</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -303,6 +304,7 @@ export default function PunchDashboardPage() {
             })}
           </CardContent>
         </Card>
+        )}
       </div>
 
       {/* ── Schedule Control ────────────────────────────────────────────── */}
