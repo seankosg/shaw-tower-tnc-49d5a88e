@@ -322,7 +322,8 @@ export default function PunchRawDataPage() {
   const { user, roles, profile } = useAuth() as { user?: any; roles?: AppRole[]; profile?: any };
   const [searchParams, setSearchParams] = useSearchParams();
   const {
-    fields: configRows, isFieldVisible, getLabel, sortFieldNames, getOriginalHeader, loading: configLoading,
+    fields: configRows, isFieldVisible, getLabel, sortFieldNames,
+    getOriginalHeader, getSourceOrigin, loading: configLoading,
   } = usePunchFieldConfig();
 
   const storageKey = user?.id ? `punch-raw-data-state:${user.id}` : 'punch-raw-data-state:anon';
