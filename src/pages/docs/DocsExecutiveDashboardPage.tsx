@@ -309,20 +309,25 @@ function ModuleSection({
   const kpiOverdueResponse = filteredItems.filter((i) => i.is_overdue_response).length;
   const splitOverdue = isAbd || isOmm;
 
-  // ABD: Overdue Response 분포 by Trade
-  const tradeOverdueResponse = useMemo(() => {
-    if (!isAbd) return [] as { trade: TradeCategory | 'Other'; count: number }[];
-    const counts = new Map<string, number>();
-    for (const it of filteredItems) {
-      if (!it.is_overdue_response) continue;
-      const t = resolveTrade({ trade: it.trade, sheet_name: it.document_no });
-      const key = t === '—' ? 'Other' : (t as string);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    const ordered: (TradeCategory | 'Other')[] = [...TRADE_OPTIONS];
-    return ordered
-      .map((t) => ({ trade: t, count: counts.get(t as string) ?? 0 }))
-      .filter((x) => x.count > 0);
+  // ABD: Overdue 분포 by Discipline (Architecture / Mechanical / Electrical)
+  const ABD_DISCIPLINES: TradeCategory[] = ['Architecture', 'Mechanical', 'Electrical'];
+  const disciplineOverdue = useMemo(() => {
+    if (!isAbd) return null;
+    const make = (predicate: (it: typeof filteredItems[number]) => boolean) => {
+      const counts = new Map<TradeCategory, number>();
+      ABD_DISCIPLINES.forEach((d) => counts.set(d, 0));
+      for (const it of filteredItems) {
+        if (!predicate(it)) continue;
+        const t = resolveTrade({ trade: it.trade, sheet_name: it.document_no }) as TradeCategory;
+        if (ABD_DISCIPLINES.includes(t)) counts.set(t, (counts.get(t) ?? 0) + 1);
+      }
+      return ABD_DISCIPLINES.map((d) => ({ trade: d, count: counts.get(d) ?? 0 }));
+    };
+    return {
+      submission: make((it) => !!it.is_overdue_submission),
+      response:   make((it) => !!it.is_overdue_response),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAbd, filteredItems]);
 
   const delayBuckets = useMemo(() => computeDelaySeverityBuckets(
