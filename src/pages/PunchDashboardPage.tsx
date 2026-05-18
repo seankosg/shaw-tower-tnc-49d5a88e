@@ -320,6 +320,7 @@ export default function PunchDashboardPage() {
       )}
 
       {/* ── Pre-Engineering Readiness ──────────────────────────────────── */}
+      {false && (
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Pre-Engineering Readiness</CardTitle></CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -343,6 +344,7 @@ export default function PunchDashboardPage() {
             onClick={() => go('status=ready_not_started')} />
         </CardContent>
       </Card>
+      )}
 
       {/* Existing detailed gate breakdown */}
       <Card>
