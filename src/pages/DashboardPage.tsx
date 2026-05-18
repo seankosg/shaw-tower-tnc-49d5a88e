@@ -119,6 +119,11 @@ export default function DashboardPage() {
     onRefresh: () => fetchData({ silent: true }),
   });
 
+  useHeaderSlot(
+    <AutoRefreshControl state={autoRefresh} />,
+    [autoRefresh.enabled, autoRefresh.intervalMs, autoRefresh.lastUpdatedAt, autoRefresh.isRefreshing],
+  );
+
 
   const today = todayIso();
   const dataDateLabel = formatDdMmm(dataDate);
