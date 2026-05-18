@@ -178,7 +178,10 @@ export default function PunchDashboardPage() {
             {loading ? 'Loading…' : `${stats.total} items tracked · as of ${asOf}`}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate('/punch/raw-data')}>Open Raw Data</Button>
+        <div className="flex items-center gap-2">
+          <AutoRefreshControl state={autoRefresh} />
+          <Button variant="outline" size="sm" onClick={() => navigate('/punch/raw-data')}>Open Raw Data</Button>
+        </div>
       </div>
 
       {/* ── Headline KPI grid ───────────────────────────────────────────── */}
