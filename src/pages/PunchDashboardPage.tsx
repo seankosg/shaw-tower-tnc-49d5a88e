@@ -489,7 +489,8 @@ export default function PunchDashboardPage() {
       </Card>
       )}
 
-      {/* ── Daily Meeting Action View ──────────────────────────────────── */}
+      {/* ── Daily Meeting Action View (hidden) ───────────────────────── */}
+      {false && (
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Daily Meeting Action View</CardTitle></CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -531,6 +532,7 @@ export default function PunchDashboardPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* ── Critical Level Summary ────────────────────────────────────── */}
       {criticalLevelSummary.length > 0 && (
