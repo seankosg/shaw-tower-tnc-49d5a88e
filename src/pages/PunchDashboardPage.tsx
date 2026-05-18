@@ -7,6 +7,7 @@ import {
   AlertCircle, AlertTriangle, CheckCircle2, Clock, CalendarDays,
   Flame, GaugeCircle, ListChecks, PauseCircle, Rocket, ShieldAlert, TrendingUp,
   Layers, Wrench, CalendarArrowUp, CalendarArrowDown,
+  Package, Hammer, PencilRuler,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
