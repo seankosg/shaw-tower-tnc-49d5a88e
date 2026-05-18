@@ -480,39 +480,60 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   // Timeline mini-banner
   const tlX2 = col2 + 0.2, tlW2 = cardW - 0.4;
   const divY = msY + msH + 0.12;
-  const axisY2 = divY + 0.22;
+  const axisY2 = divY + 0.28;
   const incompleteN = incomplete > 0 ? incomplete : 1;
   const mcX2 = tlX2 + (within / incompleteN) * tlW2;
 
   s.addText(`Today  ${fmtLong(tncKPI.dataDate)}`, {
-    x: tlX2, y: divY + 0.02, w: 1.5, h: 0.17, fontFace: FONT_MONO, fontSize: 8, color: C.textMuted,
+    x: tlX2, y: divY, w: 1.6, h: 0.2, fontFace: FONT_MONO, fontSize: 8, color: C.textMuted,
   });
   s.addText(`MC Date  ${fmtLong(tncKPI.dDay)}`, {
-    x: mcX2 - 1.5, y: divY + 0.02, w: 1.45, h: 0.17, fontFace: FONT_MONO, fontSize: 8, color: C.cyan, align: 'right',
+    x: Math.max(tlX2 + 1.7, mcX2 - 1.5), y: divY, w: 1.45, h: 0.2, fontFace: FONT_MONO, fontSize: 8, color: C.cyan, align: 'right',
   });
   s.addShape(pres.ShapeType.rect, { x: tlX2, y: axisY2, w: tlW2, h: 0.015, fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 } });
   s.addShape(pres.ShapeType.rect, { x: tlX2, y: axisY2 - 0.05, w: 0.02, h: 0.08, fill: { color: C.textMuted }, line: { color: C.textMuted, width: 0 } });
 
-  const rowH2 = 0.28, rowGap2 = 0.18;
+  const rowH2 = 0.24, rowGap2 = 0.10;
   const markerH2 = rowH2 * 3 + rowGap2 * 2 + 0.04;
   s.addShape(pres.ShapeType.rect, { x: mcX2-0.012, y: axisY2, w: 0.024, h: markerH2, fill: { color: C.cyan }, line: { color: C.cyan, width: 0 } });
   s.addShape(pres.ShapeType.rect, { x: mcX2-0.012, y: axisY2-0.05, w: 0.024, h: 0.08, fill: { color: C.cyan }, line: { color: C.cyan, width: 0 } });
 
-  const r1Y = axisY2 + 0.03;
+  // Helper: render a timeline row label safely even when the bar width is 0 or tiny.
+  // Falls back to placing the label next to the row baseline so PPT never gets a negative-width text box.
+  const MIN_LABEL_W = 1.6;
+  function drawTimelineLabel(text: string, barX: number, barY: number, barW: number, color: string) {
+    if (barW >= MIN_LABEL_W) {
+      s.addText(text, { x: barX+0.1, y: barY+0.03, w: barW-0.15, h: rowH2-0.04, fontFace: FONT, fontSize: 9, bold: true, color, margin: 0 });
+    } else {
+      // Place label to the right of the (possibly tiny) bar, clamped inside the card
+      const lx = Math.min(barX + Math.max(barW, 0.05) + 0.05, col2 + cardW - MIN_LABEL_W - 0.1);
+      s.addText(text, { x: lx, y: barY+0.03, w: MIN_LABEL_W, h: rowH2-0.04, fontFace: FONT, fontSize: 9, bold: true, color, margin: 0 });
+    }
+  }
+
+  const r1Y = axisY2 + 0.06;
   const withinW2 = (within / incompleteN) * tlW2;
-  s.addShape(pres.ShapeType.rect, { x: tlX2, y: r1Y, w: withinW2, h: rowH2, fill: { color: C.green }, line: { color: C.green, width: 0 } });
-  s.addText(`Within MC Date  ·  ${within} items`, { x: tlX2+0.1, y: r1Y+0.05, w: withinW2-0.15, h: 0.2, fontFace: FONT, fontSize: 9, bold: true, color: C.textPrimary });
+  if (withinW2 > 0.01) {
+    s.addShape(pres.ShapeType.rect, { x: tlX2, y: r1Y, w: withinW2, h: rowH2, fill: { color: C.green }, line: { color: C.green, width: 0 } });
+  }
+  drawTimelineLabel(`Within MC Date  ·  ${within} items`, tlX2, r1Y, withinW2, C.textPrimary);
 
   const r2Y2 = r1Y + rowH2 + rowGap2;
   const beyondW2 = (beyond / incompleteN) * tlW2;
-  s.addShape(pres.ShapeType.rect, { x: tlX2, y: r2Y2, w: withinW2, h: rowH2, fill: { color: '2A1020' }, line: { color: '2A1020', width: 0 } });
-  s.addShape(pres.ShapeType.rect, { x: mcX2, y: r2Y2, w: beyondW2, h: rowH2, fill: { color: C.magentaBright }, line: { color: C.magentaBright, width: 0 } });
-  s.addText(`Beyond  ·  ${beyond} items`, { x: mcX2+0.08, y: r2Y2+0.05, w: beyondW2-0.12, h: 0.2, fontFace: FONT, fontSize: 9, bold: true, color: C.textPrimary });
+  if (withinW2 > 0.01) {
+    s.addShape(pres.ShapeType.rect, { x: tlX2, y: r2Y2, w: withinW2, h: rowH2, fill: { color: '2A1020' }, line: { color: '2A1020', width: 0 } });
+  }
+  if (beyondW2 > 0.01) {
+    s.addShape(pres.ShapeType.rect, { x: mcX2, y: r2Y2, w: beyondW2, h: rowH2, fill: { color: C.magentaBright }, line: { color: C.magentaBright, width: 0 } });
+  }
+  drawTimelineLabel(`Beyond  ·  ${beyond} items`, mcX2, r2Y2, beyondW2, C.textPrimary);
 
   const r3Y2 = r2Y2 + rowH2 + rowGap2;
   const noPlanW2 = (noPlan / incompleteN) * tlW2;
-  s.addShape(pres.ShapeType.rect, { x: tlX2, y: r3Y2, w: noPlanW2, h: rowH2, fill: { color: '4A4A6A' }, line: { color: '4A4A6A', width: 0 } });
-  s.addText(`No Plan  ·  ${noPlan} items`, { x: tlX2+0.08, y: r3Y2+0.05, w: noPlanW2-0.12, h: 0.2, fontFace: FONT, fontSize: 9, bold: true, color: C.textPrimary });
+  if (noPlanW2 > 0.01) {
+    s.addShape(pres.ShapeType.rect, { x: tlX2, y: r3Y2, w: noPlanW2, h: rowH2, fill: { color: '4A4A6A' }, line: { color: '4A4A6A', width: 0 } });
+  }
+  drawTimelineLabel(`No Plan  ·  ${noPlan} items`, tlX2, r3Y2, noPlanW2, C.textPrimary);
 
   drawFooter(pres, s, '02');
 }
