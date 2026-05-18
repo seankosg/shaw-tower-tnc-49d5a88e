@@ -556,10 +556,15 @@ export interface ItemSummary {
   current_stage: string;
   is_completed: boolean;
   is_overdue: boolean;
+  is_overdue_submission: boolean;
+  is_overdue_response: boolean;
   max_delay_days: number;
   overdue_stages: string[];
   detail_route: string;
 }
+
+const isResponseStageKey = (k: string) =>
+  /_review$|_response$|_approval$|\.approved$/.test(k);
 
 export function summariseByItem(records: DocsStageRecord[]): ItemSummary[] {
   const map = new Map<string, ItemSummary>();
@@ -579,6 +584,8 @@ export function summariseByItem(records: DocsStageRecord[]): ItemSummary[] {
         current_stage: r.current_stage,
         is_completed: false,
         is_overdue: false,
+        is_overdue_submission: false,
+        is_overdue_response: false,
         max_delay_days: 0,
         overdue_stages: [],
         detail_route: r.detail_route,
@@ -587,6 +594,8 @@ export function summariseByItem(records: DocsStageRecord[]): ItemSummary[] {
     }
     if (r.is_overdue) {
       s.is_overdue = true;
+      if (isResponseStageKey(r.stage_key)) s.is_overdue_response = true;
+      else s.is_overdue_submission = true;
       s.overdue_stages.push(r.stage_label);
       if (r.delay_days > s.max_delay_days) s.max_delay_days = r.delay_days;
     }
@@ -596,6 +605,7 @@ export function summariseByItem(records: DocsStageRecord[]): ItemSummary[] {
   }
   return Array.from(map.values());
 }
+
 
 export interface StageProgress {
   module: DocModule;
