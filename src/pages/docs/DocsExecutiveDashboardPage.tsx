@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
+import { formatDdMmmSmart } from '@/lib/format';
 import {
   Calendar as CalendarIcon, FileText, BookOpen, ShieldCheck, Package,
   AlertTriangle, CheckCircle2, ListChecks, ArrowRight,
