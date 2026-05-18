@@ -444,23 +444,21 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   cardHeader(col1, row2, cardW, 'Close Out Document',
     `ABD ${docsKPI.abd.total.toLocaleString()} · OMM ${docsKPI.omm.total} · Warranty ${docsKPI.warranty.total} · Spare ${docsKPI.sparePart.total}`,
     docTriggers, C.cyan);
-  ry = row2 + 0.62;
+  ry = row2 + 0.72;
   [
-    { label: 'ABD Submitted',    pct: abdSubPct, color: C.cyanDim },
-    { label: 'ABD Approved',     pct: abdApvPct, color: C.cyan },
-    { label: 'OMM Submitted',    pct: ommSubPct, color: C.stageOfficialLight },
-    { label: 'OMM Under Review', pct: ommUrPct,  color: C.amber },
-    { label: 'Warranty Final',   pct: warFinal,  color: warFinal < 50 ? C.amber : C.green },
-    { label: 'Spare Delivery',   pct: spDel,     color: spDel < 1 ? C.magentaBright : C.green },
-  ].forEach(r => { progressRow(col1, ry, cardW, r.label, r.pct, r.color, null); ry += 0.36; });
+    { label: 'ABD Submitted',        pct: abdSubPct, color: C.cyan },
+    { label: 'OMM Draft Submitted',  pct: ommSubPct, color: C.stageOfficialLight },
+    { label: 'Warranty Final',       pct: warFinal,  color: warFinal < 50 ? C.amber : C.green },
+    { label: 'Spare Delivery',       pct: spDel,     color: spDel < 1 ? C.magentaBright : C.green },
+  ].forEach(r => { progressRow(col1, ry, cardW, r.label, r.pct, r.color, null); ry += 0.45; });
+  void abdApvPct; void ommUrPct;
 
   // Punch card
   const sb   = punchKPI.statusBreakdown;
   const cdb  = punchKPI.completionDateBreakdown;
   const within    = cdb.withinMcDate ?? 0;
   const beyond    = cdb.beyondMcDate ?? 0;
-  const noPlan    = cdb.noPlan ?? 0;
-  const incomplete = within + beyond + noPlan;
+  const incomplete = within + beyond;
   const punchTriggers = beyond > 0 ? [{ status: 'AT_RISK' }] : [];
 
   s.addShape(pres.ShapeType.rect, { x: col2, y: row2, w: cardW, h: tier2H, fill: { color: C.cardBody }, line: { color: C.cardBorder, width: 0.75 } });
@@ -491,14 +489,14 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   s.addText(`Today  ${fmtLong(tncKPI.dataDate)}`, {
     x: tlX2, y: divY, w: 1.6, h: 0.2, fontFace: FONT_MONO, fontSize: 8, color: C.textMuted,
   });
-  s.addText(`MC Date  ${fmtLong(tncKPI.dDay)}`, {
+  s.addText(`SC Date  ${fmtLong(tncKPI.dDay)}`, {
     x: Math.max(tlX2 + 1.7, mcX2 - 1.5), y: divY, w: 1.45, h: 0.2, fontFace: FONT_MONO, fontSize: 8, color: C.cyan, align: 'right',
   });
   s.addShape(pres.ShapeType.rect, { x: tlX2, y: axisY2, w: tlW2, h: 0.015, fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 } });
   s.addShape(pres.ShapeType.rect, { x: tlX2, y: axisY2 - 0.05, w: 0.02, h: 0.08, fill: { color: C.textMuted }, line: { color: C.textMuted, width: 0 } });
 
   const rowH2 = 0.24, rowGap2 = 0.10;
-  const markerH2 = rowH2 * 3 + rowGap2 * 2 + 0.04;
+  const markerH2 = rowH2 * 2 + rowGap2 + 0.04;
   s.addShape(pres.ShapeType.rect, { x: mcX2-0.012, y: axisY2, w: 0.024, h: markerH2, fill: { color: C.cyan }, line: { color: C.cyan, width: 0 } });
   s.addShape(pres.ShapeType.rect, { x: mcX2-0.012, y: axisY2-0.05, w: 0.024, h: 0.08, fill: { color: C.cyan }, line: { color: C.cyan, width: 0 } });
 
@@ -520,7 +518,7 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   if (withinW2 > 0.01) {
     s.addShape(pres.ShapeType.rect, { x: tlX2, y: r1Y, w: withinW2, h: rowH2, fill: { color: C.green }, line: { color: C.green, width: 0 } });
   }
-  drawTimelineLabel(`Within MC Date  ·  ${within} items`, tlX2, r1Y, withinW2, C.textPrimary);
+  drawTimelineLabel(`Within SC Date  ·  ${within} items`, tlX2, r1Y, withinW2, C.textPrimary);
 
   const r2Y2 = r1Y + rowH2 + rowGap2;
   const beyondW2 = (beyond / incompleteN) * tlW2;
@@ -531,13 +529,6 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
     s.addShape(pres.ShapeType.rect, { x: mcX2, y: r2Y2, w: beyondW2, h: rowH2, fill: { color: C.magentaBright }, line: { color: C.magentaBright, width: 0 } });
   }
   drawTimelineLabel(`Beyond  ·  ${beyond} items`, mcX2, r2Y2, beyondW2, C.textPrimary);
-
-  const r3Y2 = r2Y2 + rowH2 + rowGap2;
-  const noPlanW2 = (noPlan / incompleteN) * tlW2;
-  if (noPlanW2 > 0.01) {
-    s.addShape(pres.ShapeType.rect, { x: tlX2, y: r3Y2, w: noPlanW2, h: rowH2, fill: { color: '4A4A6A' }, line: { color: '4A4A6A', width: 0 } });
-  }
-  drawTimelineLabel(`No Plan  ·  ${noPlan} items`, tlX2, r3Y2, noPlanW2, C.textPrimary);
 
   drawFooter(pres, s, '02');
 }
@@ -1102,14 +1093,19 @@ export function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
   const cW = 5.9, cH = 2.65;
   const positions: [number,number][] = [[0.5, 1.55], [6.9, 1.55], [0.5, 4.35], [6.9, 4.35]];
 
+  const abdTot     = docsKPI.abd.total || 1;
+  const abdSubPctC = (abdSub / abdTot) * 100;
+  const abdUrPctC  = (abdUr  / abdTot) * 100;
+  const abdNsPctC  = (abdNs  / abdTot) * 100;
+  void abdApvPct; void abdApv;
+
   const modules = [
     {
       name: 'ABD', subtitle: `${docsKPI.abd.total.toLocaleString()} as-built drawings`, accent: C.cyan,
       rows: [
-        { label: 'Submitted',     val: abdSub.toLocaleString(), unit: ' dwgs', color: C.cyan,         isPct: false },
-        { label: 'Approved',      val: abdApv.toLocaleString(), unit: ' dwgs', color: abdApvPct < 50 ? C.amber : C.green, isPct: false },
-        { label: 'Under Review',  val: abdUr.toLocaleString(),  unit: ' dwgs', color: C.stageOfficial, isPct: false },
-        { label: 'Not Submitted', val: abdNs.toLocaleString(),  unit: ' dwgs', color: C.magentaBright, isPct: false },
+        { label: 'Submitted',     val: abdSub.toLocaleString(), unit: ' dwgs', color: C.cyan,          isPct: true, pct: abdSubPctC },
+        { label: 'Under Review',  val: abdUr.toLocaleString(),  unit: ' dwgs', color: C.stageOfficial, isPct: true, pct: abdUrPctC },
+        { label: 'Not Submitted', val: abdNs.toLocaleString(),  unit: ' dwgs', color: C.magentaBright, isPct: true, pct: abdNsPctC },
       ],
     },
     {
@@ -1243,105 +1239,7 @@ export function buildPunchSnapshot(pres: pptxgen, punchKPI: PunchKPI, meta: Repo
   ];
   heroCards.forEach((c, i) => drawCard(pres, s, 0.5 + i * (heroW + heroGap), heroY, heroW, heroH, c));
 
-  // ── Detail row: 2 list cards (slide 11 pattern) ──
-  const listY = heroY + heroH + 0.2, listH = 1.75;
-  const listW = (12.3 - 0.25) / 2;
-
-  const pct = (n: number) => total > 0 ? (n / total) * 100 : 0;
-
-  type ListRow = { label: string; count: number; color: string };
-  const statusRows: ListRow[] = [
-    { label: 'Completed',   count: sb.completed,  color: C.green },
-    { label: 'In Progress', count: sb.wip,        color: C.cyan },
-    { label: 'Not Started', count: sb.notStarted, color: C.magentaBright },
-  ];
-  const riskRows: ListRow[] = [
-    { label: 'Pre-Eng Blocked', count: risk.blocked,       color: C.amber },
-    { label: 'Overdue',         count: risk.overdue,       color: C.magentaBright },
-    { label: 'Critical Delay',  count: risk.criticalDelay, color: C.magentaBright },
-  ];
-
-  function drawListCard(cx: number, cy: number, title: string, accent: string, rows: ListRow[], alert: boolean) {
-    // Card body + top stripe
-    s.addShape(pres.ShapeType.rect, {
-      x: cx, y: cy, w: listW, h: listH,
-      fill: { color: alert ? C.cardAlert : C.cardBody },
-      line: alert ? { color: C.cardAlertBorder, width: 1.5 } : { color: C.cardBorder, width: 0.75 },
-    });
-    s.addShape(pres.ShapeType.rect, {
-      x: cx, y: cy, w: listW, h: alert ? 0.08 : 0.05,
-      fill: { color: accent }, line: { color: accent, width: 0 },
-    });
-    s.addText(title, {
-      x: cx + 0.25, y: cy + 0.2, w: listW - 0.5, h: 0.3,
-      fontFace: FONT, fontSize: 13, bold: true, color: C.textPrimary,
-    });
-    // Rows
-    const rowsTop = cy + 0.65;
-    const rowH = (listH - 0.85) / rows.length;
-    rows.forEach((r, i) => {
-      const ry = rowsTop + i * rowH;
-      s.addText(r.label, {
-        x: cx + 0.25, y: ry, w: listW * 0.55, h: 0.28,
-        fontFace: FONT, fontSize: 12, color: C.textSecondary,
-      });
-      const pctText = total > 0 ? `${r.count}  (${pct(r.count).toFixed(0)}%)` : `${r.count}`;
-      s.addText(pctText, {
-        x: cx + listW - 1.8, y: ry, w: 1.55, h: 0.28,
-        fontFace: FONT, fontSize: 13, bold: true, color: r.color, align: 'right',
-      });
-      // Mini bar
-      const barY = ry + 0.32;
-      const barW = listW - 0.5;
-      s.addShape(pres.ShapeType.rect, {
-        x: cx + 0.25, y: barY, w: barW, h: 0.06,
-        fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 },
-      });
-      const fw = Math.max(0.01, (pct(r.count) / 100) * barW);
-      s.addShape(pres.ShapeType.rect, {
-        x: cx + 0.25, y: barY, w: fw, h: 0.06,
-        fill: { color: r.color }, line: { color: r.color, width: 0 },
-      });
-    });
-  }
-
-  drawListCard(0.5, listY, 'Status Mix', C.cyan, statusRows, false);
-  drawListCard(0.5 + listW + 0.25, listY, 'Risk Watch', C.magentaBright, riskRows,
-    risk.overdue > 0 || risk.criticalDelay > 0);
-
-  // ── TOP 3 LATEST table ──
-  const t3Y = listY + listH + 0.2;
-  s.addText('TOP 3 LATEST  ·  Beyond SC  ·  Scope Review Required', {
-    x: 0.5, y: t3Y, w: 10, h: 0.24,
-    fontFace: FONT_MONO, fontSize: 11, color: C.magentaBright, charSpacing: 2,
-  });
-  s.addShape(pres.ShapeType.rect, {
-    x: 0.5, y: t3Y + 0.27, w: 12.3, h: 0.015,
-    fill: { color: C.cardBorder }, line: { color: C.cardBorder, width: 0 },
-  });
-
-  const rowItems = latest.length > 0
-    ? latest.slice(0, 3).map((item, i) => ({ idx: i + 1, item }))
-    : [1, 2, 3].map((n) => ({ idx: n, item: null as null | typeof latest[0] }));
-
-  const ROW_H = 0.30;
-  rowItems.forEach(({ idx, item }, i) => {
-    const iy = t3Y + 0.32 + i * (ROW_H + 0.02);
-    s.addShape(pres.ShapeType.rect, {
-      x: 0.5, y: iy, w: 12.3, h: ROW_H,
-      fill: { color: i % 2 === 0 ? C.cardBody : '0D1A35' },
-      line: { color: C.cardBorder, width: 0.5 },
-    });
-    s.addText(String(idx), { x: 0.6, y: iy + 0.04, w: 0.35, h: 0.22, fontFace: FONT, fontSize: 12, bold: true, color: C.magentaBright });
-    if (item) {
-      s.addText(item.itemNo || '-', { x: 1.0, y: iy + 0.04, w: 1.5, h: 0.22, fontFace: FONT_MONO, fontSize: 9, color: C.textMuted });
-      s.addText(item.description || '(no description)', { x: 2.6, y: iy + 0.04, w: 6.2, h: 0.22, fontFace: FONT, fontSize: 10, color: C.textPrimary });
-      s.addText(item.discipline || '-', { x: 8.9, y: iy + 0.04, w: 2.0, h: 0.22, fontFace: FONT, fontSize: 9, color: C.textSecondary });
-      s.addText(fmtLong(item.plannedCompletionDate) || '-', { x: 11.0, y: iy + 0.04, w: 1.8, h: 0.22, fontFace: FONT_MONO, fontSize: 9, color: C.magentaBright, align: 'right' });
-    } else {
-      s.addText('— Awaiting data —', { x: 1.0, y: iy + 0.04, w: 10, h: 0.22, fontFace: FONT, fontSize: 10, color: C.textMuted, italic: true });
-    }
-  });
+  void latest; void risk; void total;
 
   drawFooter(pres, s, '12');
 }

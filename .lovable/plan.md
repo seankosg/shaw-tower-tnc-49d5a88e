@@ -1,75 +1,56 @@
-## ABD KPI 영역 — 같은 Tier 2등분 재구성
+# PPT 빌더 정렬 — REF 슬라이드와 일치시키기
 
-### 대상
-`src/pages/docs/DocsExecutiveDashboardPage.tsx` 의 `isAbd` 분기 (L404~L461). OMM/Warranty/Spare Part 분기는 변경 없음.
+업로드한 REF .pptx 3장(Dashboard, Close Out Documents, Punch List)을 기준으로 `src/lib/ppt-builder.ts`의 해당 3개 슬라이드 빌더를 수정합니다.
 
-### 새 레이아웃
-```text
-┌───────────────────────────────────┬───────────────────────────────────┐
-│  Overview                          │  Overdue by Discipline             │
-│  ┌─────────┬─────────┬─────────┐   │  Submission                        │
-│  │ Total   │Submitted│Remaining│   │  ┌─Arch─┬─Mech─┬─Elec─┐            │
-│  │  XXX    │   XX %  │  XX     │   │  │  N   │  N   │  N   │            │
-│  │         │ progress│         │   │  └──────┴──────┴──────┘            │
-│  └─────────┴─────────┴─────────┘   │  Response                          │
-│                                    │  ┌─Arch─┬─Mech─┬─Elec─┐            │
-│                                    │  │  N   │  N   │  N   │            │
-│                                    │  └──────┴──────┴──────┘            │
-└───────────────────────────────────┴───────────────────────────────────┘
-```
+## 가정
 
-컨테이너: `grid grid-cols-1 lg:grid-cols-2 gap-3`. 좁은 화면(<lg)에서는 세로로 적층.
+"마지막 슬라이드의 ABD 카드"는 REF 3장 중 Punch List 슬라이드에는 ABD 카드가 없으므로, ABD 카드가 등장하는 **Close Out Documents 슬라이드(REF 2장째)**의 ABD 카드로 해석했습니다. 다른 의도였다면 알려주세요.
 
-### 카드 1 — Overview (왼쪽)
-- 단일 `Card` (`rounded-xl border bg-card p-3.5`)
-- 내부 3열 (`grid grid-cols-3 divide-x`)
-  - **Total** — value, 클릭 시 `extraParams()`만 적용
-  - **Submitted** — value + `XX %` sublabel + `Progress` 바, 클릭 시 `bucket=done` 추가
-  - **Remaining** — `kpiTotal − kpiCompleted`, 클릭 시 `extraParams()`만 적용
-- 각 셀: `flex flex-col items-start px-3 py-2`, label은 muted 작은 글자, value는 큰 숫자
+---
 
-### 카드 2 — Overdue by Discipline (오른쪽)
-- 단일 `Card` (`rounded-xl border bg-card p-3.5`)
-- 내부 2개 섹션 (Submission, Response), 각 섹션마다 3개 작은 칩
-- 칩 그리드: `grid grid-cols-3 gap-2`
-- 각 칩(버튼): trade 라벨(Arch/Mech/Elec) + 카운트
-  - Submission 칩: 카운트 색 `text-red-600 dark:text-red-400`
-  - Response 칩: 카운트 색 `text-amber-600 dark:text-amber-400`
-- 클릭: `{ trade: <full name>, overdue: '1', overdue_type: 'submission' | 'response' }`
+## 1) `buildDashboard` (슬라이드 02) — `Close Out Document` / `Punch List` 카드 조정
 
-### 데이터 모델
-기존 `tradeOverdueResponse` memo를 일반화하여 단일 `disciplineOverdue` memo로 통합:
-```ts
-const DISCIPLINES: TradeCategory[] = ['Architecture', 'Mechanical', 'Electrical'];
+**Close Out Document 카드 (좌하단)**
+- 현재 6행 → REF는 4행. 다음 4개만 표시:
+  1. `ABD Submitted` — `abdSubPct`, cyan
+  2. `OMM Draft Submitted` — `ommSubPct`, purple
+  3. `Warranty Final` — `warFinal`, amber/green
+  4. `Spare Delivery` — `spDel`, magenta/green
+- 행 간격 `+0.45`로 늘려 빈 공간 흡수 (현재 `+0.36`).
 
-const disciplineOverdue = useMemo(() => {
-  if (!isAbd) return null;
-  const make = (predicate: (it: ItemRow) => boolean) => {
-    const m = new Map<TradeCategory, number>();
-    DISCIPLINES.forEach(d => m.set(d, 0));
-    for (const it of filteredItems) {
-      if (!predicate(it)) continue;
-      const t = resolveTrade({ trade: it.trade, sheet_name: it.document_no }) as TradeCategory;
-      if (DISCIPLINES.includes(t)) m.set(t, (m.get(t) ?? 0) + 1);
-    }
-    return DISCIPLINES.map(d => ({ trade: d, count: m.get(d) ?? 0 }));
-  };
-  return {
-    submission: make(it => it.is_overdue_submission),
-    response:   make(it => it.is_overdue_response),
-  };
-}, [isAbd, filteredItems]);
-```
+**Punch List 카드 (우하단)**
+- 타임라인 라벨을 `MC Date` → `SC Date`로 통일 (REF와 일치).
+- 타임라인 3행(Within / Beyond / No Plan) → **2행**(`Within SC Date · N items`, `Beyond · N items`)으로 축소. `No Plan` 분기·렌더 코드 제거.
+- 미니 상태카드 3개(Completed/In Progress/Not Started)는 유지.
 
-### 제거/대체되는 기존 요소
-- 4-셀 SummaryTile 그리드 (L407-422) → Overview 카드로 대체
-- "Overdue — Response by Trade" 박스 (L424-460) → Overdue by Discipline 카드의 Response 섹션으로 흡수
-- 기존 `tradeOverdueResponse` memo (L313-326) → `disciplineOverdue`로 교체
-- 사용하지 않게 되는 import: `SummaryTile`은 OMM 등에서 계속 사용되므로 유지
+## 2) `buildDocsSnapshot` (슬라이드 11) — ABD 카드에 진도율 바차트 추가
 
-### 가정
-- "세개의 공종" = **Architecture / Mechanical / Electrical** (가장 일반적인 3대 공종, 기존 `TRADE_SHORT`의 Arch/Mech/Elec과 일치)
-- 다른 공종으로 원하시면 알려주세요 (예: Structure, HVAC 등)
+REF의 OMM/Warranty/Spare Parts 카드처럼 ABD 카드의 각 행에도 진도율 바를 표시. 단위는 `dwgs` 카운트를 유지하되, 옆에 퍼센트 기반의 바를 함께 렌더.
 
-### 영향 범위
-단일 파일 수정: `src/pages/docs/DocsExecutiveDashboardPage.tsx`. 다른 모듈/페이지에 영향 없음.
+- ABD 행 구성을 3행으로 축소(REF와 일치):
+  1. `Submitted` — `abdSub` dwgs, bar = `docsKPI.abd.pcts['sub1_submission_date']`, color `C.cyan`
+  2. `Under Review` — `abdUr` dwgs, bar = `abdUr / total * 100`, color `C.stageOfficial`
+  3. `Not Submitted` — `abdNs` dwgs, bar = `abdNs / total * 100`, color `C.magentaBright`
+- 기존 `Approved` 행은 제거(REF에 없음). 색상 결정 로직(`abdApvPct`)은 헤더 stripe accent에만 활용하거나 제거.
+- 렌더링: 기존 `kpiRow` 다음 줄에 `barRow(...)`를 ABD에도 호출하도록 `isPct` 분기 대신 항상 바를 그리되, ABD는 값 텍스트가 `count + " dwgs"` 형태가 되도록 `kpiRow` 시그니처/호출에서 `unit`/`color`만 조정.
+
+## 3) `buildPunchSnapshot` (슬라이드 12) — 디테일 리스트 카드 제거
+
+REF는 상단 3개 히어로 카드(Completion / Weighted Actual / Beyond SC)만 표시하고 그 아래는 비어 있음. 현재는 그 아래에 Status/Risk 2개 리스트 카드를 그리고 있으므로:
+
+- `drawListCard` 호출 및 `statusRows`/`riskRows`/`listY`/`listH` 등 디테일 섹션 블록을 모두 제거.
+- 헤더·헤드라인·3 히어로 카드·푸터만 남김. (필요 시 `latest`/`risk` 등 미사용 참조 정리.)
+
+## 4) 회귀 검증
+
+- 위 변경 후 다시 PPT를 생성하여 LibreOffice로 PDF→이미지 변환하고 슬라이드 2/11/12를 시각 검수:
+  - 텍스트 겹침 없음, 카드 경계 안에 모든 요소가 위치
+  - ABD 카드 3행 + 바차트가 OMM/Warranty/Spare Parts와 시각적으로 일관
+  - Punch 슬라이드 하단 여백이 REF처럼 비어 있음
+
+## Technical notes
+
+- 변경 파일: `src/lib/ppt-builder.ts` 만 수정. 다른 슬라이드(T&C, Defect 계열)는 손대지 않음.
+- 데이터 모델(`DocsKPI`, `PunchKPI`)이나 데이터 페치 로직은 변경하지 않음 — 이미 필요한 필드 모두 제공됨.
+- `progressRow`는 그대로 재사용. `kpiRow`/`barRow`는 ABD 카드에서 항상 바를 그리도록 호출 패턴만 조정.
+- ABD 바의 분모는 `docsKPI.abd.total`로 통일하여 3행 합이 100%가 되도록 함.
