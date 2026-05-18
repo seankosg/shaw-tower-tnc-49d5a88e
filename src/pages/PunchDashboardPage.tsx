@@ -25,7 +25,8 @@ import {
   isDueWithin, isPlannedToStartWithin, dominantBlocker, blockersFor,
   weightedProgress, simpleAverageProgress, groupProgressMatrix, recoveryPriorityScore,
   suggestedRecoveryAction, computePunchDqCounts, PUNCH_DQ_LABEL, topDelayingParties,
-  type PunchBlockerKind, type PunchDqKey,
+  summarizeByCriticalLevel, GATE_SHORT_LABEL, CRITICAL_LEVEL_ACCENT,
+  type PunchBlockerKind, type PunchDqKey, type CriticalLevelSummary, type GateKey,
 } from '@/lib/punch-dashboard-utils';
 
 const PAGE_SIZE = 1000;
@@ -170,6 +171,7 @@ export default function PunchDashboardPage() {
   }, [rows, asOf]);
 
   const dqCounts = useMemo(() => computePunchDqCounts(rows), [rows]);
+  const criticalLevelSummary = useMemo(() => summarizeByCriticalLevel(rows), [rows]);
   const topSubcons = useMemo(() => topDelayingParties(rows, (r) => r.subcontractor_name ?? '', 5, asOf), [rows, asOf]);
   const topPics = useMemo(() => topDelayingParties(rows, (r) => r.hdec_pic_name ?? '', 5, asOf), [rows, asOf]);
 
@@ -527,6 +529,24 @@ export default function PunchDashboardPage() {
         </CardContent>
       </Card>
 
+      {/* ── Critical Level Summary (Pre-Engineering Gates) ─────────────── */}
+      {criticalLevelSummary.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Critical Level Summary</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Pre-Engineering gate readiness per Critical Level. "Not Required" counts as Approved.
+              Click a chip to drill into pending items.
+            </p>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {criticalLevelSummary.map((s) => (
+              <CriticalLevelGroupCard key={s.level} summary={s} go={go} />
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Punch Data Quality ─────────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Punch Data Quality</CardTitle></CardHeader>
@@ -543,6 +563,86 @@ export default function PunchDashboardPage() {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────
+
+function CriticalLevelGroupCard({
+  summary,
+  go,
+}: {
+  summary: CriticalLevelSummary;
+  go: (qs: string) => void;
+}) {
+  const accent = CRITICAL_LEVEL_ACCENT[summary.level];
+  const levelParam = `criticalLevel=${encodeURIComponent(summary.level)}`;
+  const gates: GateKey[] = ['material_approval', 'material_procurement', 'drawing_approval', 'mos_approval'];
+
+  const chipTone = (g: { approved: number; pending: number; total: number }) => {
+    if (g.pending === 0) return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20';
+    if (g.pending * 2 > g.total) return 'bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20';
+    return 'bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20';
+  };
+
+  return (
+    <div
+      className={cn(
+        'relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-card p-3.5',
+        'cursor-pointer transition hover:bg-muted/30 focus-visible:ring-2',
+        accent.ring,
+      )}
+      onClick={() => go(levelParam)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') go(levelParam); }}
+    >
+      <span className={cn('absolute inset-y-0 left-0 w-1', accent.bar)} />
+      <div className="flex items-baseline justify-between gap-2 pl-1">
+        <span className="text-sm font-semibold leading-tight text-foreground">
+          {summary.level}
+        </span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {summary.total.toLocaleString()} items
+        </span>
+      </div>
+      <div className="pl-1 text-[11px] text-muted-foreground tabular-nums">
+        Earliest {summary.earliestStart ?? '—'} · Latest {summary.latestFinish ?? '—'}
+      </div>
+      <div className="grid grid-cols-4 gap-1 pl-1">
+        {gates.map((gk) => {
+          const g = summary.gates[gk];
+          return (
+            <button
+              key={gk}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (g.pending > 0) {
+                  go(`${levelParam}&blocker=${gk}`);
+                } else {
+                  go(levelParam);
+                }
+              }}
+              title={`${gk.replace(/_/g, ' ')}: ${g.approved}/${g.total} approved, ${g.pending} pending`}
+              className={cn(
+                'flex flex-col items-center justify-center rounded-md px-1 py-1.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                chipTone(g),
+              )}
+            >
+              <span className="text-[10px] font-semibold uppercase tracking-wide leading-none">
+                {GATE_SHORT_LABEL[gk]}
+              </span>
+              <span className="mt-1 text-sm font-semibold tabular-nums leading-none">
+                {g.approved}/{g.total}
+              </span>
+              <span className="mt-0.5 text-[9px] uppercase tracking-wide leading-none opacity-80">
+                {g.pending} pending
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 
 function KpiCard({ label, value, icon, accent, accentTone, tone, onClick }: {
   label: string; value: number | string; icon?: React.ReactNode;
