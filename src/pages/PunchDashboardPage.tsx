@@ -424,7 +424,8 @@ export default function PunchDashboardPage() {
         </CardContent>
       </Card>
 
-      {/* ── Recovery Priority ──────────────────────────────────────────── */}
+      {/* ── Recovery Priority (hidden) ───────────────────────────────── */}
+      {false && (
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Today's Recovery Priority Items</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto p-0">
@@ -486,8 +487,10 @@ export default function PunchDashboardPage() {
           </Table>
         </CardContent>
       </Card>
+      )}
 
-      {/* ── Daily Meeting Action View ──────────────────────────────────── */}
+      {/* ── Daily Meeting Action View (hidden) ───────────────────────── */}
+      {false && (
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Daily Meeting Action View</CardTitle></CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -529,6 +532,7 @@ export default function PunchDashboardPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* ── Critical Level Summary ────────────────────────────────────── */}
       {criticalLevelSummary.length > 0 && (
