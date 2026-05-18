@@ -623,8 +623,8 @@ function CriticalLevelRowCard({
             <MetaChip icon={<ListChecks className="h-3.5 w-3.5" />} label="Items" value={summary.total.toLocaleString()} className="min-w-[6.5rem]" />
             <MetaChip icon={<Layers className="h-3.5 w-3.5" />} label="Main Cat" value={catLabel} className="min-w-[10rem] flex-1" title={cats.map(c => `${c.name} (${c.count})`).join(', ')} />
             <MetaChip icon={<Wrench className="h-3.5 w-3.5" />} label="Pre-Eng" value={`${summary.preEngReady}/${summary.total}`} className="min-w-[7rem]" />
-            <MetaChip icon={<CalendarArrowUp className="h-3.5 w-3.5" />} label="Earliest" value={summary.earliestStart ?? '—'} className="min-w-[8.5rem]" />
-            <MetaChip icon={<CalendarArrowDown className="h-3.5 w-3.5" />} label="Latest" value={summary.latestFinish ?? '—'} className="min-w-[8.5rem]" />
+            <MetaChip icon={<CalendarArrowUp className="h-3.5 w-3.5" />} label="Earliest" value={formatDashDate(summary.earliestStart)} className="min-w-[8.5rem]" />
+            <MetaChip icon={<CalendarArrowDown className="h-3.5 w-3.5" />} label="Latest" value={formatDashDate(summary.latestFinish)} className="min-w-[8.5rem]" />
           </div>
         </div>
         <div className="flex items-center gap-3">
