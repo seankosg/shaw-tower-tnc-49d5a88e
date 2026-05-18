@@ -383,21 +383,29 @@ function normalizeCriticalLevel(v: string | null | undefined): CriticalLevel {
 }
 
 export function summarizeByCriticalLevel(items: PunchItem[]): CriticalLevelSummary[] {
-  const buckets = new Map<CriticalLevel, CriticalLevelSummary>();
-  const ensure = (lvl: CriticalLevel): CriticalLevelSummary => {
+  const buckets = new Map<CriticalLevel, { s: CriticalLevelSummary; cats: Map<string, number>; rows: PunchItem[] }>();
+  const ensure = (lvl: CriticalLevel) => {
     let b = buckets.get(lvl);
     if (!b) {
       b = {
-        level: lvl,
-        total: 0,
-        earliestStart: null,
-        latestFinish: null,
-        gates: {
-          material_approval: { approved: 0, pending: 0, total: 0 },
-          material_procurement: { approved: 0, pending: 0, total: 0 },
-          drawing_approval: { approved: 0, pending: 0, total: 0 },
-          mos_approval: { approved: 0, pending: 0, total: 0 },
+        s: {
+          level: lvl,
+          total: 0,
+          earliestStart: null,
+          latestFinish: null,
+          preEngReady: 0,
+          mainCategories: [],
+          progressActual: 0,
+          progressPlanned: 0,
+          gates: {
+            material_approval: { approved: 0, pending: 0, total: 0 },
+            material_procurement: { approved: 0, pending: 0, total: 0 },
+            drawing_approval: { approved: 0, pending: 0, total: 0 },
+            mos_approval: { approved: 0, pending: 0, total: 0 },
+          },
         },
+        cats: new Map<string, number>(),
+        rows: [],
       };
       buckets.set(lvl, b);
     }
@@ -407,17 +415,24 @@ export function summarizeByCriticalLevel(items: PunchItem[]): CriticalLevelSumma
   for (const r of items) {
     const lvl = normalizeCriticalLevel(r.critical_level);
     const b = ensure(lvl);
-    b.total++;
+    b.s.total++;
+    b.rows.push(r);
 
-    if (r.planned_start_date && (!b.earliestStart || r.planned_start_date < b.earliestStart)) {
-      b.earliestStart = r.planned_start_date;
+    if (r.planned_start_date && (!b.s.earliestStart || r.planned_start_date < b.s.earliestStart)) {
+      b.s.earliestStart = r.planned_start_date;
     }
-    if (r.planned_completion_date && (!b.latestFinish || r.planned_completion_date > b.latestFinish)) {
-      b.latestFinish = r.planned_completion_date;
+    if (r.planned_completion_date && (!b.s.latestFinish || r.planned_completion_date > b.s.latestFinish)) {
+      b.s.latestFinish = r.planned_completion_date;
     }
+
+    if (r.pre_engineering_ready) b.s.preEngReady++;
+
+    const catRaw = String((r as PunchItem & { category1?: string | null }).category1 ?? '').trim();
+    const cat = catRaw || 'Uncategorized';
+    b.cats.set(cat, (b.cats.get(cat) ?? 0) + 1);
 
     const tally = (key: GateKey, approved: boolean) => {
-      const g = b.gates[key];
+      const g = b.s.gates[key];
       g.total++;
       if (approved) g.approved++; else g.pending++;
     };
@@ -427,9 +442,18 @@ export function summarizeByCriticalLevel(items: PunchItem[]): CriticalLevelSumma
     tally('mos_approval', isApprovalApproved(r.mos_approval_status));
   }
 
+  for (const b of buckets.values()) {
+    b.s.mainCategories = Array.from(b.cats.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, z) => z.count - a.count);
+    const wp = weightedProgress(b.rows);
+    b.s.progressActual = wp.actual;
+    b.s.progressPlanned = wp.planned;
+  }
+
   return CRITICAL_LEVEL_ORDER
-    .map((lvl) => buckets.get(lvl))
-    .filter((b): b is CriticalLevelSummary => !!b && b.total > 0);
+    .map((lvl) => buckets.get(lvl)?.s)
+    .filter((s): s is CriticalLevelSummary => !!s && s.total > 0);
 }
 
 export const GATE_SHORT_LABEL: Record<GateKey, string> = {
