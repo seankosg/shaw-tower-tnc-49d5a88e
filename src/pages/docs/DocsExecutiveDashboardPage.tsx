@@ -118,7 +118,7 @@ export default function DocsExecutiveDashboardPage() {
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2 font-normal">
               <CalendarIcon className="h-4 w-4" />
-              Data Date: {format(asOf, 'yyyy-MM-dd')}
+              Data Date: {formatDdMmmSmart(asOf.toISOString().slice(0, 10))}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="end">
