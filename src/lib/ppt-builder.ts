@@ -131,6 +131,7 @@ interface PunchKPI {
   actionPlanTriggers:      NonNullable<PunchReportData['actionPlanTriggers']>;
   progressKpi:             NonNullable<PunchReportData['progressKpi']>;
   riskKpi:                 NonNullable<PunchReportData['riskKpi']>;
+  criticalLevelSummary:    NonNullable<PunchReportData['criticalLevelSummary']>;
 }
 
 // ─────────────────────────────────────────
