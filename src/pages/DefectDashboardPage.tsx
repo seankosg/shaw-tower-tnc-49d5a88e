@@ -741,6 +741,7 @@ function PlanActualTable({
   dataDateLabel,
   navigate,
   filter,
+  planMode = 'baseline',
 }: {
   rows: DefectPlanActualRow[];
   groupParam: GroupParam;
@@ -757,6 +758,7 @@ function PlanActualTable({
     onTextChange: (v: string) => void;
     onSelectedChange: (v: string[]) => void;
   };
+  planMode?: 'baseline' | 'remaining';
 }) {
   const go = (groupKey: string, extra?: Record<string, string>) => {
     const params: Record<string, string> = { source: 'dashboard', ...extra };
