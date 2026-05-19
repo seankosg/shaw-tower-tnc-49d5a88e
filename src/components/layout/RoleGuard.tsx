@@ -60,7 +60,13 @@ export function RoleGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!canAccessRoute(roles, pathname)) {
+  // Report tab has a custom gate (admin / pm_pd / Supp-team d_superuser+)
+  const isReportRoute = pathname === '/admin/report' || pathname.startsWith('/admin/report/');
+  const routeAllowed = isReportRoute
+    ? canAccessReport(roles, profile)
+    : canAccessRoute(roles, pathname);
+
+  if (!routeAllowed) {
     const target = FALLBACK_ROUTES.find((p) => p !== pathname && canAccessRoute(roles, p));
     if (!target) {
       return (
