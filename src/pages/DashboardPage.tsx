@@ -326,6 +326,7 @@ export default function DashboardPage() {
         exportedByName: profile?.name || profile?.login_id || 'unknown',
         exportedByRole: roles[0] || profile?.user_type || 'user',
         chartElement: scurveChartRef.current,
+        planMode,
       });
       toast({ title: 'Export complete', description: `${rowCount} buckets → ${fileName}` });
     } catch (e: unknown) {
