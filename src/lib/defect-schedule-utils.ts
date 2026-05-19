@@ -403,11 +403,7 @@ export function aggregateDefectSchedule(
     });
   }
 
-  rows.sort((a, b) => {
-    const ra = a.cumPlan ? a.cumActual / a.cumPlan : 1;
-    const rb = b.cumPlan ? b.cumActual / b.cumPlan : 1;
-    return ra - rb || a.label.localeCompare(b.label);
-  });
+  rows.sort((a, b) => a.label.localeCompare(b.label));
 
   return { buckets, rows };
 }
