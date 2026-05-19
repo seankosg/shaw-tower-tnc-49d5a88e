@@ -78,6 +78,16 @@ export default function SchedulePage() {
   const [pickedField, setPickedField] = useState<'planned' | 'actual'>((searchParams.get('picked_field') as 'planned' | 'actual') || 'planned');
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  const [planMode, setPlanMode] = usePlanMode();
+  // URL → planMode on mount (URL has priority)
+  useEffect(() => {
+    const urlMode = searchParams.get('plan_mode');
+    if ((urlMode === 'baseline' || urlMode === 'remaining') && urlMode !== planMode) {
+      setPlanMode(urlMode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     localStorage.setItem('schedule_hide_past', hidePast ? '1' : '0');
   }, [hidePast]);
@@ -100,8 +110,9 @@ export default function SchedulePage() {
     setOrDelete('risk_panel', showRiskPanel ? '1' : '', '');
     setOrDelete('picked', pickedDate ? format(pickedDate, 'yyyy-MM-dd') : '', format(new Date(), 'yyyy-MM-dd'));
     setOrDelete('picked_field', pickedField, 'planned');
+    setOrDelete('plan_mode', planMode, 'remaining');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, systemTextFilter, selectedSystemFilters, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, searchParams, setSearchParams]);
+  }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, systemTextFilter, selectedSystemFilters, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, planMode, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (groupBy === 'system') return;
