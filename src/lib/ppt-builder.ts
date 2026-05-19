@@ -619,18 +619,8 @@ export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
     { name: 'Pre-Test · Actual',     labels: cats, values: pts.map(p => p.t1ActualPct) },
     { name: 'Official Test · Plan',  labels: cats, values: pts.map(p => p.t2PlanPct) },
     { name: 'Official Test · Actual',labels: cats, values: pts.map(p => p.t2ActualPct) },
-    { name: 'Test Report · Plan',    labels: cats, values: pts.map(p => 0) }, // placeholder — actual R2S plan computed below
+    { name: 'Test Report · Plan',    labels: cats, values: pts.map(p => p.r2sPlanPct) },
   ];
-
-  // Test Report Plan: use snapshot planPct to interpolate if possible
-  // Simple approach: zero until last data date, then ramp to 100 by dDay
-  const lastActualIdx = pts.reduce((acc, p, i) => p.t1ActualPct != null ? i : acc, 0);
-  chartData[4].values = pts.map((p, i) => {
-    if (i < lastActualIdx) return 0;
-    const remaining = pts.length - 1 - lastActualIdx;
-    if (remaining <= 0) return 0;
-    return ((i - lastActualIdx) / remaining) * 100;
-  });
 
   const CX = 0.5, CY = 1.75, CW = 12.3, CH = 4.9;
   s.addChart('line' as pptxgen.CHART_NAME, chartData, {
