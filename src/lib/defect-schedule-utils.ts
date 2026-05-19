@@ -297,6 +297,8 @@ export function getDefectGroupHeaderLabel(by: DefectGroupBySpec): string {
 }
 
 // ───── main aggregation ─────
+export type DefectPlanMode = 'baseline' | 'remaining';
+
 export interface DefectAggregateOptions {
   /** Single dimension or ordered list of dimensions to combine into composite group keys. */
   groupBy: DefectGroupBySpec;
@@ -305,6 +307,13 @@ export interface DefectAggregateOptions {
   rangeStart: string;
   rangeEnd: string;
   asOfDate: string;
+  /**
+   * Plan counting mode:
+   *  - 'baseline' (default): every planned date counts.
+   *  - 'remaining': planned dates count ONLY when that stage is NOT yet
+   *    completed as of `asOfDate`. Already-done plans drop off cells & cumPlan.
+   */
+  planMode?: DefectPlanMode;
 }
 
 export function aggregateDefectSchedule(
@@ -314,6 +323,7 @@ export function aggregateDefectSchedule(
   const buckets = buildBucketRange(opts.rangeStart, opts.rangeEnd, opts.bucket);
   const bucketIdx = new Map<string, number>();
   buckets.forEach((b, i) => bucketIdx.set(b, i));
+  const planMode: DefectPlanMode = opts.planMode ?? 'baseline';
 
   const groupMap = new Map<string, DefectItem[]>();
   for (const it of items) {
@@ -337,8 +347,11 @@ export function aggregateDefectSchedule(
       for (const st of ALL_DEFECT_STAGE_KEYS) {
         const plan = getDefectStagePlannedDate(it, st);
         const actual = getDefectStageActualDate(it, st);
-        if (plan) {
-          const b = bucketize(plan, opts.bucket);
+        // Remaining mode: drop plan contribution once the stage is already done as-of date.
+        const stageDoneAsOf = isDefectStageActualUpTo(it, st, opts.asOfDate);
+        const countPlan = !!plan && (planMode === 'baseline' || !stageDoneAsOf);
+        if (countPlan) {
+          const b = bucketize(plan!, opts.bucket);
           const i = bucketIdx.get(b);
           if (i !== undefined) {
             stageData[st].cells[i].plan++;
@@ -353,9 +366,9 @@ export function aggregateDefectSchedule(
             stageData[st].cells[i].actual++;
             stageData[st].totalActual++;
           }
-          if (isDefectStageActualUpTo(it, st, opts.asOfDate)) stageData[st].cumActual++;
+          if (stageDoneAsOf) stageData[st].cumActual++;
         }
-        if (isDefectStageActualUpTo(it, st, opts.asOfDate)) stageData[st].totalDone++;
+        if (stageDoneAsOf) stageData[st].totalDone++;
       }
     }
 
