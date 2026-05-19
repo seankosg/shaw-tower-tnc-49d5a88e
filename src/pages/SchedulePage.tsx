@@ -347,6 +347,7 @@ export default function SchedulePage() {
       today,
       dataDate,
       asOfLabel,
+      planMode,
     });
     toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
   };
