@@ -300,6 +300,7 @@ export default function DefectDashboardPage() {
         ['Stage', scurveStage === 'all' ? 'All stages' : (DEFECT_STAGE_LABELS[scurveStage as DefectScheduleStage] ?? scurveStage)],
         ['Team', teamFilter.length === 0 ? 'All teams' : teamFilter.map(t => TEAM_LABELS[t as keyof typeof TEAM_LABELS] ?? t).join(', ')],
         ['Group by', scurveGroup === SCURVE_GROUP_NONE ? 'None' : DEFECT_GROUP_LABELS[scurveGroup as DefectScheduleGroupBy]],
+        ['Plan mode', planMode === 'remaining' ? 'Remaining' : 'Baseline'],
       ];
       if (scurveGroupValues.length > 0) filters.push(['Group values', scurveGroupValues.join(', ')]);
       const { rowCount, fileName } = await exportDefectSCurveToExcel({
