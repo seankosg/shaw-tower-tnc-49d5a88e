@@ -457,12 +457,26 @@ export default function DashboardPage() {
 
       {/* ─── 4 Tabs ─── */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardHeader className="flex flex-row items-center justify-between pb-2 gap-2 flex-wrap">
           <CardTitle className="text-base">Plan vs Actual - Summary</CardTitle>
-          <Button variant="outline" size="sm" onClick={handleBreakdownExport}>
-            <Download className="mr-1.5 h-4 w-4" />
-            Excel
-          </Button>
+          <div className="flex items-center gap-2">
+            <ToggleGroup
+              type="single"
+              value={planMode}
+              onValueChange={(v) => { if (v === 'baseline' || v === 'remaining') setPlanMode(v); }}
+              className="gap-1"
+            >
+              <ToggleGroupItem value="remaining" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Remaining</ToggleGroupItem>
+              <ToggleGroupItem value="baseline" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Baseline</ToggleGroupItem>
+            </ToggleGroup>
+            <span className="text-[10px] text-muted-foreground hidden sm:inline">
+              {planMode === 'remaining' ? 'Excludes already-done plans' : 'All planned dates count'}
+            </span>
+            <Button variant="outline" size="sm" onClick={handleBreakdownExport}>
+              <Download className="mr-1.5 h-4 w-4" />
+              Excel
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs value={breakdownTab} onValueChange={setBreakdownTab}>
