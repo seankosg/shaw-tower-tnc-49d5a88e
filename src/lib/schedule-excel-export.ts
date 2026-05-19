@@ -118,13 +118,14 @@ export interface ScheduleExportOpts {
   today: string;
   dataDate?: string;
   asOfLabel?: string;
+  planMode?: 'baseline' | 'remaining';
 }
 
 export function exportScheduleToExcel(
   data: AggregateResult,
   opts: ScheduleExportOpts,
 ): { rowCount: number; fileName: string } {
-  const { groupHeader, stageFilter, bucket, today, dataDate, asOfLabel = 'Today' } = opts;
+  const { groupHeader, stageFilter, bucket, today, dataDate, asOfLabel = 'Today', planMode = 'baseline' } = opts;
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -159,13 +160,15 @@ export function exportScheduleToExcel(
   const ws: XLSX.WorkSheet = {};
   const merges: XLSX.Range[] = [];
 
+  const planModeLabel = planMode === 'remaining' ? 'Remaining' : 'Baseline';
+
   // ── Row 0: Title ──
-  set(ws, 0, 0, `SHAW T&C — Progress Status (${groupHeader})`, S_TITLE);
+  set(ws, 0, 0, `SHAW T&C — Progress Status (${groupHeader}) [Plan: ${planModeLabel}]`, S_TITLE);
   for (let c = 1; c < COL_COUNT; c++) set(ws, 0, c, '', S_TITLE);
   merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: COL_COUNT - 1 } });
 
   // ── Row 1: Meta ──
-  set(ws, 1, 0, `Exported: ${ts}  ·  Stage: ${stageLabel}  ·  Bucket: ${bucket === 'day' ? 'Daily' : 'Weekly'}  ·  Data Date: ${dataDate ?? '—'}  ·  Today: ${today}  ·  Cumulative: ${asOfLabel}`, S_META);
+  set(ws, 1, 0, `Exported: ${ts}  ·  Stage: ${stageLabel}  ·  Bucket: ${bucket === 'day' ? 'Daily' : 'Weekly'}  ·  Data Date: ${dataDate ?? '—'}  ·  Today: ${today}  ·  Cumulative: ${asOfLabel}  ·  Plan Mode: ${planModeLabel}`, S_META);
   for (let c = 1; c < COL_COUNT; c++) set(ws, 1, c, '', S_META);
   merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: COL_COUNT - 1 } });
 
