@@ -152,7 +152,7 @@ export function exportDefectScheduleToExcel(
   for (let c = 1; c < COL_COUNT; c++) set(ws, 0, c, '', S_TITLE);
   merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: COL_COUNT - 1 } });
 
-  set(ws, 1, 0, `Exported: ${ts}  ·  Stage: ${stageLabel}  ·  Bucket: ${bucket === 'day' ? 'Daily' : 'Weekly'}  ·  Data Date: ${dataDate ?? '—'}  ·  Today: ${today}  ·  Cumulative: ${asOfLabel}`, S_META);
+  set(ws, 1, 0, `Exported: ${ts}  ·  Stage: ${stageLabel}  ·  Bucket: ${bucket === 'day' ? 'Daily' : 'Weekly'}  ·  Data Date: ${dataDate ?? '—'}  ·  Today: ${today}  ·  Cumulative: ${asOfLabel}  ·  Plan Mode: ${planMode === 'remaining' ? 'Remaining' : 'Baseline'}`, S_META);
   for (let c = 1; c < COL_COUNT; c++) set(ws, 1, c, '', S_META);
   merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: COL_COUNT - 1 } });
 
