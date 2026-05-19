@@ -338,14 +338,15 @@ export default function DefectDashboardPage() {
     scurveGroupValues.length ? next.set('group_values', scurveGroupValues.join(',')) : next.delete('group_values');
     setOrDelete('sub_trade_text', subTradeTextFilter, '');
     selectedSubTradeFilters.length ? next.set('sub_trades', selectedSubTradeFilters.join(',')) : next.delete('sub_trades');
+    setOrDelete('plan_mode', planMode, 'remaining');
     setSearchParams(next, { replace: true });
-  }, [teamFilter, breakdownTab, scurveBucket, scurveStart, scurveEnd, scurveStage, scurveGroup, scurveGroupValues, subTradeTextFilter, selectedSubTradeFilters]);
+  }, [teamFilter, breakdownTab, scurveBucket, scurveStart, scurveEnd, scurveStage, scurveGroup, scurveGroupValues, subTradeTextFilter, selectedSubTradeFilters, planMode]);
 
   const goRaw = (params: Record<string, string>) => navigate(`/defects/raw-data?${new URLSearchParams({ source: 'dashboard', ...params }).toString()}`);
   const handleBreakdownExport = () => {
     const { rows, header } = breakdownDataMap[breakdownTab] ?? breakdownDataMap.subcon;
     if (!rows.length) return toast({ title: 'No data to export', variant: 'destructive' });
-    const { rowCount, fileName } = exportDefectPlanActualToExcel(rows, header, today, dataDate);
+    const { rowCount, fileName } = exportDefectPlanActualToExcel(rows, header, today, dataDate, planMode);
     toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
   };
 
