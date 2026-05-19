@@ -19,7 +19,7 @@ export default function AdminReportPage() {
     return (
       <div className="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground">
         <Shield className="h-10 w-10" />
-        <p>Access denied. Senior User role or higher required.</p>
+        <p>Access denied. Report access is restricted to Admin, PM, and Support team Superusers.</p>
       </div>
     );
   }
