@@ -77,6 +77,12 @@ export default function DashboardPage() {
   const [dataDate, setDataDate] = useState(() => yesterdayIso(todayIso()));
   const [systemTextFilter, setSystemTextFilter] = useState(searchParams.get('system_text') || '');
   const [selectedSystemFilters, setSelectedSystemFilters] = useState<string[]>(searchParams.get('systems')?.split(',').filter(Boolean) || []);
+  const [planMode, setPlanMode] = usePlanMode();
+  useEffect(() => {
+    const urlMode = searchParams.get('plan_mode');
+    if ((urlMode === 'baseline' || urlMode === 'remaining') && urlMode !== planMode) setPlanMode(urlMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
@@ -214,24 +220,24 @@ export default function DashboardPage() {
 
   // ───── Group aggregates per tab — Plan vs Actual rows
   const bySystem = useMemo(
-    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.system_id, k => sysCodeById.get(k) ?? '—'),
-    [filteredSubtests, today, dataDate, sysCodeById]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.system_id, k => sysCodeById.get(k) ?? '—', planMode),
+    [filteredSubtests, today, dataDate, sysCodeById, planMode]
   );
   const bySubcon = useMemo(
-    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.subcontractor_name ?? NONE_LABEL, k => k),
-    [filteredSubtests, today, dataDate]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.subcontractor_name ?? NONE_LABEL, k => k, planMode),
+    [filteredSubtests, today, dataDate, planMode]
   );
   const bySubsub = useMemo(
-    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.subsub_name ?? NONE_LABEL, k => k),
-    [filteredSubtests, today, dataDate]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.subsub_name ?? NONE_LABEL, k => k, planMode),
+    [filteredSubtests, today, dataDate, planMode]
   );
   const byHdec = useMemo(
-    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.hdec_pic_name ?? NONE_LABEL, k => k),
-    [filteredSubtests, today, dataDate]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.hdec_pic_name ?? NONE_LABEL, k => k, planMode),
+    [filteredSubtests, today, dataDate, planMode]
   );
   const byTeam = useMemo(
-    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.team ?? NONE_LABEL, k => k),
-    [filteredSubtests, today, dataDate]
+    () => aggregatePlanActualByGroup(filteredSubtests, today, dataDate, s => s.team ?? NONE_LABEL, k => k, planMode),
+    [filteredSubtests, today, dataDate, planMode]
   );
   const systemFilterOptions = useMemo(
     () => Array.from(new Set(bySystem.map(r => r.label))).sort((a, b) => a.localeCompare(b)),
@@ -268,7 +274,7 @@ export default function DashboardPage() {
       toast({ title: 'No data to export', variant: 'destructive' });
       return;
     }
-    const { rowCount, fileName } = exportPlanActualToExcel(rows, header, today, dataDate);
+    const { rowCount, fileName } = exportPlanActualToExcel(rows, header, today, dataDate, planMode);
     toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
   };
 
