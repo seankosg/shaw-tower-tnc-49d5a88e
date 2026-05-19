@@ -637,27 +637,43 @@ export default function SchedulePage() {
         />
       </div>
 
-      {/* Matrix + Watchlist */}
-      <div className="flex items-center justify-end gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-2 text-xs"
-          onClick={() => setHidePast(p => !p)}
-          title={hidePast ? 'Show past dates' : 'Hide past dates'}
-        >
-          {hidePast ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
-          <span className="ml-1">{hidePast ? 'Show past' : 'Hide past'}</span>
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-2 text-xs"
-          onClick={() => setShowRiskPanel(prev => !prev)}
-        >
-          {showRiskPanel ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
-          <span className="ml-1">{showRiskPanel ? 'Hide Risk Panel' : 'Show Risk Panel'}</span>
-        </Button>
+      {/* Action row */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <ToggleGroup
+            type="single"
+            value={planMode}
+            onValueChange={(v) => { if (v === 'baseline' || v === 'remaining') setPlanMode(v); }}
+            className="gap-1"
+          >
+            <ToggleGroupItem value="remaining" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Remaining</ToggleGroupItem>
+            <ToggleGroupItem value="baseline" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Baseline</ToggleGroupItem>
+          </ToggleGroup>
+          <span className="text-[10px] text-muted-foreground">
+            {planMode === 'remaining' ? 'Excludes already-done plans' : 'All planned dates count'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs"
+            onClick={() => setHidePast(p => !p)}
+            title={hidePast ? 'Show past dates' : 'Hide past dates'}
+          >
+            {hidePast ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
+            <span className="ml-1">{hidePast ? 'Show past' : 'Hide past'}</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs"
+            onClick={() => setShowRiskPanel(prev => !prev)}
+          >
+            {showRiskPanel ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
+            <span className="ml-1">{showRiskPanel ? 'Hide Risk Panel' : 'Show Risk Panel'}</span>
+          </Button>
+        </div>
       </div>
       <div className="flex gap-4">
         <div className="min-w-0 flex-1">
