@@ -278,6 +278,7 @@ export default function DefectProgressPage() {
       today,
       dataDate,
       asOfLabel,
+      planMode,
     });
     toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
   };
