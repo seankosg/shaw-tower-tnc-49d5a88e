@@ -996,6 +996,8 @@ export async function buildReport(opts: ReportOptions): Promise<{ markdown: stri
         t1ActualPct: p.t1Actual != null ? Math.round((p.t1Actual / tot) * 1000) / 10 : null,
         t2PlanPct: Math.round((p.t2Planned / tot) * 1000) / 10,
         t2ActualPct: p.t2Actual != null ? Math.round((p.t2Actual / tot) * 1000) / 10 : null,
+        r2sPlanPct: Math.round((p.r2sPlanned / tot) * 1000) / 10,
+        r2sActualPct: p.r2sActual != null ? Math.round((p.r2sActual / tot) * 1000) / 10 : null,
       }));
     }
   }
