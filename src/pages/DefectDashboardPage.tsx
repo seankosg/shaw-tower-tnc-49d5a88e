@@ -65,6 +65,7 @@ import {
 } from '@/lib/defect-schedule-utils';
 import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
+import { usePlanMode } from '@/hooks/usePlanMode';
 
 const PIE_COLORS: Record<string, string> = {
   Complete: 'hsl(var(--primary))',
@@ -141,6 +142,16 @@ export default function DefectDashboardPage() {
   const [hiddenScurveSeries, setHiddenScurveSeries] = useState<Set<string>>(new Set());
   const [subTradeTextFilter, setSubTradeTextFilter] = useState(searchParams.get('sub_trade_text') || '');
   const [selectedSubTradeFilters, setSelectedSubTradeFilters] = useState<string[]>(searchParams.get('sub_trades')?.split(',').filter(Boolean) || []);
+  const [planMode, setPlanMode] = usePlanMode();
+
+  // URL plan_mode wins on mount, then state propagates to URL.
+  useEffect(() => {
+    const urlMode = searchParams.get('plan_mode');
+    if ((urlMode === 'baseline' || urlMode === 'remaining') && urlMode !== planMode) {
+      setPlanMode(urlMode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const refetchDataDate = useCallback(async () => {
     const latestImport = await (supabase as any)
@@ -215,13 +226,13 @@ export default function DefectDashboardPage() {
     return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, startOverdue, completionOverdue, closureOverdue, inDisputeCount };
   }, [filteredItems, today, dataDate, atRiskDays]);
 
-  const bySubTrade = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.sub_trade ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
-  const bySubcon = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.subcontractor_name ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
-  const bySubsub = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.subsub_name ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
-  const byHdec = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.hdec_pic_name ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
-  const byHdecEng = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => (i as any).hdec_eng_name ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
-  const byTeam = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.team ?? NONE_LABEL, k => k === NONE_LABEL ? k : (TEAM_LABELS[k as keyof typeof TEAM_LABELS] ?? k)), [filteredItems, today, dataDate]);
-  const byWorkType = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => (i as any).work_type ?? NONE_LABEL, k => k), [filteredItems, today, dataDate]);
+  const bySubTrade = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.sub_trade ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
+  const bySubcon = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.subcontractor_name ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
+  const bySubsub = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.subsub_name ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
+  const byHdec = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.hdec_pic_name ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
+  const byHdecEng = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => (i as any).hdec_eng_name ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
+  const byTeam = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.team ?? NONE_LABEL, k => k === NONE_LABEL ? k : (TEAM_LABELS[k as keyof typeof TEAM_LABELS] ?? k), planMode), [filteredItems, today, dataDate, planMode]);
+  const byWorkType = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => (i as any).work_type ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
   const subTradeFilterOptions = useMemo(() => Array.from(new Set(bySubTrade.map(row => row.label))).sort((a, b) => a.localeCompare(b)), [bySubTrade]);
   const filteredBySubTrade = useMemo(() => {
     const text = subTradeTextFilter.trim().toLowerCase();
@@ -327,14 +338,15 @@ export default function DefectDashboardPage() {
     scurveGroupValues.length ? next.set('group_values', scurveGroupValues.join(',')) : next.delete('group_values');
     setOrDelete('sub_trade_text', subTradeTextFilter, '');
     selectedSubTradeFilters.length ? next.set('sub_trades', selectedSubTradeFilters.join(',')) : next.delete('sub_trades');
+    setOrDelete('plan_mode', planMode, 'remaining');
     setSearchParams(next, { replace: true });
-  }, [teamFilter, breakdownTab, scurveBucket, scurveStart, scurveEnd, scurveStage, scurveGroup, scurveGroupValues, subTradeTextFilter, selectedSubTradeFilters]);
+  }, [teamFilter, breakdownTab, scurveBucket, scurveStart, scurveEnd, scurveStage, scurveGroup, scurveGroupValues, subTradeTextFilter, selectedSubTradeFilters, planMode]);
 
   const goRaw = (params: Record<string, string>) => navigate(`/defects/raw-data?${new URLSearchParams({ source: 'dashboard', ...params }).toString()}`);
   const handleBreakdownExport = () => {
     const { rows, header } = breakdownDataMap[breakdownTab] ?? breakdownDataMap.subcon;
     if (!rows.length) return toast({ title: 'No data to export', variant: 'destructive' });
-    const { rowCount, fileName } = exportDefectPlanActualToExcel(rows, header, today, dataDate);
+    const { rowCount, fileName } = exportDefectPlanActualToExcel(rows, header, today, dataDate, planMode);
     toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
   };
 
@@ -390,17 +402,33 @@ export default function DefectDashboardPage() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-base">Plan vs Actual - Summary</CardTitle><Button variant="outline" size="sm" onClick={handleBreakdownExport}><Download className="mr-1.5 h-4 w-4" />Excel</Button></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-base">Plan vs Actual - Summary</CardTitle>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Plan</span>
+            <ToggleGroup
+              type="single"
+              size="sm"
+              value={planMode}
+              onValueChange={(v) => { if (v === 'baseline' || v === 'remaining') setPlanMode(v); }}
+              className="gap-1"
+            >
+              <ToggleGroupItem value="remaining" className="h-7 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Remaining</ToggleGroupItem>
+              <ToggleGroupItem value="baseline" className="h-7 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Baseline</ToggleGroupItem>
+            </ToggleGroup>
+            <Button variant="outline" size="sm" onClick={handleBreakdownExport}><Download className="mr-1.5 h-4 w-4" />Excel</Button>
+          </div>
+        </CardHeader>
         <CardContent>
           <Tabs value={breakdownTab} onValueChange={setBreakdownTab}>
             <TabsList className="h-auto flex-wrap"><TabsTrigger value="subTrade">By Sub Trade</TabsTrigger><TabsTrigger value="subcon">By Subcontractor</TabsTrigger><TabsTrigger value="subsub">By Sub-Sub</TabsTrigger><TabsTrigger value="hdec">By HDEC PIC</TabsTrigger><TabsTrigger value="hdecEng">By HDEC ENG</TabsTrigger><TabsTrigger value="team">By Team</TabsTrigger><TabsTrigger value="workType">By Work Type</TabsTrigger></TabsList>
-            <TabsContent value="subTrade"><PlanActualTable rows={filteredBySubTrade} groupParam="subTrade" groupHeader="Sub Trade" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} filter={{ text: subTradeTextFilter, selected: selectedSubTradeFilters, options: subTradeFilterOptions, onTextChange: setSubTradeTextFilter, onSelectedChange: setSelectedSubTradeFilters }} /></TabsContent>
-            <TabsContent value="subcon"><PlanActualTable rows={bySubcon} groupParam="subcontractor" groupHeader="Subcontractor" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
-            <TabsContent value="subsub"><PlanActualTable rows={bySubsub} groupParam="subsub" groupHeader="Sub-Sub" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
-            <TabsContent value="hdec"><PlanActualTable rows={byHdec} groupParam="hdecPic" groupHeader="HDEC PIC" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
-            <TabsContent value="hdecEng"><PlanActualTable rows={byHdecEng} groupParam="hdecEng" groupHeader="HDEC ENG" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
-            <TabsContent value="team"><PlanActualTable rows={byTeam} groupParam="team" groupHeader="Team" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
-            <TabsContent value="workType"><PlanActualTable rows={byWorkType} groupParam="workType" groupHeader="Work Type" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} /></TabsContent>
+            <TabsContent value="subTrade"><PlanActualTable rows={filteredBySubTrade} groupParam="subTrade" groupHeader="Sub Trade" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} planMode={planMode} filter={{ text: subTradeTextFilter, selected: selectedSubTradeFilters, options: subTradeFilterOptions, onTextChange: setSubTradeTextFilter, onSelectedChange: setSelectedSubTradeFilters }} /></TabsContent>
+            <TabsContent value="subcon"><PlanActualTable rows={bySubcon} groupParam="subcontractor" groupHeader="Subcontractor" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} planMode={planMode} /></TabsContent>
+            <TabsContent value="subsub"><PlanActualTable rows={bySubsub} groupParam="subsub" groupHeader="Sub-Sub" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} planMode={planMode} /></TabsContent>
+            <TabsContent value="hdec"><PlanActualTable rows={byHdec} groupParam="hdecPic" groupHeader="HDEC PIC" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} planMode={planMode} /></TabsContent>
+            <TabsContent value="hdecEng"><PlanActualTable rows={byHdecEng} groupParam="hdecEng" groupHeader="HDEC ENG" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} planMode={planMode} /></TabsContent>
+            <TabsContent value="team"><PlanActualTable rows={byTeam} groupParam="team" groupHeader="Team" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} planMode={planMode} /></TabsContent>
+            <TabsContent value="workType"><PlanActualTable rows={byWorkType} groupParam="workType" groupHeader="Work Type" today={today} dataDate={dataDate} todayLabel={todayLabel} dataDateLabel={dataDateLabel} navigate={navigate} planMode={planMode} /></TabsContent>
           </Tabs>
         </CardContent>
       </Card>
@@ -713,6 +741,7 @@ function PlanActualTable({
   dataDateLabel,
   navigate,
   filter,
+  planMode = 'baseline',
 }: {
   rows: DefectPlanActualRow[];
   groupParam: GroupParam;
@@ -729,6 +758,7 @@ function PlanActualTable({
     onTextChange: (v: string) => void;
     onSelectedChange: (v: string[]) => void;
   };
+  planMode?: 'baseline' | 'remaining';
 }) {
   const go = (groupKey: string, extra?: Record<string, string>) => {
     const params: Record<string, string> = { source: 'dashboard', ...extra };
@@ -820,7 +850,7 @@ function PlanActualTable({
                 {subheads.map((label, i) => (
                   <TableHead key={`${label}-${i}`} className={cn('h-8 text-center text-[11px]', [0, 3, 7].includes(i) && 'border-l border-border')}>
                     {label === 'Plan' ? (
-                      <span>Plan<span className="ml-0.5 text-[9px] text-muted-foreground">(baseline)</span></span>
+                      <span>Plan<span className="ml-0.5 text-[9px] text-muted-foreground">({planMode === 'remaining' ? 'remaining' : 'baseline'})</span></span>
                     ) : label}
                   </TableHead>
                 ))}

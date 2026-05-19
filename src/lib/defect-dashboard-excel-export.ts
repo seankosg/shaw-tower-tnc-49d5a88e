@@ -29,18 +29,25 @@ const diffDeltaStyle = (v: number) => ({ font: { name: FONT, sz: 10, bold: v !==
 function set(ws: XLSX.WorkSheet, r: number, c: number, v: unknown, s: Record<string, unknown>) { ws[XLSX.utils.encode_cell({ r, c })] = { t: 's', v: v == null ? '' : String(v), s }; }
 function setNum(ws: XLSX.WorkSheet, r: number, c: number, v: number, s: Record<string, unknown>) { ws[XLSX.utils.encode_cell({ r, c })] = { t: 'n', v, s }; }
 
-export function exportDefectPlanActualToExcel(rows: DefectPlanActualRow[], groupHeader: string, today: string, dataDate: string): { rowCount: number; fileName: string } {
+export function exportDefectPlanActualToExcel(
+  rows: DefectPlanActualRow[],
+  groupHeader: string,
+  today: string,
+  dataDate: string,
+  planMode: 'baseline' | 'remaining' = 'baseline',
+): { rowCount: number; fileName: string } {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
   const fileTs = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
   const dataDateLabel = formatDdMmm(dataDate);
   const todayLabel = formatDdMmm(today);
+  const planModeLabel = planMode === 'remaining' ? 'Remaining' : 'Baseline';
   const COL_COUNT = 17;
   const ws: XLSX.WorkSheet = {};
-  set(ws, 0, 0, `SHAW Defect — Plan vs Actual (${groupHeader})`, S_TITLE);
+  set(ws, 0, 0, `SHAW Defect — Plan vs Actual (${groupHeader}) [Plan: ${planModeLabel}]`, S_TITLE);
   for (let c = 1; c < COL_COUNT; c++) set(ws, 0, c, '', S_TITLE);
-  set(ws, 1, 0, `Exported: ${ts}  ·  Today: ${today}  ·  Data Date: ${dataDate}`, S_META);
+  set(ws, 1, 0, `Exported: ${ts}  ·  Today: ${today}  ·  Data Date: ${dataDate}  ·  Plan Mode: ${planModeLabel}`, S_META);
   for (let c = 1; c < COL_COUNT; c++) set(ws, 1, c, '', S_META);
   const HR = 3;
   [groupHeader, 'Stage', 'Total', 'Done', 'Remain', 'To Data Date (Cumulative)', '', '', `Data Date (${dataDateLabel})`, '', '', '', `Today (${todayLabel})`, '', '', '', 'Progress'].forEach((l, c) => set(ws, HR, c, l, S_GROUP_HDR));

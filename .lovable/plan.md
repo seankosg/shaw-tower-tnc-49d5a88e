@@ -1,56 +1,64 @@
-# PPT 빌더 정렬 — REF 슬라이드와 일치시키기
+## Baseline / Remaining 토글 구현 플랜 (최종본)
 
-업로드한 REF .pptx 3장(Dashboard, Close Out Documents, Punch List)을 기준으로 `src/lib/ppt-builder.ts`의 해당 3개 슬라이드 빌더를 수정합니다.
+### 토글 위치
+- **Dashboard**: `Other: Plan vs Actual - Summary` 카드 헤더 우측
+- **Progress**: 툴바의 **Lookup** ToolbarGroup **바로 아래**에 새로운 `ToolbarGroup label="Plan Mode"`
 
-## 가정
+### 공통 사양
+- 라벨: `Baseline` / `Remaining`
+- 기본값: `Remaining`
+- 컴포넌트: `ToggleGroup` (single, size sm)
 
-"마지막 슬라이드의 ABD 카드"는 REF 3장 중 Punch List 슬라이드에는 ABD 카드가 없으므로, ABD 카드가 등장하는 **Close Out Documents 슬라이드(REF 2장째)**의 ABD 카드로 해석했습니다. 다른 의도였다면 알려주세요.
+### 페이지 간 동기화 (신규 요구사항)
+Dashboard와 Progress의 토글 상태를 양방향 동기화:
 
----
+- **저장소**: `localStorage` 키 `defect:planMode` (단일 source of truth)
+- **공용 훅**: `src/hooks/usePlanMode.ts` 신규 생성
+  - 초기값: `localStorage` → 없으면 `'remaining'`
+  - 변경 시 `localStorage.setItem` + `window.dispatchEvent(new Event('planmode-change'))`
+  - `storage` 이벤트(다른 탭) + `planmode-change` 이벤트(같은 탭, 다른 페이지)를 구독해 자동 재렌더
+  - 시그니처: `const [planMode, setPlanMode] = usePlanMode();`
+- **URL 동기화**: 페이지별 `plan_mode` 쿼리도 함께 유지 (북마크/공유용)
+  - 마운트 시 URL 값이 있으면 그것으로 localStorage 갱신(URL 우선)
+  - 토글 변경 시 URL과 localStorage 모두 업데이트
+  - 기본값(`remaining`)일 때는 쿼리 파라미터 생략
 
-## 1) `buildDashboard` (슬라이드 02) — `Close Out Document` / `Punch List` 카드 조정
+### 적용 범위 (로직)
+플랜 셀 / Cumulative Plan 모두에 동일 규칙 적용:
+- `Baseline`: 기존 로직 (planned_date 있으면 카운트)
+- `Remaining`: `count_plan(item, s) iff planned_date(s) && !isStageActualUpTo(item, s, asOfDate)`
 
-**Close Out Document 카드 (좌하단)**
-- 현재 6행 → REF는 4행. 다음 4개만 표시:
-  1. `ABD Submitted` — `abdSubPct`, cyan
-  2. `OMM Draft Submitted` — `ommSubPct`, purple
-  3. `Warranty Final` — `warFinal`, amber/green
-  4. `Spare Delivery` — `spDel`, magenta/green
-- 행 간격 `+0.45`로 늘려 빈 공간 흡수 (현재 `+0.36`).
+### 변경 파일
+1. **`src/hooks/usePlanMode.ts`** (신규)
+   - localStorage + 커스텀 이벤트 기반 동기화 훅
+2. **`src/lib/defect-schedule-utils.ts`**
+   - `DefectAggregateOptions.planMode?: 'baseline' | 'remaining'` (default `baseline`)
+   - 셀/누적 플랜 누적 분기 추가
+3. **`src/lib/defect-dashboard-utils.ts`**
+   - `aggregateDefectPlanActualByGroup`에 동일 옵션/분기 추가
+4. **`src/pages/DefectProgressPage.tsx`**
+   - `usePlanMode()` 사용 + URL `plan_mode` sync
+   - Lookup 아래 `<ToolbarGroup label="Plan Mode">` 배치
+   - `aggregateDefectSchedule` 호출 + **상단 KPI 블록**(`cumPlan` 등)에도 `planMode` 반영 (A안)
+   - 헤더 부제목에 현재 모드 라벨 표시
+5. **`src/pages/DefectDashboardPage.tsx`**
+   - `usePlanMode()` 사용 + URL `plan_mode` sync
+   - `Plan vs Actual - Summary` CardHeader 우측에 ToggleGroup 배치
+   - 7개 `aggregateDefectPlanActualByGroup` 호출 + `(baseline)` 라벨 동적화
+6. **Excel exports**
+   - `defect-schedule-excel-export.ts`, `defect-dashboard-excel-export.ts` 헤더/시트명에 현재 `planMode` 반영
 
-**Punch List 카드 (우하단)**
-- 타임라인 라벨을 `MC Date` → `SC Date`로 통일 (REF와 일치).
-- 타임라인 3행(Within / Beyond / No Plan) → **2행**(`Within SC Date · N items`, `Beyond · N items`)으로 축소. `No Plan` 분기·렌더 코드 제거.
-- 미니 상태카드 3개(Completed/In Progress/Not Started)는 유지.
+### 동기화 동작 시나리오
+- Dashboard에서 `Baseline → Remaining` 변경 → 같은 탭의 Progress 탭으로 이동 시 즉시 Remaining 적용
+- Progress 열린 상태에서 다른 탭(Dashboard)에서 변경 → `storage` 이벤트로 자동 갱신
+- 새 세션/새 사용자 → localStorage 없음 → `remaining` 기본값
 
-## 2) `buildDocsSnapshot` (슬라이드 11) — ABD 카드에 진도율 바차트 추가
+### 영향 없는 영역 (의도적 baseline 고정)
+S-Curve, Top Overdue, Critical Watchlist, AlertBanner, Pie chart, KPI Card, diffMetrics.
 
-REF의 OMM/Warranty/Spare Parts 카드처럼 ABD 카드의 각 행에도 진도율 바를 표시. 단위는 `dwgs` 카운트를 유지하되, 옆에 퍼센트 기반의 바를 함께 렌더.
+### 필터 호환성
+Progress(team/group_by/bucket/stage_view/asof_mode/range/hide_past), Dashboard(team/sub-trade/breakdownTab) 모두 aggregate 입력에 반영되어 `planMode`와 일관 동작.
 
-- ABD 행 구성을 3행으로 축소(REF와 일치):
-  1. `Submitted` — `abdSub` dwgs, bar = `docsKPI.abd.pcts['sub1_submission_date']`, color `C.cyan`
-  2. `Under Review` — `abdUr` dwgs, bar = `abdUr / total * 100`, color `C.stageOfficial`
-  3. `Not Submitted` — `abdNs` dwgs, bar = `abdNs / total * 100`, color `C.magentaBright`
-- 기존 `Approved` 행은 제거(REF에 없음). 색상 결정 로직(`abdApvPct`)은 헤더 stripe accent에만 활용하거나 제거.
-- 렌더링: 기존 `kpiRow` 다음 줄에 `barRow(...)`를 ABD에도 호출하도록 `isPct` 분기 대신 항상 바를 그리되, ABD는 값 텍스트가 `count + " dwgs"` 형태가 되도록 `kpiRow` 시그니처/호출에서 `unit`/`color`만 조정.
-
-## 3) `buildPunchSnapshot` (슬라이드 12) — 디테일 리스트 카드 제거
-
-REF는 상단 3개 히어로 카드(Completion / Weighted Actual / Beyond SC)만 표시하고 그 아래는 비어 있음. 현재는 그 아래에 Status/Risk 2개 리스트 카드를 그리고 있으므로:
-
-- `drawListCard` 호출 및 `statusRows`/`riskRows`/`listY`/`listH` 등 디테일 섹션 블록을 모두 제거.
-- 헤더·헤드라인·3 히어로 카드·푸터만 남김. (필요 시 `latest`/`risk` 등 미사용 참조 정리.)
-
-## 4) 회귀 검증
-
-- 위 변경 후 다시 PPT를 생성하여 LibreOffice로 PDF→이미지 변환하고 슬라이드 2/11/12를 시각 검수:
-  - 텍스트 겹침 없음, 카드 경계 안에 모든 요소가 위치
-  - ABD 카드 3행 + 바차트가 OMM/Warranty/Spare Parts와 시각적으로 일관
-  - Punch 슬라이드 하단 여백이 REF처럼 비어 있음
-
-## Technical notes
-
-- 변경 파일: `src/lib/ppt-builder.ts` 만 수정. 다른 슬라이드(T&C, Defect 계열)는 손대지 않음.
-- 데이터 모델(`DocsKPI`, `PunchKPI`)이나 데이터 페치 로직은 변경하지 않음 — 이미 필요한 필드 모두 제공됨.
-- `progressRow`는 그대로 재사용. `kpiRow`/`barRow`는 ABD 카드에서 항상 바를 그리도록 호출 패턴만 조정.
-- ABD 바의 분모는 `docsKPI.abd.total`로 통일하여 3행 합이 100%가 되도록 함.
+### 테스트
+- 기존 `defect-dashboard-utils.test.ts` 통과 확인 (default baseline 유지)
+- Remaining 모드: 완료된 stage가 plan 셀/누적에서 제외되는지 검증 케이스 추가

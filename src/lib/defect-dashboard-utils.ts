@@ -172,19 +172,32 @@ export function maxDelayDays(item: DefectForDashboard, asOfDate: string): number
   }));
 }
 
-function calcMetrics(items: DefectForDashboard[], stage: DefectDashboardStage, today: string, dataDate: string): DefectPlanActualMetrics {
+export type DefectPlanMode = 'baseline' | 'remaining';
+
+function calcMetrics(
+  items: DefectForDashboard[],
+  stage: DefectDashboardStage,
+  today: string,
+  dataDate: string,
+  planMode: DefectPlanMode = 'baseline',
+): DefectPlanActualMetrics {
   let cumPlan = 0, cumActual = 0, dataDatePlan = 0, dataDateActual = 0, dataDateDelay = 0, todayPlan = 0, todayActual = 0, todayDelay = 0;
   for (const item of items) {
     const plan = getStagePlanDate(item, stage);
     const actual = getStageActualDate(item, stage);
-    if (plan && plan <= dataDate) cumPlan++;
+    const done = isStageDone(item, stage);
+    // Remaining mode drops plans for stages already done as of the respective reference date.
+    const countCumPlan = planMode === 'baseline' || !done;
+    const countDataDatePlan = planMode === 'baseline' || !done;
+    const countTodayPlan = planMode === 'baseline' || !done;
+    if (plan && plan <= dataDate && countCumPlan) cumPlan++;
     if (actual && actual <= dataDate) cumActual++;
-    if (plan === dataDate) dataDatePlan++;
+    if (plan === dataDate && countDataDatePlan) dataDatePlan++;
     if (actual === dataDate) dataDateActual++;
-    if (plan === dataDate && !isStageDone(item, stage)) dataDateDelay++;
-    if (plan === today) todayPlan++;
+    if (plan === dataDate && !done) dataDateDelay++;
+    if (plan === today && countTodayPlan) todayPlan++;
     if (actual === today) todayActual++;
-    if (plan === today && !isStageDone(item, stage)) todayDelay++;
+    if (plan === today && !done) todayDelay++;
   }
   return { cumPlan, cumActual, dataDatePlan, dataDateActual, dataDateDelay, todayPlan, todayActual, todayDelay };
 }
@@ -195,6 +208,7 @@ export function aggregateDefectPlanActualByGroup(
   dataDate: string,
   groupKey: (item: DefectForDashboard) => string,
   groupLabel: (key: string) => string,
+  planMode: DefectPlanMode = 'baseline',
 ): DefectPlanActualRow[] {
   const buckets = new Map<string, DefectForDashboard[]>();
   for (const item of items) {
@@ -205,8 +219,8 @@ export function aggregateDefectPlanActualByGroup(
     key,
     label: groupLabel(key),
     totalDefects: rows.length,
-    completion: calcMetrics(rows, 'completion', today, dataDate),
-    closure: calcMetrics(rows, 'closure', today, dataDate),
+    completion: calcMetrics(rows, 'completion', today, dataDate, planMode),
+    closure: calcMetrics(rows, 'closure', today, dataDate, planMode),
   })).sort((a, b) => {
     const va = (a.completion.cumActual - a.completion.cumPlan) + (a.closure.cumActual - a.closure.cumPlan);
     const vb = (b.completion.cumActual - b.completion.cumPlan) + (b.closure.cumActual - b.closure.cumPlan);

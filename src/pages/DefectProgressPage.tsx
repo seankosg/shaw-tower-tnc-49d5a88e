@@ -43,6 +43,7 @@ import { DefectCriticalWatchlist } from '@/components/defects/DefectCriticalWatc
 import { exportDefectScheduleToExcel } from '@/lib/defect-schedule-excel-export';
 import { exportDefectArrayToExcel } from '@/lib/defect-excel-export';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
+import { usePlanMode, type PlanMode } from '@/hooks/usePlanMode';
 import { useAuth } from '@/contexts/AuthContext';
 import { USER_TYPE_LABELS } from '@/types/enums';
 
@@ -85,6 +86,16 @@ export default function DefectProgressPage() {
   const [pickedDate, setPickedDate] = useState<Date | undefined>(() => searchParams.get('picked') ? new Date(`${searchParams.get('picked')}T00:00:00`) : new Date());
   const [pickedField, setPickedField] = useState<'planned' | 'actual'>((searchParams.get('picked_field') as 'planned' | 'actual') || 'planned');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [planMode, setPlanMode] = usePlanMode();
+
+  // URL → planMode (URL has priority on mount; subsequent changes propagate URL ↔ store)
+  useEffect(() => {
+    const urlMode = searchParams.get('plan_mode');
+    if ((urlMode === 'baseline' || urlMode === 'remaining') && urlMode !== planMode) {
+      setPlanMode(urlMode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('defect_schedule_hide_past', hidePast ? '1' : '0');
@@ -106,8 +117,9 @@ export default function DefectProgressPage() {
     setOrDelete('risk_panel', showRiskPanel ? '1' : '', '');
     setOrDelete('picked', pickedDate ? format(pickedDate, 'yyyy-MM-dd') : '', format(new Date(), 'yyyy-MM-dd'));
     setOrDelete('picked_field', pickedField, 'planned');
+    setOrDelete('plan_mode', planMode, 'remaining');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, searchParams, setSearchParams]);
+  }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, planMode, searchParams, setSearchParams]);
 
   const { items: cachedItems, initialLoaded } = useDefectCache();
   const items = cachedItems as unknown as DefectItem[];
@@ -127,9 +139,9 @@ export default function DefectProgressPage() {
 
   const aggregate = useMemo(
     () => aggregateDefectSchedule(filteredItems, {
-      groupBy: groupBySpec, bucket, stageFilter: stageFilterArg, rangeStart, rangeEnd, asOfDate,
+      groupBy: groupBySpec, bucket, stageFilter: stageFilterArg, rangeStart, rangeEnd, asOfDate, planMode,
     }),
-    [filteredItems, groupBySpec, bucket, stageFilterArg, rangeStart, rangeEnd, asOfDate],
+    [filteredItems, groupBySpec, bucket, stageFilterArg, rangeStart, rangeEnd, asOfDate, planMode],
   );
 
   const critical = useMemo(
@@ -163,8 +175,10 @@ export default function DefectProgressPage() {
     for (const s of filteredItems) {
       totalStages += stages.length;
       for (const st of stages) {
-        if (isDefectStagePlannedUpTo(s, st, dataDate)) cumPlan++;
-        if (isDefectStageActualUpTo(s, st, dataDate)) {
+        const doneAsOf = isDefectStageActualUpTo(s, st, dataDate);
+        const countPlan = isDefectStagePlannedUpTo(s, st, dataDate) && (planMode === 'baseline' || !doneAsOf);
+        if (countPlan) cumPlan++;
+        if (doneAsOf) {
           cumActual++;
           doneStages++;
         }
@@ -180,13 +194,15 @@ export default function DefectProgressPage() {
     let upcoming7Plan = 0;
     for (const s of filteredItems) {
       for (const st of stages) {
+        // Remaining mode: skip if stage already done as-of today.
+        if (planMode === 'remaining' && isDefectStageActualUpTo(s, st, today)) continue;
         for (let d = today; d <= upcomingEnd; d = addDays(d, 1)) {
           if (isDefectStagePlannedOn(s, st, d)) upcoming7Plan++;
         }
       }
     }
     return { cumPlan, cumActual, variance, progressPct, doneStages, totalStages, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
-  }, [stageFilterArg, filteredItems, critical.highRisk.length, dataDate, today]);
+  }, [stageFilterArg, filteredItems, critical.highRisk.length, dataDate, today, planMode]);
 
   // ───── Navigation ─────
   const filterValueFor = (label: string) => label === '(None)' || label === '—' ? '__EMPTY__' : label;
@@ -262,6 +278,7 @@ export default function DefectProgressPage() {
       today,
       dataDate,
       asOfLabel,
+      planMode,
     });
     toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
   };
@@ -312,7 +329,7 @@ export default function DefectProgressPage() {
             Defect Progress Status
           </h1>
           <p className="text-xs text-muted-foreground">
-            Track planned vs actual progress by {groupHeaderLabel} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Data Date {formatDdMmm(dataDate)}{dataDateSource === 'fallback' && ' (fallback)'} · Today {formatDdMmm(today)} · Cumulative: {asOfLabel}
+            Track planned vs actual progress by {groupHeaderLabel} · {bucket === 'day' ? 'Daily' : 'Weekly'} view · Data Date {formatDdMmm(dataDate)}{dataDateSource === 'fallback' && ' (fallback)'} · Today {formatDdMmm(today)} · Cumulative: {asOfLabel} · Plan: {planMode === 'remaining' ? 'Remaining' : 'Baseline'}
           </p>
         </div>
         <div className="flex gap-2">
@@ -492,6 +509,21 @@ export default function DefectProgressPage() {
             </Button>
             <span className="text-[10px] text-muted-foreground">
               Applies current Stage filter. Group/Bucket/Range are view-only.
+            </span>
+          </ToolbarGroup>
+
+          <ToolbarGroup label="Plan Mode">
+            <ToggleGroup
+              type="single"
+              value={planMode}
+              onValueChange={(v) => { if (v === 'baseline' || v === 'remaining') setPlanMode(v); }}
+              className="gap-1"
+            >
+              <ToggleGroupItem value="remaining" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Remaining</ToggleGroupItem>
+              <ToggleGroupItem value="baseline" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Baseline</ToggleGroupItem>
+            </ToggleGroup>
+            <span className="text-[10px] text-muted-foreground">
+              {planMode === 'remaining' ? 'Excludes already-done plans' : 'All planned dates count'}
             </span>
           </ToolbarGroup>
 
