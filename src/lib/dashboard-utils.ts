@@ -346,6 +346,8 @@ export interface SCurvePoint {
   t1Actual: number | null;
   t2Planned: number;
   t2Actual: number | null;
+  r2sPlanned: number;
+  r2sActual: number | null;
   // T1 stacked bar segments
   t1Met: number;            // min(plan, actual)
   t1Shortfall: number;      // max(0, plan - actual)
