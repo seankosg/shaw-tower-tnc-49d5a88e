@@ -511,6 +511,21 @@ export default function DefectProgressPage() {
             </span>
           </ToolbarGroup>
 
+          <ToolbarGroup label="Plan Mode">
+            <ToggleGroup
+              type="single"
+              value={planMode}
+              onValueChange={(v) => { if (v === 'baseline' || v === 'remaining') setPlanMode(v); }}
+              className="gap-1"
+            >
+              <ToggleGroupItem value="remaining" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Remaining</ToggleGroupItem>
+              <ToggleGroupItem value="baseline" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Baseline</ToggleGroupItem>
+            </ToggleGroup>
+            <span className="text-[10px] text-muted-foreground">
+              {planMode === 'remaining' ? 'Excludes already-done plans' : 'All planned dates count'}
+            </span>
+          </ToolbarGroup>
+
           <div className="ml-auto flex items-center gap-3 text-xs">
             <Legend />
           </div>
