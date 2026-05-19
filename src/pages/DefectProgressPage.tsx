@@ -175,8 +175,10 @@ export default function DefectProgressPage() {
     for (const s of filteredItems) {
       totalStages += stages.length;
       for (const st of stages) {
-        if (isDefectStagePlannedUpTo(s, st, dataDate)) cumPlan++;
-        if (isDefectStageActualUpTo(s, st, dataDate)) {
+        const doneAsOf = isDefectStageActualUpTo(s, st, dataDate);
+        const countPlan = isDefectStagePlannedUpTo(s, st, dataDate) && (planMode === 'baseline' || !doneAsOf);
+        if (countPlan) cumPlan++;
+        if (doneAsOf) {
           cumActual++;
           doneStages++;
         }
@@ -192,13 +194,15 @@ export default function DefectProgressPage() {
     let upcoming7Plan = 0;
     for (const s of filteredItems) {
       for (const st of stages) {
+        // Remaining mode: skip if stage already done as-of today.
+        if (planMode === 'remaining' && isDefectStageActualUpTo(s, st, today)) continue;
         for (let d = today; d <= upcomingEnd; d = addDays(d, 1)) {
           if (isDefectStagePlannedOn(s, st, d)) upcoming7Plan++;
         }
       }
     }
     return { cumPlan, cumActual, variance, progressPct, doneStages, totalStages, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
-  }, [stageFilterArg, filteredItems, critical.highRisk.length, dataDate, today]);
+  }, [stageFilterArg, filteredItems, critical.highRisk.length, dataDate, today, planMode]);
 
   // ───── Navigation ─────
   const filterValueFor = (label: string) => label === '(None)' || label === '—' ? '__EMPTY__' : label;
