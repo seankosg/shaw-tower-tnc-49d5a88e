@@ -397,10 +397,15 @@ export function buildSCurve(
   planMode: TcPlanMode = 'baseline',
   asOfDate?: string,
 ): SCurvePoint[] {
-  const counts = new Map<string, { t1p: number; t1a: number; t2p: number; t2a: number; r2p: number; r2a: number }>();
-  const ensure = (b: string) => {
+  // 일일(bar)용 Plan: remaining 모드면 완료분 제외
+  // 누계(line)용 Plan: remaining 모드면 완료분을 actual 버킷으로 옮겨서
+  //   Actual 위에 잔여 계획이 쌓이도록 보정
+  type Bucket = { t1p: number; t1a: number; t2p: number; t2a: number; r2p: number; r2a: number;
+                  t1pCum: number; t2pCum: number; r2pCum: number };
+  const counts = new Map<string, Bucket>();
+  const ensure = (b: string): Bucket => {
     let v = counts.get(b);
-    if (!v) { v = { t1p: 0, t1a: 0, t2p: 0, t2a: 0, r2p: 0, r2a: 0 }; counts.set(b, v); }
+    if (!v) { v = { t1p: 0, t1a: 0, t2p: 0, t2a: 0, r2p: 0, r2a: 0, t1pCum: 0, t2pCum: 0, r2pCum: 0 }; counts.set(b, v); }
     return v;
   };
   const asOf = asOfDate ?? today;
@@ -417,11 +422,19 @@ export function buildSCurve(
     const countT1Plan = planMode === 'baseline' || !t1DoneAsOf;
     const countT2Plan = planMode === 'baseline' || !t2DoneAsOf;
     const countR2Plan = planMode === 'baseline' || !r2DoneAsOf;
+    // 일일 막대용 (기존 로직 유지)
     if (t1Plan && countT1Plan) ensure(bucketize(t1Plan, granularity)).t1p++;
-    if (t1Actual) ensure(bucketize(t1Actual, granularity)).t1a++;
     if (t2Plan && countT2Plan) ensure(bucketize(t2Plan, granularity)).t2p++;
-    if (t2Actual) ensure(bucketize(t2Actual, granularity)).t2a++;
     if (r2Plan && countR2Plan) ensure(bucketize(r2Plan, granularity)).r2p++;
+    // 누계 곡선용: remaining + 완료 항목은 actual 버킷에 기록
+    const t1CumSrc = planMode === 'remaining' && t1DoneAsOf ? t1Actual : t1Plan;
+    const t2CumSrc = planMode === 'remaining' && t2DoneAsOf ? t2Actual : t2Plan;
+    const r2CumSrc = planMode === 'remaining' && r2DoneAsOf ? r2Actual : r2Plan;
+    if (t1CumSrc) ensure(bucketize(t1CumSrc, granularity)).t1pCum++;
+    if (t2CumSrc) ensure(bucketize(t2CumSrc, granularity)).t2pCum++;
+    if (r2CumSrc) ensure(bucketize(r2CumSrc, granularity)).r2pCum++;
+    if (t1Actual) ensure(bucketize(t1Actual, granularity)).t1a++;
+    if (t2Actual) ensure(bucketize(t2Actual, granularity)).t2a++;
     if (r2Actual) ensure(bucketize(r2Actual, granularity)).r2a++;
   }
 
@@ -431,15 +444,15 @@ export function buildSCurve(
   let cT1p = 0, cT1a = 0, cT2p = 0, cT2a = 0, cR2p = 0, cR2a = 0;
   for (const [b, v] of counts) {
     if (b < buckets[0]) {
-      cT1p += v.t1p; cT1a += v.t1a; cT2p += v.t2p; cT2a += v.t2a; cR2p += v.r2p; cR2a += v.r2a;
+      cT1p += v.t1pCum; cT1a += v.t1a; cT2p += v.t2pCum; cT2a += v.t2a; cR2p += v.r2pCum; cR2a += v.r2a;
     }
   }
 
   const todayBucket = bucketize(today, granularity);
 
   return buckets.map(b => {
-    const v = counts.get(b) ?? { t1p: 0, t1a: 0, t2p: 0, t2a: 0, r2p: 0, r2a: 0 };
-    cT1p += v.t1p; cT1a += v.t1a; cT2p += v.t2p; cT2a += v.t2a; cR2p += v.r2p; cR2a += v.r2a;
+    const v = counts.get(b) ?? { t1p: 0, t1a: 0, t2p: 0, t2a: 0, r2p: 0, r2a: 0, t1pCum: 0, t2pCum: 0, r2pCum: 0 };
+    cT1p += v.t1pCum; cT1a += v.t1a; cT2p += v.t2pCum; cT2a += v.t2a; cR2p += v.r2pCum; cR2a += v.r2a;
     const isFuture = b > todayBucket;
     const t1p = v.t1p;
     const t1a = isFuture ? 0 : v.t1a;
