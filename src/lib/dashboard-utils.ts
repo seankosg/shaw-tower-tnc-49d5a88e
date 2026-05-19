@@ -414,14 +414,17 @@ export function buildSCurve(
     const t1DoneAsOf = isStageActualUpTo(s, 't1', asOf);
     const t2DoneAsOf = isStageActualUpTo(s, 't2', asOf);
     const r2DoneAsOf = isStageActualUpTo(s, 'r2s', asOf);
-    const countT1Plan = planMode === 'baseline' || !t1DoneAsOf;
-    const countT2Plan = planMode === 'baseline' || !t2DoneAsOf;
-    const countR2Plan = planMode === 'baseline' || !r2DoneAsOf;
-    if (t1Plan && countT1Plan) ensure(bucketize(t1Plan, granularity)).t1p++;
+    // Remaining 모드: 이미 완료된 항목은 원래 계획 대신 actual 버킷에 Plan +1
+    // → 누계 Plan 곡선이 asOf 이전 구간에서 Actual을 따라 이어진 뒤,
+    //   asOf 이후 잔여 계획이 위로 쌓이도록 보정.
+    const t1PlanBucketSrc = planMode === 'remaining' && t1DoneAsOf ? t1Actual : t1Plan;
+    const t2PlanBucketSrc = planMode === 'remaining' && t2DoneAsOf ? t2Actual : t2Plan;
+    const r2PlanBucketSrc = planMode === 'remaining' && r2DoneAsOf ? r2Actual : r2Plan;
+    if (t1PlanBucketSrc) ensure(bucketize(t1PlanBucketSrc, granularity)).t1p++;
     if (t1Actual) ensure(bucketize(t1Actual, granularity)).t1a++;
-    if (t2Plan && countT2Plan) ensure(bucketize(t2Plan, granularity)).t2p++;
+    if (t2PlanBucketSrc) ensure(bucketize(t2PlanBucketSrc, granularity)).t2p++;
     if (t2Actual) ensure(bucketize(t2Actual, granularity)).t2a++;
-    if (r2Plan && countR2Plan) ensure(bucketize(r2Plan, granularity)).r2p++;
+    if (r2PlanBucketSrc) ensure(bucketize(r2PlanBucketSrc, granularity)).r2p++;
     if (r2Actual) ensure(bucketize(r2Actual, granularity)).r2a++;
   }
 
