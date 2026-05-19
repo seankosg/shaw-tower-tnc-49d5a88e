@@ -270,13 +270,16 @@ export interface PlanActualRow {
   r2: PlanActualMetrics;
 }
 
+export type TcPlanMode = 'baseline' | 'remaining';
+
 /** Aggregate Plan vs Actual metrics by group. */
 export function aggregatePlanActualByGroup(
   subs: SubtestForDashboard[],
   today: string,
   dataDate: string,
   groupKey: (s: SubtestForDashboard) => string,
-  groupLabel: (key: string) => string
+  groupLabel: (key: string) => string,
+  planMode: TcPlanMode = 'baseline',
 ): PlanActualRow[] {
   const buckets = new Map<string, SubtestForDashboard[]>();
   for (const s of subs) {
@@ -291,14 +294,18 @@ export function aggregatePlanActualByGroup(
     const calc = (stage: StageKey): PlanActualMetrics => {
       let cumPlan = 0, cumActual = 0, dataDatePlan = 0, dataDateActual = 0, dataDateDelay = 0, tPlan = 0, tActual = 0, tDelay = 0;
       for (const i of items) {
-        if (isStagePlannedUpTo(i, stage, dataDate)) cumPlan++;
-        if (isStageActualUpTo(i, stage, dataDate)) cumActual++;
-        if (isStagePlannedOn(i, stage, dataDate)) dataDatePlan++;
+        const doneAsOfData = isStageActualUpTo(i, stage, dataDate);
+        const doneAsOfToday = isStageActualUpTo(i, stage, today);
+        const countPlanData = planMode === 'baseline' || !doneAsOfData;
+        const countPlanToday = planMode === 'baseline' || !doneAsOfToday;
+        if (countPlanData && isStagePlannedUpTo(i, stage, dataDate)) cumPlan++;
+        if (doneAsOfData) cumActual++;
+        if (countPlanData && isStagePlannedOn(i, stage, dataDate)) dataDatePlan++;
         if (isStageActualOn(i, stage, dataDate)) dataDateActual++;
-        if (isStagePlannedOn(i, stage, dataDate) && !isStageDone(i, stage)) dataDateDelay++;
-        if (isStagePlannedOn(i, stage, today)) tPlan++;
+        if (countPlanData && isStagePlannedOn(i, stage, dataDate) && !isStageDone(i, stage)) dataDateDelay++;
+        if (countPlanToday && isStagePlannedOn(i, stage, today)) tPlan++;
         if (isStageActualOn(i, stage, today)) tActual++;
-        if (isStagePlannedOn(i, stage, today) && !isStageDone(i, stage)) tDelay++;
+        if (countPlanToday && isStagePlannedOn(i, stage, today) && !isStageDone(i, stage)) tDelay++;
       }
       return {
         cumPlan,
@@ -326,12 +333,8 @@ export function aggregatePlanActualByGroup(
       r2: calc('r2s'),
     });
   }
-  // default sort: most-delayed (largest negative cumulative variance T2 then T1) first
-  return out.sort((a, b) => {
-    const va = (a.t1.cumActual - a.t1.cumPlan) + (a.t2.cumActual - a.t2.cumPlan);
-    const vb = (b.t1.cumActual - b.t1.cumPlan) + (b.t2.cumActual - b.t2.cumPlan);
-    return va - vb || a.label.localeCompare(b.label);
-  });
+  // Alphabetic ascending by group label (consistent with Defect Dashboard).
+  return out.sort((a, b) => a.label.localeCompare(b.label));
 }
 
 export type SCurveBucket = 'day' | 'week';
@@ -389,6 +392,8 @@ export function buildSCurve(
   startDate: string,
   endDate: string,
   today: string,
+  planMode: TcPlanMode = 'baseline',
+  asOfDate?: string,
 ): SCurvePoint[] {
   const counts = new Map<string, { t1p: number; t1a: number; t2p: number; t2a: number }>();
   const ensure = (b: string) => {
@@ -396,14 +401,19 @@ export function buildSCurve(
     if (!v) { v = { t1p: 0, t1a: 0, t2p: 0, t2a: 0 }; counts.set(b, v); }
     return v;
   };
+  const asOf = asOfDate ?? today;
   for (const s of subs) {
     const t1Plan = getStagePlannedDate(s, 't1');
     const t1Actual = getStageActualDate(s, 't1');
     const t2Plan = getStagePlannedDate(s, 't2');
     const t2Actual = getStageActualDate(s, 't2');
-    if (t1Plan) ensure(bucketize(t1Plan, granularity)).t1p++;
+    const t1DoneAsOf = isStageActualUpTo(s, 't1', asOf);
+    const t2DoneAsOf = isStageActualUpTo(s, 't2', asOf);
+    const countT1Plan = planMode === 'baseline' || !t1DoneAsOf;
+    const countT2Plan = planMode === 'baseline' || !t2DoneAsOf;
+    if (t1Plan && countT1Plan) ensure(bucketize(t1Plan, granularity)).t1p++;
     if (t1Actual) ensure(bucketize(t1Actual, granularity)).t1a++;
-    if (t2Plan) ensure(bucketize(t2Plan, granularity)).t2p++;
+    if (t2Plan && countT2Plan) ensure(bucketize(t2Plan, granularity)).t2p++;
     if (t2Actual) ensure(bucketize(t2Actual, granularity)).t2a++;
   }
 

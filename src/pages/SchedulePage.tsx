@@ -31,6 +31,7 @@ import {
 import { ScheduleMatrix } from '@/components/schedule/ScheduleMatrix';
 import { CriticalWatchlist } from '@/components/schedule/CriticalWatchlist';
 import { getScheduleCache, setScheduleCache } from '@/lib/schedule-cache';
+import { usePlanMode } from '@/hooks/usePlanMode';
 
 const GROUP_LABELS: Record<ScheduleGroupBy, string> = {
   system: 'System',
@@ -77,6 +78,16 @@ export default function SchedulePage() {
   const [pickedField, setPickedField] = useState<'planned' | 'actual'>((searchParams.get('picked_field') as 'planned' | 'actual') || 'planned');
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  const [planMode, setPlanMode] = usePlanMode();
+  // URL → planMode on mount (URL has priority)
+  useEffect(() => {
+    const urlMode = searchParams.get('plan_mode');
+    if ((urlMode === 'baseline' || urlMode === 'remaining') && urlMode !== planMode) {
+      setPlanMode(urlMode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     localStorage.setItem('schedule_hide_past', hidePast ? '1' : '0');
   }, [hidePast]);
@@ -99,8 +110,9 @@ export default function SchedulePage() {
     setOrDelete('risk_panel', showRiskPanel ? '1' : '', '');
     setOrDelete('picked', pickedDate ? format(pickedDate, 'yyyy-MM-dd') : '', format(new Date(), 'yyyy-MM-dd'));
     setOrDelete('picked_field', pickedField, 'planned');
+    setOrDelete('plan_mode', planMode, 'remaining');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, systemTextFilter, selectedSystemFilters, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, searchParams, setSearchParams]);
+  }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, systemTextFilter, selectedSystemFilters, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, planMode, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (groupBy === 'system') return;
@@ -182,9 +194,9 @@ export default function SchedulePage() {
   const aggregate = useMemo(
     () => aggregateSchedule(filteredSubtests, {
       groupBy, bucket, stageFilter: stageFilterArg,
-      rangeStart, rangeEnd, asOfDate, sysCodeById,
+      rangeStart, rangeEnd, asOfDate, sysCodeById, planMode,
     }),
-    [filteredSubtests, groupBy, bucket, stageFilterArg, rangeStart, rangeEnd, asOfDate, sysCodeById],
+    [filteredSubtests, groupBy, bucket, stageFilterArg, rangeStart, rangeEnd, asOfDate, sysCodeById, planMode],
   );
 
   const systemFilterOptions = useMemo(
@@ -238,8 +250,10 @@ export default function SchedulePage() {
     for (const s of filteredSubtests) {
       totalStages += stages.length;
       for (const st of stages) {
-        if (isStagePlannedUpTo(s, st, dataDate)) cumPlan++;
-        if (isStageActualUpTo(s, st, dataDate)) {
+        const doneAsOfData = isStageActualUpTo(s, st, dataDate);
+        const countPlanData = planMode === 'baseline' || !doneAsOfData;
+        if (countPlanData && isStagePlannedUpTo(s, st, dataDate)) cumPlan++;
+        if (doneAsOfData) {
           cumActual++;
           doneStages++;
         }
@@ -255,13 +269,15 @@ export default function SchedulePage() {
     let upcoming7Plan = 0;
     for (const s of filteredSubtests) {
       for (const st of stages) {
+        const doneAsOfToday = isStageActualUpTo(s, st, today);
+        if (planMode === 'remaining' && doneAsOfToday) continue;
         for (let d = today; d <= upcomingEnd; d = addDays(d, 1)) {
           if (isStagePlannedOn(s, st, d)) upcoming7Plan++;
         }
       }
     }
     return { cumPlan, cumActual, variance, progressPct, doneStages, totalStages, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
-  }, [stageFilterArg, filteredSubtests, critical.highRisk.length, dataDate, today]);
+  }, [stageFilterArg, filteredSubtests, critical.highRisk.length, dataDate, today, planMode]);
 
   // ───── Navigation handlers ─────
   const filterParamForGroup = (label: string): { key: string; value: string } => {
@@ -331,6 +347,7 @@ export default function SchedulePage() {
       today,
       dataDate,
       asOfLabel,
+      planMode,
     });
     toast({ title: 'Export complete', description: `${rowCount} groups → ${fileName}` });
   };
@@ -620,27 +637,43 @@ export default function SchedulePage() {
         />
       </div>
 
-      {/* Matrix + Watchlist */}
-      <div className="flex items-center justify-end gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-2 text-xs"
-          onClick={() => setHidePast(p => !p)}
-          title={hidePast ? 'Show past dates' : 'Hide past dates'}
-        >
-          {hidePast ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
-          <span className="ml-1">{hidePast ? 'Show past' : 'Hide past'}</span>
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-2 text-xs"
-          onClick={() => setShowRiskPanel(prev => !prev)}
-        >
-          {showRiskPanel ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
-          <span className="ml-1">{showRiskPanel ? 'Hide Risk Panel' : 'Show Risk Panel'}</span>
-        </Button>
+      {/* Action row */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <ToggleGroup
+            type="single"
+            value={planMode}
+            onValueChange={(v) => { if (v === 'baseline' || v === 'remaining') setPlanMode(v); }}
+            className="gap-1"
+          >
+            <ToggleGroupItem value="remaining" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Remaining</ToggleGroupItem>
+            <ToggleGroupItem value="baseline" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Baseline</ToggleGroupItem>
+          </ToggleGroup>
+          <span className="text-[10px] text-muted-foreground">
+            {planMode === 'remaining' ? 'Excludes already-done plans' : 'All planned dates count'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs"
+            onClick={() => setHidePast(p => !p)}
+            title={hidePast ? 'Show past dates' : 'Hide past dates'}
+          >
+            {hidePast ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
+            <span className="ml-1">{hidePast ? 'Show past' : 'Hide past'}</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs"
+            onClick={() => setShowRiskPanel(prev => !prev)}
+          >
+            {showRiskPanel ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
+            <span className="ml-1">{showRiskPanel ? 'Hide Risk Panel' : 'Show Risk Panel'}</span>
+          </Button>
+        </div>
       </div>
       <div className="flex gap-4">
         <div className="min-w-0 flex-1">

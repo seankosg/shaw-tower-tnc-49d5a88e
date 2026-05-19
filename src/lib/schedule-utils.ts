@@ -131,6 +131,8 @@ function getStageDates(
 }
 
 // ───── main aggregation ─────
+export type TcPlanMode = 'baseline' | 'remaining';
+
 export interface AggregateOptions {
   groupBy: ScheduleGroupBy;
   bucket: ScheduleBucket;
@@ -140,6 +142,13 @@ export interface AggregateOptions {
   /** Selected as-of ISO date — used to compute cumulative Plan/Actual. */
   asOfDate: string;
   sysCodeById: Map<string, string>;
+  /**
+   * Plan counting mode:
+   *  - 'baseline' (default): every planned date counts.
+   *  - 'remaining': planned dates count ONLY when that stage is NOT yet
+   *    completed as of `asOfDate`. Already-done plans drop off cells & cumPlan.
+   */
+  planMode?: TcPlanMode;
 }
 
 export interface AggregateResult {
@@ -154,6 +163,7 @@ export function aggregateSchedule(
   const buckets = buildBucketRange(opts.rangeStart, opts.rangeEnd, opts.bucket);
   const bucketIdx = new Map<string, number>();
   buckets.forEach((b, i) => bucketIdx.set(b, i));
+  const planMode: TcPlanMode = opts.planMode ?? 'baseline';
 
   const groupMap = new Map<string, SubtestForDashboard[]>();
   for (const s of subs) {
@@ -179,8 +189,10 @@ export function aggregateSchedule(
     for (const s of items) {
       for (const st of ['pred', 't1', 't2', 'r1', 'r2s'] as ScheduleStage[]) {
         const { plan, actual } = getStageDates(s, st);
-        if (plan) {
-          const b = bucketize(plan, opts.bucket);
+        const stageDoneAsOf = isStageActualUpTo(s, st, opts.asOfDate);
+        const countPlan = !!plan && (planMode === 'baseline' || !stageDoneAsOf);
+        if (countPlan) {
+          const b = bucketize(plan!, opts.bucket);
           const i = bucketIdx.get(b);
           if (i !== undefined) {
             stageData[st].cells[i].plan++;
@@ -195,9 +207,9 @@ export function aggregateSchedule(
             stageData[st].cells[i].actual++;
             stageData[st].totalActual++;
           }
-          if (isStageActualUpTo(s, st, opts.asOfDate)) stageData[st].cumActual++;
+          if (stageDoneAsOf) stageData[st].cumActual++;
         }
-        if (isStageActualUpTo(s, st, opts.asOfDate)) stageData[st].totalDone++;
+        if (stageDoneAsOf) stageData[st].totalDone++;
       }
     }
 
@@ -235,12 +247,8 @@ export function aggregateSchedule(
     });
   }
 
-  rows.sort((a, b) => {
-    // Lagging first (ratio low), then label
-    const ra = a.cumPlan ? a.cumActual / a.cumPlan : 1;
-    const rb = b.cumPlan ? b.cumActual / b.cumPlan : 1;
-    return ra - rb || a.label.localeCompare(b.label);
-  });
+  // Alphabetic ascending by group label (consistent with Defect Progress).
+  rows.sort((a, b) => a.label.localeCompare(b.label));
 
   return { buckets, rows };
 }

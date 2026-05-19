@@ -121,6 +121,7 @@ export function exportPlanActualToExcel(
   groupHeader: string,
   today: string,
   dataDate: string,
+  planMode: 'baseline' | 'remaining' = 'baseline',
 ): { rowCount: number; fileName: string } {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -129,15 +130,16 @@ export function exportPlanActualToExcel(
 
   const dataDateLabel = formatDdMmm(dataDate);
   const todayLabel = formatDdMmm(today);
+  const planModeLabel = planMode === 'remaining' ? 'Remaining' : 'Baseline';
   const COL_COUNT = 17; // group, stage, total/done/remain, cum(3), data date(4), today(4), progress%
   const ws: XLSX.WorkSheet = {};
 
   // ── Row 0: Title ──
-  set(ws, 0, 0, `SHAW T&C — Plan vs Actual (${groupHeader})`, S_TITLE);
+  set(ws, 0, 0, `SHAW T&C — Plan vs Actual (${groupHeader}) [Plan: ${planModeLabel}]`, S_TITLE);
   for (let c = 1; c < COL_COUNT; c++) set(ws, 0, c, '', S_TITLE);
 
   // ── Row 1: Meta ──
-  set(ws, 1, 0, `Exported: ${ts}  ·  Today: ${today}  ·  Data Date: ${dataDate}`, S_META);
+  set(ws, 1, 0, `Exported: ${ts}  ·  Today: ${today}  ·  Data Date: ${dataDate}  ·  Plan Mode: ${planModeLabel}`, S_META);
   for (let c = 1; c < COL_COUNT; c++) set(ws, 1, c, '', S_META);
 
   // ── Row 2: spacer ──
