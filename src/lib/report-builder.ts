@@ -84,6 +84,8 @@ export interface TncScurvePoint {
   t1ActualPct: number | null;
   t2PlanPct: number;
   t2ActualPct: number | null;
+  r2sPlanPct: number;
+  r2sActualPct: number | null;
 }
 export interface TncActionPlanTrigger {
   stage: 'preTest' | 'officialTest' | 'testReport';
