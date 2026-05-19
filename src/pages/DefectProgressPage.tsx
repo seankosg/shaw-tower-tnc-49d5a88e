@@ -43,6 +43,7 @@ import { DefectCriticalWatchlist } from '@/components/defects/DefectCriticalWatc
 import { exportDefectScheduleToExcel } from '@/lib/defect-schedule-excel-export';
 import { exportDefectArrayToExcel } from '@/lib/defect-excel-export';
 import { useDefectFieldConfig } from '@/hooks/useDefectFieldConfig';
+import { usePlanMode, type PlanMode } from '@/hooks/usePlanMode';
 import { useAuth } from '@/contexts/AuthContext';
 import { USER_TYPE_LABELS } from '@/types/enums';
 
