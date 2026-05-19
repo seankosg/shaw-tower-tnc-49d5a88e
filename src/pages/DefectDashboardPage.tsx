@@ -440,7 +440,7 @@ export default function DefectDashboardPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <button type="button" onClick={() => setScurveOpen((v) => !v)} className="flex items-center gap-2 text-left hover:opacity-80" aria-expanded={scurveOpen} aria-label="Toggle S-Curve chart">
               {scurveOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              <CardTitle className="text-base">Plan vs Actual — S-Curve</CardTitle>
+              <CardTitle className="text-base">Plan vs Actual — S-Curve <span className="ml-1 text-xs font-normal text-muted-foreground">({planMode})</span></CardTitle>
             </button>
             {scurveOpen && (
               <div className="flex flex-wrap items-center gap-2">
