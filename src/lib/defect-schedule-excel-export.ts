@@ -116,7 +116,7 @@ export function exportDefectScheduleToExcel(
   data: DefectAggregateResult,
   opts: DefectScheduleExportOpts,
 ): { rowCount: number; fileName: string } {
-  const { groupHeader, stageFilter, bucket, today, dataDate, asOfLabel = 'Today' } = opts;
+  const { groupHeader, stageFilter, bucket, today, dataDate, asOfLabel = 'Today', planMode = 'baseline' } = opts;
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
