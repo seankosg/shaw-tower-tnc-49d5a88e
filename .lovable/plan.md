@@ -1,57 +1,61 @@
-## 목표
-Report 탭(`/admin/report`) 접근 권한을 다음 조건으로 단순화합니다:
-- `admin` 역할, OR
-- `user_type = 'pm_pd'`, OR
-- (`superuser` 또는 `d_superuser`) AND `profiles.team = 'Supp'`
+# PPT 차트에 임베드된 .xlsx 추가 — 구현 계획
 
-현재 해당 사용자 6명: admin(VP), wj_lee(PM), jw_kim, ws_choi, yj_yoo, jk_kim
+## 목표
+PowerPoint 데스크탑에서 차트 우클릭 → "데이터 편집(Edit Data)" 클릭 시, 임베드된 Excel이 실제 차트 데이터와 함께 열리도록 구현합니다.
+
+## 현재 상태 진단
+- `pptxgenjs` v4.0.1는 차트 추가 시 기본적으로 `ppt/embeddings/Microsoft_Excel_Worksheet*.xlsx`를 생성하긴 합니다.
+- 하지만 `src/lib/ppt-builder.ts`의 `postProcessXml`이 차트 XML(라인 두께/색상)을 사후 수정하면서 임베드된 xlsx의 캐시와 불일치가 발생합니다.
+- Line chart의 다중 시리즈 + 날짜 카테고리 조합에서 셀 매핑이 비어 PowerPoint가 "데이터 편집" 시 빈 워크북을 띄웁니다.
+
+## 해결 전략
+PPT 생성 직후, ZIP을 풀어 차트별로 **(1) 올바른 xlsx를 재구성**하고 **(2) 차트 XML에 셀 참조(`<c:f>`, `<c:numRef>`, `<c:strRef>`)를 주입**하는 후처리 단계를 추가합니다.
 
 ## 작업 단계
 
-### 1. 데이터 업데이트
-- `profiles.user_type`을 `wj_lee`에 대해 `'pm_pd'`로 변경 (insert tool)
+### 1. 신규 모듈 `src/lib/ppt-embed-workbook.ts`
+- `exceljs`를 동적 import (번들 사이즈 영향 최소화)
+- 입력: 차트 XML(`<c:ser>` 파싱) → 시리즈명, 카테고리, 값
+- 출력:
+  - `Sheet1`에 헤더 1행 + 데이터 N행을 가진 완전한 xlsx 버퍼
+  - 각 시리즈별 셀 범위(`Sheet1!$B$2:$B$N` 등) 메타데이터
 
-### 2. 접근 제어 로직 변경
-신규 헬퍼 `canAccessReport(roles, profile)` 추가 — 위 3가지 조건을 종합 판정.
+### 2. 차트 XML 보강 로직
+- 각 `<c:ser>` 안의 `<c:tx>`, `<c:cat>`, `<c:val>`에 누락된 `<c:f>` 참조를 주입
+- 기존 `<c:numCache>` / `<c:strCache>`는 유지 (값 표시용)
+- Line/Bar/Stacked/Pie/Doughnut 5종 차트 타입 모두 처리
 
-위치: `src/lib/role-permissions.ts` (또는 `src/lib/report-access.ts` 신규 파일)
+### 3. `src/lib/ppt-builder.ts` 통합
+- `pptxgenjs`가 생성한 Blob을 `JSZip`으로 열기
+- `ppt/charts/chart*.xml` 순회:
+  - 기존 line style/color 후처리 유지
+  - 신규: 시리즈 추출 → xlsx 재생성 → 차트 XML에 참조 주입
+  - 대응하는 `ppt/embeddings/*.xlsx` 교체
+  - `ppt/charts/_rels/chart*.xml.rels`의 임베드 관계 확인/보정
+- `[Content_Types].xml`에 xlsx Default extension 확인
 
-```ts
-export function canAccessReport(
-  roles: AppRole[],
-  profile: { user_type?: string | null; team?: string | null } | null,
-): boolean {
-  if (roles.includes('admin')) return true;
-  if (profile?.user_type === 'pm_pd') return true;
-  if ((roles.includes('superuser') || roles.includes('d_superuser'))
-      && profile?.team === 'Supp') return true;
-  return false;
-}
-```
+### 4. 검증
+- 테스트용 PPT 생성 후 ZIP 내부 구조 점검 스크립트(`scripts/inspect-ppt-embeddings.ts`)
+- 점검 항목:
+  - 각 차트마다 임베드된 xlsx 존재
+  - xlsx 내 Sheet1 데이터가 차트 캐시와 일치
+  - 차트 XML의 `<c:f>` 참조가 실제 xlsx 셀과 매칭
+- 데스크탑 PowerPoint에서 수동 확인:
+  - Plan vs Actual (Line), Forecast (Line), Defect S-Curve, Punch 분포 등 주요 차트
+  - "데이터 편집" 클릭 → Excel 정상 오픈 → 값 수정 → 차트 갱신 확인
 
-기존 `ROUTE_MIN_RANK`의 `/^\/admin\/report/` 항목은 **제거**(또는 매우 낮은 rank로 두고) — 대신 `canAccessRoute` 내부에서 `/admin/report` 경로는 별도 처리하지 않고, **페이지 컴포넌트와 사이드바에서 `canAccessReport`를 직접 호출**하도록 통일.
+## 영향받는 파일
+- 신규: `src/lib/ppt-embed-workbook.ts`
+- 신규(개발용): `scripts/inspect-ppt-embeddings.ts`
+- 수정: `src/lib/ppt-builder.ts` (후처리 파이프라인 확장)
+- 신규 의존성: `exceljs` (동적 import)
 
-### 3. UI Gate 적용
-- `src/pages/admin/AdminReportPage.tsx`: `useAuth()`에서 `profile`을 받아 `canAccessReport(roles, profile)`로 `hasAccess` 판정. 에러 메시지는 "Access denied. Report access is restricted to Admin, PM, and Support team Superusers." 로 변경. Code Editor 탭은 기존대로 `isAdmin`만.
-- `src/components/layout/RoleGuard.tsx`: `/admin/report` 경로에 한해 `canAccessReport`를 우선 평가하도록 분기 추가 (다른 경로는 기존 `canAccessRoute` 유지).
-- `src/components/layout/AppSidebar.tsx` (또는 nav items 필터링 위치): Report 메뉴 아이템을 `canAccessReport` 결과에 따라 표시/숨김.
+## 알려진 트레이드오프
+- PPT 파일 크기: 차트당 4~15KB 증가 (10차트 기준 ~100KB)
+- 빌드 시간: 차트당 200~600ms 증가
+- 번들: `exceljs`(~600KB) 동적 로드 (Report 페이지 진입 시에만)
+- LibreOffice/Keynote에서는 "데이터 편집" 미지원 (PowerPoint 전용) — 데스크탑 PPT 사용자 타겟이므로 수용
+- 후처리 순서: line style 패치 → xlsx 재생성 → 참조 주입 순서로 고정
 
-### 4. 동작 검증
-- wj_lee 로그인 → Report 탭 보임/접근 가능
-- Supp 팀 superuser/d_superuser (jw_kim 등) → 접근 가능
-- 비-Supp superuser (ys_lee, jh_lee 등) → 접근 차단, 사이드바에서 숨김
-- senior_user (Supp 팀 ling 등 포함) → 접근 차단 (Supp 소속이어도 d_superuser 미만)
-- guest/user 등 → 차단
-
-## 기술 세부사항
-- `useAuth` context는 이미 `profile`을 노출하므로 추가 페치 불필요.
-- `role-permissions.ts`의 `/^\/admin\/report/` rank 항목은 보수적으로 **남겨두되 rank 0**(누구나 패스)으로 낮춰서 RoleGuard 분기에서 `canAccessReport`가 최종 판정하도록 함. (또는 완전히 제거하고 RoleGuard에 명시 분기.)
-- d_superuser는 기존 `/^\/admin/` (rank 5)에서 차단되지만 `/admin/report`는 더 구체적 패턴이 먼저 매칭되므로 무방. 단 `canAccessReport`에서 d_superuser+Supp을 명시 허용해야 함.
-- Realtime/profile 변경 시 RoleGuard 재평가는 기존 `useAuth` 의존성에 의해 자동 처리.
-
-## 변경 파일 요약
-- DB: `profiles` 1행 update (wj_lee)
-- `src/lib/role-permissions.ts` (또는 신규 `src/lib/report-access.ts`)
-- `src/pages/admin/AdminReportPage.tsx`
-- `src/components/layout/RoleGuard.tsx`
-- `src/components/layout/AppSidebar.tsx` (nav 필터링 위치)
+## 사용자 확인 사항
+이 계획은 ReportTab > PPT Export로 다운로드되는 모든 차트에 일괄 적용됩니다. 특정 차트만 적용하거나 제외할 필요가 있으면 알려주세요.
