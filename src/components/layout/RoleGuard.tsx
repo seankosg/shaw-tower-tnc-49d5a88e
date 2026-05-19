@@ -33,7 +33,7 @@ const FALLBACK_ROUTES = [
 ];
 
 export function RoleGuard({ children }: { children: React.ReactNode }) {
-  const { roles, isAdmin, loading, session, signOut } = useAuth();
+  const { roles, isAdmin, loading, session, signOut, profile } = useAuth();
   const { pathname } = useLocation();
   const { tnc, defect, docs, loading: modLoading } = useModuleStatus();
 
