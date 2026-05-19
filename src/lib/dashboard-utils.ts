@@ -397,10 +397,10 @@ export function buildSCurve(
   planMode: TcPlanMode = 'baseline',
   asOfDate?: string,
 ): SCurvePoint[] {
-  const counts = new Map<string, { t1p: number; t1a: number; t2p: number; t2a: number }>();
+  const counts = new Map<string, { t1p: number; t1a: number; t2p: number; t2a: number; r2p: number; r2a: number }>();
   const ensure = (b: string) => {
     let v = counts.get(b);
-    if (!v) { v = { t1p: 0, t1a: 0, t2p: 0, t2a: 0 }; counts.set(b, v); }
+    if (!v) { v = { t1p: 0, t1a: 0, t2p: 0, t2a: 0, r2p: 0, r2a: 0 }; counts.set(b, v); }
     return v;
   };
   const asOf = asOfDate ?? today;
@@ -409,31 +409,37 @@ export function buildSCurve(
     const t1Actual = getStageActualDate(s, 't1');
     const t2Plan = getStagePlannedDate(s, 't2');
     const t2Actual = getStageActualDate(s, 't2');
+    const r2Plan = getStagePlannedDate(s, 'r2s');
+    const r2Actual = getStageActualDate(s, 'r2s');
     const t1DoneAsOf = isStageActualUpTo(s, 't1', asOf);
     const t2DoneAsOf = isStageActualUpTo(s, 't2', asOf);
+    const r2DoneAsOf = isStageActualUpTo(s, 'r2s', asOf);
     const countT1Plan = planMode === 'baseline' || !t1DoneAsOf;
     const countT2Plan = planMode === 'baseline' || !t2DoneAsOf;
+    const countR2Plan = planMode === 'baseline' || !r2DoneAsOf;
     if (t1Plan && countT1Plan) ensure(bucketize(t1Plan, granularity)).t1p++;
     if (t1Actual) ensure(bucketize(t1Actual, granularity)).t1a++;
     if (t2Plan && countT2Plan) ensure(bucketize(t2Plan, granularity)).t2p++;
     if (t2Actual) ensure(bucketize(t2Actual, granularity)).t2a++;
+    if (r2Plan && countR2Plan) ensure(bucketize(r2Plan, granularity)).r2p++;
+    if (r2Actual) ensure(bucketize(r2Actual, granularity)).r2a++;
   }
 
   const buckets = generateBuckets(startDate, endDate, granularity);
   if (buckets.length === 0) return [];
 
-  let cT1p = 0, cT1a = 0, cT2p = 0, cT2a = 0;
+  let cT1p = 0, cT1a = 0, cT2p = 0, cT2a = 0, cR2p = 0, cR2a = 0;
   for (const [b, v] of counts) {
     if (b < buckets[0]) {
-      cT1p += v.t1p; cT1a += v.t1a; cT2p += v.t2p; cT2a += v.t2a;
+      cT1p += v.t1p; cT1a += v.t1a; cT2p += v.t2p; cT2a += v.t2a; cR2p += v.r2p; cR2a += v.r2a;
     }
   }
 
   const todayBucket = bucketize(today, granularity);
 
   return buckets.map(b => {
-    const v = counts.get(b) ?? { t1p: 0, t1a: 0, t2p: 0, t2a: 0 };
-    cT1p += v.t1p; cT1a += v.t1a; cT2p += v.t2p; cT2a += v.t2a;
+    const v = counts.get(b) ?? { t1p: 0, t1a: 0, t2p: 0, t2a: 0, r2p: 0, r2a: 0 };
+    cT1p += v.t1p; cT1a += v.t1a; cT2p += v.t2p; cT2a += v.t2a; cR2p += v.r2p; cR2a += v.r2a;
     const isFuture = b > todayBucket;
     const t1p = v.t1p;
     const t1a = isFuture ? 0 : v.t1a;
@@ -446,6 +452,8 @@ export function buildSCurve(
       t1Actual: isFuture ? null : cT1a,
       t2Planned: cT2p,
       t2Actual: isFuture ? null : cT2a,
+      r2sPlanned: cR2p,
+      r2sActual: isFuture ? null : cR2a,
       t1Met: isFuture ? 0 : Math.min(t1p, t1a),
       t1Shortfall: isFuture ? 0 : Math.max(0, t1p - t1a),
       t1Excess: isFuture ? 0 : Math.max(0, t1a - t1p),
