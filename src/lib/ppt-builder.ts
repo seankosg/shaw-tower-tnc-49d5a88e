@@ -1407,7 +1407,7 @@ async function fixEmbeddedWorkbook(xlsxBuf: Uint8Array): Promise<Uint8Array> {
   const ctFile = inner.file('[Content_Types].xml');
   if (ctFile) {
     let ct = await ctFile.async('string');
-    ct = ct.replace(/<Override PartName="\/xl\/tables\/[^"]+"[^/]*\/>/g, '');
+    ct = ct.replace(/<Override\s+PartName="\/xl\/tables\/[^"]+"\s+ContentType="[^"]+"\s*\/>/g, '');
     inner.file('[Content_Types].xml', ct);
   }
 
