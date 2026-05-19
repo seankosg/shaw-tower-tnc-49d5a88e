@@ -295,12 +295,13 @@ export default function DashboardPage() {
     setOrDelete('systems', selectedSystemFilters.join(','), '');
     setOrDelete('scurve_start', scurveStart, '2026-04-15');
     setOrDelete('scurve_end', scurveEnd, '2026-06-07');
+    setOrDelete('plan_mode', planMode, 'baseline');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [teamFilter, scurveBucket, breakdownTab, systemTextFilter, selectedSystemFilters, scurveStart, scurveEnd, searchParams, setSearchParams]);
+  }, [teamFilter, scurveBucket, breakdownTab, systemTextFilter, selectedSystemFilters, scurveStart, scurveEnd, planMode, searchParams, setSearchParams]);
 
   const scurve = useMemo(
-    () => buildSCurve(filteredSubtests, scurveBucket, scurveStart, scurveEnd, today),
-    [filteredSubtests, scurveBucket, scurveStart, scurveEnd, today]
+    () => buildSCurve(filteredSubtests, scurveBucket, scurveStart, scurveEnd, today, dataDate, planMode),
+    [filteredSubtests, scurveBucket, scurveStart, scurveEnd, today, dataDate, planMode]
   );
 
   const handleSCurveExport = async () => {
