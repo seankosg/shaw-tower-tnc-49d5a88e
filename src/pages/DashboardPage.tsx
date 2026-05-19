@@ -300,8 +300,8 @@ export default function DashboardPage() {
   }, [teamFilter, scurveBucket, breakdownTab, systemTextFilter, selectedSystemFilters, scurveStart, scurveEnd, planMode, searchParams, setSearchParams]);
 
   const scurve = useMemo(
-    () => buildSCurve(filteredSubtests, scurveBucket, scurveStart, scurveEnd, today, dataDate, planMode),
-    [filteredSubtests, scurveBucket, scurveStart, scurveEnd, today, dataDate, planMode]
+    () => buildSCurve(filteredSubtests, scurveBucket, scurveStart, scurveEnd, today, planMode, dataDate),
+    [filteredSubtests, scurveBucket, scurveStart, scurveEnd, today, planMode, dataDate]
   );
 
   const handleSCurveExport = async () => {
