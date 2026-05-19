@@ -194,9 +194,9 @@ export default function SchedulePage() {
   const aggregate = useMemo(
     () => aggregateSchedule(filteredSubtests, {
       groupBy, bucket, stageFilter: stageFilterArg,
-      rangeStart, rangeEnd, asOfDate, sysCodeById,
+      rangeStart, rangeEnd, asOfDate, sysCodeById, planMode,
     }),
-    [filteredSubtests, groupBy, bucket, stageFilterArg, rangeStart, rangeEnd, asOfDate, sysCodeById],
+    [filteredSubtests, groupBy, bucket, stageFilterArg, rangeStart, rangeEnd, asOfDate, sysCodeById, planMode],
   );
 
   const systemFilterOptions = useMemo(
@@ -250,8 +250,10 @@ export default function SchedulePage() {
     for (const s of filteredSubtests) {
       totalStages += stages.length;
       for (const st of stages) {
-        if (isStagePlannedUpTo(s, st, dataDate)) cumPlan++;
-        if (isStageActualUpTo(s, st, dataDate)) {
+        const doneAsOfData = isStageActualUpTo(s, st, dataDate);
+        const countPlanData = planMode === 'baseline' || !doneAsOfData;
+        if (countPlanData && isStagePlannedUpTo(s, st, dataDate)) cumPlan++;
+        if (doneAsOfData) {
           cumActual++;
           doneStages++;
         }
@@ -267,13 +269,15 @@ export default function SchedulePage() {
     let upcoming7Plan = 0;
     for (const s of filteredSubtests) {
       for (const st of stages) {
+        const doneAsOfToday = isStageActualUpTo(s, st, today);
+        if (planMode === 'remaining' && doneAsOfToday) continue;
         for (let d = today; d <= upcomingEnd; d = addDays(d, 1)) {
           if (isStagePlannedOn(s, st, d)) upcoming7Plan++;
         }
       }
     }
     return { cumPlan, cumActual, variance, progressPct, doneStages, totalStages, criticalCount: critical.highRisk.length, overdue, upcoming7Plan, upcomingEnd };
-  }, [stageFilterArg, filteredSubtests, critical.highRisk.length, dataDate, today]);
+  }, [stageFilterArg, filteredSubtests, critical.highRisk.length, dataDate, today, planMode]);
 
   // ───── Navigation handlers ─────
   const filterParamForGroup = (label: string): { key: string; value: string } => {
