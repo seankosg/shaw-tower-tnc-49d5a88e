@@ -88,7 +88,9 @@ export function AppSidebar() {
   const visibleDefects = filterNavItems(defectNav, roles);
   const visibleDocs = filterNavItems(docsNav, roles);
   const visiblePunch = filterNavItems(punchNav, roles);
-  const visibleAdmin = filterNavItems(adminNav, roles);
+  const visibleAdmin = filterNavItems(adminNav, roles).filter(
+    (item) => item.path !== '/admin/report' || canAccessReport(roles, profile),
+  );
 
   // Non-admins lose the entire group when the module is paused
   const showTncGroup = isAdmin || tnc.enabled;
