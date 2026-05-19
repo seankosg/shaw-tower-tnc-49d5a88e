@@ -65,6 +65,7 @@ import {
 } from '@/lib/defect-schedule-utils';
 import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
+import { usePlanMode } from '@/hooks/usePlanMode';
 
 const PIE_COLORS: Record<string, string> = {
   Complete: 'hsl(var(--primary))',
