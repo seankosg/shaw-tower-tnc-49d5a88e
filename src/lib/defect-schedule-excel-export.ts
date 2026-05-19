@@ -109,6 +109,7 @@ export interface DefectScheduleExportOpts {
   today: string;
   dataDate?: string;
   asOfLabel?: string;
+  planMode?: 'baseline' | 'remaining';
 }
 
 export function exportDefectScheduleToExcel(
