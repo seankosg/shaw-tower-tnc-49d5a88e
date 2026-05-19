@@ -26,7 +26,7 @@ const ROLE_RANK: Record<AppRole, number> = {
 
 /** Minimum role rank required for each route */
 const ROUTE_MIN_RANK: [RegExp, number][] = [
-  [/^\/admin\/report/, 3],   // senior_user+ (Code Editor tab inside is gated to admin only)
+  [/^\/admin\/report/, 0],   // Final gate handled by canAccessReport (admin / pm_pd / Supp-team d_superuser+)
   [/^\/admin/, 5],           // superuser / admin only (d_superuser blocked)
   [/^\/tc\/import/, 2],      // user+
   [/^\/tc\/export/, 2],      // user+
@@ -88,3 +88,22 @@ export function canAccessRoute(roles: AppRole[], path: string): boolean {
 export function filterNavItems<T extends { path: string }>(items: T[], roles: AppRole[]): T[] {
   return items.filter(item => canAccessRoute(roles, item.path));
 }
+
+/**
+ * Report tab access — independent from the rank hierarchy.
+ * Allowed:
+ *   - admin role
+ *   - user_type = 'pm_pd' (Project Manager / PD)
+ *   - superuser or d_superuser whose profiles.team = 'Supp'
+ */
+export function canAccessReport(
+  roles: AppRole[],
+  profile: { user_type?: string | null; team?: string | null } | null | undefined,
+): boolean {
+  if (roles.includes('admin')) return true;
+  if (profile?.user_type === 'pm_pd') return true;
+  if ((roles.includes('superuser') || roles.includes('d_superuser'))
+      && profile?.team === 'Supp') return true;
+  return false;
+}
+

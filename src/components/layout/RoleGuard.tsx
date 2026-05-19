@@ -1,6 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { canAccessRoute } from '@/lib/role-permissions';
+import { canAccessRoute, canAccessReport } from '@/lib/role-permissions';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { ModulePausedScreen } from './ModulePausedScreen';
 import { Button } from '@/components/ui/button';
@@ -33,7 +33,7 @@ const FALLBACK_ROUTES = [
 ];
 
 export function RoleGuard({ children }: { children: React.ReactNode }) {
-  const { roles, isAdmin, loading, session, signOut } = useAuth();
+  const { roles, isAdmin, loading, session, signOut, profile } = useAuth();
   const { pathname } = useLocation();
   const { tnc, defect, docs, loading: modLoading } = useModuleStatus();
 
@@ -60,7 +60,13 @@ export function RoleGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!canAccessRoute(roles, pathname)) {
+  // Report tab has a custom gate (admin / pm_pd / Supp-team d_superuser+)
+  const isReportRoute = pathname === '/admin/report' || pathname.startsWith('/admin/report/');
+  const routeAllowed = isReportRoute
+    ? canAccessReport(roles, profile)
+    : canAccessRoute(roles, pathname);
+
+  if (!routeAllowed) {
     const target = FALLBACK_ROUTES.find((p) => p !== pathname && canAccessRoute(roles, p));
     if (!target) {
       return (
