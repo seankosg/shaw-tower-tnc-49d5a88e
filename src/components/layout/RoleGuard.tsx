@@ -1,6 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { canAccessRoute } from '@/lib/role-permissions';
+import { canAccessRoute, canAccessReport } from '@/lib/role-permissions';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { ModulePausedScreen } from './ModulePausedScreen';
 import { Button } from '@/components/ui/button';
