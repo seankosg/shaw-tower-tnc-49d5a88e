@@ -31,6 +31,7 @@ import {
 import { ScheduleMatrix } from '@/components/schedule/ScheduleMatrix';
 import { CriticalWatchlist } from '@/components/schedule/CriticalWatchlist';
 import { getScheduleCache, setScheduleCache } from '@/lib/schedule-cache';
+import { usePlanMode } from '@/hooks/usePlanMode';
 
 const GROUP_LABELS: Record<ScheduleGroupBy, string> = {
   system: 'System',
