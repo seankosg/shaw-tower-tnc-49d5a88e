@@ -43,6 +43,8 @@ import {
 import { isStageDone } from '@/lib/stage-metrics';
 import { RecentSubtestComments } from '@/components/dashboard/RecentSubtestComments';
 import { CriticalItemsPanel } from '@/components/dashboard/CriticalItemsPanel';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { usePlanMode } from '@/hooks/usePlanMode';
 
 const STATUS_COLORS: Record<string, string> = {
   Done: 'hsl(142, 71%, 45%)',
