@@ -86,6 +86,16 @@ export default function DefectProgressPage() {
   const [pickedDate, setPickedDate] = useState<Date | undefined>(() => searchParams.get('picked') ? new Date(`${searchParams.get('picked')}T00:00:00`) : new Date());
   const [pickedField, setPickedField] = useState<'planned' | 'actual'>((searchParams.get('picked_field') as 'planned' | 'actual') || 'planned');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [planMode, setPlanMode] = usePlanMode();
+
+  // URL → planMode (URL has priority on mount; subsequent changes propagate URL ↔ store)
+  useEffect(() => {
+    const urlMode = searchParams.get('plan_mode');
+    if ((urlMode === 'baseline' || urlMode === 'remaining') && urlMode !== planMode) {
+      setPlanMode(urlMode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('defect_schedule_hide_past', hidePast ? '1' : '0');
