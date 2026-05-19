@@ -117,8 +117,9 @@ export default function DefectProgressPage() {
     setOrDelete('risk_panel', showRiskPanel ? '1' : '', '');
     setOrDelete('picked', pickedDate ? format(pickedDate, 'yyyy-MM-dd') : '', format(new Date(), 'yyyy-MM-dd'));
     setOrDelete('picked_field', pickedField, 'planned');
+    setOrDelete('plan_mode', planMode, 'remaining');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, searchParams, setSearchParams]);
+  }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, planMode, searchParams, setSearchParams]);
 
   const { items: cachedItems, initialLoaded } = useDefectCache();
   const items = cachedItems as unknown as DefectItem[];
