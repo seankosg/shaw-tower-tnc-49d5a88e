@@ -850,7 +850,7 @@ function PlanActualTable({
                 {subheads.map((label, i) => (
                   <TableHead key={`${label}-${i}`} className={cn('h-8 text-center text-[11px]', [0, 3, 7].includes(i) && 'border-l border-border')}>
                     {label === 'Plan' ? (
-                      <span>Plan<span className="ml-0.5 text-[9px] text-muted-foreground">(baseline)</span></span>
+                      <span>Plan<span className="ml-0.5 text-[9px] text-muted-foreground">({planMode === 'remaining' ? 'remaining' : 'baseline'})</span></span>
                     ) : label}
                   </TableHead>
                 ))}
