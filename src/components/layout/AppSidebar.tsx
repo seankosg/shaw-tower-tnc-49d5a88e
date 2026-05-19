@@ -13,7 +13,7 @@ import { APP_NAME } from '@/lib/constants';
 import { useAuth } from '@/contexts/AuthContext';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { usePhotoOcr } from '@/contexts/PhotoOcrContext';
-import { canAccessRoute, filterNavItems } from '@/lib/role-permissions';
+import { canAccessRoute, canAccessReport, filterNavItems } from '@/lib/role-permissions';
 import { getRememberedRoute } from '@/hooks/useRouteMemory';
 import type { AppRole } from '@/types/enums';
 
