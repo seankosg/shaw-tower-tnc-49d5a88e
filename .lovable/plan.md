@@ -1,75 +1,40 @@
-# PPT "연결된 파일을 사용할 수 없습니다" 오류 수정
+## 배경
 
-## 증상
-PowerPoint에서 차트 → "Excel에서 데이터 편집" 클릭 시:
-> "연결된 파일을 사용할 수 없습니다. 연결된 파일이 이동되었거나 저장되지 않은 경우 이 오류가 발생할 수 있습니다."
+현재 슬라이드 4 S-Curve의 `Test Report · Plan` 시리즈(`src/lib/ppt-builder.ts` L622, L627-633)는 Raw Data를 사용하지 않고, "마지막 T1 Actual 시점 이후 0→100% 선형 보간"이라는 **임의의 placeholder**로 그려져 있습니다.
 
-이는 PowerPoint가 차트 데이터를 **임베드(embed)** 가 아니라 **외부 링크(link)** 로 인식하고 있다는 의미입니다.
+검증 결과 Raw Data(`subtests.r2_target_submission_date`)에는 전체 1,904개 subtest 모두에 R2S 일일계획 일자가 채워져 있으며(34개 distinct date, 2026-04-02 ~ 2026-06-13), Pre-Test/Official Test와 동일한 방식으로 누적 % 곡선을 산출할 수 있습니다.
 
-## 원인 가설
-이전 수정에서 임베드된 xlsx 자체는 복구했지만, **차트와 xlsx를 연결하는 관계 파일에 문제가 남아있을 가능성**이 높습니다:
+## 변경 범위 (Frontend 데이터 파이프라인 + PPT 시리즈만 수정, 비즈니스 로직 변동 없음)
 
-1. **`ppt/charts/_rels/chartN.xml.rels`** 에서 xlsx 임베드 관계의 `TargetMode="External"` 속성이 잘못 설정됨
-   - 임베드는 `TargetMode` 속성 자체가 없어야 함 (기본값 Internal)
-2. **`<c:externalData>`** 블록의 `<c:autoUpdate val="1"/>` 가 링크 동작을 유도
-   - val="0"으로 강제 또는 통째 정합성 점검
-3. xlsx Target 경로가 `../embeddings/...` 가 아닌 절대/외부 경로로 기재됨
+### 1. `src/lib/dashboard-utils.ts` — `buildSCurve` 확장
 
-## 작업 단계
+- 카운터에 `r2p`(R2S Plan), `r2a`(R2S Actual) 추가
+- 루프 내부에서 `getStagePlannedDate(s, 'r2s')`, `getStageActualDate(s, 'r2s')`로 일자 추출 후 동일한 bucketize 로직 적용
+- planMode/baseline 가드는 T2와 동일한 규칙(`isStageActualUpTo(s, 'r2s', asOf)`)으로 적용
+- `SCurvePoint` 인터페이스에 `r2sPlanned: number`, `r2sActual: number | null` 추가 (기존 t1Met/t1FuturePlan 등 스택바 필드는 R2S용 추가 불필요 — 슬라이드 4·8 라인차트만 사용)
+- 기존 호출부(Dashboard 등)는 새 필드를 사용하지 않으므로 영향 없음
 
-### 1. 진단 스크립트 작성 (`scripts/inspect-ppt-chart-rels.ts`)
-- 최근 생성된 PPT의 ZIP을 열어 다음을 출력:
-  - `ppt/charts/chart*.xml` 내 `<c:externalData>`, `<c:autoUpdate>` 존재 여부 / 값
-  - `ppt/charts/_rels/chart*.xml.rels` 의 각 Relationship Type, Target, TargetMode
-  - `[Content_Types].xml` 의 xlsx Default/Override 등록 여부
-- 어떤 항목이 "External"로 잘못 표시되어 있는지 정확히 식별
+### 2. `src/lib/report-builder.ts` — `TncScurvePoint` 확장
 
-### 2. `src/lib/ppt-builder.ts` 의 `postProcessXml` 확장
-신규 후처리 단계 추가:
+- 인터페이스(L80-87)에 `r2sPlanPct: number`, `r2sActualPct: number | null` 추가
+- `scurve` 매핑부(L990-997)에서 `p.r2sPlanned`, `p.r2sActual`을 `tot`으로 나눠 백분율 계산 (T1·T2와 동일 패턴)
 
-**A. 차트 rels 정규화** (`ppt/charts/_rels/chart*.xml.rels`)
-```ts
-// TargetMode="External" 제거 (xlsx 임베드 관계 한정)
-rels = rels.replace(
-  /(<Relationship\s+[^>]*Type="[^"]*spreadsheetml\.sheet[^"]*"[^>]*?)\s+TargetMode="External"/g,
-  '$1'
-);
-// Target이 절대 URL/file:// 인 경우 ../embeddings/Microsoft_Excel_Worksheet1.xlsx 로 교정
-```
+### 3. `src/lib/ppt-builder.ts` — 슬라이드 4 차트 시리즈 정정
 
-**B. 차트 XML 정규화** (`ppt/charts/chart*.xml`)
-```ts
-// autoUpdate를 0으로 고정 (링크 동작 차단)
-xml = xml.replace(
-  /<c:autoUpdate val="1"\s*\/>/g,
-  '<c:autoUpdate val="0"/>'
-);
-// externalData 블록이 누락된 경우 임베드 rId를 가리키도록 보강
-```
+- L622의 `values: pts.map(p => 0)` placeholder 제거 → `values: pts.map(p => p.r2sPlanPct)` 로 교체
+- L625-633의 placeholder 보간 블록 전체 삭제
+- (선택) Actual 시리즈가 차트에 추가되어 있지 않으므로 현재는 Plan만 반영. 사용자가 별도로 요청하지 않은 한 Actual 시리즈는 추가하지 않음
 
-**C. 통합 순서**
-```
-1) fixEmbeddedWorkbook   (기존, xlsx 내부 복구)
-2) normalizeChartRels    (신규, External 모드 제거)
-3) normalizeChartXml     (신규, autoUpdate=0)
-4) 라인 스타일/컬러 후처리 (기존)
-```
+### 4. 슬라이드 8 (Defect/유사 차트) 확인
 
-### 3. 검증
-- 진단 스크립트로 수정 전/후 비교
-- 데스크탑 PowerPoint에서 실제 확인:
-  - "데이터 편집" 클릭 시 오류 다이얼로그 미발생
-  - Excel 임베드 워크북 정상 오픈
-  - 값 수정 후 차트 갱신 반영
-- LibreOffice에서도 깨지지 않는지 확인
+- 슬라이드 8은 `defect.scurve`(completionPlanPct/closurePlanPct) 기반이며 R2S와 무관함을 재확인. 본 작업 범위에서 제외
 
-## 영향받는 파일
-- 수정: `src/lib/ppt-builder.ts` (`postProcessXml` 확장, 함수 2개 신규 추가)
-- 신규(개발용): `scripts/inspect-ppt-chart-rels.ts`
+## 검증
 
-## 트레이드오프
-- 후처리 비용 미미 (파일당 ms 단위)
-- `autoUpdate=0` 강제는 디자인 의도와 부합 (사용자는 PPT 내부에서 수정 후 차트 갱신을 원함, 외부 파일 자동 갱신을 원하지 않음)
+- `npm run build`로 타입 변경 컴파일 확인
+- 기존 T1/T2 Plan 곡선이 변하지 않았는지(누적 % 산출 로직은 그대로) 회귀 확인
+- 생성된 PPT 슬라이드 4에서 Test Report · Plan 곡선이 0이 아닌 실제 R2S 일자 분포(5월 후반 급상승 피크 반영)로 그려지는지 시각 확인
 
-## 사용자 확인
-1단계(진단)부터 먼저 진행해 정확한 원인을 식별한 뒤 2단계 수정을 적용하는 것이 안전합니다. 진단 결과를 보고 수정 방향을 확정하는 흐름으로 진행해도 되는지 알려주세요. 즉시 1+2 단계를 한 번에 진행하길 원하시면 그렇게 작업하겠습니다.
+## 비대상 (이번 계획에서 제외)
+
+- 지시2(슬라이드 4·8 Excel 편집 실패)는 별도 후속 작업으로 분리. 사용자가 "R2S 일일계획 반영"만 요청했으므로 본 plan에서는 다루지 않음
