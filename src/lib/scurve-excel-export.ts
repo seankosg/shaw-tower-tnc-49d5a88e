@@ -180,6 +180,7 @@ export interface SCurveMetaInput {
   hiddenSeries?: string[];
   totalIncluded: number;       // total subtests / defects in scope
   notes?: string[];
+  planMode?: 'baseline' | 'remaining';
 }
 
 function writeMetaSheet(ws: ExcelJS.Worksheet, m: SCurveMetaInput) {
@@ -197,6 +198,7 @@ function writeMetaSheet(ws: ExcelJS.Worksheet, m: SCurveMetaInput) {
     ['Bucket', m.bucket === 'day' ? 'Daily' : 'Weekly'],
     ['Date range', `${m.rangeStart} ~ ${m.rangeEnd}`],
     ['Total in scope', String(m.totalIncluded)],
+    ['Plan mode', m.planMode === 'remaining' ? 'Remaining' : 'Baseline'],
   ];
   for (const [k, v] of m.filters) rows.push([`Filter: ${k}`, v]);
   if (m.hiddenSeries && m.hiddenSeries.length > 0) {
@@ -463,6 +465,7 @@ export interface ExportTncSCurveOptions {
   exportedByName: string;
   exportedByRole: string;
   chartElement: HTMLElement | null;
+  planMode?: 'baseline' | 'remaining';
 }
 
 export async function exportTncSCurveToExcel(
@@ -483,6 +486,7 @@ export async function exportTncSCurveToExcel(
     rangeEnd: opts.rangeEnd,
     filters: opts.filters,
     totalIncluded: opts.totalIncluded,
+    planMode: opts.planMode,
   };
 
   writeMetaSheet(wb.addWorksheet('Meta'), meta);
