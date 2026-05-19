@@ -818,7 +818,11 @@ function PlanActualTable({
                 <TableHead className="h-8 text-center text-[11px]">Done</TableHead>
                 <TableHead className="h-8 border-r border-border text-center text-[11px]">Open</TableHead>
                 {subheads.map((label, i) => (
-                  <TableHead key={`${label}-${i}`} className={cn('h-8 text-center text-[11px]', [0, 3, 7].includes(i) && 'border-l border-border')}>{label}</TableHead>
+                  <TableHead key={`${label}-${i}`} className={cn('h-8 text-center text-[11px]', [0, 3, 7].includes(i) && 'border-l border-border')}>
+                    {label === 'Plan' ? (
+                      <span>Plan<span className="ml-0.5 text-[9px] text-muted-foreground">(baseline)</span></span>
+                    ) : label}
+                  </TableHead>
                 ))}
               </TableRow>
               <TableRow className="bg-muted/20 hover:bg-muted/20">
