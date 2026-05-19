@@ -275,7 +275,8 @@ export default function DefectDashboardPage() {
     today,
     stage: scurveStage === 'all' ? 'completion' : scurveStage,
     groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
-  }), [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
+    planMode,
+  }), [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup, planMode]);
   const scurveAll: DefectSCurveAllResult | null = useMemo(() => {
     if (scurveStage !== 'all') return null;
     return buildDefectSCurveAllStages(scurveItems, {
@@ -284,8 +285,9 @@ export default function DefectDashboardPage() {
       endDate: scurveEnd,
       today,
       groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
+      planMode,
     });
-  }, [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
+  }, [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup, planMode]);
 
   const handleSCurveExport = async () => {
     const hasData = scurveStage === 'all' ? (scurveAll?.buckets.length ?? 0) > 0 : scurve.buckets.length > 0;
@@ -298,6 +300,7 @@ export default function DefectDashboardPage() {
         ['Stage', scurveStage === 'all' ? 'All stages' : (DEFECT_STAGE_LABELS[scurveStage as DefectScheduleStage] ?? scurveStage)],
         ['Team', teamFilter.length === 0 ? 'All teams' : teamFilter.map(t => TEAM_LABELS[t as keyof typeof TEAM_LABELS] ?? t).join(', ')],
         ['Group by', scurveGroup === SCURVE_GROUP_NONE ? 'None' : DEFECT_GROUP_LABELS[scurveGroup as DefectScheduleGroupBy]],
+        ['Plan mode', planMode === 'remaining' ? 'Remaining' : 'Baseline'],
       ];
       if (scurveGroupValues.length > 0) filters.push(['Group values', scurveGroupValues.join(', ')]);
       const { rowCount, fileName } = await exportDefectSCurveToExcel({
@@ -438,7 +441,7 @@ export default function DefectDashboardPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <button type="button" onClick={() => setScurveOpen((v) => !v)} className="flex items-center gap-2 text-left hover:opacity-80" aria-expanded={scurveOpen} aria-label="Toggle S-Curve chart">
               {scurveOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              <CardTitle className="text-base">Plan vs Actual — S-Curve</CardTitle>
+              <CardTitle className="text-base">Plan vs Actual — S-Curve <span className="ml-1 text-xs font-normal text-muted-foreground">({planMode})</span></CardTitle>
             </button>
             {scurveOpen && (
               <div className="flex flex-wrap items-center gap-2">

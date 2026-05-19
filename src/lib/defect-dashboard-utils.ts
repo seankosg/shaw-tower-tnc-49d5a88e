@@ -252,6 +252,14 @@ export interface BuildSCurveOptions {
   stage: DefectScheduleStage;
   groupBy?: DefectScheduleGroupBy | null;
   topN?: number; // for grouped breakdown; default 8
+  /**
+   * Plan accumulation mode.
+   * - 'baseline' (default): all planned dates are counted in the Plan curve.
+   * - 'remaining': planned dates for stages that have already been completed
+   *   (`isStageDone`) are dropped, so the Plan curve reflects only outstanding work.
+   *   Actual curve is unchanged in either mode.
+   */
+  planMode?: DefectPlanMode;
 }
 
 const TOTAL_KEY = '__total__';
@@ -268,7 +276,7 @@ function getStageDates(item: DefectForDashboard, stage: DefectScheduleStage): { 
 }
 
 export function buildDefectSCurve(items: DefectForDashboard[], options: BuildSCurveOptions): DefectSCurveResult {
-  const { granularity, startDate, endDate, today, stage, groupBy, topN = 8 } = options;
+  const { granularity, startDate, endDate, today, stage, groupBy, topN = 8, planMode = 'baseline' } = options;
   const buckets = generateBuckets(startDate, endDate, granularity);
   const bucketLabels = buckets.map(labelDdMmm);
   const todayBucket = bucketize(today, granularity);
@@ -291,11 +299,14 @@ export function buildDefectSCurve(items: DefectForDashboard[], options: BuildSCu
 
   for (const item of items) {
     const { plan, actual } = getStageDates(item, stage);
-    if (plan) addToSeries(TOTAL_KEY, bucketize(plan, granularity), 'p');
+    // Remaining mode: drop plan contributions for stages already completed.
+    // Stage type is structurally identical to DefectDashboardStage ('start' | 'completion' | 'closure').
+    const skipPlan = planMode === 'remaining' && isStageDone(item, stage as unknown as DefectDashboardStage);
+    if (plan && !skipPlan) addToSeries(TOTAL_KEY, bucketize(plan, granularity), 'p');
     if (actual) addToSeries(TOTAL_KEY, bucketize(actual, granularity), 'a');
     if (groupBy) {
       const gKey = getDefectGroupKey(item, groupBy);
-      if (plan) addToSeries(gKey, bucketize(plan, granularity), 'p');
+      if (plan && !skipPlan) addToSeries(gKey, bucketize(plan, granularity), 'p');
       if (actual) addToSeries(gKey, bucketize(actual, granularity), 'a');
     }
   }
