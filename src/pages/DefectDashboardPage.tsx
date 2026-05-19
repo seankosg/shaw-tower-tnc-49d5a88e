@@ -275,7 +275,8 @@ export default function DefectDashboardPage() {
     today,
     stage: scurveStage === 'all' ? 'completion' : scurveStage,
     groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
-  }), [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
+    planMode,
+  }), [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup, planMode]);
   const scurveAll: DefectSCurveAllResult | null = useMemo(() => {
     if (scurveStage !== 'all') return null;
     return buildDefectSCurveAllStages(scurveItems, {
@@ -284,8 +285,9 @@ export default function DefectDashboardPage() {
       endDate: scurveEnd,
       today,
       groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
+      planMode,
     });
-  }, [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup]);
+  }, [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup, planMode]);
 
   const handleSCurveExport = async () => {
     const hasData = scurveStage === 'all' ? (scurveAll?.buckets.length ?? 0) > 0 : scurve.buckets.length > 0;
