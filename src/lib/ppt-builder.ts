@@ -1382,73 +1382,115 @@ const PLAN_SERIES_NAMES = [
 ];
 
 /**
- * Fix the embedded xlsx workbook that pptxgenjs generates for each chart so
- * PowerPoint's "Edit Data" feature works on the desktop client.
+ * Reconstruct the embedded xlsx workbook for a chart from scratch using
+ * ExcelJS, replacing the malformed one that pptxgenjs (v4.0.1) emits.
  *
- * pptxgenjs (v4.0.1) ships three bugs that corrupt the embedded workbook:
- *   1. xl/tables/table1.xml has ref="A1:D6'" (stray apostrophe = invalid OOXML)
- *   2. table1.xml is referenced from sheet1.xml.rels and [Content_Types].xml,
- *      but sheet1.xml itself contains no <tableParts> -> broken relationship
- *   3. Null/empty values are serialised as <c r="X"><v></v></c> which is an
- *      invalid empty <v> element
+ * Why rebuild instead of patch?
+ *   pptxgenjs's embedded workbook fails PowerPoint for Mac's "Edit Data"
+ *   round-trip with the dialog "연결된 파일을 사용할 수 없습니다 (Linked
+ *   file cannot be used)". Root causes include: stray apostrophe in
+ *   xl/tables/table1.xml `ref` attribute, dangling tableParts relationship,
+ *   empty <v></v> cells, and non-canonical workbook metadata (calcId="0",
+ *   etc.). Patching every quirk is brittle; producing a Microsoft-canonical
+ *   workbook via ExcelJS — using the exact category/value data that the
+ *   chart XML already caches — is reliable.
  *
- * The fix strips the orphaned table parts and cleans null cells. Chart XML
- * cell references (<c:f>Sheet1!$B$2:$B$N</c:f>) are already correct, so the
- * "Edit Data" link round-trip works end-to-end after this pass.
+ * The chart XML's <c:f> references like `Sheet1!$A$2:$A$N` and
+ * `Sheet1!$B$2:$B$N` remain valid because we lay out the rebuilt sheet the
+ * same way pptxgenjs does: row 1 = headers (col A blank, col B+ = series
+ * names), rows 2..N+1 = data (col A = category, col B+ = values).
  */
-async function fixEmbeddedWorkbook(xlsxBuf: Uint8Array): Promise<Uint8Array> {
-  const inner = await JSZip.loadAsync(xlsxBuf);
-
-  // 1. Drop orphaned table file
-  inner.remove('xl/tables/table1.xml');
-  inner.remove('xl/tables');
-
-  // 2. Strip the table override from [Content_Types].xml
-  const ctFile = inner.file('[Content_Types].xml');
-  if (ctFile) {
-    let ct = await ctFile.async('string');
-    ct = ct.replace(/<Override\s+PartName="\/xl\/tables\/[^"]+"\s+ContentType="[^"]+"\s*\/>/g, '');
-    inner.file('[Content_Types].xml', ct);
+function parseChartData(xml: string): {
+  categories: (string | number)[];
+  series: { name: string; values: (number | null)[] }[];
+} {
+  // Categories — take from the first <c:cat>...</c:cat> block; works for
+  // strRef, multiLvlStrRef (first level), and numRef.
+  const catBlock = xml.match(/<c:cat>[\s\S]*?<\/c:cat>/);
+  const categories: (string | number)[] = [];
+  if (catBlock) {
+    const isNum = /<c:numRef>/.test(catBlock[0]);
+    for (const m of catBlock[0].matchAll(/<c:pt idx="(\d+)"><c:v>([\s\S]*?)<\/c:v><\/c:pt>/g)) {
+      const idx = parseInt(m[1], 10);
+      const raw = m[2];
+      categories[idx] = isNum ? Number(raw) : raw;
+    }
   }
 
-  // 3. Empty sheet1.xml.rels (drop the dangling table relationship)
-  const relsPath = 'xl/worksheets/_rels/sheet1.xml.rels';
-  if (inner.file(relsPath)) {
-    inner.file(
-      relsPath,
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
-    );
+  const series: { name: string; values: (number | null)[] }[] = [];
+  for (const sm of xml.matchAll(/<c:ser>([\s\S]*?)<\/c:ser>/g)) {
+    const body = sm[1];
+    const nameMatch = body.match(/<c:tx>[\s\S]*?<c:v>([\s\S]*?)<\/c:v>[\s\S]*?<\/c:tx>/);
+    const valBlock = body.match(/<c:val>[\s\S]*?<\/c:val>/);
+    const values: (number | null)[] = [];
+    if (valBlock) {
+      for (const m of valBlock[0].matchAll(/<c:pt idx="(\d+)"><c:v>([\s\S]*?)<\/c:v><\/c:pt>/g)) {
+        const idx = parseInt(m[1], 10);
+        const num = parseFloat(m[2]);
+        values[idx] = Number.isFinite(num) ? num : null;
+      }
+    }
+    series.push({ name: nameMatch ? nameMatch[1] : `Series${series.length + 1}`, values });
   }
 
-  // 4. Replace empty <v></v> / <v/> cells with self-closing <c r="X"/>
-  const sheetFile = inner.file('xl/worksheets/sheet1.xml');
-  if (sheetFile) {
-    let sheet = await sheetFile.async('string');
-    sheet = sheet.replace(
-      /<c r="([^"]+)"(?:\s+[^>]*)?>\s*<v\s*\/?>(?:\s*<\/v>)?\s*<\/c>/g,
-      '<c r="$1"/>'
-    );
-    inner.file('xl/worksheets/sheet1.xml', sheet);
+  // Fill any holes with null/empty so column indexes stay aligned
+  const maxLen = Math.max(
+    categories.length,
+    ...series.map(s => s.values.length),
+    0,
+  );
+  for (let i = 0; i < maxLen; i++) {
+    if (categories[i] === undefined) categories[i] = '';
+    for (const s of series) if (s.values[i] === undefined) s.values[i] = null;
+  }
+  return { categories, series };
+}
+
+async function buildCleanEmbedWorkbook(chartXml: string): Promise<Uint8Array | null> {
+  const { categories, series } = parseChartData(chartXml);
+  if (!series.length || !categories.length) return null;
+
+  // Dynamic import: ExcelJS is heavy (~600KB), only load when exporting PPT.
+  const { Workbook } = await import('exceljs');
+  const wb = new Workbook();
+  wb.creator = 'SHAW';
+  wb.lastModifiedBy = 'SHAW';
+  wb.created = new Date();
+  wb.modified = new Date();
+
+  const ws = wb.addWorksheet('Sheet1');
+  ws.addRow(['', ...series.map(s => s.name)]);
+  for (let i = 0; i < categories.length; i++) {
+    ws.addRow([categories[i], ...series.map(s => (s.values[i] ?? null))]);
   }
 
-  return inner.generateAsync({ type: 'uint8array' });
+  const buf = await wb.xlsx.writeBuffer();
+  return new Uint8Array(buf as ArrayBuffer);
 }
 
 async function postProcessXml(blob: Blob): Promise<Blob> {
   const zip = await JSZip.loadAsync(blob);
 
-  // ── A. Repair each embedded chart workbook so "Edit Data" works ──
-  const embedPaths = Object.keys(zip.files).filter(
-    f => f.startsWith('ppt/embeddings/') && f.endsWith('.xlsx') && !zip.files[f].dir
+  // ── A. Rebuild each chart's embedded workbook (Microsoft-canonical xlsx)
+  //       so PowerPoint Mac's "Edit Data" no longer raises "linked file"
+  //       errors.
+  const chartFiles = Object.keys(zip.files).filter(
+    f => /^ppt\/charts\/chart\d+\.xml$/.test(f) && !zip.files[f].dir
   );
-  for (const ep of embedPaths) {
+  for (const chartPath of chartFiles) {
     try {
-      const buf = await zip.files[ep].async('uint8array');
-      const fixed = await fixEmbeddedWorkbook(buf);
-      zip.file(ep, fixed);
+      const chartXml = await zip.files[chartPath].async('string');
+      const relsPath = chartPath.replace(/charts\/(chart\d+)\.xml$/, 'charts/_rels/$1.xml.rels');
+      const relsFile = zip.file(relsPath);
+      if (!relsFile) continue;
+      const relsXml = await relsFile.async('string');
+      const targetMatch = relsXml.match(/Target="\.\.\/embeddings\/([^"]+\.xlsx)"/);
+      if (!targetMatch) continue;
+      const embedPath = `ppt/embeddings/${targetMatch[1]}`;
+      const cleanBuf = await buildCleanEmbedWorkbook(chartXml);
+      if (cleanBuf) zip.file(embedPath, cleanBuf);
     } catch (e) {
-      console.warn('[ppt] failed to fix embedded workbook', ep, e);
+      console.warn('[ppt] failed to rebuild embedded workbook for', chartPath, e);
     }
   }
 
