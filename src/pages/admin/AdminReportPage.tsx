@@ -6,13 +6,13 @@ import DesignTokensEditor from '@/components/admin/DesignTokensEditor';
 import SlideComposer from '@/components/admin/SlideComposer';
 import DesignGuideManager from '@/components/admin/DesignGuideManager';
 import CodeEditor from '@/components/admin/CodeEditor';
-import { canAccessRoute } from '@/lib/role-permissions';
+import { canAccessReport } from '@/lib/role-permissions';
 
 export default function AdminReportPage() {
-  const { isAdmin, roles } = useAuth();
+  const { isAdmin, roles, profile } = useAuth();
   const isDev = import.meta.env.DEV;
-  // Senior User and above (or dev) can access the Report page
-  const hasAccess = isDev || canAccessRoute(roles, '/admin/report');
+  // Admin / PM (pm_pd) / Support-team Superuser+ can access the Report page
+  const hasAccess = isDev || canAccessReport(roles, profile);
   const canSeeCodeEditor = isDev || isAdmin;
 
   if (!hasAccess) {
