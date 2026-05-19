@@ -1381,9 +1381,78 @@ const PLAN_SERIES_NAMES = [
   'Closure · Plan',
 ];
 
+/**
+ * Fix the embedded xlsx workbook that pptxgenjs generates for each chart so
+ * PowerPoint's "Edit Data" feature works on the desktop client.
+ *
+ * pptxgenjs (v4.0.1) ships three bugs that corrupt the embedded workbook:
+ *   1. xl/tables/table1.xml has ref="A1:D6'" (stray apostrophe = invalid OOXML)
+ *   2. table1.xml is referenced from sheet1.xml.rels and [Content_Types].xml,
+ *      but sheet1.xml itself contains no <tableParts> -> broken relationship
+ *   3. Null/empty values are serialised as <c r="X"><v></v></c> which is an
+ *      invalid empty <v> element
+ *
+ * The fix strips the orphaned table parts and cleans null cells. Chart XML
+ * cell references (<c:f>Sheet1!$B$2:$B$N</c:f>) are already correct, so the
+ * "Edit Data" link round-trip works end-to-end after this pass.
+ */
+async function fixEmbeddedWorkbook(xlsxBuf: Uint8Array): Promise<Uint8Array> {
+  const inner = await JSZip.loadAsync(xlsxBuf);
+
+  // 1. Drop orphaned table file
+  inner.remove('xl/tables/table1.xml');
+  inner.remove('xl/tables');
+
+  // 2. Strip the table override from [Content_Types].xml
+  const ctFile = inner.file('[Content_Types].xml');
+  if (ctFile) {
+    let ct = await ctFile.async('string');
+    ct = ct.replace(/<Override\s+PartName="\/xl\/tables\/[^"]+"\s+ContentType="[^"]+"\s*\/>/g, '');
+    inner.file('[Content_Types].xml', ct);
+  }
+
+  // 3. Empty sheet1.xml.rels (drop the dangling table relationship)
+  const relsPath = 'xl/worksheets/_rels/sheet1.xml.rels';
+  if (inner.file(relsPath)) {
+    inner.file(
+      relsPath,
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
+    );
+  }
+
+  // 4. Replace empty <v></v> / <v/> cells with self-closing <c r="X"/>
+  const sheetFile = inner.file('xl/worksheets/sheet1.xml');
+  if (sheetFile) {
+    let sheet = await sheetFile.async('string');
+    sheet = sheet.replace(
+      /<c r="([^"]+)"(?:\s+[^>]*)?>\s*<v\s*\/?>(?:\s*<\/v>)?\s*<\/c>/g,
+      '<c r="$1"/>'
+    );
+    inner.file('xl/worksheets/sheet1.xml', sheet);
+  }
+
+  return inner.generateAsync({ type: 'uint8array' });
+}
+
 async function postProcessXml(blob: Blob): Promise<Blob> {
   const zip = await JSZip.loadAsync(blob);
 
+  // ── A. Repair each embedded chart workbook so "Edit Data" works ──
+  const embedPaths = Object.keys(zip.files).filter(
+    f => f.startsWith('ppt/embeddings/') && f.endsWith('.xlsx') && !zip.files[f].dir
+  );
+  for (const ep of embedPaths) {
+    try {
+      const buf = await zip.files[ep].async('uint8array');
+      const fixed = await fixEmbeddedWorkbook(buf);
+      zip.file(ep, fixed);
+    } catch (e) {
+      console.warn('[ppt] failed to fix embedded workbook', ep, e);
+    }
+  }
+
+  // ── B. Chart XML cosmetics (line styles, colours, legend) ──
   const chartPaths = Object.keys(zip.files).filter(
     f => f.startsWith('ppt/charts/') && f.endsWith('.xml') && !zip.files[f].dir
   );
