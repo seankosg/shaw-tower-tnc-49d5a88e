@@ -1,61 +1,75 @@
-# PPT 차트에 임베드된 .xlsx 추가 — 구현 계획
+# PPT "연결된 파일을 사용할 수 없습니다" 오류 수정
 
-## 목표
-PowerPoint 데스크탑에서 차트 우클릭 → "데이터 편집(Edit Data)" 클릭 시, 임베드된 Excel이 실제 차트 데이터와 함께 열리도록 구현합니다.
+## 증상
+PowerPoint에서 차트 → "Excel에서 데이터 편집" 클릭 시:
+> "연결된 파일을 사용할 수 없습니다. 연결된 파일이 이동되었거나 저장되지 않은 경우 이 오류가 발생할 수 있습니다."
 
-## 현재 상태 진단
-- `pptxgenjs` v4.0.1는 차트 추가 시 기본적으로 `ppt/embeddings/Microsoft_Excel_Worksheet*.xlsx`를 생성하긴 합니다.
-- 하지만 `src/lib/ppt-builder.ts`의 `postProcessXml`이 차트 XML(라인 두께/색상)을 사후 수정하면서 임베드된 xlsx의 캐시와 불일치가 발생합니다.
-- Line chart의 다중 시리즈 + 날짜 카테고리 조합에서 셀 매핑이 비어 PowerPoint가 "데이터 편집" 시 빈 워크북을 띄웁니다.
+이는 PowerPoint가 차트 데이터를 **임베드(embed)** 가 아니라 **외부 링크(link)** 로 인식하고 있다는 의미입니다.
 
-## 해결 전략
-PPT 생성 직후, ZIP을 풀어 차트별로 **(1) 올바른 xlsx를 재구성**하고 **(2) 차트 XML에 셀 참조(`<c:f>`, `<c:numRef>`, `<c:strRef>`)를 주입**하는 후처리 단계를 추가합니다.
+## 원인 가설
+이전 수정에서 임베드된 xlsx 자체는 복구했지만, **차트와 xlsx를 연결하는 관계 파일에 문제가 남아있을 가능성**이 높습니다:
+
+1. **`ppt/charts/_rels/chartN.xml.rels`** 에서 xlsx 임베드 관계의 `TargetMode="External"` 속성이 잘못 설정됨
+   - 임베드는 `TargetMode` 속성 자체가 없어야 함 (기본값 Internal)
+2. **`<c:externalData>`** 블록의 `<c:autoUpdate val="1"/>` 가 링크 동작을 유도
+   - val="0"으로 강제 또는 통째 정합성 점검
+3. xlsx Target 경로가 `../embeddings/...` 가 아닌 절대/외부 경로로 기재됨
 
 ## 작업 단계
 
-### 1. 신규 모듈 `src/lib/ppt-embed-workbook.ts`
-- `exceljs`를 동적 import (번들 사이즈 영향 최소화)
-- 입력: 차트 XML(`<c:ser>` 파싱) → 시리즈명, 카테고리, 값
-- 출력:
-  - `Sheet1`에 헤더 1행 + 데이터 N행을 가진 완전한 xlsx 버퍼
-  - 각 시리즈별 셀 범위(`Sheet1!$B$2:$B$N` 등) 메타데이터
+### 1. 진단 스크립트 작성 (`scripts/inspect-ppt-chart-rels.ts`)
+- 최근 생성된 PPT의 ZIP을 열어 다음을 출력:
+  - `ppt/charts/chart*.xml` 내 `<c:externalData>`, `<c:autoUpdate>` 존재 여부 / 값
+  - `ppt/charts/_rels/chart*.xml.rels` 의 각 Relationship Type, Target, TargetMode
+  - `[Content_Types].xml` 의 xlsx Default/Override 등록 여부
+- 어떤 항목이 "External"로 잘못 표시되어 있는지 정확히 식별
 
-### 2. 차트 XML 보강 로직
-- 각 `<c:ser>` 안의 `<c:tx>`, `<c:cat>`, `<c:val>`에 누락된 `<c:f>` 참조를 주입
-- 기존 `<c:numCache>` / `<c:strCache>`는 유지 (값 표시용)
-- Line/Bar/Stacked/Pie/Doughnut 5종 차트 타입 모두 처리
+### 2. `src/lib/ppt-builder.ts` 의 `postProcessXml` 확장
+신규 후처리 단계 추가:
 
-### 3. `src/lib/ppt-builder.ts` 통합
-- `pptxgenjs`가 생성한 Blob을 `JSZip`으로 열기
-- `ppt/charts/chart*.xml` 순회:
-  - 기존 line style/color 후처리 유지
-  - 신규: 시리즈 추출 → xlsx 재생성 → 차트 XML에 참조 주입
-  - 대응하는 `ppt/embeddings/*.xlsx` 교체
-  - `ppt/charts/_rels/chart*.xml.rels`의 임베드 관계 확인/보정
-- `[Content_Types].xml`에 xlsx Default extension 확인
+**A. 차트 rels 정규화** (`ppt/charts/_rels/chart*.xml.rels`)
+```ts
+// TargetMode="External" 제거 (xlsx 임베드 관계 한정)
+rels = rels.replace(
+  /(<Relationship\s+[^>]*Type="[^"]*spreadsheetml\.sheet[^"]*"[^>]*?)\s+TargetMode="External"/g,
+  '$1'
+);
+// Target이 절대 URL/file:// 인 경우 ../embeddings/Microsoft_Excel_Worksheet1.xlsx 로 교정
+```
 
-### 4. 검증
-- 테스트용 PPT 생성 후 ZIP 내부 구조 점검 스크립트(`scripts/inspect-ppt-embeddings.ts`)
-- 점검 항목:
-  - 각 차트마다 임베드된 xlsx 존재
-  - xlsx 내 Sheet1 데이터가 차트 캐시와 일치
-  - 차트 XML의 `<c:f>` 참조가 실제 xlsx 셀과 매칭
-- 데스크탑 PowerPoint에서 수동 확인:
-  - Plan vs Actual (Line), Forecast (Line), Defect S-Curve, Punch 분포 등 주요 차트
-  - "데이터 편집" 클릭 → Excel 정상 오픈 → 값 수정 → 차트 갱신 확인
+**B. 차트 XML 정규화** (`ppt/charts/chart*.xml`)
+```ts
+// autoUpdate를 0으로 고정 (링크 동작 차단)
+xml = xml.replace(
+  /<c:autoUpdate val="1"\s*\/>/g,
+  '<c:autoUpdate val="0"/>'
+);
+// externalData 블록이 누락된 경우 임베드 rId를 가리키도록 보강
+```
+
+**C. 통합 순서**
+```
+1) fixEmbeddedWorkbook   (기존, xlsx 내부 복구)
+2) normalizeChartRels    (신규, External 모드 제거)
+3) normalizeChartXml     (신규, autoUpdate=0)
+4) 라인 스타일/컬러 후처리 (기존)
+```
+
+### 3. 검증
+- 진단 스크립트로 수정 전/후 비교
+- 데스크탑 PowerPoint에서 실제 확인:
+  - "데이터 편집" 클릭 시 오류 다이얼로그 미발생
+  - Excel 임베드 워크북 정상 오픈
+  - 값 수정 후 차트 갱신 반영
+- LibreOffice에서도 깨지지 않는지 확인
 
 ## 영향받는 파일
-- 신규: `src/lib/ppt-embed-workbook.ts`
-- 신규(개발용): `scripts/inspect-ppt-embeddings.ts`
-- 수정: `src/lib/ppt-builder.ts` (후처리 파이프라인 확장)
-- 신규 의존성: `exceljs` (동적 import)
+- 수정: `src/lib/ppt-builder.ts` (`postProcessXml` 확장, 함수 2개 신규 추가)
+- 신규(개발용): `scripts/inspect-ppt-chart-rels.ts`
 
-## 알려진 트레이드오프
-- PPT 파일 크기: 차트당 4~15KB 증가 (10차트 기준 ~100KB)
-- 빌드 시간: 차트당 200~600ms 증가
-- 번들: `exceljs`(~600KB) 동적 로드 (Report 페이지 진입 시에만)
-- LibreOffice/Keynote에서는 "데이터 편집" 미지원 (PowerPoint 전용) — 데스크탑 PPT 사용자 타겟이므로 수용
-- 후처리 순서: line style 패치 → xlsx 재생성 → 참조 주입 순서로 고정
+## 트레이드오프
+- 후처리 비용 미미 (파일당 ms 단위)
+- `autoUpdate=0` 강제는 디자인 의도와 부합 (사용자는 PPT 내부에서 수정 후 차트 갱신을 원함, 외부 파일 자동 갱신을 원하지 않음)
 
-## 사용자 확인 사항
-이 계획은 ReportTab > PPT Export로 다운로드되는 모든 차트에 일괄 적용됩니다. 특정 차트만 적용하거나 제외할 필요가 있으면 알려주세요.
+## 사용자 확인
+1단계(진단)부터 먼저 진행해 정확한 원인을 식별한 뒤 2단계 수정을 적용하는 것이 안전합니다. 진단 결과를 보고 수정 방향을 확정하는 흐름으로 진행해도 되는지 알려주세요. 즉시 1+2 단계를 한 번에 진행하길 원하시면 그렇게 작업하겠습니다.
