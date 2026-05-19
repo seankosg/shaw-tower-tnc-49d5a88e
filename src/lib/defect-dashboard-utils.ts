@@ -252,6 +252,14 @@ export interface BuildSCurveOptions {
   stage: DefectScheduleStage;
   groupBy?: DefectScheduleGroupBy | null;
   topN?: number; // for grouped breakdown; default 8
+  /**
+   * Plan accumulation mode.
+   * - 'baseline' (default): all planned dates are counted in the Plan curve.
+   * - 'remaining': planned dates for stages that have already been completed
+   *   (`isStageDone`) are dropped, so the Plan curve reflects only outstanding work.
+   *   Actual curve is unchanged in either mode.
+   */
+  planMode?: DefectPlanMode;
 }
 
 const TOTAL_KEY = '__total__';
