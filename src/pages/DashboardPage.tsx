@@ -295,12 +295,13 @@ export default function DashboardPage() {
     setOrDelete('systems', selectedSystemFilters.join(','), '');
     setOrDelete('scurve_start', scurveStart, '2026-04-15');
     setOrDelete('scurve_end', scurveEnd, '2026-06-07');
+    setOrDelete('plan_mode', planMode, 'baseline');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [teamFilter, scurveBucket, breakdownTab, systemTextFilter, selectedSystemFilters, scurveStart, scurveEnd, searchParams, setSearchParams]);
+  }, [teamFilter, scurveBucket, breakdownTab, systemTextFilter, selectedSystemFilters, scurveStart, scurveEnd, planMode, searchParams, setSearchParams]);
 
   const scurve = useMemo(
-    () => buildSCurve(filteredSubtests, scurveBucket, scurveStart, scurveEnd, today),
-    [filteredSubtests, scurveBucket, scurveStart, scurveEnd, today]
+    () => buildSCurve(filteredSubtests, scurveBucket, scurveStart, scurveEnd, today, planMode, dataDate),
+    [filteredSubtests, scurveBucket, scurveStart, scurveEnd, today, planMode, dataDate]
   );
 
   const handleSCurveExport = async () => {
@@ -325,6 +326,7 @@ export default function DashboardPage() {
         exportedByName: profile?.name || profile?.login_id || 'unknown',
         exportedByRole: roles[0] || profile?.user_type || 'user',
         chartElement: scurveChartRef.current,
+        planMode,
       });
       toast({ title: 'Export complete', description: `${rowCount} buckets → ${fileName}` });
     } catch (e: unknown) {
@@ -455,12 +457,26 @@ export default function DashboardPage() {
 
       {/* ─── 4 Tabs ─── */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardHeader className="flex flex-row items-center justify-between pb-2 gap-2 flex-wrap">
           <CardTitle className="text-base">Plan vs Actual - Summary</CardTitle>
-          <Button variant="outline" size="sm" onClick={handleBreakdownExport}>
-            <Download className="mr-1.5 h-4 w-4" />
-            Excel
-          </Button>
+          <div className="flex items-center gap-2">
+            <ToggleGroup
+              type="single"
+              value={planMode}
+              onValueChange={(v) => { if (v === 'baseline' || v === 'remaining') setPlanMode(v); }}
+              className="gap-1"
+            >
+              <ToggleGroupItem value="remaining" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Remaining</ToggleGroupItem>
+              <ToggleGroupItem value="baseline" className="h-8 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Baseline</ToggleGroupItem>
+            </ToggleGroup>
+            <span className="text-[10px] text-muted-foreground hidden sm:inline">
+              {planMode === 'remaining' ? 'Excludes already-done plans' : 'All planned dates count'}
+            </span>
+            <Button variant="outline" size="sm" onClick={handleBreakdownExport}>
+              <Download className="mr-1.5 h-4 w-4" />
+              Excel
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs value={breakdownTab} onValueChange={setBreakdownTab}>
