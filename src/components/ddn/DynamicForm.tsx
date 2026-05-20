@@ -39,7 +39,7 @@ const widthClass: Record<string, string> = {
   quarter: 'col-span-12 md:col-span-3',
 };
 
-export function DynamicForm({ sections, fields, inputs, onChange, disabled, computedCtx }: Props) {
+export function DynamicForm({ sections, fields, inputs, onChange, disabled, computedCtx, autoMap }: Props) {
   const fieldsBySection = useMemo(() => {
     const map = new Map<string, DdnField[]>();
     for (const f of fields) {
@@ -59,7 +59,6 @@ export function DynamicForm({ sections, fields, inputs, onChange, disabled, comp
     return true;
   };
 
-  // §8 cumulative rendered separately by CumulativePanel
   const visibleSections = sections.filter((s) => s.id !== 'sec8');
 
   return (
@@ -82,6 +81,7 @@ export function DynamicForm({ sections, fields, inputs, onChange, disabled, comp
                       onChange={(v) => onChange(f.field_key, v)}
                       disabled={disabled}
                       computedCtx={{ ...computedCtx, inputs }}
+                      auto={autoMap?.[f.field_key]}
                     />
                   </div>
                 ))}
@@ -100,15 +100,41 @@ interface FieldProps {
   onChange: (v: DdnInputValue) => void;
   disabled?: boolean;
   computedCtx: DdnComputedContext;
+  auto?: AutoEntry;
 }
 
-function FieldRenderer({ field, value, onChange, disabled, computedCtx }: FieldProps) {
+function isEmpty(v: DdnInputValue): boolean {
+  if (v === null || v === undefined || v === '') return true;
+  if (Array.isArray(v) && v.length === 0) return true;
+  return false;
+}
+
+function FieldRenderer({ field, value, onChange, disabled, computedCtx, auto }: FieldProps) {
+  const empty = isEmpty(value);
+  const showPlaceholder = auto && empty;
+  const placeholderStr = showPlaceholder ? String(formatAutoPreview(auto.value)) : undefined;
+
   const label = (
-    <Label className="text-sm font-medium">
-      {field.label_ko}
-      {field.required && <span className="ml-1 text-destructive">*</span>}
-      {field.unit && <span className="ml-1 text-xs text-muted-foreground">({field.unit})</span>}
-    </Label>
+    <div className="flex items-center justify-between">
+      <Label className="text-sm font-medium">
+        {field.label_ko}
+        {field.required && <span className="ml-1 text-destructive">*</span>}
+        {field.unit && <span className="ml-1 text-xs text-muted-foreground">({field.unit})</span>}
+        {auto && <AutoFillBadge entry={auto} />}
+      </Label>
+      {auto && !disabled && (
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6"
+          title="Apply auto-filled value"
+          onClick={() => onChange(auto.value)}
+        >
+          <RotateCw className="h-3 w-3" />
+        </Button>
+      )}
+    </div>
   );
 
   switch (field.data_type) {
