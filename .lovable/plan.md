@@ -1,48 +1,71 @@
-# Captured By 데이터 노출 + 백필 점검
+# Captured By 데이터 노출 + 그룹 분류
 
 ## 현상
 
-대시보드 Captured By 섹션에 "No Captured By data available" 표시.
+대시보드 Captured By 섹션에 "No Captured By data available" 표시. 또한 인물별 카드를 Arch / Facade / MEP 3개 그룹으로 분리 필요.
 
-## 원인 진단 (DB 확인 결과)
+## 원인 진단
 
-- `defect_items` 전체 6,097 행 중:
-  - `raw_payload`에 `Captured by` 키를 가진 행: **1,320 행**
-  - 마이그레이션으로 백필된 `captured_by_name` (NULL 제외): **905 행**
-- 팀별 백필 현황: Arch 656 / Elec 226 / **Mech 23** / Design 0
-- 현재 화면(Mech 팀)에는 23명분이 있어야 하지만 **0건**으로 표시됨
+DB에는 905명분 `captured_by_name` 백필 완료 (Mech 23, Arch 656, Elec 226). 그러나 `src/lib/defect-cache.ts`의 `SLIM_COLUMNS` 배열에 `captured_by_name`이 누락되어 클라이언트가 fetch하지 않음.
 
-→ 원인은 **클라이언트 캐시(`src/lib/defect-cache.ts`)의 `SLIM_COLUMNS`에 `captured_by_name`이 빠져있어** Supabase에서 가져오지 않기 때문. DB에는 값이 있으나 프런트엔드 메모리에 로딩되지 않음.
+## 작업
 
-## 작업 계획
+### 1) 캐시 select에 컬럼 추가
 
-### 1) 캐시 select에 컬럼 추가 (핵심 수정)
+`src/lib/defect-cache.ts` `SLIM_COLUMNS`에 `'captured_by_name'` 추가 (`hdec_eng_name` 다음).
 
-`src/lib/defect-cache.ts` 의 `SLIM_COLUMNS` 배열에 `'captured_by_name'` 한 줄 추가 (`hdec_eng_name` 다음 위치).
+### 2) Captured By 그룹 매핑 정의
 
-이 한 줄 추가만으로 현재 DB에 백필된 905건이 즉시 대시보드에 표시됨.
+`src/lib/captured-by-groups.ts` 신규 파일:
 
-### 2) 백필 보강 — 대소문자/공백 변형 흡수
+```text
+Arch:
+  Penn Theen, Theepa Vishali Kanisan, Kuan Wei Wong, Nick Cranney,
+  Mani Kamalabathan, Mohammad Hossain, Rasyid Suwandi, Minxian Lee,
+  Chin Siong Lim
+  (alias 'Imam' 포함 — 부분일치)
 
-기존 마이그레이션은 `raw_payload->>'Captured by'` 정확 매칭만 사용. 다음 변형도 합쳐서 재백필:
-- `Captured By`, `CAPTURED BY`, `captured_by`, `CapturedBy` 등
-- 좌우 공백 트림 후 빈 문자열은 NULL
+Facade:
+  Merlin Sesaiyan, Lawrence Lau
 
-추정 추가 백필 대상은 많지 않지만(현재 1,320행이 이미 정확 키 사용) 안전망으로 실행.
+MEP:
+  Sahari Bin Sam, Derrick Tan, Boon Ken Lau (=Beca Boon),
+  Audrey Chin (=Beca Chin)
+  (alias 'Beca' 단독 — 부분일치)
+```
 
-### 3) 미보유 행에 대한 안내
+구현은 그룹별 키워드 리스트(소문자/공백 정규화)와 정확 매칭 우선, 부분 매칭 fallback. 어느 그룹에도 매칭되지 않으면 `Other` 그룹으로 분류.
 
-`raw_payload`에 어떤 형태의 Captured by 키도 없는 약 **4,777 행**은 원본 데이터 자체에 정보가 없음 (구버전 Aconex export, 초기 import 시점에 해당 컬럼이 포함되지 않음). 이 데이터는 DB 차원에서 복구 불가하며, 다음 중 하나가 필요:
-- 해당 행을 **재import** (Aconex에서 Captured by 컬럼 포함하여 export 후 import)
-- 또는 그대로 두고 Captured By 섹션의 "Unknown" 카운트로만 노출
+함수 시그니처:
+- `getCapturedByGroup(name: string | null): 'Arch' | 'Facade' | 'MEP' | 'Other' | null`
+- `CAPTURED_BY_GROUPS: readonly ['Arch', 'Facade', 'MEP', 'Other']`
 
-이 부분은 사용자 결정 필요 — 본 작업에서는 **재import는 수행하지 않음**.
+### 3) Dashboard UI 그룹 분리
 
-## 검증
+`DefectDashboardPage.tsx`의 `CapturedByStatsSection` 수정:
 
-수정 후 Mech 팀 대시보드에서 Captured By 카드 23명분 표시 + Reconciliation Row의 Unknown 카운트가 (팀 total - 23) 와 일치하는지 확인.
+- 인물별 stats 산출 후 그룹별로 버킷팅
+- 그룹 순서: Arch → Facade → MEP → Other (빈 그룹은 미표시)
+- 각 그룹 헤더에 그룹명 + per-group 합계 (Total / Completed / Closed / In Dispute) 표시
+- 그룹 내부에서는 기존처럼 인물 카드 4-col 그리드, Total 내림차순
+- 각 그룹 헤더 클릭 시 Raw Data로 이동하며 `?capturedByGroup=Arch` 같은 그룹 필터 적용
+- Reconciliation Row는 전체 합계 기준 1개 유지
+
+### 4) Raw Data 그룹 필터 연동
+
+`DefectRawDataPage.tsx`:
+- query param `capturedByGroup` 추가
+- 해당 그룹에 속한 인물 이름 배열로 `captured_by_name` IN 필터 적용
+- 기존 `capturedBy=<name>` 단일 필터와 병행 가능
+
+### 5) 검증
+
+- Mech 팀 화면에서 Captured By 카드가 그룹별로 표시되는지
+- Reconciliation OK 표시되는지
+- 그룹/인물/지표 클릭 → Raw Data 필터 정상 동작
 
 ## 기술 메모
 
-- `HEAVY_SELECT`는 raw_payload를 포함하므로 별도 수정 불필요
-- 변경 파일: `src/lib/defect-cache.ts` 1개 + 백필용 migration 1개
+- 그룹 매핑은 코드 상수로 시작. 추후 admin 설정 가능하게 확장 여지 있으나 본 작업 범위 외
+- `raw_payload`에 Captured by 키 자체가 없는 약 4,777행은 Unknown으로 집계 (재import 필요, 본 작업에서 다루지 않음)
+- 변경 파일: `defect-cache.ts`, `captured-by-groups.ts`(신규), `DefectDashboardPage.tsx`, `DefectRawDataPage.tsx`
