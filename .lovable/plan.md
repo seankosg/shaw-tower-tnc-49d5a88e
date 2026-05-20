@@ -23,19 +23,29 @@ Admin > Report 페이지에 `Record Export` 탭을 신규 추가하고, Raw data
 
 하단 `Generate Excel` 버튼.
 
-## 데이터 집계 규칙
+## 데이터 집계 규칙 (행=항목, 열=날짜)
 
-- **행 단위**: Subcontractor × System 조합 1행 (Sub-Sub 선택 시 Subcontractor × Sub-Sub × System).
-- **컬럼 단위**: 선택 기간 내 각 날짜 1세트. 한 날짜당 최대 6컬럼:
+- **행(세로)**: 한 행 = 개별 항목 (T&C는 Subtest 한 건 = Item No + MOS Code, Defect는 Issue No 한 건).
+  좌측 식별 컬럼(고정/freeze):
+  - Subcontractor, Sub-Sub, System, Item No(또는 Issue No), MOS Code(T&C), Description
+  - 정렬: Subcontractor → Sub-Sub → System → Item No 오름차순. 같은 그룹 내 시각적 구분을 위해 그룹 첫 행에 옅은 상단 border.
+  - 그룹 소계 행(Subcontractor 별, System 별)은 옵션 체크박스(`Include subtotals`)로 ON/OFF.
+  - 맨 아래 총계(Grand Total) 행 항상 포함.
+
+- **열(가로)**: 선택 기간 내 날짜별 1세트. 한 날짜당 최대 6개 컬럼:
 
 ```text
 [Daily Planned] [Daily Actual] [Daily Var] [Cum Planned] [Cum Actual] [Cum Var]
 ```
 
-- 일일값 = 해당 날짜에 planned_date 또는 actual_date가 떨어진 건수.
-- 누계값 = 기간 시작일부터 해당 날짜까지의 누적 건수.
-- Variance는 Planned·Actual 모두 체크된 경우에만 생성.
-- T&C는 T1/T2를 각각 집계. UI에서 `T1`, `T2` 또는 둘 다 선택할 수 있는 보조 체크박스 추가 (기본 T2).
+- 각 항목 행의 셀 값:
+  - Daily Planned = 해당 항목의 planned_date가 그 날짜와 같으면 1, 아니면 0
+  - Daily Actual  = 해당 항목의 actual_date가 그 날짜와 같으면 1, 아니면 0
+  - Cum Planned   = planned_date ≤ 해당 날짜이면 1
+  - Cum Actual    = actual_date  ≤ 해당 날짜이면 1
+  - Variance      = Actual − Planned (Planned·Actual 둘 다 체크된 경우에만 생성)
+- 총계/소계 행은 단순 SUM.
+- T&C는 보조 라디오로 `T1` / `T2` 중 하나 선택 (기본 T2). 둘 다 보고 싶으면 두 번 내보내기.
 
 ## 엑셀 구조
 
@@ -44,12 +54,13 @@ Admin > Report 페이지에 `Record Export` 탭을 신규 추가하고, Raw data
 - 시트 3 — `S-Curve` (옵션) : x=날짜, y=누계 건수. 라인 2개(Cum Planned, Cum Actual). 페이지 설정 A4 가로(landscape), 인쇄 영역 fit-to-page.
 
 엑셀 최적화:
-- 다단 헤더 사용 (Row1: 날짜, Row2: Planned/Actual/Var). `mergeCells`로 날짜 셀 병합.
-- 헤더는 굵게 + 배경색(`F1F5F9`), freeze panes (좌측 식별 컬럼 + 상단 2행).
-- 컬럼 폭 자동 계산 (헤더 길이와 데이터 최대 길이 기준 + 패딩 2).
-- 날짜 셀은 `isoToExcelSerial` 사용해 실제 date cell로 저장 (`dd-mmm` 포맷).
+- 다단 헤더 (Row1: 날짜 — `mergeCells`로 6칸 병합, Row2: Planned/Actual/Var/Cum P/Cum A/Cum Var). 좌측 식별 컬럼은 2행 세로 병합.
+- Freeze panes: 식별 컬럼 우측 + 헤더 2행 아래 고정.
+- 헤더 굵게 + 배경색(`F1F5F9`), 식별 컬럼 좁게/숫자 컬럼 6~8 폭.
+- 컬럼 폭 자동 계산(헤더와 데이터 max + 패딩 2). 좌측 식별 컬럼은 별도 폭.
+- 날짜 헤더 셀은 `isoToExcelSerial`로 실제 date cell + `dd-mmm` 포맷.
 - 숫자 0은 `-`로 표시 (`#,##0;(#,##0);-`).
-- 총계 행을 데이터 최하단에 굵게.
+- 그룹 소계/총계 행은 굵게 + 옅은 배경.
 
 ## 기술 구현
 
