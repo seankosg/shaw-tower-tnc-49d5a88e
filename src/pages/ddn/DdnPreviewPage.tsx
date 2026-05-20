@@ -84,6 +84,54 @@ export default function DdnPreviewPage() {
               <Link to={`/ddn/input?date=${entryDate}`}>Open Editor</Link>
             </Button>
             <Button variant="outline" size="sm" onClick={() => window.print()}>Print</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!letter || busy}
+              onClick={async () => {
+                if (!letter) return;
+                try {
+                  setBusy(true);
+                  const blob = await renderDocxBlob(letter);
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${entryDate}_${letter.letterNo}.docx`;
+                  document.body.appendChild(a); a.click(); a.remove();
+                  URL.revokeObjectURL(url);
+                } catch (e) {
+                  toast({ title: 'DOCX failed', description: (e as Error).message, variant: 'destructive' });
+                } finally { setBusy(false); }
+              }}
+            >Download .docx</Button>
+            {canGenerate && (
+              <Button
+                size="sm"
+                disabled={!letter || !entry || busy}
+                onClick={async () => {
+                  if (!letter || !entry) return;
+                  try {
+                    setBusy(true);
+                    await generateAndUploadDocx({
+                      entryId: entry.id, entryDate, letter, letterNo: letter.letterNo,
+                    });
+                    toast({ title: 'Finalized', description: 'DOCX uploaded to storage.' });
+                    qc.invalidateQueries({ queryKey: ['ddn-entry'] });
+                    qc.invalidateQueries({ queryKey: ['ddn-entries'] });
+                  } catch (e) {
+                    toast({ title: 'Generate failed', description: (e as Error).message, variant: 'destructive' });
+                  } finally { setBusy(false); }
+                }}
+              >{busy ? 'Working…' : 'Finalize & Upload'}</Button>
+            )}
+            {entry?.generated_docx_path && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => downloadDocxFromStorage(entry.generated_docx_path!).catch((e) =>
+                  toast({ title: 'Download failed', description: (e as Error).message, variant: 'destructive' }))}
+              >Latest file</Button>
+            )}
             <Button variant="ghost" size="sm" onClick={() => setShowDebug((v) => !v)}>
               {showDebug ? 'Hide' : 'Show'} debug
             </Button>
