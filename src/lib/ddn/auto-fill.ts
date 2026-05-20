@@ -210,6 +210,20 @@ async function fetchSubstantial(D: string, map: AutoMap, errs: string[]) {
     );
     map['sec4.om_elv'] = { value: elvHit ? 'Y' : 'N', source: 'docs_omm', note: 'O&M ELV submission on this date' };
   }
+
+  // 4d. Warranty (own table: warranty_items)
+  const { data: wr, error: e3 } = await supabase
+    .from('warranty_items')
+    .select('final_actual_date, hdec_signing_actual_date, subcon_signing_actual_date')
+    .eq('is_active', true)
+    .in('subcontractor_name', PT);
+  if (e3) errs.push(`warranty_items: ${e3.message}`);
+  else {
+    const hit = (wr ?? []).some((r) =>
+      r.final_actual_date === D || r.hdec_signing_actual_date === D || r.subcon_signing_actual_date === D
+    );
+    map['sec4.warranty'] = { value: hit ? 'Y' : 'N', source: 'warranty_items', note: 'Warranty signing activity on this date' };
+  }
 }
 
 // ---------- 5. RTO outstanding (sec6) ----------
