@@ -1,13 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { useDdnSchema, useDdnSettings, useDdnEntry } from '@/lib/ddn/schema-cache';
 import { useDdnMappingRules } from '@/lib/ddn/mapping-cache';
 import { buildLetter } from '@/lib/ddn/mapping-engine';
+import { generateAndUploadDocx, downloadDocxFromStorage, renderDocxBlob } from '@/lib/ddn/docx-generator';
 import type { DdnInputs } from '@/lib/ddn/schema-types';
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
@@ -17,6 +21,11 @@ export default function DdnPreviewPage() {
   const initialDate = sp.get('date') || todayIso();
   const [entryDate, setEntryDate] = useState(initialDate);
   const [showDebug, setShowDebug] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { roles } = useAuth();
+  const canGenerate = roles.includes('superuser') || roles.includes('admin');
 
   const { data: schema } = useDdnSchema();
   const { data: settings } = useDdnSettings();
@@ -75,6 +84,54 @@ export default function DdnPreviewPage() {
               <Link to={`/ddn/input?date=${entryDate}`}>Open Editor</Link>
             </Button>
             <Button variant="outline" size="sm" onClick={() => window.print()}>Print</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!letter || busy}
+              onClick={async () => {
+                if (!letter) return;
+                try {
+                  setBusy(true);
+                  const blob = await renderDocxBlob(letter);
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${entryDate}_${letter.letterNo}.docx`;
+                  document.body.appendChild(a); a.click(); a.remove();
+                  URL.revokeObjectURL(url);
+                } catch (e) {
+                  toast({ title: 'DOCX failed', description: (e as Error).message, variant: 'destructive' });
+                } finally { setBusy(false); }
+              }}
+            >Download .docx</Button>
+            {canGenerate && (
+              <Button
+                size="sm"
+                disabled={!letter || !entry || busy}
+                onClick={async () => {
+                  if (!letter || !entry) return;
+                  try {
+                    setBusy(true);
+                    await generateAndUploadDocx({
+                      entryId: entry.id, entryDate, letter, letterNo: letter.letterNo,
+                    });
+                    toast({ title: 'Finalized', description: 'DOCX uploaded to storage.' });
+                    qc.invalidateQueries({ queryKey: ['ddn-entry'] });
+                    qc.invalidateQueries({ queryKey: ['ddn-entries'] });
+                  } catch (e) {
+                    toast({ title: 'Generate failed', description: (e as Error).message, variant: 'destructive' });
+                  } finally { setBusy(false); }
+                }}
+              >{busy ? 'Working…' : 'Finalize & Upload'}</Button>
+            )}
+            {entry?.generated_docx_path && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => downloadDocxFromStorage(entry.generated_docx_path!).catch((e) =>
+                  toast({ title: 'Download failed', description: (e as Error).message, variant: 'destructive' }))}
+              >Latest file</Button>
+            )}
             <Button variant="ghost" size="sm" onClick={() => setShowDebug((v) => !v)}>
               {showDebug ? 'Hide' : 'Show'} debug
             </Button>
