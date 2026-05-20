@@ -24,11 +24,9 @@ import {
   ALL_STAGE_DEFS, MODULE_LABEL, MODULE_RAW_ROUTE,
   computeStageProgress, summariseByItem, computeAbdBucketDistribution,
   computeOmmSub1StatusBuckets, computeOmmSub2StatusBuckets, OMM_VISIBLE_STAGE_KEYS,
-  computeDelaySeverityBuckets, isDueThisWeek, criticalDelayItemIds,
-  DELAY_BUCKETS,
+  isDueThisWeek, criticalDelayItemIds,
   type DocModule, type DocsStageRecord, type AbdBucketDistribution,
   type OmmSub1StatusBuckets, type OmmSub2StatusBuckets, type OmmStatusBucketKey,
-  type DelayBucketKey,
 } from '@/lib/docs-stage-records';
 import { normalizeSparePartStatus, type SparePartStatusNorm } from '@/lib/docs-spare-part-status';
 import { isOverdueSparePart } from '@/lib/spare-part-utils';
