@@ -49,6 +49,22 @@
 - `DefectRawDataPage` 의 query param 처리에 `capturedBy` 추가 → 컬럼 필터로 `captured_by_name` 에 적용
   - 기존 `closureStatus`, `actualComplete`, `closureComplete` 필터 패턴과 동일하게 처리
 
+### 합계 검산(Reconciliation) 로직
+- 인물별 카드 그리드 아래에 **검산 요약 줄(Reconciliation Row)** 을 표시.
+- 검산 대상 (대시보드 최상단 KPI 카드 값과 1:1 비교):
+  - Σ Total       === `kpis.total`
+  - Σ Completed   === `kpis.actualDone`
+  - Σ Closed      === `kpis.closureDone`
+  - Σ In Dispute  === `kpis.inDisputeCount`
+- 단, Captured By 카드는 `captured_by_name` 이 비어있는 row 를 제외하므로:
+  - 캐시 전체 합계에서 **`captured_by_name` 가 null/빈값인 row 의 동일 지표값** 을 빼서 비교 기준선을 계산 (`expected = kpi - unknownCount`)
+  - 즉, "Unknown(=captured_by 미기재)" 건수는 검산 줄에 별도 표시 (`Unknown: N`)
+- 표시 형식:
+  - 모든 4개 지표가 일치하면 작은 녹색 체크 배지 `All totals reconcile ✓` 출력
+  - 하나라도 불일치 시 노란 경고 박스에 `Total: Σ=X / KPI=Y (Δ=±N, Unknown=K)` 형식으로 항목별 차이 표기
+  - 개발/관리자 디버깅 편의를 위해 `console.warn` 으로 동일 내용 로깅 (admin/superuser 일 때만)
+- 구현 위치: `CapturedByStatCard` 그리드 직후, `useMemo` 로 합계 계산 → 단일 `ReconciliationRow` 컴포넌트 렌더
+
 ## 기술 메모
 
 - 마이그레이션과 `defect_field_config` 행 변경은 단일 migration 으로 처리
