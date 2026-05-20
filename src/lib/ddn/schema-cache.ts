@@ -25,17 +25,17 @@ export function useDdnSchema() {
       if (fieldsRes.error) throw fieldsRes.error;
       if (optionsRes.error) throw optionsRes.error;
       const optionsByField = new Map<string, DdnFieldOption[]>();
-      for (const o of optionsRes.data as DdnFieldOption[]) {
+      for (const o of (optionsRes.data ?? []) as unknown as DdnFieldOption[]) {
         const arr = optionsByField.get(o.field_id) ?? [];
         arr.push(o);
         optionsByField.set(o.field_id, arr);
       }
-      const fields = (fieldsRes.data as DdnField[]).map((f) => ({
+      const fields = ((fieldsRes.data ?? []) as unknown as DdnField[]).map((f) => ({
         ...f,
         options: optionsByField.get(f.id) ?? [],
       }));
       return {
-        sections: sectionsRes.data as DdnSection[],
+        sections: (sectionsRes.data ?? []) as unknown as DdnSection[],
         fields,
       };
     },
