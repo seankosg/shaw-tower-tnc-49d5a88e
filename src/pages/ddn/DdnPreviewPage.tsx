@@ -21,6 +21,11 @@ export default function DdnPreviewPage() {
   const initialDate = sp.get('date') || todayIso();
   const [entryDate, setEntryDate] = useState(initialDate);
   const [showDebug, setShowDebug] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { roles } = useAuth();
+  const canGenerate = roles.includes('superuser') || roles.includes('admin');
 
   const { data: schema } = useDdnSchema();
   const { data: settings } = useDdnSettings();
