@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fetchAllByUploadId } from '@/lib/fetch-all-rows';
 import { FieldLog, FieldLogTable, FieldLogSummaryChips, OUTCOME_LABELS, downloadFieldLevelCsv } from '@/components/import/FieldLogTable';
+import { RollbackDialog } from '@/components/import/RollbackDialog';
 
 interface DocsBatch {
   id: string;
@@ -54,6 +55,7 @@ const statusColor: Record<string, string> = {
   processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
   failed: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+  rolled_back: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200 line-through',
 };
 
 const actionColor: Record<string, string> = {
@@ -312,29 +314,39 @@ export default function DocsImportLogsPage() {
                         <TableCell className="text-xs text-right cursor-pointer" onClick={() => selectBatch(b.id)}>{b.rejected_rows ?? 0}</TableCell>
                         {canDelete && (
                           <TableCell className="text-right">
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" disabled={deletingId === b.id} title="Delete batch (removes logs only; drawing data is preserved)">
-                                  {deletingId === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete import batch?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This permanently removes the batch <strong>{b.uploaded_file_name}</strong> along with its row logs, field logs, and change logs.
-                                    Drawings imported by this batch are preserved (only their link to this batch is cleared).
-                                    To re-import cleanly, delete the batch then run the import again.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => deleteBatch(b)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                            <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+                              {subKey === 'omm' && (
+                                <RollbackDialog
+                                  kind="docs"
+                                  batchId={b.id}
+                                  fileName={b.uploaded_file_name}
+                                  onDone={fetchBatches}
+                                />
+                              )}
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" disabled={deletingId === b.id} title="Delete batch (removes logs only; drawing data is preserved)">
+                                    {deletingId === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete import batch?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This permanently removes the batch <strong>{b.uploaded_file_name}</strong> along with its row logs, field logs, and change logs.
+                                      Drawings imported by this batch are preserved (only their link to this batch is cleared).
+                                      To re-import cleanly, delete the batch then run the import again.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => deleteBatch(b)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
                           </TableCell>
                         )}
                         </TableRow>

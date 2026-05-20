@@ -4544,6 +4544,10 @@ export type Database = {
         Args: { _batch_id: string }
         Returns: Json
       }
+      preview_rollback_docs_omm_batch: {
+        Args: { _batch_id: string }
+        Returns: Json
+      }
       preview_rollback_punch_import_batch: {
         Args: { _batch_id: string }
         Returns: Json
@@ -4559,6 +4563,10 @@ export type Database = {
       }
       restore_truncate_all: { Args: { _tables: string[] }; Returns: undefined }
       rollback_defect_import_batch: {
+        Args: { _batch_id: string; _force?: boolean }
+        Returns: Json
+      }
+      rollback_docs_omm_batch: {
         Args: { _batch_id: string; _force?: boolean }
         Returns: Json
       }
