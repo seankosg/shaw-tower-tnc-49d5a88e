@@ -625,6 +625,12 @@ export default function PunchRawDataPage() {
         case 'not_started': next = next.filter((r) => !r.actual_start_date); break;
         case 'overdue': next = next.filter((r) => !r.actual_completion_date && r.planned_completion_date && r.planned_completion_date < today); break;
         case 'start_delayed': next = next.filter((r) => !r.actual_start_date && r.planned_start_date && r.planned_start_date < today); break;
+        case 'in_delay': next = next.filter((r) => {
+          const sd = !r.actual_start_date && r.planned_start_date && r.planned_start_date < today;
+          const od = !r.actual_completion_date && r.planned_completion_date && r.planned_completion_date < today;
+          const bh = r.health_status === 'behind' || r.health_status === 'critical';
+          return sd || od || bh;
+        }); break;
         case 'critical': next = next.filter((r) => r.health_status === 'critical' || (!r.actual_completion_date && r.planned_completion_date && (Date.parse(today) - Date.parse(r.planned_completion_date)) / 86_400_000 > 14)); break;
         case 'ready_not_started': next = next.filter((r) => !!r.pre_engineering_ready && !r.actual_start_date); break;
       }

@@ -109,6 +109,13 @@ export default function PunchDashboardPage() {
     const startDelayed = rows.filter((r) => isStartDelayed(r, asOf)).length;
     const critical = rows.filter((r) => isCriticalDelay(r, asOf)).length;
     const behind = rows.filter(isBehindSchedule).length;
+    const inDelay = rows.filter((r) =>
+      isStartDelayed(r, asOf) || isCompletionOverdue(r, asOf) || isBehindSchedule(r)
+    ).length;
+    const actuallyStarted = rows.filter((r) => !!r.actual_start_date).length;
+    const plannedStartedByToday = rows.filter((r) =>
+      !!r.planned_start_date && r.planned_start_date <= asOf
+    ).length;
     const dueThisWeek = rows.filter((r) => isDueWithin(r, 7, asOf)).length;
     const due14 = rows.filter((r) => isDueWithin(r, 14, asOf)).length;
     const startThisWeek = rows.filter((r) => isPlannedToStartWithin(r, 7, asOf)).length;
@@ -145,6 +152,7 @@ export default function PunchDashboardPage() {
 
     return {
       total, completed, wip, notStarted, blocked, overdue, startDelayed, critical, behind,
+      inDelay, actuallyStarted, plannedStartedByToday,
       dueThisWeek, due14, startThisWeek, wipDueSoon, readyButNotStarted,
       w, avg, health, blockerCounts, gates,
     };
@@ -197,28 +205,31 @@ export default function PunchDashboardPage() {
       {/* ── Tier 1: Progress (진도율) ───────────────────────────────────── */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <ProgressKpiCard
-          label="Completion"
+          label="Completed"
           percent={stats.total ? (stats.completed / stats.total) * 100 : 0}
           sub={`${stats.completed.toLocaleString()} / ${stats.total.toLocaleString()} items`}
           barTone="emerald"
           onClick={() => go('completionStatus=Completed')}
         />
         <ProgressKpiCard
-          label="Weighted Actual"
-          percent={stats.w.actual}
-          sub="Progress (weighted by qty)"
-          barTone="emerald"
-        />
-        <ProgressKpiCard
-          label="Weighted Planned"
+          label="Planned Progress"
           percent={stats.w.planned}
-          sub="Plan as of today"
+          sub={`${stats.plannedStartedByToday.toLocaleString()} / ${stats.total.toLocaleString()} items`}
           barTone="neutral"
         />
-        <VarianceKpiCard
-          label="Variance"
-          value={stats.w.variance}
-          sub="Actual − Planned"
+        <ProgressKpiCard
+          label="Actual Progress"
+          percent={stats.w.actual}
+          sub={`${stats.actuallyStarted.toLocaleString()} / ${stats.total.toLocaleString()} items`}
+          barTone="emerald"
+        />
+        <RiskKpiCard
+          label="In Delay"
+          count={stats.inDelay}
+          percent={pctNum(stats.inDelay, stats.total)}
+          sub={`${stats.inDelay.toLocaleString()} / ${stats.total.toLocaleString()} items`}
+          tone="danger"
+          onClick={() => go('status=in_delay')}
         />
       </div>
 
