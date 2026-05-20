@@ -97,12 +97,15 @@ sec3  tc_reject (Y/N)                               B     subtest_change_log JOI
 sec3  tc_reject_system / level / reason             B     위 후보 행을 system-summary로 압축 + remarks 상위 1건
 sec3  archi_rework_plan                             M     수동
 
-sec4  asbuilt_cum / today                           A     docs_drawings(Puretech org) sub_module='as_built'
-                                                          AND discipline ILIKE 'ELEC%'
+sec4  asbuilt_cum / today                           A     docs_drawings(PT) sub_module='as_built' AND discipline ILIKE 'ELEC%'
                                                           cum: approved_date <= D / today: approved_date = D
-sec4  om_elec / om_elv                              B     docs_omm (Puretech) sub_module/discipline 후보 제시
-sec4  warranty                                      B     docs_warranty (Puretech) 후보 제시
-sec4  gm_*                                          M     수동
+sec4  om_elec  (radio Y/N)                          A     docs_omm(PT) trade ILIKE 'ELEC%' AND
+                                                          (sub2_actual_date = D OR is_resubmission=true 최근)
+sec4  om_elv   (radio Y/N)                          A     docs_omm(PT) trade='ELV' AND sub1_actual_date = D
+                                                                                       OR sub2_actual_date = D
+sec4  warranty (radio Y/N)                          B     docs_drawings(PT) sub_module='warranty' (있으면) 또는
+                                                          현재 별도 테이블 없음 → 운영 확정 후 A 승격
+sec4  gm_led_driver / gm_power_tab                  M     Green Mark raw 없음 → 수동
 
 sec5  cctv_* / strobe / pole / special / x15 / temp M     procurement raw 없음 → 수동
                                                           (향후 docs_spare_part 연동 검토)
