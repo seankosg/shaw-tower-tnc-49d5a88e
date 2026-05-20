@@ -743,7 +743,7 @@ function SummaryTile({
 }
 
 function StageCard({
-  label, total, done, overdue, remaining, accent, onClick,
+  label, total, done, overdue, remaining, accent, onClick, onODClick,
 }: {
   label: string;
   total: number;
@@ -752,6 +752,7 @@ function StageCard({
   remaining?: number;
   accent: Accent;
   onClick?: () => void;
+  onODClick?: () => void;
 }) {
   const pct = total ? Math.round((done / total) * 100) : 0;
   const rem = remaining ?? Math.max(0, total - done);
@@ -768,17 +769,41 @@ function StageCard({
       {/* left accent bar */}
       <span className={cn('absolute inset-y-0 left-0 w-1', accent.bar)} />
       {/* OD chip top-right */}
-      <span
-        className={cn(
-          'absolute right-2 top-2 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
-          overdue > 0
-            ? 'bg-destructive/10 text-destructive'
-            : 'bg-muted text-muted-foreground',
-        )}
-        title={`Overdue ${overdue} / Remaining ${rem}`}
-      >
-        OD {overdue}/{rem}
-      </span>
+      {onODClick ? (
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { e.stopPropagation(); onODClick(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              onODClick();
+            }
+          }}
+          className={cn(
+            'absolute right-2 top-2 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums cursor-pointer transition',
+            overdue > 0
+              ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80',
+          )}
+          title={`View overdue items (${overdue}) — click card for all`}
+        >
+          OD {overdue}/{rem}
+        </span>
+      ) : (
+        <span
+          className={cn(
+            'absolute right-2 top-2 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+            overdue > 0
+              ? 'bg-destructive/10 text-destructive'
+              : 'bg-muted text-muted-foreground',
+          )}
+          title={`Overdue ${overdue} / Remaining ${rem}`}
+        >
+          OD {overdue}/{rem}
+        </span>
+      )}
       <div className="flex items-start justify-between gap-2 pl-1 pr-14">
         <span className="text-xs font-medium leading-tight text-foreground">{label}</span>
       </div>
