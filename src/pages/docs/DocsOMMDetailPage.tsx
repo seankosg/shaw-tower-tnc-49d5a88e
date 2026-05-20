@@ -128,6 +128,22 @@ export default function DocsOMMDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
+  const [userMap, setUserMap] = useState<Record<string, string>>({});
+
+  const fetchUserNames = async (rows: any[]) => {
+    const ids = Array.from(new Set(rows.map((r) => r.changed_by).filter(Boolean)));
+    if (ids.length === 0) {
+      setUserMap({});
+      return;
+    }
+    const { data } = await (supabase as any)
+      .from('profiles')
+      .select('user_id, name')
+      .in('user_id', ids);
+    const map: Record<string, string> = {};
+    (data ?? []).forEach((p: any) => { map[p.user_id] = p.name; });
+    setUserMap(map);
+  };
   // Comments handled by <OmmComments />
 
   const masters = useCommonMasters();
