@@ -84,6 +84,7 @@ const DEFECT_RAW_FIELDS = [
   'subsub_name',
   'hdec_pic_name',
   'hdec_eng_name',
+  'captured_by_name',
   'planned_start_date',
   'planned_completion_date',
   'planned_closure_date',
