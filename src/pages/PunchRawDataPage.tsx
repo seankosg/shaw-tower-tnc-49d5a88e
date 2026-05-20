@@ -625,6 +625,8 @@ export default function PunchRawDataPage() {
         case 'not_started': next = next.filter((r) => !r.actual_start_date); break;
         case 'overdue': next = next.filter((r) => !r.actual_completion_date && r.planned_completion_date && r.planned_completion_date < today); break;
         case 'start_delayed': next = next.filter((r) => !r.actual_start_date && r.planned_start_date && r.planned_start_date < today); break;
+        case 'planned_started': next = next.filter((r) => !!r.planned_start_date && r.planned_start_date <= today); break;
+        case 'actual_started': next = next.filter((r) => !!r.actual_start_date); break;
         case 'in_delay': next = next.filter((r) => {
           const sd = !r.actual_start_date && r.planned_start_date && r.planned_start_date < today;
           const od = !r.actual_completion_date && r.planned_completion_date && r.planned_completion_date < today;
