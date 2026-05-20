@@ -1,68 +1,57 @@
-# Warranty Deeds Stage Card → Raw Data 필터 정합성 수정
+# Defect — Captured By 정규 필드화 + 대시보드 상단 통계 카드
 
-## 문제 진단
-대시보드 Stage Progress 카드에서 (예: Subcon Sign 카드 클릭) → `/docs/warranty?stage=warranty.subcon_sign[&overdue=1]` URL로 이동하지만 Raw Data 테이블이 비어 보임.
+## 1) Captured By를 정규 필드로 승격
 
-데이터 확인 (`warranty_items`, is_active=true, 152행):
-- Subcon Sign 스테이지가 overdue인 row: **53건**
-- 대시보드 OD 칩 카운트와 일치
+현재 `Captured by`는 `defect_items.raw_payload` JSON 내에 저장되어 있고, `defect_field_config` 에서 `payload_captured_by` 라는 **동적(payload_)** 컬럼으로만 Raw Data에 노출되고 있음. 이를 일반 컬럼으로 승격.
 
-즉 카드 카운트는 53인데 Raw Data가 0건으로 보이는 정합성 깨짐. 원인은 `computeDashboardFilteredIds`의 stage / overdue 필터 의미가 카드 카운트 의미와 다르기 때문.
+### 작업
+- **마이그레이션**
+  - `defect_items` 에 `captured_by_name TEXT NULL` 컬럼 추가, 인덱스(`btree`) 생성
+  - 기존 데이터 백필: `UPDATE defect_items SET captured_by_name = NULLIF(TRIM(raw_payload->>'Captured by'), '')`
+  - `defect_field_config` 에서 기존 `payload_captured_by` 행을 제거하고 `captured_by_name` 정규 행을 추가 (display_name = "Captured By", source_origin = `aconex`, is_enabled = true, sort_order는 `hdec_eng_name` 직후)
+- **Import 파이프라인 (`src/lib/defect-parser.ts`)**
+  - 헤더 별칭 맵에 `'captured by' → 'captured_by_name'` 추가
+  - 파싱 결과 객체에 `captured_by_name: toText(getMapped(raw, 'captured_by_name'))` 추가
+  - `raw_payload` 에는 기존처럼 `Captured by` 원문도 그대로 유지
+- **타입 / 라벨**
+  - `DefectItem` 인터페이스에 `captured_by_name: string | null` 추가
+  - `DEFECT_DEFAULT_FIELD_LABELS` 에 `captured_by_name: 'Captured By'` 추가
+  - `DEFECT_RAW_FIELDS` (Raw Data 페이지 컬럼 정의)에 `captured_by_name` 추가 — 위치는 `hdec_eng_name` 다음
+- 기존 dynamic `payload_captured_by` 컬럼은 `defect_field_config` 행 삭제로 자동 비활성
 
-## 근본 원인
+## 2) Defect Dashboard 상단 3개 배너 제거 + Captured By 통계 카드 추가
 
-`src/lib/docs-dashboard-filter.ts`의 현재 로직:
+`src/pages/DefectDashboardPage.tsx` 의 399~405 라인 `<AlertBanner>` 3개 (Overdue / At-Risk / In Dispute) 블록을 삭제하고, 그 자리에 **Captured By 인물별 통계 카드 그리드** 를 배치.
 
-```ts
-if (params.overdue === '1') {
-  // any-stage overdue (어떤 스테이지든 overdue면 통과)
-  if (!recs.some(r => r.is_overdue)) continue;
-}
-if (params.stage) {
-  const stageRec = recs.find(r => r.stage_key === params.stage);
-  if (!stageRec || stageRec.is_done) continue;  // 해당 스테이지가 미완료
-}
-```
+### UX 사양
+- 각 사람당 1개의 카드:
+  - 제목: 인물 이름 (`captured_by_name`)
+  - 4개 미니 metric: **Total** / **Completed** / **Closed** / **In Dispute**
+  - 카드 클릭 시 Raw Data 로 이동하며 `?capturedBy=<name>` 파라미터 적용
+  - 각 metric 숫자 클릭 시에는 해당 상태 필터까지 함께 적용 (`actualComplete=true`, `closureComplete=true`, `closureStatus=InD`)
+- 정렬: Total 내림차순. `captured_by_name` 이 비어있는 항목은 별도 카드로 표시하지 않음
+- 반응형: `grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`
 
-- 대시보드 OD 칩 카운트의 의미: **해당 스테이지가 overdue인 item 수** (= `computeStageProgress`의 `s.overdue`, stage-specific)
-- 현재 raw 페이지 필터 의미: **(아무 스테이지나 overdue) AND (해당 스테이지가 미완료)** — stage-specific overdue가 아님
+### 권한
+- **Guest 에게는 카드 영역 자체를 렌더링하지 않음**
+- 판정: `useAuth()` 의 `roles` 를 사용해 `roles.includes('guest') || roles.includes('super_guest')` 이면 hide
+- (정확히는 사용자 요구: "Guest" — `guest` role만 숨김. super_guest 포함 여부는 기존 가드 패턴 따라가되, 기본은 `guest`만 숨김)
 
-또한 두 조건이 ‘과거 actual_date가 없고 planned가 지났으나 status가 'A'/`Done`인 경우’ 등 enum 처리 분기가 어긋나 결과 row 수가 카드와 다르게 0이 되는 케이스 발생.
+### 집계 로직
+- 클라이언트 캐시 (`useDefectCache`) 의 전체 defect 리스트를 `captured_by_name` 기준 groupBy
+- Per-person 계산:
+  - **Total**: 그룹 row 수
+  - **Completed**: `isActualComplete(row)` true 개수
+  - **Closed**: `isClosureComplete(row)` true 개수
+  - **In Dispute**: `row.closure_status === 'InD'` 개수
 
-## 변경 사항
+### Raw Data 필터 연동
+- `DefectRawDataPage` 의 query param 처리에 `capturedBy` 추가 → 컬럼 필터로 `captured_by_name` 에 적용
+  - 기존 `closureStatus`, `actualComplete`, `closureComplete` 필터 패턴과 동일하게 처리
 
-### `src/lib/docs-dashboard-filter.ts`
+## 기술 메모
 
-`stage`와 `overdue=1`이 동시에 지정된 경우 의미를 **‘해당 stage가 overdue인 item’**으로 통일.
-
-```ts
-if (params.stage) {
-  const stageRec = recs.find(r => r.stage_key === params.stage);
-  if (!stageRec) continue;
-
-  if (params.overdue === '1') {
-    // stage-specific overdue (대시보드 OD 칩과 동일 의미)
-    if (!stageRec.is_overdue) continue;
-  } else {
-    // stage-specific pending (카드 본문 클릭 = 모든 미완료 item)
-    if (stageRec.is_done) continue;
-  }
-}
-
-// stage가 없고 overdue=1만 있을 때: 기존 any-stage overdue 의미 유지
-if (!params.stage && params.overdue === '1') {
-  if (module === 'spare_part') { /* 기존 spare_part 로직 그대로 */ }
-  else if (!recs.some(r => r.is_overdue)) continue;
-}
-```
-
-### 영향 범위
-- 파일: `src/lib/docs-dashboard-filter.ts` (1개 파일)
-- 영향 모듈: ABD / OMM / Warranty / Spare Part 모두 — 모든 모듈의 Stage Card 클릭 일관성 향상
-- 기존 “overdue 단독” 필터(`?overdue=1`)는 그대로 any-stage overdue 의미 유지 → Portfolio 레벨 KPI 동작 무손상
-- Spare Part는 stage 파라미터를 거의 안 쓰므로 사실상 변화 없음
-
-### 검증
-- `/docs/warranty?stage=warranty.subcon_sign&overdue=1` → 53행 표시되어야 함
-- `/docs/warranty?stage=warranty.subcon_sign` (카드 본문) → 미완료 109행 표시
-- 다른 모듈 stage 카드 OD 칩 동작 동일하게 stage-specific overdue로 표시
+- 마이그레이션과 `defect_field_config` 행 변경은 단일 migration 으로 처리
+- 정규 컬럼 추가 후 Raw Data 에서 이전 `payload_captured_by` 동적 컬럼은 자동 사라짐 (config 삭제로)
+- Captured By 라벨/source는 기존 Aconex origin 유지 → 헤더 스타일이 일관됨
+- Dashboard 카드 구현은 기존 `KpiCard` 와는 별도의 `CapturedByStatCard` 로 컴포넌트화하여 같은 파일 내 정의 (스타일 토큰은 `Card`, `Badge`, semantic color 사용)
