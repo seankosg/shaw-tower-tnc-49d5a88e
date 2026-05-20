@@ -269,6 +269,28 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
+        {visibleDdn.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Daily Default Notice</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleDdn.map((item) => (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={pathname === item.path || pathname.startsWith(item.path + '/')}
+                      onClick={() => navigate(safeRoute(item.path, roles))}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
         {visibleAdmin.length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>Administration</SidebarGroupLabel>
