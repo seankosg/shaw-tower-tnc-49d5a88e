@@ -517,7 +517,7 @@ export default function DefectRawDataPage() {
   const DRILLDOWN_PARAMS = [
     'source', 'actualComplete', 'closureComplete', 'overdue', 'atRisk',
     'dueOn', 'unplannedActualOn', 'asOf', 'stage', 'remaining_stage', 'remaining_asof',
-    'team', 'subcontractor', 'subsub', 'hdecPic', 'hdecEng',
+    'team', 'subcontractor', 'subsub', 'hdecPic', 'hdecEng', 'capturedBy',
     'level', 'mainTrade', 'subTrade', 'workType', 'classificationSource',
     'status', 'closureStatus', 'issueNo', 'subcontractorIssueNo',
     'dateStart', 'dateEnd', 'dateField', 'critical',
