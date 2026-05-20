@@ -110,6 +110,7 @@ const TEXT_FILTER_FIELDS = new Set([
   'hdec_comments',
   'aconex_comments',
   'trade_detail',
+  'captured_by_name',
 ]);
 
 const DATE_FILTER_FIELDS = new Set([
