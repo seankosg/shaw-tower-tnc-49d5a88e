@@ -13,6 +13,44 @@ type SubKey = 'abd' | 'omm' | 'warranty' | 'spare_part';
 
 const VALID: SubKey[] = ['abd', 'omm', 'warranty', 'spare_part'];
 
+const OMM_TEAM_OPTIONS = ['Mech', 'Elec', 'Supp'] as const;
+
+function OmmTeamSelector({
+  selected, onToggle, disabled,
+}: { selected: string[]; onToggle: (team: string) => void; disabled?: boolean }) {
+  const selSet = new Set(selected);
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium">Teams to Update:</span>
+        {OMM_TEAM_OPTIONS.map((team) => {
+          const active = selSet.has(team);
+          return (
+            <button
+              key={team}
+              type="button"
+              disabled={disabled}
+              onClick={() => onToggle(team)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                active
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-background text-foreground hover:bg-accent'
+              } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+            >
+              {team}
+            </button>
+          );
+        })}
+        <span className="ml-auto text-xs text-muted-foreground">
+          {selected.length === 0
+            ? 'No team selected — import disabled'
+            : `Only rows whose team is in {${selected.join(', ')}} will be upserted.`}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function fileBadge(count: number, running: boolean) {
   if (running) return <Loader2 className="ml-2 h-3 w-3 animate-spin" />;
   if (count === 0) return null;
