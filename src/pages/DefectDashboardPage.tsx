@@ -765,26 +765,26 @@ function CapturedByStatsSection({
   }, [rowsWithGroup]);
 
   const [collapsed, setCollapsed] = useState(false);
-  const [nameFilter, setNameFilter] = useState('');
-  const [groupFilter, setGroupFilter] = useState<CapturedByGroup[]>([]);
-  type SortKey = 'group' | 'name' | 'total' | 'completed' | 'closed' | 'dispute';
+  const [activeTab, setActiveTab] = useState<'All' | CapturedByGroup>('All');
+  const [nameFilter, setNameFilter] = useState<string[]>([]);
+  type SortKey = 'name' | 'total' | 'completed' | 'closed' | 'dispute';
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' });
 
+  const tabRows = useMemo(
+    () => activeTab === 'All' ? rowsWithGroup : rowsWithGroup.filter((r) => r.group === activeTab),
+    [rowsWithGroup, activeTab],
+  );
+
   const visibleRows = useMemo(() => {
-    const n = nameFilter.trim().toLowerCase();
-    const filtered = rowsWithGroup.filter((r) => {
-      if (groupFilter.length && !groupFilter.includes(r.group)) return false;
-      if (n && !r.name.toLowerCase().includes(n)) return false;
-      return true;
-    });
+    const filtered = nameFilter.length ? tabRows.filter((r) => nameFilter.includes(r.name)) : tabRows;
     const dir = sort.dir === 'asc' ? 1 : -1;
-    filtered.sort((a, b) => {
+    const sorted = [...filtered].sort((a, b) => {
       const k = sort.key;
-      if (k === 'name' || k === 'group') return a[k].localeCompare(b[k]) * dir;
+      if (k === 'name') return a.name.localeCompare(b.name) * dir;
       return ((a[k] as number) - (b[k] as number)) * dir;
     });
-    return filtered;
-  }, [rowsWithGroup, nameFilter, groupFilter, sort]);
+    return sorted;
+  }, [tabRows, nameFilter, sort]);
 
   const visibleTotals = useMemo(
     () => visibleRows.reduce(
@@ -806,12 +806,18 @@ function CapturedByStatsSection({
   }
 
   const toggleSort = (key: SortKey) =>
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'name' || key === 'group' ? 'asc' : 'desc' }));
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'name' ? 'asc' : 'desc' }));
   const sortIcon = (key: SortKey) => sort.key === key ? (sort.dir === 'asc' ? '▲' : '▼') : '';
-  const toggleGroup = (g: CapturedByGroup) =>
-    setGroupFilter((cur) => (cur.includes(g) ? cur.filter((x) => x !== g) : [...cur, g]));
-  const availableGroups = CAPTURED_BY_GROUPS.filter((g) => groupTotals.has(g));
-  const filtersActive = nameFilter.trim() !== '' || groupFilter.length > 0;
+
+  const tabs: Array<'All' | CapturedByGroup> = ['All', ...CAPTURED_BY_GROUPS];
+  const tabCount = (t: 'All' | CapturedByGroup) =>
+    t === 'All' ? rowsWithGroup.length : rowsWithGroup.filter((r) => r.group === t).length;
+
+  const fmtPct = (num: number, denom: number) => denom === 0 ? '—' : `${Math.round((num / denom) * 100)}%`;
+
+  const toggleName = (n: string) =>
+    setNameFilter((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n]));
+  const filtersActive = nameFilter.length > 0 || activeTab !== 'All';
 
   return (
     <Card>
@@ -831,46 +837,66 @@ function CapturedByStatsSection({
       </CardHeader>
       {!collapsed && (
         <CardContent className="space-y-2 pt-0">
+          <div className="flex flex-wrap items-center gap-1 rounded-md border bg-muted/30 p-1">
+            {tabs.map((t) => {
+              const n = tabCount(t);
+              const active = activeTab === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => { setActiveTab(t); setNameFilter([]); }}
+                  className={cn(
+                    'rounded px-3 py-1 text-xs font-medium transition-colors',
+                    active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/60',
+                  )}
+                >
+                  {t} <span className="ml-1 tabular-nums text-muted-foreground">({n})</span>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="overflow-x-auto rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40">
-                  <TableHead className="w-[160px] align-top">
-                    <button type="button" onClick={() => toggleSort('group')} className="flex items-center gap-1 text-xs font-semibold hover:underline">
-                      Group <span className="text-[10px] text-muted-foreground">{sortIcon('group')}</span>
-                    </button>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button type="button" className="mt-1 inline-flex h-6 items-center gap-1 rounded border px-1.5 text-[10px] text-muted-foreground hover:bg-muted/80">
-                          <Filter className="h-3 w-3" />
-                          {groupFilter.length ? `${groupFilter.length} selected` : 'All groups'}
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-52 p-2" align="start">
-                        <button type="button" onClick={() => setGroupFilter([])} className="mb-1 text-[11px] text-muted-foreground hover:underline">Clear</button>
-                        {availableGroups.map((g) => (
-                          <label key={g} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50">
-                            <Checkbox checked={groupFilter.includes(g)} onCheckedChange={() => toggleGroup(g)} className="h-3.5 w-3.5" />
-                            <span>{g}</span>
-                            <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">{groupTotals.get(g)?.total ?? 0}</span>
-                          </label>
-                        ))}
-                      </PopoverContent>
-                    </Popover>
-                  </TableHead>
-                  <TableHead className="align-top">
-                    <button type="button" onClick={() => toggleSort('name')} className="flex items-center gap-1 text-xs font-semibold hover:underline">
-                      Name <span className="text-[10px] text-muted-foreground">{sortIcon('name')}</span>
-                    </button>
-                    <Input
-                      value={nameFilter}
-                      onChange={(e) => setNameFilter(e.target.value)}
-                      placeholder="Filter..."
-                      className="mt-1 h-6 text-[11px]"
-                    />
+                  <TableHead className="align-middle">
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={() => toggleSort('name')} className="flex items-center gap-1 text-xs font-semibold hover:underline">
+                        Name <span className="text-[10px] text-muted-foreground">{sortIcon('name')}</span>
+                      </button>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className={cn(
+                              'inline-flex h-5 w-5 items-center justify-center rounded hover:bg-muted/80',
+                              nameFilter.length ? 'text-primary' : 'text-muted-foreground/60',
+                            )}
+                            title="Filter names"
+                          >
+                            <Filter className="h-3 w-3" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="max-h-72 w-56 overflow-auto p-2" align="start">
+                          <div className="mb-1 flex items-center gap-2 px-1">
+                            <button type="button" className="text-[11px] text-muted-foreground hover:underline" onClick={() => setNameFilter(tabRows.map((r) => r.name))}>Select all</button>
+                            <button type="button" className="text-[11px] text-muted-foreground hover:underline" onClick={() => setNameFilter([])}>Clear all</button>
+                          </div>
+                          {tabRows.map((r) => (
+                            <label key={r.name} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50">
+                              <Checkbox checked={nameFilter.includes(r.name)} onCheckedChange={() => toggleName(r.name)} className="h-3.5 w-3.5" />
+                              <span className="flex-1 truncate">{r.name}</span>
+                              <span className="text-[10px] text-muted-foreground tabular-nums">{r.total}</span>
+                            </label>
+                          ))}
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   </TableHead>
                   {(['total', 'completed', 'closed', 'dispute'] as const).map((k) => (
-                    <TableHead key={k} className="w-[110px] align-top text-right">
+                    <TableHead key={k} className="w-[140px] align-middle text-right">
                       <button type="button" onClick={() => toggleSort(k)} className="ml-auto flex items-center gap-1 text-xs font-semibold hover:underline">
                         {k === 'total' ? 'Total' : k === 'completed' ? 'Completed' : k === 'closed' ? 'Closed' : 'In Dispute'}
                         <span className="text-[10px] text-muted-foreground">{sortIcon(k)}</span>
@@ -880,43 +906,44 @@ function CapturedByStatsSection({
                 </TableRow>
               </TableHeader>
               <TableBody>
+                <TableRow className="bg-muted/50 font-semibold">
+                  <TableCell className="py-1.5 text-xs">
+                    {filtersActive ? `TOTAL (n=${visibleRows.length})` : `TOTAL (n=${visibleRows.length})`}
+                  </TableCell>
+                  <TableCell className="py-1.5 text-right tabular-nums">{visibleTotals.total}</TableCell>
+                  <TableCell className="py-1.5 text-right">
+                    <span className="tabular-nums text-emerald-700 dark:text-emerald-400">{visibleTotals.completed}</span>
+                    <span className="ml-2 text-[10px] text-muted-foreground tabular-nums">{fmtPct(visibleTotals.completed, visibleTotals.total)}</span>
+                  </TableCell>
+                  <TableCell className="py-1.5 text-right">
+                    <span className="tabular-nums text-primary">{visibleTotals.closed}</span>
+                    <span className="ml-2 text-[10px] text-muted-foreground tabular-nums">{fmtPct(visibleTotals.closed, visibleTotals.total)}</span>
+                  </TableCell>
+                  <TableCell className="py-1.5 text-right tabular-nums text-purple-700 dark:text-purple-300">{visibleTotals.dispute}</TableCell>
+                </TableRow>
                 {visibleRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-xs text-muted-foreground">No matches.</TableCell>
+                    <TableCell colSpan={5} className="text-center text-xs text-muted-foreground">No matches.</TableCell>
                   </TableRow>
                 ) : visibleRows.map((r) => (
                   <TableRow key={r.name} className="cursor-pointer" onClick={() => onCardClick(r.name)}>
-                    <TableCell className="py-1.5">
-                      <button
-                        type="button"
-                        className="text-xs font-medium hover:underline"
-                        onClick={(e) => { e.stopPropagation(); onGroupClick(r.group); }}
-                      >{r.group}</button>
-                    </TableCell>
                     <TableCell className="py-1.5 text-xs font-medium text-foreground">{r.name}</TableCell>
                     <TableCell className="py-1.5 text-right">
                       <ClickNum value={r.total} onClick={() => onMetricClick(r.name, 'total')} />
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
                       <button type="button" className={cn('tabular-nums hover:underline', r.completed === 0 ? 'text-muted-foreground/40' : 'font-semibold text-emerald-700 dark:text-emerald-400')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'completed'); }}>{r.completed}</button>
+                      <span className="ml-2 text-[10px] text-muted-foreground tabular-nums">{fmtPct(r.completed, r.total)}</span>
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
                       <button type="button" className={cn('tabular-nums hover:underline', r.closed === 0 ? 'text-muted-foreground/40' : 'font-semibold text-primary')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'closed'); }}>{r.closed}</button>
+                      <span className="ml-2 text-[10px] text-muted-foreground tabular-nums">{fmtPct(r.closed, r.total)}</span>
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
                       <button type="button" className={cn('tabular-nums hover:underline', r.dispute === 0 ? 'text-muted-foreground/40' : 'font-semibold text-purple-700 dark:text-purple-300')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'dispute'); }}>{r.dispute}</button>
                     </TableCell>
                   </TableRow>
                 ))}
-                <TableRow className="border-t-2 bg-muted/30 font-semibold">
-                  <TableCell colSpan={2} className="py-1.5 text-xs">
-                    {filtersActive ? `Filtered total (${visibleRows.length})` : `Total (${visibleRows.length})`}
-                  </TableCell>
-                  <TableCell className="py-1.5 text-right tabular-nums">{visibleTotals.total}</TableCell>
-                  <TableCell className="py-1.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{visibleTotals.completed}</TableCell>
-                  <TableCell className="py-1.5 text-right tabular-nums text-primary">{visibleTotals.closed}</TableCell>
-                  <TableCell className="py-1.5 text-right tabular-nums text-purple-700 dark:text-purple-300">{visibleTotals.dispute}</TableCell>
-                </TableRow>
               </TableBody>
             </Table>
           </div>
