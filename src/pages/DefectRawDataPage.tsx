@@ -52,6 +52,7 @@ import { CriticalPendingBar } from '@/components/raw-data/CriticalPendingBar';
 import type { BulkEditableField } from '@/lib/bulk-edit';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
 import { inferFilterType } from '@/lib/field-filter-type';
+import { getCapturedByGroup } from '@/lib/captured-by-groups';
 
 const EMPTY_TOKEN = '__EMPTY__';
 const DEFAULT_SORTING: SortingState = [{ id: 'issue_no', desc: false }];
@@ -727,6 +728,10 @@ export default function DefectRawDataPage() {
       const days = Number(searchParams.get('atRiskDays') ?? 7);
       next = next.filter((item) => isAtRisk(item as any, asOf, days));
     }
+    const capturedByGroup = searchParams.get('capturedByGroup');
+    if (capturedByGroup) {
+      next = next.filter((item) => getCapturedByGroup((item as any).captured_by_name) === capturedByGroup);
+    }
     return next;
   }, [items, searchParams, dataDate]);
 
@@ -1138,6 +1143,7 @@ export default function DefectRawDataPage() {
       hdecPic: 'HDEC PIC',
       hdecEng: 'HDEC ENG',
       capturedBy: 'Captured By',
+      capturedByGroup: 'Captured By Group',
       level: 'Level',
       mainTrade: 'Main Trade',
       subTrade: 'Sub Trade',

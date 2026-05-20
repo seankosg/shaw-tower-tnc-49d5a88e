@@ -66,6 +66,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
 import { usePlanMode } from '@/hooks/usePlanMode';
+import { CAPTURED_BY_GROUPS, getCapturedByGroup, type CapturedByGroup } from '@/lib/captured-by-groups';
 
 const PIE_COLORS: Record<string, string> = {
   Complete: 'hsl(var(--primary))',
@@ -408,6 +409,7 @@ export default function DefectDashboardPage() {
             else if (metric === 'dispute') params.closureStatus = 'InD';
             goRaw(params);
           }}
+          onGroupClick={(group) => goRaw({ capturedByGroup: group })}
           showDebug={roles.includes('admin') || roles.includes('superuser')}
         />
       )}
@@ -698,12 +700,13 @@ type CapturedByMetric = 'total' | 'completed' | 'closed' | 'dispute';
 interface CapturedByStat { name: string; total: number; completed: number; closed: number; dispute: number }
 
 function CapturedByStatsSection({
-  items, kpis, onCardClick, onMetricClick, showDebug,
+  items, kpis, onCardClick, onMetricClick, onGroupClick, showDebug,
 }: {
   items: DefectForDashboard[];
   kpis: { total: number; actualDone: number; closureDone: number; inDisputeCount: number };
   onCardClick: (name: string) => void;
   onMetricClick: (name: string, metric: CapturedByMetric) => void;
+  onGroupClick: (group: CapturedByGroup) => void;
   showDebug: boolean;
 }) {
   const { stats, unknown, totals } = useMemo(() => {
@@ -753,27 +756,64 @@ function CapturedByStatsSection({
     );
   }
 
+  const grouped = useMemo(() => {
+    const byGroup = new Map<CapturedByGroup, CapturedByStat[]>();
+    for (const s of stats) {
+      const g = getCapturedByGroup(s.name) ?? 'Other';
+      const arr = byGroup.get(g) ?? [];
+      arr.push(s);
+      byGroup.set(g, arr);
+    }
+    return CAPTURED_BY_GROUPS
+      .map((g) => {
+        const list = byGroup.get(g) ?? [];
+        const totals = list.reduce((acc, s) => ({
+          total: acc.total + s.total, completed: acc.completed + s.completed,
+          closed: acc.closed + s.closed, dispute: acc.dispute + s.dispute,
+        }), { total: 0, completed: 0, closed: 0, dispute: 0 });
+        return { group: g, list, totals };
+      })
+      .filter((g) => g.list.length > 0);
+  }, [stats]);
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex items-baseline justify-between">
         <h3 className="text-sm font-semibold text-foreground">Captured By — Defect Statistics</h3>
         <p className="text-xs text-muted-foreground">{stats.length} person{stats.length === 1 ? '' : 's'} · Unknown {unknown.total}</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {stats.map((s) => (
-          <Card key={s.name} className="cursor-pointer transition-colors hover:bg-muted/40" onClick={() => onCardClick(s.name)}>
-            <CardContent className="p-3">
-              <p className="mb-2 truncate text-sm font-semibold text-foreground" title={s.name}>{s.name}</p>
-              <div className="grid grid-cols-4 gap-1 text-center">
-                <MiniMetric label="Total" value={s.total} onClick={() => onMetricClick(s.name, 'total')} />
-                <MiniMetric label="Completed" value={s.completed} tone="emerald" onClick={() => onMetricClick(s.name, 'completed')} />
-                <MiniMetric label="Closed" value={s.closed} tone="primary" onClick={() => onMetricClick(s.name, 'closed')} />
-                <MiniMetric label="In Dispute" value={s.dispute} tone="purple" onClick={() => onMetricClick(s.name, 'dispute')} />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {grouped.map(({ group, list, totals: gTotals }) => (
+        <div key={group} className="space-y-2 rounded-md border bg-muted/20 p-2">
+          <button
+            type="button"
+            onClick={() => onGroupClick(group)}
+            className="flex w-full items-center justify-between gap-3 rounded px-1 py-0.5 text-left transition-colors hover:bg-muted/60"
+          >
+            <span className="text-sm font-semibold text-foreground">{group}</span>
+            <span className="flex gap-3 text-xs tabular-nums text-muted-foreground">
+              <span>Total <b className="text-foreground">{gTotals.total}</b></span>
+              <span>Completed <b className="text-emerald-700 dark:text-emerald-400">{gTotals.completed}</b></span>
+              <span>Closed <b className="text-primary">{gTotals.closed}</b></span>
+              <span>In Dispute <b className="text-purple-700 dark:text-purple-300">{gTotals.dispute}</b></span>
+            </span>
+          </button>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {list.map((s) => (
+              <Card key={s.name} className="cursor-pointer transition-colors hover:bg-muted/40" onClick={() => onCardClick(s.name)}>
+                <CardContent className="p-3">
+                  <p className="mb-2 truncate text-sm font-semibold text-foreground" title={s.name}>{s.name}</p>
+                  <div className="grid grid-cols-4 gap-1 text-center">
+                    <MiniMetric label="Total" value={s.total} onClick={() => onMetricClick(s.name, 'total')} />
+                    <MiniMetric label="Completed" value={s.completed} tone="emerald" onClick={() => onMetricClick(s.name, 'completed')} />
+                    <MiniMetric label="Closed" value={s.closed} tone="primary" onClick={() => onMetricClick(s.name, 'closed')} />
+                    <MiniMetric label="In Dispute" value={s.dispute} tone="purple" onClick={() => onMetricClick(s.name, 'dispute')} />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ))}
       <div className={cn(
         'rounded-md border p-2 text-xs',
         allOk ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300'
