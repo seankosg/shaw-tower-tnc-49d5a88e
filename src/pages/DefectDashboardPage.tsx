@@ -66,6 +66,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
 import { usePlanMode } from '@/hooks/usePlanMode';
+import { CAPTURED_BY_GROUPS, getCapturedByGroup, type CapturedByGroup } from '@/lib/captured-by-groups';
 
 const PIE_COLORS: Record<string, string> = {
   Complete: 'hsl(var(--primary))',
