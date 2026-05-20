@@ -5,6 +5,7 @@ import {
   Calendar as CalendarIcon, FileText, BookOpen, ShieldCheck, Package,
   AlertTriangle, CheckCircle2, ListChecks, ArrowRight,
   CalendarClock, Flame, Clock, Layers, Truck,
+  ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -132,7 +133,7 @@ export default function DocsExecutiveDashboardPage() {
       <PortfolioKpiStrip kpi={portfolioKpi} />
 
       {MODULES.map((m) => (
-        <ModuleSection key={m} module={m} records={records} abdRows={abdRows} ommRows={ommRows} asOf={asOf} onNavigate={goRaw} />
+        <ModuleSection key={m} module={m} records={records} abdRows={abdRows} ommRows={ommRows} asOf={asOf} onNavigate={goRaw} defaultCollapsed={m === 'spare_part'} />
       ))}
 
     </div>
@@ -182,7 +183,7 @@ function PortfolioKpiStrip({ kpi }: {
 
 // ─────────────────────────────────────────────────────────────────────
 function ModuleSection({
-  module, records, abdRows, ommRows, asOf, onNavigate,
+  module, records, abdRows, ommRows, asOf, onNavigate, defaultCollapsed = false,
 }: {
   module: DocModule;
   records: DocsStageRecord[];
@@ -190,7 +191,9 @@ function ModuleSection({
   ommRows: any[];
   asOf: Date;
   onNavigate: (m: DocModule, params?: Record<string, string>) => void;
+  defaultCollapsed?: boolean;
 }) {
+  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
   const Icon = MODULE_ICON[module];
   const accent = MODULE_ACCENT[module];
 
@@ -370,8 +373,18 @@ function ModuleSection({
         <Button variant="ghost" size="sm" className="gap-1" onClick={() => onNavigate(module)}>
           Open Raw Data <ArrowRight className="h-3.5 w-3.5" />
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => setIsCollapsed((v) => !v)}
+          aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+        >
+          {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+        </Button>
       </div>
 
+      {!isCollapsed && (
       <CardContent className="space-y-5 p-5">
         {/* Subcontractor / HDEC PIC filter row */}
         <div className="flex flex-wrap items-center gap-2">
@@ -679,6 +692,7 @@ function ModuleSection({
           )}
         </div>
       </CardContent>
+      )}
     </Card>
   );
 }
