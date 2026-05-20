@@ -134,6 +134,9 @@ export interface WorkerContext {
   /** Canonical field names the user excluded via column-select. The worker MUST
    *  skip these keys on UPDATE so existing DB values are preserved. */
   excludedFields?: Set<string>;
+  /** OMM-only: teams selected for this import run. When non-empty, rows whose
+   *  `team` value is not in this set must be skipped by the worker. */
+  allowedTeams?: Set<string>;
 }
 
 export interface ImporterAdapter<TRow> {
