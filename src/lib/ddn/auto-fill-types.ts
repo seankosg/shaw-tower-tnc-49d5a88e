@@ -6,7 +6,8 @@ export type AutoSource =
   | 'defect_items'
   | 'punch_items'
   | 'docs_drawings'
-  | 'docs_omm';
+  | 'docs_omm'
+  | 'warranty_items';
 
 export interface AutoEntry {
   /** Suggested value to apply to the field. */
