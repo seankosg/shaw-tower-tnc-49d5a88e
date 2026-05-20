@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut, ClipboardList, Tags,
-  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical, Loader2,
+  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical, Loader2, FileWarning,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -64,6 +64,13 @@ const punchNav = [
   { label: 'Export', icon: Download, path: '/punch/export' },
 ];
 
+const ddnNav = [
+  { label: 'Input', icon: FileWarning, path: '/ddn/input' },
+  { label: 'Preview', icon: FileText, path: '/ddn/preview' },
+  { label: 'History', icon: ClipboardList, path: '/ddn/history' },
+  { label: 'Settings', icon: Settings, path: '/ddn/settings' },
+];
+
 const adminNav = [
   { label: 'Admin', icon: Shield, path: '/admin' },
   { label: 'Report', icon: FileText, path: '/admin/report' },
@@ -84,6 +91,7 @@ export function AppSidebar() {
       : '';
   const userName = profile?.name || profile?.login_id || 'User';
 
+  const visibleDdn = filterNavItems(ddnNav, roles);
   const visibleMain = filterNavItems(mainNav, roles);
   const visibleDefects = filterNavItems(defectNav, roles);
   const visibleDocs = filterNavItems(docsNav, roles);
@@ -248,6 +256,28 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={pathname === item.path || (item.path === '/punch/raw-data' && /^\/punch\/(?!dashboard|raw-data|import|export)[^/]+$/.test(pathname))}
+                      onClick={() => navigate(safeRoute(item.path, roles))}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {visibleDdn.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Daily Default Notice</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleDdn.map((item) => (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={pathname === item.path || pathname.startsWith(item.path + '/')}
                       onClick={() => navigate(safeRoute(item.path, roles))}
                       tooltip={item.label}
                     >
