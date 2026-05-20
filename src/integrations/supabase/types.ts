@@ -507,6 +507,7 @@ export type Database = {
           area_location: string | null
           area_raw: string | null
           area_type: string | null
+          captured_by_name: string | null
           classification_source: string | null
           classified_at: string | null
           closure_status: string | null
@@ -559,6 +560,7 @@ export type Database = {
           area_location?: string | null
           area_raw?: string | null
           area_type?: string | null
+          captured_by_name?: string | null
           classification_source?: string | null
           classified_at?: string | null
           closure_status?: string | null
@@ -611,6 +613,7 @@ export type Database = {
           area_location?: string | null
           area_raw?: string | null
           area_type?: string | null
+          captured_by_name?: string | null
           classification_source?: string | null
           classified_at?: string | null
           closure_status?: string | null

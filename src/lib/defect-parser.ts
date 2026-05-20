@@ -41,6 +41,7 @@ export interface ParsedDefectRow {
   subsub_name: string | null;
   hdec_pic_name: string | null;
   hdec_eng_name: string | null;
+  captured_by_name: string | null;
   // New lifecycle date fields
   planned_start_date: string | null;
   planned_completion_date: string | null;
@@ -115,6 +116,10 @@ const FIELD_ALIASES: Record<string, string> = {
   'responsible engineer': 'hdec_eng_name',
   'engineer in charge': 'hdec_eng_name',
   engineer: 'hdec_eng_name',
+  // → captured_by_name (Aconex "Captured by")
+  'captured by': 'captured_by_name',
+  'captured_by': 'captured_by_name',
+  'capturedby': 'captured_by_name',
   'in charge': 'hdec_pic_name',
   'pic name': 'hdec_pic_name',
   pic: 'hdec_pic_name',
@@ -602,6 +607,7 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
       subsub_name: toText(getMapped(raw, 'subsub_name')),
       hdec_pic_name: toText(getMapped(raw, 'hdec_pic_name')),
       hdec_eng_name: toText(getMapped(raw, 'hdec_eng_name')),
+      captured_by_name: toText(getMapped(raw, 'captured_by_name')),
       planned_start_date: dp.dates.planned_start_date,
       planned_completion_date: dp.dates.planned_completion_date,
       planned_closure_date:

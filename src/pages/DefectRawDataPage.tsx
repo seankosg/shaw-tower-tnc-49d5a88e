@@ -84,6 +84,7 @@ const DEFECT_RAW_FIELDS = [
   'subsub_name',
   'hdec_pic_name',
   'hdec_eng_name',
+  'captured_by_name',
   'planned_start_date',
   'planned_completion_date',
   'planned_closure_date',
@@ -109,6 +110,7 @@ const TEXT_FILTER_FIELDS = new Set([
   'hdec_comments',
   'aconex_comments',
   'trade_detail',
+  'captured_by_name',
 ]);
 
 const DATE_FILTER_FIELDS = new Set([
@@ -147,6 +149,7 @@ const RAW_SEARCH_FIELDS = [
   'subsub_name',
   'hdec_pic_name',
   'hdec_eng_name',
+  'captured_by_name',
   'closure_status',
   'remarks',
   'hdec_comments',
@@ -514,7 +517,7 @@ export default function DefectRawDataPage() {
   const DRILLDOWN_PARAMS = [
     'source', 'actualComplete', 'closureComplete', 'overdue', 'atRisk',
     'dueOn', 'unplannedActualOn', 'asOf', 'stage', 'remaining_stage', 'remaining_asof',
-    'team', 'subcontractor', 'subsub', 'hdecPic', 'hdecEng',
+    'team', 'subcontractor', 'subsub', 'hdecPic', 'hdecEng', 'capturedBy',
     'level', 'mainTrade', 'subTrade', 'workType', 'classificationSource',
     'status', 'closureStatus', 'issueNo', 'subcontractorIssueNo',
     'dateStart', 'dateEnd', 'dateField', 'critical',
@@ -553,6 +556,7 @@ export default function DefectRawDataPage() {
       subsub: 'subsub_name',
       hdecPic: 'hdec_pic_name',
       hdecEng: 'hdec_eng_name',
+      capturedBy: 'captured_by_name',
       level: 'area_level',
       mainTrade: 'main_trade',
       subTrade: 'sub_trade',
@@ -1133,6 +1137,7 @@ export default function DefectRawDataPage() {
       subsub: 'Sub-Sub',
       hdecPic: 'HDEC PIC',
       hdecEng: 'HDEC ENG',
+      capturedBy: 'Captured By',
       level: 'Level',
       mainTrade: 'Main Trade',
       subTrade: 'Sub Trade',

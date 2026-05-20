@@ -25,7 +25,7 @@ const makeDefect = (id: string, patch: Partial<DefectForDashboard>): DefectForDa
   subcontractor_name: null,
   subsub_name: null,
   hdec_pic_name: null,
-  hdec_eng_name: null,
+  hdec_eng_name: null, captured_by_name: null,
   planned_start_date: null,
   planned_completion_date: null,
   planned_closure_date: null,

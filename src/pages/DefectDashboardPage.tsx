@@ -396,13 +396,21 @@ export default function DefectDashboardPage() {
       </div>
 
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <AlertBanner tone="destructive" title={`${kpis.overdueCount} Overdue Defect${kpis.overdueCount === 1 ? '' : 's'}`} description={`Planned date is on/before Data Date (${dataDateLabel}) and not yet complete.`} onClick={() => goRaw({ overdue: 'true', asOf: dataDate })} />
-        <AlertBanner tone="warning" title={`${kpis.atRiskCount} At-Risk Defect${kpis.atRiskCount === 1 ? '' : 's'}`} description={`Planned date is within ${atRiskDays} day(s) and not yet complete.`} onClick={() => goRaw({ atRisk: 'true', atRiskDays: String(atRiskDays) })} />
-        {kpis.inDisputeCount > 0 && (
-          <AlertBanner tone="dispute" title={`${kpis.inDisputeCount} In Dispute Defect${kpis.inDisputeCount === 1 ? '' : 's'}`} description="Aconex Status = 'In Dispute' — LL과 당사 간 이견 발생. 검토 필요." onClick={() => goRaw({ closureStatus: 'InD' })} />
-        )}
-      </div>
+      {!roles.includes('guest') && (
+        <CapturedByStatsSection
+          items={filteredItems}
+          kpis={kpis}
+          onCardClick={(name) => goRaw({ capturedBy: name })}
+          onMetricClick={(name, metric) => {
+            const params: Record<string, string> = { capturedBy: name };
+            if (metric === 'completed') params.actualComplete = 'true';
+            else if (metric === 'closed') params.closureComplete = 'true';
+            else if (metric === 'dispute') params.closureStatus = 'InD';
+            goRaw(params);
+          }}
+          showDebug={roles.includes('admin') || roles.includes('superuser')}
+        />
+      )}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2 gap-2 flex-wrap">
@@ -685,6 +693,125 @@ function KpiCard({ icon, label, value, sub, accent, progress, progressTone, onCl
 }
 
 function AlertBanner({ tone, title, description, onClick }: { tone: 'destructive' | 'warning' | 'dispute'; title: string; description: string; onClick: () => void }) { const cls = tone === 'destructive' ? 'border-destructive/40 bg-destructive/5 text-destructive' : tone === 'dispute' ? 'border-purple-500/40 bg-purple-500/5 text-purple-700 dark:text-purple-300' : 'border-primary/40 bg-primary/5 text-primary'; const Icon = tone === 'dispute' ? AlertCircle : AlertTriangle; return <button onClick={onClick} className={cn('flex items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/40', cls)}><div className="flex items-center gap-3"><Icon className="h-5 w-5" /><div><p className="font-semibold">{title}</p><p className="text-xs text-muted-foreground">{description}</p></div></div><span className="text-sm font-medium text-muted-foreground">View</span></button>; }
+
+type CapturedByMetric = 'total' | 'completed' | 'closed' | 'dispute';
+interface CapturedByStat { name: string; total: number; completed: number; closed: number; dispute: number }
+
+function CapturedByStatsSection({
+  items, kpis, onCardClick, onMetricClick, showDebug,
+}: {
+  items: DefectForDashboard[];
+  kpis: { total: number; actualDone: number; closureDone: number; inDisputeCount: number };
+  onCardClick: (name: string) => void;
+  onMetricClick: (name: string, metric: CapturedByMetric) => void;
+  showDebug: boolean;
+}) {
+  const { stats, unknown, totals } = useMemo(() => {
+    const map = new Map<string, CapturedByStat>();
+    const unknown: CapturedByStat = { name: '__unknown__', total: 0, completed: 0, closed: 0, dispute: 0 };
+    for (const it of items) {
+      const raw = (it as any).captured_by_name as string | null | undefined;
+      const name = raw && String(raw).trim() ? String(raw).trim() : null;
+      const bucket = name ? (map.get(name) ?? { name, total: 0, completed: 0, closed: 0, dispute: 0 }) : unknown;
+      bucket.total += 1;
+      if (isActualComplete(it as any)) bucket.completed += 1;
+      if (isClosureComplete(it as any)) bucket.closed += 1;
+      if (String((it as any).closure_status ?? '') === 'InD') bucket.dispute += 1;
+      if (name) map.set(name, bucket);
+    }
+    const stats = [...map.values()].sort((a, b) => b.total - a.total);
+    const totals = stats.reduce((acc, s) => ({
+      total: acc.total + s.total, completed: acc.completed + s.completed,
+      closed: acc.closed + s.closed, dispute: acc.dispute + s.dispute,
+    }), { total: 0, completed: 0, closed: 0, dispute: 0 });
+    return { stats, unknown, totals };
+  }, [items]);
+
+  const checks = useMemo(() => {
+    const rows = [
+      { label: 'Total', sum: totals.total, kpi: kpis.total, unknown: unknown.total },
+      { label: 'Completed', sum: totals.completed, kpi: kpis.actualDone, unknown: unknown.completed },
+      { label: 'Closed', sum: totals.closed, kpi: kpis.closureDone, unknown: unknown.closed },
+      { label: 'In Dispute', sum: totals.dispute, kpi: kpis.inDisputeCount, unknown: unknown.dispute },
+    ].map((r) => ({ ...r, expected: r.kpi - r.unknown, delta: r.sum - (r.kpi - r.unknown) }));
+    return rows;
+  }, [totals, unknown, kpis]);
+
+  const allOk = checks.every((c) => c.delta === 0);
+
+  useEffect(() => {
+    if (!showDebug || allOk) return;
+    // eslint-disable-next-line no-console
+    console.warn('[CapturedBy reconcile] Mismatch', checks);
+  }, [showDebug, allOk, checks]);
+
+  if (stats.length === 0) {
+    return (
+      <Card className="p-4">
+        <p className="text-sm text-muted-foreground">No "Captured By" data available.</p>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-sm font-semibold text-foreground">Captured By — Defect Statistics</h3>
+        <p className="text-xs text-muted-foreground">{stats.length} person{stats.length === 1 ? '' : 's'} · Unknown {unknown.total}</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {stats.map((s) => (
+          <Card key={s.name} className="cursor-pointer transition-colors hover:bg-muted/40" onClick={() => onCardClick(s.name)}>
+            <CardContent className="p-3">
+              <p className="mb-2 truncate text-sm font-semibold text-foreground" title={s.name}>{s.name}</p>
+              <div className="grid grid-cols-4 gap-1 text-center">
+                <MiniMetric label="Total" value={s.total} onClick={() => onMetricClick(s.name, 'total')} />
+                <MiniMetric label="Completed" value={s.completed} tone="emerald" onClick={() => onMetricClick(s.name, 'completed')} />
+                <MiniMetric label="Closed" value={s.closed} tone="primary" onClick={() => onMetricClick(s.name, 'closed')} />
+                <MiniMetric label="In Dispute" value={s.dispute} tone="purple" onClick={() => onMetricClick(s.name, 'dispute')} />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className={cn(
+        'rounded-md border p-2 text-xs',
+        allOk ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300'
+              : 'border-amber-500/40 bg-amber-500/5 text-amber-800 dark:text-amber-300',
+      )}>
+        {allOk ? (
+          <span className="font-medium">✓ All totals reconcile with summary cards (Unknown excluded: {unknown.total}).</span>
+        ) : (
+          <div className="space-y-0.5">
+            <p className="font-medium">⚠ Reconciliation mismatch detected:</p>
+            {checks.map((c) => (
+              <p key={c.label} className="tabular-nums">
+                {c.label}: Σ={c.sum} / KPI={c.kpi} (Unknown={c.unknown}, expected={c.expected}, Δ={c.delta > 0 ? '+' : ''}{c.delta})
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MiniMetric({ label, value, tone, onClick }: { label: string; value: number; tone?: 'emerald' | 'primary' | 'purple'; onClick: () => void }) {
+  const toneCls = tone === 'emerald' ? 'text-emerald-700 dark:text-emerald-400'
+    : tone === 'primary' ? 'text-primary'
+    : tone === 'purple' ? 'text-purple-700 dark:text-purple-300'
+    : 'text-foreground';
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className="rounded px-1 py-0.5 transition-colors hover:bg-muted"
+    >
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={cn('text-base font-bold tabular-nums', value === 0 && 'text-muted-foreground/40', value !== 0 && toneCls)}>{value}</p>
+    </button>
+  );
+}
 function DateButton({ value, onChange }: { value: string; onChange: (value: string) => void }) { return <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-8 gap-1 text-xs"><CalendarIcon className="h-3.5 w-3.5" />{formatDdMmm(value)}</Button></PopoverTrigger><PopoverContent className="w-auto p-0" align="end"><Calendar mode="single" selected={new Date(value + 'T00:00:00')} onSelect={(d) => d && onChange(d.toISOString().slice(0, 10))} className={cn('p-3 pointer-events-auto')} /></PopoverContent></Popover>; }
 function HeaderTotalNumber({ value, tone }: { value: number; tone?: 'done' | 'remain' | 'delay' }) { return <span className={cn('tabular-nums font-semibold', value === 0 ? 'text-muted-foreground/40' : tone === 'done' ? 'text-emerald-700 dark:text-emerald-400' : tone === 'remain' ? 'text-amber-700 dark:text-amber-400' : tone === 'delay' ? 'text-destructive' : 'text-foreground')}>{value.toLocaleString()}</span>; }
 function VarianceCell({ value, invert = false }: { value: number; invert?: boolean }) {

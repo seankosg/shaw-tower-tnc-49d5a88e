@@ -13,7 +13,7 @@ function mk(over: Partial<DefectItem>): DefectItem {
     main_trade: null, sub_trade: null, trade_detail: null,
     area_raw: null, area_type: null, area_level: null, area_location: null,
     description: null, defect_type: null, status: null, priority: null, team: null,
-    subcontractor_name: null, subsub_name: null, hdec_pic_name: null, hdec_eng_name: null,
+    subcontractor_name: null, subsub_name: null, hdec_pic_name: null, hdec_eng_name: null, captured_by_name: null,
     planned_start_date: null, planned_completion_date: null, planned_closure_date: null,
     actual_start_date: null, actual_completion_date: null, actual_closure_date: null,
     planned_progress_pct: null, actual_progress_pct: null,
