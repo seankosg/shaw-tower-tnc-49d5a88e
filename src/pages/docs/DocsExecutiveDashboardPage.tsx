@@ -692,6 +692,7 @@ function ModuleSection({
           )}
         </div>
       </CardContent>
+      )}
     </Card>
   );
 }
