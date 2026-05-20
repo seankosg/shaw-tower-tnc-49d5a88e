@@ -294,7 +294,7 @@ export function createDocsImportProvider<TRow>(
             setFiles((cur) => cur.map((x) => x.id === f.id ? { ...x, progress: pct } : x));
           };
           const result = await adapter.upsertWorker(
-            { projectId: project.id, batchId, userId: user?.id ?? null, subModule: adapter.subModule, excludedFields: f.excludedFields },
+            { projectId: project.id, batchId, userId: user?.id ?? null, subModule: adapter.subModule, excludedFields: f.excludedFields, allowedTeams: allowedTeams.length > 0 ? new Set(allowedTeams) : undefined },
             parsed,
             onProgress,
           );
