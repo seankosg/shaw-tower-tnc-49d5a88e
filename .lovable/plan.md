@@ -1,112 +1,159 @@
-# Daily Default Notice — Phase 1 (스키마 + Settings + 입력 폼 골격)
+# Daily Default Notice — Phase 1 (동적 스키마 + Settings + 입력 폼)
 
-Puretech(서브콘) 일일 디폴트 통보를 자동 생성하기 위한 신규 모듈을 사이드바 최상위에 추가합니다. Phase 1에서는 **데이터 모델, Settings, 입력 폼(8개 섹션)** 까지 구현하고, 영문 매핑·미리보기·DOCX 생성·이력·Storage 업로드는 Phase 2~3로 분리합니다.
+Puretech(서브콘) 일일 디폴트 통보를 자동 생성하는 모듈. 사이드바 최상위에 신규 메뉴로 추가합니다.
+
+**핵심 설계 원칙**: 입력 폼의 모든 필드(라벨·옵션·필수여부·표시순서)는 **DB 기반 메타스키마**로 정의해서, 관리자가 코드 수정 없이 라벨 워딩과 선택지 값을 편집할 수 있도록 합니다. 영문 매핑 문장(Phase 2)도 같은 원칙을 따릅니다.
 
 ## 범위 (Phase 1)
 
-- 사이드바 최상위 신규 메뉴 **Daily Default Notice** + 하위 4개 라우트(`/ddn/input`, `/ddn/preview`, `/ddn/history`, `/ddn/settings`).
-  - Phase 1에서는 `input` / `settings`만 실제 동작, 나머지는 "Coming soon" placeholder.
-- DB 스키마(`ddn_settings`, `ddn_entries`) + RLS.
-- Settings 페이지: admin 전용, master_notice_ref/date, day1_date, letter_no_prefix/next, 각종 단가·요율 편집.
-- 입력 폼: Korean accordion 8 섹션 + 고정 상단(금일 계획된 테스트) + 누적 read-only 패널.
-  - 자동저장(5초 debounce, draft 상태로 upsert).
-  - 입력값은 `ddn_entries.inputs` jsonb로 저장.
-  - 누적 패널은 settings + 과거 entries 합산으로 라이브 계산.
-- 권한: **superuser/admin = 풀권한(편집·저장)**, 나머지(senior_user 이하) = read-only(폼은 disabled, history/preview는 추후 Phase에서 열람 허용).
+- 사이드바 최상위 **Daily Default Notice** + 하위 4 라우트(`input`/`preview`/`history`/`settings`). Phase 1은 `input`/`settings`만 동작, 나머지는 placeholder.
+- **메타스키마 5개 테이블** (`ddn_sections`, `ddn_fields`, `ddn_field_options`, `ddn_settings`, `ddn_entries`) + RLS.
+- Settings: 단가·요율·고정 참조번호 편집 (admin only).
+- **Schema Editor** (admin only): 섹션·필드 라벨/옵션/순서 편집 UI.
+- 입력 폼: 메타스키마로부터 동적 렌더링 + 5초 debounce 자동저장.
+- 권한: superuser/admin = 풀권한, 나머지 read-only.
 
-## Phase 2/3 (참고용, 본 계획 외)
+## 동적 메타스키마 설계
 
-- Phase 2: 영문 매핑 엔진(`ddn-mapping.ts`) + Preview 페이지(A4 HTML serif 렌더) + 조건부 섹션.
-- Phase 3: DOCX 생성(`docx` lib) + Lovable Cloud Storage(`daily-notices` 버킷) 업로드 + History 테이블(필터/ZIP 일괄 다운로드) + finalize 시 letter_no_next 증가.
+### 왜 동적인가
+- 운영 중 "Engineer (Elec) — 계획/실제" 라벨을 "전기 엔지니어 (계획/실제)"로 바꾸고 싶을 때 코드 배포 없이 가능.
+- 멀티체크박스 선택지(예: §1의 "HDEC 대행 업무 6종") 추가/삭제·문구 수정 가능.
+- 새 필드 추가 시 영문 매핑 룰(Phase 2)만 추가하면 폼은 자동 확장.
 
-## 데이터 모델
+### 테이블
 
 ```text
-ddn_settings (단일 행, id='singleton' text PK)
-  master_notice_ref        text
-  master_notice_date       date
-  day1_date                date
-  letter_no_prefix         text     -- "HD/SHAW/SC/26-"
-  letter_no_next           int      -- 다음 발행 번호
-  pm_absence_start_date    date
-  contract_completion_date date
-  ld_daily_rate_sgd        numeric
-  ld_cap_sgd               numeric
-  pm_daily_rate_sgd        numeric
-  hdec_manday_rate_sgd     numeric
-  hdec_korean_md_rate_sgd  numeric
-  admin_overhead_pct       numeric  -- 0.03
-  avg_ncr_external_cost    numeric
-  avg_def_external_cost    numeric
-  updated_at               timestamptz
+ddn_sections                                 -- 8 섹션 + 고정 상단 + 누적 패널
+  id           text PK                       -- 'planned_tests','sec1','sec2',...,'cumulative'
+  title_ko     text                          -- "§1. Cl.4.8 Superintendence (인원·감독)"
+  title_en     text                          -- 영문 (Phase 2 매핑에서 사용)
+  display_order int
+  collapsible  bool
+  is_active    bool
+
+ddn_fields
+  id              uuid PK
+  section_id      text FK → ddn_sections
+  field_key       text UNIQUE                -- 'sec1.pm_attended','sec1.pm_time' (안정 키)
+  label_ko        text                       -- 편집 가능한 한글 라벨
+  label_en        text                       -- 영문 (Phase 2)
+  help_text       text
+  data_type       text                       -- 'text'|'number'|'date'|'time'|'radio_yn'
+                                             -- |'radio'|'checkbox_multi'|'textarea'
+                                             -- |'computed'|'repeatable_group'
+  unit            text                       -- '명','m','SGD','%' 등
+  required        bool
+  default_value   jsonb
+  validation      jsonb                      -- {min,max,pattern}
+  conditional_on  jsonb                      -- {field_key,equals} (특정 답에서만 표시)
+  display_order   int
+  width           text                       -- 'full'|'half'|'third' (그리드)
+  is_active       bool
+
+ddn_field_options                            -- radio/checkbox_multi 선택지
+  id          uuid PK
+  field_id    uuid FK → ddn_fields
+  value       text                           -- 안정 키 ('pt_unaware','material_late',...)
+  label_ko    text
+  label_en    text
+  display_order int
+  is_active   bool
+
+ddn_settings  (단일 행, id='singleton')
+  master_notice_ref, master_notice_date, day1_date,
+  letter_no_prefix, letter_no_next,
+  pm_absence_start_date, contract_completion_date,
+  ld_daily_rate_sgd, ld_cap_sgd, pm_daily_rate_sgd,
+  hdec_manday_rate_sgd, hdec_korean_md_rate_sgd,
+  admin_overhead_pct, avg_ncr_external_cost, avg_def_external_cost,
+  updated_at
 
 ddn_entries
-  id                       uuid PK
-  entry_date               date UNIQUE
-  letter_no                text          -- finalize 시점에 부여
-  day_n                    int           -- entry_date - day1_date + 1 (생성 시)
-  status                   text          -- 'draft' | 'finalized' | 'sent'
-  inputs                   jsonb         -- 전체 폼 페이로드
-  generated_letter_html    text          -- Phase 2
-  generated_docx_path      text          -- Phase 3
-  created_by               uuid          -- auth.users
-  created_at, updated_at   timestamptz
+  id, entry_date UNIQUE, letter_no, day_n,
+  status ('draft'|'finalized'|'sent'),
+  inputs  jsonb,                             -- { [field_key]: value } 형태로 안정 저장
+  generated_letter_html, generated_docx_path,
+  created_by, created_at, updated_at
 ```
 
-RLS:
-- `ddn_settings`: SELECT = 로그인 사용자 전체 / INSERT·UPDATE = `has_role(uid,'admin')`만.
-- `ddn_entries`: SELECT = 로그인 사용자 전체 / INSERT·UPDATE·DELETE = `has_role(uid,'superuser')` OR `has_role(uid,'admin')`.
-- 기존 `public.has_role()` security definer 함수 재사용.
+**핵심**: `ddn_entries.inputs`는 `field_key`(안정 키)로 저장 → 라벨이 바뀌어도 과거 데이터 무결성 유지. UI 표시할 때만 `ddn_fields.label_ko` 조인.
 
-## UI 구성
+### 시드 데이터
+마이그레이션에서 PART B 스펙(§1~§8 + 고정 상단 + 누적)을 그대로 시드. 약 80~100개 필드 INSERT. 모든 키는 `field_key`로 고정(`sec1.pm_attended`, `sec3.ncr_open`, `sec6.rto_cctv`, …).
 
-### 사이드바
-`src/components/layout/AppSidebar.tsx`에 신규 그룹/아이템 `Daily Default Notice` 추가(아이콘 `FileWarning`). 4개 하위 라우트.
+### computed 필드
+`data_type='computed'`은 입력 불가. 클라이언트가 `computed_formula`(field 정의 jsonb 필드로 별도 추가) 또는 하드코딩된 매핑(`src/lib/ddn/computed.ts`)으로 계산:
+- `planned_tests.pred_pct` = round(actual/planned*100)
+- `sec2.delay_days` = today − contract_completion_date
+- `cumulative.pm_absent_days`, `cumulative.aggregate_back_charge` 등
+
+Phase 1은 하드코딩 매핑으로 시작(라벨만 동적). Phase 3에서 수식 DSL 도입 검토.
+
+## RLS
+
+- 5개 테이블 모두 RLS 활성화.
+- `ddn_sections`, `ddn_fields`, `ddn_field_options`: SELECT = 인증 사용자 / INSERT·UPDATE·DELETE = `has_role(uid,'admin')`.
+- `ddn_settings`: SELECT = 인증 사용자 / 쓰기 = admin.
+- `ddn_entries`: SELECT = 인증 사용자 / 쓰기 = `has_role(uid,'superuser') OR has_role(uid,'admin')`.
+
+## UI
+
+### Sidebar
+`AppSidebar.tsx`에 `Daily Default Notice` 그룹(아이콘 `FileWarning`) + 4 하위 NavLink.
 
 ### `/ddn/input` — 오늘의 입력
-- 상단 sticky 헤더: 날짜 picker(기본 today), `Day N` 자동, draft/finalized 뱃지, 자동저장 인디케이터, 진행률 바.
-- **고정 상단 카드**: 금일 계획된 테스트 (Pred / T1 / T2 행, 계획·실적·달성률(자동)·지연 항목 repeatable).
-- **Accordion 8 섹션** (§1~§8): 스펙 PART B 그대로 — Korean label, shadcn Input/Select/RadioGroup/Checkbox/Textarea/Calendar.
-- **누적 read-only 패널** (우측 또는 §8 영역): settings + 과거 entries 합산 라이브 계산.
-- 자동저장: 폼 상태 변경 후 5초 debounce → `ddn_entries` upsert(entry_date 기준).
-- 권한 없는 사용자: 모든 입력 `disabled`, 저장 버튼 숨김, 상단에 "Read-only" 배너.
+- Sticky 헤더: 날짜 picker, `Day N`, status 뱃지, 자동저장 표시, 진행률.
+- **DynamicForm**: `ddn_sections` + `ddn_fields` fetch → 섹션별 Accordion → 필드별 컴포넌트 렌더링.
+  - `data_type`별 렌더러: `<TextField/>`, `<NumberField/>`, `<DateField/>`, `<TimeField/>`, `<RadioYNField/>`, `<RadioField/>`, `<CheckboxMultiField/>`, `<TextareaField/>`, `<ComputedField/>`, `<RepeatableGroupField/>`.
+  - `conditional_on` 평가 후 표시/숨김.
+  - `unit` 표시 (input 우측 suffix).
+- **CumulativePanel**: `data_type='computed'` 필드만 모아 read-only로 표시.
+- 자동저장: 5초 debounce → `ddn_entries` upsert(entry_date 기준), draft 상태.
+- 권한 없으면 전체 `disabled` + 상단 read-only 배너.
 
-### `/ddn/settings` — 설정 (admin only)
-- 단일 폼으로 `ddn_settings` 편집. `RoleGuard` admin 전용.
-- 저장 시 upsert + toast.
+### `/ddn/settings` — 설정 (admin)
+탭 2개:
+1. **Cost & References**: `ddn_settings` 단일 폼.
+2. **Form Schema Editor**:
+   - 좌측: 섹션 트리(드래그로 순서 변경).
+   - 우측: 선택한 섹션의 필드 목록 → 클릭하면 라벨/옵션/필수/표시순서 인라인 편집.
+   - `field_key`는 read-only(키 변경 시 과거 데이터 깨짐). 라벨/옵션 label만 자유 편집.
+   - 옵션 추가/숨김(soft delete = `is_active=false`).
+   - Phase 1은 필드 **신규 추가/삭제는 미지원**(시드된 필드의 라벨/옵션만 편집). Phase 3에서 확장.
 
 ### `/ddn/preview`, `/ddn/history`
-- Phase 1: 단순 placeholder ("Coming in Phase 2/3"). Sidebar에는 표시하되 페이지 안에 안내만.
+Placeholder ("Coming in Phase 2/3").
 
 ## 기술 구현
 
 신규 파일:
-- `src/pages/ddn/DdnLayout.tsx` — 좌측 sub-nav 또는 단순 Outlet.
-- `src/pages/ddn/DdnInputPage.tsx` — 입력 폼.
-- `src/pages/ddn/DdnSettingsPage.tsx` — Settings.
+- `src/lib/ddn/schema-types.ts` — `DdnSection`, `DdnField`, `DdnFieldOption`, `DdnInputs` 타입.
+- `src/lib/ddn/schema-cache.ts` — react-query로 메타스키마 fetch + 캐시.
+- `src/lib/ddn/computed.ts` — computed 필드 계산 함수 맵 (`field_key` → fn(inputs, settings, history)).
+- `src/lib/ddn/auto-save.ts` — `useDdnAutoSave(entryDate)` 훅.
+- `src/components/ddn/DynamicForm.tsx` — 섹션/필드 동적 렌더.
+- `src/components/ddn/fields/*.tsx` — 데이터타입별 필드 컴포넌트 10개.
+- `src/components/ddn/CumulativePanel.tsx`.
+- `src/components/ddn/SchemaEditor.tsx` — 라벨/옵션 편집 UI.
+- `src/pages/ddn/DdnLayout.tsx` (Outlet).
+- `src/pages/ddn/DdnInputPage.tsx`.
+- `src/pages/ddn/DdnSettingsPage.tsx`.
 - `src/pages/ddn/DdnPreviewPage.tsx`, `src/pages/ddn/DdnHistoryPage.tsx` — placeholder.
-- `src/components/ddn/sections/Section1Superintendence.tsx` … `Section8Cumulative.tsx` — 섹션별 폼 분리(파일당 ~150줄).
-- `src/components/ddn/PlannedTestsCard.tsx` — 고정 상단 카드.
-- `src/components/ddn/CumulativePanel.tsx` — 누적 read-only.
-- `src/lib/ddn/types.ts` — `DdnInputs` TypeScript 타입 (jsonb 페이로드 형상).
-- `src/lib/ddn/calc.ts` — 누적/back-charge 계산 함수 (Phase 2 매핑에서도 재사용).
-- `src/lib/ddn/auto-save.ts` — 5초 debounce upsert 훅 `useDdnAutoSave`.
+- `src/lib/role-permissions.ts`에 `canEditDdn`, `canManageDdnSettings` 추가.
 
-라우팅: `src/App.tsx`에 `/ddn/*` 추가, `ProtectedRoute`로 감싸기.
+라우팅: `src/App.tsx`에 `/ddn/*` + `ProtectedRoute`.
 
-사이드바: `AppSidebar.tsx` 신규 그룹.
+## Phase 2/3 (참고)
 
-권한 헬퍼: `src/lib/role-permissions.ts`에 `canEditDdn(role)` (superuser|admin), `canManageDdnSettings(role)` (admin) 추가.
+- **Phase 2**: 매핑 엔진. `ddn_mapping_rules` 테이블 추가(트리거 조건 + 영문 템플릿, `{{field_key}}` 치환). 영문 문구도 admin이 편집 가능. Preview(A4 HTML serif).
+- **Phase 3**: DOCX 생성(`docx` lib) + Lovable Cloud Storage `daily-notices` 버킷 업로드 + History(필터·ZIP) + Schema Editor에 필드 추가/삭제 + 수식 DSL.
 
 ## 작업 순서
 
-1. **migration**: `ddn_settings`, `ddn_entries` 테이블 + RLS + `updated_at` 트리거. 빈 settings 시드 1행 insert.
-2. `src/lib/ddn/types.ts` + `calc.ts` 작성.
-3. `DdnSettingsPage` — admin 폼 (단순 CRUD)으로 데이터 흐름 검증.
-4. `PlannedTestsCard` + Section1~8 컴포넌트 + `DdnInputPage` 조합.
-5. `useDdnAutoSave` 훅 + draft 로딩.
-6. `CumulativePanel` 계산 연동.
-7. Sidebar + 라우팅 + placeholder 페이지.
-8. 권한 가드(읽기 전용 모드) + 수동 검증(admin 로그인 → settings 저장 → 입력 폼 자동저장 → DB row 확인).
-
-Phase 2(매핑·Preview)와 Phase 3(DOCX·Storage·History)는 본 단계 완료 후 별도 계획으로 진행합니다.
+1. **migration**: 5개 테이블 + RLS + `updated_at` 트리거 + `ddn_settings` singleton 시드 + `ddn_sections`/`ddn_fields`/`ddn_field_options` 풀 시드(PART B 전부).
+2. `schema-types.ts` + `schema-cache.ts` + `computed.ts`.
+3. 필드 컴포넌트 10종 + `DynamicForm`.
+4. `DdnInputPage` + `useDdnAutoSave` + `CumulativePanel`.
+5. `DdnSettingsPage` (Cost 탭 → 동작 검증) → Schema Editor 탭.
+6. Sidebar + 라우팅 + placeholder.
+7. 수동 검증: admin 로그인 → settings 저장 → schema editor에서 라벨 수정 → 입력 폼 반영 확인 → 자동저장 → DB row 확인.
