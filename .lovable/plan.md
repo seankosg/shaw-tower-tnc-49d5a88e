@@ -1,34 +1,53 @@
-## 변경 파일
+# OMM Import 팀 필터 추가
 
-`src/lib/docs-stage-records.ts` — OMM stage record 생성 부분(라인 400~421)만 수정.
+## 배경
 
-## 로직
+`docs_omm`의 `team` 컬럼 값은 **Mech / Elec / Supp** 3종입니다. Ronaldo가 업로드하는 OMM 엑셀에는 3개 팀 데이터가 모두 들어 있지만 실제로 신뢰 가능한 것은 Mech, Elec뿐이고 Support 행은 반영되면 안 됩니다. 따라서 임포트 시점에 **반영할 팀을 명시적으로 선택**하게 만들어, 선택되지 않은 팀의 행은 INSERT/UPDATE 모두 건너뛰어야 합니다.
 
-OMM 워크플로우에서 어떤 행이 "Final Submission Status로 옮겨갔다"의 판정 기준:
+## 동작 요구사항
 
-```ts
-const movedToFinal =
-  !!row.final_planned_date ||
-  !!row.final_actual_date ||
-  !!row.final_response_status;
-```
+- OMM 탭(`/docs/import?sub=omm`) 상단에 **Teams to Update** 다중선택 칩(토글 버튼) 표시
+  - 옵션: `Mech`, `Elec`, `Supp` (DB 실제 값 그대로)
+  - **기본값: 아무 팀도 선택되지 않음**
+  - 칩 클릭 시 on/off 토글, 여러 개 동시 선택 가능
+- **선택 0개일 때**:
+  - `Start import` 버튼 비활성화
+  - 안내 문구: "Select at least one team to update."
+- **선택 ≥1개일 때**:
+  - 파싱된 각 행 중 `row.team`이 선택된 집합에 포함되지 않으면 업서트 단계에서 **skipped** 처리
+  - skip 사유 코드: `team_not_selected`, detail: `Team "<X>" not in selected teams`
+  - 파일별 결과 카드의 **Skipped** 카운트에 정상 반영
+- ABD / Warranty / Spare Part 탭은 영향 없음 (변경 무)
 
-위 조건이 true인 경우, 해당 행은 다음 stage record에서 **제외**:
+## 구현 범위 (frontend + worker 한정)
 
-- `omm.sub2_submission`
-- `omm.sub2_review`
-- `omm.sub3_submission`
-- `omm.sub3_review`
+1. **`src/contexts/docs-import/types.ts`**
+   - `WorkerContext`에 `allowedTeams?: Set<string>` 추가 (선택사항, OMM에서만 사용)
+   - `DocsImportContextValue`에 `allowedTeams: string[]`, `setAllowedTeams: (teams: string[]) => void` 추가 (모든 모듈 공통이지만 OMM 외에는 미사용)
 
-(Final 단계로 진입한 행은 sub2/sub3 카드의 분모·분자 양쪽 모두에서 빠지므로 카운트와 완료율이 함께 감소)
+2. **`src/contexts/docs-import/createDocsImportProvider.tsx`**
+   - `allowedTeams` state 추가, 기본값 `[]`
+   - `startImport` 내부에서 worker 호출 시 `allowedTeams: new Set(allowedTeams)`를 `WorkerContext`로 전달
+   - context value에 노출
 
-`omm.sub1_submission`, `omm.sub1_review`, `omm.final_submission`, `omm.final_approval`은 변경 없음.
+3. **`src/lib/docs-import-workers.ts` — `ommAdapter.upsertWorker`**
+   - 루프 진입부에서 `ctx.allowedTeams`가 정의되어 있고 (`size > 0`) `row.team`이 포함되지 않으면 `counters.skipped++` 후 `team_not_selected` outcome push, return
+   - 기존 SN 빈 검사 직후에 배치
 
-## 영향 범위
+4. **`src/pages/docs/DocsImportPage.tsx`**
+   - OMM `<TabsContent>` 내부 `DocsImportShell` 위에 팀 선택 칩 UI 렌더링
+     - `omm.allowedTeams` 기반 토글
+     - 옵션 배열은 페이지 상수 `OMM_TEAM_OPTIONS = ['Mech', 'Elec', 'Supp']`
+   - 선택 0개일 때 `DocsImportShell`에 새 prop `startDisabledReason="Select at least one team to update."` 전달
 
-`buildStageRecords('omm', ...)`를 사용하는 모든 화면(Docs Executive Dashboard, Report, PPT 등)에서 2nd/3rd Submission 카드 수치가 자연스럽게 재계산됨.
+5. **`src/components/docs/import/DocsImportShell.tsx`**
+   - 새 optional prop `startDisabledReason?: string`
+   - `Start import` 버튼 `disabled` 조건에 `!!startDisabledReason` 추가
+   - 버튼 위 또는 카드 헤더에 사유 표시 (사유 있을 때만)
 
-## 비변경 항목
+## 비범위
 
-- ABD는 사용자가 별도 언급 없으므로 그대로 둠.
-- Raw Data 페이지 자체 필터/표시는 변경 없음.
+- DB 스키마/RLS 변경 없음
+- ABD / Warranty / Spare Part 임포트 동작 변경 없음
+- 팀별 기본 권한(team-based RLS) 변경 없음 — 순수 임포트 단계 필터링
+- 자동 master 등록(HDEC PIC/ENG, Subcontractor)은 기존대로 모든 행에 대해 실행 (skip 대상 행이라도 raw에 등장한 이름은 캐시됨) → 필요 시 후속에서 별도 논의

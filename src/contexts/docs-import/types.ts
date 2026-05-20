@@ -93,6 +93,10 @@ export interface DocsImportContextValue<TRow = unknown> {
   /** Update the user-excluded header list and re-parse the file with the new selection. */
   setFileExcludedHeaders: (id: string, excluded: string[]) => Promise<void>;
   startImport: () => Promise<void>;
+  /** OMM-only: teams (e.g. Mech/Elec/Supp) whose rows are eligible for upsert.
+   *  Empty array means no team selected — startImport must refuse to run. */
+  allowedTeams: string[];
+  setAllowedTeams: (teams: string[]) => void;
 }
 
 export interface ParsedFileResult<TRow> {
