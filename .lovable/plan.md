@@ -1,78 +1,63 @@
-# Docs Import Log — Rollback 기능 검토
+# Punch Dashboard — Summary of Work 카드 필터 연결 점검
 
-## 결론 요약
+## 현재 동작 점검 결과
 
-**현재 Docs 영역의 Import Log에는 Rollback(되돌리기) 기능이 존재하지 않습니다.** 삭제(`Delete batch`)만 있고, 이것은 batch / row logs / change logs만 지우고 실제 데이터(docs_omm, docs_as_built, docs_warranty, docs_spare_part 행)는 그대로 둡니다. 즉 잘못된 import를 한 번에 되돌릴 방법이 UI에는 없습니다.
+`Summary of Work` 섹션의 각 Critical Level 행(`CriticalLevelRowCard`)을 분석한 결과:
 
-## 현황 분석
+| 위치 | 현재 동작 | 정상 여부 |
+|---|---|---|
+| 행 전체 클릭(빈 공간/Level 라벨/Items 칩) | `?criticalLevel=<level>` → Raw Data에서 `critical_level` 컬럼 필터로 적용 | 정상 |
+| `Material` / `Physical Work` / `Design` 칩 | 클릭 불가(단순 표시) — 행 클릭 시 carrying되지 않음 | 누락 |
+| `Pre-Eng` 칩 (`preEngReady/total`) | 클릭 불가 | 누락 |
+| `Earliest` / `Latest` 날짜 칩 | 클릭 불가 | 누락 |
+| `Overall Progress` 바 | 별도 핸들러 없음(행 클릭으로만 동작) | 정상(의도된 동작) |
 
-### Rollback 기능이 있는 모듈
-| 모듈 | UI | Preview RPC | Rollback RPC |
-|---|---|---|---|
-| T&C | RollbackDialog | `preview_rollback_upload_batch` | `rollback_upload_batch` |
-| Defect | RollbackDialog | `preview_rollback_defect_import_batch` | `rollback_defect_import_batch` |
-| Punch | RollbackDialog | `preview_rollback_punch_import_batch` | `rollback_punch_import_batch` |
+즉, **행 전체 드릴다운(criticalLevel)** 만 raw data로 정상 전달되고, 행 내부 세부 칩들은 어떤 필터도 전달하지 못합니다. 사용자가 "Material 70건"을 클릭해도 raw data에 Material만 남지 않습니다.
 
-### Rollback 기능이 없는 모듈 → **Docs 전체**
-- **ABD (as_built)**, **OMM**, **Warranty**, **Spare Part** — 4개 sub-module 모두 미지원
-- `src/components/import/RollbackDialog.tsx`의 `RollbackKind`도 `'tnc' | 'defect' | 'punch'`로 한정
-- `src/pages/docs/DocsImportLogsPage.tsx`는 RollbackDialog를 임포트도 하지 않음 (Delete 버튼만 노출, 라인 313–339)
-- DB에도 `rollback_docs_*` / `preview_rollback_docs_*` 함수 없음
+또한 PunchRawDataPage의 URL→컬럼 매핑(`urlMap`)에 `category1`이 정의되어 있지 않아, 향후 칩을 클릭 가능하게 만들더라도 단순히 `category1=Material`만 보내서는 필터가 걸리지 않습니다.
 
-### 현재 Delete의 한계
-- `delete_docs_import_batch(_batch_id)`는 로그 정리용
-- 잘못된 import로 인해 **수정된 필드값과 새로 삽입된 행은 그대로 남음**
-- 사용자가 원복하려면 직접 raw data에서 행을 찾아 수정/비활성화해야 함
+## 변경 계획
 
-### 기술적 사전조건은 이미 갖춰져 있음
-- `docs_change_log`는 `excel_import` 소스로 `(record_id, changed_field, old_value, new_value, upload_id, sub_module, changed_at)`을 모두 기록 중 (43만+ row 누적)
-- 4개 docs 테이블 모두 `source_upload_id`, `is_active`, `row_version` 컬럼 보유 → T&C와 동일 패턴의 soft-delete + 필드 복원 가능
-- 즉 **T&C의 `rollback_upload_batch` 로직을 Docs 4테이블에 그대로 이식 가능**
+### 1) `CriticalLevelRowCard` 내부 칩을 클릭 가능하게
 
-## 위험 요소 (구현 시 고려)
+칩 단위로 드릴다운하도록 `MetaChip`에 `onClick` 옵션을 추가하고, 행 자체 클릭(`criticalLevel` 단독 필터)과의 이벤트 버블링을 차단합니다. 각 칩이 전달할 쿼리스트링은 항상 `criticalLevel=<level>`을 함께 포함하여, "이 Critical Level 안에서 이 항목" 의미를 유지합니다.
 
-1. **OMM resubmission 자동생성**
-   - `docs_omm_after_update_resubmit` 트리거가 `Draft/Final response_status`를 B/C로 변경 시 `parent_id`로 연결된 자식 행을 INSERT
-   - 현재 데이터엔 사례 없음(0건)이지만 향후 발생 가능
-   - 롤백 시 자식 행도 함께 비활성화 또는 child의 `source_upload_id`까지 추적 필요
+- **Material / Physical Work / Design 칩**
+  - `?criticalLevel=<level>&category1=<name>`
+- **Pre-Eng 칩**
+  - `?criticalLevel=<level>&ready=true` (이미 `ready→pre_engineering_ready` 매핑 존재)
+- **Earliest 칩** (요약의 가장 빠른 `planned_start_date`)
+  - `?criticalLevel=<level>&dateField=planned_start_date&dateStart=<earliest>&dateEnd=<earliest>` — 해당 날짜로 시작되는 항목만
+- **Latest 칩** (요약의 가장 늦은 `planned_completion_date`)
+  - `?criticalLevel=<level>&dateField=planned_completion_date&dateStart=<latest>&dateEnd=<latest>`
+- 값이 0이거나 날짜가 null인 칩은 비클릭(`cursor-default`, hover 효과 제거).
 
-2. **Warranty 다른 sub-module 의존성**
-   - `subcontractor_information_master` 동기화, threaded discussion records가 import로 생성 → 이건 부수효과이므로 롤백 범위에서 제외하거나 별도 처리 명시 필요
+### 2) `PunchRawDataPage`의 URL→필터 매핑 보강
 
-3. **Spare Part 부모/자식 행**
-   - `(category, parent, child)` 계층 구조 — child 행만 source_upload_id가 잡혀 있는지, parent도 갱신되는지 확인 필요
+`urlMap`에 `category1: 'category1'`을 추가하여 `?category1=Material` 드릴다운이 컬럼 필터로 적용되도록 합니다. 동시에 `DRILLDOWN_PARAMS` 목록에도 `category1`을 추가하여, 드릴다운 진입 시 기존 로컬스토리지 필터를 무시하고 깨끗하게 적용되도록 합니다.
 
-4. **권한**
-   - 기존 함수는 `is_admin_or_superuser` 가드 → 동일 적용
-   - DocsImportLogsPage의 `canDelete`도 `isAdminOrSuperuser || DEV` → Rollback에도 같은 가드 사용
+(나머지 파라미터 `criticalLevel`, `ready`, `dateField/dateStart/dateEnd`는 이미 지원됨 — 변경 불필요.)
 
-5. **bulk_edit / app_direct_input 충돌**
-   - 동일 필드를 import 이후 사람이 수정했을 때 → 기존 패턴대로 conflict 카운트로 노출, `_force=true`로만 덮어쓰기
+### 3) 칩 UI 폴리시
 
-## 권고안
+`MetaChip`이 `onClick`을 받으면:
+- `role="button"`, `tabIndex={0}`, `Enter` 키 처리
+- `hover:bg-muted/60`, `cursor-pointer` 추가
+- 부모 행 클릭 막기 위해 `e.stopPropagation()`
 
-다음 두 단계로 분리해 진행:
+행 자체의 시각적 affordance는 그대로 유지(전체 행 hover/클릭 → criticalLevel 단독).
 
-### Phase A: 검토 결과만 회신 (지금 메시지)
-- 위 결론을 사용자에게 보고
-- 어느 sub-module부터 적용할지(OMM 우선? 4개 동시?) / Warranty 부수효과 처리 방침을 확인
+## 영향 범위 / 무영향 보장
 
-### Phase B: Rollback 추가 구현 (승인 시 별도 plan)
-1. **DB 마이그레이션** — sub-module별 RPC 한 쌍씩 추가
-   - `preview_rollback_docs_import_batch(_batch_id uuid)` → `{insert_count, update_count, conflict_count}`
-   - `rollback_docs_import_batch(_batch_id uuid, _force boolean default false)` → `{restored_count, deleted_count, skipped_count}`
-   - 내부에서 `docs_upload_batches.sub_module`을 읽어 `docs_omm / docs_as_built / docs_warranty / docs_spare_part` 중 해당 테이블만 처리 (단일 함수로 다중 테이블 분기)
-   - OMM은 추가로 `parent_id IS NOT NULL AND source_upload_id = _batch_id`인 자식 행도 함께 비활성화
-   - 처리 후 `docs_upload_batches.status = 'rolled_back'` 마킹
+- 수정 파일은 2개:
+  - `src/pages/PunchDashboardPage.tsx` (`CriticalLevelRowCard`, `MetaChip` 시그니처)
+  - `src/pages/PunchRawDataPage.tsx` (`urlMap`, `DRILLDOWN_PARAMS`에 `category1` 추가)
+- Defect / Docs / T&C 모듈 무영향.
+- 기존 `criticalLevel=` 단독 클릭 동작은 그대로(회귀 없음).
+- 백엔드/RLS/스키마 변경 없음.
 
-2. **프론트 변경**
-   - `RollbackDialog.tsx`의 `RollbackKind`에 `'docs'` 추가 + 함수 매핑 등록
-   - `DocsImportLogsPage.tsx` 액션 셀에 `<RollbackDialog kind="docs" batchId={b.id} fileName={b.uploaded_file_name} onDone={fetchBatches}/>` 추가
-   - status 컬럼에 `rolled_back` 색상 추가
+## 기술 세부사항
 
-3. **검증 데이터**
-   - 검증용 OMM 샘플 batch로 preview → rollback → 재import 흐름 테스트
-
----
-
-**이번 메시지는 검토 결과 보고입니다.** Phase B로 진행해도 되는지, 우선 적용할 sub-module 범위를 알려주시면 그에 맞춰 구현 plan을 새로 작성하겠습니다.
+- `CRITICAL_LEVEL_ORDER`에 `mid-Low` 등 하이픈 포함 값이 있어 이미 `encodeURIComponent`로 인코딩 중 — 변경 없음.
+- 날짜 칩의 `dateStart=dateEnd=<같은 날>`은 raw data의 `dateRangeFilterFn` 의미상 그 날 하루만 일치하므로 "가장 이른 시작일을 가진 항목"만 노출하는 의도와 일치.
+- `Pre-Eng` 칩에서 `preEngReady=0`이면 클릭 비활성화(필터링해도 0건).
