@@ -206,18 +206,46 @@ ORDER BY scl.changed_at DESC;
 -- → tc_reject_reason = 첫 행의 s.remarks (fallback "Returned")
 ```
 
-### 4. `docs_drawings` (§4 As-Built — Puretech 작성분만)
+### 4. `docs_drawings` + `docs_omm` (§4 Substantial Completion)
 
 ```sql
+-- 4a. As-Built (asbuilt_cum / asbuilt_today)
 SELECT
   count(*) FILTER (WHERE sub_module='as_built' AND discipline ILIKE 'ELEC%'
                      AND approved_date IS NOT NULL AND approved_date <= $D) AS asbuilt_cum,
   count(*) FILTER (WHERE sub_module='as_built' AND discipline ILIKE 'ELEC%'
                      AND approved_date = $D)                                AS asbuilt_today
 FROM docs_drawings
-WHERE is_active AND organisation_raw ILIKE '%Puretech%';
--- organisation_raw 외 subcontractor_id 매핑이 있으면 그쪽 우선 사용
+WHERE is_active AND subcontractor_name = 'Puretech';
+
+-- 4b. O&M Electrical resubmission (om_elec = Y/N)
+-- 해당 entry_date에 ELEC O&M의 재제출(sub2/sub3 actual)이 발생했는지
+SELECT EXISTS (
+  SELECT 1 FROM docs_omm
+  WHERE is_active AND subcontractor_name = 'Puretech'
+    AND (trade ILIKE 'ELEC%' OR category_group ILIKE 'ELEC%')
+    AND (sub2_actual_date = $D OR sub3_actual_date = $D
+         OR (is_resubmission = true AND updated_at::date = $D))
+) AS om_elec;
+
+-- 4c. O&M ELV submission (om_elv = Y/N)
+SELECT EXISTS (
+  SELECT 1 FROM docs_omm
+  WHERE is_active AND subcontractor_name = 'Puretech'
+    AND (trade = 'ELV' OR category_group ILIKE 'ELV%')
+    AND (sub1_actual_date = $D OR sub2_actual_date = $D OR final_actual_date = $D)
+) AS om_elv;
+
+-- 4d. Warranty signed copy (warranty = Y/N) — 운영 확인 필요
+-- docs_drawings.sub_module='warranty' 사용 여부가 확정되면 동일 패턴:
+-- SELECT EXISTS(SELECT 1 FROM docs_drawings WHERE is_active AND subcontractor_name='Puretech'
+--   AND sub_module='warranty' AND approved_date <= $D) AS warranty;
+-- 별도 테이블·sub_module이 없으면 일단 수동(M)으로 유지.
 ```
+
+Green Mark(`gm_led_driver`, `gm_power_tab`) 2개는 raw 소스가 없어 그대로 수동.
+
+§4 자동화 효과: 2개 → **4~5개** (라디오 om_elec / om_elv 자동 Y/N + warranty 확정 시 +1).
 
 ### 5. `punch_items` (§6 RTO outstanding)
 
