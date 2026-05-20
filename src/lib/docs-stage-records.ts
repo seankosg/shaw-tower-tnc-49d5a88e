@@ -396,6 +396,7 @@ export function buildOmmStageRecords(rows: any[], asOf: Date, ): DocsStageRecord
     const fRes  = String(row.final_response_status ?? '').toUpperCase();
     const sub2Applicable = s1Res === 'B' || s1Res === 'C' || !!row.sub2_planned_date || !!row.sub2_actual_date;
     const sub3Applicable = s2Res === 'B' || s2Res === 'C' || !!row.sub3_planned_date || !!row.sub3_actual_date;
+    const movedToFinal = !!row.final_planned_date || !!row.final_actual_date || !!row.final_response_status;
 
     const stages = [
       { def: OMM_STAGE_DEFS[0], planned: row.sub1_planned_date, actual: row.sub1_actual_date,
@@ -404,15 +405,15 @@ export function buildOmmStageRecords(rows: any[], asOf: Date, ): DocsStageRecord
         actual: s1Res === 'A' ? (row.sub1_response_date ?? null) : null,
         done: !!s1Res, applicable: !!row.sub1_actual_date },
       { def: OMM_STAGE_DEFS[2], planned: row.sub2_planned_date, actual: row.sub2_actual_date,
-        done: !!row.sub2_actual_date, applicable: sub2Applicable },
+        done: !!row.sub2_actual_date, applicable: sub2Applicable && !movedToFinal },
       { def: OMM_STAGE_DEFS[3], planned: row.sub2_response_planned_date ?? row.sub2_planned_date,
         actual: s2Res ? (row.sub2_response_actual_date ?? null) : null,
-        done: !!s2Res, applicable: sub2Applicable && !!row.sub2_actual_date },
+        done: !!s2Res, applicable: sub2Applicable && !!row.sub2_actual_date && !movedToFinal },
       { def: OMM_STAGE_DEFS[4], planned: row.sub3_planned_date, actual: row.sub3_actual_date,
-        done: !!row.sub3_actual_date, applicable: sub3Applicable },
+        done: !!row.sub3_actual_date, applicable: sub3Applicable && !movedToFinal },
       { def: OMM_STAGE_DEFS[5], planned: row.sub3_response_planned_date ?? row.sub3_planned_date,
         actual: s3Res ? (row.sub3_response_actual_date ?? null) : null,
-        done: !!s3Res, applicable: sub3Applicable && !!row.sub3_actual_date },
+        done: !!s3Res, applicable: sub3Applicable && !!row.sub3_actual_date && !movedToFinal },
       { def: OMM_STAGE_DEFS[6], planned: row.final_planned_date, actual: row.final_actual_date,
         done: !!row.final_actual_date, applicable: true },
       { def: OMM_STAGE_DEFS[7], planned: row.final_response_planned_date ?? row.final_planned_date,
