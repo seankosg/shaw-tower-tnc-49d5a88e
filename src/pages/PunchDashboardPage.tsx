@@ -216,12 +216,14 @@ export default function PunchDashboardPage() {
           percent={stats.w.planned}
           sub={`${stats.plannedStartedByToday.toLocaleString()} / ${stats.total.toLocaleString()} items`}
           barTone="neutral"
+          onClick={() => go('status=planned_started')}
         />
         <ProgressKpiCard
           label="Actual Progress"
           percent={stats.w.actual}
           sub={`${stats.actuallyStarted.toLocaleString()} / ${stats.total.toLocaleString()} items`}
           barTone="emerald"
+          onClick={() => go('status=actual_started')}
         />
         <RiskKpiCard
           label="In Delay"
