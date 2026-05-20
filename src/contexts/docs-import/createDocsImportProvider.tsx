@@ -34,6 +34,7 @@ export function createDocsImportProvider<TRow>(
     const { toast } = useToast();
     const [files, setFiles] = useState<DocsImportFile<TRow>[]>([]);
     const [isRunning, setIsRunning] = useState(false);
+    const [allowedTeams, setAllowedTeams] = useState<string[]>([]);
 
     const parseAndApply = useCallback(async (id: string, file: File, sheets?: string[], excludedHeaders?: string[]) => {
       try {
