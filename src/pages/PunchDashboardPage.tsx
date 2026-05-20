@@ -229,6 +229,7 @@ export default function PunchDashboardPage() {
           percent={pctNum(stats.inDelay, stats.total)}
           sub={`${stats.inDelay.toLocaleString()} / ${stats.total.toLocaleString()} items`}
           tone="danger"
+          showPercentFirst
           onClick={() => go('status=in_delay')}
         />
       </div>
