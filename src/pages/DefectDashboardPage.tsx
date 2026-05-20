@@ -698,12 +698,13 @@ type CapturedByMetric = 'total' | 'completed' | 'closed' | 'dispute';
 interface CapturedByStat { name: string; total: number; completed: number; closed: number; dispute: number }
 
 function CapturedByStatsSection({
-  items, kpis, onCardClick, onMetricClick, showDebug,
+  items, kpis, onCardClick, onMetricClick, onGroupClick, showDebug,
 }: {
   items: DefectForDashboard[];
   kpis: { total: number; actualDone: number; closureDone: number; inDisputeCount: number };
   onCardClick: (name: string) => void;
   onMetricClick: (name: string, metric: CapturedByMetric) => void;
+  onGroupClick: (group: CapturedByGroup) => void;
   showDebug: boolean;
 }) {
   const { stats, unknown, totals } = useMemo(() => {
