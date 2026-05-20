@@ -806,20 +806,22 @@ function VarianceKpiCard({ label, value, sub }: { label: string; value: number; 
   );
 }
 
-function RiskKpiCard({ label, count, percent, sub, tone, onClick }: {
+function RiskKpiCard({ label, count, percent, sub, tone, onClick, showPercentFirst }: {
   label: string; count: number; percent: number; sub?: string;
-  tone?: 'danger' | 'warning'; onClick?: () => void;
+  tone?: 'danger' | 'warning'; onClick?: () => void; showPercentFirst?: boolean;
 }) {
   const stripe = tone === 'danger' ? 'border-l-red-500' : tone === 'warning' ? 'border-l-amber-500' : 'border-l-muted-foreground/30';
   const countColor = tone === 'danger' ? 'text-red-600' : tone === 'warning' ? 'text-amber-700 dark:text-amber-500' : '';
   const interactive = onClick ? 'cursor-pointer hover:bg-muted/40 transition-colors' : '';
+  const mainValue = showPercentFirst ? `${percent.toFixed(1)}%` : count.toLocaleString();
+  const subValue = showPercentFirst ? count.toLocaleString() : `${percent.toFixed(1)}%`;
   return (
     <Card className={cn('border-l-4', stripe, interactive)} onClick={onClick}>
       <CardContent className="p-4">
         <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
         <div className="mt-1 flex items-baseline gap-2">
-          <div className={cn('text-3xl font-semibold tabular-nums', countColor)}>{count.toLocaleString()}</div>
-          <div className="text-sm text-muted-foreground tabular-nums">{percent.toFixed(1)}%</div>
+          <div className={cn('text-3xl font-semibold tabular-nums', countColor)}>{mainValue}</div>
+          <div className="text-sm text-muted-foreground tabular-nums">{subValue}</div>
         </div>
         {sub && <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>}
       </CardContent>
