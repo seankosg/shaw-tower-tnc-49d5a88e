@@ -31,7 +31,7 @@ export function SchemaEditor() {
 
   const saveField = async (f: DdnField, patch: Partial<DdnField>) => {
     setSavingId(f.id);
-    const { error } = await supabase.from('ddn_fields').update(patch).eq('id', f.id);
+    const { error } = await supabase.from('ddn_fields').update(patch as never).eq('id', f.id);
     setSavingId(null);
     if (error) {
       toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
