@@ -254,7 +254,7 @@ export default function PunchDashboardPage() {
           onClick={() => go('status=start_delayed')}
         />
         <RiskKpiCard
-          label="Complete Overdue"
+          label="Completion Overdue"
           count={stats.overdue}
           percent={pctNum(stats.overdue, stats.total)}
           sub="Past planned completion"
