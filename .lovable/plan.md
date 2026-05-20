@@ -1,71 +1,47 @@
-# Captured By 데이터 노출 + 그룹 분류
+# Captured By 섹션이 비어 보이는 문제 수정
 
-## 현상
+## 원인
 
-대시보드 Captured By 섹션에 "No Captured By data available" 표시. 또한 인물별 카드를 Arch / Facade / MEP 3개 그룹으로 분리 필요.
+DB 확인 결과 Design 팀 7건 모두 `captured_by_name`이 채워져 있음 (Penn Theen 1, Lawrence Lau 6). 그런데 화면은 "No Captured By data available." 만 표시.
 
-## 원인 진단
+두 가지 문제가 겹쳐 있음:
 
-DB에는 905명분 `captured_by_name` 백필 완료 (Mech 23, Arch 656, Elec 226). 그러나 `src/lib/defect-cache.ts`의 `SLIM_COLUMNS` 배열에 `captured_by_name`이 누락되어 클라이언트가 fetch하지 않음.
+1. **React Hook 순서 버그 (확실)**
+   `CapturedByStatsSection`(`src/pages/DefectDashboardPage.tsx` ~751행)에서
+   ```text
+   if (stats.length === 0) return <Card>...</Card>;   // early return
+   const grouped = useMemo(...)                        // ← 이 hook이 조건부 호출됨
+   ```
+   - stats가 비어있다 → 채워진다 로 바뀌는 순간 hook 개수가 달라져 React가 "Rendered more hooks than during the previous render" 에러를 던지거나, 이전 렌더에서 그룹화 결과를 못 만들고 빈 카드만 계속 표시됨.
 
-## 작업
+2. **캐시 정합성 (의심)**
+   Captured By 그룹 기능을 추가하면서 `SLIM_COLUMNS`에 `captured_by_name`을 새로 넣었음. 사용자가 같은 탭을 열어둔 채 HMR로 코드가 갱신되면, 모듈 스코프 `defect-cache` 상태가 이전 SELECT 결과(컬럼 없음) 그대로 남아 있을 수 있음. 새 컬럼은 incremental refresh에서 변경 행에만 채워짐.
 
-### 1) 캐시 select에 컬럼 추가
+## 수정 사항
 
-`src/lib/defect-cache.ts` `SLIM_COLUMNS`에 `'captured_by_name'` 추가 (`hdec_eng_name` 다음).
+### 1) Hook 순서 정리 — `src/pages/DefectDashboardPage.tsx`
 
-### 2) Captured By 그룹 매핑 정의
+`CapturedByStatsSection` 내부에서:
 
-`src/lib/captured-by-groups.ts` 신규 파일:
+- `grouped`의 `useMemo`를 `stats` 계산 직후, early return **이전**으로 이동.
+- 그 다음에 `if (stats.length === 0) return <빈 카드>` 를 둠.
+- 렌더 본문은 `grouped`를 그대로 사용.
 
-```text
-Arch:
-  Penn Theen, Theepa Vishali Kanisan, Kuan Wei Wong, Nick Cranney,
-  Mani Kamalabathan, Mohammad Hossain, Rasyid Suwandi, Minxian Lee,
-  Chin Siong Lim
-  (alias 'Imam' 포함 — 부분일치)
+이 변경만으로 stats가 늦게 도착해도 안전하게 재렌더되어 그룹 카드가 나타남.
 
-Facade:
-  Merlin Sesaiyan, Lawrence Lau
+### 2) 캐시 강제 동기화 — `src/lib/defect-cache.ts`
 
-MEP:
-  Sahari Bin Sam, Derrick Tan, Boon Ken Lau (=Beca Boon),
-  Audrey Chin (=Beca Chin)
-  (alias 'Beca' 단독 — 부분일치)
-```
+- `SLIM_COLUMNS` 버전을 하나 올려, 모듈 첫 로드 시 캐시를 한 번 무효화하도록 작은 가드를 추가:
+  - 모듈 상단에 `const CACHE_SCHEMA = 'v2-captured-by';` 상수.
+  - `bindRealtime()` 직전에 `sessionStorage`로 저장된 스키마 키와 비교하여 다르면 `invalidateDefectCache()` 후 키 업데이트.
+  - 결과: 사용자 새로고침 한 번이면 전체 슬림 페치가 다시 돌아 `captured_by_name`이 모든 행에 채워짐.
 
-구현은 그룹별 키워드 리스트(소문자/공백 정규화)와 정확 매칭 우선, 부분 매칭 fallback. 어느 그룹에도 매칭되지 않으면 `Other` 그룹으로 분류.
+## 검증
 
-함수 시그니처:
-- `getCapturedByGroup(name: string | null): 'Arch' | 'Facade' | 'MEP' | 'Other' | null`
-- `CAPTURED_BY_GROUPS: readonly ['Arch', 'Facade', 'MEP', 'Other']`
-
-### 3) Dashboard UI 그룹 분리
-
-`DefectDashboardPage.tsx`의 `CapturedByStatsSection` 수정:
-
-- 인물별 stats 산출 후 그룹별로 버킷팅
-- 그룹 순서: Arch → Facade → MEP → Other (빈 그룹은 미표시)
-- 각 그룹 헤더에 그룹명 + per-group 합계 (Total / Completed / Closed / In Dispute) 표시
-- 그룹 내부에서는 기존처럼 인물 카드 4-col 그리드, Total 내림차순
-- 각 그룹 헤더 클릭 시 Raw Data로 이동하며 `?capturedByGroup=Arch` 같은 그룹 필터 적용
-- Reconciliation Row는 전체 합계 기준 1개 유지
-
-### 4) Raw Data 그룹 필터 연동
-
-`DefectRawDataPage.tsx`:
-- query param `capturedByGroup` 추가
-- 해당 그룹에 속한 인물 이름 배열로 `captured_by_name` IN 필터 적용
-- 기존 `capturedBy=<name>` 단일 필터와 병행 가능
-
-### 5) 검증
-
-- Mech 팀 화면에서 Captured By 카드가 그룹별로 표시되는지
-- Reconciliation OK 표시되는지
-- 그룹/인물/지표 클릭 → Raw Data 필터 정상 동작
-
-## 기술 메모
-
-- 그룹 매핑은 코드 상수로 시작. 추후 admin 설정 가능하게 확장 여지 있으나 본 작업 범위 외
-- `raw_payload`에 Captured by 키 자체가 없는 약 4,777행은 Unknown으로 집계 (재import 필요, 본 작업에서 다루지 않음)
-- 변경 파일: `defect-cache.ts`, `captured-by-groups.ts`(신규), `DefectDashboardPage.tsx`, `DefectRawDataPage.tsx`
+1. Design 팀 탭에서 Captured By 섹션에
+   - Arch 그룹: Penn Theen (Total 1)
+   - Facade 그룹: Lawrence Lau (Total 6)
+   이 표시되는지 확인.
+2. 그룹 헤더 클릭 → Raw Data로 `capturedByGroup=Arch/Facade` 필터 이동 확인.
+3. 다른 팀(Mech/Elec/Arch)에서도 카드들이 그룹별로 분리되어 나오는지 확인.
+4. 콘솔에 hook 관련 경고가 사라졌는지 확인.
