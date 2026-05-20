@@ -133,7 +133,7 @@ export default function DocsExecutiveDashboardPage() {
       <PortfolioKpiStrip kpi={portfolioKpi} />
 
       {MODULES.map((m) => (
-        <ModuleSection key={m} module={m} records={records} abdRows={abdRows} ommRows={ommRows} asOf={asOf} onNavigate={goRaw} />
+        <ModuleSection key={m} module={m} records={records} abdRows={abdRows} ommRows={ommRows} asOf={asOf} onNavigate={goRaw} defaultCollapsed={m === 'spare_part'} />
       ))}
 
     </div>
