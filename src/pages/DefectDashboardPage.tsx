@@ -396,13 +396,21 @@ export default function DefectDashboardPage() {
       </div>
 
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <AlertBanner tone="destructive" title={`${kpis.overdueCount} Overdue Defect${kpis.overdueCount === 1 ? '' : 's'}`} description={`Planned date is on/before Data Date (${dataDateLabel}) and not yet complete.`} onClick={() => goRaw({ overdue: 'true', asOf: dataDate })} />
-        <AlertBanner tone="warning" title={`${kpis.atRiskCount} At-Risk Defect${kpis.atRiskCount === 1 ? '' : 's'}`} description={`Planned date is within ${atRiskDays} day(s) and not yet complete.`} onClick={() => goRaw({ atRisk: 'true', atRiskDays: String(atRiskDays) })} />
-        {kpis.inDisputeCount > 0 && (
-          <AlertBanner tone="dispute" title={`${kpis.inDisputeCount} In Dispute Defect${kpis.inDisputeCount === 1 ? '' : 's'}`} description="Aconex Status = 'In Dispute' — LL과 당사 간 이견 발생. 검토 필요." onClick={() => goRaw({ closureStatus: 'InD' })} />
-        )}
-      </div>
+      {!roles.includes('guest') && (
+        <CapturedByStatsSection
+          items={filteredItems}
+          kpis={kpis}
+          onCardClick={(name) => goRaw({ capturedBy: name })}
+          onMetricClick={(name, metric) => {
+            const params: Record<string, string> = { capturedBy: name };
+            if (metric === 'completed') params.actualComplete = 'true';
+            else if (metric === 'closed') params.closureComplete = 'true';
+            else if (metric === 'dispute') params.closureStatus = 'InD';
+            goRaw(params);
+          }}
+          showDebug={roles.includes('admin') || roles.includes('superuser')}
+        />
+      )}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2 gap-2 flex-wrap">
