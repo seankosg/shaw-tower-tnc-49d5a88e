@@ -55,6 +55,7 @@ const statusColor: Record<string, string> = {
   processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
   failed: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+  rolled_back: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200 line-through',
 };
 
 const actionColor: Record<string, string> = {
