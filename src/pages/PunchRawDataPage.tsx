@@ -419,6 +419,7 @@ export default function PunchRawDataPage() {
       hdecEng: 'hdec_eng_name',
       level: 'level',
       criticalLevel: 'critical_level',
+      category1: 'category1',
       workType: 'work_type',
       mainTrade: 'main_trade',
       subTrade: 'sub_trade',
