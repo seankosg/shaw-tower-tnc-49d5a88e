@@ -727,6 +727,10 @@ export default function DefectRawDataPage() {
       const days = Number(searchParams.get('atRiskDays') ?? 7);
       next = next.filter((item) => isAtRisk(item as any, asOf, days));
     }
+    const capturedByGroup = searchParams.get('capturedByGroup');
+    if (capturedByGroup) {
+      next = next.filter((item) => getCapturedByGroup((item as any).captured_by_name) === capturedByGroup);
+    }
     return next;
   }, [items, searchParams, dataDate]);
 
