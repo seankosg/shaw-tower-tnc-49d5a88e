@@ -671,10 +671,11 @@ function ModuleSection({
                 <p className="col-span-full py-6 text-center text-sm text-muted-foreground">No data.</p>
               )}
               {stages.map((s) => {
-                const params: Record<string, string> = { stage: s.stage_key, overdue: '1' };
-                if (tab !== '__all__') {
-                  params.team = tab;
-                }
+                const isWarranty = module === 'warranty';
+                const baseParams: Record<string, string> = { stage: s.stage_key };
+                if (tab !== '__all__') baseParams.team = tab;
+                const cardParams = isWarranty ? baseParams : { ...baseParams, overdue: '1' };
+                const odParams = { ...baseParams, overdue: '1' };
                 return (
                   <StageCard
                     key={s.stage_key}
@@ -684,7 +685,8 @@ function ModuleSection({
                     overdue={s.overdue}
                     remaining={s.remaining}
                     accent={accent}
-                    onClick={() => onNavigate(module, params)}
+                    onClick={() => onNavigate(module, cardParams)}
+                    onODClick={isWarranty ? () => onNavigate(module, odParams) : undefined}
                   />
                 );
               })}
