@@ -168,6 +168,13 @@ const App = () => (
                 <Route path="/admin" element={<AdminPage />} />
                 <Route path="/admin/classification" element={<AdminClassificationPage />} />
                 <Route path="/admin/report" element={<AdminReportPage />} />
+                <Route path="/ddn" element={<DdnLayout />}>
+                  <Route index element={<Navigate to="/ddn/input" replace />} />
+                  <Route path="input" element={<DdnInputPage />} />
+                  <Route path="preview" element={<DdnPreviewPage />} />
+                  <Route path="history" element={<DdnHistoryPage />} />
+                  <Route path="settings" element={<DdnSettingsPage />} />
+                </Route>
               </Route>
             </Routes>
           </BrowserRouter>
