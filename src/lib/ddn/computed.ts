@@ -48,6 +48,8 @@ export const COMPUTED: Record<string, (ctx: DdnComputedContext) => string> = {
   'planned_tests.pred_pct': ({ inputs }) => pct(inputs['planned_tests.pred_actual'], inputs['planned_tests.pred_plan']),
   'planned_tests.t1_pct':   ({ inputs }) => pct(inputs['planned_tests.t1_actual'],   inputs['planned_tests.t1_plan']),
   'planned_tests.t2_pct':   ({ inputs }) => pct(inputs['planned_tests.t2_actual'],   inputs['planned_tests.t2_plan']),
+  'planned_tests.r1s_pct':  ({ inputs }) => pct(inputs['planned_tests.r1s_actual'],  inputs['planned_tests.r1s_plan']),
+  'planned_tests.r2s_pct':  ({ inputs }) => pct(inputs['planned_tests.r2s_actual'],  inputs['planned_tests.r2s_plan']),
 
   // §2 progress
   'sec2.delay_days': ({ settings, today }) =>
