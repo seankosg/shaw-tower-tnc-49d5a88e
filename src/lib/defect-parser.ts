@@ -115,6 +115,10 @@ const FIELD_ALIASES: Record<string, string> = {
   'responsible engineer': 'hdec_eng_name',
   'engineer in charge': 'hdec_eng_name',
   engineer: 'hdec_eng_name',
+  // → captured_by_name (Aconex "Captured by")
+  'captured by': 'captured_by_name',
+  'captured_by': 'captured_by_name',
+  'capturedby': 'captured_by_name',
   'in charge': 'hdec_pic_name',
   'pic name': 'hdec_pic_name',
   pic: 'hdec_pic_name',
