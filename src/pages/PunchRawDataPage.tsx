@@ -386,7 +386,7 @@ export default function PunchRawDataPage() {
     'team', 'subcontractor', 'subsub', 'hdecPic', 'hdecEng', 'level', 'workType',
     'mainTrade', 'subTrade', 'health', 'ready', 'completionStatus', 'itemNo',
     'dateField', 'dateStart', 'dateEnd', 'critical',
-    'status', 'criticalLevel', 'pre_eng', 'blocker', 'due', 'start_due', 'dq',
+    'status', 'criticalLevel', 'category1', 'pre_eng', 'blocker', 'due', 'start_due', 'dq',
   ];
 
   useEffect(() => {
