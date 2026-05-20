@@ -405,9 +405,9 @@ export default function DefectDashboardPage() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base">Plan vs Actual - Summary</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 gap-2 flex-wrap">
           <div className="flex items-center gap-2">
+            <CardTitle className="text-base">Plan vs Actual - Summary</CardTitle>
             <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Plan</span>
             <ToggleGroup
               type="single"
@@ -419,6 +419,8 @@ export default function DefectDashboardPage() {
               <ToggleGroupItem value="remaining" className="h-7 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Remaining</ToggleGroupItem>
               <ToggleGroupItem value="baseline" className="h-7 px-2 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Baseline</ToggleGroupItem>
             </ToggleGroup>
+          </div>
+          <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleBreakdownExport}><Download className="mr-1.5 h-4 w-4" />Excel</Button>
           </div>
         </CardHeader>
