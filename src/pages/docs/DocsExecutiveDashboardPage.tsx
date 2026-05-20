@@ -89,17 +89,17 @@ export default function DocsExecutiveDashboardPage() {
     const total = summaries.length;
     const completed = summaries.filter((i) => i.is_completed).length;
     const overdue = summaries.filter((i) => i.is_overdue).length;
-    const dueIds = isDueThisWeek(records, asOf);
-    const critIds = criticalDelayItemIds(records);
+    const overdueSubmission = summaries.filter((i) => i.is_overdue_submission).length;
+    const overdueResponse = summaries.filter((i) => i.is_overdue_response).length;
     return {
       total,
       completed,
       remaining: total - completed,
       overdue,
-      dueThisWeek: dueIds.size,
-      criticalDelay: critIds.size,
+      overdueSubmission,
+      overdueResponse,
     };
-  }, [records, asOf]);
+  }, [records]);
 
 
   return (
