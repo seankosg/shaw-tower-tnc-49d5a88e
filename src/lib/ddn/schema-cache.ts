@@ -68,7 +68,7 @@ export function useDdnEntry(entryDate: string) {
         .eq('entry_date', entryDate)
         .maybeSingle();
       if (error) throw error;
-      return data as DdnEntry | null;
+      return (data ?? null) as unknown as DdnEntry | null;
     },
   });
 }
