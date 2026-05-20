@@ -40,10 +40,12 @@ interface DocsImportShellProps {
   externallyBusy?: boolean;
   /** Pre-import notice (e.g. OMM Resubmission auto-trigger explainer). */
   infoBanner?: string;
+  /** If set, disables Start import and shows the reason next to the button. */
+  startDisabledReason?: string;
 }
 
 export function DocsImportShell({
-  title, description, importer, externallyBusy, infoBanner,
+  title, description, importer, externallyBusy, infoBanner, startDisabledReason,
 }: DocsImportShellProps) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
