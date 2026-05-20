@@ -409,6 +409,7 @@ export default function DefectDashboardPage() {
             else if (metric === 'dispute') params.closureStatus = 'InD';
             goRaw(params);
           }}
+          onGroupClick={(group) => goRaw({ capturedByGroup: group })}
           showDebug={roles.includes('admin') || roles.includes('superuser')}
         />
       )}
