@@ -141,15 +141,12 @@ export default function DocsExecutiveDashboardPage() {
 
 // ─────────────────────────────────────────────────────────────────────
 function PortfolioKpiStrip({ kpi }: {
-  kpi: { total: number; completed: number; remaining: number; overdue: number; dueThisWeek: number; criticalDelay: number };
+  kpi: { total: number; completed: number; remaining: number; overdue: number; overdueSubmission: number; overdueResponse: number };
 }) {
-  const items = [
+  const baseItems = [
     { label: 'Total', value: kpi.total, icon: ListChecks, tone: 'default' as const },
     { label: 'Completed', value: kpi.completed, icon: CheckCircle2, tone: 'green' as const },
     { label: 'Remaining', value: kpi.remaining, icon: Clock, tone: 'default' as const },
-    { label: 'Overdue', value: kpi.overdue, icon: AlertTriangle, tone: kpi.overdue > 0 ? 'red' as const : 'muted' as const },
-    { label: 'Due This Week', value: kpi.dueThisWeek, icon: CalendarClock, tone: 'amber' as const },
-    { label: 'Critical Delay (>30d)', value: kpi.criticalDelay, icon: Flame, tone: kpi.criticalDelay > 0 ? 'red' as const : 'muted' as const },
   ];
   const toneClass = (t: 'default' | 'green' | 'red' | 'amber' | 'muted') => ({
     default: 'text-foreground',
@@ -158,9 +155,10 @@ function PortfolioKpiStrip({ kpi }: {
     amber: 'text-amber-600 dark:text-amber-400',
     muted: 'text-muted-foreground',
   }[t]);
+  const overdueTone = kpi.overdue > 0 ? 'red' as const : 'muted' as const;
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-      {items.map((it) => {
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+      {baseItems.map((it) => {
         const Icon = it.icon;
         return (
           <div key={it.label} className="flex flex-col rounded-xl border bg-card p-4">
@@ -174,6 +172,37 @@ function PortfolioKpiStrip({ kpi }: {
           </div>
         );
       })}
+
+      {/* Overdue with Submission / Response breakdown */}
+      <div className="flex flex-col rounded-xl border bg-card p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Overdue</span>
+          <AlertTriangle className={cn('h-4 w-4', toneClass(overdueTone))} />
+        </div>
+        <div className={cn('mt-2 text-2xl font-semibold tabular-nums tracking-tight', toneClass(overdueTone))}>
+          {kpi.overdue.toLocaleString()}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-md border bg-muted/30 px-2 py-1.5">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Submission</div>
+            <div className={cn(
+              'text-sm font-semibold tabular-nums',
+              kpi.overdueSubmission > 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground',
+            )}>
+              {kpi.overdueSubmission.toLocaleString()}
+            </div>
+          </div>
+          <div className="rounded-md border bg-muted/30 px-2 py-1.5">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Response</div>
+            <div className={cn(
+              'text-sm font-semibold tabular-nums',
+              kpi.overdueResponse > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
+            )}>
+              {kpi.overdueResponse.toLocaleString()}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
