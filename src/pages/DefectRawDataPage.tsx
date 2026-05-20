@@ -1137,6 +1137,7 @@ export default function DefectRawDataPage() {
       subsub: 'Sub-Sub',
       hdecPic: 'HDEC PIC',
       hdecEng: 'HDEC ENG',
+      capturedBy: 'Captured By',
       level: 'Level',
       mainTrade: 'Main Trade',
       subTrade: 'Sub Trade',
