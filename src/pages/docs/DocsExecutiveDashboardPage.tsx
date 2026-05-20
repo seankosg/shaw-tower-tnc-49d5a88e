@@ -671,10 +671,11 @@ function ModuleSection({
                 <p className="col-span-full py-6 text-center text-sm text-muted-foreground">No data.</p>
               )}
               {stages.map((s) => {
-                const params: Record<string, string> = { stage: s.stage_key, overdue: '1' };
-                if (tab !== '__all__') {
-                  params.team = tab;
-                }
+                const isWarranty = module === 'warranty';
+                const baseParams: Record<string, string> = { stage: s.stage_key };
+                if (tab !== '__all__') baseParams.team = tab;
+                const cardParams = isWarranty ? baseParams : { ...baseParams, overdue: '1' };
+                const odParams = { ...baseParams, overdue: '1' };
                 return (
                   <StageCard
                     key={s.stage_key}
@@ -684,7 +685,8 @@ function ModuleSection({
                     overdue={s.overdue}
                     remaining={s.remaining}
                     accent={accent}
-                    onClick={() => onNavigate(module, params)}
+                    onClick={() => onNavigate(module, cardParams)}
+                    onODClick={isWarranty ? () => onNavigate(module, odParams) : undefined}
                   />
                 );
               })}
@@ -743,7 +745,7 @@ function SummaryTile({
 }
 
 function StageCard({
-  label, total, done, overdue, remaining, accent, onClick,
+  label, total, done, overdue, remaining, accent, onClick, onODClick,
 }: {
   label: string;
   total: number;
@@ -752,6 +754,7 @@ function StageCard({
   remaining?: number;
   accent: Accent;
   onClick?: () => void;
+  onODClick?: () => void;
 }) {
   const pct = total ? Math.round((done / total) * 100) : 0;
   const rem = remaining ?? Math.max(0, total - done);
@@ -768,17 +771,41 @@ function StageCard({
       {/* left accent bar */}
       <span className={cn('absolute inset-y-0 left-0 w-1', accent.bar)} />
       {/* OD chip top-right */}
-      <span
-        className={cn(
-          'absolute right-2 top-2 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
-          overdue > 0
-            ? 'bg-destructive/10 text-destructive'
-            : 'bg-muted text-muted-foreground',
-        )}
-        title={`Overdue ${overdue} / Remaining ${rem}`}
-      >
-        OD {overdue}/{rem}
-      </span>
+      {onODClick ? (
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { e.stopPropagation(); onODClick(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              onODClick();
+            }
+          }}
+          className={cn(
+            'absolute right-2 top-2 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums cursor-pointer transition',
+            overdue > 0
+              ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80',
+          )}
+          title={`View overdue items (${overdue}) — click card for all`}
+        >
+          OD {overdue}/{rem}
+        </span>
+      ) : (
+        <span
+          className={cn(
+            'absolute right-2 top-2 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+            overdue > 0
+              ? 'bg-destructive/10 text-destructive'
+              : 'bg-muted text-muted-foreground',
+          )}
+          title={`Overdue ${overdue} / Remaining ${rem}`}
+        >
+          OD {overdue}/{rem}
+        </span>
+      )}
       <div className="flex items-start justify-between gap-2 pl-1 pr-14">
         <span className="text-xs font-medium leading-tight text-foreground">{label}</span>
       </div>
