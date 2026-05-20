@@ -52,6 +52,7 @@ import { CriticalPendingBar } from '@/components/raw-data/CriticalPendingBar';
 import type { BulkEditableField } from '@/lib/bulk-edit';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
 import { inferFilterType } from '@/lib/field-filter-type';
+import { getCapturedByGroup } from '@/lib/captured-by-groups';
 
 const EMPTY_TOKEN = '__EMPTY__';
 const DEFAULT_SORTING: SortingState = [{ id: 'issue_no', desc: false }];
