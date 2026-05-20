@@ -1,33 +1,34 @@
-## 조사 결과
+## 변경 파일
 
-`docs_change_log` 테이블을 점검한 결과:
+`src/lib/docs-stage-records.ts` — OMM stage record 생성 부분(라인 400~421)만 수정.
 
-- 컬럼 `changed_by uuid`는 이미 존재하며, **모든 행에 값이 채워져 있습니다** (NULL = 0). OMM 한정 2,859건 전부 정상.
-- 등장하는 4명의 `changed_by` 모두 `profiles.user_id`와 매핑됩니다.
+## 로직
 
-따라서 **별도의 백필 마이그레이션은 필요 없습니다.** UI에서 이름만 노출하면 됩니다. (백필이 필요했다면 excel_import는 `docs_upload_batches.created_by`, 그 외에는 `docs_omm.updated_by`로 보정하는 방안이 있었지만, 현 데이터로는 불필요)
+OMM 워크플로우에서 어떤 행이 "Final Submission Status로 옮겨갔다"의 판정 기준:
 
-## 변경 범위
-
-`src/pages/docs/DocsOMMDetailPage.tsx` 한 파일만 수정.
-
-### 1. 로그 조회 시 변경자 이름 함께 가져오기
-
-`docs_change_log` 조회 후, 등장한 `changed_by` uuid 목록으로 `profiles` 테이블에서 `user_id, name`을 한 번에 조회 → uuid→name Map 구성.
-
-(FK 조인이 정의되어 있지 않으므로 PostgREST embed 대신 두 번 fetch 후 클라이언트에서 join하는 방식이 안전)
-
-### 2. Change History 카드 UI에 컬럼 추가
-
-기존 `[140px_140px_1fr]` 3-column 그리드에 변경자 컬럼을 추가하여 4-column으로 확장:
-
-```
-[일시 140px] [변경자 110px] [필드 140px] [old → new 1fr]
+```ts
+const movedToFinal =
+  !!row.final_planned_date ||
+  !!row.final_actual_date ||
+  !!row.final_response_status;
 ```
 
-이름을 찾지 못한 경우 `—` 로 표시.
+위 조건이 true인 경우, 해당 행은 다음 stage record에서 **제외**:
 
-## 사용자 확인 사항
+- `omm.sub2_submission`
+- `omm.sub2_review`
+- `omm.sub3_submission`
+- `omm.sub3_review`
 
-1. 위 단일 파일 수정으로 진행해도 될까요?
-2. 동일하게 다른 docs 상세페이지(Drawing/Spare Part/Warranty)에도 일괄 적용을 원하시나요, 아니면 **OMM만** 적용할까요?
+(Final 단계로 진입한 행은 sub2/sub3 카드의 분모·분자 양쪽 모두에서 빠지므로 카운트와 완료율이 함께 감소)
+
+`omm.sub1_submission`, `omm.sub1_review`, `omm.final_submission`, `omm.final_approval`은 변경 없음.
+
+## 영향 범위
+
+`buildStageRecords('omm', ...)`를 사용하는 모든 화면(Docs Executive Dashboard, Report, PPT 등)에서 2nd/3rd Submission 카드 수치가 자연스럽게 재계산됨.
+
+## 비변경 항목
+
+- ABD는 사용자가 별도 언급 없으므로 그대로 둠.
+- Raw Data 페이지 자체 필터/표시는 변경 없음.
