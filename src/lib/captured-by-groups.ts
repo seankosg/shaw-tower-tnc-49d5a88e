@@ -33,8 +33,8 @@ const GROUP_DEFS: GroupDef[] = [
   },
   {
     group: 'MEP',
-    exact: ['Sahari Bin Sam', 'Derrick Tan', 'Boon Ken Lau', 'Audrey Chin'],
-    aliases: ['sahari', 'derrick', 'boon ken', 'beca boon', 'audrey', 'beca chin', 'beca'],
+    exact: ['Sahari Bin Sam', 'Derrick Tan', 'Boon Ken Lau', 'Audrey Chin', 'Darren Burrows', 'Alan Yip'],
+    aliases: ['sahari', 'derrick', 'boon ken', 'beca boon', 'audrey', 'beca chin', 'beca', 'darren', 'alan yip', 'alan yup'],
   },
 ];
 
