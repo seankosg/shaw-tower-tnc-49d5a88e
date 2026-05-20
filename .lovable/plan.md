@@ -97,12 +97,15 @@ sec3  tc_reject (Y/N)                               B     subtest_change_log JOI
 sec3  tc_reject_system / level / reason             B     위 후보 행을 system-summary로 압축 + remarks 상위 1건
 sec3  archi_rework_plan                             M     수동
 
-sec4  asbuilt_cum / today                           A     docs_drawings(Puretech org) sub_module='as_built'
-                                                          AND discipline ILIKE 'ELEC%'
+sec4  asbuilt_cum / today                           A     docs_drawings(PT) sub_module='as_built' AND discipline ILIKE 'ELEC%'
                                                           cum: approved_date <= D / today: approved_date = D
-sec4  om_elec / om_elv                              B     docs_omm (Puretech) sub_module/discipline 후보 제시
-sec4  warranty                                      B     docs_warranty (Puretech) 후보 제시
-sec4  gm_*                                          M     수동
+sec4  om_elec  (radio Y/N)                          A     docs_omm(PT) trade ILIKE 'ELEC%' AND
+                                                          (sub2_actual_date = D OR is_resubmission=true 최근)
+sec4  om_elv   (radio Y/N)                          A     docs_omm(PT) trade='ELV' AND sub1_actual_date = D
+                                                                                       OR sub2_actual_date = D
+sec4  warranty (radio Y/N)                          B     docs_drawings(PT) sub_module='warranty' (있으면) 또는
+                                                          현재 별도 테이블 없음 → 운영 확정 후 A 승격
+sec4  gm_led_driver / gm_power_tab                  M     Green Mark raw 없음 → 수동
 
 sec5  cctv_* / strobe / pole / special / x15 / temp M     procurement raw 없음 → 수동
                                                           (향후 docs_spare_part 연동 검토)
@@ -203,18 +206,46 @@ ORDER BY scl.changed_at DESC;
 -- → tc_reject_reason = 첫 행의 s.remarks (fallback "Returned")
 ```
 
-### 4. `docs_drawings` (§4 As-Built — Puretech 작성분만)
+### 4. `docs_drawings` + `docs_omm` (§4 Substantial Completion)
 
 ```sql
+-- 4a. As-Built (asbuilt_cum / asbuilt_today)
 SELECT
   count(*) FILTER (WHERE sub_module='as_built' AND discipline ILIKE 'ELEC%'
                      AND approved_date IS NOT NULL AND approved_date <= $D) AS asbuilt_cum,
   count(*) FILTER (WHERE sub_module='as_built' AND discipline ILIKE 'ELEC%'
                      AND approved_date = $D)                                AS asbuilt_today
 FROM docs_drawings
-WHERE is_active AND organisation_raw ILIKE '%Puretech%';
--- organisation_raw 외 subcontractor_id 매핑이 있으면 그쪽 우선 사용
+WHERE is_active AND subcontractor_name = 'Puretech';
+
+-- 4b. O&M Electrical resubmission (om_elec = Y/N)
+-- 해당 entry_date에 ELEC O&M의 재제출(sub2/sub3 actual)이 발생했는지
+SELECT EXISTS (
+  SELECT 1 FROM docs_omm
+  WHERE is_active AND subcontractor_name = 'Puretech'
+    AND (trade ILIKE 'ELEC%' OR category_group ILIKE 'ELEC%')
+    AND (sub2_actual_date = $D OR sub3_actual_date = $D
+         OR (is_resubmission = true AND updated_at::date = $D))
+) AS om_elec;
+
+-- 4c. O&M ELV submission (om_elv = Y/N)
+SELECT EXISTS (
+  SELECT 1 FROM docs_omm
+  WHERE is_active AND subcontractor_name = 'Puretech'
+    AND (trade = 'ELV' OR category_group ILIKE 'ELV%')
+    AND (sub1_actual_date = $D OR sub2_actual_date = $D OR final_actual_date = $D)
+) AS om_elv;
+
+-- 4d. Warranty signed copy (warranty = Y/N) — 운영 확인 필요
+-- docs_drawings.sub_module='warranty' 사용 여부가 확정되면 동일 패턴:
+-- SELECT EXISTS(SELECT 1 FROM docs_drawings WHERE is_active AND subcontractor_name='Puretech'
+--   AND sub_module='warranty' AND approved_date <= $D) AS warranty;
+-- 별도 테이블·sub_module이 없으면 일단 수동(M)으로 유지.
 ```
+
+Green Mark(`gm_led_driver`, `gm_power_tab`) 2개는 raw 소스가 없어 그대로 수동.
+
+§4 자동화 효과: 2개 → **4~5개** (라디오 om_elec / om_elv 자동 Y/N + warranty 확정 시 +1).
 
 ### 5. `punch_items` (§6 RTO outstanding)
 
