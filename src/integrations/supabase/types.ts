@@ -191,6 +191,250 @@ export type Database = {
         }
         Relationships: []
       }
+      ddn_entries: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          day_n: number | null
+          entry_date: string
+          generated_docx_path: string | null
+          generated_letter_html: string | null
+          id: string
+          inputs: Json
+          letter_no: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          day_n?: number | null
+          entry_date: string
+          generated_docx_path?: string | null
+          generated_letter_html?: string | null
+          id?: string
+          inputs?: Json
+          letter_no?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          day_n?: number | null
+          entry_date?: string
+          generated_docx_path?: string | null
+          generated_letter_html?: string | null
+          id?: string
+          inputs?: Json
+          letter_no?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ddn_field_options: {
+        Row: {
+          created_at: string
+          display_order: number
+          field_id: string
+          id: string
+          is_active: boolean
+          label_en: string | null
+          label_ko: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          field_id: string
+          id?: string
+          is_active?: boolean
+          label_en?: string | null
+          label_ko: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          field_id?: string
+          id?: string
+          is_active?: boolean
+          label_en?: string | null
+          label_ko?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ddn_field_options_field_id_fkey"
+            columns: ["field_id"]
+            isOneToOne: false
+            referencedRelation: "ddn_fields"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ddn_fields: {
+        Row: {
+          conditional_on: Json | null
+          created_at: string
+          data_type: string
+          default_value: Json | null
+          display_order: number
+          field_key: string
+          help_text: string | null
+          id: string
+          is_active: boolean
+          label_en: string | null
+          label_ko: string
+          required: boolean
+          section_id: string
+          unit: string | null
+          updated_at: string
+          validation: Json | null
+          width: string
+        }
+        Insert: {
+          conditional_on?: Json | null
+          created_at?: string
+          data_type: string
+          default_value?: Json | null
+          display_order?: number
+          field_key: string
+          help_text?: string | null
+          id?: string
+          is_active?: boolean
+          label_en?: string | null
+          label_ko: string
+          required?: boolean
+          section_id: string
+          unit?: string | null
+          updated_at?: string
+          validation?: Json | null
+          width?: string
+        }
+        Update: {
+          conditional_on?: Json | null
+          created_at?: string
+          data_type?: string
+          default_value?: Json | null
+          display_order?: number
+          field_key?: string
+          help_text?: string | null
+          id?: string
+          is_active?: boolean
+          label_en?: string | null
+          label_ko?: string
+          required?: boolean
+          section_id?: string
+          unit?: string | null
+          updated_at?: string
+          validation?: Json | null
+          width?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ddn_fields_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "ddn_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ddn_sections: {
+        Row: {
+          collapsible: boolean
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          title_en: string | null
+          title_ko: string
+          updated_at: string
+        }
+        Insert: {
+          collapsible?: boolean
+          created_at?: string
+          display_order?: number
+          id: string
+          is_active?: boolean
+          title_en?: string | null
+          title_ko: string
+          updated_at?: string
+        }
+        Update: {
+          collapsible?: boolean
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          title_en?: string | null
+          title_ko?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ddn_settings: {
+        Row: {
+          admin_overhead_pct: number | null
+          avg_def_external_cost: number | null
+          avg_ncr_external_cost: number | null
+          contract_completion_date: string | null
+          day1_date: string | null
+          hdec_korean_md_rate_sgd: number | null
+          hdec_manday_rate_sgd: number | null
+          id: string
+          ld_cap_sgd: number | null
+          ld_daily_rate_sgd: number | null
+          letter_no_next: number | null
+          letter_no_prefix: string | null
+          master_notice_date: string | null
+          master_notice_ref: string | null
+          pm_absence_start_date: string | null
+          pm_daily_rate_sgd: number | null
+          updated_at: string
+        }
+        Insert: {
+          admin_overhead_pct?: number | null
+          avg_def_external_cost?: number | null
+          avg_ncr_external_cost?: number | null
+          contract_completion_date?: string | null
+          day1_date?: string | null
+          hdec_korean_md_rate_sgd?: number | null
+          hdec_manday_rate_sgd?: number | null
+          id?: string
+          ld_cap_sgd?: number | null
+          ld_daily_rate_sgd?: number | null
+          letter_no_next?: number | null
+          letter_no_prefix?: string | null
+          master_notice_date?: string | null
+          master_notice_ref?: string | null
+          pm_absence_start_date?: string | null
+          pm_daily_rate_sgd?: number | null
+          updated_at?: string
+        }
+        Update: {
+          admin_overhead_pct?: number | null
+          avg_def_external_cost?: number | null
+          avg_ncr_external_cost?: number | null
+          contract_completion_date?: string | null
+          day1_date?: string | null
+          hdec_korean_md_rate_sgd?: number | null
+          hdec_manday_rate_sgd?: number | null
+          id?: string
+          ld_cap_sgd?: number | null
+          ld_daily_rate_sgd?: number | null
+          letter_no_next?: number | null
+          letter_no_prefix?: string | null
+          master_notice_date?: string | null
+          master_notice_ref?: string | null
+          pm_absence_start_date?: string | null
+          pm_daily_rate_sgd?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       defect_change_log: {
         Row: {
           change_source: string | null
