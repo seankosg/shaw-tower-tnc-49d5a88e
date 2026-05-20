@@ -1,41 +1,33 @@
-## 원인
+## 조사 결과
 
-`PunchRawDataPage.tsx`의 URL → 필터 하이드레이션 로직은 `DRILLDOWN_PARAMS` 리스트에 있는 파라미터가 URL에 존재할 때만 "대시보드에서 진입(드릴다운)"으로 판단하여 localStorage에 저장된 기존 필터를 무시합니다.
+`docs_change_log` 테이블을 점검한 결과:
 
-현재 `DRILLDOWN_PARAMS`(385~389행):
+- 컬럼 `changed_by uuid`는 이미 존재하며, **모든 행에 값이 채워져 있습니다** (NULL = 0). OMM 한정 2,859건 전부 정상.
+- 등장하는 4명의 `changed_by` 모두 `profiles.user_id`와 매핑됩니다.
+
+따라서 **별도의 백필 마이그레이션은 필요 없습니다.** UI에서 이름만 노출하면 됩니다. (백필이 필요했다면 excel_import는 `docs_upload_batches.created_by`, 그 외에는 `docs_omm.updated_by`로 보정하는 방안이 있었지만, 현 데이터로는 불필요)
+
+## 변경 범위
+
+`src/pages/docs/DocsOMMDetailPage.tsx` 한 파일만 수정.
+
+### 1. 로그 조회 시 변경자 이름 함께 가져오기
+
+`docs_change_log` 조회 후, 등장한 `changed_by` uuid 목록으로 `profiles` 테이블에서 `user_id, name`을 한 번에 조회 → uuid→name Map 구성.
+
+(FK 조인이 정의되어 있지 않으므로 PostgREST embed 대신 두 번 fetch 후 클라이언트에서 join하는 방식이 안전)
+
+### 2. Change History 카드 UI에 컬럼 추가
+
+기존 `[140px_140px_1fr]` 3-column 그리드에 변경자 컬럼을 추가하여 4-column으로 확장:
+
 ```
-team, subcontractor, subsub, hdecPic, hdecEng, level, workType,
-mainTrade, subTrade, health, ready, completionStatus, itemNo,
-dateField, dateStart, dateEnd, critical
-```
-
-그러나 Punch Dashboard의 `go(...)` 호출에서 실제로 사용하는 파라미터에는 다음이 포함됩니다:
-- `status` (planned_started, actual_started, in_delay, start_delayed, overdue, critical, ready_not_started, wip 등)
-- `criticalLevel`
-- `pre_eng`
-- `blocker`
-- `due`
-- `start_due`
-- `dq`
-
-이 파라미터들은 `DRILLDOWN_PARAMS`에 빠져 있어, 예를 들어 `?status=in_delay`나 `?criticalLevel=mid-High`로 진입하면 `isDrilldown=false`가 되고 localStorage의 기존 컬럼 필터가 그대로 복원되어 결과가 겹칩니다. (Defect/Docs RawData 페이지는 자신들의 모든 드릴다운 키를 리스트에 포함해 동일한 문제를 회피하고 있음 — 예: DefectRawDataPage `status` 포함, DocsRawDataPage `DOCS_DRILLDOWN_PARAMS`)
-
-## 수정 사항
-
-**파일: `src/pages/PunchRawDataPage.tsx` (라인 385~389)**
-
-`DRILLDOWN_PARAMS` 배열에 누락된 Punch 전용 드릴다운 파라미터 추가:
-
-```ts
-const DRILLDOWN_PARAMS = [
-  'team', 'subcontractor', 'subsub', 'hdecPic', 'hdecEng', 'level', 'workType',
-  'mainTrade', 'subTrade', 'health', 'ready', 'completionStatus', 'itemNo',
-  'dateField', 'dateStart', 'dateEnd', 'critical',
-  // 추가
-  'status', 'criticalLevel', 'pre_eng', 'blocker', 'due', 'start_due', 'dq',
-];
+[일시 140px] [변경자 110px] [필드 140px] [old → new 1fr]
 ```
 
-이렇게 하면 대시보드 카드 클릭으로 진입할 때 localStorage 기반 기존 컬럼 필터가 초기화되고, URL의 필터 조건만 적용됩니다. 동시에 사용자가 Raw Data에 직접 진입(파라미터 없음)할 때는 기존 저장 필터가 그대로 복원되어 다른 페이지들과 동일한 UX를 유지합니다.
+이름을 찾지 못한 경우 `—` 로 표시.
 
-코드 변경은 이 한 곳뿐이며 다른 로직(필터 적용, localStorage 저장)은 그대로 둡니다.
+## 사용자 확인 사항
+
+1. 위 단일 파일 수정으로 진행해도 될까요?
+2. 동일하게 다른 docs 상세페이지(Drawing/Spare Part/Warranty)에도 일괄 적용을 원하시나요, 아니면 **OMM만** 적용할까요?

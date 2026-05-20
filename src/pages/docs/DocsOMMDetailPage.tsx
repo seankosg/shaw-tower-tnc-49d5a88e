@@ -128,6 +128,22 @@ export default function DocsOMMDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
+  const [userMap, setUserMap] = useState<Record<string, string>>({});
+
+  const fetchUserNames = async (rows: any[]) => {
+    const ids = Array.from(new Set(rows.map((r) => r.changed_by).filter(Boolean)));
+    if (ids.length === 0) {
+      setUserMap({});
+      return;
+    }
+    const { data } = await (supabase as any)
+      .from('profiles')
+      .select('user_id, name')
+      .in('user_id', ids);
+    const map: Record<string, string> = {};
+    (data ?? []).forEach((p: any) => { map[p.user_id] = p.name; });
+    setUserMap(map);
+  };
   // Comments handled by <OmmComments />
 
   const masters = useCommonMasters();
@@ -173,7 +189,9 @@ export default function DocsOMMDetailPage() {
       .eq('sub_module', 'omm')
       .order('changed_at', { ascending: false })
       .limit(50);
-    setLogs(logRes.data ?? []);
+    const logRows = logRes.data ?? [];
+    setLogs(logRows);
+    await fetchUserNames(logRows);
     setLoading(false);
   };
 
@@ -229,7 +247,9 @@ export default function DocsOMMDetailPage() {
       .eq('sub_module', 'omm')
       .order('changed_at', { ascending: false })
       .limit(50);
-    setLogs(logRes.data ?? []);
+    const logRows2 = logRes.data ?? [];
+    setLogs(logRows2);
+    await fetchUserNames(logRows2);
   };
 
 
@@ -424,8 +444,11 @@ export default function DocsOMMDetailPage() {
           ) : (
             <div className="space-y-1 text-xs max-h-80 overflow-y-auto">
               {logs.map((l) => (
-                <div key={l.id} className="grid grid-cols-[140px_140px_1fr] gap-2 border-b py-1">
+                <div key={l.id} className="grid grid-cols-[140px_110px_140px_1fr] gap-2 border-b py-1">
                   <span className="text-muted-foreground">{formatDateTimeDdMmmYyyy(l.changed_at)}</span>
+                  <span className="text-muted-foreground truncate" title={userMap[l.changed_by] ?? ''}>
+                    {l.changed_by ? (userMap[l.changed_by] ?? '—') : '—'}
+                  </span>
                   <span className="font-medium">{getLabel(l.changed_field) || l.changed_field}</span>
                   <span>
                     <span className="text-muted-foreground line-through">{l.old_value ?? '—'}</span>
