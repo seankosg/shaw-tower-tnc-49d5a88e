@@ -91,6 +91,7 @@ export function AppSidebar() {
       : '';
   const userName = profile?.name || profile?.login_id || 'User';
 
+  const visibleDdn = filterNavItems(ddnNav, roles);
   const visibleMain = filterNavItems(mainNav, roles);
   const visibleDefects = filterNavItems(defectNav, roles);
   const visibleDocs = filterNavItems(docsNav, roles);
