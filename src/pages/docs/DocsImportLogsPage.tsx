@@ -313,29 +313,39 @@ export default function DocsImportLogsPage() {
                         <TableCell className="text-xs text-right cursor-pointer" onClick={() => selectBatch(b.id)}>{b.rejected_rows ?? 0}</TableCell>
                         {canDelete && (
                           <TableCell className="text-right">
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" disabled={deletingId === b.id} title="Delete batch (removes logs only; drawing data is preserved)">
-                                  {deletingId === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete import batch?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This permanently removes the batch <strong>{b.uploaded_file_name}</strong> along with its row logs, field logs, and change logs.
-                                    Drawings imported by this batch are preserved (only their link to this batch is cleared).
-                                    To re-import cleanly, delete the batch then run the import again.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => deleteBatch(b)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                            <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+                              {subKey === 'omm' && (
+                                <RollbackDialog
+                                  kind="docs"
+                                  batchId={b.id}
+                                  fileName={b.uploaded_file_name}
+                                  onDone={fetchBatches}
+                                />
+                              )}
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" disabled={deletingId === b.id} title="Delete batch (removes logs only; drawing data is preserved)">
+                                    {deletingId === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete import batch?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This permanently removes the batch <strong>{b.uploaded_file_name}</strong> along with its row logs, field logs, and change logs.
+                                      Drawings imported by this batch are preserved (only their link to this batch is cleared).
+                                      To re-import cleanly, delete the batch then run the import again.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => deleteBatch(b)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
                           </TableCell>
                         )}
                         </TableRow>
