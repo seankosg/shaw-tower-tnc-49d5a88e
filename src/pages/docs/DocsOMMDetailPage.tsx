@@ -444,8 +444,11 @@ export default function DocsOMMDetailPage() {
           ) : (
             <div className="space-y-1 text-xs max-h-80 overflow-y-auto">
               {logs.map((l) => (
-                <div key={l.id} className="grid grid-cols-[140px_140px_1fr] gap-2 border-b py-1">
+                <div key={l.id} className="grid grid-cols-[140px_110px_140px_1fr] gap-2 border-b py-1">
                   <span className="text-muted-foreground">{formatDateTimeDdMmmYyyy(l.changed_at)}</span>
+                  <span className="text-muted-foreground truncate" title={userMap[l.changed_by] ?? ''}>
+                    {l.changed_by ? (userMap[l.changed_by] ?? '—') : '—'}
+                  </span>
                   <span className="font-medium">{getLabel(l.changed_field) || l.changed_field}</span>
                   <span>
                     <span className="text-muted-foreground line-through">{l.old_value ?? '—'}</span>
