@@ -152,6 +152,7 @@ export default function PunchDashboardPage() {
 
     return {
       total, completed, wip, notStarted, blocked, overdue, startDelayed, critical, behind,
+      inDelay, actuallyStarted, plannedStartedByToday,
       dueThisWeek, due14, startThisWeek, wipDueSoon, readyButNotStarted,
       w, avg, health, blockerCounts, gates,
     };
