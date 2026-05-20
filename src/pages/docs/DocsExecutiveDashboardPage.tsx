@@ -373,8 +373,18 @@ function ModuleSection({
         <Button variant="ghost" size="sm" className="gap-1" onClick={() => onNavigate(module)}>
           Open Raw Data <ArrowRight className="h-3.5 w-3.5" />
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => setIsCollapsed((v) => !v)}
+          aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+        >
+          {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+        </Button>
       </div>
 
+      {!isCollapsed && (
       <CardContent className="space-y-5 p-5">
         {/* Subcontractor / HDEC PIC filter row */}
         <div className="flex flex-wrap items-center gap-2">
