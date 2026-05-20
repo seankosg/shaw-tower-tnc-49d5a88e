@@ -149,6 +149,7 @@ const RAW_SEARCH_FIELDS = [
   'subsub_name',
   'hdec_pic_name',
   'hdec_eng_name',
+  'captured_by_name',
   'closure_status',
   'remarks',
   'hdec_comments',
