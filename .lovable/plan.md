@@ -1,54 +1,78 @@
-# Captured By — 그룹 탭 + 풀다운 필터 + % 표시
+# Record Export 탭 추가
 
-## 요구사항
-- 각 사람 행에 **Completed %**, **Closure %** 추가 (숫자 옆 작은 회색).
-- **컬럼 필터는 풀다운(체크박스) 형식** — 실제 데이터 값을 옵션으로 제공. 텍스트 입력형 폐기.
-- **Group 컬럼 제거**. 대신 테이블 상단 헤더에 **탭 (All / Arch / Facade / MEP / Other)** 으로 그룹 필터.
-- **Total 행을 데이터행들 최상단**에 고정 (sticky 첫 행).
+Admin > Report 페이지에 `Record Export` 탭을 신규 추가하고, Raw data 기반 Subcontractor 일일/누계 실적을 엑셀로 내보내는 기능을 구현합니다.
 
-## 수정 대상
-`src/pages/DefectDashboardPage.tsx`의 `CapturedByStatsSection` 한 군데.
+## 범위
 
-## 새 레이아웃
+대상 모듈: **T&C**, **Defect** 2종.
+계획/실적 기준:
+- T&C: T1 planned_date / T1 actual_date, T2 planned_date / T2 actual_date (Subtest 단위)
+- Defect: planned_completion_date / actual_completion_date (Defect 단위)
+
+## UI 구성 (선택 패널)
+
+상단 카드 안에 한 줄씩 배치:
+
+1. **Module** — Radio 또는 Tabs (T&C / Defect)
+2. **Subcontractor** — 다중선택 (현재 모듈 raw data 기준 distinct 목록, 체크박스 팝오버)
+3. **Sub-Sub** — 다중선택, 선택된 Sub의 자식만 표시. 없으면 비활성.
+4. **System** — 다중선택 (system_master 기준; Defect엔 system 컬럼 없으면 비활성)
+5. **기간** — 시작/종료 날짜 두 개 (shadcn Calendar Popover, `pointer-events-auto`)
+6. **출력 데이터** — 체크박스 3개: `Planned`, `Actual`, (둘 다 체크 시 자동으로 `Variance = Actual − Planned` 컬럼 추가)
+7. **S-Curve 시트 포함** — 체크박스 한 개. ON이면 별도 시트(A4 가로)로 누계 차트 출력.
+
+하단 `Generate Excel` 버튼.
+
+## 데이터 집계 규칙
+
+- **행 단위**: Subcontractor × System 조합 1행 (Sub-Sub 선택 시 Subcontractor × Sub-Sub × System).
+- **컬럼 단위**: 선택 기간 내 각 날짜 1세트. 한 날짜당 최대 6컬럼:
+
 ```text
-[v] Captured By — Defect Statistics                17 persons · Unknown 418
-
- ┌────────────────────────────────────────────────────────────────┐
- │ [ All (17) ] [ Arch (3) ] [ Facade (2) ] [ MEP (8) ] [ Other ] │  ← 탭
- └────────────────────────────────────────────────────────────────┘
-
-┌──────────────┬────────┬──────────────┬──────────────┬──────────┐
-│ Name  ▾Filter│ Total ▼│ Completed    │ Closed       │ In Dispute│
-├──────────────┼────────┼──────────────┼──────────────┼──────────┤
-│ TOTAL (n=17) │  6 489 │  5 812  89%  │  3 102  48%  │    42    │  ← 합계행 (최상단, 강조)
-├──────────────┼────────┼──────────────┼──────────────┼──────────┤
-│ Penn Theen   │  3 655 │  3 262  89%  │  1 293  35%  │    10    │
-│ Theepa V K   │    249 │    225  90%  │     20   8%  │     1    │
-│ ...                                                             │
-└──────────────┴────────┴──────────────┴──────────────┴──────────┘
-✓ All totals reconcile ...
+[Daily Planned] [Daily Actual] [Daily Var] [Cum Planned] [Cum Actual] [Cum Var]
 ```
 
-### 동작
-- **그룹 탭**: 단일 선택 (All / Arch / Facade / MEP / Other). 각 탭 라벨에 해당 그룹 인원수 표시. 선택 시 해당 그룹 행만 표시. 탭 클릭 시 `onGroupClick(group)` 호출은 하지 않음 (단순 in-table 필터링).
-- **Name 필터 풀다운**: 현재 표시 중인(탭 적용 후) 인물 목록을 체크박스로 다중 선택. Select all / Clear all 지원.
-- **컬럼 정렬**: Name, Total, Completed, Closed, In Dispute 헤더 클릭 toggle. 기본 Total desc.
-- **% 표시**: Completed/Closed 셀은 `숫자  ##%` 형식. `total === 0`이면 `—`. % 는 `Math.round(value/total*100)`.
-- **Total 행**: 항상 데이터 행 최상단. 필터 적용 시 라벨 `TOTAL (n=k)` 로 표시. 배경 `bg-muted/40`, 굵게.
-- **행 클릭 / 셀 클릭**: 기존 `onCardClick(name)` / `onMetricClick(name, metric)` 동작 유지.
-- **접기/펼치기**: 기존 chevron 토글 유지.
+- 일일값 = 해당 날짜에 planned_date 또는 actual_date가 떨어진 건수.
+- 누계값 = 기간 시작일부터 해당 날짜까지의 누적 건수.
+- Variance는 Planned·Actual 모두 체크된 경우에만 생성.
+- T&C는 T1/T2를 각각 집계. UI에서 `T1`, `T2` 또는 둘 다 선택할 수 있는 보조 체크박스 추가 (기본 T2).
 
-### 보존
-- Reconciliation 박스 유지.
-- KPI props·콜백 시그니처 동일.
+## 엑셀 구조
 
-### 정리
-- 기존 텍스트 Name 검색 input, Group multi-select Popover, Group 컬럼 및 셀, `groupTotals` 사용처 일부 — 모두 제거/대체.
-- `MiniMetric` 미사용 상태 유지.
+- 시트 1 — `Summary` : 선택 조건, 합계, 생성일시
+- 시트 2 — `Daily & Cumulative` : 위 행/컬럼 매트릭스
+- 시트 3 — `S-Curve` (옵션) : x=날짜, y=누계 건수. 라인 2개(Cum Planned, Cum Actual). 페이지 설정 A4 가로(landscape), 인쇄 영역 fit-to-page.
 
-## 검증
-- All 탭일 때 TOTAL 행 = reconciliation 합계와 일치.
-- 그룹 탭 전환 시 TOTAL 행이 그룹 합계로 갱신.
-- Name 풀다운 옵션은 현재 탭 안에서만 나옴.
-- % 가 total=0 인 경우 — 로 표기.
-- 모바일 가로 스크롤 OK.
+엑셀 최적화:
+- 다단 헤더 사용 (Row1: 날짜, Row2: Planned/Actual/Var). `mergeCells`로 날짜 셀 병합.
+- 헤더는 굵게 + 배경색(`F1F5F9`), freeze panes (좌측 식별 컬럼 + 상단 2행).
+- 컬럼 폭 자동 계산 (헤더 길이와 데이터 최대 길이 기준 + 패딩 2).
+- 날짜 셀은 `isoToExcelSerial` 사용해 실제 date cell로 저장 (`dd-mmm` 포맷).
+- 숫자 0은 `-`로 표시 (`#,##0;(#,##0);-`).
+- 총계 행을 데이터 최하단에 굵게.
+
+## 기술 구현
+
+- 신규 파일:
+  - `src/pages/admin/RecordExportTab.tsx` — UI + 데이터 fetch + 핸들러
+  - `src/lib/record-export.ts` — 집계 함수 (`buildRecordMatrix`) + 엑셀 빌더 (`exportRecordWorkbook`)
+- `AdminReportPage.tsx` Tabs에 `<TabsTrigger value="record">Record Export</TabsTrigger>` 및 `<TabsContent>` 추가.
+- 데이터 fetch:
+  - T&C: `subtests` (`subcontractor_name, subsub_name, system_id, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date`) + `system_master` join, `is_active = true`.
+  - Defect: `defects` (`subcontractor_name, subsub_name, planned_completion_date, actual_completion_date` + system 컬럼 존재 시 포함).
+  - `fetchAllRows` 사용해 1000행 제한 우회.
+- S-Curve: `xlsx-js-style`의 차트 미지원 → `chart.js` 또는 `recharts` 캡처 대신 ExcelJS 도입 또는 PNG 차트 이미지를 시트에 삽입하는 방식 사용. 가벼운 방식으로 **ExcelJS**를 이 시트 한정 사용 (LineChart 네이티브 지원). 메인 시트는 기존 `xlsx-js-style` 유지.
+- 파일명: `RecordExport_{module}_{start}_{end}.xlsx`.
+
+## 권한
+
+기존 Report 탭 접근권한 (`canAccessReport`)을 그대로 상속. 추가 가드 불필요.
+
+## 작업 순서
+
+1. 집계 유틸 (`record-export.ts`) + 단위 테스트(간단)
+2. 엑셀 빌더 (헤더 병합, freeze, 날짜 셀)
+3. S-Curve 시트 (ExcelJS 의존성 추가)
+4. `RecordExportTab` UI + Subcontractor/Sub-Sub/System distinct 목록 fetch
+5. AdminReportPage 탭 등록
+6. 수동 검증: T&C/Defect 각각 작은 기간으로 다운로드해 헤더 정렬, 누계 일치, S-Curve 라인 확인
