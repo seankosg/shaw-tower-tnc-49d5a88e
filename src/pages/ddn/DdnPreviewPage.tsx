@@ -1,13 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { useDdnSchema, useDdnSettings, useDdnEntry } from '@/lib/ddn/schema-cache';
 import { useDdnMappingRules } from '@/lib/ddn/mapping-cache';
 import { buildLetter } from '@/lib/ddn/mapping-engine';
+import { generateAndUploadDocx, downloadDocxFromStorage, renderDocxBlob } from '@/lib/ddn/docx-generator';
 import type { DdnInputs } from '@/lib/ddn/schema-types';
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
