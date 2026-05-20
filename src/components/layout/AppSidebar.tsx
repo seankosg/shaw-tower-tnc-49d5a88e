@@ -64,6 +64,13 @@ const punchNav = [
   { label: 'Export', icon: Download, path: '/punch/export' },
 ];
 
+const ddnNav = [
+  { label: 'Input', icon: FileWarning, path: '/ddn/input' },
+  { label: 'Preview', icon: FileText, path: '/ddn/preview' },
+  { label: 'History', icon: ClipboardList, path: '/ddn/history' },
+  { label: 'Settings', icon: Settings, path: '/ddn/settings' },
+];
+
 const adminNav = [
   { label: 'Admin', icon: Shield, path: '/admin' },
   { label: 'Report', icon: FileText, path: '/admin/report' },
