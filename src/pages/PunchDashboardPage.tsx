@@ -109,6 +109,13 @@ export default function PunchDashboardPage() {
     const startDelayed = rows.filter((r) => isStartDelayed(r, asOf)).length;
     const critical = rows.filter((r) => isCriticalDelay(r, asOf)).length;
     const behind = rows.filter(isBehindSchedule).length;
+    const inDelay = rows.filter((r) =>
+      isStartDelayed(r, asOf) || isCompletionOverdue(r, asOf) || isBehindSchedule(r)
+    ).length;
+    const actuallyStarted = rows.filter((r) => !!r.actual_start_date).length;
+    const plannedStartedByToday = rows.filter((r) =>
+      !!r.planned_start_date && r.planned_start_date <= asOf
+    ).length;
     const dueThisWeek = rows.filter((r) => isDueWithin(r, 7, asOf)).length;
     const due14 = rows.filter((r) => isDueWithin(r, 14, asOf)).length;
     const startThisWeek = rows.filter((r) => isPlannedToStartWithin(r, 7, asOf)).length;
