@@ -342,6 +342,56 @@ export type Database = {
           },
         ]
       }
+      ddn_mapping_rules: {
+        Row: {
+          condition: Json
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          notes: string | null
+          rule_key: string
+          section_id: string
+          style: string
+          template: string
+          updated_at: string
+        }
+        Insert: {
+          condition?: Json
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          rule_key: string
+          section_id: string
+          style?: string
+          template: string
+          updated_at?: string
+        }
+        Update: {
+          condition?: Json
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          rule_key?: string
+          section_id?: string
+          style?: string
+          template?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ddn_mapping_rules_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "ddn_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ddn_sections: {
         Row: {
           collapsible: boolean

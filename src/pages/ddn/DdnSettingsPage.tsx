@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useDdnSettings } from '@/lib/ddn/schema-cache';
 import { SchemaEditor } from '@/components/ddn/SchemaEditor';
+import { MappingRulesEditor } from '@/components/ddn/MappingRulesEditor';
 import type { DdnSettings } from '@/lib/ddn/schema-types';
 
 const NUMERIC_KEYS: (keyof DdnSettings)[] = [
@@ -60,6 +61,7 @@ export default function DdnSettingsPage() {
       <TabsList>
         <TabsTrigger value="cost">Cost &amp; References</TabsTrigger>
         <TabsTrigger value="schema">Form Schema Editor</TabsTrigger>
+        <TabsTrigger value="rules">Mapping Rules</TabsTrigger>
       </TabsList>
 
       <TabsContent value="cost" className="mt-3">
@@ -99,6 +101,10 @@ export default function DdnSettingsPage() {
 
       <TabsContent value="schema" className="mt-3">
         <SchemaEditor />
+      </TabsContent>
+
+      <TabsContent value="rules" className="mt-3">
+        <MappingRulesEditor />
       </TabsContent>
     </Tabs>
   );
