@@ -247,7 +247,9 @@ export default function DocsOMMDetailPage() {
       .eq('sub_module', 'omm')
       .order('changed_at', { ascending: false })
       .limit(50);
-    setLogs(logRes.data ?? []);
+    const logRows2 = logRes.data ?? [];
+    setLogs(logRows2);
+    await fetchUserNames(logRows2);
   };
 
 
