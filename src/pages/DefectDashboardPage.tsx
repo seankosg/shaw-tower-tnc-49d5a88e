@@ -748,6 +748,55 @@ function CapturedByStatsSection({
     console.warn('[CapturedBy reconcile] Mismatch', checks);
   }, [showDebug, allOk, checks]);
 
+  // Rows annotated with group (computed before any early return to keep hook order stable).
+  const rowsWithGroup = useMemo(
+    () => stats.map((s) => ({ ...s, group: (getCapturedByGroup(s.name) ?? 'Other') as CapturedByGroup })),
+    [stats],
+  );
+
+  const groupTotals = useMemo(() => {
+    const map = new Map<CapturedByGroup, { total: number; completed: number; closed: number; dispute: number }>();
+    for (const r of rowsWithGroup) {
+      const t = map.get(r.group) ?? { total: 0, completed: 0, closed: 0, dispute: 0 };
+      t.total += r.total; t.completed += r.completed; t.closed += r.closed; t.dispute += r.dispute;
+      map.set(r.group, t);
+    }
+    return map;
+  }, [rowsWithGroup]);
+
+  const [collapsed, setCollapsed] = useState(false);
+  const [nameFilter, setNameFilter] = useState('');
+  const [groupFilter, setGroupFilter] = useState<CapturedByGroup[]>([]);
+  type SortKey = 'group' | 'name' | 'total' | 'completed' | 'closed' | 'dispute';
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' });
+
+  const visibleRows = useMemo(() => {
+    const n = nameFilter.trim().toLowerCase();
+    const filtered = rowsWithGroup.filter((r) => {
+      if (groupFilter.length && !groupFilter.includes(r.group)) return false;
+      if (n && !r.name.toLowerCase().includes(n)) return false;
+      return true;
+    });
+    const dir = sort.dir === 'asc' ? 1 : -1;
+    filtered.sort((a, b) => {
+      const k = sort.key;
+      if (k === 'name' || k === 'group') return a[k].localeCompare(b[k]) * dir;
+      return ((a[k] as number) - (b[k] as number)) * dir;
+    });
+    return filtered;
+  }, [rowsWithGroup, nameFilter, groupFilter, sort]);
+
+  const visibleTotals = useMemo(
+    () => visibleRows.reduce(
+      (acc, r) => ({
+        total: acc.total + r.total, completed: acc.completed + r.completed,
+        closed: acc.closed + r.closed, dispute: acc.dispute + r.dispute,
+      }),
+      { total: 0, completed: 0, closed: 0, dispute: 0 },
+    ),
+    [visibleRows],
+  );
+
   if (stats.length === 0) {
     return (
       <Card className="p-4">
@@ -756,83 +805,143 @@ function CapturedByStatsSection({
     );
   }
 
-  const grouped = useMemo(() => {
-    const byGroup = new Map<CapturedByGroup, CapturedByStat[]>();
-    for (const s of stats) {
-      const g = getCapturedByGroup(s.name) ?? 'Other';
-      const arr = byGroup.get(g) ?? [];
-      arr.push(s);
-      byGroup.set(g, arr);
-    }
-    return CAPTURED_BY_GROUPS
-      .map((g) => {
-        const list = byGroup.get(g) ?? [];
-        const totals = list.reduce((acc, s) => ({
-          total: acc.total + s.total, completed: acc.completed + s.completed,
-          closed: acc.closed + s.closed, dispute: acc.dispute + s.dispute,
-        }), { total: 0, completed: 0, closed: 0, dispute: 0 });
-        return { group: g, list, totals };
-      })
-      .filter((g) => g.list.length > 0);
-  }, [stats]);
+  const toggleSort = (key: SortKey) =>
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'name' || key === 'group' ? 'asc' : 'desc' }));
+  const sortIcon = (key: SortKey) => sort.key === key ? (sort.dir === 'asc' ? '▲' : '▼') : '';
+  const toggleGroup = (g: CapturedByGroup) =>
+    setGroupFilter((cur) => (cur.includes(g) ? cur.filter((x) => x !== g) : [...cur, g]));
+  const availableGroups = CAPTURED_BY_GROUPS.filter((g) => groupTotals.has(g));
+  const filtersActive = nameFilter.trim() !== '' || groupFilter.length > 0;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-foreground">Captured By — Defect Statistics</h3>
-        <p className="text-xs text-muted-foreground">{stats.length} person{stats.length === 1 ? '' : 's'} · Unknown {unknown.total}</p>
-      </div>
-      {grouped.map(({ group, list, totals: gTotals }) => (
-        <div key={group} className="space-y-2 rounded-md border bg-muted/20 p-2">
-          <button
-            type="button"
-            onClick={() => onGroupClick(group)}
-            className="flex w-full items-center justify-between gap-3 rounded px-1 py-0.5 text-left transition-colors hover:bg-muted/60"
-          >
-            <span className="text-sm font-semibold text-foreground">{group}</span>
-            <span className="flex gap-3 text-xs tabular-nums text-muted-foreground">
-              <span>Total <b className="text-foreground">{gTotals.total}</b></span>
-              <span>Completed <b className="text-emerald-700 dark:text-emerald-400">{gTotals.completed}</b></span>
-              <span>Closed <b className="text-primary">{gTotals.closed}</b></span>
-              <span>In Dispute <b className="text-purple-700 dark:text-purple-300">{gTotals.dispute}</b></span>
-            </span>
-          </button>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {list.map((s) => (
-              <Card key={s.name} className="cursor-pointer transition-colors hover:bg-muted/40" onClick={() => onCardClick(s.name)}>
-                <CardContent className="p-3">
-                  <p className="mb-2 truncate text-sm font-semibold text-foreground" title={s.name}>{s.name}</p>
-                  <div className="grid grid-cols-4 gap-1 text-center">
-                    <MiniMetric label="Total" value={s.total} onClick={() => onMetricClick(s.name, 'total')} />
-                    <MiniMetric label="Completed" value={s.completed} tone="emerald" onClick={() => onMetricClick(s.name, 'completed')} />
-                    <MiniMetric label="Closed" value={s.closed} tone="primary" onClick={() => onMetricClick(s.name, 'closed')} />
-                    <MiniMetric label="In Dispute" value={s.dispute} tone="purple" onClick={() => onMetricClick(s.name, 'dispute')} />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="flex flex-1 items-center gap-2 text-left"
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          <CardTitle className="text-base">Captured By — Defect Statistics</CardTitle>
+        </button>
+        <p className="text-xs text-muted-foreground tabular-nums">
+          {stats.length} person{stats.length === 1 ? '' : 's'} · Unknown {unknown.total}
+        </p>
+      </CardHeader>
+      {!collapsed && (
+        <CardContent className="space-y-2 pt-0">
+          <div className="overflow-x-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40">
+                  <TableHead className="w-[160px] align-top">
+                    <button type="button" onClick={() => toggleSort('group')} className="flex items-center gap-1 text-xs font-semibold hover:underline">
+                      Group <span className="text-[10px] text-muted-foreground">{sortIcon('group')}</span>
+                    </button>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button type="button" className="mt-1 inline-flex h-6 items-center gap-1 rounded border px-1.5 text-[10px] text-muted-foreground hover:bg-muted/80">
+                          <Filter className="h-3 w-3" />
+                          {groupFilter.length ? `${groupFilter.length} selected` : 'All groups'}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-52 p-2" align="start">
+                        <button type="button" onClick={() => setGroupFilter([])} className="mb-1 text-[11px] text-muted-foreground hover:underline">Clear</button>
+                        {availableGroups.map((g) => (
+                          <label key={g} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-muted/50">
+                            <Checkbox checked={groupFilter.includes(g)} onCheckedChange={() => toggleGroup(g)} className="h-3.5 w-3.5" />
+                            <span>{g}</span>
+                            <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">{groupTotals.get(g)?.total ?? 0}</span>
+                          </label>
+                        ))}
+                      </PopoverContent>
+                    </Popover>
+                  </TableHead>
+                  <TableHead className="align-top">
+                    <button type="button" onClick={() => toggleSort('name')} className="flex items-center gap-1 text-xs font-semibold hover:underline">
+                      Name <span className="text-[10px] text-muted-foreground">{sortIcon('name')}</span>
+                    </button>
+                    <Input
+                      value={nameFilter}
+                      onChange={(e) => setNameFilter(e.target.value)}
+                      placeholder="Filter..."
+                      className="mt-1 h-6 text-[11px]"
+                    />
+                  </TableHead>
+                  {(['total', 'completed', 'closed', 'dispute'] as const).map((k) => (
+                    <TableHead key={k} className="w-[110px] align-top text-right">
+                      <button type="button" onClick={() => toggleSort(k)} className="ml-auto flex items-center gap-1 text-xs font-semibold hover:underline">
+                        {k === 'total' ? 'Total' : k === 'completed' ? 'Completed' : k === 'closed' ? 'Closed' : 'In Dispute'}
+                        <span className="text-[10px] text-muted-foreground">{sortIcon(k)}</span>
+                      </button>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-xs text-muted-foreground">No matches.</TableCell>
+                  </TableRow>
+                ) : visibleRows.map((r) => (
+                  <TableRow key={r.name} className="cursor-pointer" onClick={() => onCardClick(r.name)}>
+                    <TableCell className="py-1.5">
+                      <button
+                        type="button"
+                        className="text-xs font-medium hover:underline"
+                        onClick={(e) => { e.stopPropagation(); onGroupClick(r.group); }}
+                      >{r.group}</button>
+                    </TableCell>
+                    <TableCell className="py-1.5 text-xs font-medium text-foreground">{r.name}</TableCell>
+                    <TableCell className="py-1.5 text-right">
+                      <ClickNum value={r.total} onClick={() => onMetricClick(r.name, 'total')} />
+                    </TableCell>
+                    <TableCell className="py-1.5 text-right">
+                      <button type="button" className={cn('tabular-nums hover:underline', r.completed === 0 ? 'text-muted-foreground/40' : 'font-semibold text-emerald-700 dark:text-emerald-400')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'completed'); }}>{r.completed}</button>
+                    </TableCell>
+                    <TableCell className="py-1.5 text-right">
+                      <button type="button" className={cn('tabular-nums hover:underline', r.closed === 0 ? 'text-muted-foreground/40' : 'font-semibold text-primary')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'closed'); }}>{r.closed}</button>
+                    </TableCell>
+                    <TableCell className="py-1.5 text-right">
+                      <button type="button" className={cn('tabular-nums hover:underline', r.dispute === 0 ? 'text-muted-foreground/40' : 'font-semibold text-purple-700 dark:text-purple-300')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'dispute'); }}>{r.dispute}</button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                <TableRow className="border-t-2 bg-muted/30 font-semibold">
+                  <TableCell colSpan={2} className="py-1.5 text-xs">
+                    {filtersActive ? `Filtered total (${visibleRows.length})` : `Total (${visibleRows.length})`}
+                  </TableCell>
+                  <TableCell className="py-1.5 text-right tabular-nums">{visibleTotals.total}</TableCell>
+                  <TableCell className="py-1.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{visibleTotals.completed}</TableCell>
+                  <TableCell className="py-1.5 text-right tabular-nums text-primary">{visibleTotals.closed}</TableCell>
+                  <TableCell className="py-1.5 text-right tabular-nums text-purple-700 dark:text-purple-300">{visibleTotals.dispute}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
-        </div>
-      ))}
-      <div className={cn(
-        'rounded-md border p-2 text-xs',
-        allOk ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300'
-              : 'border-amber-500/40 bg-amber-500/5 text-amber-800 dark:text-amber-300',
-      )}>
-        {allOk ? (
-          <span className="font-medium">✓ All totals reconcile with summary cards (Unknown excluded: {unknown.total}).</span>
-        ) : (
-          <div className="space-y-0.5">
-            <p className="font-medium">⚠ Reconciliation mismatch detected:</p>
-            {checks.map((c) => (
-              <p key={c.label} className="tabular-nums">
-                {c.label}: Σ={c.sum} / KPI={c.kpi} (Unknown={c.unknown}, expected={c.expected}, Δ={c.delta > 0 ? '+' : ''}{c.delta})
-              </p>
-            ))}
+
+          <div className={cn(
+            'rounded-md border p-2 text-xs',
+            allOk ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300'
+                  : 'border-amber-500/40 bg-amber-500/5 text-amber-800 dark:text-amber-300',
+          )}>
+            {allOk ? (
+              <span className="font-medium">✓ All totals reconcile with summary cards (Unknown excluded: {unknown.total}).</span>
+            ) : (
+              <div className="space-y-0.5">
+                <p className="font-medium">⚠ Reconciliation mismatch detected:</p>
+                {checks.map((c) => (
+                  <p key={c.label} className="tabular-nums">
+                    {c.label}: Σ={c.sum} / KPI={c.kpi} (Unknown={c.unknown}, expected={c.expected}, Δ={c.delta > 0 ? '+' : ''}{c.delta})
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
-    </div>
+        </CardContent>
+      )}
+    </Card>
   );
 }
 
