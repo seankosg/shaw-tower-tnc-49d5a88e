@@ -200,7 +200,8 @@ export function computeDashboardFilteredIds(
       if (!row) continue;
       if (String(row.po_status ?? '').toLowerCase() !== params.po_status.toLowerCase()) continue;
     }
-    if (params.overdue === '1') {
+    // Overdue (stand-alone): when no stage specified, treat as any-stage overdue
+    if (!params.stage && params.overdue === '1') {
       if (module === 'spare_part') {
         const row = sparePartById.get(id);
         if (!row || !isOverdueSparePart(row, asOfIso)) continue;
@@ -230,10 +231,15 @@ export function computeDashboardFilteredIds(
       const row = sparePartById.get(id);
       if (!row || row.actual_delivery_date) continue;
     }
+    // Stage filter — combined with overdue means stage-specific overdue
     if (params.stage) {
       const stageRec = recs.find((r: any) => r.stage_key === params.stage);
       if (!stageRec) continue;
-      if (stageRec.is_done) continue;
+      if (params.overdue === '1') {
+        if (!stageRec.is_overdue) continue;
+      } else {
+        if (stageRec.is_done) continue;
+      }
     }
     if (dueThisWeekIds && !dueThisWeekIds.has(id)) continue;
     if (params.delay_bucket) {
