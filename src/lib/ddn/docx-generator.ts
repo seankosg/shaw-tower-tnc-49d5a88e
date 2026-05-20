@@ -10,7 +10,7 @@ import type { RenderedLetter } from './mapping-types';
 
 const FONT = 'Times New Roman';
 
-function p(text: string, opts: { bold?: boolean; size?: number; align?: AlignmentType } = {}) {
+function p(text: string, opts: { bold?: boolean; size?: number; align?: (typeof AlignmentType)[keyof typeof AlignmentType] } = {}) {
   return new Paragraph({
     alignment: opts.align,
     spacing: { after: 120 },
