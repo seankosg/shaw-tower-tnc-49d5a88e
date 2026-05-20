@@ -635,6 +635,25 @@ function CriticalLevelRowCard({
 
   const chipWidth = 'min-w-[8.5rem]';
 
+  const goCat = (name: string) => {
+    if (catCount(name) <= 0) return;
+    go(`${levelParam}&category1=${encodeURIComponent(name)}`);
+  };
+  const goPreEng = () => {
+    if (summary.preEngReady <= 0) return;
+    go(`${levelParam}&ready=true`);
+  };
+  const goEarliest = () => {
+    if (!summary.earliestStart) return;
+    const d = String(summary.earliestStart).slice(0, 10);
+    go(`${levelParam}&dateField=planned_start_date&dateStart=${d}&dateEnd=${d}`);
+  };
+  const goLatest = () => {
+    if (!summary.latestFinish) return;
+    const d = String(summary.latestFinish).slice(0, 10);
+    go(`${levelParam}&dateField=planned_completion_date&dateStart=${d}&dateEnd=${d}`);
+  };
+
   return (
     <div
       className={cn(
@@ -658,14 +677,14 @@ function CriticalLevelRowCard({
           </div>
           <div className="flex flex-col gap-2 flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <MetaChip icon={<Package className="h-3.5 w-3.5" />} label="Material" value={catCount('Material').toLocaleString()} className={chipWidth} />
-              <MetaChip icon={<Hammer className="h-3.5 w-3.5" />} label="Physical Work" value={catCount('Physical Work').toLocaleString()} className={chipWidth} />
-              <MetaChip icon={<PencilRuler className="h-3.5 w-3.5" />} label="Design" value={catCount('Design').toLocaleString()} className={chipWidth} />
+              <MetaChip icon={<Package className="h-3.5 w-3.5" />} label="Material" value={catCount('Material').toLocaleString()} className={chipWidth} onClick={catCount('Material') > 0 ? goCat.bind(null, 'Material') : undefined} />
+              <MetaChip icon={<Hammer className="h-3.5 w-3.5" />} label="Physical Work" value={catCount('Physical Work').toLocaleString()} className={chipWidth} onClick={catCount('Physical Work') > 0 ? goCat.bind(null, 'Physical Work') : undefined} />
+              <MetaChip icon={<PencilRuler className="h-3.5 w-3.5" />} label="Design" value={catCount('Design').toLocaleString()} className={chipWidth} onClick={catCount('Design') > 0 ? goCat.bind(null, 'Design') : undefined} />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <MetaChip icon={<Wrench className="h-3.5 w-3.5" />} label="Pre-Eng" value={`${summary.preEngReady}/${summary.total}`} className={chipWidth} />
-              <MetaChip icon={<CalendarArrowUp className="h-3.5 w-3.5" />} label="Earliest" value={formatDdMmmSmart(summary.earliestStart)} className={chipWidth} />
-              <MetaChip icon={<CalendarArrowDown className="h-3.5 w-3.5" />} label="Latest" value={formatDdMmmSmart(summary.latestFinish)} className={chipWidth} />
+              <MetaChip icon={<Wrench className="h-3.5 w-3.5" />} label="Pre-Eng" value={`${summary.preEngReady}/${summary.total}`} className={chipWidth} onClick={summary.preEngReady > 0 ? goPreEng : undefined} />
+              <MetaChip icon={<CalendarArrowUp className="h-3.5 w-3.5" />} label="Earliest" value={formatDdMmmSmart(summary.earliestStart)} className={chipWidth} onClick={summary.earliestStart ? goEarliest : undefined} />
+              <MetaChip icon={<CalendarArrowDown className="h-3.5 w-3.5" />} label="Latest" value={formatDdMmmSmart(summary.latestFinish)} className={chipWidth} onClick={summary.latestFinish ? goLatest : undefined} />
             </div>
           </div>
         </div>
@@ -682,21 +701,28 @@ function CriticalLevelRowCard({
 }
 
 function MetaChip({
-  icon, label, value, className, title,
+  icon, label, value, className, title, onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   value: React.ReactNode;
   className?: string;
   title?: string;
+  onClick?: () => void;
 }) {
+  const interactive = !!onClick;
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-xs',
+        interactive && 'cursor-pointer hover:bg-muted/70 transition-colors',
         className,
       )}
       title={title}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onClick={interactive ? (e) => { e.stopPropagation(); onClick!(); } : undefined}
+      onKeyDown={interactive ? (e) => { if (e.key === 'Enter') { e.stopPropagation(); onClick!(); } } : undefined}
     >
       <span className="text-muted-foreground">{icon}</span>
       <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
@@ -704,6 +730,7 @@ function MetaChip({
     </span>
   );
 }
+
 
 
 function KpiCard({ label, value, icon, accent, accentTone, tone, onClick }: {
