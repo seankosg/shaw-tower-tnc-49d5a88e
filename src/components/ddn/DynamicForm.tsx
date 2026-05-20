@@ -145,6 +145,7 @@ function FieldRenderer({ field, value, onChange, disabled, computedCtx, auto }: 
           <Input
             value={(value as string) ?? ''}
             disabled={disabled}
+            placeholder={placeholderStr}
             onChange={(e) => onChange(e.target.value)}
           />
         </div>
@@ -157,6 +158,7 @@ function FieldRenderer({ field, value, onChange, disabled, computedCtx, auto }: 
           <Textarea
             value={(value as string) ?? ''}
             disabled={disabled}
+            placeholder={placeholderStr}
             onChange={(e) => onChange(e.target.value)}
             rows={3}
           />
@@ -171,6 +173,7 @@ function FieldRenderer({ field, value, onChange, disabled, computedCtx, auto }: 
             type="number"
             value={value === null || value === undefined ? '' : (value as number)}
             disabled={disabled}
+            placeholder={placeholderStr}
             onChange={(e) => onChange(e.target.value === '' ? null : parseFloat(e.target.value))}
           />
         </div>
