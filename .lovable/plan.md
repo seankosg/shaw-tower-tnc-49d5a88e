@@ -1,73 +1,48 @@
-# Defect — Captured By 정규 필드화 + 대시보드 상단 통계 카드
+# Captured By 데이터 노출 + 백필 점검
 
-## 1) Captured By를 정규 필드로 승격
+## 현상
 
-현재 `Captured by`는 `defect_items.raw_payload` JSON 내에 저장되어 있고, `defect_field_config` 에서 `payload_captured_by` 라는 **동적(payload_)** 컬럼으로만 Raw Data에 노출되고 있음. 이를 일반 컬럼으로 승격.
+대시보드 Captured By 섹션에 "No Captured By data available" 표시.
 
-### 작업
-- **마이그레이션**
-  - `defect_items` 에 `captured_by_name TEXT NULL` 컬럼 추가, 인덱스(`btree`) 생성
-  - 기존 데이터 백필: `UPDATE defect_items SET captured_by_name = NULLIF(TRIM(raw_payload->>'Captured by'), '')`
-  - `defect_field_config` 에서 기존 `payload_captured_by` 행을 제거하고 `captured_by_name` 정규 행을 추가 (display_name = "Captured By", source_origin = `aconex`, is_enabled = true, sort_order는 `hdec_eng_name` 직후)
-- **Import 파이프라인 (`src/lib/defect-parser.ts`)**
-  - 헤더 별칭 맵에 `'captured by' → 'captured_by_name'` 추가
-  - 파싱 결과 객체에 `captured_by_name: toText(getMapped(raw, 'captured_by_name'))` 추가
-  - `raw_payload` 에는 기존처럼 `Captured by` 원문도 그대로 유지
-- **타입 / 라벨**
-  - `DefectItem` 인터페이스에 `captured_by_name: string | null` 추가
-  - `DEFECT_DEFAULT_FIELD_LABELS` 에 `captured_by_name: 'Captured By'` 추가
-  - `DEFECT_RAW_FIELDS` (Raw Data 페이지 컬럼 정의)에 `captured_by_name` 추가 — 위치는 `hdec_eng_name` 다음
-- 기존 dynamic `payload_captured_by` 컬럼은 `defect_field_config` 행 삭제로 자동 비활성
+## 원인 진단 (DB 확인 결과)
 
-## 2) Defect Dashboard 상단 3개 배너 제거 + Captured By 통계 카드 추가
+- `defect_items` 전체 6,097 행 중:
+  - `raw_payload`에 `Captured by` 키를 가진 행: **1,320 행**
+  - 마이그레이션으로 백필된 `captured_by_name` (NULL 제외): **905 행**
+- 팀별 백필 현황: Arch 656 / Elec 226 / **Mech 23** / Design 0
+- 현재 화면(Mech 팀)에는 23명분이 있어야 하지만 **0건**으로 표시됨
 
-`src/pages/DefectDashboardPage.tsx` 의 399~405 라인 `<AlertBanner>` 3개 (Overdue / At-Risk / In Dispute) 블록을 삭제하고, 그 자리에 **Captured By 인물별 통계 카드 그리드** 를 배치.
+→ 원인은 **클라이언트 캐시(`src/lib/defect-cache.ts`)의 `SLIM_COLUMNS`에 `captured_by_name`이 빠져있어** Supabase에서 가져오지 않기 때문. DB에는 값이 있으나 프런트엔드 메모리에 로딩되지 않음.
 
-### UX 사양
-- 각 사람당 1개의 카드:
-  - 제목: 인물 이름 (`captured_by_name`)
-  - 4개 미니 metric: **Total** / **Completed** / **Closed** / **In Dispute**
-  - 카드 클릭 시 Raw Data 로 이동하며 `?capturedBy=<name>` 파라미터 적용
-  - 각 metric 숫자 클릭 시에는 해당 상태 필터까지 함께 적용 (`actualComplete=true`, `closureComplete=true`, `closureStatus=InD`)
-- 정렬: Total 내림차순. `captured_by_name` 이 비어있는 항목은 별도 카드로 표시하지 않음
-- 반응형: `grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`
+## 작업 계획
 
-### 권한
-- **Guest 에게는 카드 영역 자체를 렌더링하지 않음**
-- 판정: `useAuth()` 의 `roles` 를 사용해 `roles.includes('guest') || roles.includes('super_guest')` 이면 hide
-- (정확히는 사용자 요구: "Guest" — `guest` role만 숨김. super_guest 포함 여부는 기존 가드 패턴 따라가되, 기본은 `guest`만 숨김)
+### 1) 캐시 select에 컬럼 추가 (핵심 수정)
 
-### 집계 로직
-- 클라이언트 캐시 (`useDefectCache`) 의 전체 defect 리스트를 `captured_by_name` 기준 groupBy
-- Per-person 계산:
-  - **Total**: 그룹 row 수
-  - **Completed**: `isActualComplete(row)` true 개수
-  - **Closed**: `isClosureComplete(row)` true 개수
-  - **In Dispute**: `row.closure_status === 'InD'` 개수
+`src/lib/defect-cache.ts` 의 `SLIM_COLUMNS` 배열에 `'captured_by_name'` 한 줄 추가 (`hdec_eng_name` 다음 위치).
 
-### Raw Data 필터 연동
-- `DefectRawDataPage` 의 query param 처리에 `capturedBy` 추가 → 컬럼 필터로 `captured_by_name` 에 적용
-  - 기존 `closureStatus`, `actualComplete`, `closureComplete` 필터 패턴과 동일하게 처리
+이 한 줄 추가만으로 현재 DB에 백필된 905건이 즉시 대시보드에 표시됨.
 
-### 합계 검산(Reconciliation) 로직
-- 인물별 카드 그리드 아래에 **검산 요약 줄(Reconciliation Row)** 을 표시.
-- 검산 대상 (대시보드 최상단 KPI 카드 값과 1:1 비교):
-  - Σ Total       === `kpis.total`
-  - Σ Completed   === `kpis.actualDone`
-  - Σ Closed      === `kpis.closureDone`
-  - Σ In Dispute  === `kpis.inDisputeCount`
-- 단, Captured By 카드는 `captured_by_name` 이 비어있는 row 를 제외하므로:
-  - 캐시 전체 합계에서 **`captured_by_name` 가 null/빈값인 row 의 동일 지표값** 을 빼서 비교 기준선을 계산 (`expected = kpi - unknownCount`)
-  - 즉, "Unknown(=captured_by 미기재)" 건수는 검산 줄에 별도 표시 (`Unknown: N`)
-- 표시 형식:
-  - 모든 4개 지표가 일치하면 작은 녹색 체크 배지 `All totals reconcile ✓` 출력
-  - 하나라도 불일치 시 노란 경고 박스에 `Total: Σ=X / KPI=Y (Δ=±N, Unknown=K)` 형식으로 항목별 차이 표기
-  - 개발/관리자 디버깅 편의를 위해 `console.warn` 으로 동일 내용 로깅 (admin/superuser 일 때만)
-- 구현 위치: `CapturedByStatCard` 그리드 직후, `useMemo` 로 합계 계산 → 단일 `ReconciliationRow` 컴포넌트 렌더
+### 2) 백필 보강 — 대소문자/공백 변형 흡수
+
+기존 마이그레이션은 `raw_payload->>'Captured by'` 정확 매칭만 사용. 다음 변형도 합쳐서 재백필:
+- `Captured By`, `CAPTURED BY`, `captured_by`, `CapturedBy` 등
+- 좌우 공백 트림 후 빈 문자열은 NULL
+
+추정 추가 백필 대상은 많지 않지만(현재 1,320행이 이미 정확 키 사용) 안전망으로 실행.
+
+### 3) 미보유 행에 대한 안내
+
+`raw_payload`에 어떤 형태의 Captured by 키도 없는 약 **4,777 행**은 원본 데이터 자체에 정보가 없음 (구버전 Aconex export, 초기 import 시점에 해당 컬럼이 포함되지 않음). 이 데이터는 DB 차원에서 복구 불가하며, 다음 중 하나가 필요:
+- 해당 행을 **재import** (Aconex에서 Captured by 컬럼 포함하여 export 후 import)
+- 또는 그대로 두고 Captured By 섹션의 "Unknown" 카운트로만 노출
+
+이 부분은 사용자 결정 필요 — 본 작업에서는 **재import는 수행하지 않음**.
+
+## 검증
+
+수정 후 Mech 팀 대시보드에서 Captured By 카드 23명분 표시 + Reconciliation Row의 Unknown 카운트가 (팀 total - 23) 와 일치하는지 확인.
 
 ## 기술 메모
 
-- 마이그레이션과 `defect_field_config` 행 변경은 단일 migration 으로 처리
-- 정규 컬럼 추가 후 Raw Data 에서 이전 `payload_captured_by` 동적 컬럼은 자동 사라짐 (config 삭제로)
-- Captured By 라벨/source는 기존 Aconex origin 유지 → 헤더 스타일이 일관됨
-- Dashboard 카드 구현은 기존 `KpiCard` 와는 별도의 `CapturedByStatCard` 로 컴포넌트화하여 같은 파일 내 정의 (스타일 토큰은 `Card`, `Badge`, semantic color 사용)
+- `HEAVY_SELECT`는 raw_payload를 포함하므로 별도 수정 불필요
+- 변경 파일: `src/lib/defect-cache.ts` 1개 + 백필용 migration 1개
