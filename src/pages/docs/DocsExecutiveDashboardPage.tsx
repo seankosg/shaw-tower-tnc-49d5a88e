@@ -183,7 +183,7 @@ function PortfolioKpiStrip({ kpi }: {
 
 // ─────────────────────────────────────────────────────────────────────
 function ModuleSection({
-  module, records, abdRows, ommRows, asOf, onNavigate,
+  module, records, abdRows, ommRows, asOf, onNavigate, defaultCollapsed = false,
 }: {
   module: DocModule;
   records: DocsStageRecord[];
@@ -191,7 +191,9 @@ function ModuleSection({
   ommRows: any[];
   asOf: Date;
   onNavigate: (m: DocModule, params?: Record<string, string>) => void;
+  defaultCollapsed?: boolean;
 }) {
+  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
   const Icon = MODULE_ICON[module];
   const accent = MODULE_ACCENT[module];
 
