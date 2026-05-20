@@ -270,13 +270,16 @@ trade 매핑 초안 (`src/lib/ddn/auto-fill-trade-map.ts`, 운영 확인 후 확
 
 - `src/lib/ddn/auto-fill.ts` — fetcher 5종 + `useDdnAutoFill(D)` react-query 훅
 - `src/lib/ddn/auto-fill-types.ts` — `AutoEntry`, `AutoMap`, `AutoSource` 타입
-- `src/components/ddn/AutoFillBanner.tsx` — 상단 배너 (몇 개 필드 자동, 데이터 새로고침 시각, Apply 버튼)
+- `src/lib/ddn/system-summary.ts` — `summarizeSystems(rows)` 헬퍼 (system+level → 압축 문자열, 단위 테스트 포함)
+- `src/lib/ddn/auto-fill-trade-map.ts` — RTO 카테고리 ↔ punch trade/keyword 상수
+- `src/lib/ddn/pt-filter.ts` — `PT_NAMES = ['Puretech']` 상수 (한곳 관리)
+- `src/components/ddn/AutoFillBanner.tsx` — 상단 배너 (Puretech-only 표기, 자동 N개, fetch 시각, Apply 버튼)
 - `src/components/ddn/AutoFillBadge.tsx` — 필드 옆 작은 뱃지 (재사용)
 
 ### 변경 파일
 
 - `src/pages/ddn/DdnInputPage.tsx`
-  - 헤더에 Auto-fill 배너 추가 (자동 가능 필드 N개 / 빈 필드만 채우기 / 덮어쓰기).
+  - 헤더에 Auto-fill 배너 추가 ("Scope: Puretech only" 부제 + 자동 가능 필드 N개 / 빈 필드만 채우기 / 덮어쓰기).
   - `useDdnAutoFill(entryDate)` 사용해 autoMap 생성.
   - DynamicForm에 `autoMap` prop 전달.
 - `src/components/ddn/DynamicForm.tsx`
@@ -284,52 +287,56 @@ trade 매핑 초안 (`src/lib/ddn/auto-fill-trade-map.ts`, 운영 확인 후 확
     - 값이 비었으면 input `placeholder`에 자동값 표시 (회색)
     - label 우측에 `<AutoFillBadge source={...} />` 추가
     - field 우측에 "↻" 버튼 (해당 필드만 적용)
-  - `repeatable_group` 의 경우 자동 후보를 별도 expandable 목록으로 표시 (사용자가 "Add"로 가져오기).
+  - `repeatable_group` (delayed_items) 의 경우 자동 후보를 별도 expandable 목록으로 표시 (사용자가 "Add"로 가져오기).
 
-### 신규 SQL 보조 (선택)
+### 마이그레이션 (1건)
 
-성능을 위해 view 1개:
+R1S, R2S 시드 + 매핑 룰:
+
 ```sql
-CREATE OR REPLACE VIEW ddn_subtest_daily AS
-SELECT
-  COALESCE(t1_actual_date, t1_planned_date, t2_actual_date, t2_planned_date, pred_actual_date, pred_planned_date) AS d,
-  id, project_id, system_id, item_no, subtest_id,
-  pred_planned_date, pred_actual_date,
-  t1_planned_date, t1_actual_date, t1_status,
-  t2_planned_date, t2_actual_date, t2_status
-FROM subtests WHERE is_active;
+-- ddn_fields: planned_tests.r1s_systems / r1s_plan / r1s_actual / r1s_pct
+--             planned_tests.r2s_systems / r2s_plan / r2s_actual / r2s_pct
+--             (Pred/T1/T2와 동일한 구조)
+-- ddn_mapping_rules: planned_tests.r1s_line / r2s_line
+--   condition: gt planned_tests.r1s_plan 0
+--   template:  "R1S — {{planned_tests.r1s_actual}}/{{planned_tests.r1s_plan}}
+--               ({{planned_tests.r1s_pct}}) — {{planned_tests.r1s_systems}}."
 ```
-(필요 없다고 판단되면 클라이언트에서 직접 집계.)
 
 ## UI 변경 미리보기 (Input 페이지)
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
-│ Entry date [2026-05-20]   Day N [120]   [draft]   ⓘ Auto-fill   │
+│ Entry date [2026-05-20]   Day N [120]   [draft]                 │
 │ ┌──────────────────────────────────────────────────────────────┐│
-│ │ Auto-fill available for 28 fields  •  Source: subtests,      ││
-│ │ defect_items, docs_drawings, punch_items                     ││
-│ │ [Refresh data]  [Apply to empty fields]  [Overwrite all ▾]   ││
+│ │ Auto-fill available for 27 fields  •  Scope: Puretech only   ││
+│ │ Sources: subtests, defect_items, docs_drawings, punch_items  ││
+│ │ [Refresh data]  [Apply to empty]  [Overwrite all ▾]          ││
 │ └──────────────────────────────────────────────────────────────┘│
 └──────────────────────────────────────────────────────────────────┘
 
- §Planned Tests
-   Pred — Systems/Level  [auto]                   ↻
-   ┌──────────────────────────────┐
-   │ Substation A, B, ... (auto)  │  ← placeholder가 자동값
-   └──────────────────────────────┘
-   Pred — Planned [auto]    Pred — Actual [auto]   Pred — Achievement
-   [  12  ]                 [   9  ]                 75%
+ §Planned Tests (Puretech)
+   T1 — Systems/Level [auto]                       ↻
+   ┌────────────────────────────────────────────┐
+   │ Substation 1 (L5–L7); Genset (L1)  (auto)  │  ← system-summary 결과
+   └────────────────────────────────────────────┘
+   T1 — Planned [auto]   T1 — Actual [auto]    T1 — Achievement
+   [    12   ]           [     9    ]           75%
+
+   R1S — Systems/Level [auto]   R1S — Planned [auto]  R1S — Actual [auto]
+   [ ... ]                       [   5   ]              [   3   ]
 ```
 
 ## 작업 순서
 
-1. `auto-fill-types.ts` + `auto-fill.ts` — fetcher 5종, AutoMap 빌더, react-query 훅.
-2. `AutoFillBadge.tsx` + `AutoFillBanner.tsx`.
-3. `DynamicForm.tsx` 수정 — autoMap prop 수용, placeholder/뱃지/↻ 버튼.
-4. `DdnInputPage.tsx` 수정 — useDdnAutoFill 연결, 배너 삽입.
-5. trade 매핑 상수 `src/lib/ddn/auto-fill-trade-map.ts` — RTO 카테고리 ↔ punch trade.
-6. 검증: 실제 D 입력 → fetch → 자동값 표시 → "Apply to empty" → 저장 확인.
+1. 마이그레이션: planned_tests 섹션에 R1S/R2S 필드 + 매핑 룰 시드.
+2. `system-summary.ts` + 단위 테스트.
+3. `auto-fill-types.ts` + `pt-filter.ts` + `auto-fill-trade-map.ts`.
+4. `auto-fill.ts` — fetcher 5종 (모두 Puretech 필터 적용), AutoMap 빌더, react-query 훅.
+5. `AutoFillBadge.tsx` + `AutoFillBanner.tsx`.
+6. `DynamicForm.tsx` 수정 — autoMap prop 수용, placeholder/뱃지/↻ 버튼.
+7. `DdnInputPage.tsx` 수정 — useDdnAutoFill 연결, 배너 삽입.
+8. 검증: 실제 D 입력 → fetch → 자동값 표시 → "Apply to empty" → 저장 → Preview에서 R1S/R2S 문장 확인.
 
 ## 향후 확장 (참고)
 
