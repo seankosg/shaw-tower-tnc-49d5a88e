@@ -4,11 +4,56 @@
 
 ## 핵심 원칙
 
+- **범위 = Puretech 업무 한정**: 모든 raw 쿼리는 `subcontractor_name = 'Puretech'` (필요 시 `subsub_name` 포함 = Puretech의 sub-sub 22개)로 필터. defect/punch/subtest 전부 동일. 비-Puretech 행은 자동 채움 집계에서 제외.
+- **레터 친화 요약**: 자동값은 통보문에 그대로 인용되므로 **짧고 읽기 쉽게**. Subtest ID 나열 ✗, **System 단위로 압축**하고, 같은 시스템의 여러 층은 한 줄로 묶음 (예: `Substation 1 (L5, L6, L7)`, 동일 시스템 동일 그룹이 ≥ 4개면 `(L5–L9, +2)` 식으로 축약).
 - **결정성**: 같은 entry_date + 같은 raw data → 항상 같은 자동값.
 - **비파괴**: 자동값은 사용자 입력을 덮어쓰지 않음. 빈 칸만 채우거나, "Auto-fill" 버튼을 명시적으로 눌렀을 때만 적용.
-- **출처 표시**: 각 필드 옆에 "auto" 뱃지 + 마우스 오버 시 출처 쿼리 설명.
+- **출처 표시**: 각 필드 옆에 "auto" 뱃지 + 마우스 오버 시 출처 쿼리 설명 + 필터(Puretech) 명시.
 - **재계산 가능**: 새로 raw data가 import되면 "Refresh from data" 버튼으로 재반영.
 - **fail-soft**: 쿼리 실패/데이터 없음 → 빈 값으로 두고 경고 패널에 표시. 폼 자체는 항상 사용 가능.
+
+## 스키마 변경 — planned_tests 섹션 확장
+
+현재 Pred / T1 / T2 3개 행만 있음. 운영 요구에 따라 **R1S, R2S 2개 행을 추가**합니다.
+
+| 행 | 의미 | plan 소스 | actual 소스 | done 판정 |
+|----|------|-----------|-------------|----------|
+| Pred | Predecessor | `pred_planned_date` | `pred_actual_date` | `pred_status='Done'` |
+| T1 | Test 1 | `t1_planned_date` | `t1_actual_date` | `t1_status='Done'` |
+| T2 | Test 2 | `t2_planned_date` | `t2_actual_date` | `t2_status='Done'` |
+| **R1S** | Report 1 Submission | `r1_target_submission_date` | `r1_actual_submission_date` | `r1_status` ∈ ('Submitted','Approved') |
+| **R2S** | Report 2 Submission | `r2_target_submission_date` | `r2_actual_submission_date` | `r2_status` ∈ ('Submitted','Approved') |
+
+각 행마다 동일 5필드(`systems`, `plan`, `actual`, `pct`, 선택적으로 짧은 코멘트)를 추가합니다.
+
+마이그레이션 1건: `ddn_sections.planned_tests` 아래 R1S(field_keys `planned_tests.r1s_*`), R2S(`planned_tests.r2s_*`) 필드 시드 + 영문 매핑 룰 추가(`planned_tests.r1s_line`, `planned_tests.r2s_line`).
+
+## System 표현 규칙 (자동 채움 산출물 공통)
+
+```text
+입력 행(Puretech 필터링된 subtests):
+  (system='Substation 1', level='L5')
+  (system='Substation 1', level='L6')
+  (system='Substation 1', level='L7')
+  (system='Genset',       level='L1')
+
+출력 1줄 문자열:
+  "Substation 1 (L5–L7); Genset (L1)"
+
+규칙:
+  1. system_master.name 기준으로 그룹.
+  2. 같은 system에 속한 level은 정렬 후
+     - 1~3개: "(L5, L6, L7)"
+     - 연속 4개 이상: "(L5–L9)"  (Range로 압축)
+     - 비연속/혼합: "(L5–L7, L10)" 형태
+  3. system 간 구분자 "; "
+  4. 전체 길이가 80자 초과 시 "… +N more" 로 잘라냄 (마우스 오버 시 전체 표시).
+  5. level이 비어있으면 system 이름만, level만 있고 system이 없으면 "(L5)" 형태.
+
+위 로직은 src/lib/ddn/system-summary.ts 헬퍼 1개로 통일 (재사용 + 테스트).
+```
+
+이 헬퍼는 Pred/T1/T2/R1S/R2S systems 필드 5종, delayed_items 그룹화, T&C reject system 표시에 모두 동일하게 사용합니다.
 
 ## 필드별 자동 채움 매핑 검토 결과
 
