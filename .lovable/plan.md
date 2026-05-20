@@ -64,79 +64,65 @@
 
 ### 섹션별 매핑표
 
+> **공통 필터**: 아래 모든 A/B 항목 쿼리는 `subcontractor_name = 'Puretech'` 적용. defect/punch는 동일 컬럼, subtests도 동일. sub-sub 22개는 자동 포함(부모가 Puretech).
+
 ```text
-section          field_key                       구분  데이터 소스 + 산식
-───────────────  ─────────────────────────────── ────  ──────────────────────────────────────────────────────────
-planned_tests    pred_plan                       A     subtests where pred_planned_date = D, group count
-planned_tests    pred_actual                     A     subtests where pred_actual_date = D, group count
-planned_tests    pred_systems                    B     subtests pred-plan 그룹의 system_master.name 콤마 결합
-planned_tests    pred_pct                        A     computed (이미 구현)
-planned_tests    t1_plan                         A     subtests where t1_planned_date = D
-planned_tests    t1_actual                       A     subtests where t1_actual_date = D AND t1_status='Done'
-planned_tests    t1_systems                      B     동일 그룹 system name
-planned_tests    t2_plan / t2_actual / t2_systems A     동일 (t2_*)
-planned_tests    delayed_items (repeatable)      B     subtests where (t1_planned_date < D AND t1_status != 'Done')
-                                                       또는 (t2_planned_date < D AND t2_status != 'Done')
-                                                       → name = subtest_id, reasons = ['delay']
-                                                       (사유는 사용자가 multi-select로 보완)
+section          field_key                          구분  데이터 소스 + 산식
+───────────────  ────────────────────────────────── ────  ─────────────────────────────────────────────────────────
+planned_tests    pred_plan / actual                 A     subtests(PT) where pred_planned_date / pred_actual_date = D
+planned_tests    pred_systems                       A     pred-plan 행을 system-summary 헬퍼로 압축
+planned_tests    pred_pct                           A     computed (이미 구현)
+planned_tests    t1_plan / actual / systems         A     subtests(PT) t1_planned_date=D / t1_actual_date=D AND t1_status='Done'
+planned_tests    t2_plan / actual / systems         A     subtests(PT) t2_*
+planned_tests    r1s_plan / actual / systems  [신규] A     subtests(PT) r1_target_submission_date / r1_actual_submission_date,
+                                                          done = r1_status IN ('Submitted','Approved')
+planned_tests    r2s_plan / actual / systems  [신규] A     subtests(PT) r2_target_submission_date / r2_actual_submission_date,
+                                                          done = r2_status IN ('Submitted','Approved')
+planned_tests    delayed_items (repeatable)         B     subtests(PT) where 과거 계획 미완료 → system-summary로 그룹
+                                                          → name = system 1줄, reasons = ['delay'] (사용자 보완)
 
-sec1  (인원·감독)                                M     PM 출근, 회의 참석, 인원 계획/실적 모두 raw 없음
-sec1  pm_attended                                M     수동 (체크리스트)
-sec1  hdec_substitution / target / other         M     수동
-sec1  eng_planned / actual 등 인원 카운트        M     인원 마스터가 없으므로 수동
-                                                       (향후: 인원 일일 출근 테이블 추가 시 자동화 가능 — Phase++)
+sec1  (인원·감독·회의)                              M     모두 수동 (raw 없음)
 
-sec2  delay_days                                 A     computed (settings.contract_completion_date − D)
-sec2  ld_accumulated                             A     computed (delay_days × settings.ld_daily_rate_sgd)
-sec2  facade_cum / today / defect                M     별도 façade 진척 raw 없음 (수동)
-sec2  op_24h                                     M     수동
+sec2  delay_days / ld_accumulated                   A     computed
+sec2  facade_* / op_24h                             M     수동
 
-sec3  ncr_open                                   M*    NCR 테이블 없음. defect_items 중 priority='NCR'/특정 분류
-                                                       가 있다면 추출 가능. 현재 스키마상 직접 매핑 어렵 → M
-                                                       (필요 시 defect_classification_rules 활용한 필터 추가)
-sec3  ncr_new_today / closed_today               M*    동일
-sec3  def_open                                   A     defect_items where is_active AND status='Open' count
-sec3  def_closed_today                           A     defect_items where actual_closure_date = D 또는
-                                                       (status='Closed' AND updated_at::date = D)
-                                                       — 우선 actual_closure_date 우선, 보조로 change_log 확인
-sec3  def_new_today                              A     defect_items where created_at::date = D AND is_active
-sec3  tc_reject                                  B     subtest_change_log changed_field='t1_status' OR 'r1_status'
-                                                       new_value IN ('Returned') AND changed_at::date = D
-                                                       → Y/N 결정 + system/level/reason 후보 표시
-sec3  tc_reject_system / level / reason          B     위 후보 행의 subtest → system_master.name / level / remarks
-sec3  archi_rework_plan                          M     수동
+sec3  ncr_*                                         M*    별도 NCR 테이블 없음 → 수동 (향후 defect priority 매핑 시 자동화)
+sec3  def_open                                      A     defect_items(PT) is_active AND status='Open' count
+sec3  def_closed_today                              A     defect_items(PT) actual_closure_date=D 또는
+                                                          (status='Closed' AND updated_at::date=D)
+sec3  def_new_today                                 A     defect_items(PT) created_at::date=D AND is_active
+sec3  tc_reject (Y/N)                               B     subtest_change_log JOIN subtests(PT)
+                                                          changed_field IN (t1/t2/r1/r2_status)
+                                                          AND new_value='Returned' AND changed_at::date=D
+sec3  tc_reject_system / level / reason             B     위 후보 행을 system-summary로 압축 + remarks 상위 1건
+sec3  archi_rework_plan                             M     수동
 
-sec4  asbuilt_cum                                A     docs_drawings where sub_module='as_built' AND discipline ILIKE 'ELEC%'
-                                                       AND approved_date <= D, count
-sec4  asbuilt_today                              A     docs_drawings where approved_date = D AND discipline ILIKE 'ELEC%'
-sec4  om_elec / om_elv                           B     docs_omm 테이블 기준 (sub_module/discipline) — 후보 제시
-sec4  warranty                                   B     docs_warranty (signed/submitted 여부) — 후보 제시
-sec4  gm_led_driver / gm_power_tab               M     수동
+sec4  asbuilt_cum / today                           A     docs_drawings(Puretech org) sub_module='as_built'
+                                                          AND discipline ILIKE 'ELEC%'
+                                                          cum: approved_date <= D / today: approved_date = D
+sec4  om_elec / om_elv                              B     docs_omm (Puretech) sub_module/discipline 후보 제시
+sec4  warranty                                      B     docs_warranty (Puretech) 후보 제시
+sec4  gm_*                                          M     수동
 
-sec5  cctv_po / cctv_po_date / cctv_eta 등        M     구매·자재 상태 raw 별도 없음 → 수동
-                                                       (향후: docs_spare_part 또는 별도 procurement 테이블 연동 검토)
+sec5  cctv_* / strobe / pole / special / x15 / temp M     procurement raw 없음 → 수동
+                                                          (향후 docs_spare_part 연동 검토)
 
-sec6  pt_unaware / pt_dispute                    M     정성 평가 — 수동
-sec6  t1_substitute                              A?    subtests where t1_actual_date = D AND
-                                                       hdec_pic_name IS NOT NULL AND subcontractor_name = 'PT'
-                                                       count (운영 합의 후 정의 fix)
-sec6  mos_unlearned                              M     수동 (MOS 학습 정의 별도)
-sec6  hubble_reject                              B     punch_items 또는 별도 외부 (Hubble) — 후보만
-sec6  rto_cctv / fi / oi / smart / pa            A     punch_items where main_trade IN (...) AND completion_status != 'Closed'
-                                                       (trade 매핑: cctv→'ELV'+keyword, fi→'FP', oi→?,
-                                                        smart→'ELV'+keyword, pa→'PSG' 등 — 운영 정의 필요)
-sec6  cross_damage / location / trade / cost     M     수동
-sec6  pt_other_rework                            M     수동
+sec6  pt_unaware / pt_dispute                       M     정성 평가 — 수동
+sec6  t1_substitute                                 B     subtests(PT) t1_actual_date=D AND hdec_pic_name IS NOT NULL
+                                                          → 운영 정의 fix 후 A 승격
+sec6  mos_unlearned                                 M     수동
+sec6  hubble_reject                                 B     punch_items(PT) 외부 Hubble 식별자 컬럼 정의 후
+sec6  rto_cctv / fi / oi / smart / pa               A     punch_items(PT) trade 매핑 + completion_status != 'Closed' count
+                                                          (매핑 상수는 src/lib/ddn/auto-fill-trade-map.ts)
+sec6  cross_damage / pt_other_rework                M     수동
 
-sec7  safety_violations / env_violations         M     안전 raw 없음 — 수동
-sec7  hse_penalty_count / amount                 M     수동
-sec7  working_hour_violation / detail            M     수동
+sec7  safety_* / env_* / hse_* / working_hour_*     M     수동
 
-sec8  input_korean_md / input_hdec_md            M     사용자 일일 입력
-sec8  cum_* / aggregate / delta_yesterday        A     computed (이미 구현)
+sec8  input_korean_md / input_hdec_md               M     사용자 일일 입력
+sec8  cum_* / aggregate / delta_yesterday           A     computed (이미 구현)
 ```
 
-요약: **약 30~35개 필드(전체 ~90 중 1/3)** 가 raw에서 자동/반자동 채움이 가능합니다.
+요약: **자동(A) ~25개 + 반자동(B) ~10개 = 약 35개 필드**가 채워집니다 (전체 ~100개 중 35%). planned_tests 5행 × 3필드(systems/plan/actual) = 15개 + computed 2 + defect 3 + as-built 2 + RTO 5 = 핵심 27개가 1클릭 채움.
 
 ## 데이터 소스별 쿼리 청사진
 
