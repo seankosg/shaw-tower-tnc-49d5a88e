@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut, ClipboardList, Tags,
-  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical, Loader2,
+  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical, Loader2, FileWarning,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
