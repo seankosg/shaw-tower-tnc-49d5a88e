@@ -39,6 +39,7 @@ function makeRow(overrides: RowOverrides): ParsedDefectRow {
     subsub_name: overrides.subsub_name ?? null,
     hdec_pic_name: overrides.hdec_pic_name ?? null,
     hdec_eng_name: overrides.hdec_eng_name ?? null,
+    captured_by_name: overrides.captured_by_name ?? null,
     planned_start_date: overrides.planned_start_date ?? null,
     planned_completion_date: overrides.planned_completion_date ?? null,
     planned_closure_date: overrides.planned_closure_date ?? null,
