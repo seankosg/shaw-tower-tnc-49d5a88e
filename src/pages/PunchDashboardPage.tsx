@@ -205,28 +205,31 @@ export default function PunchDashboardPage() {
       {/* ── Tier 1: Progress (진도율) ───────────────────────────────────── */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <ProgressKpiCard
-          label="Completion"
+          label="Completed"
           percent={stats.total ? (stats.completed / stats.total) * 100 : 0}
           sub={`${stats.completed.toLocaleString()} / ${stats.total.toLocaleString()} items`}
           barTone="emerald"
           onClick={() => go('completionStatus=Completed')}
         />
         <ProgressKpiCard
-          label="Weighted Actual"
-          percent={stats.w.actual}
-          sub="Progress (weighted by qty)"
-          barTone="emerald"
-        />
-        <ProgressKpiCard
-          label="Weighted Planned"
+          label="Planned Progress"
           percent={stats.w.planned}
-          sub="Plan as of today"
+          sub={`${stats.plannedStartedByToday.toLocaleString()} / ${stats.total.toLocaleString()} items`}
           barTone="neutral"
         />
-        <VarianceKpiCard
-          label="Variance"
-          value={stats.w.variance}
-          sub="Actual − Planned"
+        <ProgressKpiCard
+          label="Actual Progress"
+          percent={stats.w.actual}
+          sub={`${stats.actuallyStarted.toLocaleString()} / ${stats.total.toLocaleString()} items`}
+          barTone="emerald"
+        />
+        <RiskKpiCard
+          label="In Delay"
+          count={stats.inDelay}
+          percent={pctNum(stats.inDelay, stats.total)}
+          sub={`${stats.inDelay.toLocaleString()} / ${stats.total.toLocaleString()} items`}
+          tone="danger"
+          onClick={() => go('status=in_delay')}
         />
       </div>
 
