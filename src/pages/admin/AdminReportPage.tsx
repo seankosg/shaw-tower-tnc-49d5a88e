@@ -31,12 +31,14 @@ export default function AdminReportPage() {
       <Tabs defaultValue="report">
         <TabsList className="flex-wrap">
           <TabsTrigger value="report">Report Generator</TabsTrigger>
+          <TabsTrigger value="record">Record Export</TabsTrigger>
           <TabsTrigger value="tokens">Design Tokens</TabsTrigger>
           <TabsTrigger value="composer">Slide Composer</TabsTrigger>
           <TabsTrigger value="guide">Design Guide</TabsTrigger>
           {canSeeCodeEditor && <TabsTrigger value="code">Code Editor</TabsTrigger>}
         </TabsList>
         <TabsContent value="report"><ReportTab /></TabsContent>
+        <TabsContent value="record"><RecordExportTab /></TabsContent>
         <TabsContent value="tokens"><DesignTokensEditor embedded /></TabsContent>
         <TabsContent value="composer"><SlideComposer embedded /></TabsContent>
         <TabsContent value="guide"><DesignGuideManager embedded /></TabsContent>
