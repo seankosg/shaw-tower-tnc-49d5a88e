@@ -25,7 +25,6 @@ import {
   ALL_STAGE_DEFS, MODULE_LABEL, MODULE_RAW_ROUTE,
   computeStageProgress, summariseByItem, computeAbdBucketDistribution,
   computeOmmSub1StatusBuckets, computeOmmSub2StatusBuckets, OMM_VISIBLE_STAGE_KEYS,
-  isDueThisWeek, criticalDelayItemIds,
   type DocModule, type DocsStageRecord, type AbdBucketDistribution,
   type OmmSub1StatusBuckets, type OmmSub2StatusBuckets, type OmmStatusBucketKey,
 } from '@/lib/docs-stage-records';
