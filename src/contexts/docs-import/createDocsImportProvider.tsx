@@ -34,6 +34,7 @@ export function createDocsImportProvider<TRow>(
     const { toast } = useToast();
     const [files, setFiles] = useState<DocsImportFile<TRow>[]>([]);
     const [isRunning, setIsRunning] = useState(false);
+    const [allowedTeams, setAllowedTeams] = useState<string[]>([]);
 
     const parseAndApply = useCallback(async (id: string, file: File, sheets?: string[], excludedHeaders?: string[]) => {
       try {
@@ -293,7 +294,7 @@ export function createDocsImportProvider<TRow>(
             setFiles((cur) => cur.map((x) => x.id === f.id ? { ...x, progress: pct } : x));
           };
           const result = await adapter.upsertWorker(
-            { projectId: project.id, batchId, userId: user?.id ?? null, subModule: adapter.subModule, excludedFields: f.excludedFields },
+            { projectId: project.id, batchId, userId: user?.id ?? null, subModule: adapter.subModule, excludedFields: f.excludedFields, allowedTeams: allowedTeams.length > 0 ? new Set(allowedTeams) : undefined },
             parsed,
             onProgress,
           );
@@ -347,6 +348,7 @@ export function createDocsImportProvider<TRow>(
       rawDataPath: adapter.rawDataPath,
       files, isRunning, addFiles, removeFile, clearAll,
       setFileSheets, setFileDataDate, setFileExcludedHeaders, startImport,
+      allowedTeams, setAllowedTeams,
     };
 
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

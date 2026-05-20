@@ -93,6 +93,10 @@ export interface DocsImportContextValue<TRow = unknown> {
   /** Update the user-excluded header list and re-parse the file with the new selection. */
   setFileExcludedHeaders: (id: string, excluded: string[]) => Promise<void>;
   startImport: () => Promise<void>;
+  /** OMM-only: teams (e.g. Mech/Elec/Supp) whose rows are eligible for upsert.
+   *  Empty array means no team selected — startImport must refuse to run. */
+  allowedTeams: string[];
+  setAllowedTeams: (teams: string[]) => void;
 }
 
 export interface ParsedFileResult<TRow> {
@@ -130,6 +134,9 @@ export interface WorkerContext {
   /** Canonical field names the user excluded via column-select. The worker MUST
    *  skip these keys on UPDATE so existing DB values are preserved. */
   excludedFields?: Set<string>;
+  /** OMM-only: teams selected for this import run. When non-empty, rows whose
+   *  `team` value is not in this set must be skipped by the worker. */
+  allowedTeams?: Set<string>;
 }
 
 export interface ImporterAdapter<TRow> {

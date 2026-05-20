@@ -461,6 +461,25 @@ export const ommAdapter: ImporterAdapter<ParsedOmmRow> = {
         return;
       }
 
+      if (ctx.allowedTeams && ctx.allowedTeams.size > 0) {
+        const teamVal = row.team ? String(row.team).trim() : '';
+        if (!teamVal || !ctx.allowedTeams.has(teamVal)) {
+          counters.skipped++;
+          pushLog({ rawRowNo: row.rawRowNo, field: 'team', outcome: 'skipped_empty',
+            raw: row.team, code: 'team_not_selected',
+            detail: `Team "${teamVal || '(empty)'}" not in selected teams` });
+          outcomes.push({
+            rawRowNo: row.rawRowNo, key: sn, action: 'skipped',
+            reasonCode: 'team_not_selected',
+            reasonDetail: `Team "${teamVal || '(empty)'}" not in selected teams`,
+            fieldLogs,
+          });
+          processed++;
+          return;
+        }
+      }
+
+
       const existing = existingBySn.get(sn);
       const payload: Record<string, unknown> = {
         project_id: ctx.projectId,
