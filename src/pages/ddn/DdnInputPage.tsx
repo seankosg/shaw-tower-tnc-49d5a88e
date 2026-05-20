@@ -41,9 +41,32 @@ export default function DdnInputPage() {
   }, [settings?.day1_date, entryDate]);
 
   const { state } = useDdnAutoSave({ entryDate, inputs, dayN, enabled: canEdit });
+  const { data: autoFill, isFetching: autoFetching, refetch: refetchAuto } = useDdnAutoFill(entryDate);
 
   const onChange = (key: string, value: DdnInputValue) => {
     setInputs((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const isEmpty = (v: unknown) => {
+    if (v === null || v === undefined || v === '') return true;
+    if (Array.isArray(v) && v.length === 0) return true;
+    return false;
+  };
+
+  const applyAutoFill = (overwrite: boolean) => {
+    if (!autoFill) return;
+    setInputs((prev) => {
+      const next = { ...prev };
+      let n = 0;
+      for (const [k, entry] of Object.entries(autoFill.map)) {
+        if (overwrite || isEmpty(next[k])) {
+          next[k] = entry.value as DdnInputValue;
+          n++;
+        }
+      }
+      toast.success(`Applied ${n} auto-filled field${n === 1 ? '' : 's'}`);
+      return next;
+    });
   };
 
   if (schemaLoading) return <p className="text-sm text-muted-foreground">Loading schema…</p>;
@@ -76,6 +99,19 @@ export default function DdnInputPage() {
         </CardContent>
       </Card>
 
+      <AutoFillBanner
+        result={autoFill}
+        isFetching={autoFetching}
+        disabled={!canEdit}
+        onRefresh={() => refetchAuto()}
+        onApplyEmpty={() => applyAutoFill(false)}
+        onOverwrite={() => {
+          if (window.confirm('Overwrite all auto-fillable fields with values from raw data?')) {
+            applyAutoFill(true);
+          }
+        }}
+      />
+
       <DynamicForm
         sections={schema.sections}
         fields={schema.fields}
@@ -83,6 +119,7 @@ export default function DdnInputPage() {
         onChange={onChange}
         disabled={!canEdit}
         computedCtx={computedCtx}
+        autoMap={autoFill?.map}
       />
 
       <CumulativePanel
