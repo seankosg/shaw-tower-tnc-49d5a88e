@@ -54,12 +54,13 @@ Admin > Report 페이지에 `Record Export` 탭을 신규 추가하고, Raw data
 - 시트 3 — `S-Curve` (옵션) : x=날짜, y=누계 건수. 라인 2개(Cum Planned, Cum Actual). 페이지 설정 A4 가로(landscape), 인쇄 영역 fit-to-page.
 
 엑셀 최적화:
-- 다단 헤더 사용 (Row1: 날짜, Row2: Planned/Actual/Var). `mergeCells`로 날짜 셀 병합.
-- 헤더는 굵게 + 배경색(`F1F5F9`), freeze panes (좌측 식별 컬럼 + 상단 2행).
-- 컬럼 폭 자동 계산 (헤더 길이와 데이터 최대 길이 기준 + 패딩 2).
-- 날짜 셀은 `isoToExcelSerial` 사용해 실제 date cell로 저장 (`dd-mmm` 포맷).
+- 다단 헤더 (Row1: 날짜 — `mergeCells`로 6칸 병합, Row2: Planned/Actual/Var/Cum P/Cum A/Cum Var). 좌측 식별 컬럼은 2행 세로 병합.
+- Freeze panes: 식별 컬럼 우측 + 헤더 2행 아래 고정.
+- 헤더 굵게 + 배경색(`F1F5F9`), 식별 컬럼 좁게/숫자 컬럼 6~8 폭.
+- 컬럼 폭 자동 계산(헤더와 데이터 max + 패딩 2). 좌측 식별 컬럼은 별도 폭.
+- 날짜 헤더 셀은 `isoToExcelSerial`로 실제 date cell + `dd-mmm` 포맷.
 - 숫자 0은 `-`로 표시 (`#,##0;(#,##0);-`).
-- 총계 행을 데이터 최하단에 굵게.
+- 그룹 소계/총계 행은 굵게 + 옅은 배경.
 
 ## 기술 구현
 
