@@ -561,13 +561,6 @@ function ModuleSection({
         )}
 
 
-        {/* Delay Severity Buckets — hidden for ABD */}
-        {!isAbd && (
-          <DelaySeverityRow
-            counts={delayBuckets}
-            onClick={(b) => onNavigate(module, { ...extraParams(), delay_bucket: b, overdue: '1' })}
-          />
-        )}
 
         {/* Stage Progress */}
         <div>
