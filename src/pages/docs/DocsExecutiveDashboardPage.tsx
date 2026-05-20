@@ -24,11 +24,9 @@ import {
   ALL_STAGE_DEFS, MODULE_LABEL, MODULE_RAW_ROUTE,
   computeStageProgress, summariseByItem, computeAbdBucketDistribution,
   computeOmmSub1StatusBuckets, computeOmmSub2StatusBuckets, OMM_VISIBLE_STAGE_KEYS,
-  computeDelaySeverityBuckets, isDueThisWeek, criticalDelayItemIds,
-  DELAY_BUCKETS,
+  isDueThisWeek, criticalDelayItemIds,
   type DocModule, type DocsStageRecord, type AbdBucketDistribution,
   type OmmSub1StatusBuckets, type OmmSub2StatusBuckets, type OmmStatusBucketKey,
-  type DelayBucketKey,
 } from '@/lib/docs-stage-records';
 import { normalizeSparePartStatus, type SparePartStatusNorm } from '@/lib/docs-spare-part-status';
 import { isOverdueSparePart } from '@/lib/spare-part-utils';
@@ -330,11 +328,6 @@ function ModuleSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAbd, filteredItems]);
 
-  const delayBuckets = useMemo(() => computeDelaySeverityBuckets(
-    filteredRecords
-      .filter((r) => subFilter === '__all__' || (r.subcontractor ?? '') === subFilter)
-      .filter((r) => picFilter === '__all__' || (r.hdec_pic ?? '') === picFilter),
-  ), [filteredRecords, subFilter, picFilter]);
 
   // Build extra params for drill-down (preserve current filters)
   const extraParams = (): Record<string, string> => {
@@ -568,13 +561,6 @@ function ModuleSection({
         )}
 
 
-        {/* Delay Severity Buckets — hidden for ABD */}
-        {!isAbd && (
-          <DelaySeverityRow
-            counts={delayBuckets}
-            onClick={(b) => onNavigate(module, { ...extraParams(), delay_bucket: b, overdue: '1' })}
-          />
-        )}
 
         {/* Stage Progress */}
         <div>
@@ -1015,52 +1001,4 @@ function OmmSubStatusCard({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────
-function DelaySeverityRow({
-  counts,
-  onClick,
-}: {
-  counts: Record<DelayBucketKey, number>;
-  onClick: (b: DelayBucketKey) => void;
-}) {
-  const total = DELAY_BUCKETS.reduce((s, b) => s + (counts[b] ?? 0), 0);
-  const tone: Record<DelayBucketKey, string> = {
-    '0-7':   'bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20',
-    '8-14':  'bg-orange-500/10 text-orange-700 dark:text-orange-300 hover:bg-orange-500/20',
-    '15-30': 'bg-red-500/10 text-red-700 dark:text-red-300 hover:bg-red-500/20',
-    '30+':   'bg-red-600/15 text-red-800 dark:text-red-200 hover:bg-red-600/25',
-  };
-  return (
-    <div className="rounded-xl border bg-card p-3.5">
-      <div className="mb-2 flex items-baseline justify-between">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Delay Severity (Overdue Items)
-        </span>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          Total {total.toLocaleString()}
-        </span>
-      </div>
-      <div className="grid grid-cols-4 gap-2">
-        {DELAY_BUCKETS.map((b) => (
-          <button
-            key={b}
-            type="button"
-            onClick={() => onClick(b)}
-            className={cn(
-              'flex flex-col items-center justify-center rounded-md px-2 py-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              tone[b],
-            )}
-          >
-            <span className="text-[10px] font-semibold uppercase tracking-wide leading-none">
-              {b === '30+' ? '30+ days' : `${b} days`}
-            </span>
-            <span className="mt-1 text-base font-semibold tabular-nums leading-none">
-              {(counts[b] ?? 0).toLocaleString()}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
