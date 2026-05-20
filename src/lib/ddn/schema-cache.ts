@@ -53,7 +53,7 @@ export function useDdnSettings() {
         .eq('id', 'singleton')
         .maybeSingle();
       if (error) throw error;
-      return data as DdnSettings | null;
+      return (data ?? null) as unknown as DdnSettings | null;
     },
   });
 }
