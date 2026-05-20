@@ -87,13 +87,23 @@ export default function DocsImportPage() {
           />
         </TabsContent>
 
-        <TabsContent value="omm" className="mt-4">
+        <TabsContent value="omm" className="mt-4 space-y-3">
+          <OmmTeamSelector
+            selected={omm.allowedTeams}
+            onToggle={(team) => {
+              const set = new Set(omm.allowedTeams);
+              if (set.has(team)) set.delete(team); else set.add(team);
+              omm.setAllowedTeams(Array.from(set));
+            }}
+            disabled={omm.isRunning}
+          />
           <DocsImportShell
             title="OMM — Operation & Maintenance Manuals"
             description="Upload OMM register Excel files. Headers map per Admin → Header Mappings → Docs / OMM."
             importer={omm}
             externallyBusy={abd.isRunning || warranty.isRunning}
             infoBanner="Resubmission rows are auto-created when Draft / Final response status becomes B or C during import."
+            startDisabledReason={omm.allowedTeams.length === 0 ? 'Select at least one team to update.' : undefined}
           />
         </TabsContent>
 
