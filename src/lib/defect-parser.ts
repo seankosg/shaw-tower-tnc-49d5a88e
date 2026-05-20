@@ -607,6 +607,7 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
       subsub_name: toText(getMapped(raw, 'subsub_name')),
       hdec_pic_name: toText(getMapped(raw, 'hdec_pic_name')),
       hdec_eng_name: toText(getMapped(raw, 'hdec_eng_name')),
+      captured_by_name: toText(getMapped(raw, 'captured_by_name')),
       planned_start_date: dp.dates.planned_start_date,
       planned_completion_date: dp.dates.planned_completion_date,
       planned_closure_date:
