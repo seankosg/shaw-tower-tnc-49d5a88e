@@ -188,11 +188,16 @@ export function DocsImportShell({
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={clearAll} disabled={isRunning}>Clear all</Button>
-              <Button size="sm" onClick={startImport} disabled={isRunning || importableCount === 0 || blocked}>
+              <Button size="sm" onClick={startImport} disabled={isRunning || importableCount === 0 || blocked || !!startDisabledReason}>
                 {isRunning ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" />Importing…</> : `Start import (${importableCount})`}
               </Button>
             </div>
           </CardHeader>
+          {startDisabledReason && (
+            <div className="px-6 -mt-2 pb-2">
+              <p className="text-xs text-amber-700 dark:text-amber-300">{startDisabledReason}</p>
+            </div>
+          )}
           <CardContent className="space-y-3">
             {files.map((f) => {
               const badge = statusBadge[f.status];
