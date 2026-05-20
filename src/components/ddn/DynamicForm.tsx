@@ -295,6 +295,13 @@ function FieldRenderer({ field, value, onChange, disabled, computedCtx, auto }: 
   }
 }
 
+function formatAutoPreview(v: DdnInputValue): string {
+  if (v === null || v === undefined) return '';
+  if (Array.isArray(v)) return `${v.length} item(s)`;
+  if (typeof v === 'object') return '';
+  return String(v);
+}
+
 function DelayedItemsField({
   field, value, onChange, disabled,
 }: {
