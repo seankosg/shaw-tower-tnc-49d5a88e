@@ -2,6 +2,7 @@ import { Shield } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ReportTab from './ReportTab';
+import RecordExportTab from './RecordExportTab';
 import DesignTokensEditor from '@/components/admin/DesignTokensEditor';
 import SlideComposer from '@/components/admin/SlideComposer';
 import DesignGuideManager from '@/components/admin/DesignGuideManager';
