@@ -128,86 +128,115 @@ sec8  cum_* / aggregate / delta_yesterday           A     computed (이미 구�
 
 모든 쿼리는 `entry_date = D` 한 개 입력으로 동작.
 
-### 1. `subtests` (Pred/T1/T2 + Delayed Items)
+**모든 쿼리 공통 WHERE**: `is_active AND subcontractor_name = 'Puretech'` (subtests/defect/punch 동일. sub-sub는 부모 필터로 자동 포함). 향후 운영에서 다른 PT(예: `'Puretech-2'`)가 추가되면 상수 `PT_NAMES = ['Puretech']` 한곳만 수정.
+
+### 1. `subtests` (Pred / T1 / T2 / R1S / R2S + Delayed)
 
 ```sql
--- Pred/T1/T2 plan/actual count
+-- 5행 한 번에 (Pred, T1, T2, R1S, R2S)
 SELECT
-  count(*) FILTER (WHERE pred_planned_date = $D) AS pred_plan,
-  count(*) FILTER (WHERE pred_actual_date = $D)  AS pred_actual,
-  count(*) FILTER (WHERE t1_planned_date = $D)   AS t1_plan,
-  count(*) FILTER (WHERE t1_actual_date  = $D AND t1_status='Done') AS t1_actual,
-  count(*) FILTER (WHERE t2_planned_date = $D)   AS t2_plan,
-  count(*) FILTER (WHERE t2_actual_date  = $D AND t2_status='Done') AS t2_actual
-FROM subtests WHERE is_active;
+  -- Pred
+  count(*) FILTER (WHERE pred_planned_date = $D)                                AS pred_plan,
+  count(*) FILTER (WHERE pred_actual_date  = $D AND pred_status='Done')         AS pred_actual,
+  -- T1
+  count(*) FILTER (WHERE t1_planned_date = $D)                                  AS t1_plan,
+  count(*) FILTER (WHERE t1_actual_date  = $D AND t1_status='Done')             AS t1_actual,
+  -- T2
+  count(*) FILTER (WHERE t2_planned_date = $D)                                  AS t2_plan,
+  count(*) FILTER (WHERE t2_actual_date  = $D AND t2_status='Done')             AS t2_actual,
+  -- R1S
+  count(*) FILTER (WHERE r1_target_submission_date = $D)                        AS r1s_plan,
+  count(*) FILTER (WHERE r1_actual_submission_date = $D
+                     AND r1_status IN ('Submitted','Approved'))                  AS r1s_actual,
+  -- R2S
+  count(*) FILTER (WHERE r2_target_submission_date = $D)                        AS r2s_plan,
+  count(*) FILTER (WHERE r2_actual_submission_date = $D
+                     AND r2_status IN ('Submitted','Approved'))                  AS r2s_actual
+FROM subtests
+WHERE is_active AND subcontractor_name = 'Puretech';
 
--- Systems list (Pred/T1/T2 각각)
-SELECT DISTINCT sm.name FROM subtests s JOIN system_master sm ON sm.id = s.system_id
-WHERE s.is_active AND s.t1_planned_date = $D;
-
--- Delayed items (today 기준 미완료된 과거 계획)
-SELECT s.subtest_id AS name, s.item_no, sm.name AS system,
-       s.t1_status, s.t2_status, s.t1_planned_date, s.t2_planned_date
+-- Systems 압축용 raw (Pred/T1/T2/R1S/R2S 각각 fetch, system+level 행 단위)
+SELECT sm.name AS system, s.level
 FROM subtests s JOIN system_master sm ON sm.id = s.system_id
-WHERE s.is_active AND (
+WHERE s.is_active AND s.subcontractor_name = 'Puretech'
+  AND s.t1_planned_date = $D;
+-- → 클라이언트 system-summary 헬퍼로 "Substation 1 (L5–L7); Genset (L1)" 형식 변환
+
+-- Delayed items (system 단위로 그룹 — 레터 가독성 우선)
+SELECT sm.name AS system, s.level, s.t1_status, s.t2_status,
+       s.t1_planned_date, s.t2_planned_date
+FROM subtests s JOIN system_master sm ON sm.id = s.system_id
+WHERE s.is_active AND s.subcontractor_name = 'Puretech' AND (
    (s.t1_planned_date < $D AND s.t1_status IS DISTINCT FROM 'Done')
 OR (s.t2_planned_date < $D AND s.t2_status IS DISTINCT FROM 'Done'))
-ORDER BY COALESCE(s.t2_planned_date, s.t1_planned_date)
-LIMIT 50;  -- 상위 N개만 후보로
+ORDER BY COALESCE(s.t2_planned_date, s.t1_planned_date);
+-- → 클라이언트에서 system 단위 group + level 압축 →
+--    repeatable rows: { name: "Substation 1 (L5–L7)", reasons: ['delay'] }
 ```
 
 ### 2. `defect_items` (§3 Defects)
 
 ```sql
 SELECT
-  count(*) FILTER (WHERE is_active AND status='Open') AS def_open,
-  count(*) FILTER (WHERE actual_closure_date = $D OR
-                         (status='Closed' AND updated_at::date = $D)) AS def_closed_today,
-  count(*) FILTER (WHERE created_at::date = $D AND is_active) AS def_new_today
-FROM defect_items;
+  count(*) FILTER (WHERE is_active AND status='Open')                   AS def_open,
+  count(*) FILTER (WHERE actual_closure_date = $D
+                      OR (status='Closed' AND updated_at::date = $D))   AS def_closed_today,
+  count(*) FILTER (WHERE created_at::date = $D AND is_active)           AS def_new_today
+FROM defect_items
+WHERE subcontractor_name = 'Puretech';
 ```
 
 ### 3. `subtest_change_log` (§3 T&C Reject)
 
 ```sql
-SELECT scl.subtest_id, s.subtest_id AS subtest_code, sm.name AS system,
-       s.level, scl.new_value, s.remarks
+SELECT sm.name AS system, s.level, scl.changed_field, scl.new_value, s.remarks
 FROM subtest_change_log scl
 JOIN subtests s ON s.id = scl.subtest_id
 JOIN system_master sm ON sm.id = s.system_id
-WHERE scl.changed_at::date = $D
+WHERE s.subcontractor_name = 'Puretech'
+  AND scl.changed_at::date = $D
   AND scl.changed_field IN ('t1_status','t2_status','r1_status','r2_status')
-  AND scl.new_value IN ('Returned')
-ORDER BY scl.changed_at DESC LIMIT 10;
+  AND scl.new_value = 'Returned'
+ORDER BY scl.changed_at DESC;
+-- → tc_reject = Y if 행 있음
+-- → tc_reject_system = system-summary 헬퍼 적용
+-- → tc_reject_reason = 첫 행의 s.remarks (fallback "Returned")
 ```
 
-### 4. `docs_drawings` (§4 As-Built)
+### 4. `docs_drawings` (§4 As-Built — Puretech 작성분만)
 
 ```sql
 SELECT
   count(*) FILTER (WHERE sub_module='as_built' AND discipline ILIKE 'ELEC%'
                      AND approved_date IS NOT NULL AND approved_date <= $D) AS asbuilt_cum,
   count(*) FILTER (WHERE sub_module='as_built' AND discipline ILIKE 'ELEC%'
-                     AND approved_date = $D) AS asbuilt_today
-FROM docs_drawings WHERE is_active;
+                     AND approved_date = $D)                                AS asbuilt_today
+FROM docs_drawings
+WHERE is_active AND organisation_raw ILIKE '%Puretech%';
+-- organisation_raw 외 subcontractor_id 매핑이 있으면 그쪽 우선 사용
 ```
 
 ### 5. `punch_items` (§6 RTO outstanding)
 
-trade 매핑 테이블(코드 내 상수 또는 신규 `ddn_punch_trade_map` 룩업)로 카테고리 → trade/keyword 변환.
-
 ```sql
--- 예: rto_fi = main_trade='FP' AND completion_status != 'Closed'
+-- 카테고리별 별도 쿼리 (또는 group by trade 1쿼리 후 클라이언트 분배)
 SELECT count(*) FROM punch_items
-WHERE is_active AND main_trade = $TRADE AND completion_status IS DISTINCT FROM 'Closed';
+WHERE is_active
+  AND subcontractor_name = 'Puretech'
+  AND main_trade = $TRADE
+  AND ($KEYWORD IS NULL OR description ILIKE '%' || $KEYWORD || '%' OR sub_trade ILIKE '%' || $KEYWORD || '%')
+  AND completion_status IS DISTINCT FROM 'Closed';
 ```
 
-trade 매핑 초안(운영 확인 필요):
-- `rto_cctv` → main_trade='ELV' AND description/sub_trade ILIKE '%CCTV%'
-- `rto_fi`   → main_trade='FP'
-- `rto_oi`   → main_trade='ICN' (운영 정의 필요)
-- `rto_smart` → main_trade='ELV' AND description ILIKE '%smart%'
-- `rto_pa`   → main_trade='PSG'
+trade 매핑 초안 (`src/lib/ddn/auto-fill-trade-map.ts`, 운영 확인 후 확정):
+
+| field        | main_trade | keyword |
+|--------------|------------|---------|
+| `rto_cctv`   | ELV        | CCTV    |
+| `rto_fi`     | FP         | —       |
+| `rto_oi`     | ICN        | —       |
+| `rto_smart`  | ELV        | smart   |
+| `rto_pa`     | PSG        | —       |
 
 ## 구현 흐름
 
