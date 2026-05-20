@@ -328,11 +328,6 @@ function ModuleSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAbd, filteredItems]);
 
-  const delayBuckets = useMemo(() => computeDelaySeverityBuckets(
-    filteredRecords
-      .filter((r) => subFilter === '__all__' || (r.subcontractor ?? '') === subFilter)
-      .filter((r) => picFilter === '__all__' || (r.hdec_pic ?? '') === picFilter),
-  ), [filteredRecords, subFilter, picFilter]);
 
   // Build extra params for drill-down (preserve current filters)
   const extraParams = (): Record<string, string> => {
