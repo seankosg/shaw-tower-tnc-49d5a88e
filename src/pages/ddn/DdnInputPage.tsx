@@ -8,8 +8,11 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDdnSchema, useDdnSettings, useDdnEntry } from '@/lib/ddn/schema-cache';
 import { useDdnAutoSave } from '@/lib/ddn/auto-save';
+import { useDdnAutoFill } from '@/lib/ddn/auto-fill';
 import { DynamicForm } from '@/components/ddn/DynamicForm';
 import { CumulativePanel } from '@/components/ddn/CumulativePanel';
+import { AutoFillBanner } from '@/components/ddn/AutoFillBanner';
+import { toast } from 'sonner';
 import type { DdnInputs, DdnInputValue } from '@/lib/ddn/schema-types';
 
 function todayIso() {
