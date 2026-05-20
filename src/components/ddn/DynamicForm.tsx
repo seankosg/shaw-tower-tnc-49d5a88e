@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, RotateCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type {
   DdnField,
@@ -19,6 +19,8 @@ import type {
   DdnDelayedItem,
 } from '@/lib/ddn/schema-types';
 import { computeField, type DdnComputedContext } from '@/lib/ddn/computed';
+import type { AutoMap, AutoEntry } from '@/lib/ddn/auto-fill-types';
+import { AutoFillBadge } from './AutoFillBadge';
 
 interface Props {
   sections: DdnSection[];
@@ -27,6 +29,7 @@ interface Props {
   onChange: (key: string, value: DdnInputValue) => void;
   disabled?: boolean;
   computedCtx: Omit<DdnComputedContext, 'inputs'>;
+  autoMap?: AutoMap;
 }
 
 const widthClass: Record<string, string> = {
