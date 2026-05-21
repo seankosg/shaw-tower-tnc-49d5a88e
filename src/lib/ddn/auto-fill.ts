@@ -160,14 +160,17 @@ async function fetchTcReject(D: string, map: AutoMap, errs: string[]) {
   const sysName = new Map<string, string>();
   if (sysIds.length) {
     const { data: sm } = await supabase
-      .from('system_master').select('id, system_name_std').in('id', sysIds);
-    for (const s of sm ?? []) sysName.set(s.id as string, (s.system_name_std as string) ?? '');
+      .from('system_master').select('id, system_name_std, system_code').in('id', sysIds);
+    for (const s of sm ?? []) {
+      const nm = (s.system_name_std as string | null) || (s.system_code as string | null) || '';
+      sysName.set(s.id as string, nm);
+    }
   }
   const sysRows: SystemRow[] = rows.map((r) => ({
     system: r.subtests?.system_id ? sysName.get(r.subtests.system_id) ?? '' : '',
     level: r.subtests?.level ?? null,
   }));
-  map['sec3.tc_reject_system'] = { value: summarizeSystems(sysRows), source: 'subtest_change_log', note: 'Systems with returned reports' };
+  map['sec3.tc_reject_system'] = { value: summarizeSystemNames(sysRows), source: 'subtest_change_log', note: 'Systems with returned reports' };
   const firstReason = rows.find((r) => r.subtests?.remarks)?.subtests?.remarks;
   if (firstReason) {
     map['sec3.tc_reject_reason'] = { value: firstReason, source: 'subtest_change_log', note: 'First subtest remarks (most recent)' };
