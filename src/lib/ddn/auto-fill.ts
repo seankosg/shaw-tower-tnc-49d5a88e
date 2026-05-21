@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { PT_NAMES } from './pt-filter';
 import { RTO_TRADE_MAP } from './auto-fill-trade-map';
-import { summarizeSystems, type SystemRow } from './system-summary';
+import { summarizeSystems, summarizeSystemNames, type SystemRow } from './system-summary';
 import type { AutoMap, AutoFillResult } from './auto-fill-types';
 
 const PT = PT_NAMES as readonly string[];
