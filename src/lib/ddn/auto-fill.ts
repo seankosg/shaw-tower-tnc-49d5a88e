@@ -74,7 +74,7 @@ async function fetchPlannedTests(D: string, map: AutoMap, errs: string[]) {
     map[`planned_tests.${s}_actual`] = { value: actual.length, source: 'subtests', note: `${s.toUpperCase()} done on ${D}` };
     if (sysRows.length) {
       map[`planned_tests.${s}_systems`] = {
-        value: summarizeSystems(sysRows),
+        value: summarizeSystemNames(sysRows),
         source: 'subtests',
         note: `${s.toUpperCase()} systems from ${sysRows.length} subtest(s)`,
       };
