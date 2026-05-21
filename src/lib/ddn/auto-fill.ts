@@ -33,8 +33,11 @@ async function fetchPlannedTests(D: string, map: AutoMap, errs: string[]) {
   let sysName = new Map<string, string>();
   if (sysIds.length) {
     const { data: sm } = await supabase
-      .from('system_master').select('id, system_name_std').in('id', sysIds);
-    for (const s of sm ?? []) sysName.set(s.id as string, (s.system_name_std as string) ?? '');
+      .from('system_master').select('id, system_name_std, system_code').in('id', sysIds);
+    for (const s of sm ?? []) {
+      const nm = (s.system_name_std as string | null) || (s.system_code as string | null) || '';
+      sysName.set(s.id as string, nm);
+    }
   }
   const sysOf = (id: string | null): string => (id ? sysName.get(id) ?? '' : '');
 
