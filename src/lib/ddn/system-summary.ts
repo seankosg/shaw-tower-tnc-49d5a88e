@@ -61,6 +61,34 @@ function compressLevels(levels: string[]): string {
   return `(${uniq.slice().sort().join(', ')})`;
 }
 
+/**
+ * System-name-only summary: dedupe + sort + comma-join.
+ * Levels and counts are intentionally omitted (letter-friendly).
+ */
+export function summarizeSystemNames(rows: SystemRow[], opts: SummarizeOptions = {}): string {
+  const maxLen = opts.maxLen ?? 120;
+  const names = Array.from(
+    new Set(
+      rows
+        .map((r) => (r.system ?? '').trim())
+        .filter((s) => s.length > 0),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+  if (names.length === 0) return '';
+  const full = names.join(', ');
+  if (full.length <= maxLen) return full;
+  let out = '';
+  let kept = 0;
+  for (const name of names) {
+    const candidate = out ? `${out}, ${name}` : name;
+    if (candidate.length > maxLen - 16) break;
+    out = candidate;
+    kept++;
+  }
+  const remaining = names.length - kept;
+  return remaining > 0 ? `${out} … +${remaining} systems` : out;
+}
+
 export function summarizeSystems(rows: SystemRow[], opts: SummarizeOptions = {}): string {
   const maxLen = opts.maxLen ?? 120;
   const groups = new Map<string, string[]>();

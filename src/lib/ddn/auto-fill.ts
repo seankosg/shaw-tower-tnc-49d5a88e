@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { PT_NAMES } from './pt-filter';
 import { RTO_TRADE_MAP } from './auto-fill-trade-map';
-import { summarizeSystems, type SystemRow } from './system-summary';
+import { summarizeSystems, summarizeSystemNames, type SystemRow } from './system-summary';
 import type { AutoMap, AutoFillResult } from './auto-fill-types';
 
 const PT = PT_NAMES as readonly string[];
@@ -33,8 +33,11 @@ async function fetchPlannedTests(D: string, map: AutoMap, errs: string[]) {
   let sysName = new Map<string, string>();
   if (sysIds.length) {
     const { data: sm } = await supabase
-      .from('system_master').select('id, system_name_std').in('id', sysIds);
-    for (const s of sm ?? []) sysName.set(s.id as string, (s.system_name_std as string) ?? '');
+      .from('system_master').select('id, system_name_std, system_code').in('id', sysIds);
+    for (const s of sm ?? []) {
+      const nm = (s.system_name_std as string | null) || (s.system_code as string | null) || '';
+      sysName.set(s.id as string, nm);
+    }
   }
   const sysOf = (id: string | null): string => (id ? sysName.get(id) ?? '' : '');
 
@@ -71,7 +74,7 @@ async function fetchPlannedTests(D: string, map: AutoMap, errs: string[]) {
     map[`planned_tests.${s}_actual`] = { value: actual.length, source: 'subtests', note: `${s.toUpperCase()} done on ${D}` };
     if (sysRows.length) {
       map[`planned_tests.${s}_systems`] = {
-        value: summarizeSystems(sysRows),
+        value: summarizeSystemNames(sysRows),
         source: 'subtests',
         note: `${s.toUpperCase()} systems from ${sysRows.length} subtest(s)`,
       };
@@ -103,7 +106,7 @@ async function fetchPlannedTests(D: string, map: AutoMap, errs: string[]) {
       bySys.set(k, arr);
     }
     const items = Array.from(bySys.entries()).map(([sys, list]) => ({
-      name: summarizeSystems(list),
+      name: summarizeSystemNames(list) || sys,
       reasons: ['delay'],
     }));
     map['planned_tests.delayed_items'] = {
@@ -157,14 +160,17 @@ async function fetchTcReject(D: string, map: AutoMap, errs: string[]) {
   const sysName = new Map<string, string>();
   if (sysIds.length) {
     const { data: sm } = await supabase
-      .from('system_master').select('id, system_name_std').in('id', sysIds);
-    for (const s of sm ?? []) sysName.set(s.id as string, (s.system_name_std as string) ?? '');
+      .from('system_master').select('id, system_name_std, system_code').in('id', sysIds);
+    for (const s of sm ?? []) {
+      const nm = (s.system_name_std as string | null) || (s.system_code as string | null) || '';
+      sysName.set(s.id as string, nm);
+    }
   }
   const sysRows: SystemRow[] = rows.map((r) => ({
     system: r.subtests?.system_id ? sysName.get(r.subtests.system_id) ?? '' : '',
     level: r.subtests?.level ?? null,
   }));
-  map['sec3.tc_reject_system'] = { value: summarizeSystems(sysRows), source: 'subtest_change_log', note: 'Systems with returned reports' };
+  map['sec3.tc_reject_system'] = { value: summarizeSystemNames(sysRows), source: 'subtest_change_log', note: 'Systems with returned reports' };
   const firstReason = rows.find((r) => r.subtests?.remarks)?.subtests?.remarks;
   if (firstReason) {
     map['sec3.tc_reject_reason'] = { value: firstReason, source: 'subtest_change_log', note: 'First subtest remarks (most recent)' };
