@@ -106,7 +106,7 @@ async function fetchPlannedTests(D: string, map: AutoMap, errs: string[]) {
       bySys.set(k, arr);
     }
     const items = Array.from(bySys.entries()).map(([sys, list]) => ({
-      name: summarizeSystems(list),
+      name: summarizeSystemNames(list) || sys,
       reasons: ['delay'],
     }));
     map['planned_tests.delayed_items'] = {
