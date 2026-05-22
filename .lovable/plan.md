@@ -6,7 +6,7 @@
 
 | # | 카드 라벨 | 모집단(Priority 값) |
 |---|---|---|
-| 1 | **Total** | 전체 (필터 무관) |
+| 1 | **Total** | 현재 Team 필터가 적용된 `filteredItems` 전체 |
 | 2 | **Cat. A** | `Cat A - Major Defect (Before SC)` |
 | 3 | **Cat. B** | `Cat B - Minor Defect` |
 | 4 | **No Cat.** | priority 가 비어있음(null/빈 문자열) |
@@ -18,7 +18,7 @@
 
 진도율 = 해당 모집단 내에서 Completion/Closure 충족 건수 / 모집단 총 개수 × 100 (소수1자리). 기존 `isActualComplete` / `isClosureComplete` 헬퍼 재사용.
 
-카드 클릭 → Raw Data 페이지로 이동, priority 필터 자동 적용 (Total 카드는 필터 없음). 내부 Completion / Closure 숫자 영역 클릭 시 priority 필터 + `actualComplete=true` 또는 `closureComplete=true` 가 함께 적용.
+카드 클릭 → Raw Data 페이지로 이동, **현재 Team 필터 값을 항상 함께 전달**하고 priority 필터를 자동 적용 (Total 카드는 priority 필터 없이 Team만 전달). 내부 Completion / Closure 숫자 영역 클릭 시 Team + priority 필터에 `actualComplete=true` 또는 `closureComplete=true` 가 함께 적용.
 
 ## 레이아웃
 
@@ -46,10 +46,10 @@
 
 `DefectRawDataPage.tsx` 의 `urlMap`에 `priority: 'priority'` 추가. priority 가 비어있는 행을 거르기 위해 기존 `EMPTY_TOKEN` 패턴을 select 필터에도 지원하도록 분기 처리(이미 TEXT 필드용 EMPTY_TOKEN 처리 존재 — select용 처리 1줄 추가). 그리고 `DRILLDOWN_PARAMS`에 `priority` 추가.
 
-링크 예시:
-- Cat. A 카드: `?source=dashboard&priority=Cat A - Major Defect (Before SC)`
-- No Cat. 카드: `?source=dashboard&priority=__EMPTY__`
-- Total 카드: `?source=dashboard`
+링크 예시 (Team=`KOR` 가 활성인 상황 가정):
+- Total 카드: `?source=dashboard&team=KOR`
+- Cat. A 카드: `?source=dashboard&team=KOR&priority=Cat A - Major Defect (Before SC)`
+- No Cat. 카드: `?source=dashboard&team=KOR&priority=__EMPTY__`
 
 ## 변경 파일
 
