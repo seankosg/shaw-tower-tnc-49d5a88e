@@ -549,6 +549,11 @@ export default function DefectDetailPage() {
         <ReadonlyField label="Difference" value={progressDifference == null ? null : formatPct(progressDifference)} />
         <SelectField label="Completion Status" value={form.completion_status} options={statusOptionsList} disabled={!canEdit} onChange={(v) => updateField('completion_status', v)} />
         <SelectField label="Closure Status" value={form.closure_status} options={statusOptionsList} disabled={!canEdit} onChange={(v) => updateField('closure_status', v)} />
+        <ReadonlyField label="HDEC's Verification" value={(record as any).hdec_verification ?? null} />
+        <div className="md:col-span-2 space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">HDEC's Reason</label>
+          <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm min-h-[2.25rem]">{String((record as any).hdec_reason ?? '—')}</div>
+        </div>
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Description</label><Textarea value={String(form.description ?? '')} disabled={!canEdit} onChange={(e) => updateField('description', e.target.value)} /></div>
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Remarks</label><Textarea value={String(form.remarks ?? '')} disabled={!canEdit} onChange={(e) => updateField('remarks', e.target.value)} /></div>
       </CardContent></Card>
