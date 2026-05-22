@@ -542,8 +542,8 @@ export default function DefectDashboardPage() {
               <p className="text-sm text-muted-foreground">No disputes recorded.</p>
             ) : (() => {
               const sorted = [...kpis.dispute.hdecCatBReasons].sort((a, b) => b[1] - a[1]);
-              const top = sorted.slice(0, 3);
-              const rest = sorted.slice(3);
+              const top = sorted.slice(0, 4);
+              const rest = sorted.slice(4);
               const renderBtn = ([reason, count]: [string, number], rank = -1) => {
                 const isEmpty = reason === '__EMPTY__';
                 const label = isEmpty ? 'Unspecified' : reason;
