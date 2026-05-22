@@ -548,7 +548,7 @@ export default function DefectDashboardPage() {
                         <ChevronDown className="h-3 w-3 transition-transform" />
                       </CollapsibleTrigger>
                       <CollapsibleContent className="pt-2">
-                        <div className="flex flex-wrap gap-2">{rest.map(renderBtn)}</div>
+                        <div className="flex flex-wrap gap-2">{rest.map((item) => renderBtn(item))}</div>
                       </CollapsibleContent>
                     </Collapsible>
                   )}
