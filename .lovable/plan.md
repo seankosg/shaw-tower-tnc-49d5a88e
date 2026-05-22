@@ -193,84 +193,15 @@ Backfill: Import 흐름과 무관. 별도 Admin 액션(6번)에서 처리.
 
 ---
 
-## 확인 필요
+## 확정 결정사항
 
-### Q1. Admin 규칙 편집 UI를 1차 PR에 포함할까?
+- **Q1 → A**: 1차 PR은 Seed 규칙만 포함. Admin 편집 UI는 후속 PR로 분리.
+- **Q2 → A**: `hdec_verification` 컬럼에 DB CHECK 제약 적용 (NULL 또는 3개 허용 값만).
+- **Q3 → 승인**: `defect-parser.ts` header alias 등록
+  - `"hdec's verification"`, `"hdec verification"`, `"verification"` → `hdec_verification`
+  - `"hdec's reason"`, `"hdec reason"`, `"reason of assessment"` → `hdec_reason`
+- **Q4 → C (Clear 정책)**: Priority가 Cat A에서 다른 값으로 변경된 row는 `hdec_verification`·`hdec_reason` 두 필드를 **NULL로 강제 clear**.
+  - Import 통합 로직 보강: `priority != "Cat A - Major Defect (Before SC)"` 인 모든 row의 upsert payload에 `hdec_verification = null, hdec_reason = null` 명시 포함.
+  - 게이트(Closed/Done)에 의한 미수행 케이스와는 구분 — 그 경우는 기존 값 유지.
 
-**배경**: 프롬프트에는 약 100여 개의 키워드 규칙이 정의되어 있고, 향후 현장 운영 중에 새로운 결함 표현(오타·신규 패턴)이 발견되면 규칙을 추가/수정해야 합니다.
-
-- **옵션 A — Seed only (권장, 1차 PR 작게)**
-  - Migration으로 모든 규칙을 `defect_priority_verification_rules` 테이블에 INSERT.
-  - 규칙 수정이 필요하면 admin이 Supabase 콘솔에서 직접 row 수정하거나, 새 migration 작성.
-  - 장점: 1차 PR 빠르게 출시, 분류 엔진 동작 검증에 집중.
-  - 단점: 운영 중 규칙 변경 시 admin이라도 코드/DB 직접 접근 필요.
-  - 예상 작업: 1차 PR 내 추가 작업 없음.
-
-- **옵션 B — 편집 UI 포함**
-  - `AdminClassificationPage`에 "Priority Verification Rules" 탭 신설.
-  - 규칙 목록(verdict별 그룹), 키워드 추가/삭제, category·explanation 편집, is_active 토글, 우선순위 reorder.
-  - 변경 시 캐시 invalidate + 재분류 트리거 옵션.
-  - 장점: 코드 변경 없이 규칙 운영 가능.
-  - 단점: 1차 PR 작업량 약 1.5~2배, UI/검증 로직 추가 필요.
-  - 예상 추가 작업: 신규 탭 컴포넌트, CRUD 폼, reorder DnD, 약 400~600 LOC.
-
-**제 권장**: **A (Seed only)** 로 1차 출시 → 운영 1~2주 후 규칙 안정성·수정 빈도 보고 B를 별도 PR로 진행.
-
----
-
-### Q2. `hdec_verification` 값 제약은 어디서 enforce 할까?
-
-이 컬럼은 정확히 다음 3개 문자열만 허용해야 합니다:
-- `Cat A - Major Defect (Before SC)`
-- `Cat B - Minor Defect`
-- `Review Needed`
-- 그 외 + `NULL` (분류 미수행 시)
-
-- **옵션 A — DB CHECK 제약 (권장)**
-  ```sql
-  ALTER TABLE defect_items ADD CONSTRAINT defect_items_hdec_verification_check
-    CHECK (hdec_verification IS NULL OR hdec_verification IN (
-      'Cat A - Major Defect (Before SC)',
-      'Cat B - Minor Defect',
-      'Review Needed'
-    ));
-  ```
-  - 장점: 모든 경로(앱·edge function·콘솔 수기 입력·migration)에서 잘못된 값 차단. 데이터 무결성 보장.
-  - 단점: 향후 verdict 종류를 늘리려면 migration 필요 (실제로는 드물게 발생).
-
-- **옵션 B — 애플리케이션 검증만**
-  - `verifyDefectPriority()` 함수와 edge function에서만 검증.
-  - 장점: 향후 변경 유연.
-  - 단점: Supabase 콘솔이나 다른 경로로 잘못된 값이 들어갈 위험. RLS·CHECK 없이 text 필드는 신뢰하기 어렵습니다.
-
-- **옵션 C — Postgres ENUM 타입**
-  - `CREATE TYPE hdec_verdict AS ENUM (...)` 후 컬럼 타입을 ENUM으로.
-  - 장점: 가장 엄격.
-  - 단점: 값 변경 시 `ALTER TYPE` 필요, 기존 `team_type` ENUM처럼 마이그레이션이 다소 번거로움.
-
-**제 권장**: **A (CHECK 제약)** — 다른 text 분류 컬럼(`priority`, `status`)에서 잘못된 값으로 인한 집계 오류 사례가 있었던 점을 감안하면, CHECK가 비용 대비 효과 최선입니다.
-
----
-
-### Q3. 신규 컬럼 헤더 자동 인식 alias 등록
-
-Re-import / Export 호환을 위해 `defect-parser.ts`의 header alias map에 다음을 등록해야 합니다:
-- `"hdec's verification"`, `"hdec verification"`, `"verification"` → `hdec_verification`
-- `"hdec's reason"`, `"hdec reason"`, `"reason of assessment"` → `hdec_reason`
-
-→ 사용자께서 동의하시면 위 alias 그대로 등록합니다. 다른 alias 추가 희망 시 알려주세요.
-
----
-
-### Q4. 재import 시 기존 값 보존 vs 덮어쓰기 정책
-
-현재 계획은 "게이트 미충족(예: status=Closed)인 경우 기존 `hdec_verification` 값을 **유지**"로 되어 있습니다. 다른 시나리오에서:
-
-- (a) 게이트 통과 + 재계산 결과가 기존 값과 다름 → **항상 덮어쓰기** (계획 안)
-- (b) Description이 비었고 fallback도 실패한 경우 → **기존 값 유지** (계획 안)
-- (c) Cat A에서 Cat B로 priority가 바뀐 row → **두 필드 모두 비움(clear)** 할지, 아니면 유지할지?
-
-**제 권장**: (c)는 **비움(clear)** — Cat A 일 때만 의미가 있는 필드이므로, priority가 바뀌면 일관성 위해 NULL 처리.
-
-→ 동의 여부 확인 부탁드립니다.
 
