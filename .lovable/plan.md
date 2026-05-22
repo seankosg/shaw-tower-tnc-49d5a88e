@@ -6,7 +6,7 @@
 
 | # | 카드 라벨 | 모집단(Priority 값) |
 |---|---|---|
-| 1 | **Total** | 전체 (필터 무관) |
+| 1 | **Total** | 현재 Team 필터가 적용된 `filteredItems` 전체 |
 | 2 | **Cat. A** | `Cat A - Major Defect (Before SC)` |
 | 3 | **Cat. B** | `Cat B - Minor Defect` |
 | 4 | **No Cat.** | priority 가 비어있음(null/빈 문자열) |
