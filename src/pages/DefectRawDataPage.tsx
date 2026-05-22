@@ -1234,6 +1234,17 @@ export default function DefectRawDataPage() {
       const days = searchParams.get('atRiskDays');
       out.push({ label: days ? `At Risk (≤ ${days}d)` : 'At Risk', param: 'atRisk', clears: ['atRisk', 'atRiskDays'] });
     }
+    if (searchParams.get('notClosureDone') === 'true') {
+      out.push({ label: 'Closure ≠ Done', param: 'notClosureDone', clears: ['notClosureDone'] });
+    }
+    const hdecVer = searchParams.get('hdecVerification');
+    if (hdecVer) {
+      out.push({ label: `HDEC Verification: ${hdecVer === EMPTY_TOKEN ? '(Blank)' : hdecVer}`, param: 'hdecVerification', clears: ['hdecVerification'] });
+    }
+    const hdecRsn = searchParams.get('hdecReason');
+    if (hdecRsn) {
+      out.push({ label: `HDEC Reason: ${hdecRsn === EMPTY_TOKEN ? '(Blank)' : hdecRsn}`, param: 'hdecReason', clears: ['hdecReason'] });
+    }
     return out;
   }, [searchParams, getLabel]);
 
