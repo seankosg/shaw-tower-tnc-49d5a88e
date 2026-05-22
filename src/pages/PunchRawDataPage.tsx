@@ -350,6 +350,21 @@ export default function PunchRawDataPage() {
 
   const tableRef = useRef<HTMLDivElement>(null);
 
+  const autoSizeColumn = useCallback((columnId: string) => {
+    const container = tableRef.current;
+    if (!container) return;
+    const cells = container.querySelectorAll<HTMLElement>(`[data-column-id="${columnId}"]`);
+    let max = 72;
+    cells.forEach((cell) => {
+      const clone = cell.cloneNode(true) as HTMLElement;
+      clone.style.cssText = 'position:absolute; visibility:hidden; width:auto; white-space:nowrap; max-width:none; left:-9999px; top:0;';
+      document.body.appendChild(clone);
+      max = Math.max(max, clone.getBoundingClientRect().width);
+      document.body.removeChild(clone);
+    });
+    setColumnSizing((prev) => ({ ...prev, [columnId]: Math.min(Math.ceil(max) + 18, 640) }));
+  }, []);
+
   // ── Load punch items ─────────────────────────────────────────────────────
   const reload = useCallback(async () => {
     setLoading(true);
