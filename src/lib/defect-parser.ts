@@ -55,6 +55,8 @@ export interface ParsedDefectRow {
   closure_status: string | null;
   remarks: string | null;
   hdec_comments: string | null;
+  hdec_verification: string | null;
+  hdec_reason: string | null;
   aconex_comments: string | null;
   work_type: string | null;
   raw_payload: Record<string, unknown>;
@@ -132,6 +134,14 @@ const FIELD_ALIASES: Record<string, string> = {
   comments: 'aconex_comments',
   'aconex comments': 'aconex_comments',
   'hdec comments': 'hdec_comments',
+  // HDEC priority verification result columns (Cat A re-classification output)
+  "hdec's verification": 'hdec_verification',
+  'hdec verification': 'hdec_verification',
+  'verification': 'hdec_verification',
+  'priority verification': 'hdec_verification',
+  "hdec's reason": 'hdec_reason',
+  'hdec reason': 'hdec_reason',
+  'reason of assessment': 'hdec_reason',
   // New lifecycle headers
   'planned start date': 'planned_start_date',
   'planned completion date': 'planned_completion_date',
@@ -624,6 +634,8 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
       closure_status: toText(getMapped(raw, 'closure_status')),
       remarks: toText(getMapped(raw, 'remarks')),
       hdec_comments: toText(getMapped(raw, 'hdec_comments')),
+      hdec_verification: toText(getMapped(raw, 'hdec_verification')),
+      hdec_reason: toText(getMapped(raw, 'hdec_reason')),
       aconex_comments: toText(getMapped(raw, 'aconex_comments')),
       work_type: toText(getMapped(raw, 'work_type')),
       raw_payload: raw,

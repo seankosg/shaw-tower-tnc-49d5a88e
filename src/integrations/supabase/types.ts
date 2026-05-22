@@ -817,6 +817,8 @@ export type Database = {
           hdec_comments: string | null
           hdec_eng_name: string | null
           hdec_pic_name: string | null
+          hdec_reason: string | null
+          hdec_verification: string | null
           id: string
           is_active: boolean
           is_critical: boolean
@@ -870,6 +872,8 @@ export type Database = {
           hdec_comments?: string | null
           hdec_eng_name?: string | null
           hdec_pic_name?: string | null
+          hdec_reason?: string | null
+          hdec_verification?: string | null
           id?: string
           is_active?: boolean
           is_critical?: boolean
@@ -923,6 +927,8 @@ export type Database = {
           hdec_comments?: string | null
           hdec_eng_name?: string | null
           hdec_pic_name?: string | null
+          hdec_reason?: string | null
+          hdec_verification?: string | null
           id?: string
           is_active?: boolean
           is_critical?: boolean
@@ -949,6 +955,51 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           work_type?: string | null
+        }
+        Relationships: []
+      }
+      defect_priority_verification_rules: {
+        Row: {
+          category: string
+          created_at: string
+          exclude_keywords: Json | null
+          explanation: string
+          id: string
+          is_active: boolean
+          keywords: Json
+          match_type: string
+          order_no: number
+          step: number
+          updated_at: string
+          verdict: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          exclude_keywords?: Json | null
+          explanation: string
+          id?: string
+          is_active?: boolean
+          keywords?: Json
+          match_type?: string
+          order_no: number
+          step: number
+          updated_at?: string
+          verdict: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          exclude_keywords?: Json | null
+          explanation?: string
+          id?: string
+          is_active?: boolean
+          keywords?: Json
+          match_type?: string
+          order_no?: number
+          step?: number
+          updated_at?: string
+          verdict?: string
         }
         Relationships: []
       }
