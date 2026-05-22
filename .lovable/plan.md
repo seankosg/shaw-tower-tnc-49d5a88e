@@ -1,37 +1,20 @@
-# HDEC 판별 로직 일회성 백필 실행
+# Defect Header Mapping에 `Captured By` 노출
 
-현재 Raw Data 전체에 대해 신규 판별 로직(`hdec_verification`, `hdec_reason`)을 일회 적용합니다. 이미 구현된 Edge Function `defect-priority-verification-backfill` 을 직접 호출하여 처리합니다.
+## 문제
+Admin → Header Mapping의 Defect 모듈 타겟 필드 목록에 `captured_by_name`(Captured By)이 보이지 않음. 따라서 사용자가 alias를 등록할 수 없음.
 
-## 실행 범위
+## 원인
+`src/pages/admin/HeaderMappingsTab.tsx`의 `DEFECT_FIELDS` 화이트리스트에 `captured_by_name`이 누락. 파서(`defect-parser.ts`)와 Field Config 라벨에는 이미 존재하지만, Header Mapping UI는 별도 whitelist로 타겟을 거른다.
 
-- 대상: `defect_items` 테이블 전체 (프로젝트 스코프 없음)
-- 동작:
-  1. **Clear Pass** — `priority ≠ 'Cat A - Major Defect (Before SC)'` 인데 HDEC 필드가 채워진 행은 `null` 로 초기화
-  2. **Set Pass** — Cat A 행 중 `status ∉ {Closed, Done}` 이고 `description` 이 있는 행에 대해 룰 매칭 실행 → `hdec_verification` / `hdec_reason` 세팅
-- 제외: Closed/Done 상태 행은 보존(Preserve)
+동일하게 신규 추가된 `hdec_verification`, `hdec_reason`도 누락되어 있어 같이 추가 필요(메모리 규칙: 신규 필드는 Field Config와 Header Mapping에 모두 추가).
 
-## 실행 방식
+## 변경
+1. `src/pages/admin/HeaderMappingsTab.tsx` — `DEFECT_FIELDS`에 다음 3개 추가:
+   - `captured_by_name`
+   - `hdec_verification`
+   - `hdec_reason`
+2. `src/components/import/DefectColumnSelect.tsx` — `DEFECT_KNOWN_FIELDS`에 `captured_by_name` 추가(Column Select 다이얼로그에서 알 수 없는 필드로 표시되지 않도록).
 
-옵션 두 가지 중 선택:
-
-### A. Admin UI 버튼으로 실행 (권장)
-- Admin → Settings → "HDEC Priority Verification Backfill" 버튼 클릭
-- 결과 토스트로 Set / Cleared / No match / Skipped / Scanned 카운트 확인
-
-### B. 에이전트가 Edge Function 직접 호출
-- `supabase--curl_edge_functions` 로 `defect-priority-verification-backfill` 호출 (현재 로그인 세션 토큰 사용, admin/superuser 권한 필요)
-- 응답 JSON 을 채팅으로 요약 보고
-- 필요 시 DB 검증 쿼리 (`hdec_verification` 분포 집계) 실행
-
-## 기술 세부 (참고)
-
-- 함수 위치: `supabase/functions/defect-priority-verification-backfill/index.ts`
-- 권한 체크: `is_admin_or_superuser(auth.uid())`
-- 스캔 한도: 50,000 rows / 100-row 청크 / `Promise.allSettled` 병렬 업데이트
-- 룰 소스: `defect_priority_verification_rules` (활성 룰만, 캐시 5분)
-
-## 확인 필요
-
-어떤 방식으로 실행할까요?
-- A: 직접 Admin UI 에서 실행 (안전, 사용자가 통제)
-- B: 에이전트가 지금 호출 (즉시 실행 + 결과 요약)
+## 비고
+- DB 스키마/RLS 변경 없음. 기존 import_header_mappings 행은 그대로.
+- 파서 하드코딩 alias(`captured by`, `captured_by`, `capturedby`)는 그대로 유지되며, 이제 DB에서도 추가 alias 등록 가능.
