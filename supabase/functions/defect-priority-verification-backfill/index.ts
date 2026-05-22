@@ -120,22 +120,35 @@ Deno.serve(async (req) => {
 
     const CHUNK = 100;
 
+    // Helper: paginate to bypass PostgREST max-rows cap
+    async function fetchAll<T>(build: (from: number, to: number) => any): Promise<T[]> {
+      const PAGE = 1000;
+      const out: T[] = [];
+      for (let offset = 0; offset < 50000; offset += PAGE) {
+        const { data, error } = await build(offset, offset + PAGE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        out.push(...(data as T[]));
+        if (data.length < PAGE) break;
+      }
+      return out;
+    }
+
     // ── CLEAR pass: priority ≠ Cat A but verification populated
-    let clearScan = admin
-      .from('defect_items')
-      .select('id')
-      .neq('priority', CAT_A)
-      .not('hdec_verification', 'is', null)
-      .range(0, 49999);
-    if (projectId) clearScan = clearScan.eq('project_id', projectId);
-    const { data: clearRows, error: clearScanErr } = await clearScan;
-    if (clearScanErr) throw clearScanErr;
+    const clearRows = await fetchAll<{ id: string }>((from, to) => {
+      let q = admin.from('defect_items').select('id')
+        .neq('priority', CAT_A)
+        .not('hdec_verification', 'is', null)
+        .range(from, to);
+      if (projectId) q = q.eq('project_id', projectId);
+      return q;
+    });
     let clearedCount = 0;
     const clearErrors: string[] = [];
-    for (let i = 0; i < (clearRows?.length ?? 0); i += CHUNK) {
-      const slice = clearRows!.slice(i, i + CHUNK);
+    for (let i = 0; i < clearRows.length; i += CHUNK) {
+      const slice = clearRows.slice(i, i + CHUNK);
       const results = await Promise.allSettled(
-        slice.map((r: any) =>
+        slice.map((r) =>
           userClient.from('defect_items')
             .update({ hdec_verification: null, hdec_reason: null })
             .eq('id', r.id)
@@ -154,15 +167,16 @@ Deno.serve(async (req) => {
     }
 
     // ── SET pass: eligible Cat A rows
-    let baseQuery = admin
-      .from('defect_items')
-      .select('id, description, closure_status, status, hdec_verification, hdec_reason')
-      .eq('priority', CAT_A)
-      .eq('is_active', true)
-      .range(0, 49999);
-    if (projectId) baseQuery = baseQuery.eq('project_id', projectId);
-    const { data: candidates, error: candErr } = await baseQuery;
-    if (candErr) throw candErr;
+    const candidates = await fetchAll<any>((from, to) => {
+      let q = admin.from('defect_items')
+        .select('id, description, closure_status, status, hdec_verification, hdec_reason')
+        .eq('priority', CAT_A)
+        .eq('is_active', true)
+        .range(from, to);
+      if (projectId) q = q.eq('project_id', projectId);
+      return q;
+    });
+
 
     let setCount = 0;
     let noMatchCount = 0;
