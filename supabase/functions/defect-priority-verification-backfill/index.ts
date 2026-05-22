@@ -113,29 +113,61 @@ Deno.serve(async (req) => {
       explanation: r.explanation,
     }));
 
-    // ── CLEAR pass: priority ≠ Cat A but verification populated → null both fields
-    let clearQuery = admin
+    // NOTE: defect_items has a BEFORE UPDATE trigger that calls auth.uid().
+    // Service-role calls have NULL uid → rejected. Use the admin user's JWT
+    // client for UPDATE so auth.uid() resolves to an admin/superuser.
+    // We still use service-role for the SELECT scans (no row-cap concerns).
+
+    const CHUNK = 100;
+
+    // ── CLEAR pass: priority ≠ Cat A but verification populated
+    let clearScan = admin
       .from('defect_items')
-      .update({ hdec_verification: null, hdec_reason: null })
+      .select('id')
       .neq('priority', CAT_A)
-      .not('hdec_verification', 'is', null);
-    if (projectId) clearQuery = clearQuery.eq('project_id', projectId);
-    const { error: clearErr, count: clearedCount } = await clearQuery.select('id', { count: 'exact', head: true });
-    if (clearErr) throw clearErr;
+      .not('hdec_verification', 'is', null)
+      .range(0, 49999);
+    if (projectId) clearScan = clearScan.eq('project_id', projectId);
+    const { data: clearRows, error: clearScanErr } = await clearScan;
+    if (clearScanErr) throw clearScanErr;
+    let clearedCount = 0;
+    const clearErrors: string[] = [];
+    for (let i = 0; i < (clearRows?.length ?? 0); i += CHUNK) {
+      const slice = clearRows!.slice(i, i + CHUNK);
+      const results = await Promise.allSettled(
+        slice.map((r: any) =>
+          userClient.from('defect_items')
+            .update({ hdec_verification: null, hdec_reason: null })
+            .eq('id', r.id)
+            .select('id'),
+        ),
+      );
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          const v: any = r.value;
+          if (v?.error) clearErrors.push(v.error.message);
+          else if ((v?.data?.length ?? 0) > 0) clearedCount++;
+        } else {
+          clearErrors.push(String((r as PromiseRejectedResult).reason));
+        }
+      }
+    }
 
     // ── SET pass: eligible Cat A rows
     let baseQuery = admin
       .from('defect_items')
       .select('id, description, closure_status, status, hdec_verification, hdec_reason')
       .eq('priority', CAT_A)
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .range(0, 49999);
     if (projectId) baseQuery = baseQuery.eq('project_id', projectId);
-    const { data: candidates, error: candErr } = await baseQuery.limit(50000);
+    const { data: candidates, error: candErr } = await baseQuery;
     if (candErr) throw candErr;
 
     let setCount = 0;
     let noMatchCount = 0;
     let skippedCount = 0;
+    const setErrors: string[] = [];
     const updates: Array<{ id: string; verification: string; reason: string }> = [];
 
     for (const row of candidates ?? []) {
@@ -154,30 +186,39 @@ Deno.serve(async (req) => {
       updates.push({ id: row.id, verification, reason });
     }
 
-    // Apply updates in chunks of 100
-    const CHUNK = 100;
     for (let i = 0; i < updates.length; i += CHUNK) {
       const slice = updates.slice(i, i + CHUNK);
-      // Postgres has no native bulk-update-with-different-values via PostgREST;
-      // do per-row but parallelized in the chunk.
       const results = await Promise.allSettled(
         slice.map((u) =>
-          admin.from('defect_items')
+          userClient.from('defect_items')
             .update({ hdec_verification: u.verification, hdec_reason: u.reason })
-            .eq('id', u.id),
+            .eq('id', u.id)
+            .select('id'),
         ),
       );
-      setCount += results.filter((r) => r.status === 'fulfilled').length;
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          const v: any = r.value;
+          if (v?.error) setErrors.push(v.error.message);
+          else if ((v?.data?.length ?? 0) > 0) setCount++;
+          else skippedCount++;
+        } else {
+          setErrors.push(String((r as PromiseRejectedResult).reason));
+        }
+      }
     }
 
     return new Response(JSON.stringify({
       ok: true,
       project_id: projectId,
-      cleared: clearedCount ?? 0,
+      cleared: clearedCount,
       eligible_scanned: candidates?.length ?? 0,
       set: setCount,
       no_match: noMatchCount,
       skipped: skippedCount,
+      clear_errors_sample: clearErrors.slice(0, 3),
+      set_errors_sample: setErrors.slice(0, 3),
+      error_total: clearErrors.length + setErrors.length,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
