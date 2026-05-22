@@ -1118,13 +1118,13 @@ function CapturedByStatsSection({
                   : 'border-amber-500/40 bg-amber-500/5 text-amber-800 dark:text-amber-300',
           )}>
             {allOk ? (
-              <span className="font-medium">✓ All totals reconcile with summary cards (Unknown excluded: {unknown.total}).</span>
+              <span className="font-medium">✓ All totals reconcile with summary cards (Unknown included: {unknown.total}).</span>
             ) : (
               <div className="space-y-0.5">
                 <p className="font-medium">⚠ Reconciliation mismatch detected:</p>
                 {checks.map((c) => (
                   <p key={c.label} className="tabular-nums">
-                    {c.label}: Σ={c.sum} / KPI={c.kpi} (Unknown={c.unknown}, expected={c.expected}, Δ={c.delta > 0 ? '+' : ''}{c.delta})
+                    {c.label}: Σ={c.sum} / KPI={c.kpi} (Δ={c.delta > 0 ? '+' : ''}{c.delta})
                   </p>
                 ))}
               </div>
