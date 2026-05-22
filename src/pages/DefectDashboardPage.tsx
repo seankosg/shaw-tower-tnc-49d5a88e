@@ -818,22 +818,27 @@ function CapturedByStatsSection({
 }) {
   const { stats, unknown, totals } = useMemo(() => {
     const map = new Map<string, CapturedByStat>();
-    const unknown: CapturedByStat = { name: '__unknown__', total: 0, completed: 0, closed: 0, dispute: 0 };
+    const unknown: CapturedByStat = { name: '__unknown__', total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 };
     for (const it of items) {
       const raw = (it as any).captured_by_name as string | null | undefined;
       const name = raw && String(raw).trim() ? String(raw).trim() : null;
-      const bucket = name ? (map.get(name) ?? { name, total: 0, completed: 0, closed: 0, dispute: 0 }) : unknown;
+      const bucket = name ? (map.get(name) ?? { name, total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 }) : unknown;
       bucket.total += 1;
       if (isActualComplete(it as any)) bucket.completed += 1;
       if (isClosureComplete(it as any)) bucket.closed += 1;
       if (String((it as any).closure_status ?? '') === 'InD') bucket.dispute += 1;
+      const pri = (it as any).priority as string | null | undefined;
+      if (pri === PRI_CAT_A_LABEL) bucket.priCatA += 1;
+      else if (pri === PRI_CAT_B_LABEL) bucket.priCatB += 1;
+      else if (!pri) bucket.priNoCat += 1;
       if (name) map.set(name, bucket);
     }
     const stats = [...map.values()].sort((a, b) => b.total - a.total);
     const totals = stats.reduce((acc, s) => ({
       total: acc.total + s.total, completed: acc.completed + s.completed,
       closed: acc.closed + s.closed, dispute: acc.dispute + s.dispute,
-    }), { total: 0, completed: 0, closed: 0, dispute: 0 });
+      priCatA: acc.priCatA + s.priCatA, priCatB: acc.priCatB + s.priCatB, priNoCat: acc.priNoCat + s.priNoCat,
+    }), { total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 });
     return { stats, unknown, totals };
   }, [items]);
 
