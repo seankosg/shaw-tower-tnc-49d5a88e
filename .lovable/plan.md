@@ -46,10 +46,10 @@
 
 `DefectRawDataPage.tsx` 의 `urlMap`에 `priority: 'priority'` 추가. priority 가 비어있는 행을 거르기 위해 기존 `EMPTY_TOKEN` 패턴을 select 필터에도 지원하도록 분기 처리(이미 TEXT 필드용 EMPTY_TOKEN 처리 존재 — select용 처리 1줄 추가). 그리고 `DRILLDOWN_PARAMS`에 `priority` 추가.
 
-링크 예시:
-- Cat. A 카드: `?source=dashboard&priority=Cat A - Major Defect (Before SC)`
-- No Cat. 카드: `?source=dashboard&priority=__EMPTY__`
-- Total 카드: `?source=dashboard`
+링크 예시 (Team=`KOR` 가 활성인 상황 가정):
+- Total 카드: `?source=dashboard&team=KOR`
+- Cat. A 카드: `?source=dashboard&team=KOR&priority=Cat A - Major Defect (Before SC)`
+- No Cat. 카드: `?source=dashboard&team=KOR&priority=__EMPTY__`
 
 ## 변경 파일
 
