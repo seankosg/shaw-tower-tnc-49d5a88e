@@ -441,6 +441,85 @@ export default function DefectDashboardPage() {
         </Card>
       </div>
 
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {/* Banner 1 — Dispute in Category */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Dispute in Category</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => goRaw({ priority: 'Cat A - Major Defect (Before SC)', notClosureDone: 'true' })}
+                className="rounded-md border bg-muted/30 p-3 text-left transition hover:bg-muted/60"
+              >
+                <p className="text-xs text-muted-foreground">LL's CAT A</p>
+                <p className="mt-1 text-2xl font-semibold text-foreground">{kpis.dispute.llCatA.toLocaleString()}</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">Closure ≠ Done</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => goRaw({ hdecVerification: 'Cat A - Major Defect (Before SC)', notClosureDone: 'true' })}
+                className="rounded-md border bg-muted/30 p-3 text-left transition hover:bg-muted/60"
+              >
+                <p className="text-xs text-muted-foreground">HDEC's CAT A</p>
+                <p className="mt-1 text-2xl font-semibold text-foreground">{kpis.dispute.hdecCatA.toLocaleString()}</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">Closure ≠ Done</p>
+              </button>
+              <div className="rounded-md border bg-muted/30 p-3">
+                <p className="text-xs text-muted-foreground">Difference</p>
+                <p className={cn(
+                  'mt-1 text-2xl font-semibold',
+                  kpis.dispute.diff > 0 ? 'text-emerald-600 dark:text-emerald-400'
+                    : kpis.dispute.diff < 0 ? 'text-destructive' : 'text-foreground',
+                )}>
+                  {kpis.dispute.diff > 0 ? '+' : ''}{kpis.dispute.diff.toLocaleString()}
+                </p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">LL − HDEC</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Banner 2 — HDEC's Basis of Dispute */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">HDEC's Basis of Dispute</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {kpis.dispute.hdecCatBReasons.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No disputes recorded.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {kpis.dispute.hdecCatBReasons.map(([reason, count]) => {
+                  const isEmpty = reason === '__EMPTY__';
+                  const label = isEmpty ? 'Unspecified' : reason;
+                  return (
+                    <button
+                      key={reason}
+                      type="button"
+                      onClick={() => goRaw({
+                        hdecVerification: 'Cat B - Minor Defect',
+                        hdecReason: isEmpty ? '__EMPTY__' : reason,
+                        notClosureDone: 'true',
+                      })}
+                      className="inline-flex items-center gap-1.5 rounded-md border bg-muted/30 px-2.5 py-1.5 text-xs transition hover:bg-muted/60"
+                      title={label}
+                    >
+                      <span className="max-w-[28ch] truncate text-foreground">{label}</span>
+                      <span className="rounded bg-primary/10 px-1.5 py-0.5 font-semibold text-primary">{count.toLocaleString()}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {([
           { label: 'Total', stats: kpis.byPriority.total, priority: null },
