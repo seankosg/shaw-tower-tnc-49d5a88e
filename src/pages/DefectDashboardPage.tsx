@@ -455,9 +455,9 @@ export default function DefectDashboardPage() {
         <CapturedByStatsSection
           items={filteredItems}
           kpis={kpis}
-          onCardClick={(name) => goRaw({ capturedBy: name })}
+          onCardClick={(name) => goRaw({ capturedBy: name === 'Unknown' ? '__EMPTY__' : name })}
           onMetricClick={(name, metric) => {
-            const params: Record<string, string> = { capturedBy: name };
+            const params: Record<string, string> = { capturedBy: name === 'Unknown' ? '__EMPTY__' : name };
             if (metric === 'completed') params.actualComplete = 'true';
             else if (metric === 'closed') params.closureComplete = 'true';
             else if (metric === 'dispute') params.closureStatus = 'InD';
