@@ -18,7 +18,7 @@
 
 진도율 = 해당 모집단 내에서 Completion/Closure 충족 건수 / 모집단 총 개수 × 100 (소수1자리). 기존 `isActualComplete` / `isClosureComplete` 헬퍼 재사용.
 
-카드 클릭 → Raw Data 페이지로 이동, priority 필터 자동 적용 (Total 카드는 필터 없음). 내부 Completion / Closure 숫자 영역 클릭 시 priority 필터 + `actualComplete=true` 또는 `closureComplete=true` 가 함께 적용.
+카드 클릭 → Raw Data 페이지로 이동, **현재 Team 필터 값을 항상 함께 전달**하고 priority 필터를 자동 적용 (Total 카드는 priority 필터 없이 Team만 전달). 내부 Completion / Closure 숫자 영역 클릭 시 Team + priority 필터에 `actualComplete=true` 또는 `closureComplete=true` 가 함께 적용.
 
 ## 레이아웃
 
