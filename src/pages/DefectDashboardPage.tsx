@@ -4,6 +4,7 @@ import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { exportDefectSCurveToExcel } from '@/lib/scurve-excel-export';
+import { exportCapturedByToExcel } from '@/lib/defect-captured-by-export';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, AlertOctagon, AlertTriangle, CalendarIcon, CheckCircle2, ChevronDown, ChevronRight, Clock, Download, Filter, ListChecks, ShieldCheck, TrendingUp } from 'lucide-react';
 import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ReferenceLine, XAxis, YAxis } from 'recharts';
@@ -1079,7 +1080,7 @@ function CapturedByStatsSection({
   if (stats.length === 0) {
     return (
       <Card className="p-4">
-        <p className="text-sm text-muted-foreground">No "Captured By" data available.</p>
+        <p className="text-sm text-muted-foreground">No "PM's Defect Statistics" data available.</p>
       </Card>
     );
   }
@@ -1098,6 +1099,22 @@ function CapturedByStatsSection({
     setNameFilter((cur) => (cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n]));
   const filtersActive = nameFilter.length > 0 || activeTab !== 'All';
 
+  const { profile } = useAuth();
+  const handleExport = () => {
+    exportCapturedByToExcel({
+      rows: visibleRows.map((r) => ({
+        name: r.name,
+        total: r.total, completed: r.completed, closed: r.closed, dispute: r.dispute,
+        priTotal: r.priTotal, priCatA: r.priCatA, priCatB: r.priCatB, priNoCat: r.priNoCat,
+        isUnknown: r.isUnknown,
+      })),
+      totals: visibleTotals,
+      meta: { userName: profile?.name || profile?.login_id || 'Unknown', userType: (profile as any)?.user_type ?? '' },
+      activeTab: String(activeTab),
+      nameFilter,
+    });
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
@@ -1108,11 +1125,22 @@ function CapturedByStatsSection({
           aria-expanded={!collapsed}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          <CardTitle className="text-base">Captured By — Defect Statistics</CardTitle>
+          <CardTitle className="text-base">PM's Defect Statistics</CardTitle>
         </button>
-        <p className="text-xs text-muted-foreground tabular-nums">
-          {stats.length} person{stats.length === 1 ? '' : 's'} · Unknown {unknown.total}
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {stats.length} person{stats.length === 1 ? '' : 's'} · Unknown {unknown.total}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1 text-xs"
+            onClick={(e) => { e.stopPropagation(); handleExport(); }}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Excel
+          </Button>
+        </div>
       </CardHeader>
       {!collapsed && (
         <CardContent className="space-y-2 pt-0">
