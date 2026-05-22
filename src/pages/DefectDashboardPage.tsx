@@ -224,8 +224,35 @@ export default function DefectDashboardPage() {
     const completionOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'completion', dataDate)).length;
     const closureOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'closure', dataDate)).length;
     const inDisputeCount = filteredItems.filter((item) => item.closure_status === 'InD').length;
-    return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, startOverdue, completionOverdue, closureOverdue, inDisputeCount };
+
+    // Priority 분류별 집계 (Cat A / Cat B / No Cat / Total)
+    const CAT_A = 'Cat A - Major Defect (Before SC)';
+    const CAT_B = 'Cat B - Minor Defect';
+    const bucketize = (rows: typeof filteredItems) => {
+      const t = rows.length;
+      const c = rows.filter(isActualComplete).length;
+      const z = rows.filter(isClosureComplete).length;
+      return {
+        total: t,
+        completion: c,
+        closure: z,
+        completionPct: t ? Math.round((c / t) * 1000) / 10 : 0,
+        closurePct: t ? Math.round((z / t) * 1000) / 10 : 0,
+      };
+    };
+    const catA = filteredItems.filter((i) => (i as any).priority === CAT_A);
+    const catB = filteredItems.filter((i) => (i as any).priority === CAT_B);
+    const noCat = filteredItems.filter((i) => !(i as any).priority);
+    const byPriority = {
+      total: bucketize(filteredItems),
+      catA: bucketize(catA),
+      catB: bucketize(catB),
+      noCat: bucketize(noCat),
+    };
+
+    return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, startOverdue, completionOverdue, closureOverdue, inDisputeCount, byPriority };
   }, [filteredItems, today, dataDate, atRiskDays]);
+
 
   const bySubTrade = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.sub_trade ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
   const bySubcon = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.subcontractor_name ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
@@ -395,6 +422,30 @@ export default function DefectDashboardPage() {
           <p className="mt-1 text-[10px] text-muted-foreground">Closure / Total</p>
         </Card>
       </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {([
+          { label: 'Total', stats: kpis.byPriority.total, priority: null },
+          { label: 'Cat. A', stats: kpis.byPriority.catA, priority: 'Cat A - Major Defect (Before SC)' },
+          { label: 'Cat. B', stats: kpis.byPriority.catB, priority: 'Cat B - Minor Defect' },
+          { label: 'No Cat.', stats: kpis.byPriority.noCat, priority: '__EMPTY__' },
+        ] as const).map(({ label, stats, priority }) => {
+          const teamParam: Record<string, string> = teamFilter.length ? { team: teamFilter.join(',') } : {};
+          const pParam: Record<string, string> = priority ? { priority } : {};
+          return (
+            <PriorityCard
+              key={label}
+              label={label}
+              stats={stats}
+              onCardClick={() => goRaw({ ...teamParam, ...pParam })}
+              onCompletionClick={() => goRaw({ ...teamParam, ...pParam, actualComplete: 'true' })}
+              onClosureClick={() => goRaw({ ...teamParam, ...pParam, closureComplete: 'true' })}
+            />
+          );
+        })}
+      </div>
+
+
 
 
       {!roles.includes('guest') && (
@@ -689,6 +740,35 @@ export default function DefectDashboardPage() {
 
 type GroupParam = 'subTrade' | 'subcontractor' | 'subsub' | 'hdecPic' | 'hdecEng' | 'team' | 'workType';
 type StageKey = 'completion' | 'closure' | 'difference';
+
+interface PriorityStats { total: number; completion: number; closure: number; completionPct: number; closurePct: number }
+function PriorityCard({ label, stats, onCardClick, onCompletionClick, onClosureClick }: { label: string; stats: PriorityStats; onCardClick?: () => void; onCompletionClick?: () => void; onClosureClick?: () => void }) {
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
+  return (
+    <Card onClick={onCardClick} className={cn(onCardClick && 'cursor-pointer transition-colors hover:bg-muted/40')}>
+      <CardContent className="flex flex-col gap-2 p-4">
+        <div className="flex items-baseline justify-between">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <p className="text-2xl font-bold text-foreground">{stats.total.toLocaleString()}</p>
+        </div>
+        <button type="button" onClick={(e) => { stop(e); onCompletionClick?.(); }} className="text-left transition-colors hover:bg-muted/30 rounded px-1 -mx-1 py-0.5">
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>Completion</span>
+            <span className="tabular-nums"><span className="font-medium text-foreground">{stats.completion.toLocaleString()}</span> / {stats.total.toLocaleString()} ({stats.completionPct}%)</span>
+          </div>
+          <Progress value={Math.max(0, Math.min(100, stats.completionPct))} className="mt-1 h-1.5" />
+        </button>
+        <button type="button" onClick={(e) => { stop(e); onClosureClick?.(); }} className="text-left transition-colors hover:bg-muted/30 rounded px-1 -mx-1 py-0.5">
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>Closure</span>
+            <span className="tabular-nums"><span className="font-medium text-foreground">{stats.closure.toLocaleString()}</span> / {stats.total.toLocaleString()} ({stats.closurePct}%)</span>
+          </div>
+          <Progress value={Math.max(0, Math.min(100, stats.closurePct))} className="mt-1 h-1.5 [&>div]:bg-emerald-500" />
+        </button>
+      </CardContent>
+    </Card>
+  );
+}
 
 function KpiCard({ icon, label, value, sub, accent, progress, progressTone, onClick }: { icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: 'destructive'; progress?: number; progressTone?: 'default' | 'destructive'; onClick?: () => void }) {
   return <Card onClick={onClick} className={cn(onClick && 'cursor-pointer transition-colors hover:bg-muted/40', accent === 'destructive' && 'border-destructive/30')}><CardContent className="flex items-center gap-3 p-4">{icon}<div className="min-w-0 flex-1"><p className="truncate text-xs text-muted-foreground">{label}</p><p className={cn('text-2xl font-bold', accent === 'destructive' ? 'text-destructive' : 'text-foreground')}>{value}</p>{sub && <p className="text-xs text-muted-foreground">{sub}</p>}{typeof progress === 'number' && <Progress value={Math.max(0, Math.min(100, progress))} className={cn('mt-1.5 h-1.5', progressTone === 'destructive' && '[&>div]:bg-destructive')} />}</div></CardContent></Card>;
