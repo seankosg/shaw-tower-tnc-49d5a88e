@@ -1,60 +1,45 @@
-# Defect Dashboard — Dispute 서머리 배너 2종 추가
+# CAT 판별 로직 - Issue Description 컬럼 추가
 
-Defect 대시보드 상단 Priority Category 카드(`Total / Cat. A / Cat. B / No Cat.`) 바로 아래 tier에 두 개의 요약 배너를 추가한다. 데이터는 현재 `filteredItems`(팀 필터 적용된 결과)를 그대로 사용한다.
+## 배경
+현재 `verifyPriority`는 Import 행의 `description` 한 컬럼만 lower-case 변환 후 키워드 매칭에 사용함.
+Parser(`defect-parser.ts`)에서 `"description"`과 `"issue description"` 헤더가 동일 필드(`description`)로 매핑되어 둘 중 마지막 값이 덮어쓰이는 구조라서, Import 파일에 두 컬럼이 함께 존재할 때 한 쪽이 누락됨.
 
-## 배너 1 — "Dispute in Category"
+## 변경 방향
+`Description` + `Issue Description` 두 컬럼의 텍스트를 **모두** 키워드 매칭 대상에 포함시킨다. (게이트 조건 — Priority / Status / 기존 closure_status — 은 변경 없음)
 
-가로 3분할 카드(혹은 단일 Card 내 3개 셀):
-- **LL's CAT A** — `priority === 'Cat A - Major Defect (Before SC)'` AND `closure_status !== 'Done'` 인 항목 수
-- **HDEC's CAT A** — `hdec_verification === 'Cat A - Major Defect (Before SC)'` AND `closure_status !== 'Done'` 인 항목 수
-- **Difference** — `LL's CAT A − HDEC's CAT A` (양수: HDEC가 등급 강하 시킨 수, 음수면 빨간색)
+## 수정 파일
 
-클릭 동작(기존 KPI 카드 패턴과 동일):
-- LL's CAT A → `goRaw({ priority: 'Cat A - Major Defect (Before SC)', closureStatus: '__NOT_DONE__' })`
-- HDEC's CAT A → `goRaw({ hdecVerification: 'Cat A - Major Defect (Before SC)', closureStatus: '__NOT_DONE__' })`
-- Difference → 비클릭
+### 1. `src/lib/defect-priority-verifier.ts`
+- `VerifyInput`에 `issueDescription?: string | null` 필드 추가
+- `verifyPriority` 내부에서 `description`과 `issueDescription`을 줄바꿈으로 합쳐 하나의 hay 문자열로 lower-case 변환 후 룰 매칭에 사용
+- 합쳐서 빈 문자열이면 `no_match` 반환 (현재 동작 유지)
 
-## 배너 2 — "HDEC's Basis of Dispute"
+### 2. `src/contexts/DefectImportContext.tsx` (verifyPriority 호출부, 약 833행)
+- `row.raw_payload`에서 "Issue Description" / "IssueDescription" / "issue description" 키를 대소문자 무시로 탐색하는 헬퍼로 원본 값 추출
+- `issueDescription`을 입력에 추가하여 호출
 
-대상 집합: `closure_status !== 'Done'` AND `hdec_verification === 'Cat B - Minor Defect'` 인 행.
+```ts
+const issueDescRaw = pickRawValue(row.raw_payload, ['Issue Description', 'IssueDescription', 'issue description']);
+const verifyOutcome = verifyPriority(
+  {
+    priority: row.priority,
+    description: row.description,
+    issueDescription: issueDescRaw,
+    importStatus: row.status,
+    existingClosureStatus: existing?.closure_status,
+  },
+  verificationRules,
+);
+```
 
-표시 방식: `hdec_reason` 값별로 그룹핑하여 (reason, count) 리스트를 카드 내부에 chips/리스트로 노출.
-- 정렬: count 내림차순, 동률이면 reason 알파벳순.
-- 빈/null reason은 `Unspecified` 레이블로 묶음.
-- 각 항목 클릭 시 → `goRaw({ hdecVerification: 'Cat B - Minor Defect', hdecReason: <reason 혹은 __EMPTY__>, closureStatus: '__NOT_DONE__' })`.
-- 대상 0건이면 "No disputes recorded." 안내문 표시.
+`pickRawValue`는 raw_payload key들을 lower-case + trim으로 비교해 첫 매칭 값을 문자열로 반환하는 작은 로컬 헬퍼.
 
-## 변경 파일
+## 영향 범위 / 비변경
+- DB 스키마: 변경 없음
+- 게이트 조건(Priority == Cat A, Status != Closed, closure_status != Done): 변경 없음
+- clear / preserve / no_match 동작: 변경 없음
+- 룰 데이터(`defect_priority_verification_rules`): 변경 없음
+- Description 컬럼만 있는 기존 파일도 동작 동일 (issueDescription이 비면 무시)
 
-1. `src/pages/DefectDashboardPage.tsx`
-   - `kpis` useMemo 내부에 `dispute` 객체 추가:
-     ```ts
-     const NOT_DONE = (i) => i.closure_status !== 'Done';
-     const llCatA   = filteredItems.filter(i => i.priority === CAT_A && NOT_DONE(i)).length;
-     const hdecCatA = filteredItems.filter(i => (i as any).hdec_verification === CAT_A && NOT_DONE(i)).length;
-     const hdecCatBReasons = (() => {
-       const m = new Map<string, number>();
-       for (const i of filteredItems) {
-         if (!NOT_DONE(i)) continue;
-         if ((i as any).hdec_verification !== CAT_B) continue;
-         const r = ((i as any).hdec_reason || '').trim() || '__EMPTY__';
-         m.set(r, (m.get(r) ?? 0) + 1);
-       }
-       return Array.from(m.entries()).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]));
-     })();
-     ```
-   - Priority 카드 grid(라인 428-449) 직후, `CapturedByStatsSection` 앞에 두 배너 JSX 삽입.
-   - `goRaw` 호출에 새 쿼리키 사용 (아래 2번 항목과 짝).
-
-2. `src/pages/DefectRawDataPage.tsx` (및 `defect-dashboard-utils` 필요 시)
-   - URL 쿼리 파라미터 신규 지원:
-     - `hdecVerification=<exact value>` — 정확 일치 필터
-     - `hdecReason=<exact value | __EMPTY__>` — 정확 일치 (빈 토큰 시 null/공백 매칭)
-     - `closureStatus=__NOT_DONE__` — 기존 `closureStatus=InD` 같은 단일 값 분기에 "Done이 아닌 전체" 토큰 추가
-   - Active filter chips에도 신규 3종 표시 + 제거 가능하도록 추가.
-
-## 비고
-
-- 데이터/RLS/DB 변경 없음. 모두 클라이언트 필터링.
-- `closureStatus=__NOT_DONE__`는 신규 sentinel. 기존 값(`Done/Delay/WIP/Planned/InD`)과 충돌하지 않음.
-- 배너 디자인은 기존 KpiCard 스타일에 맞춰 작은 카드 2개(grid `md:grid-cols-2`)로 배치.
+## 테스트
+- `src/test/`에 priority-verifier 전용 테스트가 없으면 추가 생략 (기존 import 통합 테스트로 회귀 확인). 필요 시 후속 작업으로 단위 테스트 추가.
