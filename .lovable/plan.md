@@ -1,55 +1,48 @@
-# Punch Raw Data — sticky 컬럼 & 스크롤 로직을 Defect Raw Data와 동일화
+# Defect Dashboard — Priority 카드 OD 칩 추가
 
-현재 `PunchRawDataPage.tsx`의 테이블은 sticky 좌측 컬럼이 없고(헤더만 sticky-top), 단순 `overflow-auto` 컨테이너만 사용하며, 행 가상화 / 상단 미러 가로 스크롤바도 없습니다. 이를 `DefectRawDataPage.tsx`의 `DefectRawTableView` 와 동일한 구조로 통일합니다.
+## 목표
+Defect Dashboard의 신규 Priority 카드 4종(Total / Cat. A / Cat. B / No Cat.)에 **계획대비 완료되지 않은(Overdue) 개수**를 표시하는 OD 칩을 추가하고, 클릭 시 Raw Data로 필터링 이동되게 한다.
 
-## 결과적으로 적용되는 동작
+## OD 정의
+- "계획대비 완료되지 않은" = **Completion 단계 지연**
+  → `isStageDelayedAsOf(item, 'completion', dataDate)` 기준
+  (기존 KPI "Overdue - Completion"과 동일한 판정)
+- Data Date(`dataDate`) 기준으로 계산
 
-1. **좌측 sticky 컬럼**
-   - 선택 컬럼(`__select`) 1개 + 사용자 설정값(`useFrozenColumnCount`, 1~4, 모바일은 1) 만큼 좌측 고정
-   - 각 sticky 컬럼은 누적 left offset으로 `position: sticky` 적용
-   - 마지막 sticky 컬럼은 오른쪽에 미세 그림자(`shadow-[2px_0_4px_-2px_…]`)
-2. **상단 sticky 헤더 행**
-   - 동일 `<table>` 내 헤더가 `[&>th]:sticky [&>th]:top-0 [&>th]:z-[2]` 로 세로 스크롤 시 고정
-3. **단일 스크롤 컨테이너 + 미러 가로 스크롤바**
-   - 본문 위에 `TopHorizontalScrollbar` (frozen 영역만큼 좌측 비워둠) 배치 → 본문 스크롤과 양방향 동기화
-   - 컨테이너 높이 `max-h-[calc(100vh-220px)]`, `[scrollbar-gutter:stable]`
-4. **행 가상화** (`@tanstack/react-virtual`, ROW_HEIGHT=36, overscan 12)
-5. **sticky 셀 불투명 배경**
-   - 행 상태(`health_status` critical/behind, hover, completed)에 맞춘 2-레이어 배경(불투명 base + 색상 tint)으로 비-frozen 영역 셀이 sticky 셀 뒤로 비치지 않게 처리
-6. **컬럼 리사이즈 핸들 더블클릭 → auto-size**
-   - `tableRef` 기반 DOM 측정 후 `columnSizing` 갱신 (Defect와 동일 로직)
+## 변경 사항
 
-## Punch 고유 매핑
+### 1) `src/pages/DefectDashboardPage.tsx` — kpis 집계
+`kpis.byPriority` 계산 시 각 버킷(total / catA / catB / noCat)에 **completion-overdue count**를 함께 산출.
 
-- Defect의 "closed / overdue" 색상 기준 → Punch에서는:
-  - 완료(연한 회색) = `actual_completion_date` 존재 또는 `completion_status` 가 done/complete/closed 류
-  - 위험(연한 destructive 배경) = `health_status === 'critical' || 'behind'`
-- Defect의 `getSourceOrigin` (HDEC/Aconex/system 헤더 색상)은 Punch에 해당 데이터 없음 → 미적용(기존 `bg-background` 유지)
-- `__select`(선택 체크박스) + `item_no` 가 기본 첫 컬럼이므로 자연스럽게 sticky 대상에 포함됨
+```ts
+const bucketize = (rows) => {
+  ...
+  const overdue = rows.filter(i => isStageDelayedAsOf(i, 'completion', dataDate)).length;
+  return { total, completion, closure, completionPct, closurePct, overdue };
+};
+```
 
-## 변경 파일 (단일)
+### 2) `PriorityCard` 컴포넌트
+- `PriorityStats`에 `overdue: number` 추가
+- `onOverdueClick?: () => void` prop 추가
+- 카드 상단(라벨 옆 또는 total 아래)에 작은 **destructive 색상 칩** `OD {n}` 렌더
+  - 값이 0이면 muted 톤으로 표시(클릭 비활성)
+  - 클릭 시 부모 카드 onClick 전파 차단(`stopPropagation`)
 
-`src/pages/PunchRawDataPage.tsx`
+### 3) 4개 카드 렌더 매핑
+각 카드마다 `onOverdueClick` 전달:
+```ts
+onOverdueClick={() => goRaw({
+  ...teamParam,
+  ...pParam,
+  overdue: 'true',
+  stage: 'completion',
+  asOf: dataDate,
+})}
+```
+→ 기존 `DefectRawDataPage`의 `overdue/stage/asOf` 필터 로직 그대로 활용 (코드 변경 불요).
 
-1. import 추가
-   - `useVirtualizer` from `@tanstack/react-virtual`
-   - `TopHorizontalScrollbar` from `@/components/raw-data/TopHorizontalScrollbar`
-   - `useFrozenColumnCount` from `@/hooks/useAppSettings`
-   - `useIsMobile` from `@/hooks/use-mobile`
-2. `autoSizeColumn(columnId)` 헬퍼 추가 (Defect와 동일)
-3. 컬럼 리사이즈 핸들에 `onDoubleClick` 연결
-4. 테이블 렌더 블록(현 `<div ref={tableRef} className="flex-1 overflow-auto …">` 영역)을 신규 내부 컴포넌트 **`PunchRawTableView`** 로 추출
-   - `frozenCount`, `stickyLefts`, `frozenWidth`, `totalWidth` 계산
-   - 헤더/셀 sticky 스타일 적용 + 마지막 sticky 컬럼 그림자
-   - `useVirtualizer` 로 가상화, 위/아래 padding `<tr>` 삽입
-   - hover index state로 sticky 셀 배경 보정
-   - `<TopHorizontalScrollbar>` 본문 위 렌더
-5. 기존 `renderHeader` 로직은 위 컴포넌트로 이동(중복 제거)
-6. CSS 외 동작/필터/정렬/선택/Bulk Edit 로직은 변경 없음 (state 그대로 props로 주입)
-
-## 기술 세부 (요약)
-
-- frozenCount = `(isMobile ? 1 : clamp(frozenSetting, 1, 4)) + 1` (선택 컬럼 포함)
-- 행 정렬·필터 상태는 외부 `table` 객체로 그대로 전달
-- 가상화 도입으로 행 수 많아도 DOM 노드 수 일정 → 스크롤 성능 개선
-- `tableRef` 는 가상화 스크롤 엘리먼트로 사용 (Defect와 동일)
+## 영향 범위
+- 변경 파일: `src/pages/DefectDashboardPage.tsx` 1개
+- Raw Data 페이지 / 유틸리티 / DB 변경 없음
+- 디자인 시스템 토큰만 사용 (destructive, muted-foreground)
