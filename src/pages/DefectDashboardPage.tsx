@@ -252,7 +252,23 @@ export default function DefectDashboardPage() {
       noCat: bucketize(noCat),
     };
 
-    return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, startOverdue, completionOverdue, closureOverdue, inDisputeCount, byPriority };
+    // Dispute summary: rows whose closure is not yet 'Done'.
+    const notDone = (i: any) => i.closure_status !== 'Done';
+    const llCatADispute = filteredItems.filter((i) => (i as any).priority === CAT_A && notDone(i)).length;
+    const hdecCatADispute = filteredItems.filter((i) => (i as any).hdec_verification === CAT_A && notDone(i)).length;
+    const hdecCatBReasonMap = new Map<string, number>();
+    for (const i of filteredItems) {
+      if (!notDone(i)) continue;
+      if ((i as any).hdec_verification !== CAT_B) continue;
+      const raw = (i as any).hdec_reason;
+      const key = (raw == null ? '' : String(raw).trim()) || '__EMPTY__';
+      hdecCatBReasonMap.set(key, (hdecCatBReasonMap.get(key) ?? 0) + 1);
+    }
+    const hdecCatBReasons = Array.from(hdecCatBReasonMap.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const dispute = { llCatA: llCatADispute, hdecCatA: hdecCatADispute, diff: llCatADispute - hdecCatADispute, hdecCatBReasons };
+
+    return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, startOverdue, completionOverdue, closureOverdue, inDisputeCount, byPriority, dispute };
   }, [filteredItems, today, dataDate, atRiskDays]);
 
 
