@@ -733,6 +733,31 @@ export default function DefectRawDataPage() {
     if (capturedByGroup) {
       next = next.filter((item) => getCapturedByGroup((item as any).captured_by_name) === capturedByGroup);
     }
+    if (searchParams.get('notClosureDone') === 'true') {
+      next = next.filter((item) => (item as any).closure_status !== 'Done');
+    }
+    const hdecVerification = searchParams.get('hdecVerification');
+    if (hdecVerification) {
+      if (hdecVerification === EMPTY_TOKEN) {
+        next = next.filter((item) => {
+          const v = (item as any).hdec_verification;
+          return v == null || String(v).trim() === '';
+        });
+      } else {
+        next = next.filter((item) => (item as any).hdec_verification === hdecVerification);
+      }
+    }
+    const hdecReason = searchParams.get('hdecReason');
+    if (hdecReason) {
+      if (hdecReason === EMPTY_TOKEN) {
+        next = next.filter((item) => {
+          const v = (item as any).hdec_reason;
+          return v == null || String(v).trim() === '';
+        });
+      } else {
+        next = next.filter((item) => (item as any).hdec_reason === hdecReason);
+      }
+    }
     return next;
   }, [items, searchParams, dataDate]);
 
