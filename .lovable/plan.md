@@ -1,45 +1,39 @@
-# CAT 판별 로직 - Issue Description 컬럼 추가
+## 목표
 
-## 배경
-현재 `verifyPriority`는 Import 행의 `description` 한 컬럼만 lower-case 변환 후 키워드 매칭에 사용함.
-Parser(`defect-parser.ts`)에서 `"description"`과 `"issue description"` 헤더가 동일 필드(`description`)로 매핑되어 둘 중 마지막 값이 덮어쓰이는 구조라서, Import 파일에 두 컬럼이 함께 존재할 때 한 쪽이 누락됨.
+`Defect Raw Data` 화면, Dashboard의 "Dispute in Category" 배너, Excel Export 모두에서 `HDEC's Verification` / `HDEC's Reason` 값이 정상 표시되도록 한다.
 
-## 변경 방향
-`Description` + `Issue Description` 두 컬럼의 텍스트를 **모두** 키워드 매칭 대상에 포함시킨다. (게이트 조건 — Priority / Status / 기존 closure_status — 은 변경 없음)
+## 근본 원인
 
-## 수정 파일
+`src/lib/defect-cache.ts`의 `SLIM_COLUMNS` 배열(26~72행)이 `defect_items` 테이블에서 select할 컬럼을 명시적으로 나열하는데, **`hdec_verification`과 `hdec_reason` 두 컬럼이 누락**되어 있다. 결과적으로 클라이언트 캐시에는 두 필드가 항상 `undefined`로 들어가고, 이 캐시를 소비하는 모든 화면/배너/export가 빈 값으로 보인다.
 
-### 1. `src/lib/defect-priority-verifier.ts`
-- `VerifyInput`에 `issueDescription?: string | null` 필드 추가
-- `verifyPriority` 내부에서 `description`과 `issueDescription`을 줄바꿈으로 합쳐 하나의 hay 문자열로 lower-case 변환 후 룰 매칭에 사용
-- 합쳐서 빈 문자열이면 `no_match` 반환 (현재 동작 유지)
+DB 자체와 Import 시 판별 로직은 정상이며, 실제로 Cat A 1,370행 중 1,284행에 verification이 채워져 있음을 확인했다.
 
-### 2. `src/contexts/DefectImportContext.tsx` (verifyPriority 호출부, 약 833행)
-- `row.raw_payload`에서 "Issue Description" / "IssueDescription" / "issue description" 키를 대소문자 무시로 탐색하는 헬퍼로 원본 값 추출
-- `issueDescription`을 입력에 추가하여 호출
+## 변경 사항
+
+### `src/lib/defect-cache.ts`
+
+`SLIM_COLUMNS` 배열에 두 항목을 추가한다. 위치는 `closure_status` 다음, `work_type` 앞이 의미상 자연스럽다.
 
 ```ts
-const issueDescRaw = pickRawValue(row.raw_payload, ['Issue Description', 'IssueDescription', 'issue description']);
-const verifyOutcome = verifyPriority(
-  {
-    priority: row.priority,
-    description: row.description,
-    issueDescription: issueDescRaw,
-    importStatus: row.status,
-    existingClosureStatus: existing?.closure_status,
-  },
-  verificationRules,
-);
+'closure_status',
+'hdec_verification',   // ← 추가
+'hdec_reason',         // ← 추가
+'work_type',
 ```
 
-`pickRawValue`는 raw_payload key들을 lower-case + trim으로 비교해 첫 매칭 값을 문자열로 반환하는 작은 로컬 헬퍼.
+이 한 줄 변경으로:
+- 캐시 초기 로드 시점부터 두 컬럼이 포함되어 Raw Data 테이블에 즉시 표시됨
+- Dashboard의 `Dispute in Category` 카운트(`HDEC's CAT A`, `Difference`)가 올바르게 계산됨
+- Excel Export도 캐시를 그대로 사용하므로 자동으로 채워짐
+- Realtime 패치 경로(같은 SLIM 컬럼 셋 사용)도 자동 적용됨
 
-## 영향 범위 / 비변경
-- DB 스키마: 변경 없음
-- 게이트 조건(Priority == Cat A, Status != Closed, closure_status != Done): 변경 없음
-- clear / preserve / no_match 동작: 변경 없음
-- 룰 데이터(`defect_priority_verification_rules`): 변경 없음
-- Description 컬럼만 있는 기존 파일도 동작 동일 (issueDescription이 비면 무시)
+## 검증
 
-## 테스트
-- `src/test/`에 priority-verifier 전용 테스트가 없으면 추가 생략 (기존 import 통합 테스트로 회귀 확인). 필요 시 후속 작업으로 단위 테스트 추가.
+1. Defect Raw Data 페이지 새로고침 → `HDEC's Verification` / `HDEC's Reason` 컬럼에 값이 보이는지 확인
+2. Defect Dashboard 새로고침 → `Dispute in Category` 카드의 `HDEC's CAT A` 가 1,284 근처, `Difference`가 0 근처로 표시되는지 확인
+3. Export Excel 다시 받아 두 컬럼 값이 채워지는지 확인
+
+## 범위 외
+
+- Import 판별 로직(`defect-priority-verifier.ts`), DB 스키마, Edge Function은 손대지 않는다.
+- DB에는 이미 정확한 값이 있으므로 backfill이나 재분류는 불필요하다.
