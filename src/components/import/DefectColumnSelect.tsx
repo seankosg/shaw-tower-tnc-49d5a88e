@@ -74,7 +74,7 @@ export function DefectColumnSelect({
   }), [isReimport, isFieldRequired, getLabel, getSourceLabel, getSourceOrigin]);
 
   const presets = useMemo(() => {
-    const ACONEX_FIELDS = new Set(['issue_no', 'status', 'actual_closure_date', 'aconex_comments']);
+    const ACONEX_FIELDS = new Set(['issue_no', 'status', 'actual_closure_date', 'aconex_comments', 'priority']);
     const HDEC_FIELDS = new Set([
       'issue_no', 'team', 'subcontractor_name', 'subsub_name',
       'hdec_pic_name', 'hdec_eng_name',
