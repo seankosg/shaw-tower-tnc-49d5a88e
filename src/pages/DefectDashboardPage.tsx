@@ -461,6 +461,9 @@ export default function DefectDashboardPage() {
             if (metric === 'completed') params.actualComplete = 'true';
             else if (metric === 'closed') params.closureComplete = 'true';
             else if (metric === 'dispute') params.closureStatus = 'InD';
+            else if (metric === 'priCatA') params.priority = 'Cat A - Major Defect (Before SC)';
+            else if (metric === 'priCatB') params.priority = 'Cat B - Minor Defect';
+            else if (metric === 'priNoCat') params.priority = '__EMPTY__';
             goRaw(params);
           }}
           onGroupClick={(group) => goRaw({ capturedByGroup: group })}
@@ -796,8 +799,12 @@ function KpiCard({ icon, label, value, sub, accent, progress, progressTone, onCl
 
 function AlertBanner({ tone, title, description, onClick }: { tone: 'destructive' | 'warning' | 'dispute'; title: string; description: string; onClick: () => void }) { const cls = tone === 'destructive' ? 'border-destructive/40 bg-destructive/5 text-destructive' : tone === 'dispute' ? 'border-purple-500/40 bg-purple-500/5 text-purple-700 dark:text-purple-300' : 'border-primary/40 bg-primary/5 text-primary'; const Icon = tone === 'dispute' ? AlertCircle : AlertTriangle; return <button onClick={onClick} className={cn('flex items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/40', cls)}><div className="flex items-center gap-3"><Icon className="h-5 w-5" /><div><p className="font-semibold">{title}</p><p className="text-xs text-muted-foreground">{description}</p></div></div><span className="text-sm font-medium text-muted-foreground">View</span></button>; }
 
-type CapturedByMetric = 'total' | 'completed' | 'closed' | 'dispute';
-interface CapturedByStat { name: string; total: number; completed: number; closed: number; dispute: number }
+type CapturedByMetric =
+  | 'total' | 'completed' | 'closed' | 'dispute'
+  | 'priTotal' | 'priCatA' | 'priCatB' | 'priNoCat';
+interface CapturedByStat { name: string; total: number; completed: number; closed: number; dispute: number; priCatA: number; priCatB: number; priNoCat: number }
+const PRI_CAT_A_LABEL = 'Cat A - Major Defect (Before SC)';
+const PRI_CAT_B_LABEL = 'Cat B - Minor Defect';
 
 function CapturedByStatsSection({
   items, kpis, onCardClick, onMetricClick, onGroupClick, showDebug,
@@ -811,22 +818,27 @@ function CapturedByStatsSection({
 }) {
   const { stats, unknown, totals } = useMemo(() => {
     const map = new Map<string, CapturedByStat>();
-    const unknown: CapturedByStat = { name: '__unknown__', total: 0, completed: 0, closed: 0, dispute: 0 };
+    const unknown: CapturedByStat = { name: '__unknown__', total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 };
     for (const it of items) {
       const raw = (it as any).captured_by_name as string | null | undefined;
       const name = raw && String(raw).trim() ? String(raw).trim() : null;
-      const bucket = name ? (map.get(name) ?? { name, total: 0, completed: 0, closed: 0, dispute: 0 }) : unknown;
+      const bucket = name ? (map.get(name) ?? { name, total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 }) : unknown;
       bucket.total += 1;
       if (isActualComplete(it as any)) bucket.completed += 1;
       if (isClosureComplete(it as any)) bucket.closed += 1;
       if (String((it as any).closure_status ?? '') === 'InD') bucket.dispute += 1;
+      const pri = (it as any).priority as string | null | undefined;
+      if (pri === PRI_CAT_A_LABEL) bucket.priCatA += 1;
+      else if (pri === PRI_CAT_B_LABEL) bucket.priCatB += 1;
+      else if (!pri) bucket.priNoCat += 1;
       if (name) map.set(name, bucket);
     }
     const stats = [...map.values()].sort((a, b) => b.total - a.total);
     const totals = stats.reduce((acc, s) => ({
       total: acc.total + s.total, completed: acc.completed + s.completed,
       closed: acc.closed + s.closed, dispute: acc.dispute + s.dispute,
-    }), { total: 0, completed: 0, closed: 0, dispute: 0 });
+      priCatA: acc.priCatA + s.priCatA, priCatB: acc.priCatB + s.priCatB, priNoCat: acc.priNoCat + s.priNoCat,
+    }), { total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 });
     return { stats, unknown, totals };
   }, [items]);
 
@@ -867,7 +879,7 @@ function CapturedByStatsSection({
   const [collapsed, setCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'All' | CapturedByGroup>('All');
   const [nameFilter, setNameFilter] = useState<string[]>([]);
-  type SortKey = 'name' | 'total' | 'completed' | 'closed' | 'dispute';
+  type SortKey = 'name' | 'total' | 'completed' | 'closed' | 'dispute' | 'priCatA' | 'priCatB' | 'priNoCat';
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' });
 
   const tabRows = useMemo(
@@ -891,8 +903,9 @@ function CapturedByStatsSection({
       (acc, r) => ({
         total: acc.total + r.total, completed: acc.completed + r.completed,
         closed: acc.closed + r.closed, dispute: acc.dispute + r.dispute,
+        priCatA: acc.priCatA + r.priCatA, priCatB: acc.priCatB + r.priCatB, priNoCat: acc.priNoCat + r.priNoCat,
       }),
-      { total: 0, completed: 0, closed: 0, dispute: 0 },
+      { total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 },
     ),
     [visibleRows],
   );
@@ -960,6 +973,15 @@ function CapturedByStatsSection({
           <div className="overflow-x-auto rounded-md border">
             <Table>
               <TableHeader>
+                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                  <TableHead className="align-middle" />
+                  <TableHead colSpan={4} className="border-l text-center align-middle text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    By Quantity
+                  </TableHead>
+                  <TableHead colSpan={4} className="border-l text-center align-middle text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    By Priority
+                  </TableHead>
+                </TableRow>
                 <TableRow className="bg-muted/40">
                   <TableHead className="align-middle">
                     <div className="flex items-center gap-1">
@@ -995,22 +1017,34 @@ function CapturedByStatsSection({
                       </Popover>
                     </div>
                   </TableHead>
-                  {(['total', 'completed', 'closed', 'dispute'] as const).map((k) => (
-                    <TableHead key={k} className="w-[140px] align-middle text-right">
+                  {(['total', 'completed', 'closed', 'dispute'] as const).map((k, idx) => (
+                    <TableHead key={k} className={cn('w-[140px] align-middle text-right', idx === 0 && 'border-l')}>
                       <button type="button" onClick={() => toggleSort(k)} className="ml-auto flex items-center gap-1 text-xs font-semibold hover:underline">
                         {k === 'total' ? 'Total' : k === 'completed' ? 'Completed' : k === 'closed' ? 'Closed' : 'In Dispute'}
                         <span className="text-[10px] text-muted-foreground">{sortIcon(k)}</span>
                       </button>
                     </TableHead>
                   ))}
+                  {(['priTotal', 'priCatA', 'priCatB', 'priNoCat'] as const).map((k, idx) => {
+                    const label = k === 'priTotal' ? 'Total' : k === 'priCatA' ? 'Cat. A' : k === 'priCatB' ? 'Cat. B' : 'No Cat.';
+                    const sortKey: SortKey | null = k === 'priTotal' ? 'total' : (k as SortKey);
+                    return (
+                      <TableHead key={k} className={cn('w-[110px] align-middle text-right', idx === 0 && 'border-l')}>
+                        <button type="button" onClick={() => sortKey && toggleSort(sortKey)} className="ml-auto flex items-center gap-1 text-xs font-semibold hover:underline">
+                          {label}
+                          <span className="text-[10px] text-muted-foreground">{sortKey ? sortIcon(sortKey) : ''}</span>
+                        </button>
+                      </TableHead>
+                    );
+                  })}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 <TableRow className="bg-muted/50 font-semibold">
                   <TableCell className="py-1.5 text-xs">
-                    {filtersActive ? `TOTAL (n=${visibleRows.length})` : `TOTAL (n=${visibleRows.length})`}
+                    {`TOTAL (n=${visibleRows.length})`}
                   </TableCell>
-                  <TableCell className="py-1.5 text-right tabular-nums">{visibleTotals.total}</TableCell>
+                  <TableCell className="border-l py-1.5 text-right tabular-nums">{visibleTotals.total}</TableCell>
                   <TableCell className="py-1.5 text-right">
                     <span className="tabular-nums text-emerald-700 dark:text-emerald-400">{visibleTotals.completed}</span>
                     <span className="ml-2 text-[10px] text-muted-foreground tabular-nums">{fmtPct(visibleTotals.completed, visibleTotals.total)}</span>
@@ -1020,15 +1054,19 @@ function CapturedByStatsSection({
                     <span className="ml-2 text-[10px] text-muted-foreground tabular-nums">{fmtPct(visibleTotals.closed, visibleTotals.total)}</span>
                   </TableCell>
                   <TableCell className="py-1.5 text-right tabular-nums text-purple-700 dark:text-purple-300">{visibleTotals.dispute}</TableCell>
+                  <TableCell className="border-l py-1.5 text-right tabular-nums">{visibleTotals.total}</TableCell>
+                  <TableCell className={cn('py-1.5 text-right tabular-nums', visibleTotals.priCatA === 0 && 'text-muted-foreground/40')}>{visibleTotals.priCatA}</TableCell>
+                  <TableCell className={cn('py-1.5 text-right tabular-nums', visibleTotals.priCatB === 0 && 'text-muted-foreground/40')}>{visibleTotals.priCatB}</TableCell>
+                  <TableCell className={cn('py-1.5 text-right tabular-nums', visibleTotals.priNoCat === 0 && 'text-muted-foreground/40')}>{visibleTotals.priNoCat}</TableCell>
                 </TableRow>
                 {visibleRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-xs text-muted-foreground">No matches.</TableCell>
+                    <TableCell colSpan={9} className="text-center text-xs text-muted-foreground">No matches.</TableCell>
                   </TableRow>
                 ) : visibleRows.map((r) => (
                   <TableRow key={r.name} className="cursor-pointer" onClick={() => onCardClick(r.name)}>
                     <TableCell className="py-1.5 text-xs font-medium text-foreground">{r.name}</TableCell>
-                    <TableCell className="py-1.5 text-right">
+                    <TableCell className="border-l py-1.5 text-right">
                       <ClickNum value={r.total} onClick={() => onMetricClick(r.name, 'total')} />
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
@@ -1041,6 +1079,18 @@ function CapturedByStatsSection({
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
                       <button type="button" className={cn('tabular-nums hover:underline', r.dispute === 0 ? 'text-muted-foreground/40' : 'font-semibold text-purple-700 dark:text-purple-300')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'dispute'); }}>{r.dispute}</button>
+                    </TableCell>
+                    <TableCell className="border-l py-1.5 text-right">
+                      <button type="button" className="tabular-nums font-semibold hover:underline" onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priTotal'); }}>{r.total}</button>
+                    </TableCell>
+                    <TableCell className="py-1.5 text-right">
+                      <button type="button" className={cn('tabular-nums hover:underline', r.priCatA === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priCatA'); }} disabled={r.priCatA === 0}>{r.priCatA}</button>
+                    </TableCell>
+                    <TableCell className="py-1.5 text-right">
+                      <button type="button" className={cn('tabular-nums hover:underline', r.priCatB === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priCatB'); }} disabled={r.priCatB === 0}>{r.priCatB}</button>
+                    </TableCell>
+                    <TableCell className="py-1.5 text-right">
+                      <button type="button" className={cn('tabular-nums hover:underline', r.priNoCat === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priNoCat'); }} disabled={r.priNoCat === 0}>{r.priNoCat}</button>
                     </TableCell>
                   </TableRow>
                 ))}
