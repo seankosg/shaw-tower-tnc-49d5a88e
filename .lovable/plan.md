@@ -1,48 +1,69 @@
-# Defect Dashboard — Priority 카드 OD 칩 추가
+# Defect Dashboard — Captured By 테이블에 "By Priority" 그룹 컬럼 추가
 
 ## 목표
-Defect Dashboard의 신규 Priority 카드 4종(Total / Cat. A / Cat. B / No Cat.)에 **계획대비 완료되지 않은(Overdue) 개수**를 표시하는 OD 칩을 추가하고, 클릭 시 Raw Data로 필터링 이동되게 한다.
+Captured By 통계 테이블을 2-그룹 헤더로 재구성한다.
+- **By Quantity** (기존 4컬럼): Total / Completed / Closed / In Dispute
+- **By Priority** (신규 4컬럼): Total / Cat. A / Cat. B / No Cat. — Raw Data의 `priority` 컬럼 값을 담당자별로 집계
 
-## OD 정의
-- "계획대비 완료되지 않은" = **Completion 단계 지연**
-  → `isStageDelayedAsOf(item, 'completion', dataDate)` 기준
-  (기존 KPI "Overdue - Completion"과 동일한 판정)
-- Data Date(`dataDate`) 기준으로 계산
+## 변경 위치
+`src/pages/DefectDashboardPage.tsx` — `CapturedByStatsSection` 컴포넌트(약 802~1050행) 단독 수정. 다른 파일/유틸/DB 변경 없음.
 
-## 변경 사항
+## 상세
 
-### 1) `src/pages/DefectDashboardPage.tsx` — kpis 집계
-`kpis.byPriority` 계산 시 각 버킷(total / catA / catB / noCat)에 **completion-overdue count**를 함께 산출.
+### 1) 데이터 집계 (`useMemo` 내부)
+- `CapturedByStat` 인터페이스에 4개 필드 추가:
+  `priTotal` (= 기존 `total`과 동일 값), `priCatA`, `priCatB`, `priNoCat`
+- 각 row 집계 시 `priority` 값 기준 분기:
+  - `'Cat A - Major Defect (Before SC)'` → `priCatA++`
+  - `'Cat B - Minor Defect'` → `priCatB++`
+  - falsy(빈값) → `priNoCat++`
+- (Priority 분류 상수는 상위 `kpis.byPriority` 계산 로직과 동일하게 사용 — 단일 진실 원천 유지)
+- `totals` / `visibleTotals` / `unknown` 동일하게 4개 priority 합계 누적
 
-```ts
-const bucketize = (rows) => {
-  ...
-  const overdue = rows.filter(i => isStageDelayedAsOf(i, 'completion', dataDate)).length;
-  return { total, completion, closure, completionPct, closurePct, overdue };
-};
+### 2) 테이블 헤더 — 2단 그룹 헤더
+기존 단일 `TableRow` 헤더를 두 줄로 교체:
+
+```text
+| Name | -------- By Quantity --------- | -------- By Priority --------- |
+|      | Total | Completed | Closed | InD | Total | Cat. A | Cat. B | NoCat |
 ```
 
-### 2) `PriorityCard` 컴포넌트
-- `PriorityStats`에 `overdue: number` 추가
-- `onOverdueClick?: () => void` prop 추가
-- 카드 상단(라벨 옆 또는 total 아래)에 작은 **destructive 색상 칩** `OD {n}` 렌더
-  - 값이 0이면 muted 톤으로 표시(클릭 비활성)
-  - 클릭 시 부모 카드 onClick 전파 차단(`stopPropagation`)
+- 1단 헤더: 빈 셀(Name 위) + `colSpan=4` "By Quantity" + `colSpan=4` "By Priority"
+- 그룹 라벨은 `text-[11px] font-semibold text-muted-foreground uppercase tracking-wide` 정도로 차분하게
+- 두 그룹 사이는 `border-l`로 시각 분리
+- 2단 헤더: 기존 Name 컬럼 + 기존 4 컬럼 + 신규 4 컬럼(우측 정렬, sort 버튼 포함)
 
-### 3) 4개 카드 렌더 매핑
-각 카드마다 `onOverdueClick` 전달:
+### 3) 정렬 키 확장
+`SortKey` 타입에 `'priCatA' | 'priCatB' | 'priNoCat'` 추가
+(By Priority의 Total은 By Quantity의 Total과 동일하므로 별도 정렬 키 불필요 — 기존 `total` sort 재사용)
+
+### 4) 본문 행 렌더
+- TOTAL 합계 행: 신규 4개 컬럼 합계 표시 (Cat A / Cat B / No Cat은 muted 톤, 0이면 더 흐리게)
+- 각 person 행: 신규 4개 셀에 클릭 가능한 숫자 버튼.
+  클릭 시 `onMetricClick(name, priorityMetric)` 호출.
+- `colSpan` 빈 상태 메시지: 5 → **9**로 변경
+
+### 5) 클릭 → Raw Data 라우팅
+`CapturedByMetric` 타입 확장:
 ```ts
-onOverdueClick={() => goRaw({
-  ...teamParam,
-  ...pParam,
-  overdue: 'true',
-  stage: 'completion',
-  asOf: dataDate,
-})}
+type CapturedByMetric =
+  | 'total' | 'completed' | 'closed' | 'dispute'
+  | 'priTotal' | 'priCatA' | 'priCatB' | 'priNoCat';
 ```
-→ 기존 `DefectRawDataPage`의 `overdue/stage/asOf` 필터 로직 그대로 활용 (코드 변경 불요).
+
+상위(`DefectDashboardPage`)의 `onMetricClick` 핸들러(약 460행)에서 분기 추가:
+```ts
+const params: Record<string, string> = { capturedBy: name };
+if (metric === 'priCatA') params.priority = 'Cat A - Major Defect (Before SC)';
+else if (metric === 'priCatB') params.priority = 'Cat B - Minor Defect';
+else if (metric === 'priNoCat') params.priority = '__EMPTY__';
+// priTotal은 priority 없이 capturedBy만
+// 기존 completed/closed/dispute는 기존 분기 유지
+goRaw(params);
+```
+→ 기존 Priority 카드와 동일한 `priority` 쿼리 파라미터 컨벤션 재사용 (DefectRawDataPage 변경 불요).
 
 ## 영향 범위
 - 변경 파일: `src/pages/DefectDashboardPage.tsx` 1개
-- Raw Data 페이지 / 유틸리티 / DB 변경 없음
-- 디자인 시스템 토큰만 사용 (destructive, muted-foreground)
+- Raw Data 페이지 / 유틸 / DB / 디자인 토큰 추가 없음
+- 기존 그룹(All/Arch/Facade/MEP/Other) 탭, 이름 필터, 디버그 reconcile 로직은 그대로 동작
