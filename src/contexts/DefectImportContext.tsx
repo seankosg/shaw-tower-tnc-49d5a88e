@@ -821,6 +821,64 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       // Apply blank-preservation for general data fields (description, dates, PIC, etc.)
       preserveExistingForBlank(row, existing);
 
+      // ── HDEC Priority Verification ─────────────────────────────────────
+      // Runs ONLY when row.priority === "Cat A - Major Defect (Before SC)" AND
+      // (existing.closure_status !== "Done") AND (row.status !== "Closed").
+      // Description fallback to existing DB value already applied via preserveExistingForBlank.
+      // Outcome:
+      //   - set      → write verification + reason (overwrites any imported values, per spec)
+      //   - clear    → priority moved off Cat A → null both columns
+      //   - preserve → gated by Closed/Done → keep existing values (do not touch)
+      //   - no_match → eligible but no rule matched → leave existing untouched + log
+      const verifyOutcome = verifyPriority(
+        {
+          priority: row.priority,
+          description: row.description,
+          importStatus: row.status,
+          existingClosureStatus: existing?.closure_status,
+        },
+        verificationRules,
+      );
+      if (verifyOutcome.action === 'set') {
+        row.hdec_verification = verifyOutcome.verification;
+        row.hdec_reason = verifyOutcome.reason;
+        fl(row.rawRowNo, 'hdec_verification', 'derived', {
+          applied: verifyOutcome.verification,
+          previous: existing?.hdec_verification ?? null,
+          code: 'priority_verification_matched',
+          detail: `Matched rule (step ${verifyOutcome.step}, ${verifyOutcome.category}); reason: ${verifyOutcome.reason}`,
+        });
+      } else if (verifyOutcome.action === 'clear') {
+        // Q4 policy: priority is no longer Cat A → wipe both fields.
+        const hadVerification = (existing?.hdec_verification ?? null) !== null
+          || (existing?.hdec_reason ?? null) !== null;
+        row.hdec_verification = null;
+        row.hdec_reason = null;
+        if (hadVerification) {
+          fl(row.rawRowNo, 'hdec_verification', 'applied', {
+            applied: null,
+            previous: existing?.hdec_verification ?? null,
+            code: 'priority_verification_cleared',
+            detail: 'Priority is no longer Cat A — HDEC verification fields cleared.',
+          });
+        }
+      } else if (verifyOutcome.action === 'preserve') {
+        // Gated by import status Closed or existing closure_status Done — keep existing values.
+        row.hdec_verification = existing?.hdec_verification ?? row.hdec_verification ?? null;
+        row.hdec_reason = existing?.hdec_reason ?? row.hdec_reason ?? null;
+      } else {
+        // no_match — keep existing values; log once for traceability.
+        row.hdec_verification = existing?.hdec_verification ?? null;
+        row.hdec_reason = existing?.hdec_reason ?? null;
+        if ((row.priority ?? '').trim() === 'Cat A - Major Defect (Before SC)') {
+          fl(row.rawRowNo, 'hdec_verification', 'skipped_empty', {
+            code: 'priority_verification_no_match',
+            detail: 'Cat A row — description did not match any verification rule.',
+          });
+        }
+      }
+      // ───────────────────────────────────────────────────────────────────
+
       // Policy: when actual_completion_date is explicitly present (Excel or pre-existing DB)
       // but actual_start_date is missing in BOTH Excel and DB, impute start = completion.
       // Rationale: a completed-but-unstarted row is meaningless. We only impute when the
