@@ -611,9 +611,9 @@ export default function DefectDashboardPage() {
             if (metric === 'completed') params.actualComplete = 'true';
             else if (metric === 'closed') params.closureComplete = 'true';
             else if (metric === 'dispute') params.closureStatus = 'InD';
-            else if (metric === 'priCatA') params.priority = 'Cat A - Major Defect (Before SC)';
-            else if (metric === 'priCatB') params.priority = 'Cat B - Minor Defect';
-            else if (metric === 'priNoCat') params.priority = '__EMPTY__';
+            else if (metric === 'priCatA') { params.priority = 'Cat A - Major Defect (Before SC)'; params.notClosureDone = 'true'; }
+            else if (metric === 'priCatB') { params.priority = 'Cat B - Minor Defect'; params.notClosureDone = 'true'; }
+            else if (metric === 'priNoCat') { params.priority = '__EMPTY__'; params.notClosureDone = 'true'; }
             goRaw(params);
           }}
           onGroupClick={(group) => goRaw({ capturedByGroup: group })}
@@ -977,10 +977,12 @@ function CapturedByStatsSection({
       if (isActualComplete(it as any)) bucket.completed += 1;
       if (isClosureComplete(it as any)) bucket.closed += 1;
       if (String((it as any).closure_status ?? '') === 'InD') bucket.dispute += 1;
-      const pri = (it as any).priority as string | null | undefined;
-      if (pri === PRI_CAT_A_LABEL) bucket.priCatA += 1;
-      else if (pri === PRI_CAT_B_LABEL) bucket.priCatB += 1;
-      else if (!pri) bucket.priNoCat += 1;
+      if (!isClosureComplete(it as any)) {
+        const pri = (it as any).priority as string | null | undefined;
+        if (pri === PRI_CAT_A_LABEL) bucket.priCatA += 1;
+        else if (pri === PRI_CAT_B_LABEL) bucket.priCatB += 1;
+        else if (!pri) bucket.priNoCat += 1;
+      }
       if (name) map.set(name, bucket);
     }
     const namedStats = [...map.values()].sort((a, b) => b.total - a.total);
@@ -1141,7 +1143,7 @@ function CapturedByStatsSection({
                     By Quantity
                   </TableHead>
                   <TableHead colSpan={4} className="border-l text-center align-middle text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    By Priority
+                    By Priority for Outstanding Items
                   </TableHead>
                 </TableRow>
                 <TableRow className="bg-muted/40">

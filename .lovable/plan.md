@@ -1,59 +1,24 @@
-## 변경 계획 — Defect Import에 "Cat Check" preset 추가
+## 변경 사항
 
-`src/components/import/DefectColumnSelect.tsx` 의 `presets` 배열에 4번째 프리셋 **`Cat Check`** 추가. Category 분류(LL/HDEC) 판별에 필요한 컬럼만 자동 선택되도록 합니다.
+`src/pages/DefectDashboardPage.tsx` 에 두 가지 수정을 함께 적용합니다.
 
-### Cat Check 필수 컬럼 세트
+### 1. Captured by 테이블의 By Priority 컬럼 집계 로직 수정
+- Cat A / Cat B / No Cat 카운트에 `!isClosureComplete(it)` 가드를 추가하여 Closure Status가 Closed인 항목은 제외
+- 결과적으로 이 합계가 Dispute in Category 배너의 `LL's CAT A` 값과 일치하게 됨
+- 해당 셀 클릭 시 Raw Data로 이동하는 `onMetricClick` 핸들러에 `notClosureDone: 'true'` 파라미터를 추가하여 표시 숫자와 Raw Data 필터가 일치하도록 함
 
-행 매칭/식별 키:
-- `issue_no` (header 감지·매칭 필수)
+### 2. 그룹 라벨 변경
+- 테이블 헤더의 "By Priority" → "By Priority for Outstanding Items" 로 변경 (line 1144 부근)
 
-분류 판단 근거(설명문):
-- `description` — `Description`, `Issue Description` 헤더 모두 동일 필드(`description`)로 매핑됨 (defect-parser.ts 93–94 확인)
-
-Category 판별 핵심:
-- `priority` — LL's Category
-- `hdec_verification` — HDEC's Category
-- `hdec_reason` — HDEC Cat B 분쟁 사유
-
-Outstanding 여부 판별(= Closure ≠ Done):
-- `closure_status`
-- `actual_closure_date`
-
-(팀/책임자 필드는 제외)
-
-### 코드 변경
-
-`presets` useMemo 내부에 추가:
-
+### 기술 세부
 ```ts
-const CAT_CHECK_FIELDS = new Set([
-  'issue_no',
-  'description',
-  'priority',
-  'hdec_verification',
-  'hdec_reason',
-  'closure_status',
-  'actual_closure_date',
-]);
-const catCheckHeaders = headers.filter((h) => CAT_CHECK_FIELDS.has(toFieldName(h)));
+// CapturedByStatsSection 집계 부분
+if (!isClosureComplete(it as any)) {
+  const pri = (it as any).priority as string | null | undefined;
+  if (pri === PRI_CAT_A_LABEL) bucket.priCatA += 1;
+  else if (pri === PRI_CAT_B_LABEL) bucket.priCatB += 1;
+  else if (!pri) bucket.priNoCat += 1;
+}
 ```
 
-`presets` 배열 마지막에 추가:
-
-```ts
-{
-  id: 'cat-check',
-  label: 'Cat Check',
-  matchedHeaders: catCheckHeaders,
-  className: 'border-rose-300 text-rose-900 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-100 dark:hover:bg-rose-950',
-},
-```
-
-### 동작
-- `Cat Check` 클릭 → 위 7개 필드에 매칭되는 헤더만 선택, 나머지 자동 제외
-- `Description` 과 `Issue Description` 헤더가 둘 다 존재해도 모두 동일 필드로 매핑되어 함께 포함됨
-- 기존 3개 preset 옆 4번째 위치, rose 톤으로 시각 구분(검증·이견 점검 성격)
-
-### 영향 범위
-- 변경 파일: `src/components/import/DefectColumnSelect.tsx` 단일
-- 로직/스키마 변경 없음 — 순수 UI preset 추가
+Total / Completed / Closed / In Dispute 컬럼은 변경 없음.
