@@ -224,8 +224,35 @@ export default function DefectDashboardPage() {
     const completionOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'completion', dataDate)).length;
     const closureOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'closure', dataDate)).length;
     const inDisputeCount = filteredItems.filter((item) => item.closure_status === 'InD').length;
-    return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, startOverdue, completionOverdue, closureOverdue, inDisputeCount };
+
+    // Priority 분류별 집계 (Cat A / Cat B / No Cat / Total)
+    const CAT_A = 'Cat A - Major Defect (Before SC)';
+    const CAT_B = 'Cat B - Minor Defect';
+    const bucketize = (rows: typeof filteredItems) => {
+      const t = rows.length;
+      const c = rows.filter(isActualComplete).length;
+      const z = rows.filter(isClosureComplete).length;
+      return {
+        total: t,
+        completion: c,
+        closure: z,
+        completionPct: t ? Math.round((c / t) * 1000) / 10 : 0,
+        closurePct: t ? Math.round((z / t) * 1000) / 10 : 0,
+      };
+    };
+    const catA = filteredItems.filter((i) => (i as any).priority === CAT_A);
+    const catB = filteredItems.filter((i) => (i as any).priority === CAT_B);
+    const noCat = filteredItems.filter((i) => !(i as any).priority);
+    const byPriority = {
+      total: bucketize(filteredItems),
+      catA: bucketize(catA),
+      catB: bucketize(catB),
+      noCat: bucketize(noCat),
+    };
+
+    return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, startOverdue, completionOverdue, closureOverdue, inDisputeCount, byPriority };
   }, [filteredItems, today, dataDate, atRiskDays]);
+
 
   const bySubTrade = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.sub_trade ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
   const bySubcon = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.subcontractor_name ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
