@@ -62,12 +62,13 @@ const TNC_FIELDS = [
 const DEFECT_FIELDS = [
   'id','issue_no','defect_type','area_raw','area_location','area_level','description','status',
   'trade_detail','priority','main_trade','sub_trade',
-  'subcontractor_name','subsub_name','hdec_pic_name','hdec_eng_name',
+  'subcontractor_name','subsub_name','hdec_pic_name','hdec_eng_name','captured_by_name',
   'remarks','aconex_comments','hdec_comments',
   'planned_start_date','planned_completion_date','planned_closure_date',
   'actual_start_date','actual_completion_date','actual_closure_date',
   'planned_progress_pct','actual_progress_pct','completion_status','closure_status',
   'work_type','subcontractor_issue_no','subcontractor_issue_source',
+  'hdec_verification','hdec_reason',
   // Pseudo-target for ignoring system/derived columns on import
   'skip',
 ] as const;

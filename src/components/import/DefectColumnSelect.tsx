@@ -19,13 +19,14 @@ const DEFECT_KNOWN_FIELDS = new Set([
   'issue_no', 'id', 'area_raw', 'area_type', 'area_level', 'area_location',
   'main_trade', 'sub_trade', 'trade_detail', 'description', 'defect_type',
   'status', 'priority', 'team', 'subcontractor_name', 'subsub_name',
-  'hdec_pic_name', 'hdec_eng_name',
+  'hdec_pic_name', 'hdec_eng_name', 'captured_by_name',
   'planned_start_date', 'planned_completion_date', 'planned_closure_date',
   'actual_start_date', 'actual_completion_date', 'actual_closure_date',
   'planned_progress_pct', 'actual_progress_pct',
   'completion_status', 'closure_status', 'remarks',
   'hdec_comments', 'aconex_comments', 'work_type',
   'subcontractor_issue_no', 'subcontractor_issue_source',
+  'hdec_verification', 'hdec_reason',
 ]);
 
 export function DefectColumnSelect({
