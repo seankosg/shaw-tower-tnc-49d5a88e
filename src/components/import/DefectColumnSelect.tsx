@@ -82,6 +82,11 @@ export function DefectColumnSelect({
       'planned_start_date', 'planned_completion_date', 'planned_closure_date',
       'actual_start_date', 'actual_completion_date', 'actual_closure_date',
     ]);
+    const CAT_CHECK_FIELDS = new Set([
+      'issue_no', 'description', 'priority',
+      'hdec_verification', 'hdec_reason',
+      'closure_status', 'actual_closure_date',
+    ]);
     const isVerifiedByHdecHeader = (h: string) => {
       const n = h.toLowerCase();
       return n.includes('verified') && (n.includes('hdec') || n.includes('field'));
@@ -92,6 +97,7 @@ export function DefectColumnSelect({
       return ACONEX_FIELDS.has(f) || isVerifiedByHdecHeader(h);
     });
     const hdecHeaders = headers.filter((h) => HDEC_FIELDS.has(toFieldName(h)));
+    const catCheckHeaders = headers.filter((h) => CAT_CHECK_FIELDS.has(toFieldName(h)));
 
     return [
       {
@@ -111,8 +117,15 @@ export function DefectColumnSelect({
         matchedHeaders: hdecHeaders,
         className: 'border-blue-300 text-blue-900 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-100 dark:hover:bg-blue-950',
       },
+      {
+        id: 'cat-check',
+        label: 'Cat Check',
+        matchedHeaders: catCheckHeaders,
+        className: 'border-rose-300 text-rose-900 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-100 dark:hover:bg-rose-950',
+      },
     ];
   }, [headers]);
+
 
   return (
     <ColumnSelectDialog
