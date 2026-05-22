@@ -857,67 +857,6 @@ export default function PunchRawDataPage() {
   const tableLoading = loading || configLoading;
   const filteredRowCount = table.getFilteredRowModel().rows.length;
 
-  // Header click sort handler
-  const renderHeader = (header: any) => {
-    const headerDef = header.column.columnDef.header;
-    const meta = header.column.columnDef.meta as any;
-    const headerText = (meta?.headerLabel as string) || (typeof headerDef === 'string' ? headerDef : header.column.id);
-    return (
-      <TableHead
-        key={header.id}
-        title={headerText}
-        style={{
-          width: header.getSize(),
-          minWidth: header.getSize(),
-          maxWidth: header.getSize(),
-        }}
-        className={cn(
-          'relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background px-3 py-0 text-left text-xs font-medium',
-          'sticky top-0 z-[2]',
-        )}
-        onClick={header.column.getToggleSortingHandler()}
-      >
-        <div className="flex w-full items-center justify-between gap-1">
-          <span className="inline-flex min-w-0 items-center gap-1 truncate">
-            <span className="truncate">{flexRender(header.column.columnDef.header, header.getContext())}</span>
-            {header.column.getIsSorted() && (
-              <span className="flex-shrink-0">
-                {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
-                {sorting.length > 1 && (
-                  <sup className="ml-0.5 text-[9px] text-muted-foreground">{header.column.getSortIndex() + 1}</sup>
-                )}
-              </span>
-            )}
-          </span>
-          {header.column.getCanFilter() && (
-            <span className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-              <ColumnFilterDropdown column={header.column} />
-            </span>
-          )}
-        </div>
-        {header.column.getCanResize() && (
-          <div
-            onMouseDown={header.getResizeHandler()}
-            onTouchStart={header.getResizeHandler()}
-            onClick={(e) => e.stopPropagation()}
-            title="Drag to resize"
-            className={cn(
-              'absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40',
-              header.column.getIsResizing() && 'bg-primary/60',
-            )}
-          />
-        )}
-      </TableHead>
-    );
-  };
-
-  const headers = table.getHeaderGroups().at(-1)?.headers ?? [];
-  const tableRows = table.getRowModel().rows;
-  const totalWidth = useMemo(
-    () => table.getVisibleLeafColumns().reduce((s, c) => s + c.getSize(), 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [columnSizing, columns, columnVisibility, columnOrder],
-  );
 
   return (
     <div className="flex h-full flex-col gap-4 p-4">
