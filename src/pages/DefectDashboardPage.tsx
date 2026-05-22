@@ -741,6 +741,35 @@ export default function DefectDashboardPage() {
 type GroupParam = 'subTrade' | 'subcontractor' | 'subsub' | 'hdecPic' | 'hdecEng' | 'team' | 'workType';
 type StageKey = 'completion' | 'closure' | 'difference';
 
+interface PriorityStats { total: number; completion: number; closure: number; completionPct: number; closurePct: number }
+function PriorityCard({ label, stats, onCardClick, onCompletionClick, onClosureClick }: { label: string; stats: PriorityStats; onCardClick?: () => void; onCompletionClick?: () => void; onClosureClick?: () => void }) {
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
+  return (
+    <Card onClick={onCardClick} className={cn(onCardClick && 'cursor-pointer transition-colors hover:bg-muted/40')}>
+      <CardContent className="flex flex-col gap-2 p-4">
+        <div className="flex items-baseline justify-between">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <p className="text-2xl font-bold text-foreground">{stats.total.toLocaleString()}</p>
+        </div>
+        <button type="button" onClick={(e) => { stop(e); onCompletionClick?.(); }} className="text-left transition-colors hover:bg-muted/30 rounded px-1 -mx-1 py-0.5">
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>Completion</span>
+            <span className="tabular-nums"><span className="font-medium text-foreground">{stats.completion.toLocaleString()}</span> / {stats.total.toLocaleString()} ({stats.completionPct}%)</span>
+          </div>
+          <Progress value={Math.max(0, Math.min(100, stats.completionPct))} className="mt-1 h-1.5" />
+        </button>
+        <button type="button" onClick={(e) => { stop(e); onClosureClick?.(); }} className="text-left transition-colors hover:bg-muted/30 rounded px-1 -mx-1 py-0.5">
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>Closure</span>
+            <span className="tabular-nums"><span className="font-medium text-foreground">{stats.closure.toLocaleString()}</span> / {stats.total.toLocaleString()} ({stats.closurePct}%)</span>
+          </div>
+          <Progress value={Math.max(0, Math.min(100, stats.closurePct))} className="mt-1 h-1.5 [&>div]:bg-emerald-500" />
+        </button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function KpiCard({ icon, label, value, sub, accent, progress, progressTone, onClick }: { icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: 'destructive'; progress?: number; progressTone?: 'default' | 'destructive'; onClick?: () => void }) {
   return <Card onClick={onClick} className={cn(onClick && 'cursor-pointer transition-colors hover:bg-muted/40', accent === 'destructive' && 'border-destructive/30')}><CardContent className="flex items-center gap-3 p-4">{icon}<div className="min-w-0 flex-1"><p className="truncate text-xs text-muted-foreground">{label}</p><p className={cn('text-2xl font-bold', accent === 'destructive' ? 'text-destructive' : 'text-foreground')}>{value}</p>{sub && <p className="text-xs text-muted-foreground">{sub}</p>}{typeof progress === 'number' && <Progress value={Math.max(0, Math.min(100, progress))} className={cn('mt-1.5 h-1.5', progressTone === 'destructive' && '[&>div]:bg-destructive')} />}</div></CardContent></Card>;
 }
