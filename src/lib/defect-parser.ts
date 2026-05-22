@@ -134,6 +134,14 @@ const FIELD_ALIASES: Record<string, string> = {
   comments: 'aconex_comments',
   'aconex comments': 'aconex_comments',
   'hdec comments': 'hdec_comments',
+  // HDEC priority verification result columns (Cat A re-classification output)
+  "hdec's verification": 'hdec_verification',
+  'hdec verification': 'hdec_verification',
+  'verification': 'hdec_verification',
+  'priority verification': 'hdec_verification',
+  "hdec's reason": 'hdec_reason',
+  'hdec reason': 'hdec_reason',
+  'reason of assessment': 'hdec_reason',
   // New lifecycle headers
   'planned start date': 'planned_start_date',
   'planned completion date': 'planned_completion_date',
