@@ -1020,46 +1020,15 @@ export default function PunchRawDataPage() {
         onClearSelection={() => setRowSelection({})}
       />
 
-      <div ref={tableRef} className="flex-1 overflow-auto rounded-md border">
-        <Table style={{ width: totalWidth, tableLayout: 'fixed' }}>
-          <TableHeader>
-            <TableRow>{headers.map(renderHeader)}</TableRow>
-          </TableHeader>
-          <TableBody>
-            {tableLoading && (
-              <TableRow>
-                <TableCell colSpan={headers.length} className="text-center py-12 text-muted-foreground text-sm">Loading…</TableCell>
-              </TableRow>
-            )}
-            {!tableLoading && tableRows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={headers.length} className="text-center py-12 text-muted-foreground text-sm">No punch items match the current filters.</TableCell>
-              </TableRow>
-            )}
-            {!tableLoading && tableRows.map((r) => (
-              <TableRow
-                key={r.id}
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => navigate(`/punch/${r.original.id}`)}
-              >
-                {r.getVisibleCells().map((cell) => (
-                  <TableCell
-                    key={cell.id}
-                    style={{
-                      width: cell.column.getSize(),
-                      minWidth: cell.column.getSize(),
-                      maxWidth: cell.column.getSize(),
-                    }}
-                    className="truncate whitespace-nowrap py-2 text-xs align-top"
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <PunchRawTableView
+        table={table}
+        loading={tableLoading}
+        sorting={sorting.length ? sorting : DEFAULT_SORTING}
+        autoSizeColumn={autoSizeColumn}
+        navigate={navigate}
+        tableRef={tableRef}
+      />
+
 
       <Dialog
         open={exportDialogOpen}
