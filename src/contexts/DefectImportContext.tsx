@@ -512,6 +512,8 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
     }
 
     const classificationCtx = await loadClassificationContextV2();
+    // HDEC priority verification rules (Cat A re-classification engine).
+    const verificationRules = await loadVerificationRules();
 
     const mappedRows = item.parsed.map((row) => applyMasterDecisions(row, decisions));
 
