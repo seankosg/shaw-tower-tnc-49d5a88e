@@ -799,8 +799,12 @@ function KpiCard({ icon, label, value, sub, accent, progress, progressTone, onCl
 
 function AlertBanner({ tone, title, description, onClick }: { tone: 'destructive' | 'warning' | 'dispute'; title: string; description: string; onClick: () => void }) { const cls = tone === 'destructive' ? 'border-destructive/40 bg-destructive/5 text-destructive' : tone === 'dispute' ? 'border-purple-500/40 bg-purple-500/5 text-purple-700 dark:text-purple-300' : 'border-primary/40 bg-primary/5 text-primary'; const Icon = tone === 'dispute' ? AlertCircle : AlertTriangle; return <button onClick={onClick} className={cn('flex items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/40', cls)}><div className="flex items-center gap-3"><Icon className="h-5 w-5" /><div><p className="font-semibold">{title}</p><p className="text-xs text-muted-foreground">{description}</p></div></div><span className="text-sm font-medium text-muted-foreground">View</span></button>; }
 
-type CapturedByMetric = 'total' | 'completed' | 'closed' | 'dispute';
-interface CapturedByStat { name: string; total: number; completed: number; closed: number; dispute: number }
+type CapturedByMetric =
+  | 'total' | 'completed' | 'closed' | 'dispute'
+  | 'priTotal' | 'priCatA' | 'priCatB' | 'priNoCat';
+interface CapturedByStat { name: string; total: number; completed: number; closed: number; dispute: number; priCatA: number; priCatB: number; priNoCat: number }
+const PRI_CAT_A_LABEL = 'Cat A - Major Defect (Before SC)';
+const PRI_CAT_B_LABEL = 'Cat B - Minor Defect';
 
 function CapturedByStatsSection({
   items, kpis, onCardClick, onMetricClick, onGroupClick, showDebug,
