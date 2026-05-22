@@ -830,10 +830,24 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       //   - clear    → priority moved off Cat A → null both columns
       //   - preserve → gated by Closed/Done → keep existing values (do not touch)
       //   - no_match → eligible but no rule matched → leave existing untouched + log
+      // Pull "Issue Description" (case/space-insensitive) directly from raw_payload so
+      // it isn't lost when parser maps both "Description" and "Issue Description" into
+      // the single `description` field.
+      const issueDescRaw = (() => {
+        const payload = row.raw_payload as Record<string, unknown> | undefined;
+        if (!payload) return null;
+        for (const [k, v] of Object.entries(payload)) {
+          if (String(k).toLowerCase().replace(/\s+/g, ' ').trim() === 'issue description') {
+            return v == null ? null : String(v);
+          }
+        }
+        return null;
+      })();
       const verifyOutcome = verifyPriority(
         {
           priority: row.priority,
           description: row.description,
+          issueDescription: issueDescRaw,
           importStatus: row.status,
           existingClosureStatus: existing?.closure_status,
         },
