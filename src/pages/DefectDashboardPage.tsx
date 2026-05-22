@@ -879,7 +879,7 @@ function CapturedByStatsSection({
   const [collapsed, setCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'All' | CapturedByGroup>('All');
   const [nameFilter, setNameFilter] = useState<string[]>([]);
-  type SortKey = 'name' | 'total' | 'completed' | 'closed' | 'dispute';
+  type SortKey = 'name' | 'total' | 'completed' | 'closed' | 'dispute' | 'priCatA' | 'priCatB' | 'priNoCat';
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' });
 
   const tabRows = useMemo(
@@ -903,8 +903,9 @@ function CapturedByStatsSection({
       (acc, r) => ({
         total: acc.total + r.total, completed: acc.completed + r.completed,
         closed: acc.closed + r.closed, dispute: acc.dispute + r.dispute,
+        priCatA: acc.priCatA + r.priCatA, priCatB: acc.priCatB + r.priCatB, priNoCat: acc.priNoCat + r.priNoCat,
       }),
-      { total: 0, completed: 0, closed: 0, dispute: 0 },
+      { total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 },
     ),
     [visibleRows],
   );
