@@ -511,17 +511,20 @@ export default function DefectDashboardPage() {
                 <p className="mt-1 text-3xl font-bold text-destructive">{kpis.dispute.hdecCatA.toLocaleString()}</p>
                 <p className="mt-0.5 text-[10px] text-muted-foreground">Closure ≠ Done</p>
               </button>
-              <div className="rounded-md border bg-muted/30 p-3">
+              <button
+                type="button"
+                onClick={() => goRaw({ catADispute: 'xor', notClosureDone: 'true' })}
+                className="rounded-md border bg-muted/30 p-3 text-left transition hover:bg-muted/60"
+              >
                 <p className="text-xs text-muted-foreground">Difference</p>
                 <p className={cn(
                   'mt-1 text-3xl font-bold',
-                  kpis.dispute.diff > 0 ? 'text-emerald-600 dark:text-emerald-400'
-                    : kpis.dispute.diff < 0 ? 'text-destructive' : 'text-foreground',
+                  kpis.dispute.diff > 0 ? 'text-destructive' : 'text-foreground',
                 )}>
-                  {kpis.dispute.diff > 0 ? '+' : ''}{kpis.dispute.diff.toLocaleString()}
+                  {kpis.dispute.diff.toLocaleString()}
                 </p>
-                <p className="mt-0.5 text-[10px] text-muted-foreground">LL − HDEC</p>
-              </div>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">LL ≠ HDEC (Cat A)</p>
+              </button>
             </div>
           </CardContent>
         </Card>
