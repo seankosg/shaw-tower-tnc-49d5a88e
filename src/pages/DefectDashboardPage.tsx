@@ -900,6 +900,9 @@ function CapturedByStatsSection({
     const filtered = nameFilter.length ? tabRows.filter((r) => nameFilter.includes(r.name)) : tabRows;
     const dir = sort.dir === 'asc' ? 1 : -1;
     const sorted = [...filtered].sort((a, b) => {
+      // Always pin Unknown row at the bottom.
+      if (a.isUnknown && !b.isUnknown) return 1;
+      if (!a.isUnknown && b.isUnknown) return -1;
       const k = sort.key;
       if (k === 'name') return a.name.localeCompare(b.name) * dir;
       return ((a[k] as number) - (b[k] as number)) * dir;
