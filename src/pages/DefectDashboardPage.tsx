@@ -267,7 +267,14 @@ export default function DefectDashboardPage() {
     }
     const hdecCatBReasons = Array.from(hdecCatBReasonMap.entries())
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-    const dispute = { llCatA: llCatADispute, hdecCatA: hdecCatADispute, diff: llCatADispute - hdecCatADispute, hdecCatBReasons };
+    // Difference: outstanding rows where LL Cat A classification differs from HDEC (XOR).
+    const diffCount = filteredItems.filter((i) => {
+      if (!notDone(i)) return false;
+      const ll = (i as any).priority === CAT_A;
+      const hd = (i as any).hdec_verification === CAT_A;
+      return ll !== hd;
+    }).length;
+    const dispute = { llCatA: llCatADispute, hdecCatA: hdecCatADispute, diff: diffCount, hdecCatBReasons };
 
     return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, startOverdue, completionOverdue, closureOverdue, inDisputeCount, byPriority, dispute };
   }, [filteredItems, today, dataDate, atRiskDays]);
