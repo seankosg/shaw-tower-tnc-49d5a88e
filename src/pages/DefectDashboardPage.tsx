@@ -461,6 +461,9 @@ export default function DefectDashboardPage() {
             if (metric === 'completed') params.actualComplete = 'true';
             else if (metric === 'closed') params.closureComplete = 'true';
             else if (metric === 'dispute') params.closureStatus = 'InD';
+            else if (metric === 'priCatA') params.priority = 'Cat A - Major Defect (Before SC)';
+            else if (metric === 'priCatB') params.priority = 'Cat B - Minor Defect';
+            else if (metric === 'priNoCat') params.priority = '__EMPTY__';
             goRaw(params);
           }}
           onGroupClick={(group) => goRaw({ capturedByGroup: group })}
