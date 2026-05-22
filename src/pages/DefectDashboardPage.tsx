@@ -867,7 +867,11 @@ function CapturedByStatsSection({
 
   // Rows annotated with group (computed before any early return to keep hook order stable).
   const rowsWithGroup = useMemo(
-    () => stats.map((s) => ({ ...s, group: (getCapturedByGroup(s.name) ?? 'Other') as CapturedByGroup })),
+    () => stats.map((s) => ({
+      ...s,
+      group: (s.name === 'Unknown' ? 'Other' : (getCapturedByGroup(s.name) ?? 'Other')) as CapturedByGroup,
+      isUnknown: s.name === 'Unknown',
+    })),
     [stats],
   );
 
