@@ -105,6 +105,7 @@ function ruleMatches(rule: VerificationRule, hay: string): boolean {
 export interface VerifyInput {
   priority: string | null | undefined;
   description: string | null | undefined;
+  issueDescription?: string | null | undefined;
   importStatus: string | null | undefined;
   existingClosureStatus: string | null | undefined;
 }
@@ -131,7 +132,10 @@ export function verifyPriority(input: VerifyInput, rules: VerificationRule[]): V
   const existingDone = (input.existingClosureStatus ?? '').trim().toLowerCase() === 'done';
   if (importClosed || existingDone) return { action: 'preserve' };
 
-  const desc = (input.description ?? '').toString().toLowerCase();
+  // Concatenate Description + Issue Description (case-insensitive) for keyword matching.
+  const descPart = (input.description ?? '').toString().toLowerCase();
+  const issuePart = (input.issueDescription ?? '').toString().toLowerCase();
+  const desc = [descPart, issuePart].filter((s) => s.trim()).join('\n');
   if (!desc.trim()) return { action: 'no_match' };
 
   for (const rule of rules) {
