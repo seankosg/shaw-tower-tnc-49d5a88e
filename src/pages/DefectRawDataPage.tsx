@@ -737,6 +737,15 @@ export default function DefectRawDataPage() {
     if (searchParams.get('notClosureDone') === 'true') {
       next = next.filter((item) => (item as any).closure_status !== 'Done');
     }
+    const catADispute = searchParams.get('catADispute');
+    if (catADispute === 'xor') {
+      const CAT_A = 'Cat A - Major Defect (Before SC)';
+      next = next.filter((item) => {
+        const ll = (item as any).priority === CAT_A;
+        const hd = (item as any).hdec_verification === CAT_A;
+        return ll !== hd;
+      });
+    }
     const hdecVerification = searchParams.get('hdecVerification');
     if (hdecVerification) {
       if (hdecVerification === EMPTY_TOKEN) {
