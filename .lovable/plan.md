@@ -29,14 +29,16 @@
 - `grid grid-cols-2 md:grid-cols-4 gap-3` (현재 KPI 행 톤과 일치)
 - 카드 하나의 높이는 두 개의 Progress 바를 포함해야 하므로 기존 `KpiCard` 보다 약간 큼 → 신규 `PriorityCard` 컴포넌트로 분리 (같은 파일 안에 정의)
 
-## 데이터 소스
+## 데이터 소스 / 팀 필터 연동
 
-- `filteredItems` (팀 필터 적용된 현재 dataset) 사용 — 기존 KPI들과 동일한 모집단
+- 모집단은 **우측 상단 Team 필터가 적용된 `filteredItems`** 사용 — 기존 1·2행 KPI 카드와 동일한 dataset
+- 즉 사용자가 Team 토글을 변경하면 4개 Priority 카드의 Total / Completion / Closure 수치와 진도율 바가 **즉시 재계산**됨 (별도 상태 없이 `useMemo` 의존성으로 `filteredItems` 사용)
 - 카테고리 분류는 정확 일치(strict equality):
   - Cat A: `priority === 'Cat A - Major Defect (Before SC)'`
   - Cat B: `priority === 'Cat B - Minor Defect'`
   - No Cat: `!priority` (null / '' / undefined)
-- Total: 전체 `filteredItems`
+- Total 카드: 현재 Team 필터 적용된 `filteredItems` 전체
+- Raw Data 드릴다운 시에도 현재 활성 Team 값을 `team` 파라미터로 함께 전달하여 동일 모집단 유지
 
 > DB 조회 결과 위 3개 외 소수 이상값(`Cat B - Prior to SC` 1건, `High` 1건, `DONE` 1건)이 존재합니다. 사양상 어디에도 속하지 않으므로 **어느 카드에도 포함되지 않음**. (필요 시 후속 결정)
 
