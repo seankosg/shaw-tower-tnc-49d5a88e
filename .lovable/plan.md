@@ -95,19 +95,33 @@ export function verifyDefectPriority(args: {
 `src/contexts/DefectImportContext.tsx` 매핑 직후 단계(`classifyDefectV2` 호출부 인근, 약 878~930 라인)에 분류 호출 삽입.
 
 추가 처리:
-- Import 시작 전 한 번, 대상 issue들의 기존 `closure_status` 를 batch select 하여 map으로 보유 (이미 fetch하고 있다면 재사용, 아니면 `defect_items.select('issue_no, closure_status')` 1회 추가).
+- Import 시작 전 한 번, 대상 issue들의 기존 값을 batch select 하여 map으로 보유:
+  - `closure_status` (게이트용)
+  - `description` (import 파일에 description 컬럼이 없거나 해당 row의 값이 비었을 때 fallback)
+  쿼리: `defect_items.select('issue_no, closure_status, description')` 1회.
+- description 결정 로직:
+  ```ts
+  const effectiveDescription =
+    (row.description && row.description.trim())
+      ? row.description
+      : (existingMap.get(row.issue_no)?.description ?? null);
+  ```
+  - Import 파일에 description 컬럼 자체가 없는 경우 → 모든 row에서 위 fallback 동작.
+  - 컬럼은 있지만 특정 row만 빈 경우 → 해당 row만 fallback.
+  - 신규 issue(기존 DB에 없음) + description 없음 → null → 게이트는 통과해도 매칭 결과는 Default Minor.
 - 각 row 처리 시:
   ```ts
   const v = verifyDefectPriority({
     priority: row.priority,
     status: row.status,
-    existingClosureStatus: existingClosureMap.get(row.issue_no),
-    description: row.description,
+    existingClosureStatus: existingMap.get(row.issue_no)?.closure_status,
+    description: effectiveDescription,
     rules,
   });
   // null 이면 기존 DB 값 유지(payload에 포함하지 않음)
   if (v.verdict !== null) {
     row.hdec_verification = v.verdict;
+
     row.hdec_reason = v.reason;
   }
   ```
