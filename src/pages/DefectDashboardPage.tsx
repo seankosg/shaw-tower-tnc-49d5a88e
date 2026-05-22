@@ -833,24 +833,29 @@ function CapturedByStatsSection({
       else if (!pri) bucket.priNoCat += 1;
       if (name) map.set(name, bucket);
     }
-    const stats = [...map.values()].sort((a, b) => b.total - a.total);
+    const namedStats = [...map.values()].sort((a, b) => b.total - a.total);
+    // Include Unknown (captured_by_name empty) as a visible row so table totals
+    // reconcile directly with summary cards.
+    const stats: CapturedByStat[] = unknown.total > 0
+      ? [...namedStats, { ...unknown, name: 'Unknown' }]
+      : namedStats;
     const totals = stats.reduce((acc, s) => ({
       total: acc.total + s.total, completed: acc.completed + s.completed,
       closed: acc.closed + s.closed, dispute: acc.dispute + s.dispute,
       priCatA: acc.priCatA + s.priCatA, priCatB: acc.priCatB + s.priCatB, priNoCat: acc.priNoCat + s.priNoCat,
     }), { total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 });
-    return { stats, unknown, totals };
+    return { stats, unknown, totals, namedCount: namedStats.length };
   }, [items]);
 
   const checks = useMemo(() => {
     const rows = [
-      { label: 'Total', sum: totals.total, kpi: kpis.total, unknown: unknown.total },
-      { label: 'Completed', sum: totals.completed, kpi: kpis.actualDone, unknown: unknown.completed },
-      { label: 'Closed', sum: totals.closed, kpi: kpis.closureDone, unknown: unknown.closed },
-      { label: 'In Dispute', sum: totals.dispute, kpi: kpis.inDisputeCount, unknown: unknown.dispute },
-    ].map((r) => ({ ...r, expected: r.kpi - r.unknown, delta: r.sum - (r.kpi - r.unknown) }));
+      { label: 'Total', sum: totals.total, kpi: kpis.total },
+      { label: 'Completed', sum: totals.completed, kpi: kpis.actualDone },
+      { label: 'Closed', sum: totals.closed, kpi: kpis.closureDone },
+      { label: 'In Dispute', sum: totals.dispute, kpi: kpis.inDisputeCount },
+    ].map((r) => ({ ...r, delta: r.sum - r.kpi }));
     return rows;
-  }, [totals, unknown, kpis]);
+  }, [totals, kpis]);
 
   const allOk = checks.every((c) => c.delta === 0);
 
