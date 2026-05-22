@@ -477,6 +477,7 @@ export default function DefectDashboardPage() {
                   onCompletionClick={() => goRaw({ ...teamParam, ...pParam, actualComplete: 'true' })}
                   onClosureClick={() => goRaw({ ...teamParam, ...pParam, closureComplete: 'true' })}
                   onOverdueClick={() => goRaw({ ...teamParam, ...pParam, overdue: 'true', stage: 'completion', asOf: dataDate })}
+                  onRemainingClick={() => goRaw({ ...teamParam, ...pParam, notClosureDone: 'true' })}
                 />
               </div>
             );
@@ -900,9 +901,11 @@ type GroupParam = 'subTrade' | 'subcontractor' | 'subsub' | 'hdecPic' | 'hdecEng
 type StageKey = 'completion' | 'closure' | 'difference';
 
 interface PriorityStats { total: number; completion: number; closure: number; completionPct: number; closurePct: number; overdue: number }
-function PriorityCard({ label, stats, onCardClick, onCompletionClick, onClosureClick, onOverdueClick }: { label: string; stats: PriorityStats; onCardClick?: () => void; onCompletionClick?: () => void; onClosureClick?: () => void; onOverdueClick?: () => void }) {
+function PriorityCard({ label, stats, onCardClick, onCompletionClick, onClosureClick, onOverdueClick, onRemainingClick }: { label: string; stats: PriorityStats; onCardClick?: () => void; onCompletionClick?: () => void; onClosureClick?: () => void; onOverdueClick?: () => void; onRemainingClick?: () => void }) {
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   const odActive = stats.overdue > 0;
+  const remaining = Math.max(0, stats.total - stats.closure);
+  const remActive = remaining > 0;
   return (
     <Card onClick={onCardClick} className={cn(onCardClick && 'cursor-pointer transition-colors hover:bg-muted/40')}>
       <CardContent className="flex flex-col gap-2 p-4">
@@ -924,7 +927,23 @@ function PriorityCard({ label, stats, onCardClick, onCompletionClick, onClosureC
               OD {stats.overdue.toLocaleString()}
             </button>
           </div>
-          <p className="text-2xl font-bold text-foreground">{stats.total.toLocaleString()}</p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => { stop(e); if (remActive) onRemainingClick?.(); }}
+              disabled={!remActive}
+              title="Closure 미완료 잔여"
+              className={cn(
+                'shrink-0 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums border transition-colors',
+                remActive
+                  ? 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 cursor-pointer'
+                  : 'border-muted bg-muted/30 text-muted-foreground/60 cursor-default',
+              )}
+            >
+              Rem {remaining.toLocaleString()}
+            </button>
+            <p className="text-2xl font-bold text-foreground">{stats.total.toLocaleString()}</p>
+          </div>
         </div>
         <button type="button" onClick={(e) => { stop(e); onCompletionClick?.(); }} className="text-left transition-colors hover:bg-muted/30 rounded px-1 -mx-1 py-0.5">
           <div className="flex items-center justify-between text-[11px] text-muted-foreground">

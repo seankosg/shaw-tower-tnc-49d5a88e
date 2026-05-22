@@ -1,40 +1,28 @@
 ## 변경 사항
 
-### 1. 라벨 변경 (`src/pages/DefectDashboardPage.tsx`)
-- Line 1111: `Captured By — Defect Statistics` → `PM's Defect Statistics`
-- Line 1082: `"Captured By"` → `"PM's Defect Statistics"` (no-data 메시지)
+Category Classification & Dispute 섹션의 4개 PriorityCard(Total / Cat. A / Cat. B / No Cat.) 상단 우측, 전체 갯수 값 옆에 **잔여 갯수(remaining)** 를 표시하는 붉은색 칩을 추가합니다.
 
-### 2. Excel 다운로드 버튼 (`src/pages/DefectDashboardPage.tsx`)
-- CardHeader 우측 (line 1103~1116, 인원수 표시 옆)에 `Download className="h-3.5 w-3.5"` 아이콘 + `Excel` 텍스트의 `Button size="sm" variant="outline"` 추가
-- collapse 토글 버튼과 분리(stopPropagation), `visibleRows` / `visibleTotals` / `activeTab` / `nameFilter` 기반으로 export 함수 호출
+### 정의
+- 잔여 = `stats.total - stats.closure` (Closure 미완료 건수)
+- 잔여가 0이면 칩은 비활성(muted) 스타일로 표시하고 클릭 비활성화
 
-### 3. 신규 파일 `src/lib/defect-captured-by-export.ts`
-- `xlsx-js-style` 사용, 기존 `excel-export.ts`의 `STYLE_TITLE / STYLE_META_LABEL / STYLE_META_VALUE / STYLE_HEADER / STYLE_DATA / setCell / FONT_NAME` 재사용
-- 시트 구조 (다른 export와 동일한 시인성):
-  ```
-  Row 1: SHAW T&C — PM's Defect Statistics                        [TITLE 머지]
-  Row 2: Exported: ... by {user} ({role})
-  Row 3: Tab: {activeTab}
-  Row 4: Name Filter: {names or (none)}
-  Row 5: Rows: {n}
-  Row 6: (blank spacer)
-  Row 7: 그룹 헤더  [공백][By Quantity ×4][By Priority for Outstanding Items ×4]  (병합)
-  Row 8: 컬럼 헤더  Name | Total | Completed | Closed | In Dispute | Total | Cat. A | Cat. B | No Cat.
-  Row 9~: TOTAL 행 (visibleTotals, 강조 스타일) + 데이터 행
-  ```
-- 컬럼 폭 지정 (Name 28, 숫자 컬럼 12), freeze pane: ySplit=8, xSplit=1
-- 숫자 셀은 `t:'n'` + 우측 정렬 스타일
-- 파일명: `SHAW_PM_Defect_Statistics_YYYYMMDD_HHMM.xlsx`
-- export 함수 시그니처:
-  ```ts
-  exportCapturedByToExcel({
-    rows: VisibleRow[],
-    totals: { total, completed, closed, dispute, priTotal, priCatA, priCatB, priNoCat },
-    meta: { userName, userType },
-    activeTab: string,
-    nameFilter: string[],
-  })
-  ```
+### UI (`src/pages/DefectDashboardPage.tsx`, `PriorityCard` 컴포넌트, 909~928 line 근처)
+- 우측 영역을 `flex items-center gap-2`로 묶고 다음 순서로 배치:
+  1. 잔여 칩 — 작은 라운드 chip, `border-destructive/40 bg-destructive/10 text-destructive`, 라벨 `Rem {remaining}`, 호버 시 진하게, `title="Closure 미완료 잔여"`, `OD` 칩과 동일한 사이즈 토큰 사용
+  2. 기존 total 숫자 (`text-2xl font-bold`)
+- 잔여 0일 때 muted 스타일 (OD 칩과 동일 패턴)
 
-### 4. 사용자 메타데이터
-- 기존 페이지가 이미 사용 중인 `useAuth` / 프로필에서 `userName`, `userType`(role)을 가져와 export 호출에 전달. 없으면 'Unknown' 폴백
+### Drill-down 연동
+- `PriorityCard` props에 `onRemainingClick?: () => void` 추가
+- 칩 클릭 시 `stopPropagation` 후 호출
+- 호출부(462~483 line)에서 각 카드에 다음 라우팅 추가:
+  - Total: `goRaw({ ...teamParam, notClosureDone: 'true' })`
+  - Cat. A: `goRaw({ ...teamParam, priority: 'Cat A - Major Defect (Before SC)', notClosureDone: 'true' })`
+  - Cat. B: `goRaw({ ...teamParam, priority: 'Cat B - Minor Defect', notClosureDone: 'true' })`
+  - No Cat.: `goRaw({ ...teamParam, priority: '__EMPTY__', notClosureDone: 'true' })`
+
+`notClosureDone=true` 파라미터는 Captured By 섹션 등 다른 잔여 카운트 drill-down(615 line 등)에서 이미 사용 중인 동일 컨벤션입니다.
+
+### 범위 외
+- 백엔드/집계 로직 변경 없음 (UI + 기존 라우팅 파라미터만 사용)
+- 다른 카드/섹션 디자인은 그대로 유지
