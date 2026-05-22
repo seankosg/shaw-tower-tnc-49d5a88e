@@ -611,6 +611,7 @@ export default function DefectDashboardPage() {
             if (metric === 'completed') params.actualComplete = 'true';
             else if (metric === 'closed') params.closureComplete = 'true';
             else if (metric === 'dispute') params.closureStatus = 'InD';
+            else if (metric === 'priTotal') params.notClosureDone = 'true';
             else if (metric === 'priCatA') { params.priority = 'Cat A - Major Defect (Before SC)'; params.notClosureDone = 'true'; }
             else if (metric === 'priCatB') { params.priority = 'Cat B - Minor Defect'; params.notClosureDone = 'true'; }
             else if (metric === 'priNoCat') { params.priority = '__EMPTY__'; params.notClosureDone = 'true'; }
@@ -952,7 +953,7 @@ function AlertBanner({ tone, title, description, onClick }: { tone: 'destructive
 type CapturedByMetric =
   | 'total' | 'completed' | 'closed' | 'dispute'
   | 'priTotal' | 'priCatA' | 'priCatB' | 'priNoCat';
-interface CapturedByStat { name: string; total: number; completed: number; closed: number; dispute: number; priCatA: number; priCatB: number; priNoCat: number }
+interface CapturedByStat { name: string; total: number; completed: number; closed: number; dispute: number; priTotal: number; priCatA: number; priCatB: number; priNoCat: number }
 const PRI_CAT_A_LABEL = 'Cat A - Major Defect (Before SC)';
 const PRI_CAT_B_LABEL = 'Cat B - Minor Defect';
 
@@ -968,16 +969,17 @@ function CapturedByStatsSection({
 }) {
   const { stats, unknown, totals } = useMemo(() => {
     const map = new Map<string, CapturedByStat>();
-    const unknown: CapturedByStat = { name: '__unknown__', total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 };
+    const unknown: CapturedByStat = { name: '__unknown__', total: 0, completed: 0, closed: 0, dispute: 0, priTotal: 0, priCatA: 0, priCatB: 0, priNoCat: 0 };
     for (const it of items) {
       const raw = (it as any).captured_by_name as string | null | undefined;
       const name = raw && String(raw).trim() ? String(raw).trim() : null;
-      const bucket = name ? (map.get(name) ?? { name, total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 }) : unknown;
+      const bucket = name ? (map.get(name) ?? { name, total: 0, completed: 0, closed: 0, dispute: 0, priTotal: 0, priCatA: 0, priCatB: 0, priNoCat: 0 }) : unknown;
       bucket.total += 1;
       if (isActualComplete(it as any)) bucket.completed += 1;
       if (isClosureComplete(it as any)) bucket.closed += 1;
       if (String((it as any).closure_status ?? '') === 'InD') bucket.dispute += 1;
       if (!isClosureComplete(it as any)) {
+        bucket.priTotal += 1;
         const pri = (it as any).priority as string | null | undefined;
         if (pri === PRI_CAT_A_LABEL) bucket.priCatA += 1;
         else if (pri === PRI_CAT_B_LABEL) bucket.priCatB += 1;
@@ -994,8 +996,8 @@ function CapturedByStatsSection({
     const totals = stats.reduce((acc, s) => ({
       total: acc.total + s.total, completed: acc.completed + s.completed,
       closed: acc.closed + s.closed, dispute: acc.dispute + s.dispute,
-      priCatA: acc.priCatA + s.priCatA, priCatB: acc.priCatB + s.priCatB, priNoCat: acc.priNoCat + s.priNoCat,
-    }), { total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 });
+      priTotal: acc.priTotal + s.priTotal, priCatA: acc.priCatA + s.priCatA, priCatB: acc.priCatB + s.priCatB, priNoCat: acc.priNoCat + s.priNoCat,
+    }), { total: 0, completed: 0, closed: 0, dispute: 0, priTotal: 0, priCatA: 0, priCatB: 0, priNoCat: 0 });
     return { stats, unknown, totals, namedCount: namedStats.length };
   }, [items]);
 
@@ -1067,9 +1069,9 @@ function CapturedByStatsSection({
       (acc, r) => ({
         total: acc.total + r.total, completed: acc.completed + r.completed,
         closed: acc.closed + r.closed, dispute: acc.dispute + r.dispute,
-        priCatA: acc.priCatA + r.priCatA, priCatB: acc.priCatB + r.priCatB, priNoCat: acc.priNoCat + r.priNoCat,
+        priTotal: acc.priTotal + r.priTotal, priCatA: acc.priCatA + r.priCatA, priCatB: acc.priCatB + r.priCatB, priNoCat: acc.priNoCat + r.priNoCat,
       }),
-      { total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 },
+      { total: 0, completed: 0, closed: 0, dispute: 0, priTotal: 0, priCatA: 0, priCatB: 0, priNoCat: 0 },
     ),
     [visibleRows],
   );
@@ -1218,7 +1220,7 @@ function CapturedByStatsSection({
                     <span className="ml-2 text-[10px] text-muted-foreground tabular-nums">{fmtPct(visibleTotals.closed, visibleTotals.total)}</span>
                   </TableCell>
                   <TableCell className="py-1.5 text-right tabular-nums text-purple-700 dark:text-purple-300">{visibleTotals.dispute}</TableCell>
-                  <TableCell className="border-l py-1.5 text-right tabular-nums">{visibleTotals.total}</TableCell>
+                  <TableCell className="border-l py-1.5 text-right tabular-nums">{visibleTotals.priTotal}</TableCell>
                   <TableCell className={cn('py-1.5 text-right tabular-nums', visibleTotals.priCatA === 0 && 'text-muted-foreground/40')}>{visibleTotals.priCatA}</TableCell>
                   <TableCell className={cn('py-1.5 text-right tabular-nums', visibleTotals.priCatB === 0 && 'text-muted-foreground/40')}>{visibleTotals.priCatB}</TableCell>
                   <TableCell className={cn('py-1.5 text-right tabular-nums', visibleTotals.priNoCat === 0 && 'text-muted-foreground/40')}>{visibleTotals.priNoCat}</TableCell>
@@ -1247,7 +1249,7 @@ function CapturedByStatsSection({
                       <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.dispute === 0 ? 'text-muted-foreground/40' : 'font-semibold text-purple-700 dark:text-purple-300')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'dispute'); }}>{r.dispute}</button>
                     </TableCell>
                     <TableCell className="border-l py-1.5 text-right">
-                      <button type="button" className={cn('tabular-nums font-semibold hover:underline', r.isUnknown && 'text-destructive')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priTotal'); }}>{r.total}</button>
+                      <button type="button" className={cn('tabular-nums font-semibold hover:underline', r.isUnknown && 'text-destructive')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priTotal'); }}>{r.priTotal}</button>
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
                       <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.priCatA === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priCatA'); }} disabled={r.priCatA === 0}>{r.priCatA}</button>
