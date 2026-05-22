@@ -1,217 +1,37 @@
-# Cat A Defect 자동 검증 (HDEC's Verification + HDEC's Reason)
+# HDEC 판별 로직 일회성 백필 실행
 
-## 목적
-Import 시 `Defect Prioritisation == "Cat A - Major Defect (Before SC)"` 이고 아직 종결되지 않은 결함의 `description`을 키워드 규칙으로 자동 평가하여 신규 필드 2개를 채운다.
+현재 Raw Data 전체에 대해 신규 판별 로직(`hdec_verification`, `hdec_reason`)을 일회 적용합니다. 이미 구현된 Edge Function `defect-priority-verification-backfill` 을 직접 호출하여 처리합니다.
 
-- **HDEC's Verification** (verdict): 다음 3개 값 중 하나
-  - `Cat A - Major Defect (Before SC)` — Major로 확정 (= "Confirmed Major")
-  - `Cat B - Minor Defect` — Minor로 재분류 권고 (= "Should be Minor")
-  - `Review Needed` — 현장 확인 필요
-- **HDEC's Reason**: `"[Category] | [Explanation]"` 형식 단일 문자열
+## 실행 범위
 
-## 실행 조건 (모두 만족해야 분류 수행)
+- 대상: `defect_items` 테이블 전체 (프로젝트 스코프 없음)
+- 동작:
+  1. **Clear Pass** — `priority ≠ 'Cat A - Major Defect (Before SC)'` 인데 HDEC 필드가 채워진 행은 `null` 로 초기화
+  2. **Set Pass** — Cat A 행 중 `status ∉ {Closed, Done}` 이고 `description` 이 있는 행에 대해 룰 매칭 실행 → `hdec_verification` / `hdec_reason` 세팅
+- 제외: Closed/Done 상태 행은 보존(Preserve)
 
-분류는 다음을 **모두** 만족할 때만 실행:
+## 실행 방식
 
-1. Import row의 `priority` (Defect Prioritisation 컬럼) == `Cat A - Major Defect (Before SC)`
-2. Import row의 `status` (Status 컬럼) ≠ `Closed` (대소문자 무관)
-3. 기존 Raw Data 동일 issue의 `closure_status` ≠ `Done` (재import/업데이트 시 DB 조회로 확인)
+옵션 두 가지 중 선택:
 
-위 조건 중 하나라도 미충족이면 두 필드는 **빈 값으로 둠** (기존 값이 있어도 import 흐름에서는 덮어쓰지 않음 — 기존 값 유지).
+### A. Admin UI 버튼으로 실행 (권장)
+- Admin → Settings → "HDEC Priority Verification Backfill" 버튼 클릭
+- 결과 토스트로 Set / Cleared / No match / Skipped / Scanned 카운트 확인
 
----
+### B. 에이전트가 Edge Function 직접 호출
+- `supabase--curl_edge_functions` 로 `defect-priority-verification-backfill` 호출 (현재 로그인 세션 토큰 사용, admin/superuser 권한 필요)
+- 응답 JSON 을 채팅으로 요약 보고
+- 필요 시 DB 검증 쿼리 (`hdec_verification` 분포 집계) 실행
 
-## 1. 데이터 모델
+## 기술 세부 (참고)
 
-`defect_items` 테이블 신규 컬럼 (NULL 허용):
+- 함수 위치: `supabase/functions/defect-priority-verification-backfill/index.ts`
+- 권한 체크: `is_admin_or_superuser(auth.uid())`
+- 스캔 한도: 50,000 rows / 100-row 청크 / `Promise.allSettled` 병렬 업데이트
+- 룰 소스: `defect_priority_verification_rules` (활성 룰만, 캐시 5분)
 
-- `hdec_verification text` — 위 3개 값 중 하나
-- `hdec_reason text` — `"Category | Explanation"`
+## 확인 필요
 
-인덱스: `hdec_verification` 단일 인덱스(대시보드 필터/집계용).
-
-신규 규칙 테이블 `defect_priority_verification_rules`:
-- `id uuid pk`
-- `verdict text` — `cat_a_major` / `cat_b_minor` / `review_needed`
-- `step int` — 평가 순서(1=Major, 2=Review, 3=Minor)
-- `order_no int` — 같은 verdict 내 평가 순서 (first match wins)
-- `match_type text` — `contains` / `contains_all` / `regex`
-- `keywords jsonb` — 매칭 키워드 배열 (소문자)
-- `exclude_keywords jsonb` — 제외 키워드 (AND NOT)
-- `category text` — Reason의 `[Category]`
-- `explanation text` — Reason의 `[Explanation]`
-- `is_active boolean`, 표준 timestamps
-
-RLS: 누구나 read, admin/superuser write (기존 `defect_classification_rules` 패턴).
-
-초기 데이터: Seed migration으로 프롬프트의 규칙을 일괄 INSERT.
-- Step1 (Major) 약 35개 키워드 행
-- Step2 (Review) 약 27개
-- Step3 (Minor) 카테고리 규칙 약 45개 + Default Minor fallback
-
----
-
-## 2. 분류 엔진
-
-신규 파일: `src/lib/defect-priority-verifier.ts`
-
-```ts
-export type HdecVerdict =
-  | 'Cat A - Major Defect (Before SC)'
-  | 'Cat B - Minor Defect'
-  | 'Review Needed';
-
-export interface HdecVerificationResult {
-  verdict: HdecVerdict | null;   // 조건 미충족 시 null
-  reason: string | null;          // "Category | Explanation"
-  category: string | null;        // dashboard 집계용 분리값
-}
-
-export function verifyDefectPriority(args: {
-  priority: string | null;
-  status: string | null;
-  existingClosureStatus?: string | null;
-  description: string | null;
-  rules: PriorityVerificationRule[];
-}): HdecVerificationResult
-```
-
-알고리즘:
-1. 게이트 체크 — `priority != "Cat A..."` → `{null,null,null}`.
-2. `status?.toLowerCase() === 'closed'` → `{null,null,null}`.
-3. `existingClosureStatus?.toLowerCase() === 'done'` → `{null,null,null}`.
-4. `description` 소문자/공백 정규화.
-5. Step 1 (cat_a_major) 순회 → 첫 매칭 시 verdict = `Cat A - Major Defect (Before SC)`.
-6. 미매칭 시 Step 2 (review_needed) → `Review Needed`.
-7. 미매칭 시 Step 3 (cat_b_minor) 순서대로 → 첫 매칭, 모두 미스면 Default Minor.
-8. 매칭 규칙의 `category | explanation`로 reason 조립.
-
-규칙 캐시: `src/lib/defect-priority-verifier-cache.ts` (기존 `defect-classifier-context.ts` 패턴).
-
----
-
-## 3. Import 통합
-
-`src/contexts/DefectImportContext.tsx` 매핑 직후 단계(`classifyDefectV2` 호출부 인근, 약 878~930 라인)에 분류 호출 삽입.
-
-추가 처리:
-- Import 시작 전 한 번, 대상 issue들의 기존 값을 batch select 하여 map으로 보유:
-  - `closure_status` (게이트용)
-  - `description` (import 파일에 description 컬럼이 없거나 해당 row의 값이 비었을 때 fallback)
-  쿼리: `defect_items.select('issue_no, closure_status, description')` 1회.
-- description 결정 로직:
-  ```ts
-  const effectiveDescription =
-    (row.description && row.description.trim())
-      ? row.description
-      : (existingMap.get(row.issue_no)?.description ?? null);
-  ```
-  - Import 파일에 description 컬럼 자체가 없는 경우 → 모든 row에서 위 fallback 동작.
-  - 컬럼은 있지만 특정 row만 빈 경우 → 해당 row만 fallback.
-  - 신규 issue(기존 DB에 없음) + description 없음 → null → 게이트는 통과해도 매칭 결과는 Default Minor.
-- 각 row 처리 시:
-  ```ts
-  const v = verifyDefectPriority({
-    priority: row.priority,
-    status: row.status,
-    existingClosureStatus: existingMap.get(row.issue_no)?.closure_status,
-    description: effectiveDescription,
-    rules,
-  });
-  // null 이면 기존 DB 값 유지(payload에 포함하지 않음)
-  if (v.verdict !== null) {
-    row.hdec_verification = v.verdict;
-
-    row.hdec_reason = v.reason;
-  }
-  ```
-- Upsert payload에 두 컬럼 조건부 포함.
-
-Backfill: Import 흐름과 무관. 별도 Admin 액션(6번)에서 처리.
-
----
-
-## 4. 화면 표시
-
-### Defect Raw Data 페이지
-- 컬럼 2개 추가: `HDEC's Verification`, `HDEC's Reason`.
-- `hdec_verification` 셀 배경색:
-  - `Cat A - Major Defect (Before SC)` → `#FFCCCC` (light red)
-  - `Review Needed` → `#FFEB99` (light amber)
-  - `Cat B - Minor Defect` → `#CCFFCC` (light green)
-  - 빈 값 → 색상 없음
-- Reason 컬럼: `|` 기준 카테고리 굵게 + 설명.
-- 필터: Verdict 선택 + Category 선택.
-
-### Defect Detail 페이지
-- Defect Prioritisation 필드 하단에 HDEC's Verification 뱃지 + HDEC's Reason 표시.
-
-### Defect Dashboard 페이지
-- Cat A 검증 분포 카드 1개 추가 (Major / Review / Minor 건수). Drill-down → Raw Data 필터.
-
-### Admin → Field Config 탭
-- `defect_field_config` 테이블에 두 필드 row 신규 등록 (migration seed):
-  - `hdec_verification` — label `HDEC's Verification`, group `Verification`, visible=true, editable=false (자동계산), order=Defect Prioritisation 바로 아래.
-  - `hdec_reason` — label `HDEC's Reason`, group `Verification`, visible=true, editable=false, order=`hdec_verification` 바로 아래.
-- Admin이 Field Config UI에서 visibility/순서/label 조정 가능 (기존 동작 그대로).
-
-### Admin → Header Mappings 탭
-- `header_mappings` 테이블에 신규 alias 등록 (migration seed):
-  - `hdec_verification` ← `"hdec's verification"`, `"hdec verification"`, `"verification"`
-  - `hdec_reason` ← `"hdec's reason"`, `"hdec reason"`, `"reason of assessment"`
-- Admin이 Header Mappings UI에서 추가 alias 등록·수정 가능.
-- `defect-parser.ts` fallback alias map에도 동일 항목 하드코딩 (DB 미동기화 환경 안전망).
-
----
-
-## 5. Admin 관리 UI (분류 규칙)
-
-`AdminClassificationPage`에 "Priority Verification Rules" 탭 추가 (1차에선 read-only 목록 + Seed 사용, 편집 UI는 후속 PR).
-
----
-
-## 6. 기존 데이터 Backfill
-
-신규 edge function `supabase/functions/recompute-hdec-verification/index.ts`:
-- admin/superuser JWT 검증.
-- 조건: `priority = 'Cat A - Major Defect (Before SC)' AND (closure_status IS DISTINCT FROM 'Done') AND (status IS DISTINCT FROM 'Closed')`.
-- 규칙 적용 후 batch UPDATE.
-- Admin 페이지에 "Recompute HDEC's Verification" 버튼.
-
----
-
-## 7. 테스트
-
-`src/test/defect-priority-verifier.test.ts`:
-- Cat A 외 priority → null/null/null.
-- Status = Closed → null.
-- 기존 closure_status = Done → null.
-- 각 Step 키워드 샘플별 verdict + reason 정확성.
-- Step3 우선순위 의존 케이스 (예: `seal up fire stop` vs `fire stop ... clean`).
-- Default Minor fallback.
-- 대소문자/공백 정규화.
-
----
-
-## 기술 메모
-
-- 매칭은 `description.toLowerCase()` 후 `includes`. `regex` 타입은 `RegExp(pattern, 'i')`.
-- `contains_all`: 모든 키워드 포함, `exclude_keywords`: 하나라도 포함 시 매칭 실패.
-- Step3 의 broad catch-all (예: "ceiling" 단독)은 세부 규칙보다 뒤에 `order_no` 배치.
-- Reason은 단일 컬럼 저장, UI에서 `split('|', 2)`로 분해.
-- `hdec_verification` enum 값은 정확히 위 3개 문자열만 허용. 컬럼은 text지만 CHECK 제약 또는 트리거로 enforce.
-
----
-
-## 확정 결정사항
-
-- **Q1 → A**: 1차 PR은 Seed 규칙만 포함. Admin 편집 UI는 후속 PR로 분리.
-- **Q2 → A**: `hdec_verification` 컬럼에 DB CHECK 제약 적용 (NULL 또는 3개 허용 값만).
-- **Q3 → 승인**: `defect-parser.ts` header alias 등록
-  - `"hdec's verification"`, `"hdec verification"`, `"verification"` → `hdec_verification`
-  - `"hdec's reason"`, `"hdec reason"`, `"reason of assessment"` → `hdec_reason`
-- **Q4 → C (Clear 정책)**: Priority가 Cat A에서 다른 값으로 변경된 row는 `hdec_verification`·`hdec_reason` 두 필드를 **NULL로 강제 clear**.
-  - Import 통합 로직 보강: `priority != "Cat A - Major Defect (Before SC)"` 인 모든 row의 upsert payload에 `hdec_verification = null, hdec_reason = null` 명시 포함.
-  - 게이트(Closed/Done)에 의한 미수행 케이스와는 구분 — 그 경우는 기존 값 유지.
-
-
+어떤 방식으로 실행할까요?
+- A: 직접 Admin UI 에서 실행 (안전, 사용자가 통제)
+- B: 에이전트가 지금 호출 (즉시 실행 + 결과 요약)
