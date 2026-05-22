@@ -55,6 +55,8 @@ const SLIM_COLUMNS = [
   'actual_progress_pct',
   'completion_status',
   'closure_status',
+  'hdec_verification',
+  'hdec_reason',
   'work_type',
   'classification_source',
   'classified_at',
