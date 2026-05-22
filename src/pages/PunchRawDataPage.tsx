@@ -15,6 +15,10 @@ import {
   type VisibilityState,
   useReactTable,
 } from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
+import { useFrozenColumnCount } from '@/hooks/useAppSettings';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { AlertCircle, Download, Filter, Search, Upload } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
@@ -345,6 +349,21 @@ export default function PunchRawDataPage() {
   const [exportBusy, setExportBusy] = useState(false);
 
   const tableRef = useRef<HTMLDivElement>(null);
+
+  const autoSizeColumn = useCallback((columnId: string) => {
+    const container = tableRef.current;
+    if (!container) return;
+    const cells = container.querySelectorAll<HTMLElement>(`[data-column-id="${columnId}"]`);
+    let max = 72;
+    cells.forEach((cell) => {
+      const clone = cell.cloneNode(true) as HTMLElement;
+      clone.style.cssText = 'position:absolute; visibility:hidden; width:auto; white-space:nowrap; max-width:none; left:-9999px; top:0;';
+      document.body.appendChild(clone);
+      max = Math.max(max, clone.getBoundingClientRect().width);
+      document.body.removeChild(clone);
+    });
+    setColumnSizing((prev) => ({ ...prev, [columnId]: Math.min(Math.ceil(max) + 18, 640) }));
+  }, []);
 
   // ── Load punch items ─────────────────────────────────────────────────────
   const reload = useCallback(async () => {
@@ -838,67 +857,6 @@ export default function PunchRawDataPage() {
   const tableLoading = loading || configLoading;
   const filteredRowCount = table.getFilteredRowModel().rows.length;
 
-  // Header click sort handler
-  const renderHeader = (header: any) => {
-    const headerDef = header.column.columnDef.header;
-    const meta = header.column.columnDef.meta as any;
-    const headerText = (meta?.headerLabel as string) || (typeof headerDef === 'string' ? headerDef : header.column.id);
-    return (
-      <TableHead
-        key={header.id}
-        title={headerText}
-        style={{
-          width: header.getSize(),
-          minWidth: header.getSize(),
-          maxWidth: header.getSize(),
-        }}
-        className={cn(
-          'relative h-9 cursor-pointer select-none whitespace-nowrap border-b bg-background px-3 py-0 text-left text-xs font-medium',
-          'sticky top-0 z-[2]',
-        )}
-        onClick={header.column.getToggleSortingHandler()}
-      >
-        <div className="flex w-full items-center justify-between gap-1">
-          <span className="inline-flex min-w-0 items-center gap-1 truncate">
-            <span className="truncate">{flexRender(header.column.columnDef.header, header.getContext())}</span>
-            {header.column.getIsSorted() && (
-              <span className="flex-shrink-0">
-                {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
-                {sorting.length > 1 && (
-                  <sup className="ml-0.5 text-[9px] text-muted-foreground">{header.column.getSortIndex() + 1}</sup>
-                )}
-              </span>
-            )}
-          </span>
-          {header.column.getCanFilter() && (
-            <span className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-              <ColumnFilterDropdown column={header.column} />
-            </span>
-          )}
-        </div>
-        {header.column.getCanResize() && (
-          <div
-            onMouseDown={header.getResizeHandler()}
-            onTouchStart={header.getResizeHandler()}
-            onClick={(e) => e.stopPropagation()}
-            title="Drag to resize"
-            className={cn(
-              'absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40',
-              header.column.getIsResizing() && 'bg-primary/60',
-            )}
-          />
-        )}
-      </TableHead>
-    );
-  };
-
-  const headers = table.getHeaderGroups().at(-1)?.headers ?? [];
-  const tableRows = table.getRowModel().rows;
-  const totalWidth = useMemo(
-    () => table.getVisibleLeafColumns().reduce((s, c) => s + c.getSize(), 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [columnSizing, columns, columnVisibility, columnOrder],
-  );
 
   return (
     <div className="flex h-full flex-col gap-4 p-4">
@@ -1001,46 +959,15 @@ export default function PunchRawDataPage() {
         onClearSelection={() => setRowSelection({})}
       />
 
-      <div ref={tableRef} className="flex-1 overflow-auto rounded-md border">
-        <Table style={{ width: totalWidth, tableLayout: 'fixed' }}>
-          <TableHeader>
-            <TableRow>{headers.map(renderHeader)}</TableRow>
-          </TableHeader>
-          <TableBody>
-            {tableLoading && (
-              <TableRow>
-                <TableCell colSpan={headers.length} className="text-center py-12 text-muted-foreground text-sm">Loading…</TableCell>
-              </TableRow>
-            )}
-            {!tableLoading && tableRows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={headers.length} className="text-center py-12 text-muted-foreground text-sm">No punch items match the current filters.</TableCell>
-              </TableRow>
-            )}
-            {!tableLoading && tableRows.map((r) => (
-              <TableRow
-                key={r.id}
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => navigate(`/punch/${r.original.id}`)}
-              >
-                {r.getVisibleCells().map((cell) => (
-                  <TableCell
-                    key={cell.id}
-                    style={{
-                      width: cell.column.getSize(),
-                      minWidth: cell.column.getSize(),
-                      maxWidth: cell.column.getSize(),
-                    }}
-                    className="truncate whitespace-nowrap py-2 text-xs align-top"
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <PunchRawTableView
+        table={table}
+        loading={tableLoading}
+        sorting={sorting.length ? sorting : DEFAULT_SORTING}
+        autoSizeColumn={autoSizeColumn}
+        navigate={navigate}
+        tableRef={tableRef}
+      />
+
 
       <Dialog
         open={exportDialogOpen}
@@ -1184,6 +1111,230 @@ export default function PunchRawDataPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+interface PunchRawTableViewProps {
+  table: any;
+  loading: boolean;
+  sorting: SortingState;
+  autoSizeColumn: (id: string) => void;
+  navigate: (path: string) => void;
+  tableRef: React.RefObject<HTMLDivElement>;
+}
+
+function PunchRawTableView({ table, loading, sorting, autoSizeColumn, navigate, tableRef }: PunchRawTableViewProps) {
+  const isMobile = useIsMobile();
+  const { value: frozenSetting } = useFrozenColumnCount();
+  const userFrozenCount = isMobile ? 1 : Math.min(Math.max(Number(frozenSetting) || 1, 1), 4);
+  const frozenCount = userFrozenCount + 1;
+
+  const leafColumns = table.getVisibleLeafColumns();
+  const stickyLefts = useMemo(() => {
+    const lefts: number[] = [];
+    let acc = 0;
+    for (let i = 0; i < frozenCount && i < leafColumns.length; i++) {
+      lefts.push(acc);
+      acc += leafColumns[i].getSize();
+    }
+    return lefts;
+  }, [leafColumns, frozenCount, table.getState().columnSizing]);
+  const frozenWidth = useMemo(
+    () => leafColumns.slice(0, frozenCount).reduce((s: number, c: any) => s + c.getSize(), 0),
+    [leafColumns, frozenCount, table.getState().columnSizing],
+  );
+  const totalWidth = useMemo(
+    () => leafColumns.reduce((s: number, c: any) => s + c.getSize(), 0),
+    [leafColumns, table.getState().columnSizing],
+  );
+
+  const rows = table.getRowModel().rows;
+  const ROW_HEIGHT = 36;
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => tableRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 12,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const totalSize = rowVirtualizer.getTotalSize();
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const paddingBottom = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  const headerGroup = table.getHeaderGroups().at(-1);
+  const allHeaders = headerGroup?.headers ?? [];
+
+  const renderHeader = (header: any, index: number) => {
+    const isSticky = index < frozenCount;
+    const isLastSticky = index === frozenCount - 1;
+    const headerDef = header.column.columnDef.header;
+    const meta = header.column.columnDef.meta as any;
+    const headerText = (meta?.headerLabel as string) || (typeof headerDef === 'string' ? headerDef : header.column.id);
+    return (
+      <TableHead
+        key={header.id}
+        data-column-id={header.column.id}
+        title={headerText}
+        style={{
+          width: header.getSize(),
+          minWidth: header.getSize(),
+          maxWidth: header.getSize(),
+          ...(isSticky
+            ? { position: 'sticky', left: stickyLefts[index], zIndex: 3, background: 'hsl(var(--background))' }
+            : {}),
+        }}
+        className={cn(
+          'relative h-9 cursor-pointer select-none whitespace-nowrap border-b px-3 py-0 text-left text-xs font-medium',
+          !isSticky && 'bg-background',
+          isLastSticky && 'shadow-[2px_0_4px_-2px_hsl(var(--border))]',
+        )}
+        onClick={header.column.getToggleSortingHandler()}
+      >
+        <div className="flex w-full items-center justify-between gap-1">
+          <span className="inline-flex min-w-0 items-center gap-1 truncate">
+            <span className="truncate">{flexRender(header.column.columnDef.header, header.getContext())}</span>
+            {header.column.getIsSorted() && (
+              <span className="flex-shrink-0">
+                {header.column.getIsSorted() === 'asc' ? '▲' : '▼'}
+                {sorting.length > 1 && (
+                  <sup className="ml-0.5 text-[9px] text-muted-foreground">{header.column.getSortIndex() + 1}</sup>
+                )}
+              </span>
+            )}
+          </span>
+          {header.column.getCanFilter() && (
+            <span className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+              <ColumnFilterDropdown column={header.column} />
+            </span>
+          )}
+        </div>
+        {header.column.getCanResize() && (
+          <div
+            onMouseDown={header.getResizeHandler()}
+            onTouchStart={header.getResizeHandler()}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => { e.stopPropagation(); autoSizeColumn(header.column.id); }}
+            title="Drag to resize, double-click to auto-fit"
+            className={cn(
+              'absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40',
+              header.column.getIsResizing() && 'bg-primary/60',
+            )}
+          />
+        )}
+      </TableHead>
+    );
+  };
+
+  const isCompletedRow = (row: PunchItem) => {
+    if (row.actual_completion_date) return true;
+    const s = String(row.completion_status ?? '').trim().toLowerCase();
+    return s === 'done' || s === 'complete' || s === 'completed' || s === 'closed';
+  };
+  const isRiskRow = (row: PunchItem) => row.health_status === 'critical' || row.health_status === 'behind';
+
+  const renderRowClass = (row: PunchItem, index: number) => {
+    const completed = isCompletedRow(row);
+    const risk = isRiskRow(row);
+    return cn(
+      'cursor-pointer',
+      completed && 'bg-muted/30 text-muted-foreground',
+      risk && !completed && 'bg-destructive/5',
+      hoveredIndex === index && 'bg-muted/50',
+    );
+  };
+
+  const stickyBgFor = (row: PunchItem, index: number): string => {
+    const completed = isCompletedRow(row);
+    const risk = isRiskRow(row);
+    const base = 'hsl(var(--background))';
+    const opaque = `linear-gradient(${base}, ${base})`;
+    if (hoveredIndex === index) return `${opaque}, hsl(var(--muted) / 0.95)`;
+    if (risk && !completed) return `${opaque}, hsl(var(--destructive) / 0.06)`;
+    if (completed) return `${opaque}, hsl(var(--muted) / 0.45)`;
+    return base;
+  };
+
+  return (
+    <div className="flex max-h-[calc(100vh-220px)] flex-col overflow-hidden rounded-md border bg-background">
+      <TopHorizontalScrollbar targetRef={tableRef} width={totalWidth} frozenWidth={frozenWidth} />
+      <div ref={tableRef} className="min-w-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
+        <Table style={{ width: totalWidth, tableLayout: 'fixed' }}>
+          <TableHeader className="bg-background">
+            <TableRow className="border-b bg-background [&>th]:sticky [&>th]:top-0 [&>th]:z-[2] [&>th]:bg-background">
+              {allHeaders.map(renderHeader)}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={leafColumns.length} className="py-8 text-center text-muted-foreground">Loading…</TableCell>
+              </TableRow>
+            ) : rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={leafColumns.length} className="py-8 text-center text-muted-foreground">No punch items match the current filters.</TableCell>
+              </TableRow>
+            ) : (
+              <>
+                {paddingTop > 0 && (
+                  <tr style={{ height: paddingTop }} aria-hidden>
+                    <td colSpan={leafColumns.length} style={{ padding: 0, border: 0 }} />
+                  </tr>
+                )}
+                {virtualRows.map((virtualRow) => {
+                  const row = rows[virtualRow.index];
+                  const stickyBg = stickyBgFor(row.original, virtualRow.index);
+                  return (
+                    <TableRow
+                      key={row.id}
+                      data-index={virtualRow.index}
+                      style={{ height: ROW_HEIGHT, maxHeight: ROW_HEIGHT }}
+                      className={renderRowClass(row.original, virtualRow.index)}
+                      onMouseEnter={() => setHoveredIndex(virtualRow.index)}
+                      onMouseLeave={() => setHoveredIndex(null)}
+                      onClick={() => navigate(`/punch/${row.original.id}`)}
+                    >
+                      {row.getVisibleCells().map((cell: any, cellIdx: number) => {
+                        const isSticky = cellIdx < frozenCount;
+                        const isLastSticky = cellIdx === frozenCount - 1;
+                        return (
+                          <TableCell
+                            key={cell.id}
+                            data-column-id={cell.column.id}
+                            style={{
+                              width: cell.column.getSize(),
+                              minWidth: cell.column.getSize(),
+                              maxWidth: cell.column.getSize(),
+                              height: ROW_HEIGHT,
+                              maxHeight: ROW_HEIGHT,
+                              overflow: 'hidden',
+                              ...(isSticky
+                                ? { position: 'sticky', left: stickyLefts[cellIdx], zIndex: 1, background: stickyBg }
+                                : {}),
+                            }}
+                            className={cn(
+                              'truncate whitespace-nowrap py-2 text-xs',
+                              isLastSticky && 'shadow-[2px_0_4px_-2px_hsl(var(--border))]',
+                            )}
+                          >
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  );
+                })}
+                {paddingBottom > 0 && (
+                  <tr style={{ height: paddingBottom }} aria-hidden>
+                    <td colSpan={leafColumns.length} style={{ padding: 0, border: 0 }} />
+                  </tr>
+                )}
+              </>
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
