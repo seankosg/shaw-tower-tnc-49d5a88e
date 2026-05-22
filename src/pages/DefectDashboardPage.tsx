@@ -477,6 +477,7 @@ export default function DefectDashboardPage() {
                   onCompletionClick={() => goRaw({ ...teamParam, ...pParam, actualComplete: 'true' })}
                   onClosureClick={() => goRaw({ ...teamParam, ...pParam, closureComplete: 'true' })}
                   onOverdueClick={() => goRaw({ ...teamParam, ...pParam, overdue: 'true', stage: 'completion', asOf: dataDate })}
+                  onRemainingClick={() => goRaw({ ...teamParam, ...pParam, notClosureDone: 'true' })}
                 />
               </div>
             );
