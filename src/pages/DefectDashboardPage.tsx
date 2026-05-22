@@ -1076,33 +1076,33 @@ function CapturedByStatsSection({
                     <TableCell colSpan={9} className="text-center text-xs text-muted-foreground">No matches.</TableCell>
                   </TableRow>
                 ) : visibleRows.map((r) => (
-                  <TableRow key={r.name} className="cursor-pointer" onClick={() => onCardClick(r.name)}>
-                    <TableCell className="py-1.5 text-xs font-medium text-foreground">{r.name}</TableCell>
+                  <TableRow key={r.name} className={cn('cursor-pointer', r.isUnknown && 'text-destructive')} onClick={() => onCardClick(r.name)}>
+                    <TableCell className={cn('py-1.5 text-xs font-medium', r.isUnknown ? 'text-destructive italic' : 'text-foreground')}>{r.name}</TableCell>
                     <TableCell className="border-l py-1.5 text-right">
-                      <ClickNum value={r.total} onClick={() => onMetricClick(r.name, 'total')} />
+                      <ClickNum value={r.total} onClick={() => onMetricClick(r.name, 'total')} className={r.isUnknown ? 'text-destructive' : undefined} />
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
-                      <button type="button" className={cn('tabular-nums hover:underline', r.completed === 0 ? 'text-muted-foreground/40' : 'font-semibold text-emerald-700 dark:text-emerald-400')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'completed'); }}>{r.completed}</button>
-                      <span className="ml-2 text-[10px] text-muted-foreground tabular-nums">{fmtPct(r.completed, r.total)}</span>
+                      <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.completed === 0 ? 'text-muted-foreground/40' : 'font-semibold text-emerald-700 dark:text-emerald-400')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'completed'); }}>{r.completed}</button>
+                      <span className={cn('ml-2 text-[10px] tabular-nums', r.isUnknown ? 'text-destructive/70' : 'text-muted-foreground')}>{fmtPct(r.completed, r.total)}</span>
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
-                      <button type="button" className={cn('tabular-nums hover:underline', r.closed === 0 ? 'text-muted-foreground/40' : 'font-semibold text-primary')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'closed'); }}>{r.closed}</button>
-                      <span className="ml-2 text-[10px] text-muted-foreground tabular-nums">{fmtPct(r.closed, r.total)}</span>
+                      <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.closed === 0 ? 'text-muted-foreground/40' : 'font-semibold text-primary')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'closed'); }}>{r.closed}</button>
+                      <span className={cn('ml-2 text-[10px] tabular-nums', r.isUnknown ? 'text-destructive/70' : 'text-muted-foreground')}>{fmtPct(r.closed, r.total)}</span>
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
-                      <button type="button" className={cn('tabular-nums hover:underline', r.dispute === 0 ? 'text-muted-foreground/40' : 'font-semibold text-purple-700 dark:text-purple-300')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'dispute'); }}>{r.dispute}</button>
+                      <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.dispute === 0 ? 'text-muted-foreground/40' : 'font-semibold text-purple-700 dark:text-purple-300')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'dispute'); }}>{r.dispute}</button>
                     </TableCell>
                     <TableCell className="border-l py-1.5 text-right">
-                      <button type="button" className="tabular-nums font-semibold hover:underline" onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priTotal'); }}>{r.total}</button>
+                      <button type="button" className={cn('tabular-nums font-semibold hover:underline', r.isUnknown && 'text-destructive')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priTotal'); }}>{r.total}</button>
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
-                      <button type="button" className={cn('tabular-nums hover:underline', r.priCatA === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priCatA'); }} disabled={r.priCatA === 0}>{r.priCatA}</button>
+                      <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.priCatA === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priCatA'); }} disabled={r.priCatA === 0}>{r.priCatA}</button>
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
-                      <button type="button" className={cn('tabular-nums hover:underline', r.priCatB === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priCatB'); }} disabled={r.priCatB === 0}>{r.priCatB}</button>
+                      <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.priCatB === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priCatB'); }} disabled={r.priCatB === 0}>{r.priCatB}</button>
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
-                      <button type="button" className={cn('tabular-nums hover:underline', r.priNoCat === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priNoCat'); }} disabled={r.priNoCat === 0}>{r.priNoCat}</button>
+                      <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.priNoCat === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priNoCat'); }} disabled={r.priNoCat === 0}>{r.priNoCat}</button>
                     </TableCell>
                   </TableRow>
                 ))}
