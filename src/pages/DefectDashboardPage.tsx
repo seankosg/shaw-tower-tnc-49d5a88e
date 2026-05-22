@@ -518,7 +518,7 @@ export default function DefectDashboardPage() {
               const sorted = [...kpis.dispute.hdecCatBReasons].sort((a, b) => b[1] - a[1]);
               const top = sorted.slice(0, 3);
               const rest = sorted.slice(3);
-              const renderBtn = ([reason, count]: [string, number]) => {
+              const renderBtn = ([reason, count]: [string, number], fullText = false) => {
                 const isEmpty = reason === '__EMPTY__';
                 const label = isEmpty ? 'Unspecified' : reason;
                 return (
@@ -533,14 +533,14 @@ export default function DefectDashboardPage() {
                     className="inline-flex items-center gap-1.5 rounded-md border bg-muted/30 px-2.5 py-1.5 text-xs transition hover:bg-muted/60"
                     title={label}
                   >
-                    <span className="max-w-[28ch] truncate text-foreground">{label}</span>
+                    <span className={cn('text-foreground', !fullText && 'max-w-[28ch] truncate')}>{label}</span>
                     <span className="rounded bg-primary/10 px-1.5 py-0.5 font-semibold text-primary">{count.toLocaleString()}</span>
                   </button>
                 );
               };
               return (
                 <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2">{top.map(renderBtn)}</div>
+                  <div className="flex flex-wrap gap-2">{top.map((item) => renderBtn(item, true))}</div>
                   {rest.length > 0 && (
                     <Collapsible>
                       <CollapsibleTrigger className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition [&[data-state=open]>svg]:rotate-180">
@@ -548,7 +548,7 @@ export default function DefectDashboardPage() {
                         <ChevronDown className="h-3 w-3 transition-transform" />
                       </CollapsibleTrigger>
                       <CollapsibleContent className="pt-2">
-                        <div className="flex flex-wrap gap-2">{rest.map(renderBtn)}</div>
+                        <div className="flex flex-wrap gap-2">{rest.map((item) => renderBtn(item))}</div>
                       </CollapsibleContent>
                     </Collapsible>
                   )}
