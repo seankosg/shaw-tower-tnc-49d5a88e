@@ -149,12 +149,22 @@ Backfill: Import 흐름과 무관. 별도 Admin 액션(6번)에서 처리.
 ### Defect Dashboard 페이지
 - Cat A 검증 분포 카드 1개 추가 (Major / Review / Minor 건수). Drill-down → Raw Data 필터.
 
-### Defect Field Config
-- 신규 두 필드를 `defect_field_config`에 등록.
+### Admin → Field Config 탭
+- `defect_field_config` 테이블에 두 필드 row 신규 등록 (migration seed):
+  - `hdec_verification` — label `HDEC's Verification`, group `Verification`, visible=true, editable=false (자동계산), order=Defect Prioritisation 바로 아래.
+  - `hdec_reason` — label `HDEC's Reason`, group `Verification`, visible=true, editable=false, order=`hdec_verification` 바로 아래.
+- Admin이 Field Config UI에서 visibility/순서/label 조정 가능 (기존 동작 그대로).
+
+### Admin → Header Mappings 탭
+- `header_mappings` 테이블에 신규 alias 등록 (migration seed):
+  - `hdec_verification` ← `"hdec's verification"`, `"hdec verification"`, `"verification"`
+  - `hdec_reason` ← `"hdec's reason"`, `"hdec reason"`, `"reason of assessment"`
+- Admin이 Header Mappings UI에서 추가 alias 등록·수정 가능.
+- `defect-parser.ts` fallback alias map에도 동일 항목 하드코딩 (DB 미동기화 환경 안전망).
 
 ---
 
-## 5. Admin 관리 UI
+## 5. Admin 관리 UI (분류 규칙)
 
 `AdminClassificationPage`에 "Priority Verification Rules" 탭 추가 (1차에선 read-only 목록 + Seed 사용, 편집 UI는 후속 PR).
 
