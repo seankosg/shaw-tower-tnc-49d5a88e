@@ -626,6 +626,8 @@ export async function parseDefectExcel(file: File, sheetName?: string, excludedH
       closure_status: toText(getMapped(raw, 'closure_status')),
       remarks: toText(getMapped(raw, 'remarks')),
       hdec_comments: toText(getMapped(raw, 'hdec_comments')),
+      hdec_verification: toText(getMapped(raw, 'hdec_verification')),
+      hdec_reason: toText(getMapped(raw, 'hdec_reason')),
       aconex_comments: toText(getMapped(raw, 'aconex_comments')),
       work_type: toText(getMapped(raw, 'work_type')),
       raw_payload: raw,
