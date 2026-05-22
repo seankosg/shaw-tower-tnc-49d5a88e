@@ -1079,7 +1079,9 @@ function CapturedByStatsSection({
                   <TableRow key={r.name} className={cn('cursor-pointer', r.isUnknown && 'text-destructive')} onClick={() => onCardClick(r.name)}>
                     <TableCell className={cn('py-1.5 text-xs font-medium', r.isUnknown ? 'text-destructive italic' : 'text-foreground')}>{r.name}</TableCell>
                     <TableCell className="border-l py-1.5 text-right">
-                      <ClickNum value={r.total} onClick={() => onMetricClick(r.name, 'total')} className={r.isUnknown ? 'text-destructive' : undefined} />
+                      {r.isUnknown
+                        ? <button type="button" className="tabular-nums font-semibold text-destructive hover:underline" onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'total'); }}>{r.total}</button>
+                        : <ClickNum value={r.total} onClick={() => onMetricClick(r.name, 'total')} />}
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
                       <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.completed === 0 ? 'text-muted-foreground/40' : 'font-semibold text-emerald-700 dark:text-emerald-400')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'completed'); }}>{r.completed}</button>
