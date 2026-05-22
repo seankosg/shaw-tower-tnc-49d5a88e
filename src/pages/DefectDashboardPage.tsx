@@ -232,12 +232,14 @@ export default function DefectDashboardPage() {
       const t = rows.length;
       const c = rows.filter(isActualComplete).length;
       const z = rows.filter(isClosureComplete).length;
+      const od = rows.filter((i) => isStageDelayedAsOf(i, 'completion', dataDate)).length;
       return {
         total: t,
         completion: c,
         closure: z,
         completionPct: t ? Math.round((c / t) * 1000) / 10 : 0,
         closurePct: t ? Math.round((z / t) * 1000) / 10 : 0,
+        overdue: od,
       };
     };
     const catA = filteredItems.filter((i) => (i as any).priority === CAT_A);
