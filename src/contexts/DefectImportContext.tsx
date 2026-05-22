@@ -34,6 +34,7 @@ const PRESERVE_BLANK_FIELDS = [
   'actual_start_date', 'actual_closure_date',
   'actual_progress_pct',
   'remarks', 'hdec_comments', 'aconex_comments',
+  'hdec_verification', 'hdec_reason',
 ] as const;
 
 function isBlankValue(v: unknown): boolean {
