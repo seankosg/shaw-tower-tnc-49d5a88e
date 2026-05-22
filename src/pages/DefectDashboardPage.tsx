@@ -524,7 +524,7 @@ export default function DefectDashboardPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-destructive" />
-              <CardTitle className="text-base">HDEC's Basis of Dispute</CardTitle>
+              <CardTitle className="text-base">HDEC's Basis of Cat B</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
