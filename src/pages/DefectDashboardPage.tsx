@@ -442,59 +442,72 @@ export default function DefectDashboardPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {([
-          { label: 'Total', stats: kpis.byPriority.total, priority: null },
-          { label: 'Cat. A', stats: kpis.byPriority.catA, priority: 'Cat A - Major Defect (Before SC)' },
-          { label: 'Cat. B', stats: kpis.byPriority.catB, priority: 'Cat B - Minor Defect' },
-          { label: 'No Cat.', stats: kpis.byPriority.noCat, priority: '__EMPTY__' },
-        ] as const).map(({ label, stats, priority }) => {
-          const teamParam: Record<string, string> = teamFilter.length ? { team: teamFilter.join(',') } : {};
-          const pParam: Record<string, string> = priority ? { priority } : {};
-          return (
-            <PriorityCard
-              key={label}
-              label={label}
-              stats={stats}
-              onCardClick={() => goRaw({ ...teamParam, ...pParam })}
-              onCompletionClick={() => goRaw({ ...teamParam, ...pParam, actualComplete: 'true' })}
-              onClosureClick={() => goRaw({ ...teamParam, ...pParam, closureComplete: 'true' })}
-              onOverdueClick={() => goRaw({ ...teamParam, ...pParam, overdue: 'true', stage: 'completion', asOf: dataDate })}
-            />
-          );
-        })}
-      </div>
+      <section className="rounded-lg border border-destructive/30 border-l-4 border-l-destructive bg-gradient-to-br from-destructive/[0.06] via-background to-background shadow-sm p-3 md:p-4 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertOctagon className="h-4 w-4 text-destructive" />
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">Category Classification & Dispute</h2>
+          </div>
+          <p className="text-xs text-muted-foreground">LL ↔ HDEC 분류 이견 — 우선 조치 필요</p>
+        </div>
 
-      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {([
+            { label: 'Total', stats: kpis.byPriority.total, priority: null, tone: '' },
+            { label: 'Cat. A', stats: kpis.byPriority.catA, priority: 'Cat A - Major Defect (Before SC)', tone: 'border-destructive/40 bg-destructive/[0.05]' },
+            { label: 'Cat. B', stats: kpis.byPriority.catB, priority: 'Cat B - Minor Defect', tone: 'border-amber-500/40 bg-amber-500/[0.05]' },
+            { label: 'No Cat.', stats: kpis.byPriority.noCat, priority: '__EMPTY__', tone: 'border-muted-foreground/30 bg-muted/40' },
+          ] as const).map(({ label, stats, priority, tone }) => {
+            const teamParam: Record<string, string> = teamFilter.length ? { team: teamFilter.join(',') } : {};
+            const pParam: Record<string, string> = priority ? { priority } : {};
+            return (
+              <div key={label} className={cn('rounded-lg', tone)}>
+                <PriorityCard
+                  label={label}
+                  stats={stats}
+                  onCardClick={() => goRaw({ ...teamParam, ...pParam })}
+                  onCompletionClick={() => goRaw({ ...teamParam, ...pParam, actualComplete: 'true' })}
+                  onClosureClick={() => goRaw({ ...teamParam, ...pParam, closureComplete: 'true' })}
+                  onOverdueClick={() => goRaw({ ...teamParam, ...pParam, overdue: 'true', stage: 'completion', asOf: dataDate })}
+                />
+              </div>
+            );
+          })}
+        </div>
+
         {/* Banner 1 — Dispute in Category for Outstanding Defects */}
-        <Card>
+        <Card className="border-destructive/40 bg-destructive/[0.03] shadow-md">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Dispute in Category for Outstanding Defects</CardTitle>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <CardTitle className="text-base">Dispute in Category for Outstanding Defects</CardTitle>
+              <span className="rounded bg-destructive px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-destructive-foreground">Critical</span>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => goRaw({ priority: 'Cat A - Major Defect (Before SC)', notClosureDone: 'true' })}
-                className="rounded-md border bg-muted/30 p-3 text-left transition hover:bg-muted/60"
+                className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-left transition hover:bg-destructive/10"
               >
                 <p className="text-xs text-muted-foreground">LL's CAT A</p>
-                <p className="mt-1 text-2xl font-semibold text-foreground">{kpis.dispute.llCatA.toLocaleString()}</p>
+                <p className="mt-1 text-3xl font-bold text-destructive">{kpis.dispute.llCatA.toLocaleString()}</p>
                 <p className="mt-0.5 text-[10px] text-muted-foreground">Closure ≠ Done</p>
               </button>
               <button
                 type="button"
                 onClick={() => goRaw({ hdecVerification: 'Cat A - Major Defect (Before SC)', notClosureDone: 'true' })}
-                className="rounded-md border bg-muted/30 p-3 text-left transition hover:bg-muted/60"
+                className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-left transition hover:bg-destructive/10"
               >
                 <p className="text-xs text-muted-foreground">HDEC's CAT A</p>
-                <p className="mt-1 text-2xl font-semibold text-foreground">{kpis.dispute.hdecCatA.toLocaleString()}</p>
+                <p className="mt-1 text-3xl font-bold text-destructive">{kpis.dispute.hdecCatA.toLocaleString()}</p>
                 <p className="mt-0.5 text-[10px] text-muted-foreground">Closure ≠ Done</p>
               </button>
               <div className="rounded-md border bg-muted/30 p-3">
                 <p className="text-xs text-muted-foreground">Difference</p>
                 <p className={cn(
-                  'mt-1 text-2xl font-semibold',
+                  'mt-1 text-3xl font-bold',
                   kpis.dispute.diff > 0 ? 'text-emerald-600 dark:text-emerald-400'
                     : kpis.dispute.diff < 0 ? 'text-destructive' : 'text-foreground',
                 )}>
@@ -507,9 +520,12 @@ export default function DefectDashboardPage() {
         </Card>
 
         {/* Banner 2 — HDEC's Basis of Dispute */}
-        <Card>
+        <Card className="border-destructive/40 bg-destructive/[0.03] shadow-md">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">HDEC's Basis of Dispute</CardTitle>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <CardTitle className="text-base">HDEC's Basis of Dispute</CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             {kpis.dispute.hdecCatBReasons.length === 0 ? (
@@ -518,9 +534,10 @@ export default function DefectDashboardPage() {
               const sorted = [...kpis.dispute.hdecCatBReasons].sort((a, b) => b[1] - a[1]);
               const top = sorted.slice(0, 3);
               const rest = sorted.slice(3);
-              const renderBtn = ([reason, count]: [string, number], fullText = false) => {
+              const renderBtn = ([reason, count]: [string, number], rank = -1) => {
                 const isEmpty = reason === '__EMPTY__';
                 const label = isEmpty ? 'Unspecified' : reason;
+                const isTop = rank >= 0;
                 return (
                   <button
                     key={reason}
@@ -530,17 +547,26 @@ export default function DefectDashboardPage() {
                       hdecReason: isEmpty ? '__EMPTY__' : reason,
                       notClosureDone: 'true',
                     })}
-                    className="inline-flex items-center gap-1.5 rounded-md border bg-muted/30 px-2.5 py-1.5 text-xs transition hover:bg-muted/60"
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition',
+                      isTop
+                        ? 'border-destructive/40 bg-destructive/5 hover:bg-destructive/10'
+                        : 'border bg-muted/30 hover:bg-muted/60',
+                      rank === 0 && 'ring-1 ring-destructive/50',
+                    )}
                     title={label}
                   >
-                    <span className={cn('text-foreground', !fullText && 'max-w-[28ch] truncate')}>{label}</span>
-                    <span className="rounded bg-primary/10 px-1.5 py-0.5 font-semibold text-primary">{count.toLocaleString()}</span>
+                    <span className={cn('text-foreground', !isTop && 'max-w-[28ch] truncate')}>{label}</span>
+                    <span className={cn(
+                      'rounded px-1.5 py-0.5 font-semibold',
+                      isTop ? 'bg-destructive text-destructive-foreground' : 'bg-primary/10 text-primary',
+                    )}>{count.toLocaleString()}</span>
                   </button>
                 );
               };
               return (
                 <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2">{top.map((item) => renderBtn(item, true))}</div>
+                  <div className="flex flex-wrap gap-2">{top.map((item, i) => renderBtn(item, i))}</div>
                   {rest.length > 0 && (
                     <Collapsible>
                       <CollapsibleTrigger className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition [&[data-state=open]>svg]:rotate-180">
@@ -557,7 +583,8 @@ export default function DefectDashboardPage() {
             })()}
           </CardContent>
         </Card>
-      </div>
+      </section>
+
 
 
 
