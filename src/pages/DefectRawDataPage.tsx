@@ -522,6 +522,7 @@ export default function DefectRawDataPage() {
     'level', 'mainTrade', 'subTrade', 'workType', 'classificationSource',
     'status', 'closureStatus', 'issueNo', 'subcontractorIssueNo',
     'dateStart', 'dateEnd', 'dateField', 'critical', 'priority',
+    'hdecVerification', 'hdecReason', 'notClosureDone',
   ];
 
   useEffect(() => {
@@ -732,6 +733,31 @@ export default function DefectRawDataPage() {
     const capturedByGroup = searchParams.get('capturedByGroup');
     if (capturedByGroup) {
       next = next.filter((item) => getCapturedByGroup((item as any).captured_by_name) === capturedByGroup);
+    }
+    if (searchParams.get('notClosureDone') === 'true') {
+      next = next.filter((item) => (item as any).closure_status !== 'Done');
+    }
+    const hdecVerification = searchParams.get('hdecVerification');
+    if (hdecVerification) {
+      if (hdecVerification === EMPTY_TOKEN) {
+        next = next.filter((item) => {
+          const v = (item as any).hdec_verification;
+          return v == null || String(v).trim() === '';
+        });
+      } else {
+        next = next.filter((item) => (item as any).hdec_verification === hdecVerification);
+      }
+    }
+    const hdecReason = searchParams.get('hdecReason');
+    if (hdecReason) {
+      if (hdecReason === EMPTY_TOKEN) {
+        next = next.filter((item) => {
+          const v = (item as any).hdec_reason;
+          return v == null || String(v).trim() === '';
+        });
+      } else {
+        next = next.filter((item) => (item as any).hdec_reason === hdecReason);
+      }
     }
     return next;
   }, [items, searchParams, dataDate]);
@@ -1207,6 +1233,17 @@ export default function DefectRawDataPage() {
     if (searchParams.get('atRisk') === 'true') {
       const days = searchParams.get('atRiskDays');
       out.push({ label: days ? `At Risk (≤ ${days}d)` : 'At Risk', param: 'atRisk', clears: ['atRisk', 'atRiskDays'] });
+    }
+    if (searchParams.get('notClosureDone') === 'true') {
+      out.push({ label: 'Closure ≠ Done', param: 'notClosureDone', clears: ['notClosureDone'] });
+    }
+    const hdecVer = searchParams.get('hdecVerification');
+    if (hdecVer) {
+      out.push({ label: `HDEC Verification: ${hdecVer === EMPTY_TOKEN ? '(Blank)' : hdecVer}`, param: 'hdecVerification', clears: ['hdecVerification'] });
+    }
+    const hdecRsn = searchParams.get('hdecReason');
+    if (hdecRsn) {
+      out.push({ label: `HDEC Reason: ${hdecRsn === EMPTY_TOKEN ? '(Blank)' : hdecRsn}`, param: 'hdecReason', clears: ['hdecReason'] });
     }
     return out;
   }, [searchParams, getLabel]);
