@@ -455,9 +455,9 @@ export default function DefectDashboardPage() {
         <CapturedByStatsSection
           items={filteredItems}
           kpis={kpis}
-          onCardClick={(name) => goRaw({ capturedBy: name })}
+          onCardClick={(name) => goRaw({ capturedBy: name === 'Unknown' ? '__EMPTY__' : name })}
           onMetricClick={(name, metric) => {
-            const params: Record<string, string> = { capturedBy: name };
+            const params: Record<string, string> = { capturedBy: name === 'Unknown' ? '__EMPTY__' : name };
             if (metric === 'completed') params.actualComplete = 'true';
             else if (metric === 'closed') params.closureComplete = 'true';
             else if (metric === 'dispute') params.closureStatus = 'InD';
@@ -833,24 +833,29 @@ function CapturedByStatsSection({
       else if (!pri) bucket.priNoCat += 1;
       if (name) map.set(name, bucket);
     }
-    const stats = [...map.values()].sort((a, b) => b.total - a.total);
+    const namedStats = [...map.values()].sort((a, b) => b.total - a.total);
+    // Include Unknown (captured_by_name empty) as a visible row so table totals
+    // reconcile directly with summary cards.
+    const stats: CapturedByStat[] = unknown.total > 0
+      ? [...namedStats, { ...unknown, name: 'Unknown' }]
+      : namedStats;
     const totals = stats.reduce((acc, s) => ({
       total: acc.total + s.total, completed: acc.completed + s.completed,
       closed: acc.closed + s.closed, dispute: acc.dispute + s.dispute,
       priCatA: acc.priCatA + s.priCatA, priCatB: acc.priCatB + s.priCatB, priNoCat: acc.priNoCat + s.priNoCat,
     }), { total: 0, completed: 0, closed: 0, dispute: 0, priCatA: 0, priCatB: 0, priNoCat: 0 });
-    return { stats, unknown, totals };
+    return { stats, unknown, totals, namedCount: namedStats.length };
   }, [items]);
 
   const checks = useMemo(() => {
     const rows = [
-      { label: 'Total', sum: totals.total, kpi: kpis.total, unknown: unknown.total },
-      { label: 'Completed', sum: totals.completed, kpi: kpis.actualDone, unknown: unknown.completed },
-      { label: 'Closed', sum: totals.closed, kpi: kpis.closureDone, unknown: unknown.closed },
-      { label: 'In Dispute', sum: totals.dispute, kpi: kpis.inDisputeCount, unknown: unknown.dispute },
-    ].map((r) => ({ ...r, expected: r.kpi - r.unknown, delta: r.sum - (r.kpi - r.unknown) }));
+      { label: 'Total', sum: totals.total, kpi: kpis.total },
+      { label: 'Completed', sum: totals.completed, kpi: kpis.actualDone },
+      { label: 'Closed', sum: totals.closed, kpi: kpis.closureDone },
+      { label: 'In Dispute', sum: totals.dispute, kpi: kpis.inDisputeCount },
+    ].map((r) => ({ ...r, delta: r.sum - r.kpi }));
     return rows;
-  }, [totals, unknown, kpis]);
+  }, [totals, kpis]);
 
   const allOk = checks.every((c) => c.delta === 0);
 
@@ -862,7 +867,11 @@ function CapturedByStatsSection({
 
   // Rows annotated with group (computed before any early return to keep hook order stable).
   const rowsWithGroup = useMemo(
-    () => stats.map((s) => ({ ...s, group: (getCapturedByGroup(s.name) ?? 'Other') as CapturedByGroup })),
+    () => stats.map((s) => ({
+      ...s,
+      group: (s.name === 'Unknown' ? 'Other' : (getCapturedByGroup(s.name) ?? 'Other')) as CapturedByGroup,
+      isUnknown: s.name === 'Unknown',
+    })),
     [stats],
   );
 
@@ -891,6 +900,9 @@ function CapturedByStatsSection({
     const filtered = nameFilter.length ? tabRows.filter((r) => nameFilter.includes(r.name)) : tabRows;
     const dir = sort.dir === 'asc' ? 1 : -1;
     const sorted = [...filtered].sort((a, b) => {
+      // Always pin Unknown row at the bottom.
+      if (a.isUnknown && !b.isUnknown) return 1;
+      if (!a.isUnknown && b.isUnknown) return -1;
       const k = sort.key;
       if (k === 'name') return a.name.localeCompare(b.name) * dir;
       return ((a[k] as number) - (b[k] as number)) * dir;
@@ -1064,33 +1076,35 @@ function CapturedByStatsSection({
                     <TableCell colSpan={9} className="text-center text-xs text-muted-foreground">No matches.</TableCell>
                   </TableRow>
                 ) : visibleRows.map((r) => (
-                  <TableRow key={r.name} className="cursor-pointer" onClick={() => onCardClick(r.name)}>
-                    <TableCell className="py-1.5 text-xs font-medium text-foreground">{r.name}</TableCell>
+                  <TableRow key={r.name} className={cn('cursor-pointer', r.isUnknown && 'text-destructive')} onClick={() => onCardClick(r.name)}>
+                    <TableCell className={cn('py-1.5 text-xs font-medium', r.isUnknown ? 'text-destructive italic' : 'text-foreground')}>{r.name}</TableCell>
                     <TableCell className="border-l py-1.5 text-right">
-                      <ClickNum value={r.total} onClick={() => onMetricClick(r.name, 'total')} />
+                      {r.isUnknown
+                        ? <button type="button" className="tabular-nums font-semibold text-destructive hover:underline" onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'total'); }}>{r.total}</button>
+                        : <ClickNum value={r.total} onClick={() => onMetricClick(r.name, 'total')} />}
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
-                      <button type="button" className={cn('tabular-nums hover:underline', r.completed === 0 ? 'text-muted-foreground/40' : 'font-semibold text-emerald-700 dark:text-emerald-400')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'completed'); }}>{r.completed}</button>
-                      <span className="ml-2 text-[10px] text-muted-foreground tabular-nums">{fmtPct(r.completed, r.total)}</span>
+                      <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.completed === 0 ? 'text-muted-foreground/40' : 'font-semibold text-emerald-700 dark:text-emerald-400')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'completed'); }}>{r.completed}</button>
+                      <span className={cn('ml-2 text-[10px] tabular-nums', r.isUnknown ? 'text-destructive/70' : 'text-muted-foreground')}>{fmtPct(r.completed, r.total)}</span>
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
-                      <button type="button" className={cn('tabular-nums hover:underline', r.closed === 0 ? 'text-muted-foreground/40' : 'font-semibold text-primary')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'closed'); }}>{r.closed}</button>
-                      <span className="ml-2 text-[10px] text-muted-foreground tabular-nums">{fmtPct(r.closed, r.total)}</span>
+                      <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.closed === 0 ? 'text-muted-foreground/40' : 'font-semibold text-primary')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'closed'); }}>{r.closed}</button>
+                      <span className={cn('ml-2 text-[10px] tabular-nums', r.isUnknown ? 'text-destructive/70' : 'text-muted-foreground')}>{fmtPct(r.closed, r.total)}</span>
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
-                      <button type="button" className={cn('tabular-nums hover:underline', r.dispute === 0 ? 'text-muted-foreground/40' : 'font-semibold text-purple-700 dark:text-purple-300')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'dispute'); }}>{r.dispute}</button>
+                      <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.dispute === 0 ? 'text-muted-foreground/40' : 'font-semibold text-purple-700 dark:text-purple-300')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'dispute'); }}>{r.dispute}</button>
                     </TableCell>
                     <TableCell className="border-l py-1.5 text-right">
-                      <button type="button" className="tabular-nums font-semibold hover:underline" onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priTotal'); }}>{r.total}</button>
+                      <button type="button" className={cn('tabular-nums font-semibold hover:underline', r.isUnknown && 'text-destructive')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priTotal'); }}>{r.total}</button>
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
-                      <button type="button" className={cn('tabular-nums hover:underline', r.priCatA === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priCatA'); }} disabled={r.priCatA === 0}>{r.priCatA}</button>
+                      <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.priCatA === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priCatA'); }} disabled={r.priCatA === 0}>{r.priCatA}</button>
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
-                      <button type="button" className={cn('tabular-nums hover:underline', r.priCatB === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priCatB'); }} disabled={r.priCatB === 0}>{r.priCatB}</button>
+                      <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.priCatB === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priCatB'); }} disabled={r.priCatB === 0}>{r.priCatB}</button>
                     </TableCell>
                     <TableCell className="py-1.5 text-right">
-                      <button type="button" className={cn('tabular-nums hover:underline', r.priNoCat === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priNoCat'); }} disabled={r.priNoCat === 0}>{r.priNoCat}</button>
+                      <button type="button" className={cn('tabular-nums hover:underline', r.isUnknown ? 'font-semibold text-destructive' : r.priNoCat === 0 ? 'text-muted-foreground/40' : 'font-semibold')} onClick={(e) => { e.stopPropagation(); onMetricClick(r.name, 'priNoCat'); }} disabled={r.priNoCat === 0}>{r.priNoCat}</button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1104,13 +1118,13 @@ function CapturedByStatsSection({
                   : 'border-amber-500/40 bg-amber-500/5 text-amber-800 dark:text-amber-300',
           )}>
             {allOk ? (
-              <span className="font-medium">✓ All totals reconcile with summary cards (Unknown excluded: {unknown.total}).</span>
+              <span className="font-medium">✓ All totals reconcile with summary cards (Unknown included: {unknown.total}).</span>
             ) : (
               <div className="space-y-0.5">
                 <p className="font-medium">⚠ Reconciliation mismatch detected:</p>
                 {checks.map((c) => (
                   <p key={c.label} className="tabular-nums">
-                    {c.label}: Σ={c.sum} / KPI={c.kpi} (Unknown={c.unknown}, expected={c.expected}, Δ={c.delta > 0 ? '+' : ''}{c.delta})
+                    {c.label}: Σ={c.sum} / KPI={c.kpi} (Δ={c.delta > 0 ? '+' : ''}{c.delta})
                   </p>
                 ))}
               </div>
