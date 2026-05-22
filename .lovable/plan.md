@@ -1,64 +1,64 @@
-# §1 시스템 요약 표시 개선 (옵션 A · 시스템명만)
+# Priority 기준 카드 행 추가 (Defect Dashboard)
 
-## 증상
-`/ddn/input` Auto-fill 결과에서 Pred/T1/T2/R1S/R2S 시스템 요약이
-- 시스템명 자리에 `(unknown)`
-- 레벨이 압축되지 않고 `(L5, L6, Lv26, …, L32RF/LMR)` 전부 나열
-- 너무 길어서 `… +1 more` 로 잘림
+기존 2개 KPI 행 다음(그리고 Captured By 섹션 앞)에 **Priority 분류별 카드 행**을 추가합니다.
 
-## 원인
-1. `system_master.system_name_std` 가 대부분 NULL — 실제 이름은 `system_code` 컬럼.
-2. `system-summary.ts` 의 `levelNum` 정규식 `/^L?(\d+)$/` 가 `Lv26`, `L32RF/LMR` 미인식.
+## 카드 구성 (4장)
 
-## 채택 방향: 시스템명만 노출
+| # | 카드 라벨 | 모집단(Priority 값) |
+|---|---|---|
+| 1 | **Total** | 전체 (필터 무관) |
+| 2 | **Cat. A** | `Cat A - Major Defect (Before SC)` |
+| 3 | **Cat. B** | `Cat B - Minor Defect` |
+| 4 | **No Cat.** | priority 가 비어있음(null/빈 문자열) |
 
-레터 본문에는 **레벨·카운트 모두 빼고 시스템명 리스트**만.
-- 중복 제거 + 알파벳 정렬 + `", "` join
-- 예: `Chiller Plant, Sprinkler, Lighting`
-- `maxLen` 초과 시 앞에서부터 채우고 `… +K systems`
+각 카드 내부 표시:
+- 상단: 라벨 + 모집단 **총 개수** (Total Count)
+- 중단: **Completion** — `n / total`, 진도율 %, Progress 바 (primary 색)
+- 하단: **Closure** — `n / total`, 진도율 %, Progress 바 (emerald 색)
 
-상세(레벨·Item No 첨부)는 **금번 범위 제외** — 별도 로직으로 추후 진행.
+진도율 = 해당 모집단 내에서 Completion/Closure 충족 건수 / 모집단 총 개수 × 100 (소수1자리). 기존 `isActualComplete` / `isClosureComplete` 헬퍼 재사용.
 
-## 사전점검: 계획값/실적값/차이값 계산 영향 없음 확인
+카드 클릭 → Raw Data 페이지로 이동, priority 필터 자동 적용 (Total 카드는 필터 없음). 내부 Completion / Closure 숫자 영역 클릭 시 priority 필터 + `actualComplete=true` 또는 `closureComplete=true` 가 함께 적용.
 
-이번 변경은 **표시 문자열만 교체**하며, 카운트/퍼센트 계산 경로는 손대지 않음.
+## 레이아웃
 
-| 필드 | 산출식 | 데이터 소스 | 이번 변경 영향 |
-|---|---|---|---|
-| `planned_tests.{stage}_plan` | `rows.filter(planned_date === D).length` | subtests | 무영향 (row 카운트) |
-| `planned_tests.{stage}_actual` | `rows.filter(actual_date === D && status∈Done/Submitted/Approved).length` | subtests | 무영향 |
-| `planned_tests.{stage}_pct` | `Math.round(actual / plan * 100)` (computed.ts) | inputs | 무영향 (숫자만 참조) |
-| `planned_tests.{stage}_systems` | 시스템 리스트 문자열 | subtests | **변경 대상** — 표시만 |
-| `planned_tests.delayed_items` | `planned_date < D && status !== 'Done'` 카운트·그룹 | subtests | 무영향 (그룹 `name` 표시만 교체) |
-| `sec3.tc_reject*` | `subtest_change_log` 개수/유무 | log | 무영향 (시스템 표기만 교체) |
+```text
+[Total] [Cat. A] [Cat. B] [No Cat.]
+```
 
-체크 결론:
-1. `summarizeSystemNames` 는 `_systems`, `tc_reject_system`, `delayed_items[].name` 의 **string 값**만 다시 만들고, `_plan`/`_actual`/`_pct`/`delayed_items[].reasons` 등 숫자/플래그 필드는 그대로.
-2. `subtests` 조회 필터(`is_active=true`, `subcontractor_name IN PT`)와 stage별 date 필터는 동일 유지 — 동일 row 가 plan/actual/system 모두에 사용됨. 즉 "시스템 통합" 으로 카운트가 어긋날 여지 없음.
-3. 차이값(plan − actual)을 사용하는 별도 computed 키는 없으며, `*_pct` 만 존재.
-4. 시스템 통합은 **표시 단계에서 dedupe** 만 수행하므로, 같은 시스템에 N개 subtest가 있어도 plan 카운트는 N으로 정상 유지(시스템 통합과 무관).
+- `grid grid-cols-2 md:grid-cols-4 gap-3` (현재 KPI 행 톤과 일치)
+- 카드 하나의 높이는 두 개의 Progress 바를 포함해야 하므로 기존 `KpiCard` 보다 약간 큼 → 신규 `PriorityCard` 컴포넌트로 분리 (같은 파일 안에 정의)
 
-## 수정 범위 (프론트엔드 한정)
+## 데이터 소스
 
-### A. `src/lib/ddn/auto-fill.ts`
-- `system_master` SELECT 에 `system_code` 추가
-- `sysName.set(id, system_name_std || system_code || '')` 폴백 (planned + tc_reject 양쪽)
-- `summarizeSystems(...)` 호출을 `summarizeSystemNames(...)` 로 교체
-  - 대상: `planned_tests.{pred|t1|t2|r1s|r2s}_systems`, `sec3.tc_reject_system`, `delayed_items[].name`
-- 카운트/필터/상태 판정 로직은 **무수정**
+- `filteredItems` (팀 필터 적용된 현재 dataset) 사용 — 기존 KPI들과 동일한 모집단
+- 카테고리 분류는 정확 일치(strict equality):
+  - Cat A: `priority === 'Cat A - Major Defect (Before SC)'`
+  - Cat B: `priority === 'Cat B - Minor Defect'`
+  - No Cat: `!priority` (null / '' / undefined)
+- Total: 전체 `filteredItems`
 
-### B. `src/lib/ddn/system-summary.ts`
-- 신규 export `summarizeSystemNames(rows, {maxLen=120})`:
-  - 시스템명만 추출 → trim → 빈값 제거 → 중복 제거 → 정렬 → `", "` join
-  - 길이 초과 시 앞부분 유지 + `" … +K systems"`
-- 기존 `summarizeSystems` 는 보존(호출처 제거 후에도 후속 PR 에서 정리)
+> DB 조회 결과 위 3개 외 소수 이상값(`Cat B - Prior to SC` 1건, `High` 1건, `DONE` 1건)이 존재합니다. 사양상 어디에도 속하지 않으므로 **어느 카드에도 포함되지 않음**. (필요 시 후속 결정)
 
-### C. 테스트 `src/test/system-summary.test.ts`
-- 빈/중복/정렬/길이 컷오프
-- (참고) plan/actual 카운트는 별도 테스트 불필요 — 본 변경이 해당 경로를 건드리지 않음
+## Raw Data 연동 (드릴다운)
 
-## 비범위
-- DB 마이그레이션 없음
-- DDN 스키마 / 폼 / Docx 생성기 변경 없음
-- 상세(레벨·Item No) 첨부 필드는 별도 작업
-- `system_name_std` 정합화는 별도 주제
+`DefectRawDataPage.tsx` 의 `urlMap`에 `priority: 'priority'` 추가. priority 가 비어있는 행을 거르기 위해 기존 `EMPTY_TOKEN` 패턴을 select 필터에도 지원하도록 분기 처리(이미 TEXT 필드용 EMPTY_TOKEN 처리 존재 — select용 처리 1줄 추가). 그리고 `DRILLDOWN_PARAMS`에 `priority` 추가.
+
+링크 예시:
+- Cat. A 카드: `?source=dashboard&priority=Cat A - Major Defect (Before SC)`
+- No Cat. 카드: `?source=dashboard&priority=__EMPTY__`
+- Total 카드: `?source=dashboard`
+
+## 변경 파일
+
+1. `src/pages/DefectDashboardPage.tsx`
+   - `kpis` 계산 블록에 `byPriority` 집계 추가 (a / b / none 버킷별 total / completion / closure / pct)
+   - 두 번째 KPI 행(`grid-cols-2 lg:grid-cols-5`) 바로 아래에 새 `<section>` 삽입
+   - 파일 하단에 `PriorityCard` 헬퍼 컴포넌트 정의
+
+2. `src/pages/DefectRawDataPage.tsx`
+   - `urlMap` 에 `priority` 추가
+   - `DRILLDOWN_PARAMS` 에 `priority` 추가
+   - select 필터에서 `EMPTY_TOKEN` 값일 때 빈 priority 매칭 처리
+
+비즈니스 로직 신규 추가는 없음 (기존 `isActualComplete` / `isClosureComplete` 재사용).
