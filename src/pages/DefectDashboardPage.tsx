@@ -464,11 +464,11 @@ export default function DefectDashboardPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {/* Banner 1 — Dispute in Category */}
+      <div className="space-y-3">
+        {/* Banner 1 — Dispute in Category for Outstanding Defects */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Dispute in Category</CardTitle>
+            <CardTitle className="text-base">Dispute in Category for Outstanding Defects</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-2">
@@ -513,30 +513,47 @@ export default function DefectDashboardPage() {
           <CardContent>
             {kpis.dispute.hdecCatBReasons.length === 0 ? (
               <p className="text-sm text-muted-foreground">No disputes recorded.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {kpis.dispute.hdecCatBReasons.map(([reason, count]) => {
-                  const isEmpty = reason === '__EMPTY__';
-                  const label = isEmpty ? 'Unspecified' : reason;
-                  return (
-                    <button
-                      key={reason}
-                      type="button"
-                      onClick={() => goRaw({
-                        hdecVerification: 'Cat B - Minor Defect',
-                        hdecReason: isEmpty ? '__EMPTY__' : reason,
-                        notClosureDone: 'true',
-                      })}
-                      className="inline-flex items-center gap-1.5 rounded-md border bg-muted/30 px-2.5 py-1.5 text-xs transition hover:bg-muted/60"
-                      title={label}
-                    >
-                      <span className="max-w-[28ch] truncate text-foreground">{label}</span>
-                      <span className="rounded bg-primary/10 px-1.5 py-0.5 font-semibold text-primary">{count.toLocaleString()}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            ) : (() => {
+              const sorted = [...kpis.dispute.hdecCatBReasons].sort((a, b) => b[1] - a[1]);
+              const top = sorted.slice(0, 3);
+              const rest = sorted.slice(3);
+              const renderBtn = ([reason, count]: [string, number]) => {
+                const isEmpty = reason === '__EMPTY__';
+                const label = isEmpty ? 'Unspecified' : reason;
+                return (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => goRaw({
+                      hdecVerification: 'Cat B - Minor Defect',
+                      hdecReason: isEmpty ? '__EMPTY__' : reason,
+                      notClosureDone: 'true',
+                    })}
+                    className="inline-flex items-center gap-1.5 rounded-md border bg-muted/30 px-2.5 py-1.5 text-xs transition hover:bg-muted/60"
+                    title={label}
+                  >
+                    <span className="max-w-[28ch] truncate text-foreground">{label}</span>
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 font-semibold text-primary">{count.toLocaleString()}</span>
+                  </button>
+                );
+              };
+              return (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">{top.map(renderBtn)}</div>
+                  {rest.length > 0 && (
+                    <Collapsible>
+                      <CollapsibleTrigger className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition [&[data-state=open]>svg]:rotate-180">
+                        <span>Show {rest.length} more</span>
+                        <ChevronDown className="h-3 w-3 transition-transform" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="pt-2">
+                        <div className="flex flex-wrap gap-2">{rest.map(renderBtn)}</div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>
