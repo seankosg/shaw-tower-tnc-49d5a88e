@@ -423,6 +423,30 @@ export default function DefectDashboardPage() {
         </Card>
       </div>
 
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {([
+          { label: 'Total', stats: kpis.byPriority.total, priority: null },
+          { label: 'Cat. A', stats: kpis.byPriority.catA, priority: 'Cat A - Major Defect (Before SC)' },
+          { label: 'Cat. B', stats: kpis.byPriority.catB, priority: 'Cat B - Minor Defect' },
+          { label: 'No Cat.', stats: kpis.byPriority.noCat, priority: '__EMPTY__' },
+        ] as const).map(({ label, stats, priority }) => {
+          const teamParam: Record<string, string> = teamFilter.length ? { team: teamFilter.join(',') } : {};
+          const pParam: Record<string, string> = priority ? { priority } : {};
+          return (
+            <PriorityCard
+              key={label}
+              label={label}
+              stats={stats}
+              onCardClick={() => goRaw({ ...teamParam, ...pParam })}
+              onCompletionClick={() => goRaw({ ...teamParam, ...pParam, actualComplete: 'true' })}
+              onClosureClick={() => goRaw({ ...teamParam, ...pParam, closureComplete: 'true' })}
+            />
+          );
+        })}
+      </div>
+
+
+
 
       {!roles.includes('guest') && (
         <CapturedByStatsSection
