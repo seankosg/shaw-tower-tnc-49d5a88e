@@ -232,12 +232,14 @@ export default function DefectDashboardPage() {
       const t = rows.length;
       const c = rows.filter(isActualComplete).length;
       const z = rows.filter(isClosureComplete).length;
+      const od = rows.filter((i) => isStageDelayedAsOf(i, 'completion', dataDate)).length;
       return {
         total: t,
         completion: c,
         closure: z,
         completionPct: t ? Math.round((c / t) * 1000) / 10 : 0,
         closurePct: t ? Math.round((z / t) * 1000) / 10 : 0,
+        overdue: od,
       };
     };
     const catA = filteredItems.filter((i) => (i as any).priority === CAT_A);
@@ -440,6 +442,7 @@ export default function DefectDashboardPage() {
               onCardClick={() => goRaw({ ...teamParam, ...pParam })}
               onCompletionClick={() => goRaw({ ...teamParam, ...pParam, actualComplete: 'true' })}
               onClosureClick={() => goRaw({ ...teamParam, ...pParam, closureComplete: 'true' })}
+              onOverdueClick={() => goRaw({ ...teamParam, ...pParam, overdue: 'true', stage: 'completion', asOf: dataDate })}
             />
           );
         })}
@@ -741,14 +744,31 @@ export default function DefectDashboardPage() {
 type GroupParam = 'subTrade' | 'subcontractor' | 'subsub' | 'hdecPic' | 'hdecEng' | 'team' | 'workType';
 type StageKey = 'completion' | 'closure' | 'difference';
 
-interface PriorityStats { total: number; completion: number; closure: number; completionPct: number; closurePct: number }
-function PriorityCard({ label, stats, onCardClick, onCompletionClick, onClosureClick }: { label: string; stats: PriorityStats; onCardClick?: () => void; onCompletionClick?: () => void; onClosureClick?: () => void }) {
+interface PriorityStats { total: number; completion: number; closure: number; completionPct: number; closurePct: number; overdue: number }
+function PriorityCard({ label, stats, onCardClick, onCompletionClick, onClosureClick, onOverdueClick }: { label: string; stats: PriorityStats; onCardClick?: () => void; onCompletionClick?: () => void; onClosureClick?: () => void; onOverdueClick?: () => void }) {
   const stop = (e: React.MouseEvent) => e.stopPropagation();
+  const odActive = stats.overdue > 0;
   return (
     <Card onClick={onCardClick} className={cn(onCardClick && 'cursor-pointer transition-colors hover:bg-muted/40')}>
       <CardContent className="flex flex-col gap-2 p-4">
-        <div className="flex items-baseline justify-between">
-          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <div className="flex items-baseline justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className="text-xs font-medium text-muted-foreground truncate">{label}</p>
+            <button
+              type="button"
+              onClick={(e) => { stop(e); if (odActive) onOverdueClick?.(); }}
+              disabled={!odActive}
+              title="Overdue vs plan (Completion)"
+              className={cn(
+                'shrink-0 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums border transition-colors',
+                odActive
+                  ? 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 cursor-pointer'
+                  : 'border-muted bg-muted/30 text-muted-foreground/60 cursor-default',
+              )}
+            >
+              OD {stats.overdue.toLocaleString()}
+            </button>
+          </div>
           <p className="text-2xl font-bold text-foreground">{stats.total.toLocaleString()}</p>
         </div>
         <button type="button" onClick={(e) => { stop(e); onCompletionClick?.(); }} className="text-left transition-colors hover:bg-muted/30 rounded px-1 -mx-1 py-0.5">
