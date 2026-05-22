@@ -86,6 +86,7 @@ export function DefectColumnSelect({
       'issue_no', 'description', 'priority',
       'hdec_verification', 'hdec_reason',
       'closure_status', 'actual_closure_date',
+      'status',
     ]);
     const isVerifiedByHdecHeader = (h: string) => {
       const n = h.toLowerCase();
