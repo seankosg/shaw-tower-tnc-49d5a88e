@@ -231,8 +231,48 @@ function SettingsTab() {
             Default: 1.
           </p>
         </div>
+
+        <div className="space-y-2 border-t pt-4">
+          <Label>HDEC Priority Verification Backfill</Label>
+          <p className="text-xs text-muted-foreground">
+            Re-runs the HDEC Priority Verification engine across existing defect rows. Sets
+            HDEC's Verification / HDEC's Reason for eligible Cat A rows (not Closed and not Done),
+            and clears those fields for rows whose priority is no longer Cat A. Safe to run repeatedly.
+          </p>
+          <PriorityVerificationBackfillButton />
+        </div>
       </CardContent>
     </Card>
+  );
+}
+
+function PriorityVerificationBackfillButton() {
+  const { toast } = useToast();
+  const [running, setRunning] = useState(false);
+  const [lastResult, setLastResult] = useState<string | null>(null);
+  const run = async () => {
+    setRunning(true);
+    setLastResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('defect-priority-verification-backfill', { body: {} });
+      if (error) throw error;
+      const summary = `Set: ${data?.set ?? 0} · Cleared: ${data?.cleared ?? 0} · No match: ${data?.no_match ?? 0} · Skipped: ${data?.skipped ?? 0} · Scanned: ${data?.eligible_scanned ?? 0}`;
+      setLastResult(summary);
+      toast({ title: 'Backfill completed', description: summary });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Backfill failed';
+      toast({ title: 'Backfill failed', description: msg, variant: 'destructive' });
+    } finally {
+      setRunning(false);
+    }
+  };
+  return (
+    <div className="space-y-2">
+      <Button onClick={run} disabled={running} variant="secondary">
+        {running ? 'Running…' : 'Run Backfill'}
+      </Button>
+      {lastResult && <p className="text-xs text-muted-foreground">Last run — {lastResult}</p>}
+    </div>
   );
 }
 
