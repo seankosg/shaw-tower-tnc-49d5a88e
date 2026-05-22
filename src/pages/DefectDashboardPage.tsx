@@ -267,7 +267,14 @@ export default function DefectDashboardPage() {
     }
     const hdecCatBReasons = Array.from(hdecCatBReasonMap.entries())
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-    const dispute = { llCatA: llCatADispute, hdecCatA: hdecCatADispute, diff: llCatADispute - hdecCatADispute, hdecCatBReasons };
+    // Difference: outstanding rows where LL Cat A classification differs from HDEC (XOR).
+    const diffCount = filteredItems.filter((i) => {
+      if (!notDone(i)) return false;
+      const ll = (i as any).priority === CAT_A;
+      const hd = (i as any).hdec_verification === CAT_A;
+      return ll !== hd;
+    }).length;
+    const dispute = { llCatA: llCatADispute, hdecCatA: hdecCatADispute, diff: diffCount, hdecCatBReasons };
 
     return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, startOverdue, completionOverdue, closureOverdue, inDisputeCount, byPriority, dispute };
   }, [filteredItems, today, dataDate, atRiskDays]);
@@ -504,17 +511,20 @@ export default function DefectDashboardPage() {
                 <p className="mt-1 text-3xl font-bold text-destructive">{kpis.dispute.hdecCatA.toLocaleString()}</p>
                 <p className="mt-0.5 text-[10px] text-muted-foreground">Closure ≠ Done</p>
               </button>
-              <div className="rounded-md border bg-muted/30 p-3">
+              <button
+                type="button"
+                onClick={() => goRaw({ catADispute: 'xor', notClosureDone: 'true' })}
+                className="rounded-md border bg-muted/30 p-3 text-left transition hover:bg-muted/60"
+              >
                 <p className="text-xs text-muted-foreground">Difference</p>
                 <p className={cn(
                   'mt-1 text-3xl font-bold',
-                  kpis.dispute.diff > 0 ? 'text-emerald-600 dark:text-emerald-400'
-                    : kpis.dispute.diff < 0 ? 'text-destructive' : 'text-foreground',
+                  kpis.dispute.diff > 0 ? 'text-destructive' : 'text-foreground',
                 )}>
-                  {kpis.dispute.diff > 0 ? '+' : ''}{kpis.dispute.diff.toLocaleString()}
+                  {kpis.dispute.diff.toLocaleString()}
                 </p>
-                <p className="mt-0.5 text-[10px] text-muted-foreground">LL − HDEC</p>
-              </div>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">LL ≠ HDEC (Cat A)</p>
+              </button>
             </div>
           </CardContent>
         </Card>

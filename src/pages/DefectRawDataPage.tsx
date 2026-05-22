@@ -522,7 +522,7 @@ export default function DefectRawDataPage() {
     'level', 'mainTrade', 'subTrade', 'workType', 'classificationSource',
     'status', 'closureStatus', 'issueNo', 'subcontractorIssueNo',
     'dateStart', 'dateEnd', 'dateField', 'critical', 'priority',
-    'hdecVerification', 'hdecReason', 'notClosureDone',
+    'hdecVerification', 'hdecReason', 'notClosureDone', 'catADispute',
   ];
 
   useEffect(() => {
@@ -736,6 +736,15 @@ export default function DefectRawDataPage() {
     }
     if (searchParams.get('notClosureDone') === 'true') {
       next = next.filter((item) => (item as any).closure_status !== 'Done');
+    }
+    const catADispute = searchParams.get('catADispute');
+    if (catADispute === 'xor') {
+      const CAT_A = 'Cat A - Major Defect (Before SC)';
+      next = next.filter((item) => {
+        const ll = (item as any).priority === CAT_A;
+        const hd = (item as any).hdec_verification === CAT_A;
+        return ll !== hd;
+      });
     }
     const hdecVerification = searchParams.get('hdecVerification');
     if (hdecVerification) {
@@ -1240,6 +1249,9 @@ export default function DefectRawDataPage() {
     const hdecVer = searchParams.get('hdecVerification');
     if (hdecVer) {
       out.push({ label: `HDEC Verification: ${hdecVer === EMPTY_TOKEN ? '(Blank)' : hdecVer}`, param: 'hdecVerification', clears: ['hdecVerification'] });
+    }
+    if (searchParams.get('catADispute') === 'xor') {
+      out.push({ label: 'Cat A Dispute (LL ≠ HDEC)', param: 'catADispute', clears: ['catADispute'] });
     }
     const hdecRsn = searchParams.get('hdecReason');
     if (hdecRsn) {
