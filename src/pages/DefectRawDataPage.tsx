@@ -1250,6 +1250,9 @@ export default function DefectRawDataPage() {
     if (hdecVer) {
       out.push({ label: `HDEC Verification: ${hdecVer === EMPTY_TOKEN ? '(Blank)' : hdecVer}`, param: 'hdecVerification', clears: ['hdecVerification'] });
     }
+    if (searchParams.get('catADispute') === 'xor') {
+      out.push({ label: 'Cat A Dispute (LL ≠ HDEC)', param: 'catADispute', clears: ['catADispute'] });
+    }
     const hdecRsn = searchParams.get('hdecReason');
     if (hdecRsn) {
       out.push({ label: `HDEC Reason: ${hdecRsn === EMPTY_TOKEN ? '(Blank)' : hdecRsn}`, param: 'hdecReason', clears: ['hdecReason'] });
