@@ -13,6 +13,7 @@ import { useDefectCache, refreshDefectCache } from '@/lib/defect-cache';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
