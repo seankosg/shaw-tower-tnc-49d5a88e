@@ -329,9 +329,6 @@ export default function DmrDashboardPage() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <CardTitle className="text-sm">Daily Manpower by {chartGroupBy === 'trade' ? 'Trade' : 'Workplace'}</CardTitle>
-              <div className="mt-1 text-[22px] font-bold text-primary truncate">
-                Subcontractor: {fSubs.size === subs.length ? 'All' : Array.from(fSubs).join(', ')}
-              </div>
             </div>
             <div className="inline-flex shrink-0 rounded-md border bg-background p-0.5">
               {(['trade', 'workplace'] as const).map((m) => (
