@@ -391,7 +391,7 @@ export default function DmrDashboardPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead rowSpan={2} className="sticky left-0 z-20 border-r bg-background align-bottom" style={{ width: W_SUB, minWidth: W_SUB }}>Subcontractor</TableHead>
-                    <TableHead colSpan={avgGroupCols} className="sticky z-20 border-l bg-muted/40 text-center font-medium" style={{ left: leftAvgTotal }}>Average</TableHead>
+                    <TableHead colSpan={avgGroupCols} className="sticky z-20 border-l bg-muted text-center font-medium" style={{ left: leftAvgTotal }}>Average</TableHead>
                     {dates.map((d) => (
                       <TableHead key={d} colSpan={1 + selectedWp.length} className="border-l bg-muted/30 text-center font-medium">{fmtDate(d)}</TableHead>
                     ))}
