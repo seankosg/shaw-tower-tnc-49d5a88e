@@ -710,6 +710,8 @@ export default function DefectDashboardPage() {
             })()}
           </CardContent>
         </Card>
+          </CollapsibleContent>
+        </Collapsible>
       </section>
 
 
