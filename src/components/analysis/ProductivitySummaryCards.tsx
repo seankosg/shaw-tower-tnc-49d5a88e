@@ -74,8 +74,6 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
   const stats = useMemo(() => {
     let plannedQty = 0;
     let actualQty = 0;
-    let plannedMan = 0;
-    let actualMan = 0;
 
     // Manpower lookup: sub -> date -> wp -> man
     const manMap = new Map<string, Map<string, Map<string, number>>>();
@@ -90,21 +88,16 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
     const getMan = (sub: string, date: string, wp: string) =>
       manMap.get(sub)?.get(date)?.get(wp) ?? 0;
 
+    const activeSubs = new Set<string>();
     const addQty = (
       sub: string,
       date: string | null,
-      wp: 'T&C' | 'Defect',
       kind: 'planned' | 'actual',
     ) => {
       if (!date || !dateSet.has(date)) return;
-      const man = getMan(sub, date, wp);
-      if (kind === 'planned') {
-        plannedQty += 1;
-        plannedMan += man;
-      } else {
-        actualQty += 1;
-        actualMan += man;
-      }
+      if (kind === 'planned') plannedQty += 1;
+      else actualQty += 1;
+      activeSubs.add(sub);
     };
 
     if (showTC) {
@@ -112,10 +105,10 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
         const sub = norm(r.subcontractor_name);
         if (!sub || !fSubsUpper.has(sub)) continue;
         if (r.team && !fTeamsUpper.has(norm(r.team))) continue;
-        addQty(sub, r.t1_planned_date, 'T&C', 'planned');
-        addQty(sub, r.t2_planned_date, 'T&C', 'planned');
-        addQty(sub, r.t1_actual_date, 'T&C', 'actual');
-        addQty(sub, r.t2_actual_date, 'T&C', 'actual');
+        addQty(sub, r.t1_planned_date, 'planned');
+        addQty(sub, r.t2_planned_date, 'planned');
+        addQty(sub, r.t1_actual_date, 'actual');
+        addQty(sub, r.t2_actual_date, 'actual');
       }
     }
     if (showDefect) {
@@ -123,13 +116,27 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
         const sub = norm(r.subcontractor_name);
         if (!sub || !fSubsUpper.has(sub)) continue;
         if (r.team && !fTeamsUpper.has(norm(r.team))) continue;
-        addQty(sub, r.planned_completion_date, 'Defect', 'planned');
-        addQty(sub, r.actual_completion_date, 'Defect', 'actual');
+        addQty(sub, r.planned_completion_date, 'planned');
+        addQty(sub, r.actual_completion_date, 'actual');
       }
     }
 
-    return { plannedQty, actualQty, plannedMan, actualMan };
-  }, [dmrRows, dateSet, subtestData, defectData, fSubsUpper, fTeamsUpper, showTC, showDefect]);
+    // Manpower total: sum over (active sub × enabled wp × dates), counted once per (sub, date, wp)
+    let manTotal = 0;
+    const wps: string[] = [];
+    if (showTC) wps.push('T&C');
+    if (showDefect) wps.push('Defect');
+    for (const sub of activeSubs) {
+      for (const wp of wps) {
+        for (const d of dates) {
+          manTotal += getMan(sub, d, wp);
+        }
+      }
+    }
+
+    return { plannedQty, actualQty, plannedMan: manTotal, actualMan: manTotal };
+  }, [dmrRows, dateSet, dates, subtestData, defectData, fSubsUpper, fTeamsUpper, showTC, showDefect]);
+
 
   const days = dates.length || 1;
   const avgVolPlan = stats.plannedQty / days;
