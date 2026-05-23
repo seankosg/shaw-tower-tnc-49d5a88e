@@ -310,14 +310,30 @@ export default function DmrDashboardPage() {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Daily Manpower by Trade</CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-sm">Daily Manpower by {chartGroupBy === 'trade' ? 'Trade' : 'Workplace'}</CardTitle>
+            <div className="inline-flex rounded-md border bg-background p-0.5">
+              {(['trade', 'workplace'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setChartGroupBy(m)}
+                  className={`rounded px-2.5 py-1 text-xs transition-colors ${
+                    chartGroupBy === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  {m === 'trade' ? 'Trade' : 'Workplace'}
+                </button>
+              ))}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="h-[320px] w-full">
             {isLoading ? (
               <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</div>
-            ) : chartByTrade.length === 0 || selectedTrades.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No data for selected trades</div>
+            ) : chartByTrade.length === 0 || chartKeys.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No data for current selection</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartByTrade} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
@@ -329,12 +345,12 @@ export default function DmrDashboardPage() {
                     contentStyle={{ fontSize: 12 }}
                   />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  {selectedTrades.map((tr, i) => (
+                  {chartKeys.map((k, i) => (
                     <Line
-                      key={tr}
+                      key={k}
                       type="monotone"
-                      dataKey={tr}
-                      name={tr}
+                      dataKey={k}
+                      name={k}
                       stroke={COLORS[i % COLORS.length]}
                       strokeWidth={2}
                       dot={{ r: 3 }}
