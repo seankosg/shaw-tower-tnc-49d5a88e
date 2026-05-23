@@ -1,78 +1,41 @@
-## HDEC's Basis of Cat B — 차트 추가 (분포 시각화)
-
-대상: `src/pages/DefectDashboardPage.tsx` `Banner 2 — HDEC's Basis of Cat B` (≈534~597 line).
+## HDEC's Basis of Cat B — Excel 다운로드 버튼 추가
 
 ### 목표
-현재 reason 칩들로만 표시되는 데이터를, 우측에 **분포 차트**로 함께 보여줘 "어떤 사유가 얼마나 큰 비중을 차지하는지" 한눈에 파악.
+`HDEC's Basis of Cat B` 카드의 가로 막대 차트(우측 패널) 데이터를 한 번의 클릭으로 Excel(.xlsx)로 내려받을 수 있도록 버튼 추가.
 
-### 추천 차트: 가로 막대(Horizontal Bar) — 파이차트 아님
+### 위치 & UI
+- 대상: `src/pages/DefectDashboardPage.tsx`의 Distribution 패널 헤더(라인 633~640).
+- 헤더 우측의 `{n} reasons · {total} items` 텍스트 옆에 작은 아이콘 버튼(`Download` 아이콘, `variant="ghost"`, `size="sm"`/`h-7 px-2`) 배치.
+- 버튼 tooltip: `Export to Excel`.
+- 데이터가 비어있으면 (`sorted.length === 0`) 버튼 미노출 — 기존 "No disputes recorded." 분기에서 이미 처리됨.
 
-**파이차트 비추 사유:**
-- reason 라벨이 보통 긴 문장형 텍스트 → 파이 슬라이스 라벨 배치 어려움, 범례 길어짐
-- 항목 수가 가변(5~15+) → 슬라이스 많아지면 가독성·색 구분 급격히 저하
-- 비중 차이가 작은 사유들 비교 불가
-- 클릭 영역(drill-down) 좁아 모바일 사용성 떨어짐
+### 내보낼 데이터
+정렬된 `sorted` 배열(Top N 제한 없이 전체) 기준:
 
-**가로 막대 장점:**
-- 긴 라벨 좌측 정렬, truncate + tooltip 자연스러움
-- 길이 비교가 직관적 (사람 눈은 길이를 각도보다 정확히 비교)
-- 상위 N 정렬 → 우선순위 시각적 즉시 파악
-- 행 단위 클릭 = 칩 클릭과 동일한 drill-down 일관
-- 항목 수 늘어나도 스크롤로 대응 가능
+| 열 | 값 |
+|---|---|
+| Rank | 1부터 순번 |
+| Reason | `__EMPTY__` → `Unspecified`, 그 외 원문 |
+| Count | 숫자 (number, 천단위 구분은 number-format으로) |
+| Percentage | `count/total` (소수, 셀 number-format `0.0%`) |
 
-대안 후보: Treemap(공간 효율적이나 라벨 잘림 심함), Donut + 외부 범례(여전히 라벨 길이 문제). → **가로 막대 채택**.
+상단 메타 행: 제목 `HDEC's Basis of Cat B — Distribution`, Exported timestamp + user, Total items, Reasons count. (기존 `docs-excel-export.ts`의 메타 헤더 스타일과 동일 패턴.)
 
-### 레이아웃
-
-데스크탑(≥md): 2열 그리드, 좌측 칩 영역 / 우측 차트.
-모바일: 1열 스택 (차트가 칩 아래).
-
-```text
-┌─ HDEC's Basis of Cat B ───────────────────────────────────────┐
-│ ┌── 좌 (칩, 기존) ─────────┐ ┌── 우 (신규 차트) ───────────┐ │
-│ │ [Reason A  42]            │ │ Distribution (Top 8)         │ │
-│ │ [Reason B  31] [C 18]     │ │ Reason A ████████████  42  │ │
-│ │ [D 12] ...                │ │ Reason B █████████     31  │ │
-│ │ ▸ Show 6 more             │ │ Reason C █████         18  │ │
-│ │                            │ │ Reason D ███           12  │ │
-│ │                            │ │ ...                         │ │
-│ └────────────────────────────┘ │ Others (n) ██           24  │ │
-│                                 └──────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-`CardContent`를 `grid md:grid-cols-[1fr_minmax(0,360px)] gap-4`로 분할.
-
-### 차트 사양 (우측 패널)
-
-- 헤더: `Distribution` + 총합 `({total} items)`
-- 정렬: 카운트 내림차순, Top 8 표시, 나머지 합계는 "Others (n)" 행으로 묶음 (`muted` 색)
-- 각 행:
-  - 좌측: reason 라벨 (max-w로 truncate, `title` tooltip)
-  - 중앙: 가로 막대 (width = `count/maxCount * 100%`)
-  - 우측: 카운트 + 백분율(`%`)
-- 색상:
-  - 1위: `bg-destructive`
-  - 2~3위: `bg-destructive/70`
-  - 그 외: `bg-destructive/40`
-  - Others: `bg-muted-foreground/40`
-  - Unspecified(`__EMPTY__`): `bg-muted-foreground/50` + 라벨 `Unspecified` (기존 칩과 동일 규칙)
-- 행 hover: `hover:bg-muted/40`, 클릭 → 기존 `goRaw({ hdecVerification: 'Cat B - Minor Defect', hdecReason, notClosureDone: 'true' })` 호출 (칩과 동일)
-- "Others" 행은 클릭 비활성 (또는 모든 나머지 reason multi-filter 미지원이므로 단순 표시만)
-- 빈 상태: `kpis.dispute.hdecCatBReasons.length === 0` → 차트도 숨김 (좌측 "No disputes recorded." 만 노출, grid 해제)
-
-### 기술 디테일
-
-- recharts 도입 안 함. 단순 div 기반 막대로 구현(가볍고 라벨 제어 자유로움). 프로젝트에 이미 recharts 사용 중이나 이 케이스는 라벨 제어가 더 중요.
-- `tabular-nums`로 숫자 정렬 안정화.
-- 백분율 계산: `Math.round(count / total * 100)`, 0%는 `<1%`로 표기.
-- Top N 상수: `const CHART_TOP_N = 8`.
-- 좌측 칩 영역의 기존 Top 4 + Collapsible 구조는 **변경 없이 유지**(요청 범위 외).
+### 기술 구현
+- 새 파일: `src/lib/defect-cat-b-reason-export.ts`
+  - export function `exportHdecCatBReasons(reasons: Array<[string, number]>, meta: { userName: string; userType: string })`
+  - `xlsx-js-style` + `src/lib/excel-export.ts`의 공유 스타일(`STYLE_TITLE`, `STYLE_HEADER`, `STYLE_DATA`, `setCell`) 재사용.
+  - 파일명: `SHAW_HDEC_CatB_Reasons_YYYYMMDD_HHMM.xlsx`.
+  - Percentage 셀은 number(0~1) + numFmt `0.0%`.
+  - Count 셀은 number + numFmt `#,##0`.
+  - 컬럼 너비: Rank 6, Reason 60, Count 12, Percentage 14.
+  - Freeze: 헤더 행 아래.
+- `DefectDashboardPage.tsx`:
+  - `Download` 아이콘 import 추가(이미 lucide 사용 중).
+  - `useAuth()` 등에서 현재 user 정보 획득 — 기존 다른 export 호출부와 동일 방식 확인 후 사용. (없으면 빈 문자열 fallback.)
+  - 헤더 라인 ~633에 버튼 추가, `onClick`에서 위 함수 호출.
 
 ### 범위 외
-- `Banner 1 — Dispute in Category` 변경 없음
-- 데이터 집계 로직(`kpis.dispute.hdecCatBReasons`) 변경 없음
-- 다른 섹션·라우팅 파라미터 변경 없음
-
-### 차트 종류에 대한 사용자 확인 필요
-파이차트로 강제 진행할지, 추천대로 **가로 막대**로 갈지 선택 부탁드립니다. (도넛 + 우측 범례도 가능하나 라벨 잘림 이슈는 동일)
+- 좌측 칩, "Others" 행 그룹화 로직: Excel에는 그룹화 없이 전체 reason을 그대로 행으로 출력 (Excel에서는 정렬/필터가 가능하므로 Top N 제한 불필요).
+- Banner 1, Category Classification & Dispute, 다른 섹션 변경 없음.
+- 집계 로직 변경 없음.
