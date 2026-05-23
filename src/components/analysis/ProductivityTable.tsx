@@ -56,28 +56,26 @@ interface Props {
 export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, subs }: Props) {
   const { data: subtestData, isLoading: l1 } = useQuery({
     queryKey: ['productivity_subtests'],
-    queryFn: async (): Promise<SubtestRow[]> => {
-      const { data, error } = await supabase
-        .from('subtests')
-        .select('subcontractor_name, team, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date')
-        .eq('is_active', true)
-        .limit(50000);
-      if (error) throw error;
-      return (data ?? []) as SubtestRow[];
-    },
+    queryFn: () =>
+      fetchAllRows<SubtestRow>((from, to) =>
+        supabase
+          .from('subtests')
+          .select('subcontractor_name, team, t1_planned_date, t1_actual_date, t2_planned_date, t2_actual_date')
+          .eq('is_active', true)
+          .range(from, to),
+      ),
   });
 
   const { data: defectData, isLoading: l2 } = useQuery({
     queryKey: ['productivity_defects'],
-    queryFn: async (): Promise<DefectRow[]> => {
-      const { data, error } = await supabase
-        .from('defect_items')
-        .select('subcontractor_name, team, planned_completion_date, actual_completion_date')
-        .eq('is_active', true)
-        .limit(50000);
-      if (error) throw error;
-      return (data ?? []) as DefectRow[];
-    },
+    queryFn: () =>
+      fetchAllRows<DefectRow>((from, to) =>
+        supabase
+          .from('defect_items')
+          .select('subcontractor_name, team, planned_completion_date, actual_completion_date')
+          .eq('is_active', true)
+          .range(from, to),
+      ),
   });
 
   const showTC = fWp.has('T&C');
