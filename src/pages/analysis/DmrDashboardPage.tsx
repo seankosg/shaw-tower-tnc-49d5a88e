@@ -294,9 +294,9 @@ export default function DmrDashboardPage() {
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
                           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                          <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                          <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={fmtDate} />
                           <YAxis domain={[0, yMax]} ticks={yTicks} tick={{ fontSize: 11 }} />
-                          <Tooltip formatter={(v) => [v, wp]} labelClassName="text-xs" contentStyle={{ fontSize: 12 }} />
+                          <Tooltip formatter={(v) => [v, wp]} labelFormatter={(l) => fmtDate(l as string)} labelClassName="text-xs" contentStyle={{ fontSize: 12 }} />
                           <Line type="monotone" dataKey="manpower" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                         </LineChart>
                       </ResponsiveContainer>
