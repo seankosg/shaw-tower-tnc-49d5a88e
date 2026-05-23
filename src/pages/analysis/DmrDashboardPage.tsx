@@ -185,11 +185,16 @@ export default function DmrDashboardPage() {
         <p className="text-xs text-muted-foreground">Daily manpower trends from DMR Raw Data. Filters apply to chart and table.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MultiFilter label="Team" options={teams} value={fTeams} onChange={(s) => setSelTeams(s)} />
-        <MultiFilter label="Trade" options={trades} value={fTrades} onChange={(s) => setSelTrades(s)} />
-        <MultiFilter label="Subcontractor" options={subs} value={fSubs} onChange={(s) => setSelSubs(s)} />
-        <MultiFilter label="Workplace" options={workplaces} value={fWp} onChange={(s) => setSelWp(s)} />
+      <div className="space-y-2">
+        <TabFilter label="Team" options={teams} value={fTeams} onChange={(s) => setSelTeams(s)} />
+        <TabFilter label="Trade" options={trades} value={fTrades} onChange={(s) => setSelTrades(s)} />
+        <TabFilter label="Workplace" options={workplaces} value={fWp} onChange={(s) => setSelWp(s)} />
+        <div className="flex items-start gap-2">
+          <div className="w-28 shrink-0 pt-2 text-xs font-medium text-muted-foreground">Subcontractor</div>
+          <div className="flex-1">
+            <MultiFilter label="Subcontractor" options={subs} value={fSubs} onChange={(s) => setSelSubs(s)} />
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
