@@ -10,6 +10,7 @@ import { ChevronDown, Loader2 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
+import ProductivityTable from '@/components/analysis/ProductivityTable';
 
 type Row = {
   report_date: string;
