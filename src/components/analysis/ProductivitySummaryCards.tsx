@@ -141,19 +141,23 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
   const days = dates.length || 1;
   const avgVolPlan = stats.plannedQty / days;
   const avgVolAct = stats.actualQty / days;
-  const avgPlan = stats.plannedQty / days;
-  const avgAct = stats.actualQty / days;
-  const diff = avgAct - avgPlan;
+
+  const manDen = stats.plannedMan > 0 ? stats.plannedMan : stats.actualMan;
+  const planProdNum = manDen > 0 ? stats.plannedQty / manDen : null;
+  const actProdNum = manDen > 0 ? stats.actualQty / manDen : null;
+  const diffNum =
+    planProdNum !== null && actProdNum !== null ? actProdNum - planProdNum : null;
 
   const fmt1 = (n: number) => n.toFixed(1);
+  const fmt2 = (n: number) => n.toFixed(2);
 
   const diffColor =
-    diff === 0
+    diffNum === null || diffNum === 0
       ? 'text-foreground'
-      : diff > 0
+      : diffNum > 0
         ? 'text-emerald-600 dark:text-emerald-400'
         : 'text-red-600 dark:text-red-400';
-  const diffSign = diff > 0 ? '+' : '';
+  const diffSign = diffNum !== null && diffNum > 0 ? '+' : '';
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
