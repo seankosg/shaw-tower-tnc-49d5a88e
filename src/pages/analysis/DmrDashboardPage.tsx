@@ -77,6 +77,48 @@ function MultiFilter({
   );
 }
 
+function TabFilter({
+  label, options, value, onChange,
+}: { label: string; options: string[]; value: Set<string>; onChange: (s: Set<string>) => void }) {
+  const allSelected = value.size === options.length;
+  const toggle = (o: string) => {
+    const next = new Set(value);
+    if (next.has(o)) next.delete(o); else next.add(o);
+    onChange(next);
+  };
+  return (
+    <div className="flex items-start gap-2">
+      <div className="w-28 shrink-0 pt-1.5 text-xs font-medium text-muted-foreground">{label}</div>
+      <div className="flex flex-1 flex-wrap gap-1">
+        <button
+          type="button"
+          onClick={() => onChange(new Set(options))}
+          className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+            allSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background hover:bg-muted'
+          }`}
+        >
+          All
+        </button>
+        {options.map((o) => {
+          const active = !allSelected && value.has(o);
+          return (
+            <button
+              key={o}
+              type="button"
+              onClick={() => toggle(o)}
+              className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background hover:bg-muted'
+              }`}
+            >
+              {o}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function DmrDashboardPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['dmr_entries_all'],
@@ -185,11 +227,16 @@ export default function DmrDashboardPage() {
         <p className="text-xs text-muted-foreground">Daily manpower trends from DMR Raw Data. Filters apply to chart and table.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MultiFilter label="Team" options={teams} value={fTeams} onChange={(s) => setSelTeams(s)} />
-        <MultiFilter label="Trade" options={trades} value={fTrades} onChange={(s) => setSelTrades(s)} />
-        <MultiFilter label="Subcontractor" options={subs} value={fSubs} onChange={(s) => setSelSubs(s)} />
-        <MultiFilter label="Workplace" options={workplaces} value={fWp} onChange={(s) => setSelWp(s)} />
+      <div className="space-y-2">
+        <TabFilter label="Team" options={teams} value={fTeams} onChange={(s) => setSelTeams(s)} />
+        <TabFilter label="Trade" options={trades} value={fTrades} onChange={(s) => setSelTrades(s)} />
+        <TabFilter label="Workplace" options={workplaces} value={fWp} onChange={(s) => setSelWp(s)} />
+        <div className="flex items-start gap-2">
+          <div className="w-28 shrink-0 pt-2 text-xs font-medium text-muted-foreground">Subcontractor</div>
+          <div className="flex-1">
+            <MultiFilter label="Subcontractor" options={subs} value={fSubs} onChange={(s) => setSelSubs(s)} />
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
