@@ -101,6 +101,7 @@ export function AppSidebar() {
   const visibleDefects = filterNavItems(defectNav, roles);
   const visibleDocs = filterNavItems(docsNav, roles);
   const visiblePunch = filterNavItems(punchNav, roles);
+  const visibleAnalysis = filterNavItems(analysisNav, roles);
   const visibleAdmin = filterNavItems(adminNav, roles).filter(
     (item) => item.path !== '/admin/report' || canAccessReport(roles, profile),
   );
