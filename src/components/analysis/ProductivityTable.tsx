@@ -179,6 +179,7 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
 
   const W_SUB = 160;
   const W_METRIC = 110;
+  const W_AVG = 56;
 
   type MetricRow = { key: string; label: string; wp: 'T&C' | 'Defect'; map: Map<string, Map<string, number>> };
   const metricRowsFor = (s: string): MetricRow[] => {
