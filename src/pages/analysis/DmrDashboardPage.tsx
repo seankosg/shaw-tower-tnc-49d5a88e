@@ -169,7 +169,22 @@ export default function DmrDashboardPage() {
     return dates.map((d) => ({ date: d, manpower: m.get(d) ?? 0 }));
   }, [filtered, dates]);
 
-  const yMax = useMemo(() => niceMax(Math.max(0, ...chartData.map((d) => d.manpower))), [chartData]);
+  // Per-workplace chart series (one chart each)
+  const chartByWp = useMemo(() => {
+    const out: { wp: string; data: { date: string; manpower: number }[] }[] = [];
+    const selected = workplaces.filter((w) => fWp.has(w));
+    for (const wp of selected) {
+      const m = new Map<string, number>();
+      for (const r of filtered) if (r.workplace === wp) m.set(r.report_date, (m.get(r.report_date) ?? 0) + r.manpower);
+      out.push({ wp, data: dates.map((d) => ({ date: d, manpower: m.get(d) ?? 0 })) });
+    }
+    return out;
+  }, [filtered, dates, workplaces, fWp]);
+
+  const yMax = useMemo(() => {
+    const peakWp = Math.max(0, ...chartByWp.flatMap((c) => c.data.map((d) => d.manpower)));
+    return niceMax(Math.max(peakWp, ...chartData.map((d) => d.manpower)));
+  }, [chartByWp, chartData]);
   const yTicks = useMemo(() => {
     const step = yMax / 5;
     return Array.from({ length: 6 }, (_, i) => Math.round(step * i));
