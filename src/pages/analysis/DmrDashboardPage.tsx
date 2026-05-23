@@ -184,36 +184,40 @@ export default function DmrDashboardPage() {
 
   const dates = useMemo(() => Array.from(new Set(filtered.map((r) => r.report_date))).sort(), [filtered]);
 
-  // One combined chart by Trade (different colored lines)
+  const [chartGroupBy, setChartGroupBy] = useState<'trade' | 'workplace'>('trade');
+
+  // One combined chart grouped by Trade or Workplace (different colored lines)
   const selectedTrades = useMemo(() => trades.filter((t) => fTrades.has(t)), [trades, fTrades]);
+  const selectedWpForChart = useMemo(() => workplaces.filter((w) => fWp.has(w)), [workplaces, fWp]);
+  const chartKeys = chartGroupBy === 'trade' ? selectedTrades : selectedWpForChart;
+
   const chartByTrade = useMemo(() => {
-    // Build: date -> trade -> manpower
     const m = new Map<string, Map<string, number>>();
     for (const r of filtered) {
       if (!m.has(r.report_date)) m.set(r.report_date, new Map());
       const t = m.get(r.report_date)!;
-      const key = r.trade ?? 'Unknown';
+      const key = chartGroupBy === 'trade' ? (r.trade ?? 'Unknown') : r.workplace;
       t.set(key, (t.get(key) ?? 0) + r.manpower);
     }
     return dates.map((d) => {
       const entry: Record<string, number | string> = { date: d };
-      for (const tr of selectedTrades) {
-        entry[tr] = m.get(d)?.get(tr) ?? 0;
+      for (const k of chartKeys) {
+        entry[k] = m.get(d)?.get(k) ?? 0;
       }
       return entry;
     });
-  }, [filtered, dates, selectedTrades]);
+  }, [filtered, dates, chartKeys, chartGroupBy]);
 
   const yMax = useMemo(() => {
     let peak = 0;
     for (const row of chartByTrade) {
-      for (const tr of selectedTrades) {
-        const v = Number(row[tr] ?? 0);
+      for (const k of chartKeys) {
+        const v = Number(row[k] ?? 0);
         if (v > peak) peak = v;
       }
     }
     return niceMax(peak);
-  }, [chartByTrade, selectedTrades]);
+  }, [chartByTrade, chartKeys]);
   const yTicks = useMemo(() => {
     const step = yMax / 5;
     return Array.from({ length: 6 }, (_, i) => Math.round(step * i));
