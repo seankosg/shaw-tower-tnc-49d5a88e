@@ -303,6 +303,10 @@ export default function DmrDashboardPage() {
         </div>
       </div>
 
+      <div className="text-[22px] font-bold text-primary truncate">
+        Subcontractor: {fSubs.size === subs.length ? 'All' : Array.from(fSubs).join(', ')}
+      </div>
+
       <ProductivitySummaryCards
         dmrRows={filtered}
         dates={dates}
