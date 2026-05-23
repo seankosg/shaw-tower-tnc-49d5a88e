@@ -30,3 +30,26 @@ export async function fetchAllByUploadId<T = any>(
   }
   return all;
 }
+
+/**
+ * Generic paginated fetch. Pass a builder that returns a PostgREST query for the
+ * given range. Loops until a short page is returned. Works around Supabase's
+ * default 1000-row response cap.
+ */
+export async function fetchAllRows<T = any>(
+  build: (from: number, to: number) => any,
+  pageSize = 1000,
+): Promise<T[]> {
+  const all: T[] = [];
+  let from = 0;
+  for (let i = 0; i < 100; i++) {
+    const to = from + pageSize - 1;
+    const { data, error } = await build(from, to);
+    if (error) throw error;
+    const batch = (data ?? []) as T[];
+    all.push(...batch);
+    if (batch.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
