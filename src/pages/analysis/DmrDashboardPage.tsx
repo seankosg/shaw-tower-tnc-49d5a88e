@@ -169,7 +169,22 @@ export default function DmrDashboardPage() {
     return dates.map((d) => ({ date: d, manpower: m.get(d) ?? 0 }));
   }, [filtered, dates]);
 
-  const yMax = useMemo(() => niceMax(Math.max(0, ...chartData.map((d) => d.manpower))), [chartData]);
+  // Per-workplace chart series (one chart each)
+  const chartByWp = useMemo(() => {
+    const out: { wp: string; data: { date: string; manpower: number }[] }[] = [];
+    const selected = workplaces.filter((w) => fWp.has(w));
+    for (const wp of selected) {
+      const m = new Map<string, number>();
+      for (const r of filtered) if (r.workplace === wp) m.set(r.report_date, (m.get(r.report_date) ?? 0) + r.manpower);
+      out.push({ wp, data: dates.map((d) => ({ date: d, manpower: m.get(d) ?? 0 })) });
+    }
+    return out;
+  }, [filtered, dates, workplaces, fWp]);
+
+  const yMax = useMemo(() => {
+    const peakWp = Math.max(0, ...chartByWp.flatMap((c) => c.data.map((d) => d.manpower)));
+    return niceMax(Math.max(peakWp, ...chartData.map((d) => d.manpower)));
+  }, [chartByWp, chartData]);
   const yTicks = useMemo(() => {
     const step = yMax / 5;
     return Array.from({ length: 6 }, (_, i) => Math.round(step * i));
@@ -246,28 +261,45 @@ export default function DmrDashboardPage() {
         <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Days covered</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{daysCovered}</CardContent></Card>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Daily Manpower Trend</CardTitle></CardHeader>
-        <CardContent>
-          <div className="h-[320px] w-full">
-            {isLoading ? (
-              <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</div>
-            ) : chartData.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No data for current filters</div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis domain={[0, yMax]} ticks={yTicks} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v) => [v, 'Manpower']} labelClassName="text-xs" contentStyle={{ fontSize: 12 }} />
-                  <Line type="monotone" dataKey="manpower" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+        {isLoading ? (
+          <Card className="xl:col-span-2"><CardContent className="flex h-[280px] items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</CardContent></Card>
+        ) : chartByWp.length === 0 ? (
+          <Card className="xl:col-span-2"><CardContent className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">No workplace selected</CardContent></Card>
+        ) : (
+          chartByWp.map(({ wp, data }) => {
+            const wpTotal = data.reduce((a, d) => a + d.manpower, 0);
+            const wpPeak = data.reduce((a, d) => (d.manpower > a ? d.manpower : a), 0);
+            return (
+              <Card key={wp}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between text-sm">
+                    <span>{wp}</span>
+                    <span className="text-xs font-normal text-muted-foreground">Total {wpTotal} · Peak {wpPeak}</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[260px] w-full">
+                    {data.every((d) => d.manpower === 0) ? (
+                      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No data</div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                          <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                          <YAxis domain={[0, yMax]} ticks={yTicks} tick={{ fontSize: 11 }} />
+                          <Tooltip formatter={(v) => [v, wp]} labelClassName="text-xs" contentStyle={{ fontSize: 12 }} />
+                          <Line type="monotone" dataKey="manpower" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
+      </div>
 
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm">Breakdown by Subcontractor × Date</CardTitle></CardHeader>
