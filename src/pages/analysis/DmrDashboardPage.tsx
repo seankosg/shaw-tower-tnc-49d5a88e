@@ -239,47 +239,41 @@ export default function DmrDashboardPage() {
                     <TableHead rowSpan={2} className="border-l bg-muted/30 text-right align-bottom">Row Total</TableHead>
                   </TableRow>
                   <TableRow>
-                    {dates.map((d) => (
-                      <>
-                        <TableHead key={`${d}-total`} className="border-l bg-muted/50 text-right text-[11px] font-semibold">Total</TableHead>
-                        {selectedWp.map((w) => (
-                          <TableHead key={`${d}-${w}`} className="text-right text-[11px] font-normal text-muted-foreground">{w}</TableHead>
-                        ))}
-                      </>
-                    ))}
+                    {dates.flatMap((d) => [
+                      <TableHead key={`${d}-total`} className="border-l bg-muted/50 text-right text-[11px] font-semibold">Total</TableHead>,
+                      ...selectedWp.map((w) => (
+                        <TableHead key={`${d}-${w}`} className="text-right text-[11px] font-normal text-muted-foreground">{w}</TableHead>
+                      )),
+                    ])}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pivotSubs.map((s) => (
                     <TableRow key={s}>
                       <TableCell className="sticky left-0 z-10 border-r bg-background font-medium">{s}</TableCell>
-                      {dates.map((d) => {
+                      {dates.flatMap((d) => {
                         const total = dateTotal(s, d);
-                        return (
-                          <>
-                            <TableCell key={`${s}-${d}-total`} className={`border-l bg-muted/30 text-right font-semibold tabular-nums ${total === 0 ? 'text-muted-foreground/50' : ''}`}>{total}</TableCell>
-                            {selectedWp.map((w) => {
-                              const v = cellVal(s, d, w);
-                              return <TableCell key={`${s}-${d}-${w}`} className={`text-right tabular-nums ${v === 0 ? 'text-muted-foreground/40' : ''}`}>{v}</TableCell>;
-                            })}
-                          </>
-                        );
+                        return [
+                          <TableCell key={`${s}-${d}-total`} className={`border-l bg-muted/30 text-right font-semibold tabular-nums ${total === 0 ? 'text-muted-foreground/50' : ''}`}>{total}</TableCell>,
+                          ...selectedWp.map((w) => {
+                            const v = cellVal(s, d, w);
+                            return <TableCell key={`${s}-${d}-${w}`} className={`text-right tabular-nums ${v === 0 ? 'text-muted-foreground/40' : ''}`}>{v}</TableCell>;
+                          }),
+                        ];
                       })}
                       <TableCell className={`border-l bg-muted/30 text-right font-semibold tabular-nums ${rowTotal(s) === 0 ? 'text-muted-foreground/50' : ''}`}>{rowTotal(s)}</TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="border-t-2">
                     <TableCell className="sticky left-0 z-10 border-r bg-muted/60 font-semibold">Day Total</TableCell>
-                    {dates.map((d) => {
+                    {dates.flatMap((d) => {
                       const t = dayTotalByDate.get(d) ?? 0;
-                      return (
-                        <>
-                          <TableCell key={`tot-${d}-total`} className="border-l bg-muted/60 text-right font-bold tabular-nums">{t}</TableCell>
-                          {selectedWp.map((w) => (
-                            <TableCell key={`tot-${d}-${w}`} className="bg-muted/40 text-right font-medium tabular-nums">{colWpTotal(d, w)}</TableCell>
-                          ))}
-                        </>
-                      );
+                      return [
+                        <TableCell key={`tot-${d}-total`} className="border-l bg-muted/60 text-right font-bold tabular-nums">{t}</TableCell>,
+                        ...selectedWp.map((w) => (
+                          <TableCell key={`tot-${d}-${w}`} className="bg-muted/40 text-right font-medium tabular-nums">{colWpTotal(d, w)}</TableCell>
+                        )),
+                      ];
                     })}
                     <TableCell className="border-l bg-muted/60 text-right font-bold tabular-nums">{grandTotal}</TableCell>
                   </TableRow>
