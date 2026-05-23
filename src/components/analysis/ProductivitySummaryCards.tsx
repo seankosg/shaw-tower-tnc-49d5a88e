@@ -132,50 +132,36 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
   }, [dmrRows, dateSet, subtestData, defectData, fSubsUpper, fTeamsUpper, showTC, showDefect]);
 
   const days = dates.length || 1;
-  const prodPlan = stats.plannedMan ? stats.plannedQty / stats.plannedMan : null;
-  const prodAct = stats.actualMan ? stats.actualQty / stats.actualMan : null;
+  const avgVolPlan = stats.plannedQty / days;
+  const avgVolAct = stats.actualQty / days;
   const avgPlan = stats.plannedQty / days;
   const avgAct = stats.actualQty / days;
-  const diff = prodPlan !== null && prodAct !== null ? prodAct - prodPlan : null;
+  const diff = avgPlan - avgAct;
 
-  const fmt1 = (n: number | null) => (n === null ? '-' : n.toFixed(1));
-  const fmtInt = (n: number) => n.toLocaleString();
+  const fmt1 = (n: number) => n.toFixed(1);
 
   const diffColor =
-    diff === null || diff === 0
+    diff === 0
       ? 'text-foreground'
       : diff > 0
-        ? 'text-emerald-600 dark:text-emerald-400'
-        : 'text-red-600 dark:text-red-400';
-  const diffSign = diff !== null && diff > 0 ? '+' : '';
+        ? 'text-red-600 dark:text-red-400'
+        : 'text-emerald-600 dark:text-emerald-400';
+  const diffSign = diff > 0 ? '+' : '';
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       <Card>
-        <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Work Volume</CardTitle></CardHeader>
-        <CardContent className="space-y-1">
-          <div className="flex items-baseline justify-between">
-            <span className="text-[11px] text-muted-foreground">Planned Q'ty</span>
-            <span className="text-xl font-semibold tabular-nums">{fmtInt(stats.plannedQty)}</span>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-[11px] text-muted-foreground">Actual Q'ty</span>
-            <span className="text-xl font-semibold tabular-nums">{fmtInt(stats.actualQty)}</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Productivity (Nos/Man)</CardTitle></CardHeader>
+        <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Average Work Volume</CardTitle></CardHeader>
         <CardContent className="space-y-1">
           <div className="flex items-baseline justify-between">
             <span className="text-[11px] text-muted-foreground">Planned</span>
-            <span className="text-xl font-semibold tabular-nums">{fmt1(prodPlan)}</span>
+            <span className="text-xl font-semibold tabular-nums">{fmt1(avgVolPlan)}</span>
           </div>
           <div className="flex items-baseline justify-between">
             <span className="text-[11px] text-muted-foreground">Actual</span>
-            <span className="text-xl font-semibold tabular-nums">{fmt1(prodAct)}</span>
+            <span className="text-xl font-semibold tabular-nums">{fmt1(avgVolAct)}</span>
           </div>
+          <div className="pt-0.5 text-[11px] text-muted-foreground">Nos/day</div>
         </CardContent>
       </Card>
 
@@ -194,12 +180,12 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
       </Card>
 
       <Card>
-        <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Difference (Actual − Plan)</CardTitle></CardHeader>
+        <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Difference (Plan − Actual)</CardTitle></CardHeader>
         <CardContent>
           <div className={`text-2xl font-semibold tabular-nums ${diffColor}`}>
-            {diff === null ? '-' : `${diffSign}${diff.toFixed(1)}`}
+            {`${diffSign}${diff.toFixed(1)}`}
           </div>
-          <div className="text-[11px] text-muted-foreground">Nos/Man</div>
+          <div className="text-[11px] text-muted-foreground">Nos/day</div>
         </CardContent>
       </Card>
     </div>
