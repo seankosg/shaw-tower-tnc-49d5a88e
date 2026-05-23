@@ -451,14 +451,26 @@ export default function DefectDashboardPage() {
         </Card>
       </div>
 
-      <section className="rounded-lg border border-destructive/30 border-l-4 border-l-destructive bg-gradient-to-br from-destructive/[0.06] via-background to-background shadow-sm p-3 md:p-4 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <AlertOctagon className="h-4 w-4 text-destructive" />
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">Category Classification & Dispute</h2>
-          </div>
-          <p className="text-xs text-muted-foreground">LL ↔ HDEC 분류 이견 — 우선 조치 필요</p>
-        </div>
+      <section className="rounded-lg border border-destructive/30 border-l-4 border-l-destructive bg-gradient-to-br from-destructive/[0.06] via-background to-background shadow-sm p-3 md:p-4">
+        <Collapsible open={catDisputeOpen} onOpenChange={setCatDisputeOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full flex-wrap items-center justify-between gap-2 text-left"
+            >
+              <div className="flex items-center gap-2">
+                <AlertOctagon className="h-4 w-4 text-destructive" />
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">Category Classification & Dispute</h2>
+                {catDisputeOpen ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">LL ↔ HDEC 분류 이견 — 우선 조치 필요</p>
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-4 pt-4">
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {([
