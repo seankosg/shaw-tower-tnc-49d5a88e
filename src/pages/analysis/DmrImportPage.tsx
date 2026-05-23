@@ -100,13 +100,28 @@ export default function DmrImportPage() {
     });
   }
 
+  function resolveTrade(team: string, subcontractor: string, rawTrade: string | null): string | null {
+    if (rawTrade && rawTrade.trim()) return rawTrade;
+    const TRADE_BY_SUB: Record<string, string> = {
+      MERO: 'Façade', Mero: 'Façade',
+      PureTech: 'Elec', Puretech: 'Elec',
+      'Schindler Lift': 'Lift', SCHINDLER: 'Lift',
+      ASK: 'PSG', RICO: 'FP',
+      Kurihara: 'ACMV', 'Kurihara (ACMV)': 'ACMV',
+    };
+    if (TRADE_BY_SUB[subcontractor]) return TRADE_BY_SUB[subcontractor];
+    if (team === 'Arch') return 'Arch';
+    return null;
+  }
+
   function flatten(p: ParsedDmr, date: string) {
     const out: Array<{ report_date: string; team: string; trade: string | null; subcontractor: string; workplace: string; manpower: number }> = [];
     for (const s of p.sections) {
       for (const r of s.rows) {
-        out.push({ report_date: date, team: s.team, trade: r.trade ?? null, subcontractor: r.subcontractor, workplace: 'T&C', manpower: r.tnc ?? 0 });
-        out.push({ report_date: date, team: s.team, trade: r.trade ?? null, subcontractor: r.subcontractor, workplace: 'Defect', manpower: r.defect ?? 0 });
-        out.push({ report_date: date, team: s.team, trade: r.trade ?? null, subcontractor: r.subcontractor, workplace: 'Post TOP', manpower: r.post_top ?? 0 });
+        const trade = resolveTrade(s.team, r.subcontractor, r.trade);
+        out.push({ report_date: date, team: s.team, trade, subcontractor: r.subcontractor, workplace: 'T&C', manpower: r.tnc ?? 0 });
+        out.push({ report_date: date, team: s.team, trade, subcontractor: r.subcontractor, workplace: 'Defect', manpower: r.defect ?? 0 });
+        out.push({ report_date: date, team: s.team, trade, subcontractor: r.subcontractor, workplace: 'Post TOP', manpower: r.post_top ?? 0 });
       }
     }
     return out;
