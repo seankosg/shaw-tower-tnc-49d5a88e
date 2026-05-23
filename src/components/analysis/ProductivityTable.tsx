@@ -228,6 +228,13 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
                   >
                     Metric
                   </TableHead>
+                  <TableHead
+                    colSpan={3}
+                    className="sticky z-20 border-l border-r bg-muted text-center font-medium"
+                    style={{ left: W_SUB + W_METRIC }}
+                  >
+                    Average
+                  </TableHead>
                   {dates.map((d) => (
                     <TableHead key={d} colSpan={3} className="border-l bg-muted text-center font-medium">
                       {fmtDate(d)}
@@ -235,6 +242,9 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
                   ))}
                 </TableRow>
                 <TableRow>
+                  <TableHead className="sticky z-20 border-l bg-muted text-right text-[11px] font-semibold" style={{ left: W_SUB + W_METRIC, width: W_AVG, minWidth: W_AVG }}>Qty</TableHead>
+                  <TableHead className="sticky z-20 bg-muted text-right text-[11px] font-normal text-muted-foreground" style={{ left: W_SUB + W_METRIC + W_AVG, width: W_AVG, minWidth: W_AVG }}>Man</TableHead>
+                  <TableHead className="sticky z-20 border-r bg-muted text-right text-[11px] font-semibold" style={{ left: W_SUB + W_METRIC + W_AVG * 2, width: W_AVG, minWidth: W_AVG }}>Nos/Man</TableHead>
                   {dates.flatMap((d) => [
                     <TableHead key={`${d}-q`} className="border-l text-right text-[11px] font-semibold">Qty</TableHead>,
                     <TableHead key={`${d}-m`} className="text-right text-[11px] font-normal text-muted-foreground">Man</TableHead>,
@@ -248,6 +258,11 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
                   return mrows.map((mr, idx) => {
                     const isPlanned = mr.key.endsWith('p');
                     const rowBg = isPlanned ? 'bg-muted/30' : '';
+                    const denom = dates.length || 1;
+                    const qSum = dates.reduce((a, d) => a + getQty(mr.map, s, d), 0);
+                    const mSum = dates.reduce((a, d) => a + getMan(s, d, mr.wp), 0);
+                    const qAvg = Math.floor(qSum / denom);
+                    const mAvg = Math.floor(mSum / denom);
                     return (
                       <TableRow key={`${s}-${mr.key}`} className={idx === 0 ? 'border-t-2' : ''}>
                         {idx === 0 && (
@@ -265,6 +280,9 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
                         >
                           {mr.label}
                         </TableCell>
+                        <TableCell className={`sticky z-10 border-l bg-background text-right tabular-nums font-semibold ${qAvg === 0 ? 'text-muted-foreground/40' : ''}`} style={{ left: W_SUB + W_METRIC, width: W_AVG, minWidth: W_AVG }}>{qAvg || ''}</TableCell>
+                        <TableCell className={`sticky z-10 bg-background text-right tabular-nums text-muted-foreground ${mAvg === 0 ? 'text-muted-foreground/40' : ''}`} style={{ left: W_SUB + W_METRIC + W_AVG, width: W_AVG, minWidth: W_AVG }}>{mAvg || ''}</TableCell>
+                        <TableCell className="sticky z-10 border-r bg-background text-right tabular-nums font-semibold" style={{ left: W_SUB + W_METRIC + W_AVG * 2, width: W_AVG, minWidth: W_AVG }}>{prod(qSum, mSum)}</TableCell>
                         {dates.flatMap((d) => {
                           const q = getQty(mr.map, s, d);
                           const man = getMan(s, d, mr.wp);
