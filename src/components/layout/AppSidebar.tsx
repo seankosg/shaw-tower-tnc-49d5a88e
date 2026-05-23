@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut, ClipboardList, Tags,
-  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical, Loader2, FileWarning,
+  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical, Loader2, FileWarning, Users,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -71,6 +71,11 @@ const ddnNav = [
   { label: 'Settings', icon: Settings, path: '/ddn/settings' },
 ];
 
+const analysisNav = [
+  { label: 'DMR Raw Data', icon: Users,  path: '/analysis/dmr' },
+  { label: 'DMR Import',   icon: Upload, path: '/analysis/dmr/import' },
+];
+
 const adminNav = [
   { label: 'Admin', icon: Shield, path: '/admin' },
   { label: 'Report', icon: FileText, path: '/admin/report' },
@@ -96,6 +101,7 @@ export function AppSidebar() {
   const visibleDefects = filterNavItems(defectNav, roles);
   const visibleDocs = filterNavItems(docsNav, roles);
   const visiblePunch = filterNavItems(punchNav, roles);
+  const visibleAnalysis = filterNavItems(analysisNav, roles);
   const visibleAdmin = filterNavItems(adminNav, roles).filter(
     (item) => item.path !== '/admin/report' || canAccessReport(roles, profile),
   );
@@ -290,6 +296,30 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+
+        {visibleAnalysis.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Analysis</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleAnalysis.map((item) => (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={pathname === item.path}
+                      onClick={() => navigate(safeRoute(item.path, roles))}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+
 
         {visibleAdmin.length > 0 && (
           <SidebarGroup>
