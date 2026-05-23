@@ -166,16 +166,26 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
       </Card>
 
       <Card>
-        <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Average (Nos/day)</CardTitle></CardHeader>
+        <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Average Productivity</CardTitle></CardHeader>
         <CardContent className="space-y-1">
-          <div className="flex items-baseline justify-between">
-            <span className="text-[11px] text-muted-foreground">Plan</span>
-            <span className="text-xl font-semibold tabular-nums">{fmt1(avgPlan)}</span>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-[11px] text-muted-foreground">Actual</span>
-            <span className="text-xl font-semibold tabular-nums">{fmt1(avgAct)}</span>
-          </div>
+          {(() => {
+            const manDen = stats.plannedMan > 0 ? stats.plannedMan : stats.actualMan;
+            const planProd = manDen > 0 ? (stats.plannedQty / manDen).toFixed(2) : '-';
+            const actProd = manDen > 0 ? (stats.actualQty / manDen).toFixed(2) : '-';
+            return (
+              <>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[11px] text-muted-foreground">Plan</span>
+                  <span className="text-xl font-semibold tabular-nums">{planProd}</span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[11px] text-muted-foreground">Actual</span>
+                  <span className="text-xl font-semibold tabular-nums">{actProd}</span>
+                </div>
+                <div className="pt-0.5 text-[11px] text-muted-foreground">Nos/Man</div>
+              </>
+            );
+          })()}
         </CardContent>
       </Card>
 
