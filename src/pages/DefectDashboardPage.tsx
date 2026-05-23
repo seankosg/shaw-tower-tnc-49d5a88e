@@ -116,6 +116,7 @@ export default function DefectDashboardPage() {
     return raw.split(',').map(s => s.trim()).filter(Boolean);
   });
   const [breakdownTab, setBreakdownTab] = useState(searchParams.get('tab') || 'subcon');
+  const [catDisputeOpen, setCatDisputeOpen] = useState(true);
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>((searchParams.get('bucket') as 'day' | 'week') || 'day');
   const [scurveOpen, setScurveOpen] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
