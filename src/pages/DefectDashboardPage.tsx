@@ -634,9 +634,26 @@ export default function DefectDashboardPage() {
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Distribution
                       </p>
-                      <p className="text-[11px] text-muted-foreground tabular-nums">
-                        {sorted.length} reasons · {total.toLocaleString()} items
-                      </p>
+                      <div className="flex items-baseline gap-2">
+                        <p className="text-[11px] text-muted-foreground tabular-nums">
+                          {sorted.length} reasons · {total.toLocaleString()} items
+                        </p>
+                        <button
+                          type="button"
+                          title="Export to Excel"
+                          onClick={() => exportHdecCatBReasons({
+                            reasons: sorted,
+                            meta: {
+                              userName: profile?.name || profile?.login_id || 'Unknown',
+                              userType: (profile as any)?.user_type ?? '',
+                            },
+                          })}
+                          className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/60 hover:text-foreground transition"
+                        >
+                          <Download className="h-3 w-3" />
+                          Excel
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-1.5">
                       {chartTop.map(([reason, count], i) => {
