@@ -1,35 +1,50 @@
-## 변경 범위
-`src/pages/analysis/DmrDashboardPage.tsx`의 상단 서머리 카드 4장(Total man-days / Avg per day / Peak day / Days covered)을 모두 제거하고, 동일 위치(필터 바로 아래, ProductivityTable 위)에 생산성 기반 신규 카드 4장을 추가합니다.
+## 원인
 
-## 신규 카드 4장
+Analysis Dashboard 의 Productivity 표/카드가 사용하는 두 쿼리가 Supabase 의 기본 max-rows=1000 제한에 걸려 데이터가 잘리고 있습니다.
 
-각 카드는 현재 필터(Team / Trade / Subcontractor / Workplace)에 연동되며, T&C(=T1+T2) 와 Defect(=Completion 기준)를 선택된 Workplace에 한해 합산합니다. 분모 인원(Man)은 ProductivityTable과 동일한 규칙(매칭 workplace의 DMR manpower 합)을 사용합니다.
+- `subtests` 실제 행수: **1,789** → 1,000 만 반환됨 (`.limit(50000)` 은 클라이언트 요청값일 뿐, 서버가 1000 으로 잘라냄)
+- `defect_items` 실제 행수: **6,234** → 1,000 만 반환됨 (약 1/6)
+- `dmr_entries` 909행은 영향 없음
 
-1. **Work Volume**
-   - Planned Q'ty: 선택 범위의 TC Planned + Defect Planned 합계 (Nos)
-   - Actual Q'ty: 선택 범위의 TC Actual + Defect Actual 합계 (Nos)
+검증:
+- 5/22 Defect Mero 실제 DB → Planned 12, Actual 45 (raw data 와 일치)
+- 1000/6234 ≈ 16% 만 들어오므로 12×0.16≈2, 45×0.16≈7 → Dashboard 가 보여주는 **Plan 1, Actual 8** 와 일치 (truncation 으로 인한 손실)
 
-2. **Productivity (Nos/Man)**
-   - Planned: Σ Planned Qty ÷ Σ matching Man (소수 1자리)
-   - Actual: Σ Actual Qty ÷ Σ matching Man
+T&C 쪽도 1789→1000 으로 잘리므로 동일 증상이 발생할 수 있습니다.
 
-3. **Average** (필터 기간 내 일평균)
-   - Plan: Σ Planned Qty ÷ 활성 일수
-   - Actual: Σ Actual Qty ÷ 활성 일수
-   - 단위: Nos/day
+## 수정 계획
 
-4. **Difference**
-   - Actual Productivity − Planned Productivity
-   - 표시: 부호 포함 숫자 + 단위 `Nos/Man`
-   - 양수 녹색 / 음수 빨강(semantic token), 0 또는 계산 불가는 `-`
+`src/components/analysis/ProductivityTable.tsx` 와 `src/components/analysis/ProductivitySummaryCards.tsx` 에서 사용하는 두 쿼리(`subtests`, `defect_items`)를 페이지네이션 fetch 로 교체합니다.
 
-## 기술 세부 사항
+### 1) 공용 헬퍼 추가
 
-- 새 컴포넌트 `src/components/analysis/ProductivitySummaryCards.tsx`를 만들고 `DmrDashboardPage`에서 사용. Props는 ProductivityTable과 동일(`dmrRows, dates, fTeams, fSubs, fWp, subs`).
-- 내부에서 `subtests` / `defect_items` 쿼리를 동일 키로 재사용(react-query 캐시 공유). 정규화(`norm`) 및 필터 로직은 ProductivityTable과 동일하게 구현.
-- 집계 후 4개 카드를 `grid grid-cols-2 lg:grid-cols-4 gap-3`로 렌더.
-- `DmrDashboardPage.tsx`에서:
-  - 기존 4개 Card 블록(라인 305–310) 삭제
-  - `<ProductivitySummaryCards .../>`로 교체
-  - 더 이상 사용되지 않으면 `totalMandays / avgPerDay / peak / daysCovered` 계산도 정리(차트 KPI에서 쓰이지 않으면 제거)
-- ProductivityTable의 표시/계산 로직은 변경하지 않음.
+`src/lib/fetch-all-rows.ts` 에 범용 페이지네이션 함수를 추가:
+
+```ts
+export async function fetchAllRows<T>(
+  build: (from: number, to: number) => any, // PostgREST builder
+  pageSize = 1000,
+): Promise<T[]>
+```
+
+내부에서 `.range(from, to)` 를 반복 호출하며 batch.length < pageSize 일 때 중단. 안전 상한 100회.
+
+### 2) ProductivityTable 의 두 useQuery 교체
+
+- `subtests` 쿼리: `is_active=true` 필터 + 필요한 컬럼 select 를 `fetchAllRows` 로 감싸 전체 행 로딩.
+- `defect_items` 쿼리: 동일하게 페이지네이션.
+- 캐시 키는 그대로 유지 (`productivity_subtests`, `productivity_defects`).
+
+### 3) ProductivitySummaryCards 의 동일 두 쿼리 교체
+
+같은 방식으로 paging 적용. 두 컴포넌트가 같은 queryKey 를 사용하면 react-query 캐시를 공유하므로 네트워크 부하는 한 번에 그칩니다 (현재도 키가 동일하면 캐시 공유). 키를 통일.
+
+### 4) 검증
+
+- 빌드 통과 확인
+- Dashboard 에서 Mero 5/22 Defect Planned=12, Actual=49 (Arch 45 + Mech 4) 표시 확인. (Note: defect_items 에 `Mero/Arch` 45건과 `MERO/Mech` 4건이 함께 있어 합산되며, normalize 가 case-insensitive 이므로 두 표기가 같은 행으로 합쳐집니다 — 의도된 동작.)
+
+## 영향 범위
+
+- UI/표시 로직은 변경 없음, 데이터 fetch 만 페이지네이션으로 교체
+- 한 번에 최대 6,234 / 1000 = 7 회 fetch (defect_items). 첫 로드에 약간의 지연이 추가되나 react-query 캐시로 이후엔 즉시 표시
