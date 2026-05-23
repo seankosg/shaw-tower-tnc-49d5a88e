@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Database, BarChart3, Upload, Download, Shield, Settings, Calendar, CalendarClock, LogOut, ClipboardList, Tags,
-  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical, Loader2, FileWarning,
+  FileText, FolderKanban, Wrench, ShieldCheck, Package, FlaskConical, Loader2, FileWarning, Users,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarGroup,
@@ -69,6 +69,11 @@ const ddnNav = [
   { label: 'Preview', icon: FileText, path: '/ddn/preview' },
   { label: 'History', icon: ClipboardList, path: '/ddn/history' },
   { label: 'Settings', icon: Settings, path: '/ddn/settings' },
+];
+
+const analysisNav = [
+  { label: 'DMR Raw Data', icon: Users,  path: '/analysis/dmr' },
+  { label: 'DMR Import',   icon: Upload, path: '/analysis/dmr/import' },
 ];
 
 const adminNav = [

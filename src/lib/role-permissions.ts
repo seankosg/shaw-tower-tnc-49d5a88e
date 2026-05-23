@@ -62,6 +62,8 @@ const ROUTE_MIN_RANK: [RegExp, number][] = [
   [/^\/punch\/raw-data/, 1], // super_guest+
   [/^\/punch\/dashboard/, 0], // everyone (guest+)
   [/^\/punch\/[^/]+$/, 1],   // punch detail (/punch/:id) — keep last in punch group
+  [/^\/analysis\/.+\/import/, 2], // analysis imports — user+
+  [/^\/analysis/, 1],        // analysis read — super_guest+
   [/^\/import/, 2],          // user+
   [/^\/export/, 2],          // user+
   [/^\/mobile/, 2],          // user+

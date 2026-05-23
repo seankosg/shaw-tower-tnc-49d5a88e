@@ -64,6 +64,8 @@ import DdnInputPage from "./pages/ddn/DdnInputPage";
 import DdnPreviewPage from "./pages/ddn/DdnPreviewPage";
 import DdnHistoryPage from "./pages/ddn/DdnHistoryPage";
 import DdnSettingsPage from "./pages/ddn/DdnSettingsPage";
+import DmrRawDataPage from "./pages/analysis/DmrRawDataPage";
+import DmrImportPage from "./pages/analysis/DmrImportPage";
 import { useHeaderMappingsSync } from "@/hooks/useHeaderMappings";
 import { loadHeaderMappingsCache } from "@/lib/header-mappings-cache";
 import { useCustomFieldsSync } from "@/hooks/useCustomFields";
@@ -168,6 +170,8 @@ const App = () => (
                 <Route path="/admin" element={<AdminPage />} />
                 <Route path="/admin/classification" element={<AdminClassificationPage />} />
                 <Route path="/admin/report" element={<AdminReportPage />} />
+                <Route path="/analysis/dmr" element={<DmrRawDataPage />} />
+                <Route path="/analysis/dmr/import" element={<DmrImportPage />} />
                 <Route path="/ddn" element={<DdnLayout />}>
                   <Route index element={<Navigate to="/ddn/input" replace />} />
                   <Route path="input" element={<DdnInputPage />} />
