@@ -206,6 +206,16 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
             {diffNum === null ? '-' : `${diffSign}${fmt2(diffNum)}`}
           </div>
           <div className="text-[11px] text-muted-foreground">Nos/Man</div>
+          {diffNum !== null && diffNum < 0 && planProdNum && planProdNum > 0 && (() => {
+            const shortageQty = stats.plannedQty - stats.actualQty;
+            const extraManTotal = shortageQty / planProdNum;
+            const extraPerDay = extraManTotal / days;
+            return (
+              <div className="mt-2 text-[11px] text-muted-foreground">
+                Need <span className="font-semibold text-foreground">+{fmt1(extraPerDay)}</span> men/day on average to reach Plan productivity
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
     </div>
