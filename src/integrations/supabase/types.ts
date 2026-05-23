@@ -1357,6 +1357,48 @@ export type Database = {
         }
         Relationships: []
       }
+      dmr_entries: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          manpower: number
+          report_date: string
+          source_image_path: string | null
+          subcontractor: string
+          team: string
+          trade: string | null
+          updated_at: string
+          workplace: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          manpower?: number
+          report_date: string
+          source_image_path?: string | null
+          subcontractor: string
+          team: string
+          trade?: string | null
+          updated_at?: string
+          workplace: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          manpower?: number
+          report_date?: string
+          source_image_path?: string | null
+          subcontractor?: string
+          team?: string
+          trade?: string | null
+          updated_at?: string
+          workplace?: string
+        }
+        Relationships: []
+      }
       docs_change_log: {
         Row: {
           change_source: string | null
