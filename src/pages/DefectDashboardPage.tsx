@@ -909,42 +909,42 @@ function PriorityCard({ label, stats, onCardClick, onCompletionClick, onClosureC
   return (
     <Card onClick={onCardClick} className={cn(onCardClick && 'cursor-pointer transition-colors hover:bg-muted/40')}>
       <CardContent className="flex flex-col gap-2 p-4">
-        <div className="flex items-baseline justify-between gap-2">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <p className="text-xs font-medium text-muted-foreground truncate">{label}</p>
-            <button
-              type="button"
-              onClick={(e) => { stop(e); if (odActive) onOverdueClick?.(); }}
-              disabled={!odActive}
-              title="Overdue vs plan (Completion)"
-              className={cn(
-                'shrink-0 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums border transition-colors',
-                odActive
-                  ? 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 cursor-pointer'
-                  : 'border-muted bg-muted/30 text-muted-foreground/60 cursor-default',
-              )}
-            >
-              OD {stats.overdue.toLocaleString()}
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={(e) => { stop(e); if (remActive) onRemainingClick?.(); }}
-              disabled={!remActive}
-              title="Closure 미완료 잔여"
-              className={cn(
-                'shrink-0 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums border transition-colors',
-                remActive
-                  ? 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 cursor-pointer'
-                  : 'border-muted bg-muted/30 text-muted-foreground/60 cursor-default',
-              )}
-            >
-              Rem {remaining.toLocaleString()}
-            </button>
-            <p className="text-2xl font-bold text-foreground">{stats.total.toLocaleString()}</p>
-          </div>
+        {/* Tier 1: Label */}
+        <p className="text-sm font-semibold text-foreground truncate">{label}</p>
+
+        {/* Tier 2: number + remaining chip + OD chip */}
+        <div className="flex items-center gap-2">
+          <p className="text-2xl font-bold tabular-nums leading-none text-foreground">{stats.total.toLocaleString()}</p>
+          <button
+            type="button"
+            onClick={(e) => { stop(e); if (remActive) onRemainingClick?.(); }}
+            disabled={!remActive}
+            title="Closure 미완료 잔여"
+            className={cn(
+              'shrink-0 inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors',
+              remActive
+                ? 'border-destructive bg-background text-destructive hover:bg-destructive/10 cursor-pointer'
+                : 'border-muted bg-background text-muted-foreground/60 cursor-default',
+            )}
+          >
+            {remaining.toLocaleString()}
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { stop(e); if (odActive) onOverdueClick?.(); }}
+            disabled={!odActive}
+            title="Overdue vs plan (Completion)"
+            className={cn(
+              'ml-auto shrink-0 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums border transition-colors',
+              odActive
+                ? 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 cursor-pointer'
+                : 'border-muted bg-muted/30 text-muted-foreground/60 cursor-default',
+            )}
+          >
+            OD {stats.overdue.toLocaleString()}
+          </button>
         </div>
+
         <button type="button" onClick={(e) => { stop(e); onCompletionClick?.(); }} className="text-left transition-colors hover:bg-muted/30 rounded px-1 -mx-1 py-0.5">
           <div className="flex items-center justify-between text-[11px] text-muted-foreground">
             <span>Completion</span>
