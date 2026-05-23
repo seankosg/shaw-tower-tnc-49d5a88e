@@ -134,22 +134,11 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
   const days = dates.length || 1;
   const avgVolPlan = stats.plannedQty / days;
   const avgVolAct = stats.actualQty / days;
-  const avgPlan = stats.plannedQty / days;
-  const avgAct = stats.actualQty / days;
-  const diff = avgAct - avgPlan;
 
   const fmt1 = (n: number) => n.toFixed(1);
 
-  const diffColor =
-    diff === 0
-      ? 'text-foreground'
-      : diff > 0
-        ? 'text-emerald-600 dark:text-emerald-400'
-        : 'text-red-600 dark:text-red-400';
-  const diffSign = diff > 0 ? '+' : '';
-
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <Card>
         <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Average Work Volume</CardTitle></CardHeader>
         <CardContent className="space-y-1">
@@ -170,24 +159,15 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
         <CardContent className="space-y-1">
           <div className="flex items-baseline justify-between">
             <span className="text-[11px] text-muted-foreground">Plan</span>
-            <span className="text-xl font-semibold tabular-nums">{fmt1(avgPlan)}</span>
+            <span className="text-xl font-semibold tabular-nums">{fmt1(avgVolPlan)}</span>
           </div>
           <div className="flex items-baseline justify-between">
             <span className="text-[11px] text-muted-foreground">Actual</span>
-            <span className="text-xl font-semibold tabular-nums">{fmt1(avgAct)}</span>
+            <span className="text-xl font-semibold tabular-nums">{fmt1(avgVolAct)}</span>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Difference (Actual − Plan)</CardTitle></CardHeader>
-        <CardContent>
-          <div className={`text-2xl font-semibold tabular-nums ${diffColor}`}>
-            {`${diffSign}${diff.toFixed(1)}`}
-          </div>
-          <div className="text-[11px] text-muted-foreground">Nos/day</div>
         </CardContent>
       </Card>
     </div>
   );
 }
+
