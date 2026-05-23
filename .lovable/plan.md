@@ -1,62 +1,15 @@
-## 점검 결과 — 현재는 동일 문제 재발
+## 목표
+Analysis 그룹에 Dashboard 탭 추가. dmr_entries 데이터로 일일 인원 선형차트 + 연동 피벗 테이블.
 
-이미지 Import 경로를 추적해 보면:
+## 추가/수정 파일
+- `src/pages/analysis/DmrDashboardPage.tsx` (신규)
+- `src/components/layout/AppSidebar.tsx` — Dashboard 항목 추가
+- `src/App.tsx` — 라우트 추가
 
-1. **Edge function 프롬프트** (`supabase/functions/dmr-image-parse/index.ts`, 28번 줄)
-   ```
-   Construction fixed trades: MERO -> "Façade".
-   All other Construction companies -> trade=null.
-   ```
-   → AI가 Arch 그룹(GRB, Microtac, SYS, ACU, NEE LEE 등 13개 sub)의 `trade`를 **null**로 반환합니다.
-
-2. **Frontend `flatten()`** (`DmrImportPage.tsx`, 107~109번 줄)
-   ```ts
-   trade: r.trade ?? null
-   ```
-   → 받은 null을 그대로 DB에 INSERT.
-
-결과적으로 **이미지 Import 시에도 Arch sub들은 `trade = NULL`로 저장**되어, 방금 우리가 보정한 909행과 똑같이 비게 됩니다.
-
-## 변경
-
-엑셀과 동일하게 모든 행이 Trade를 갖도록 두 곳을 보완합니다. DB 스키마/마이그레이션 변경 없음.
-
-### 1. Edge function 프롬프트 보강
-
-`supabase/functions/dmr-image-parse/index.ts`의 SYSTEM_PROMPT를 수정:
-
-- 기존: "All other Construction companies -> trade=null"
-- 변경: **"All other Construction companies -> trade='Arch'"**
-- Mechanical/Electrical 규칙은 이미 회사명에 `(...)` 또는 고정 매핑(PureTech→Elec, Schindler Lift→Lift)으로 채워지므로 그대로 유지.
-
-이렇게 하면 AI가 한 번에 올바른 trade를 채워줍니다.
-
-### 2. Frontend `flatten()` 안전망
-
-AI가 어떤 이유로든 trade를 비워서 보내더라도 DB에 NULL이 들어가지 않도록 fallback 매핑을 추가:
-
-```ts
-const TRADE_FALLBACK_BY_TEAM = { Arch: 'Arch', Mech: 'Arch', Elec: 'Arch' };
-const TRADE_BY_SUB: Record<string, string> = {
-  MERO: 'Façade', Mero: 'Façade',
-  PureTech: 'Elec', Puretech: 'Elec',
-  'Schindler Lift': 'Lift', SCHINDLER: 'Lift',
-  ASK: 'PSG', RICO: 'FP',
-  Kurihara: 'ACMV', 'Kurihara (ACMV)': 'ACMV',
-};
-// flatten 안에서:
-const trade = r.trade ?? TRADE_BY_SUB[r.subcontractor] ?? (s.team === 'Arch' ? 'Arch' : null);
-```
-
-(Mech/Elec sub는 위 매핑으로 대부분 결정되고, 신규 sub가 들어오면 사용자가 Verify 화면에서 직접 입력하는 경로가 이미 있으므로 fallback은 Arch 그룹에만 강제 적용)
-
-### 3. 검증 방법
-
-- 새 이미지 1장 업로드 → Verify 화면에서 모든 row의 Trade가 채워져 있는지 육안 확인
-- Save 후 `SELECT trade, count(*) FROM dmr_entries WHERE source_image_path IS NOT NULL GROUP BY trade` 로 NULL 0개 확인
-
-## 영향 범위
-
-- 코드 2개 파일(edge function 1, 프론트 1)만 수정
-- DB / 스키마 / 기존 데이터 무변경
-- 기존 909행은 이미 직전 단계에서 보정 완료
+## 기능
+1. 데이터: supabase `dmr_entries` select 전체, React Query 캐시, 클라이언트 필터.
+2. 필터 4개 (Team/Trade/Subcontractor/Workplace): 모두 다중선택 + All 토글 popover.
+3. 선형차트: X=날짜, Y=sum(manpower). 컨테이너 고정, Y축 nice round 능동 스케일.
+4. 피벗 테이블: 가로=날짜 → 하위=Day Total(가장 왼쪽, 굵게) + 선택 Workplace. 세로=Subcontractor(알파벳 오름차순). 하단 Day Total 행. 우측 Row Total. 0 dim. sticky left + 가로스크롤.
+5. 상단 KPI 4개 카드: Total man-days, Avg/day, Peak day, Days covered.
+6. 디자인: Inter, Card 레이아웃, 다른 dashboard와 톤 일치.
