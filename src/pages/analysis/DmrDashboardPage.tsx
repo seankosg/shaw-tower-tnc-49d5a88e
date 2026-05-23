@@ -10,6 +10,7 @@ import { ChevronDown, Loader2 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
+import ProductivityTable from '@/components/analysis/ProductivityTable';
 
 type Row = {
   report_date: string;
@@ -307,6 +308,15 @@ export default function DmrDashboardPage() {
         <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Peak day</CardTitle></CardHeader><CardContent><div className="text-2xl font-semibold">{peak.manpower}</div><div className="text-[11px] text-muted-foreground">{fmtDate(peak.date)}</div></CardContent></Card>
         <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Days covered</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{daysCovered}</CardContent></Card>
       </div>
+
+      <ProductivityTable
+        dmrRows={filtered}
+        dates={dates}
+        fTeams={fTeams}
+        fSubs={fSubs}
+        fWp={fWp}
+        subs={subs}
+      />
 
       <Card>
         <CardHeader className="pb-2">
