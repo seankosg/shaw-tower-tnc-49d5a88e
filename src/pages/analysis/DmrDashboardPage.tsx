@@ -77,6 +77,48 @@ function MultiFilter({
   );
 }
 
+function TabFilter({
+  label, options, value, onChange,
+}: { label: string; options: string[]; value: Set<string>; onChange: (s: Set<string>) => void }) {
+  const allSelected = value.size === options.length;
+  const toggle = (o: string) => {
+    const next = new Set(value);
+    if (next.has(o)) next.delete(o); else next.add(o);
+    onChange(next);
+  };
+  return (
+    <div className="flex items-start gap-2">
+      <div className="w-28 shrink-0 pt-1.5 text-xs font-medium text-muted-foreground">{label}</div>
+      <div className="flex flex-1 flex-wrap gap-1">
+        <button
+          type="button"
+          onClick={() => onChange(new Set(options))}
+          className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+            allSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background hover:bg-muted'
+          }`}
+        >
+          All
+        </button>
+        {options.map((o) => {
+          const active = !allSelected && value.has(o);
+          return (
+            <button
+              key={o}
+              type="button"
+              onClick={() => toggle(o)}
+              className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background hover:bg-muted'
+              }`}
+            >
+              {o}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function DmrDashboardPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['dmr_entries_all'],
