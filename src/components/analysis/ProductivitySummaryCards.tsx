@@ -180,9 +180,8 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
         <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Average Productivity</CardTitle></CardHeader>
         <CardContent className="space-y-1">
           {(() => {
-            const manDen = stats.plannedMan > 0 ? stats.plannedMan : stats.actualMan;
-            const planProd = manDen > 0 ? (stats.plannedQty / manDen).toFixed(2) : '-';
-            const actProd = manDen > 0 ? (stats.actualQty / manDen).toFixed(2) : '-';
+            const planProd = planProdNum !== null ? fmt2(planProdNum) : '-';
+            const actProd = actProdNum !== null ? fmt2(actProdNum) : '-';
             return (
               <>
                 <div className="flex items-baseline justify-between">
@@ -204,9 +203,9 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
         <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Difference (Actual − Plan)</CardTitle></CardHeader>
         <CardContent>
           <div className={`text-2xl font-semibold tabular-nums ${diffColor}`}>
-            {`${diffSign}${diff.toFixed(1)}`}
+            {diffNum === null ? '-' : `${diffSign}${fmt2(diffNum)}`}
           </div>
-          <div className="text-[11px] text-muted-foreground">Nos/day</div>
+          <div className="text-[11px] text-muted-foreground">Nos/Man</div>
         </CardContent>
       </Card>
     </div>
