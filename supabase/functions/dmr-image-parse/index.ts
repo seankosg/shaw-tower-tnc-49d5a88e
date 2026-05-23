@@ -25,8 +25,9 @@ Subcontractor / Trade rules:
   e.g. "Kurihara (ACMV)" -> subcontractor="Kurihara", trade="ACMV"
        "ASK (PSG)" -> subcontractor="ASK", trade="PSG"
        "RICO (FP)" -> subcontractor="RICO", trade="FP"
-- Construction fixed trades: MERO -> "Façade". All other Construction companies -> trade=null.
+- Construction fixed trades: MERO -> "Façade". All other Construction companies -> trade="Arch".
 - Electrical fixed: PureTech -> "Elec", "Schindler Lift" -> "Lift".
+- Trade must never be null. If unsure, use the team default: Construction->"Arch", Mechanical->"ACMV", Electrical->"Elec".
 
 Number rules:
 - "-" or blank cell -> 0 (integer)
