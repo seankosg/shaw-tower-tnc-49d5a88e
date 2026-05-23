@@ -265,7 +265,7 @@ export default function DmrDashboardPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Total man-days</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{totalMandays}</CardContent></Card>
         <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Avg / day</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{avgPerDay}</CardContent></Card>
-        <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Peak day</CardTitle></CardHeader><CardContent><div className="text-2xl font-semibold">{peak.manpower}</div><div className="text-[11px] text-muted-foreground">{peak.date}</div></CardContent></Card>
+        <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Peak day</CardTitle></CardHeader><CardContent><div className="text-2xl font-semibold">{peak.manpower}</div><div className="text-[11px] text-muted-foreground">{fmtDate(peak.date)}</div></CardContent></Card>
         <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Days covered</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{daysCovered}</CardContent></Card>
       </div>
 
