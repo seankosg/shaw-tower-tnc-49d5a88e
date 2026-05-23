@@ -416,10 +416,10 @@ export default function DmrDashboardPage() {
                     return (
                     <TableRow key={s}>
                       <TableCell className="sticky left-0 z-10 border-r bg-background font-medium" style={{ width: W_SUB, minWidth: W_SUB }}>{s}</TableCell>
-                      <TableCell className={`sticky z-10 border-l bg-muted/30 text-right font-semibold tabular-nums ${at === 0 ? 'text-muted-foreground/50' : ''}`} style={{ left: leftAvgTotal, width: W_AVG, minWidth: W_AVG }}>{at}</TableCell>
+                      <TableCell className={`sticky z-10 border-l bg-background text-right font-semibold tabular-nums ${at === 0 ? 'text-muted-foreground/50' : ''}`} style={{ left: leftAvgTotal, width: W_AVG, minWidth: W_AVG }}>{at}</TableCell>
                       {selectedWp.map((w, i) => {
                         const v = avgWp(s, w);
-                        return <TableCell key={`avg-${s}-${w}`} className={`sticky z-10 bg-muted/20 text-right tabular-nums ${v === 0 ? 'text-muted-foreground/40' : ''}`} style={{ left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG }}>{v}</TableCell>;
+                        return <TableCell key={`avg-${s}-${w}`} className={`sticky z-10 bg-background text-right tabular-nums ${v === 0 ? 'text-muted-foreground/40' : ''}`} style={{ left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG }}>{v}</TableCell>;
                       })}
                       {dates.flatMap((d) => {
                         const total = dateTotal(s, d);
