@@ -180,7 +180,7 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
       </Card>
 
       <Card>
-        <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Difference (Plan − Actual)</CardTitle></CardHeader>
+        <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Difference (Actual − Plan)</CardTitle></CardHeader>
         <CardContent>
           <div className={`text-2xl font-semibold tabular-nums ${diffColor}`}>
             {`${diffSign}${diff.toFixed(1)}`}
