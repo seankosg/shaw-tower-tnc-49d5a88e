@@ -168,10 +168,8 @@ export default function DmrDashboardPage() {
   function colWpTotal(date: string, wp: string): number {
     return pivotSubs.reduce((a, s) => a + cellVal(s, date, wp), 0);
   }
-  function colDateTotal(date: string): number {
-    return pivotSubs.reduce((a, s) => a + dateTotal(s, d => d, ), 0);
-  }
-  // simpler:
+  // (day total computed via dayTotalByDate below)
+
   const dayTotalByDate = useMemo(() => {
     const m = new Map<string, number>();
     for (const d of dates) m.set(d, pivotSubs.reduce((a, s) => a + dateTotal(s, d), 0));
