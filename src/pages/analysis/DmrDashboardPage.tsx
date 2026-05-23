@@ -310,9 +310,14 @@ export default function DmrDashboardPage() {
 
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle className="text-sm">Daily Manpower by {chartGroupBy === 'trade' ? 'Trade' : 'Workplace'}</CardTitle>
-            <div className="inline-flex rounded-md border bg-background p-0.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <CardTitle className="text-sm">Daily Manpower by {chartGroupBy === 'trade' ? 'Trade' : 'Workplace'}</CardTitle>
+              <div className="mt-1 text-[11px] text-muted-foreground truncate">
+                Subcontractor: {fSubs.size === subs.length ? 'All' : Array.from(fSubs).join(', ')}
+              </div>
+            </div>
+            <div className="inline-flex shrink-0 rounded-md border bg-background p-0.5">
               {(['trade', 'workplace'] as const).map((m) => (
                 <button
                   key={m}
