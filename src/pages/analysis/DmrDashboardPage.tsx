@@ -398,9 +398,9 @@ export default function DmrDashboardPage() {
                     <TableHead rowSpan={2} className="border-l bg-muted/30 text-right align-bottom">Row Total</TableHead>
                   </TableRow>
                   <TableRow>
-                    <TableHead className="sticky z-20 border-l bg-muted/50 text-right text-[11px] font-semibold" style={{ left: leftAvgTotal, width: W_AVG, minWidth: W_AVG }}>Total</TableHead>
+                    <TableHead className="sticky z-20 border-l bg-muted text-right text-[11px] font-semibold" style={{ left: leftAvgTotal, width: W_AVG, minWidth: W_AVG }}>Total</TableHead>
                     {selectedWp.map((w, i) => (
-                      <TableHead key={`avg-${w}`} className="sticky z-20 bg-muted/40 text-right text-[11px] font-normal text-muted-foreground" style={{ left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG }}>{w}</TableHead>
+                      <TableHead key={`avg-${w}`} className="sticky z-20 bg-muted text-right text-[11px] font-normal text-muted-foreground" style={{ left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG }}>{w}</TableHead>
                     ))}
                     {dates.flatMap((d) => [
                       <TableHead key={`${d}-total`} className="border-l bg-muted/50 text-right text-[11px] font-semibold">Total</TableHead>,
