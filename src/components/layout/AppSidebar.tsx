@@ -297,6 +297,30 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
+        {visibleAnalysis.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Analysis</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleAnalysis.map((item) => (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={pathname === item.path}
+                      onClick={() => navigate(safeRoute(item.path, roles))}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+
+
         {visibleAdmin.length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>Administration</SidebarGroupLabel>
