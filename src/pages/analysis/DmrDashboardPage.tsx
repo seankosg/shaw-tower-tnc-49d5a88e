@@ -105,9 +105,16 @@ function TabFilter({
 }: { label: string; options: string[]; value: Set<string>; onChange: (s: Set<string>) => void }) {
   const allSelected = value.size === options.length;
   const toggle = (o: string) => {
-    const next = new Set(value);
-    if (next.has(o)) next.delete(o); else next.add(o);
-    onChange(next);
+    if (allSelected) {
+      // All 상태에서 탭 누르면 해당 탭만 선택 (single select)
+      onChange(new Set([o]));
+    } else if (value.size === 1 && value.has(o)) {
+      // 한 개만 선택된 상태에서 같은 탭 다시 누르면 All로 해제
+      onChange(new Set(options));
+    } else {
+      // 다른 탭 누르면 해당 탭만 선택
+      onChange(new Set([o]));
+    }
   };
   return (
     <div className="flex items-start gap-2">
