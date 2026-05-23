@@ -3,6 +3,7 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { exportHdecCatBReasons } from '@/lib/defect-cat-b-reason-export';
 import { exportDefectSCurveToExcel } from '@/lib/scurve-excel-export';
 import { exportCapturedByToExcel } from '@/lib/defect-captured-by-export';
 import { useNavigate, useSearchParams } from 'react-router-dom';
