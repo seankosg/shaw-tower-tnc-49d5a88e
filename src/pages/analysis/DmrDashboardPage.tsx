@@ -321,7 +321,7 @@ export default function DmrDashboardPage() {
                   <TableRow>
                     <TableHead rowSpan={2} className="sticky left-0 z-10 border-r bg-background align-bottom">Subcontractor</TableHead>
                     {dates.map((d) => (
-                      <TableHead key={d} colSpan={1 + selectedWp.length} className="border-l bg-muted/30 text-center font-medium">{d}</TableHead>
+                      <TableHead key={d} colSpan={1 + selectedWp.length} className="border-l bg-muted/30 text-center font-medium">{fmtDate(d)}</TableHead>
                     ))}
                     <TableHead rowSpan={2} className="border-l bg-muted/30 text-right align-bottom">Row Total</TableHead>
                   </TableRow>
