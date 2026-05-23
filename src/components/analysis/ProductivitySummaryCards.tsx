@@ -136,7 +136,7 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
   const avgVolAct = stats.actualQty / days;
   const avgPlan = stats.plannedQty / days;
   const avgAct = stats.actualQty / days;
-  const diff = avgPlan - avgAct;
+  const diff = avgAct - avgPlan;
 
   const fmt1 = (n: number) => n.toFixed(1);
 
@@ -144,8 +144,8 @@ export default function ProductivitySummaryCards({ dmrRows, dates, fTeams, fSubs
     diff === 0
       ? 'text-foreground'
       : diff > 0
-        ? 'text-red-600 dark:text-red-400'
-        : 'text-emerald-600 dark:text-emerald-400';
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : 'text-red-600 dark:text-red-400';
   const diffSign = diff > 0 ? '+' : '';
 
   return (
