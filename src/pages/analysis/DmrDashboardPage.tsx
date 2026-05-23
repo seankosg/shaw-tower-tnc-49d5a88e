@@ -227,20 +227,20 @@ export default function DmrDashboardPage() {
   const totalMandays = useMemo(() => {
     let sum = 0;
     for (const row of chartByTrade) {
-      for (const tr of selectedTrades) sum += Number(row[tr] ?? 0);
+      for (const k of chartKeys) sum += Number(row[k] ?? 0);
     }
     return sum;
-  }, [chartByTrade, selectedTrades]);
+  }, [chartByTrade, chartKeys]);
   const peak = useMemo(() => {
     let max = 0;
     let maxDate = '-';
     for (const row of chartByTrade) {
       let daySum = 0;
-      for (const tr of selectedTrades) daySum += Number(row[tr] ?? 0);
+      for (const k of chartKeys) daySum += Number(row[k] ?? 0);
       if (daySum > max) { max = daySum; maxDate = String(row.date); }
     }
     return { date: maxDate, manpower: max };
-  }, [chartByTrade, selectedTrades]);
+  }, [chartByTrade, chartKeys]);
   const daysCovered = chartByTrade.length;
   const avgPerDay = daysCovered ? Math.round((totalMandays / daysCovered) * 10) / 10 : 0;
 
