@@ -29,7 +29,7 @@ const ROUTE_MIN_RANK: [RegExp, number][] = [
   [/^\/admin\/report/, 0],   // Final gate handled by canAccessReport (admin / pm_pd / Supp-team d_superuser+)
   [/^\/admin/, 5],           // superuser / admin only (d_superuser blocked)
   [/^\/ddn\/settings/, 5],   // superuser / admin only
-  [/^\/ddn/, 0],             // everyone read; write gated in-page
+  [/^\/ddn/, 1],             // super_guest+ (write gated in-page)
   [/^\/tc\/import/, 2],      // user+
   [/^\/tc\/export/, 2],      // user+
   [/^\/tc\/quick-update/, 2], // user+
