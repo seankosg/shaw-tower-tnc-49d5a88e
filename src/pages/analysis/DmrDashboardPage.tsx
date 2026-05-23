@@ -261,18 +261,6 @@ export default function DmrDashboardPage() {
         <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Days covered</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{daysCovered}</CardContent></Card>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Daily Manpower Trend</CardTitle></CardHeader>
-        <CardContent>
-          <div className="h-[320px] w-full">
-            {isLoading ? (
-              <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</div>
-            ) : chartData.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No data for current filters</div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         {isLoading ? (
           <Card className="xl:col-span-2"><CardContent className="flex h-[280px] items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</CardContent></Card>
