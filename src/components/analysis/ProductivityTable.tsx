@@ -82,13 +82,17 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
   const showTC = fWp.has('T&C');
   const showDefect = fWp.has('Defect');
 
-  // Build maps: sub -> date -> count
+  // Normalize subcontractor/team names (case-insensitive match against DMR canonical list)
+  const norm = (s: string | null | undefined) => (s ?? '').trim().toUpperCase();
+  const fSubsUpper = useMemo(() => new Set(Array.from(fSubs).map(norm)), [fSubs]);
+  const fTeamsUpper = useMemo(() => new Set(Array.from(fTeams).map(norm)), [fTeams]);
+
   const tcPlanned = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
     for (const r of subtestData ?? []) {
-      const sub = r.subcontractor_name ?? '';
-      if (!sub || !fSubs.has(sub)) continue;
-      if (r.team && !fTeams.has(r.team)) continue;
+      const sub = norm(r.subcontractor_name);
+      if (!sub || !fSubsUpper.has(sub)) continue;
+      if (r.team && !fTeamsUpper.has(norm(r.team))) continue;
       for (const d of [r.t1_planned_date, r.t2_planned_date]) {
         if (!d) continue;
         if (!m.has(sub)) m.set(sub, new Map());
@@ -97,14 +101,14 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
       }
     }
     return m;
-  }, [subtestData, fSubs, fTeams]);
+  }, [subtestData, fSubsUpper, fTeamsUpper]);
 
   const tcActual = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
     for (const r of subtestData ?? []) {
-      const sub = r.subcontractor_name ?? '';
-      if (!sub || !fSubs.has(sub)) continue;
-      if (r.team && !fTeams.has(r.team)) continue;
+      const sub = norm(r.subcontractor_name);
+      if (!sub || !fSubsUpper.has(sub)) continue;
+      if (r.team && !fTeamsUpper.has(norm(r.team))) continue;
       for (const d of [r.t1_actual_date, r.t2_actual_date]) {
         if (!d) continue;
         if (!m.has(sub)) m.set(sub, new Map());
@@ -113,14 +117,14 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
       }
     }
     return m;
-  }, [subtestData, fSubs, fTeams]);
+  }, [subtestData, fSubsUpper, fTeamsUpper]);
 
   const defPlanned = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
     for (const r of defectData ?? []) {
-      const sub = r.subcontractor_name ?? '';
-      if (!sub || !fSubs.has(sub)) continue;
-      if (r.team && !fTeams.has(r.team)) continue;
+      const sub = norm(r.subcontractor_name);
+      if (!sub || !fSubsUpper.has(sub)) continue;
+      if (r.team && !fTeamsUpper.has(norm(r.team))) continue;
       const d = r.planned_completion_date;
       if (!d) continue;
       if (!m.has(sub)) m.set(sub, new Map());
@@ -128,14 +132,14 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
       dm.set(d, (dm.get(d) ?? 0) + 1);
     }
     return m;
-  }, [defectData, fSubs, fTeams]);
+  }, [defectData, fSubsUpper, fTeamsUpper]);
 
   const defActual = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
     for (const r of defectData ?? []) {
-      const sub = r.subcontractor_name ?? '';
-      if (!sub || !fSubs.has(sub)) continue;
-      if (r.team && !fTeams.has(r.team)) continue;
+      const sub = norm(r.subcontractor_name);
+      if (!sub || !fSubsUpper.has(sub)) continue;
+      if (r.team && !fTeamsUpper.has(norm(r.team))) continue;
       const d = r.actual_completion_date;
       if (!d) continue;
       if (!m.has(sub)) m.set(sub, new Map());
@@ -143,14 +147,15 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
       dm.set(d, (dm.get(d) ?? 0) + 1);
     }
     return m;
-  }, [defectData, fSubs, fTeams]);
+  }, [defectData, fSubsUpper, fTeamsUpper]);
 
-  // Manpower map: sub -> date -> workplace -> manpower
+  // Manpower map keyed by normalized sub name
   const manMap = useMemo(() => {
     const m = new Map<string, Map<string, Map<string, number>>>();
     for (const r of dmrRows) {
-      if (!m.has(r.subcontractor)) m.set(r.subcontractor, new Map());
-      const dm = m.get(r.subcontractor)!;
+      const sub = norm(r.subcontractor);
+      if (!m.has(sub)) m.set(sub, new Map());
+      const dm = m.get(sub)!;
       if (!dm.has(r.report_date)) dm.set(r.report_date, new Map());
       const wm = dm.get(r.report_date)!;
       wm.set(r.workplace, (wm.get(r.workplace) ?? 0) + r.manpower);
@@ -159,18 +164,18 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
   }, [dmrRows]);
 
   function getMan(sub: string, date: string, wp: string): number {
-    return manMap.get(sub)?.get(date)?.get(wp) ?? 0;
+    return manMap.get(norm(sub))?.get(date)?.get(wp) ?? 0;
   }
   function getQty(map: Map<string, Map<string, number>>, sub: string, date: string): number {
-    return map.get(sub)?.get(date) ?? 0;
+    return map.get(norm(sub))?.get(date) ?? 0;
   }
 
-  // Subs that have any data
   const rowSubs = useMemo(() => {
     return subs.filter((s) => {
       if (!fSubs.has(s)) return false;
-      if (showTC && (tcPlanned.has(s) || tcActual.has(s))) return true;
-      if (showDefect && (defPlanned.has(s) || defActual.has(s))) return true;
+      const k = norm(s);
+      if (showTC && (tcPlanned.has(k) || tcActual.has(k))) return true;
+      if (showDefect && (defPlanned.has(k) || defActual.has(k))) return true;
       return false;
     });
   }, [subs, fSubs, showTC, showDefect, tcPlanned, tcActual, defPlanned, defActual]);
