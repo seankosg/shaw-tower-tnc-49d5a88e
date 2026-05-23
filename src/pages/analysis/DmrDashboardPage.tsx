@@ -309,6 +309,15 @@ export default function DmrDashboardPage() {
         <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Days covered</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{daysCovered}</CardContent></Card>
       </div>
 
+      <ProductivityTable
+        dmrRows={filtered}
+        dates={dates}
+        fTeams={fTeams}
+        fSubs={fSubs}
+        fWp={fWp}
+        subs={subs}
+      />
+
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-3">
