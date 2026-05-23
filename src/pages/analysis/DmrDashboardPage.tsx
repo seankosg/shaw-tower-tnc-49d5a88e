@@ -435,18 +435,18 @@ export default function DmrDashboardPage() {
                     </TableRow>
                   );})}
                   <TableRow className="border-t-2">
-                    <TableCell className="sticky left-0 z-10 border-r bg-muted/60 font-semibold" style={{ width: W_SUB, minWidth: W_SUB }}>Day Total</TableCell>
+                    <TableCell className="sticky left-0 z-10 border-r bg-muted font-semibold" style={{ width: W_SUB, minWidth: W_SUB }}>Day Total</TableCell>
                     {(() => {
                       const totSum = pivotSubs.reduce((a, s) => a + rowTotal(s), 0);
                       const avgTot = Math.floor(totSum / denom);
                       return (
-                        <TableCell className="sticky z-10 border-l bg-muted/60 text-right font-bold tabular-nums" style={{ left: leftAvgTotal, width: W_AVG, minWidth: W_AVG }}>{avgTot}</TableCell>
+                        <TableCell className="sticky z-10 border-l bg-muted text-right font-bold tabular-nums" style={{ left: leftAvgTotal, width: W_AVG, minWidth: W_AVG }}>{avgTot}</TableCell>
                       );
                     })()}
                     {selectedWp.map((w, i) => {
                       const sum = dates.reduce((a, d) => a + colWpTotal(d, w), 0);
                       const v = Math.floor(sum / denom);
-                      return <TableCell key={`avg-tot-${w}`} className="sticky z-10 bg-muted/50 text-right font-medium tabular-nums" style={{ left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG }}>{v}</TableCell>;
+                      return <TableCell key={`avg-tot-${w}`} className="sticky z-10 bg-muted text-right font-medium tabular-nums" style={{ left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG }}>{v}</TableCell>;
                     })}
                     {dates.flatMap((d) => {
                       const t = dayTotalByDate.get(d) ?? 0;
