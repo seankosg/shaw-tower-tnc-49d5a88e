@@ -576,20 +576,122 @@ export default function DefectDashboardPage() {
                   </button>
                 );
               };
+
+              // ---- Distribution chart (right panel) ----
+              const CHART_TOP_N = 8;
+              const total = sorted.reduce((s, [, c]) => s + c, 0);
+              const chartTop = sorted.slice(0, CHART_TOP_N);
+              const chartRest = sorted.slice(CHART_TOP_N);
+              const restSum = chartRest.reduce((s, [, c]) => s + c, 0);
+              const maxCount = chartTop[0]?.[1] ?? 1;
+              const pctText = (c: number) => {
+                if (total === 0) return '0%';
+                const p = (c / total) * 100;
+                if (p > 0 && p < 1) return '<1%';
+                return `${Math.round(p)}%`;
+              };
+              const barColor = (rank: number, isEmpty: boolean) => {
+                if (isEmpty) return 'bg-muted-foreground/50';
+                if (rank === 0) return 'bg-destructive';
+                if (rank <= 2) return 'bg-destructive/70';
+                return 'bg-destructive/40';
+              };
+
               return (
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2">{top.map((item, i) => renderBtn(item, i))}</div>
-                  {rest.length > 0 && (
-                    <Collapsible>
-                      <CollapsibleTrigger className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition [&[data-state=open]>svg]:rotate-180">
-                        <span>Show {rest.length} more</span>
-                        <ChevronDown className="h-3 w-3 transition-transform" />
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="pt-2">
-                        <div className="flex flex-wrap gap-2">{rest.map((item) => renderBtn(item))}</div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  )}
+                <div className="grid gap-4 md:grid-cols-[1fr_minmax(0,360px)]">
+                  {/* Left: existing chips */}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">{top.map((item, i) => renderBtn(item, i))}</div>
+                    {rest.length > 0 && (
+                      <Collapsible>
+                        <CollapsibleTrigger className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition [&[data-state=open]>svg]:rotate-180">
+                          <span>Show {rest.length} more</span>
+                          <ChevronDown className="h-3 w-3 transition-transform" />
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="pt-2">
+                          <div className="flex flex-wrap gap-2">{rest.map((item) => renderBtn(item))}</div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    )}
+                  </div>
+
+                  {/* Right: distribution bar chart */}
+                  <div className="rounded-md border bg-background/60 p-3">
+                    <div className="mb-2 flex items-baseline justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Distribution
+                      </p>
+                      <p className="text-[11px] text-muted-foreground tabular-nums">
+                        {sorted.length} reasons · {total.toLocaleString()} items
+                      </p>
+                    </div>
+                    <div className="space-y-1.5">
+                      {chartTop.map(([reason, count], i) => {
+                        const isEmpty = reason === '__EMPTY__';
+                        const label = isEmpty ? 'Unspecified' : reason;
+                        const widthPct = Math.max(2, (count / maxCount) * 100);
+                        return (
+                          <button
+                            key={reason}
+                            type="button"
+                            onClick={() => goRaw({
+                              hdecVerification: 'Cat B - Minor Defect',
+                              hdecReason: isEmpty ? '__EMPTY__' : reason,
+                              notClosureDone: 'true',
+                            })}
+                            title={label}
+                            className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-1.5 py-1 text-left transition hover:bg-muted/40"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-[11px] text-foreground group-hover:text-foreground">
+                                {label}
+                              </p>
+                              <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-muted/50">
+                                <div
+                                  className={cn('h-full rounded-full transition-all', barColor(i, isEmpty))}
+                                  style={{ width: `${widthPct}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-baseline gap-1.5 tabular-nums">
+                              <span className="text-xs font-semibold text-foreground">
+                                {count.toLocaleString()}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground w-9 text-right">
+                                {pctText(count)}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {restSum > 0 && (
+                        <div
+                          title={`${chartRest.length} more reasons`}
+                          className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-1.5 py-1"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-[11px] text-muted-foreground">
+                              Others ({chartRest.length})
+                            </p>
+                            <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-muted/50">
+                              <div
+                                className="h-full rounded-full bg-muted-foreground/40"
+                                style={{ width: `${Math.max(2, (restSum / maxCount) * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-baseline gap-1.5 tabular-nums">
+                            <span className="text-xs font-semibold text-muted-foreground">
+                              {restSum.toLocaleString()}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground w-9 text-right">
+                              {pctText(restSum)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               );
             })()}
