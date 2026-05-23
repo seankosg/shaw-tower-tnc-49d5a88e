@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 
 type Row = {
@@ -21,6 +21,19 @@ type Row = {
 };
 
 const WORKPLACE_ORDER = ['T&C', 'Defect', 'Post TOP'];
+
+const COLORS = [
+  'hsl(var(--primary))',
+  '#ef4444',
+  '#f59e0b',
+  '#10b981',
+  '#06b6d4',
+  '#8b5cf6',
+  '#ec4899',
+  '#84cc16',
+  '#f97316',
+  '#6366f1',
+];
 
 function fmtDate(iso: string): string {
   if (!iso || iso === '-') return '-';
@@ -171,37 +184,60 @@ export default function DmrDashboardPage() {
 
   const dates = useMemo(() => Array.from(new Set(filtered.map((r) => r.report_date))).sort(), [filtered]);
 
-  const chartData = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const r of filtered) m.set(r.report_date, (m.get(r.report_date) ?? 0) + r.manpower);
-    return dates.map((d) => ({ date: d, manpower: m.get(d) ?? 0 }));
-  }, [filtered, dates]);
-
-  // Per-workplace chart series (one chart each)
-  const chartByWp = useMemo(() => {
-    const out: { wp: string; data: { date: string; manpower: number }[] }[] = [];
-    const selected = workplaces.filter((w) => fWp.has(w));
-    for (const wp of selected) {
-      const m = new Map<string, number>();
-      for (const r of filtered) if (r.workplace === wp) m.set(r.report_date, (m.get(r.report_date) ?? 0) + r.manpower);
-      out.push({ wp, data: dates.map((d) => ({ date: d, manpower: m.get(d) ?? 0 })) });
+  // One combined chart by Trade (different colored lines)
+  const selectedTrades = useMemo(() => trades.filter((t) => fTrades.has(t)), [trades, fTrades]);
+  const chartByTrade = useMemo(() => {
+    // Build: date -> trade -> manpower
+    const m = new Map<string, Map<string, number>>();
+    for (const r of filtered) {
+      if (!m.has(r.report_date)) m.set(r.report_date, new Map());
+      const t = m.get(r.report_date)!;
+      const key = r.trade ?? 'Unknown';
+      t.set(key, (t.get(key) ?? 0) + r.manpower);
     }
-    return out;
-  }, [filtered, dates, workplaces, fWp]);
+    return dates.map((d) => {
+      const entry: Record<string, number | string> = { date: d };
+      for (const tr of selectedTrades) {
+        entry[tr] = m.get(d)?.get(tr) ?? 0;
+      }
+      return entry;
+    });
+  }, [filtered, dates, selectedTrades]);
 
   const yMax = useMemo(() => {
-    const peakWp = Math.max(0, ...chartByWp.flatMap((c) => c.data.map((d) => d.manpower)));
-    return niceMax(Math.max(peakWp, ...chartData.map((d) => d.manpower)));
-  }, [chartByWp, chartData]);
+    let peak = 0;
+    for (const row of chartByTrade) {
+      for (const tr of selectedTrades) {
+        const v = Number(row[tr] ?? 0);
+        if (v > peak) peak = v;
+      }
+    }
+    return niceMax(peak);
+  }, [chartByTrade, selectedTrades]);
   const yTicks = useMemo(() => {
     const step = yMax / 5;
     return Array.from({ length: 6 }, (_, i) => Math.round(step * i));
   }, [yMax]);
 
   // KPI
-  const totalMandays = chartData.reduce((a, d) => a + d.manpower, 0);
-  const peak = chartData.reduce((acc, d) => (d.manpower > acc.manpower ? d : acc), { date: '-', manpower: 0 });
-  const daysCovered = chartData.length;
+  const totalMandays = useMemo(() => {
+    let sum = 0;
+    for (const row of chartByTrade) {
+      for (const tr of selectedTrades) sum += Number(row[tr] ?? 0);
+    }
+    return sum;
+  }, [chartByTrade, selectedTrades]);
+  const peak = useMemo(() => {
+    let max = 0;
+    let maxDate = '-';
+    for (const row of chartByTrade) {
+      let daySum = 0;
+      for (const tr of selectedTrades) daySum += Number(row[tr] ?? 0);
+      if (daySum > max) { max = daySum; maxDate = String(row.date); }
+    }
+    return { date: maxDate, manpower: max };
+  }, [chartByTrade, selectedTrades]);
+  const daysCovered = chartByTrade.length;
   const avgPerDay = daysCovered ? Math.round((totalMandays / daysCovered) * 10) / 10 : 0;
 
   // Pivot
@@ -233,7 +269,6 @@ export default function DmrDashboardPage() {
   function colWpTotal(date: string, wp: string): number {
     return pivotSubs.reduce((a, s) => a + cellVal(s, date, wp), 0);
   }
-  // (day total computed via dayTotalByDate below)
 
   const dayTotalByDate = useMemo(() => {
     const m = new Map<string, number>();
@@ -269,45 +304,45 @@ export default function DmrDashboardPage() {
         <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Days covered</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{daysCovered}</CardContent></Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        {isLoading ? (
-          <Card className="xl:col-span-2"><CardContent className="flex h-[280px] items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</CardContent></Card>
-        ) : chartByWp.length === 0 ? (
-          <Card className="xl:col-span-2"><CardContent className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">No workplace selected</CardContent></Card>
-        ) : (
-          chartByWp.map(({ wp, data }) => {
-            const wpTotal = data.reduce((a, d) => a + d.manpower, 0);
-            const wpPeak = data.reduce((a, d) => (d.manpower > a ? d.manpower : a), 0);
-            return (
-              <Card key={wp}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center justify-between text-sm">
-                    <span>{wp}</span>
-                    <span className="text-xs font-normal text-muted-foreground">Total {wpTotal} · Peak {wpPeak}</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[260px] w-full">
-                    {data.every((d) => d.manpower === 0) ? (
-                      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No data</div>
-                    ) : (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
-                          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                          <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={fmtDate} />
-                          <YAxis domain={[0, yMax]} ticks={yTicks} tick={{ fontSize: 11 }} />
-                          <Tooltip formatter={(v) => [v, wp]} labelFormatter={(l) => fmtDate(l as string)} labelClassName="text-xs" contentStyle={{ fontSize: 12 }} />
-                          <Line type="monotone" dataKey="manpower" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })
-        )}
-      </div>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Daily Manpower by Trade</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[320px] w-full">
+            {isLoading ? (
+              <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</div>
+            ) : chartByTrade.length === 0 || selectedTrades.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No data for selected trades</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartByTrade} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={fmtDate} />
+                  <YAxis domain={[0, yMax]} ticks={yTicks} tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    labelFormatter={(l) => fmtDate(l as string)}
+                    contentStyle={{ fontSize: 12 }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  {selectedTrades.map((tr, i) => (
+                    <Line
+                      key={tr}
+                      type="monotone"
+                      dataKey={tr}
+                      name={tr}
+                      stroke={COLORS[i % COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm">Breakdown by Subcontractor × Date</CardTitle></CardHeader>
