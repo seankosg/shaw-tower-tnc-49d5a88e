@@ -1,21 +1,29 @@
-## 변경 사항
+## 문제
 
-`src/components/analysis/ProductivitySummaryCards.tsx`의 두 번째 카드를 **Average Productivity**로 수정합니다.
+현재 Card 2(Average Productivity)가 0.04 / 0.03으로 표시됨. 하지만 하부 Productivity 테이블의 Average 컬럼 Nos/Man 값(2.7 / 2.3)과 일치해야 함.
 
-### Card 2 — Average Productivity
-- 제목: `Average Productivity`
-- 단위: `Nos/Man`
-- 계산:
-  - `Plan = stats.plannedQty / manDenominator`
-  - `Actual = stats.actualQty / manDenominator`
-  - `manDenominator = stats.plannedMan > 0 ? stats.plannedMan : stats.actualMan`
-  - 즉, 계획 인원(plannedMan)이 0이면 실제 인원(actualMan)으로 대체
-  - 분모가 0이면 `-` 표시
-- 소수점 2자리 표시 (생산성 값이 보통 작음)
+원인: 카드의 `plannedMan` / `actualMan`이 **qty 이벤트마다** 해당 날짜의 manpower를 누적함. 즉 동일 날짜의 manpower가 qty 개수만큼 중복 합산되어 분모가 비정상적으로 커짐.
 
-### Card 1, 3 유지
-- Card 1 (Average Work Volume), Card 3 (Difference Actual − Plan)은 변경 없음
+테이블은 sub × workplace 단위로 `mSum = Σ getMan(sub, date, wp)` (날짜별로 1회) 를 사용하므로 `qSum / mSum = 2.7` 이 나옴.
 
-### 영향 범위
-- 단일 파일 수정: `src/components/analysis/ProductivitySummaryCards.tsx`
-- 데이터 fetch 로직 변경 없음 (이미 plannedMan/actualMan 집계됨)
+## 수정 (src/components/analysis/ProductivitySummaryCards.tsx)
+
+`stats` useMemo의 인원 누적 로직을 테이블과 동일한 방식으로 변경:
+
+1. qty 누적은 그대로 유지 (planned/actual qty 카운트)
+2. man 누적은 **별도 패스**로 처리:
+   - 필터된 subcontractor 목록을 subtest/defect 데이터에서 추출 (혹은 dmrRows의 subcontractor와 fSubs 교집합)
+   - 각 (sub, wp) 조합에 대해 (wp는 showTC면 'T&C', showDefect면 'Defect')
+   - `mSum = Σ_{d ∈ dates} getMan(sub, d, wp)` 를 한 번만 계산해서 plannedMan / actualMan 양쪽에 동일하게 합산
+3. 즉 분모는 "선택된 날짜 범위 × 선택된 sub × 선택된 wp의 manpower 총합"
+
+결과:
+- planProd = plannedQty / manTotal
+- actProd  = actualQty  / manTotal
+- 테이블의 Average 컬럼 Nos/Man과 동일한 값으로 표시됨
+
+## 변경 범위
+
+- 파일: `src/components/analysis/ProductivitySummaryCards.tsx` 1개
+- Card 1(Average Work Volume), Card 3(Difference) 로직 유지
+- 데이터 fetch 로직 변경 없음
