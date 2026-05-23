@@ -22,6 +22,14 @@ type Row = {
 
 const WORKPLACE_ORDER = ['T&C', 'Defect', 'Post TOP'];
 
+function fmtDate(iso: string): string {
+  if (!iso || iso === '-') return '-';
+  const d = new Date(iso + 'T00:00:00');
+  const day = String(d.getDate()).padStart(2, '0');
+  const mmm = d.toLocaleDateString('en-US', { month: 'short' });
+  return `${day}-${mmm}`;
+}
+
 function niceMax(v: number): number {
   if (v <= 0) return 10;
   const steps = [10, 25, 50, 100, 150, 200, 250, 500, 750, 1000, 1500, 2000, 5000, 10000];
