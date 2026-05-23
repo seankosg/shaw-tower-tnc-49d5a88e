@@ -459,13 +459,13 @@ export default function DefectDashboardPage() {
               className="flex w-full flex-wrap items-center justify-between gap-2 text-left"
             >
               <div className="flex items-center gap-2">
-                <AlertOctagon className="h-4 w-4 text-destructive" />
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">Category Classification & Dispute</h2>
                 {catDisputeOpen ? (
                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 ) : (
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 )}
+                <AlertOctagon className="h-4 w-4 text-destructive" />
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">Category Classification & Dispute</h2>
               </div>
               <p className="text-xs text-muted-foreground">LL ↔ HDEC 분류 이견 — 우선 조치 필요</p>
             </button>
