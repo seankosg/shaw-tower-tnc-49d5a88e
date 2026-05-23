@@ -72,8 +72,9 @@ const ddnNav = [
 ];
 
 const analysisNav = [
-  { label: 'DMR Raw Data', icon: Users,  path: '/analysis/dmr' },
-  { label: 'DMR Import',   icon: Upload, path: '/analysis/dmr/import' },
+  { label: 'Dashboard',    icon: BarChart3, path: '/analysis/dmr/dashboard' },
+  { label: 'DMR Raw Data', icon: Users,     path: '/analysis/dmr' },
+  { label: 'DMR Import',   icon: Upload,    path: '/analysis/dmr/import' },
 ];
 
 const adminNav = [
