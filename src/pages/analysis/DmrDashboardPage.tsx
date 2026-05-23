@@ -22,6 +22,14 @@ type Row = {
 
 const WORKPLACE_ORDER = ['T&C', 'Defect', 'Post TOP'];
 
+function fmtDate(iso: string): string {
+  if (!iso || iso === '-') return '-';
+  const d = new Date(iso + 'T00:00:00');
+  const day = String(d.getDate()).padStart(2, '0');
+  const mmm = d.toLocaleDateString('en-US', { month: 'short' });
+  return `${day}-${mmm}`;
+}
+
 function niceMax(v: number): number {
   if (v <= 0) return 10;
   const steps = [10, 25, 50, 100, 150, 200, 250, 500, 750, 1000, 1500, 2000, 5000, 10000];
@@ -257,7 +265,7 @@ export default function DmrDashboardPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Total man-days</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{totalMandays}</CardContent></Card>
         <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Avg / day</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{avgPerDay}</CardContent></Card>
-        <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Peak day</CardTitle></CardHeader><CardContent><div className="text-2xl font-semibold">{peak.manpower}</div><div className="text-[11px] text-muted-foreground">{peak.date}</div></CardContent></Card>
+        <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Peak day</CardTitle></CardHeader><CardContent><div className="text-2xl font-semibold">{peak.manpower}</div><div className="text-[11px] text-muted-foreground">{fmtDate(peak.date)}</div></CardContent></Card>
         <Card><CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Days covered</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{daysCovered}</CardContent></Card>
       </div>
 
@@ -286,9 +294,9 @@ export default function DmrDashboardPage() {
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
                           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                          <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                          <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={fmtDate} />
                           <YAxis domain={[0, yMax]} ticks={yTicks} tick={{ fontSize: 11 }} />
-                          <Tooltip formatter={(v) => [v, wp]} labelClassName="text-xs" contentStyle={{ fontSize: 12 }} />
+                          <Tooltip formatter={(v) => [v, wp]} labelFormatter={(l) => fmtDate(l as string)} labelClassName="text-xs" contentStyle={{ fontSize: 12 }} />
                           <Line type="monotone" dataKey="manpower" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                         </LineChart>
                       </ResponsiveContainer>
@@ -313,7 +321,7 @@ export default function DmrDashboardPage() {
                   <TableRow>
                     <TableHead rowSpan={2} className="sticky left-0 z-10 border-r bg-background align-bottom">Subcontractor</TableHead>
                     {dates.map((d) => (
-                      <TableHead key={d} colSpan={1 + selectedWp.length} className="border-l bg-muted/30 text-center font-medium">{d}</TableHead>
+                      <TableHead key={d} colSpan={1 + selectedWp.length} className="border-l bg-muted/30 text-center font-medium">{fmtDate(d)}</TableHead>
                     ))}
                     <TableHead rowSpan={2} className="border-l bg-muted/30 text-right align-bottom">Row Total</TableHead>
                   </TableRow>
