@@ -325,7 +325,7 @@ export default function DmrDashboardPage() {
 
       <ProductivityTable
         dmrRows={filtered}
-        dates={dates}
+        dates={tableDates}
         fTeams={fTeams}
         fSubs={fSubs}
         fWp={fWp}
