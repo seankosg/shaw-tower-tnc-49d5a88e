@@ -423,7 +423,7 @@ export default function DmrDashboardPage() {
                     {selectedWp.map((w, i) => (
                       <TableHead key={`avg-${w}`} className="sticky z-20 bg-muted text-right text-[11px] font-normal text-muted-foreground" style={{ left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG }}>{w}</TableHead>
                     ))}
-                    {dates.flatMap((d) => [
+                    {tableDates.flatMap((d) => [
                       <TableHead key={`${d}-total`} className="border-l bg-muted/50 text-right text-[11px] font-semibold">Total</TableHead>,
                       ...selectedWp.map((w) => (
                         <TableHead key={`${d}-${w}`} className="text-right text-[11px] font-normal text-muted-foreground">{w}</TableHead>
