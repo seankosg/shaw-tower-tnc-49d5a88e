@@ -442,7 +442,7 @@ export default function DmrDashboardPage() {
                         const v = avgWp(s, w);
                         return <TableCell key={`avg-${s}-${w}`} className={`sticky z-10 bg-background text-right tabular-nums ${v === 0 ? 'text-muted-foreground/40' : ''}`} style={{ left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG }}>{v}</TableCell>;
                       })}
-                      {dates.flatMap((d) => {
+                      {tableDates.flatMap((d) => {
                         const total = dateTotal(s, d);
                         return [
                           <TableCell key={`${s}-${d}-total`} className={`border-l bg-muted/30 text-right font-semibold tabular-nums ${total === 0 ? 'text-muted-foreground/50' : ''}`}>{total}</TableCell>,
