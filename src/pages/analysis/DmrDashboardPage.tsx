@@ -469,7 +469,7 @@ export default function DmrDashboardPage() {
                       const v = Math.floor(sum / denom);
                       return <TableCell key={`avg-tot-${w}`} className="sticky z-10 bg-muted text-right font-medium tabular-nums" style={{ left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG }}>{v}</TableCell>;
                     })}
-                    {dates.flatMap((d) => {
+                    {tableDates.flatMap((d) => {
                       const t = dayTotalByDate.get(d) ?? 0;
                       return [
                         <TableCell key={`tot-${d}-total`} className="border-l bg-muted/60 text-right font-bold tabular-nums">{t}</TableCell>,
