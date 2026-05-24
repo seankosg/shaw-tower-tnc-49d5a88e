@@ -192,6 +192,7 @@ export default function DmrDashboardPage() {
   }), [rows, fTeams, fTrades, fSubs, fWp]);
 
   const dates = useMemo(() => Array.from(new Set(filtered.map((r) => r.report_date))).sort(), [filtered]);
+  const tableDates = useMemo(() => [...dates].reverse(), [dates]);
 
   const [chartGroupBy, setChartGroupBy] = useState<'trade' | 'workplace'>('trade');
 
