@@ -192,6 +192,7 @@ export default function DmrDashboardPage() {
   }), [rows, fTeams, fTrades, fSubs, fWp]);
 
   const dates = useMemo(() => Array.from(new Set(filtered.map((r) => r.report_date))).sort(), [filtered]);
+  const tableDates = useMemo(() => [...dates].reverse(), [dates]);
 
   const [chartGroupBy, setChartGroupBy] = useState<'trade' | 'workplace'>('trade');
 
@@ -324,7 +325,7 @@ export default function DmrDashboardPage() {
 
       <ProductivityTable
         dmrRows={filtered}
-        dates={dates}
+        dates={tableDates}
         fTeams={fTeams}
         fSubs={fSubs}
         fWp={fWp}
@@ -412,7 +413,7 @@ export default function DmrDashboardPage() {
                   <TableRow>
                     <TableHead rowSpan={2} className="sticky left-0 z-20 border-r bg-background align-bottom" style={{ width: W_SUB, minWidth: W_SUB }}>Subcontractor</TableHead>
                     <TableHead colSpan={avgGroupCols} className="sticky z-20 border-l bg-muted text-center font-medium" style={{ left: leftAvgTotal }}>Average</TableHead>
-                    {dates.map((d) => (
+                    {tableDates.map((d) => (
                       <TableHead key={d} colSpan={1 + selectedWp.length} className="border-l bg-muted/30 text-center font-medium">{fmtDate(d)}</TableHead>
                     ))}
                     <TableHead rowSpan={2} className="border-l bg-muted/30 text-right align-bottom">Row Total</TableHead>
@@ -422,7 +423,7 @@ export default function DmrDashboardPage() {
                     {selectedWp.map((w, i) => (
                       <TableHead key={`avg-${w}`} className="sticky z-20 bg-muted text-right text-[11px] font-normal text-muted-foreground" style={{ left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG }}>{w}</TableHead>
                     ))}
-                    {dates.flatMap((d) => [
+                    {tableDates.flatMap((d) => [
                       <TableHead key={`${d}-total`} className="border-l bg-muted/50 text-right text-[11px] font-semibold">Total</TableHead>,
                       ...selectedWp.map((w) => (
                         <TableHead key={`${d}-${w}`} className="text-right text-[11px] font-normal text-muted-foreground">{w}</TableHead>
@@ -441,7 +442,7 @@ export default function DmrDashboardPage() {
                         const v = avgWp(s, w);
                         return <TableCell key={`avg-${s}-${w}`} className={`sticky z-10 bg-background text-right tabular-nums ${v === 0 ? 'text-muted-foreground/40' : ''}`} style={{ left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG }}>{v}</TableCell>;
                       })}
-                      {dates.flatMap((d) => {
+                      {tableDates.flatMap((d) => {
                         const total = dateTotal(s, d);
                         return [
                           <TableCell key={`${s}-${d}-total`} className={`border-l bg-muted/30 text-right font-semibold tabular-nums ${total === 0 ? 'text-muted-foreground/50' : ''}`}>{total}</TableCell>,
@@ -468,7 +469,7 @@ export default function DmrDashboardPage() {
                       const v = Math.floor(sum / denom);
                       return <TableCell key={`avg-tot-${w}`} className="sticky z-10 bg-muted text-right font-medium tabular-nums" style={{ left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG }}>{v}</TableCell>;
                     })}
-                    {dates.flatMap((d) => {
+                    {tableDates.flatMap((d) => {
                       const t = dayTotalByDate.get(d) ?? 0;
                       return [
                         <TableCell key={`tot-${d}-total`} className="border-l bg-muted/60 text-right font-bold tabular-nums">{t}</TableCell>,
