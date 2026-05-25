@@ -772,6 +772,7 @@ interface AbdRow {
 interface OmmRow {
   sub1_actual_date: string | null; sub2_actual_date: string | null; sub3_actual_date: string | null;
   final_actual_date: string | null; final_response_actual_date: string | null; draft_actual_date: string | null;
+  final_response_status: string | null;
 }
 interface WarrantyRow {
   draft_actual_date: string | null; subcon_signing_actual_date: string | null;
