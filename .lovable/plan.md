@@ -1,57 +1,38 @@
-## 원인
+# 목표
+Subtask 추가 시 반복되는 `type "public.team_enum" does not exist` 오류를 단순 봉합이 아니라, 재배포/복원/환경 재구성 때도 다시 나오지 않도록 근본적으로 제거합니다.
 
-`punch_recalc_summary(p_summary_id)` 함수 (migration `20260525045831`)에서 Summary 행 health 재계산 시 존재하지 않는 enum 값을 캐스팅하고 있음:
+# 확인된 문제
+- 현재 운영 백엔드의 `add_punch_subtask` 함수는 `public.team_type`를 사용하고 있어 현재 정의만 보면 정상입니다.
+- 하지만 저장소의 핵심 migration 파일 `20260525045831...sql` 안에는 아직 `::public.team_enum`가 남아 있습니다.
+- 즉, 어느 시점에든 이 migration 기준으로 함수가 다시 생성되거나 환경이 복원되면 잘못된 함수 정의가 다시 살아날 수 있는 구조입니다.
+- 이전에 수정한 `health_status` 오류와 같은 패턴으로, 이번에는 `team` enum 참조가 원본 migration에 남아 있어 재발성 장애를 만들고 있습니다.
 
-```sql
-v_health := CASE
-  WHEN v_variance >= 0 THEN 'on_track'::public.punch_health_status
-  WHEN v_variance >= -10 THEN 'at_risk'::public.punch_health_status  -- ❌
-  ELSE 'behind'::public.punch_health_status
-END;
-```
+# 구현 계획
+1. **Subtask RPC 관련 DB 정의 전수 정리**
+   - `add_punch_subtask` 원본 migration의 `team_enum` 참조를 `team_type`로 수정합니다.
+   - 동일 계열의 punch 관련 함수/trigger/migration 중 enum 드리프트가 더 없는지 함께 정리합니다.
 
-`punch_health_status` enum 정의:
-```
-ahead, on_track, behind, critical   (at_risk 없음)
-```
+2. **재발 방지용 보정 migration 추가**
+   - 현재 운영 백엔드에 `CREATE OR REPLACE FUNCTION public.add_punch_subtask(...)`를 다시 적용하는 보정 migration을 추가합니다.
+   - 필요 시 `DROP FUNCTION ...` 후 재생성 대신, 시그니처를 유지하는 범위에서 안전하게 함수 본문만 교체합니다.
+   - 이 보정 migration에는 `team_type` 강제, null 처리, 기존 권한 로직 유지가 포함됩니다.
 
-Subtask 추가 → `add_punch_subtask` → rollup → `punch_recalc_summary` 호출 시 enum 변환 실패로
-`invalid input value for enum punch_health_status: "at_risk"` 가 발생하여 RPC 전체가 롤백됨.
+3. **입력값 안정성 보강**
+   - 프론트의 Add Subtask payload에서 `team` 값이 빈 문자열일 때 DB cast 경로에서 불필요한 예외를 만들지 않도록 검토합니다.
+   - `sub_trade`, `planned_start_date`, `main_trade` 자동 상속 로직은 유지하면서 team 전달값만 더 안전하게 다듬습니다.
 
-## 해결 방안
+4. **실제 동작 기준 검증**
+   - Summary/비-Summary parent 각각에서 Subtask 추가 경로를 점검합니다.
+   - `planned_start_date` 최신 subtask 상속, Main Trade/Sub Trade 상속, 정렬 오름차순 로직이 이번 수정으로 깨지지 않는지 함께 확인합니다.
+   - 같은 오류 문자열이 다시 발생하지 않는지 로그 기준으로 확인합니다.
 
-행 단위 트리거(`trg_set_health` / `punch_rollup_trigger`)가 이미 4단계 기준으로 health_status를 계산함:
+# 결과물
+- 잘못된 `team_enum` 참조 제거
+- 운영 백엔드 함수 보정 migration
+- 프론트 payload 안정성 보강(필요 시)
+- 재발 방지 검증 완료
 
-| variance v | health |
-|---|---|
-| v ≥ 5 | ahead |
-| -5 < v < 5 | on_track |
-| -15 < v ≤ -5 | behind |
-| v ≤ -15 | critical |
-
-`punch_recalc_summary` 안의 CASE를 동일한 4단계로 교체하여 enum 정합성을 맞춤. (사용자가 언급한 "healthy 로직 삭제 검토"는 health 자체를 제거하지 않고, 잘못된 자체 계산을 표준 로직으로 통일하는 것으로 해석.)
-
-### 수정 SQL
-
-새 migration 한 건으로 `punch_recalc_summary` 함수를 `CREATE OR REPLACE`. 본문은 기존과 동일하며 `v_health` CASE 부분만 다음으로 교체:
-
-```sql
-v_health := CASE
-  WHEN v_variance >= 5  THEN 'ahead'::public.punch_health_status
-  WHEN v_variance > -5  THEN 'on_track'::public.punch_health_status
-  WHEN v_variance > -15 THEN 'behind'::public.punch_health_status
-  ELSE 'critical'::public.punch_health_status
-END;
-```
-
-나머지 로직(weight rollup, stage_status, gate aggregation, override 보존)은 그대로 유지.
-
-## 부가 검토
-
-- `add_punch_subtask`, `punch_rollup_trigger` 등 다른 함수에서는 `at_risk` 사용 없음 확인 완료.
-- 기존 punch_items 데이터 중 health_status='at_risk'는 enum에 없으므로 저장 자체가 불가 → 데이터 마이그레이션 불필요.
-- 트리거가 행 단위로 이미 health 재계산하므로 Summary 행에 대해서도 자동 일관성 유지됨.
-
-## 변경 파일
-
-- 신규 migration: `punch_recalc_summary` 함수의 v_health CASE만 4단계 enum 값으로 수정
+# 기술 메모
+- 현재 DB에 존재하는 enum은 `team_type` 뿐이며 `team_enum`는 없습니다.
+- 따라서 이번 이슈의 본질은 “현재 함수 한 군데 수정”이 아니라, “원본 migration과 운영 함수 정의의 불일치(drift)”입니다.
+- 이 drift를 없애야 이후 재배포/복원/마이그레이션 재적용 때 동일 장애가 되살아나지 않습니다.
