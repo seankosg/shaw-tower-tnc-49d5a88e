@@ -1053,9 +1053,9 @@ export function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
   const abdUr     = docsKPI.abd.statusCounts['under_review']          ?? 0;
   const abdNs     = docsKPI.abd.statusCounts['not_submitted']         ?? 0;
 
-  const ommUr     = docsKPI.omm.statusCounts['under_review']  ?? 0;
-  const ommSub    = docsKPI.omm.pcts['sub2_actual_date']       ?? 0;
-  const ommUrPct  = docsKPI.omm.total > 0 ? (ommUr / docsKPI.omm.total) * 100 : 0;
+  const ommFinalSub = docsKPI.omm.pcts['final_actual_date']           ?? 0;
+  const ommFinalRes = docsKPI.omm.pcts['final_response_actual_date']  ?? 0;
+  const ommFinalA   = docsKPI.omm.pcts['final_response_status_a']     ?? 0;
 
   const warFinal  = docsKPI.warranty.pcts['final_actual_date']            ?? 0;
   const warHdec   = docsKPI.warranty.pcts['hdec_signing_actual_date']     ?? 0;
@@ -1103,8 +1103,9 @@ export function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
     {
       name: 'OMM', subtitle: `${docsKPI.omm.total} operation & maintenance manuals`, accent: C.stageOfficial,
       rows: [
-        { label: 'Submitted (Sub2)', val: ommSub.toFixed(1),   unit: '%', color: C.stageOfficial, isPct: true, pct: ommSub },
-        { label: 'Under Review',     val: ommUrPct.toFixed(1), unit: '%', color: C.amber,         isPct: true, pct: ommUrPct },
+        { label: 'Final Submission', val: ommFinalSub.toFixed(1), unit: '%', color: C.cyan,          isPct: true, pct: ommFinalSub },
+        { label: 'Final Response',   val: ommFinalRes.toFixed(1), unit: '%', color: C.stageOfficial, isPct: true, pct: ommFinalRes },
+        { label: 'Final Status A',   val: ommFinalA.toFixed(1),   unit: '%', color: ommFinalA < 50 ? C.amber : C.green, isPct: true, pct: ommFinalA },
       ],
     },
     {

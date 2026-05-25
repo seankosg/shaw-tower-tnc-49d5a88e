@@ -772,6 +772,7 @@ interface AbdRow {
 interface OmmRow {
   sub1_actual_date: string | null; sub2_actual_date: string | null; sub3_actual_date: string | null;
   final_actual_date: string | null; final_response_actual_date: string | null; draft_actual_date: string | null;
+  final_response_status: string | null;
 }
 interface WarrantyRow {
   draft_actual_date: string | null; subcon_signing_actual_date: string | null;
@@ -815,7 +816,7 @@ async function computeDocsData(opts: ReportOptions): Promise<DocsReportData> {
   const wantSnap = opts.sections.includes('snapshots');
   const [abd, omm, warr, sp] = await Promise.all([
     fetchAll<AbdRow>('docs_drawings', 'sub1_submission_date,sub1_approval_date,sub1_approval_status,sub2_submission_date,sub2_approval_date,sub2_approval_status,sub3_submission_date,sub3_approval_date,sub3_approval_status,sub1_planned_date,sub2_planned_date,sub3_planned_date,approved_date,current_status', (q) => q.eq('sub_module', 'as_built')),
-    fetchAll<OmmRow>('docs_omm', 'sub1_actual_date,sub2_actual_date,sub3_actual_date,final_actual_date,final_response_actual_date,draft_actual_date'),
+    fetchAll<OmmRow>('docs_omm', 'sub1_actual_date,sub2_actual_date,sub3_actual_date,final_actual_date,final_response_actual_date,draft_actual_date,final_response_status'),
     fetchAll<WarrantyRow>('warranty_items', 'draft_actual_date,subcon_signing_actual_date,hdec_signing_actual_date,final_actual_date'),
     fetchAll<SparePartRow>('docs_spare_part', 'actual_confirm_date,actual_po_date,actual_delivery_date'),
   ]);
@@ -872,6 +873,9 @@ async function computeDocsData(opts: ReportOptions): Promise<DocsReportData> {
     },
   };
   const ommData = mk(omm, OMM_COLS);
+  const ommFinalACount = omm.filter(r => r.final_response_status === 'A').length;
+  ommData.currentCounts!['final_response_status_a'] = ommFinalACount;
+  ommData.currentPcts!['final_response_status_a'] = omm.length ? Math.round((ommFinalACount / omm.length) * 1000) / 10 : 0;
   ommData.statusCounts = {
     under_review: omm.filter(r => !!r.sub2_actual_date && !r.final_response_actual_date).length,
   };
