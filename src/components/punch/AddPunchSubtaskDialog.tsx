@@ -39,6 +39,10 @@ interface Props {
     sub_trade?: string | null;
     work_type?: string | null;
     team?: TeamType | null;
+    subcontractor_name?: string | null;
+    subsub_name?: string | null;
+    hdec_pic_name?: string | null;
+    hdec_eng_name?: string | null;
   };
   /** Existing siblings, used to auto-pick the next stage and chain start date. */
   existingSubtasks?: ExistingSubtask[];
