@@ -32,7 +32,7 @@ function formatSize(bytes: number) {
 export default function ImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet, setFileExcludedHeaders } = useImport();
+  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet, setFileExcludedHeaders, similarDecisions, setDecisionAction, confirmSimilarDecisions, cancelSimilarDecisions } = useImport();
   const { tnc } = useModuleStatus();
   const { isAdmin } = useAuth();
   const [columnDialogFileId, setColumnDialogFileId] = useState<string | null>(null);
