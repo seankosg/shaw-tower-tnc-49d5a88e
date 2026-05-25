@@ -167,7 +167,6 @@ export default function DmrDashboardPage() {
 
   const teams = useMemo(() => Array.from(new Set(rows.map((r) => r.team).filter(Boolean) as string[])).sort(), [rows]);
   const trades = useMemo(() => Array.from(new Set(rows.map((r) => r.trade).filter(Boolean) as string[])).sort(), [rows]);
-  const subs = useMemo(() => Array.from(new Set(rows.map((r) => r.subcontractor))).sort((a, b) => a.localeCompare(b)), [rows]);
   const workplaces = useMemo(() => {
     const seen = Array.from(new Set(rows.map((r) => r.workplace)));
     return WORKPLACE_ORDER.filter((w) => seen.includes(w)).concat(seen.filter((w) => !WORKPLACE_ORDER.includes(w)));
@@ -180,8 +179,32 @@ export default function DmrDashboardPage() {
 
   const fTeams = selTeams ?? new Set(teams);
   const fTrades = selTrades ?? new Set(trades);
-  const fSubs = selSubs ?? new Set(subs);
   const fWp = selWp ?? new Set(workplaces);
+
+  // Subcontractor options are scoped to current Team/Trade selection
+  const subs = useMemo(() => {
+    return Array.from(new Set(
+      rows
+        .filter((r) => (!r.team || fTeams.has(r.team)) && (!r.trade || fTrades.has(r.trade)))
+        .map((r) => r.subcontractor)
+    )).sort((a, b) => a.localeCompare(b));
+  }, [rows, fTeams, fTrades]);
+
+  // Prune explicit Subcontractor selection when scope shrinks
+  useEffect(() => {
+    if (!selSubs) return;
+    const available = new Set(subs);
+    let changed = false;
+    const next = new Set<string>();
+    for (const s of selSubs) {
+      if (available.has(s)) next.add(s);
+      else changed = true;
+    }
+    if (changed) setSelSubs(next);
+  }, [subs, selSubs]);
+
+  const fSubs = selSubs ?? new Set(subs);
+
 
   const filtered = useMemo(() => rows.filter((r) => {
     if (r.team && !fTeams.has(r.team)) return false;
