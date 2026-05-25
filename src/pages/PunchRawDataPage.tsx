@@ -48,7 +48,26 @@ import { USER_TYPE_LABELS } from '@/types/enums';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/integrations/supabase/types';
-import { compareItemNo } from '@/lib/item-no-sort';
+
+// Natural compare for punch item_no like "3", "3.1", "10", "10.2"
+function comparePunchItemNo(a: string | null | undefined, b: string | null | undefined): number {
+  const sa = String(a ?? ''); const sb = String(b ?? '');
+  const pa = sa.split('.').map((p) => { const n = Number(p); return Number.isFinite(n) ? n : p; });
+  const pb = sb.split('.').map((p) => { const n = Number(p); return Number.isFinite(n) ? n : p; });
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const x = pa[i]; const y = pb[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    if (typeof x === 'number' && typeof y === 'number') {
+      if (x !== y) return x - y;
+    } else {
+      const cmp = String(x).localeCompare(String(y));
+      if (cmp !== 0) return cmp;
+    }
+  }
+  return 0;
+}
 import {
   PUNCH_FIELDS,
   PUNCH_FIELDS_BY_NAME,
