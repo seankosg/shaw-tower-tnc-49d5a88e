@@ -229,7 +229,7 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
           const sumQty = (mr: MetricRow, d: string) =>
             rowSubs.reduce((a, s) => a + getQty(mr.map, s, d), 0);
           const sumMan = (wp: 'T&C' | 'Defect', d: string) =>
-            rowSubs.reduce((a, s) => a + getMan(s, d, wp), 0);
+            dmrRows.reduce((a, r) => (r.report_date === d && r.workplace === wp ? a + r.manpower : a), 0);
 
           // Sticky offset constants (px). Header rows fixed at 32px each.
           const H_HEAD = 32;
