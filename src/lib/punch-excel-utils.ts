@@ -523,10 +523,8 @@ export async function upsertPunchRows(
     const { error } = await supabase.from('punch_change_log').insert(pendingChangeLogs as any);
     if (error) console.warn('[punch] change log insert failed:', error.message);
   }
-  if (opts.uploadId && pendingRowLogs.length) {
-    const { error } = await (supabase as any).from('punch_upload_row_logs').insert(pendingRowLogs);
-    if (error) console.warn('[punch] row log insert failed:', error.message);
-  }
+  // Defer pendingRowLogs flush until after the 2nd pass so hierarchy results
+  // (link success/failure) are included in the same batch log.
 
   // --- Second pass: resolve Parent Item No → parent_id, promote parents ---
   if (parentRefByItemNo.size > 0) {
@@ -544,10 +542,28 @@ export async function upsertPunchRows(
     });
 
     const parentsToPromote = new Set<string>();
+    const rawRowByItemNo = new Map<string, number>();
+    for (const r of rows) if (r.values.item_no) rawRowByItemNo.set(r.values.item_no, r.rawRowNo);
+
+    const recordHierarchyFailure = (childNo: string, code: string, detail: string) => {
+      result.failed++;
+      result.errors.push({ itemNo: childNo, reason: detail });
+      if (opts.uploadId) {
+        pendingRowLogs.push({
+          upload_id: opts.uploadId,
+          raw_row_no: rawRowByItemNo.get(childNo) ?? null,
+          item_no: childNo,
+          action_taken: 'rejected',
+          reason_code: code,
+          reason_detail: detail,
+        });
+      }
+    };
+
     for (const [childNo, parentNo] of parentRefByItemNo) {
       const child = idByItemNo.get(childNo);
       if (!child) {
-        result.errors.push({ itemNo: childNo, reason: `Child row not found after insert — skipped` });
+        recordHierarchyFailure(childNo, 'child_missing', `Child row not found after insert — skipped`);
         continue;
       }
       let parent = idByItemNo.get(parentNo);
@@ -568,7 +584,7 @@ export async function upsertPunchRows(
           .select('id, item_no, is_summary, parent_id')
           .maybeSingle();
         if (createErr || !created) {
-          result.errors.push({ itemNo: childNo, reason: `Auto-create parent "${parentNo}" failed: ${createErr?.message ?? 'unknown'}` });
+          recordHierarchyFailure(childNo, 'auto_parent_create_failed', `Auto-create parent "${parentNo}" failed: ${createErr?.message ?? 'unknown'}`);
           continue;
         }
         parent = { id: created.id, is_summary: created.is_summary as boolean | null, parent_id: created.parent_id as string | null };
@@ -587,7 +603,7 @@ export async function upsertPunchRows(
       }
       if (child.id === parent.id) continue;
       if (parent.parent_id) {
-        result.errors.push({ itemNo: childNo, reason: `Parent "${parentNo}" is already a subtask — only 2-level hierarchy allowed` });
+        recordHierarchyFailure(childNo, 'parent_depth_invalid', `Parent "${parentNo}" is already a subtask — only 2-level hierarchy allowed`);
         continue;
       }
       const { error: linkErr } = await supabase
@@ -595,14 +611,30 @@ export async function upsertPunchRows(
         .update({ parent_id: parent.id })
         .eq('id', child.id);
       if (linkErr) {
-        result.errors.push({ itemNo: childNo, reason: `Parent link failed: ${linkErr.message}` });
+        recordHierarchyFailure(childNo, 'parent_link_failed', `Parent link failed: ${linkErr.message}`);
         continue;
       }
       if (!parent.is_summary) parentsToPromote.add(parent.id);
+      if (opts.uploadId) {
+        pendingRowLogs.push({
+          upload_id: opts.uploadId,
+          raw_row_no: rawRowByItemNo.get(childNo) ?? null,
+          item_no: childNo,
+          action_taken: 'updated',
+          reason_code: 'parent_linked',
+          reason_detail: `Linked to parent "${parentNo}"`,
+        });
+      }
     }
     for (const pid of parentsToPromote) {
       await supabase.from('punch_items').update({ is_summary: true } as any).eq('id', pid);
     }
+  }
+
+  // Flush all row logs at end (1st + 2nd pass)
+  if (opts.uploadId && pendingRowLogs.length) {
+    const { error } = await (supabase as any).from('punch_upload_row_logs').insert(pendingRowLogs);
+    if (error) console.warn('[punch] row log insert failed:', error.message);
   }
 
   return result;
