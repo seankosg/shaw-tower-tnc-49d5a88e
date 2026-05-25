@@ -626,6 +626,10 @@ export default function PunchDetailPage() {
             sub_trade: src.sub_trade,
             work_type: src.work_type,
             team: (src.team ?? null) as TeamType | null,
+            subcontractor_name: (src as any).subcontractor_name ?? null,
+            subsub_name: (src as any).subsub_name ?? null,
+            hdec_pic_name: (src as any).hdec_pic_name ?? null,
+            hdec_eng_name: (src as any).hdec_eng_name ?? null,
           };
         })()}
         existingSubtasks={children.map((c) => ({

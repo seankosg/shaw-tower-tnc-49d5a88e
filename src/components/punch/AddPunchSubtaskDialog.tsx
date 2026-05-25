@@ -39,6 +39,10 @@ interface Props {
     sub_trade?: string | null;
     work_type?: string | null;
     team?: TeamType | null;
+    subcontractor_name?: string | null;
+    subsub_name?: string | null;
+    hdec_pic_name?: string | null;
+    hdec_eng_name?: string | null;
   };
   /** Existing siblings, used to auto-pick the next stage and chain start date. */
   existingSubtasks?: ExistingSubtask[];
@@ -94,6 +98,10 @@ export function AddPunchSubtaskDialog({
   const [mainTrade, setMainTrade] = useState(defaults?.main_trade ?? '');
   const [subTrade, setSubTrade] = useState(defaults?.sub_trade ?? '');
   const [team, setTeam] = useState<TeamType | ''>(defaults?.team ?? parentTeam ?? '');
+  const [subcontractor, setSubcontractor] = useState(defaults?.subcontractor_name ?? '');
+  const [subsub, setSubsub] = useState(defaults?.subsub_name ?? '');
+  const [hdecPic, setHdecPic] = useState(defaults?.hdec_pic_name ?? '');
+  const [hdecEng, setHdecEng] = useState(defaults?.hdec_eng_name ?? '');
   const [plannedStart, setPlannedStart] = useState(
     computeChainedStart(initialStage, siblings, parentPlannedStartDate),
   );
@@ -118,6 +126,10 @@ export function AddPunchSubtaskDialog({
     setMainTrade(defaults?.main_trade ?? '');
     setSubTrade(defaults?.sub_trade ?? '');
     setTeam((defaults?.team ?? parentTeam ?? '') as TeamType | '');
+    setSubcontractor(defaults?.subcontractor_name ?? '');
+    setSubsub(defaults?.subsub_name ?? '');
+    setHdecPic(defaults?.hdec_pic_name ?? '');
+    setHdecEng(defaults?.hdec_eng_name ?? '');
     setPlannedStart(computeChainedStart(ns, siblings, parentPlannedStartDate));
     setStartDirty(false);
     setPlannedEnd('');
@@ -169,6 +181,10 @@ export function AddPunchSubtaskDialog({
       work_type: workType || null,
       main_trade: mainTrade || null,
       sub_trade: subTrade || null,
+      subcontractor_name: subcontractor || null,
+      subsub_name: subsub || null,
+      hdec_pic_name: hdecPic || null,
+      hdec_eng_name: hdecEng || null,
       planned_start_date: plannedStart || null,
       planned_completion_date: plannedEnd || null,
       weight: weight || '1',
@@ -236,6 +252,10 @@ export function AddPunchSubtaskDialog({
             <div><Label className="text-xs">Work Type</Label><Input value={workType} onChange={(e) => setWorkType(e.target.value)} className="h-9" /></div>
             <div><Label className="text-xs">Main Trade</Label><Input value={mainTrade} onChange={(e) => setMainTrade(e.target.value)} className="h-9" /></div>
             <div><Label className="text-xs">Sub Trade</Label><Input value={subTrade} onChange={(e) => setSubTrade(e.target.value)} className="h-9" /></div>
+            <div><Label className="text-xs">Subcontractor</Label><Input value={subcontractor} onChange={(e) => setSubcontractor(e.target.value)} className="h-9" /></div>
+            <div><Label className="text-xs">Subsub</Label><Input value={subsub} onChange={(e) => setSubsub(e.target.value)} className="h-9" /></div>
+            <div><Label className="text-xs">HDEC PIC</Label><Input value={hdecPic} onChange={(e) => setHdecPic(e.target.value)} className="h-9" /></div>
+            <div><Label className="text-xs">HDEC Engineer</Label><Input value={hdecEng} onChange={(e) => setHdecEng(e.target.value)} className="h-9" /></div>
             <div>
               <Label className="text-xs">Team <span className="text-muted-foreground">(can differ from parent)</span></Label>
               <Select value={team || undefined} onValueChange={(v) => setTeam(v as TeamType)}>
