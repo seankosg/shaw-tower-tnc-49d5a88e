@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -152,15 +153,14 @@ function TabFilter({
 export default function DmrDashboardPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['dmr_entries_all'],
-    queryFn: async (): Promise<Row[]> => {
-      const { data, error } = await supabase
-        .from('dmr_entries')
-        .select('report_date, team, trade, subcontractor, workplace, manpower')
-        .order('report_date', { ascending: true })
-        .limit(10000);
-      if (error) throw error;
-      return (data ?? []) as Row[];
-    },
+    queryFn: (): Promise<Row[]> =>
+      fetchAllRows<Row>((from, to) =>
+        supabase
+          .from('dmr_entries')
+          .select('report_date, team, trade, subcontractor, workplace, manpower')
+          .order('report_date', { ascending: true })
+          .range(from, to),
+      ),
   });
 
   const rows = data ?? [];

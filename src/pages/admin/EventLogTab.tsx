@@ -120,27 +120,38 @@ export default function EventLogTab() {
   }
 
   async function exportCsv() {
-    // Pull up to 5,000 matching rows for export
-    let q = supabase
-      .from('event_log')
-      .select('*')
-      .gte('occurred_at', `${from}T00:00:00.000Z`)
-      .lte('occurred_at', `${to}T23:59:59.999Z`)
-      .order('occurred_at', { ascending: false })
-      .limit(5000);
-    if (role !== 'all') q = q.eq('actor_role', role);
-    if (action !== 'all') q = q.eq('action', action);
-    if (tableName !== 'all') q = q.eq('table_name', tableName);
-    if (actor.trim()) {
-      const v = actor.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
-      q = q.or(`actor_login_id.ilike.%${v}%,actor_name.ilike.%${v}%`);
+    // Pull up to 5,000 matching rows for export, paginated past the 1000-row PostgREST cap
+    const MAX_EXPORT = 5000;
+    const PAGE = 1000;
+    const buildQuery = (rangeFrom: number, rangeTo: number) => {
+      let q = supabase
+        .from('event_log')
+        .select('*')
+        .gte('occurred_at', `${from}T00:00:00.000Z`)
+        .lte('occurred_at', `${to}T23:59:59.999Z`)
+        .order('occurred_at', { ascending: false })
+        .range(rangeFrom, rangeTo);
+      if (role !== 'all') q = q.eq('actor_role', role);
+      if (action !== 'all') q = q.eq('action', action);
+      if (tableName !== 'all') q = q.eq('table_name', tableName);
+      if (actor.trim()) {
+        const v = actor.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
+        q = q.or(`actor_login_id.ilike.%${v}%,actor_name.ilike.%${v}%`);
+      }
+      return q;
+    };
+    const list: EventLogRow[] = [];
+    for (let off = 0; off < MAX_EXPORT; off += PAGE) {
+      const to2 = Math.min(off + PAGE, MAX_EXPORT) - 1;
+      const { data, error } = await buildQuery(off, to2);
+      if (error) {
+        toast({ title: 'Export failed', description: error.message, variant: 'destructive' });
+        return;
+      }
+      const batch = (data ?? []) as EventLogRow[];
+      list.push(...batch);
+      if (batch.length < to2 - off + 1) break;
     }
-    const { data, error } = await q;
-    if (error) {
-      toast({ title: 'Export failed', description: error.message, variant: 'destructive' });
-      return;
-    }
-    const list = (data ?? []) as EventLogRow[];
     const headers = ['Occurred At', 'Actor Login', 'Actor Name', 'Role', 'Action', 'Table', 'Record ID', 'Summary', 'Changed Fields', 'Before', 'After'];
     const escape = (v: unknown) => {
       const s = v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v);

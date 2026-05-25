@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -118,12 +119,14 @@ export default function DefectDetailPage() {
     if (!record?.project_id) return;
     let cancelled = false;
     async function loadSuggestions() {
-      const { data } = await (supabase as any)
-        .from('defect_items')
-        .select('area_level, area_location, main_trade, sub_trade, work_type')
-        .eq('project_id', record!.project_id)
-        .eq('is_active', true)
-        .limit(5000);
+      const data = await fetchAllRows<any>((from, to) =>
+        (supabase as any)
+          .from('defect_items')
+          .select('area_level, area_location, main_trade, sub_trade, work_type')
+          .eq('project_id', record!.project_id)
+          .eq('is_active', true)
+          .range(from, to),
+      );
       if (cancelled) return;
       const collect = (key: 'area_level' | 'area_location' | 'main_trade' | 'sub_trade' | 'work_type') => {
         const set = new Set<string>();

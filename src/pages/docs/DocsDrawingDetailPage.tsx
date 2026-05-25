@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useDocsFieldConfig } from '@/hooks/useDocsFieldConfig';
@@ -195,14 +196,16 @@ export default function DocsDrawingDetailPage() {
     if (!record?.project_id) return;
     let cancelled = false;
     (async () => {
-      const [subRes, poolRes] = await Promise.all([
+      const [subRes, poolData] = await Promise.all([
         (supabase as any).from('subcontractor_master').select('id, name, type').eq('is_active', true).order('name'),
-        (supabase as any)
-          .from('docs_drawings')
-          .select('aconex_status, current_status, document_type, discipline, series, organisation_raw, hdec_pic_name, hdec_eng_name')
-          .eq('project_id', record.project_id)
-          .eq('is_active', true)
-          .limit(5000),
+        fetchAllRows<any>((from, to) =>
+          (supabase as any)
+            .from('docs_drawings')
+            .select('aconex_status, current_status, document_type, discipline, series, organisation_raw, hdec_pic_name, hdec_eng_name')
+            .eq('project_id', record.project_id)
+            .eq('is_active', true)
+            .range(from, to),
+        ),
       ]);
       if (cancelled) return;
       const allSubs = ((subRes.data ?? []) as Array<SubMaster & { type: string }>)
@@ -212,7 +215,7 @@ export default function DocsDrawingDetailPage() {
 
       const collect = (key: keyof typeof statusPool) => {
         const set = new Set<string>();
-        for (const row of (poolRes.data ?? []) as any[]) {
+        for (const row of (poolData ?? []) as any[]) {
           const v = (row?.[key] ?? '').toString().trim();
           if (v) set.add(v);
         }

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/lib/fetch-all-rows';
 import XLSX from 'xlsx-js-style';
 import { Button } from '@/components/ui/button';
 import { isoToExcelSerial, isoTimestampToExcelSerial, DATE_NUMFMT, DATETIME_NUMFMT } from '@/lib/excel-date-cell';
@@ -35,22 +36,23 @@ export default function ExportPage() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      let query = supabase
-        .from('subtests')
-        .select('item_no, equipment, subtest_id, mos_code, description, predecessor_status_raw, t1_planned_date, t1_status, t2_planned_date, t2_status, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, updated_at, system_master!inner(system_code)')
-        .eq('is_active', true)
-        .order('updated_at', { ascending: false });
+      const data = await fetchAllRows<any>((from, to) => {
+        let query = supabase
+          .from('subtests')
+          .select('item_no, equipment, subtest_id, mos_code, description, predecessor_status_raw, t1_planned_date, t1_status, t2_planned_date, t2_status, subcontractor_name, subsub_name, hdec_pic_name, data_source_type, updated_at, system_master!inner(system_code)')
+          .eq('is_active', true)
+          .order('updated_at', { ascending: false });
 
-      if (systemFilter !== 'all') {
-        const sys = systems.find(s => s.system_code === systemFilter);
-        if (sys) query = query.eq('system_id', sys.id);
-      }
-      if (statusFilter !== 'all') {
-        query = query.or(`t1_status.eq.${statusFilter},t2_status.eq.${statusFilter}`);
-      }
+        if (systemFilter !== 'all') {
+          const sys = systems.find(s => s.system_code === systemFilter);
+          if (sys) query = query.eq('system_id', sys.id);
+        }
+        if (statusFilter !== 'all') {
+          query = query.or(`t1_status.eq.${statusFilter},t2_status.eq.${statusFilter}`);
+        }
 
-      const { data, error } = await query.limit(5000);
-      if (error) throw error;
+        return query.range(from, to);
+      });
       if (!data || data.length === 0) {
         toast({ title: 'No data to export', variant: 'destructive' });
         setExporting(false);
