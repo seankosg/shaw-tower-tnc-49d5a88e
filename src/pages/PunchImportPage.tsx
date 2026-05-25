@@ -14,6 +14,11 @@ import {
   type PunchParseResult, type PunchUpsertResult,
 } from '@/lib/punch-excel-utils';
 import { PunchColumnSelect } from '@/components/import/PunchColumnSelect';
+import { SimilarMasterDialog } from '@/components/import/SimilarMasterDialog';
+import {
+  applyDecisionsInPlace, detectEditDistanceDecisions, fetchSubMasterMaps, normalizeRowsAgainstMaster,
+  type SimilarDecisionAction, type SimilarMasterDecision,
+} from '@/lib/subcontractor-master-sync';
 
 interface QueueItem {
   id: string;
