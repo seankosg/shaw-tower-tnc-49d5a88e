@@ -857,9 +857,9 @@ export default function PunchRawDataPage() {
   }, [allFieldIds, sortFieldNames]);
 
   const table = useReactTable({
-    data: filteredRows,
+    data: orderedRows,
     columns,
-    state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
+    state: { sorting: isDefaultSort ? [] : sorting, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,
