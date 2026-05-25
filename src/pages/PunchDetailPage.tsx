@@ -463,7 +463,16 @@ export default function PunchDetailPage() {
               <CardHeader className="pb-2"><CardTitle className="text-sm">Subtasks ({children.length})</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 {SUBTASK_STAGES.map((s) => {
-                  const inStage = children.filter((c) => (c as any).subtask_stage === s);
+                  const inStage = children
+                    .filter((c) => (c as any).subtask_stage === s)
+                    .sort((a, b) => {
+                      const da = a.planned_start_date ?? '';
+                      const db = b.planned_start_date ?? '';
+                      if (!da && !db) return 0;
+                      if (!da) return 1; // NULL last
+                      if (!db) return -1;
+                      return da.localeCompare(db);
+                    });
                   if (inStage.length === 0) return null;
                   return (
                     <div key={s}>
@@ -494,6 +503,7 @@ export default function PunchDetailPage() {
               </CardContent>
             </Card>
           )}
+
         </div>
 
         <div className="space-y-4">
