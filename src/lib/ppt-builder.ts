@@ -626,7 +626,7 @@ export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
   const CX = 0.5, CY = 1.75, CW = 12.3, CH = 4.9;
   s.addChart('line' as pptxgen.CHART_NAME, chartData, {
     x: CX, y: CY, w: CW, h: CH,
-    chartColors: [C.stagePreTest, C.stagePreTest, C.stageOfficial, C.stageOfficial, C.stageTestReport],
+    chartColors: [C.stagePreTest, C.stagePreTest, C.stageOfficial, C.stageOfficial, C.stageTestReport, C.stageTestReport],
     lineSize: 2.5, lineSmooth: true, lineDataSymbol: 'none',
     showLegend: true, legendPos: 't', legendFontSize: 10, legendColor: C.textSecondary,
     catAxisLabelColor: C.textMuted, valAxisLabelColor: C.textMuted,
