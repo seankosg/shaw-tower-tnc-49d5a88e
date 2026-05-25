@@ -312,7 +312,7 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
                         const isLastGrand = gIdx === grandRows.length - 1;
                         const borderCls = `${isFirst ? 'border-t-2' : ''} ${isLastGrand ? 'border-b' : ''}`;
                         return (
-                          <TableRow key={`grand-${g.key}`} className={`${borderCls} bg-muted font-bold`} style={{ height: H_HEAD }}>
+                          <TableRow key={`grand-${g.key}`} className={`${borderCls} bg-muted font-bold whitespace-nowrap`} style={{ height: H_HEAD }}>
                             {isFirst && (
                               <TableCell
                                 rowSpan={totalRowCount}
