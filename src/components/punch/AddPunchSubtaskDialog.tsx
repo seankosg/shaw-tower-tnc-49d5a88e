@@ -29,6 +29,7 @@ interface Props {
     outstanding_work?: string | null;
     location?: string | null;
     main_trade?: string | null;
+    sub_trade?: string | null;
     work_type?: string | null;
     team?: TeamType | null;
     planned_start_date?: string | null;
@@ -48,6 +49,7 @@ export function AddPunchSubtaskDialog({
   const [location, setLocation] = useState(defaults?.location ?? '');
   const [workType, setWorkType] = useState(defaults?.work_type ?? '');
   const [mainTrade, setMainTrade] = useState(defaults?.main_trade ?? '');
+  const [subTrade, setSubTrade] = useState(defaults?.sub_trade ?? '');
   const [team, setTeam] = useState<TeamType | ''>(defaults?.team ?? parentTeam ?? '');
   const [plannedStart, setPlannedStart] = useState(defaults?.planned_start_date ?? '');
   const [plannedEnd, setPlannedEnd] = useState(defaults?.planned_completion_date ?? '');
@@ -63,6 +65,7 @@ export function AddPunchSubtaskDialog({
     setLocation(defaults?.location ?? '');
     setWorkType(defaults?.work_type ?? '');
     setMainTrade(defaults?.main_trade ?? '');
+    setSubTrade(defaults?.sub_trade ?? '');
     setTeam((defaults?.team ?? parentTeam ?? '') as TeamType | '');
     setPlannedStart(defaults?.planned_start_date ?? '');
     setPlannedEnd(defaults?.planned_completion_date ?? '');
@@ -87,6 +90,7 @@ export function AddPunchSubtaskDialog({
         location: location || null,
         work_type: workType || null,
         main_trade: mainTrade || null,
+        sub_trade: subTrade || null,
         team: team || null,
         planned_start_date: plannedStart || null,
         planned_completion_date: plannedEnd || null,
@@ -108,7 +112,7 @@ export function AddPunchSubtaskDialog({
     onOpenChange(false);
     if (data) onCreated?.(data as string);
     // reset
-    setOutstanding(''); setLocation(''); setWorkType(''); setMainTrade('');
+    setOutstanding(''); setLocation(''); setWorkType(''); setMainTrade(''); setSubTrade('');
     setPlannedStart(''); setPlannedEnd(''); setWeight('1'); setRemarks('');
     setStage('physical_work');
   }
@@ -153,6 +157,7 @@ export function AddPunchSubtaskDialog({
             <div><Label className="text-xs">Location</Label><Input value={location} onChange={(e) => setLocation(e.target.value)} className="h-9" /></div>
             <div><Label className="text-xs">Work Type</Label><Input value={workType} onChange={(e) => setWorkType(e.target.value)} className="h-9" /></div>
             <div><Label className="text-xs">Main Trade</Label><Input value={mainTrade} onChange={(e) => setMainTrade(e.target.value)} className="h-9" /></div>
+            <div><Label className="text-xs">Sub Trade</Label><Input value={subTrade} onChange={(e) => setSubTrade(e.target.value)} className="h-9" /></div>
             <div>
               <Label className="text-xs">Team <span className="text-muted-foreground">(can differ from parent)</span></Label>
               <Select value={team || undefined} onValueChange={(v) => setTeam(v as TeamType)}>
