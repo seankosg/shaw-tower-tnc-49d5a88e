@@ -576,6 +576,7 @@ export default function PunchDetailPage() {
             outstanding_work: src.outstanding_work,
             location: src.location,
             main_trade: src.main_trade,
+            sub_trade: src.sub_trade,
             work_type: src.work_type,
             team: (src.team ?? null) as TeamType | null,
             planned_start_date: src.planned_start_date,
