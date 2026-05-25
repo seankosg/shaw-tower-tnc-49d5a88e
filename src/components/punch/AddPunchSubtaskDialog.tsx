@@ -71,18 +71,7 @@ export function AddPunchSubtaskDialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const { toast } = useToast();
-  const [stage, setStage] = useState<SubtaskStage>('physical_work');
-  const [outstanding, setOutstanding] = useState(defaults?.outstanding_work ?? '');
-  const [location, setLocation] = useState(defaults?.location ?? '');
-  const [workType, setWorkType] = useState(defaults?.work_type ?? '');
-  const [mainTrade, setMainTrade] = useState(defaults?.main_trade ?? '');
-  const [team, setTeam] = useState<TeamType | ''>(parentTeam ?? '');
-  const [plannedStart, setPlannedStart] = useState('');
-  const [plannedEnd, setPlannedEnd] = useState('');
-  const [weight, setWeight] = useState('1');
-  const [remarks, setRemarks] = useState('');
-  const [saving, setSaving] = useState(false);
+
 
   async function handleSubmit() {
     if (!outstanding.trim()) {
