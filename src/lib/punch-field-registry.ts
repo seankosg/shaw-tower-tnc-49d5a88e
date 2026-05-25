@@ -157,6 +157,12 @@ export const PUNCH_FIELDS: PunchFieldDef[] = [
 
   // meta
   { field: 'remarks', exportLabel: 'Remarks', aliases: ['remarks', 'remark', 'note', 'notes', 'comment', 'comments'], group: 'meta', dataType: 'text' },
+
+  // hierarchy (Summary / Subtask)
+  { field: 'parent_item_no', exportLabel: 'Parent Item No', aliases: ['parentitemno', 'parentno', 'parent', 'summaryitemno'], group: 'hierarchy', dataType: 'text' },
+  { field: 'subtask_stage', exportLabel: 'Subtask Stage', aliases: ['subtaskstage', 'stage', 'substage'], group: 'hierarchy', dataType: 'enum', enumValues: SUBTASK_STAGES },
+  { field: 'is_summary', exportLabel: 'Is Summary', aliases: ['issummary', 'summary', 'rowtype'], group: 'hierarchy', dataType: 'bool', readOnly: true },
+  { field: 'manual_override_fields', exportLabel: 'Manual Override Fields', aliases: ['manualoverride', 'overridefields', 'manualoverridefields'], group: 'hierarchy', dataType: 'text', readOnly: true },
 ];
 
 // Lookup helpers -----------------------------------------------------------
