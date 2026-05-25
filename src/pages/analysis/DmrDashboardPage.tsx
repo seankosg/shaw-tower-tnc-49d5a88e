@@ -452,7 +452,7 @@ export default function DmrDashboardPage() {
                 </TableHeader>
                 <TableBody>
                   {/* Grand Total row */}
-                  <TableRow className="border-t-2 bg-muted font-bold" style={{ height: H_HEAD }}>
+                  <TableRow className="border-t-2 bg-muted font-bold whitespace-nowrap" style={{ height: H_HEAD }}>
                     <TableCell
                       rowSpan={totalRowCount}
                       className="sticky left-0 border-r bg-muted align-middle text-center font-bold"
