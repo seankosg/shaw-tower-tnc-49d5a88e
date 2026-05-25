@@ -57,10 +57,13 @@ import {
   PUNCH_HEALTH_STATUS,
   PUNCH_PROCUREMENT_LABEL,
   PUNCH_PROCUREMENT_STATUS,
+  PUNCH_OVERRIDABLE_SET,
+  SUBTASK_STAGE_SHORT,
   type PunchFieldDef,
   type PunchGateStatus,
   type PunchHealthStatus,
   type PunchProcurementStatus,
+  type SubtaskStage,
 } from '@/lib/punch-field-registry';
 import type { AppRole } from '@/types/enums';
 import {
