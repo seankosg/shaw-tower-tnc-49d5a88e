@@ -137,22 +137,7 @@ export function createDocsImportProvider<TRow>(
       await parseAndApply(id, target.file, target.selectedSheets, excluded);
     }, [parseAndApply]);
 
-    const startImport = useCallback(async () => {
-      if (isRunning) return;
-      const ready = files.filter((f) => f.status === 'ready' && f.parsed && f.parsed.length > 0);
-      if (ready.length === 0) {
-        toast({ title: 'Nothing to import', description: 'Please add and parse files first.', variant: 'destructive' });
-        return;
-      }
-      const blocked = ready.filter((f) => f.validationError);
-      if (blocked.length > 0) {
-        toast({
-          title: 'Cannot start import',
-          description: `${blocked.length} file(s) are missing required columns. ${blocked[0].validationError}`,
-          variant: 'destructive',
-        });
-        return;
-      }
+    const executeImport = useCallback(async (ready: DocsImportFile<TRow>[]) => {
       setIsRunning(true);
 
       let project: { id: string };
