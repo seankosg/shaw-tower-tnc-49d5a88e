@@ -385,6 +385,34 @@ export default function PunchDetailPage() {
             </CardContent>
           </Card>
 
+          {!isSummary && (item as any).parent_id && (
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Subtask Stage</CardTitle></CardHeader>
+              <CardContent>
+                <RadioGroup
+                  value={(merged as any).subtask_stage ?? ''}
+                  onValueChange={(v) => patch('subtask_stage' as any, v as any)}
+                  className="grid grid-cols-3 gap-2"
+                  disabled={disabled}
+                >
+                  {SUBTASK_STAGES.map((s) => (
+                    <label
+                      key={s}
+                      htmlFor={`detail-stage-${s}`}
+                      className={cn(
+                        'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5',
+                        disabled && 'cursor-not-allowed opacity-60',
+                      )}
+                    >
+                      <RadioGroupItem value={s} id={`detail-stage-${s}`} disabled={disabled} />
+                      <span>{SUBTASK_STAGE_LABEL[s]}</span>
+                    </label>
+                  ))}
+                </RadioGroup>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm">People & Team</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-2 gap-3">
