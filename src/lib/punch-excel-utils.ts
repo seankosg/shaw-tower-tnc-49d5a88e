@@ -83,6 +83,40 @@ function coerceNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Parse a Subtask-style Item No like "3_1", "3.1", "Elec-001_2" into
+ * { itemNo, parentItemNo }. Normalizes '_' separator to '.'.
+ * Returns parentItemNo=null when the value is not a subtask pattern.
+ *
+ * Pattern: <base><sep><digits>  where sep is '_' or '.', digits >= 1.
+ * Only the LAST separator is split, so "3_1_2" → parent "3_1", child ".2".
+ */
+export function parseSubtaskItemNo(raw: unknown): { itemNo: string; parentItemNo: string | null } {
+  const s = raw == null ? '' : String(raw).trim();
+  if (!s) return { itemNo: s, parentItemNo: null };
+  const m = s.match(/^(.+)[._](\d+)$/);
+  if (!m) return { itemNo: s, parentItemNo: null };
+  const base = m[1].trim();
+  const child = m[2];
+  if (!base) return { itemNo: s, parentItemNo: null };
+  return { itemNo: `${base}.${child}`, parentItemNo: base };
+}
+
+/** Coerce a Subtask Stage cell into one of the 3 enum values. Returns
+ * undefined if blank, the enum string if valid, or null if invalid. */
+const STAGE_ALIAS_MAP: Record<string, 'pre_engineering' | 'physical_work' | 'inspection'> = {
+  preengineering: 'pre_engineering', preeng: 'pre_engineering', pe: 'pre_engineering',
+  physicalwork: 'physical_work', physical: 'physical_work', pw: 'physical_work', work: 'physical_work',
+  inspection: 'inspection', inspect: 'inspection', in: 'inspection', insp: 'inspection',
+};
+export function coerceSubtaskStage(value: unknown): 'pre_engineering' | 'physical_work' | 'inspection' | undefined | null {
+  if (value == null) return undefined;
+  const s = String(value).trim();
+  if (!s) return undefined;
+  const norm = s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  return STAGE_ALIAS_MAP[norm] ?? null;
+}
+
 /** Normalize Excel header for header_mapping lookup.
  * Must match Admin's punch normalizeAlias: lowercase + strip all non-alphanumerics.
  * So "Main Cat", "main-cat", "Main_Cat" all collapse to "maincat". */
