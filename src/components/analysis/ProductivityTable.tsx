@@ -351,6 +351,10 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
                         return (
                           <TableRow key={`total-${mr.key}`} className={`${borderCls} bg-muted font-bold whitespace-nowrap`} style={{ height: H_HEAD }}>
                             <TableCell
+                              className="sticky left-0 border-r bg-muted text-center font-bold"
+                              style={{ top, width: W_SUB, minWidth: W_SUB, zIndex: Z_TOTAL_LEFT }}
+                            />
+                            <TableCell
                               className="sticky border-r bg-muted text-[11px] font-semibold"
                               style={{ top, left: W_SUB, width: W_METRIC, minWidth: W_METRIC, zIndex: Z_TOTAL_LEFT }}
                             >
