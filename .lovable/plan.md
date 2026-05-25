@@ -1,46 +1,24 @@
-## 변경 대상
-리포트 PPT 11번 슬라이드(`buildDocsSnapshot`, `src/lib/ppt-builder.ts`)의 **OMM 카드**.
-
-## 현재 상태
-OMM 카드는 2개 바차트만 표시:
-- Submitted (Sub2) — `sub2_actual_date` 보유 비율
-- Under Review — `under_review` 상태 비율
-
 ## 목표
-기존 2개 바를 제거하고, 다음 3개의 바차트로 교체. 표현(라벨 + 값 + 가로 바)은 다른 모듈(ABD/Warranty/Spare Parts) 카드와 동일한 `kpiRow` + `barRow` 방식 그대로 유지.
+2번 슬라이드(Dashboard)의 Close Out Document 카드에 있는 OMM 바차트를 기존 'OMM Draft Submitted(sub2_actual_date)'에서 'OMM Final Submission(final_actual_date)' 기준으로 변경합니다.
 
-| # | 라벨 | 분자 | 분모 | 컬럼 |
-|---|------|------|------|------|
-| 1 | Final Submission | `final_actual_date` 값 있는 행 수 | 전체 OMM 행 수 | `final_actual_date` |
-| 2 | Final Response | `final_response_actual_date` 값 있는 행 수 | 전체 OMM 행 수 | `final_response_actual_date` |
-| 3 | Final Status A | `final_response_status === 'A'` 행 수 | 전체 OMM 행 수 | `final_response_status` |
+## 변경 대상 파일
+`src/lib/ppt-builder.ts` — `buildDashboard` 함수 내 Close Out Document 카드 영역 (L435~456)
 
-> 참고: `docs_omm` 테이블에는 `final_status` 컬럼이 없고 OMM의 최종 승인 상태는 `final_response_status`에 들어있어 그것을 'Final Status'로 사용합니다. 만약 다른 컬럼을 의도하셨다면 알려주세요.
+## 변경 내용
+1. **L438** — 데이터 소스 변경
+   - 기존: `const ommSubPct = docsKPI.omm.pcts['sub2_actual_date'] ?? 0;`
+   - 변경: `const ommSubPct = docsKPI.omm.pcts['final_actual_date'] ?? 0;`
 
-## 구현 변경
-
-### 1) `src/lib/report-builder.ts`
-- `OmmRow` 인터페이스에 `final_response_status: string | null` 추가.
-- `fetchAll<OmmRow>('docs_omm', ...)`의 select 컬럼에 `final_response_status` 추가.
-- 일반 `mk()` 로직(존재 여부 기준 %)을 그대로 사용하되, OMM 한정으로 `final_response_status === 'A'` 카운트를 별도 계산해 `currentPcts['final_response_status_a']`와 `currentCounts['final_response_status_a']`에 주입.
-  - 기존 `currentPcts['final_actual_date']`, `currentPcts['final_response_actual_date']`는 이미 계산되어 있으므로 그대로 사용.
-
-### 2) `src/lib/ppt-builder.ts` (SLIDE 11, OMM 모듈)
-- 기존 `ommUr`, `ommSub`, `ommUrPct` 산출 제거.
-- 새 변수:
-  ```ts
-  const ommFinalSub = docsKPI.omm.pcts['final_actual_date']           ?? 0;
-  const ommFinalRes = docsKPI.omm.pcts['final_response_actual_date']  ?? 0;
-  const ommFinalA   = docsKPI.omm.pcts['final_response_status_a']     ?? 0;
-  ```
-- `modules` 배열의 OMM 항목 `rows`를 다음 3행으로 교체:
-  ```ts
-  { label: 'Final Submission', val: ommFinalSub.toFixed(1), unit: '%', color: C.cyan,          isPct: true, pct: ommFinalSub },
-  { label: 'Final Response',   val: ommFinalRes.toFixed(1), unit: '%', color: C.stageOfficial, isPct: true, pct: ommFinalRes },
-  { label: 'Final Status A',   val: ommFinalA.toFixed(1),   unit: '%', color: ommFinalA < 50 ? C.amber : C.green, isPct: true, pct: ommFinalA },
-  ```
-- `headlineDefault`가 `abdUr > 500` 조건이라 OMM 변경과 무관 → 그대로 유지.
+2. **L452** — 라벨 변경
+   - 기존: `{ label: 'OMM Draft Submitted', pct: ommSubPct, color: C.stageOfficialLight }`
+   - 변경: `{ label: 'OMM Final Submission', pct: ommSubPct, color: C.stageOfficialLight }`
 
 ## 영향 범위
-- 다른 모듈 카드(ABD/Warranty/Spare Parts), 다른 슬라이드, 대시보드 화면은 변경 없음.
-- 리포트 본문(`renderDocsMd`)도 변경 없음(기존 출력 그대로).
+- `report-builder.ts`는 이미 `final_actual_date`에 대한 데이터(`currentPcts['final_actual_date']`)를 계산하고 있으므로 추가 변경이 필요 없습니다.
+- 11번 슬라이드(OMM 진도율)는 영향받지 않습니다.
+- 기존 변수명 `ommSubPct`은 유지하되, 실제 의미는 Final Submission 기준으로 변경됩니다.
+
+## 기술적 세부사항
+- `void ommUrPct;` (L456)는 기존처럼 그대로 유지됩니다.
+- 색상 `C.stageOfficialLight`은 유지됩니다.
+- 카드 헤더의 총 개수 표시(OMM ${docsKPI.omm.total})는 그대로 유지됩니다.

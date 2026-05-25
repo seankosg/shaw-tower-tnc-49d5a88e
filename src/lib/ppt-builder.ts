@@ -435,7 +435,7 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   // Close Out Docs card
   const abdApvPct  = docsKPI.abd.pcts['sub1_approval_date'] ?? 0;
   const abdSubPct  = docsKPI.abd.pcts['sub1_submission_date'] ?? 0;
-  const ommSubPct  = docsKPI.omm.pcts['sub2_actual_date'] ?? 0;
+  const ommSubPct  = docsKPI.omm.pcts['final_actual_date'] ?? 0;
   const ommUrCount = docsKPI.omm.statusCounts['under_review'] ?? 0;
   const ommUrPct   = docsKPI.omm.total > 0 ? (ommUrCount / docsKPI.omm.total) * 100 : 0;
   const warFinal   = docsKPI.warranty.pcts['final_actual_date'] ?? 0;
@@ -449,7 +449,7 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   ry = row2 + 0.72;
   [
     { label: 'ABD Submitted',        pct: abdSubPct, color: C.cyan },
-    { label: 'OMM Draft Submitted',  pct: ommSubPct, color: C.stageOfficialLight },
+    { label: 'OMM Final Submission', pct: ommSubPct, color: C.stageOfficialLight },
     { label: 'Warranty Final',       pct: warFinal,  color: warFinal < 50 ? C.amber : C.green },
     { label: 'Spare Delivery',       pct: spDel,     color: spDel < 1 ? C.magentaBright : C.green },
   ].forEach(r => { progressRow(col1, ry, cardW, r.label, r.pct, r.color, null); ry += 0.45; });
