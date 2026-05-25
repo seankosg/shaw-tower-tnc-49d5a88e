@@ -352,23 +352,23 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
                         const isLast = idx === totalMetrics.length - 1;
                         const borderCls = `${isLast ? 'border-b-2' : ''}`;
                         return (
-                          <TableRow key={`total-${mr.key}`} className={`${borderCls} bg-muted/70 font-bold whitespace-nowrap`} style={{ height: H_HEAD }}>
+                          <TableRow key={`total-${mr.key}`} className={`${borderCls} bg-muted font-bold whitespace-nowrap`} style={{ height: H_HEAD }}>
                             <TableCell
-                              className="sticky border-r bg-muted/70 text-[11px] font-semibold"
+                              className="sticky border-r bg-muted text-[11px] font-semibold"
                               style={{ top, left: W_SUB, width: W_METRIC, minWidth: W_METRIC, zIndex: Z_TOTAL_LEFT }}
                             >
                               {mr.label}
                             </TableCell>
-                            <TableCell className="sticky border-l bg-muted/70 text-right tabular-nums font-bold" style={{ top, left: W_SUB + W_METRIC, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{qAvg || ''}</TableCell>
-                            <TableCell className="sticky bg-muted/70 text-right tabular-nums text-muted-foreground font-bold" style={{ top, left: W_SUB + W_METRIC + W_AVG, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{mAvg || ''}</TableCell>
-                            <TableCell className="sticky border-r bg-muted/70 text-right tabular-nums font-bold" style={{ top, left: W_SUB + W_METRIC + W_AVG * 2, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{prod(qSum, mSum)}</TableCell>
+                            <TableCell className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top, left: W_SUB + W_METRIC, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{qAvg || ''}</TableCell>
+                            <TableCell className="sticky bg-muted text-right tabular-nums text-muted-foreground font-bold" style={{ top, left: W_SUB + W_METRIC + W_AVG, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{mAvg || ''}</TableCell>
+                            <TableCell className="sticky border-r bg-muted text-right tabular-nums font-bold" style={{ top, left: W_SUB + W_METRIC + W_AVG * 2, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{prod(qSum, mSum)}</TableCell>
                             {dates.flatMap((d) => {
                               const q = sumQty(mr, d);
                               const man = sumMan(mr.wp, d);
                               return [
-                                <TableCell key={`total-${mr.key}-${d}-q`} className="sticky border-l bg-muted/70 text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{q || ''}</TableCell>,
-                                <TableCell key={`total-${mr.key}-${d}-m`} className="sticky bg-muted/70 text-right tabular-nums text-muted-foreground font-bold" style={{ top, zIndex: Z_TOTAL }}>{man || ''}</TableCell>,
-                                <TableCell key={`total-${mr.key}-${d}-p`} className="sticky bg-muted/70 text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{prod(q, man)}</TableCell>,
+                                <TableCell key={`total-${mr.key}-${d}-q`} className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{q || ''}</TableCell>,
+                                <TableCell key={`total-${mr.key}-${d}-m`} className="sticky bg-muted text-right tabular-nums text-muted-foreground font-bold" style={{ top, zIndex: Z_TOTAL }}>{man || ''}</TableCell>,
+                                <TableCell key={`total-${mr.key}-${d}-p`} className="sticky bg-muted text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{prod(q, man)}</TableCell>,
                               ];
                             })}
                           </TableRow>

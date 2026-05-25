@@ -485,23 +485,23 @@ export default function DmrDashboardPage() {
                     const wSum = wpSumAll(wRow);
                     const isLast = wIdx === selectedWp.length - 1;
                     return (
-                      <TableRow key={`total-wp-${wRow}`} className={`${isLast ? 'border-b-2' : ''} bg-muted/70 font-bold whitespace-nowrap`} style={{ height: H_HEAD }}>
-                        <TableCell className="sticky border-l bg-muted/70 text-right tabular-nums font-bold" style={{ top, left: leftAvgTotal, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{wAvg || ''}</TableCell>
+                      <TableRow key={`total-wp-${wRow}`} className={`${isLast ? 'border-b-2' : ''} bg-muted font-bold whitespace-nowrap`} style={{ height: H_HEAD }}>
+                        <TableCell className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top, left: leftAvgTotal, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{wAvg || ''}</TableCell>
                         {selectedWp.map((w, i) => {
                           const v = w === wRow ? wAvg : 0;
-                          return <TableCell key={`total-wp-${wRow}-avg-${w}`} className="sticky bg-muted/70 text-right tabular-nums text-muted-foreground font-bold" style={{ top, left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{v || ''}</TableCell>;
+                          return <TableCell key={`total-wp-${wRow}-avg-${w}`} className="sticky bg-muted text-right tabular-nums text-muted-foreground font-bold" style={{ top, left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{v || ''}</TableCell>;
                         })}
                         {tableDates.flatMap((d) => {
                           const t = colWpTotal(d, wRow);
                           return [
-                            <TableCell key={`total-wp-${wRow}-${d}-total`} className="sticky border-l bg-muted/70 text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{t || ''}</TableCell>,
+                            <TableCell key={`total-wp-${wRow}-${d}-total`} className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{t || ''}</TableCell>,
                             ...selectedWp.map((w) => {
                               const v = w === wRow ? t : 0;
-                              return <TableCell key={`total-wp-${wRow}-${d}-${w}`} className="sticky bg-muted/70 text-right tabular-nums text-muted-foreground font-bold" style={{ top, zIndex: Z_TOTAL }}>{v || ''}</TableCell>;
+                              return <TableCell key={`total-wp-${wRow}-${d}-${w}`} className="sticky bg-muted text-right tabular-nums text-muted-foreground font-bold" style={{ top, zIndex: Z_TOTAL }}>{v || ''}</TableCell>;
                             }),
                           ];
                         })}
-                        <TableCell className="sticky border-l bg-muted/70 text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{wSum || ''}</TableCell>
+                        <TableCell className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{wSum || ''}</TableCell>
                       </TableRow>
                     );
                   })}

@@ -1,42 +1,30 @@
-## 요약
-`DmrDashboardPage.tsx`의 **Breakdown by Subcontractor × Date** 테이블에 Productivity 테이블과 동일한 방식의 sticky Total 섹션을 헤더 바로 아래에 추가합니다. 기존 하단 `Day Total` 행은 중복되므로 제거합니다.
+## 문제
 
-## 변경 파일
-- `src/pages/analysis/DmrDashboardPage.tsx` (line 393~489 영역)
+ProductivityTable 및 DMR Breakdown 테이블의 sticky Total 행이 `bg-muted/70` (70% 투명)으로 되어 있어, 데이터 행이 그 아래로 스크롤될 때 뒷면 글자가 비쳐 보입니다. 화면상 "Defect Planned" 행이 두 줄로 겹쳐 보이는 원인입니다.
 
-## 변경 내용
+## 수정 범위
 
-### 1) Total 섹션 구조 (헤더 직하단)
-- **Grand Total 행 1개** (Productivity의 Plan/Actual grand 행과 동일한 스타일)
-  - 라벨: `Total (All)`
-  - Average · Total = `floor(grandTotal / denom)`
-  - Average · 각 workplace = `floor(Σdates colWpTotal(d, w) / denom)` (기존 Day Total 행 로직 재사용)
-  - 날짜별 Total = `dayTotalByDate.get(d)`
-  - 날짜별 workplace 셀 = `colWpTotal(d, w)`
-  - Row Total 셀 = `grandTotal`
-- **Workplace별 Total 행** (`selectedWp.length`개)
-  - 라벨: workplace 이름 (예: `T&C Total`, `Defect Total`, `Post TOP Total`)
-  - Average · Total = `floor(Σdates colWpTotal(d, w) / denom)` (자신의 wp만)
-  - Average · workplace 컬럼: 자기 컬럼에만 값, 나머지는 빈칸
-  - 날짜별 Total 컬럼 = `colWpTotal(d, w)` (해당 wp만)
-  - 날짜별 workplace 컬럼: 자기 컬럼에만 값, 나머지는 빈칸
-  - Row Total = `Σdates colWpTotal(d, w)`
+투명도만 제거합니다. 레이아웃, 폰트, 동작은 그대로.
 
-### 2) 좌측 Sticky `Total` 라벨 병합
-- 첫 grand 행에 `rowSpan = 1 + selectedWp.length`인 sticky 좌측 셀 (`Subcontractor` 컬럼 자리) 표시 → 라벨 `Total`, `bg-muted`, 가운데 정렬.
+### 1) `src/components/analysis/ProductivityTable.tsx`
 
-### 3) Sticky 처리
-- 헤더 2행: 기존 그대로 (위치 변경 없음 — 현 코드에는 `top: 0` sticky가 없으니 같은 패턴 유지). 단, **세로 sticky 적용**:
-  - 현재 컨테이너 `overflow-x-auto` → `overflow-auto` + `max-h-[70vh]`
-  - 헤더 두 행에 `sticky top: 0 / top: 32px` + 적절한 zIndex 부여 (Productivity와 동일 상수 H_HEAD=32, Z_HEAD=40, Z_HEAD_LEFT=50)
-  - Total 행들에 `sticky top` 누적 (`TOP_TOTAL_BASE = 64`, 행마다 `+H_HEAD`), Z_TOTAL=30 / Z_TOTAL_LEFT=35
-  - 좌측 sticky 컬럼들(Subcontractor, Average Total, Average WP들)은 Z_HEAD_LEFT / Z_TOTAL_LEFT 사용
+- Per-metric Total 행에서 `bg-muted/70` → `bg-muted` 로 전부 교체
+  - `<TableRow>` className
+  - 모든 sticky `<TableCell>` className (4개 left-sticky 셀 + 날짜별 3개 셀)
+- Grand Total 행은 이미 `bg-muted` (불투명) 이라 변경 불필요
+- 데이터 행의 `text-muted-foreground/40` (Qty/Man 0일 때)은 유지 — sticky 아래에서만 비치는 게 아니라 본인 행 표시이므로 무관
 
-### 4) 하단 `Day Total` 행 제거
-- 기존 line 458~482 행은 새 Total 섹션과 동일 정보를 표시하므로 삭제.
+### 2) `src/pages/analysis/DmrDashboardPage.tsx`
+
+- Per-workplace Total 행의 `bg-muted/70` → `bg-muted` 로 교체 (TableRow + 모든 sticky TableCell)
+- Grand Total 행은 변경 없음
+
+### 3) 시각적 구분
+
+Grand Total과 Per-metric/Per-workplace Total이 둘 다 `bg-muted` 단색이 되면 구분이 약해지므로, Per-metric/Per-workplace 행은 `bg-muted` + 약간 작은 글자 강조(`font-semibold` 유지)로 두고, Grand Total은 `font-bold border-b` 로 시각적 위계 유지. 색 차이 대신 굵기/구분선으로 구분합니다.
 
 ## 검증
-- DMR Dashboard에서 Breakdown 테이블 진입 시 헤더 아래에 `Total (All)` + workplace별 Total 행이 표시되고, 모든 협력사 합과 일치.
-- 세로 스크롤 시 헤더 + Total 섹션 sticky 고정.
-- 가로 스크롤 시 좌측 `Total` 라벨, Average 컬럼들이 정상 sticky.
-- 필터 변경(Subcontractor / Team / Workplace) 시 Total 값이 즉시 갱신.
+
+- DMR Dashboard에서 표를 세로 스크롤 → Total 영역 아래에서 협력사 이름/숫자가 비쳐 보이지 않음 확인
+- Productivity 표에서도 동일 확인
+- 5월 25일 기준 Total 숫자(T&C 67, Defect 244, Post TOP 51) 그대로 표시되는지 확인
