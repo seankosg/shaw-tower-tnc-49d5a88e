@@ -608,8 +608,8 @@ export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
   });
 
   const headlineDefault = tncKPI.testReport.pct < 1
-    ? 'Tests are running ahead — reports have not started.'
-    : `Tests ahead of plan — Test Report at ${tncKPI.testReport.pct.toFixed(1)}%.`;
+    ? 'Tests ahead — Test Report not yet started.'
+    : `Plan vs Actual across all three streams — Test Report at ${tncKPI.testReport.pct.toFixed(1)}%.`;
   const headline = T('tnc_scurve', 'headline', headlineDefault);
   s.addText(headline, { x: 0.5, y: 0.85, w: 12.5, h: 0.8, fontFace: FONT, fontSize: 32, bold: true, color: C.textPrimary, margin: 0 });
 
@@ -620,12 +620,13 @@ export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
     { name: 'Official Test · Plan',  labels: cats, values: pts.map(p => p.t2PlanPct) },
     { name: 'Official Test · Actual',labels: cats, values: pts.map(p => p.t2ActualPct) },
     { name: 'Test Report · Plan',    labels: cats, values: pts.map(p => p.r2sPlanPct) },
+    { name: 'Test Report · Actual',  labels: cats, values: pts.map(p => p.r2sActualPct) },
   ];
 
   const CX = 0.5, CY = 1.75, CW = 12.3, CH = 4.9;
   s.addChart('line' as pptxgen.CHART_NAME, chartData, {
     x: CX, y: CY, w: CW, h: CH,
-    chartColors: [C.stagePreTest, C.stagePreTest, C.stageOfficial, C.stageOfficial, C.stageTestReport],
+    chartColors: [C.stagePreTest, C.stagePreTest, C.stageOfficial, C.stageOfficial, C.stageTestReport, C.stageTestReport],
     lineSize: 2.5, lineSmooth: true, lineDataSymbol: 'none',
     showLegend: true, legendPos: 't', legendFontSize: 10, legendColor: C.textSecondary,
     catAxisLabelColor: C.textMuted, valAxisLabelColor: C.textMuted,
@@ -641,17 +642,23 @@ export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
   const PLOT_L = CX + 0.75, PLOT_T = CY + 0.65;
   const PLOT_W = CW - 0.75 - 0.15, PLOT_H = CH - 0.65 - 0.65;
 
-  let lastIdx = 0, lastT1 = 0, lastT2 = 0;
+  let lastIdx = 0, lastT1 = 0, lastT2 = 0, lastR2Idx = 0, lastR2 = 0;
   pts.forEach((p, i) => {
     if (p.t1ActualPct != null) { lastIdx = i; lastT1 = p.t1ActualPct; lastT2 = p.t2ActualPct ?? 0; }
+    if (p.r2sActualPct != null) { lastR2Idx = i; lastR2 = p.r2sActualPct; }
   });
   const nPts = pts.length;
   const xDD = PLOT_L + (lastIdx / Math.max(nPts - 1, 1)) * PLOT_W;
   const yT1 = PLOT_T + (1 - lastT1 / 100) * PLOT_H;
   const yT2 = PLOT_T + (1 - lastT2 / 100) * PLOT_H;
+  const xR2 = PLOT_L + (lastR2Idx / Math.max(nPts - 1, 1)) * PLOT_W;
+  const yR2 = PLOT_T + (1 - lastR2 / 100) * PLOT_H;
 
   s.addText(`${Math.round(lastT1)}%`, { x: xDD+0.15, y: yT1-0.18, w: 0.8, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stagePreTest, margin: 0 });
   s.addText(`${Math.round(lastT2)}%`, { x: xDD+0.15, y: yT2-0.18, w: 0.8, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stageOfficial, margin: 0 });
+  if (lastR2 > 0) {
+    s.addText(`${Math.round(lastR2)}%`, { x: xR2+0.15, y: yR2-0.18, w: 0.8, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stageTestReport, margin: 0 });
+  }
 
   const yT1Plan = PLOT_T + (1 - (pts[lastIdx]?.t1PlanPct ?? 0) / 100) * PLOT_H;
   const yT2Plan = PLOT_T + (1 - (pts[lastIdx]?.t2PlanPct ?? 0) / 100) * PLOT_H;
@@ -664,6 +671,11 @@ export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
   if (tncKPI.official.variance > 0) {
     const yVar2 = Math.min((yT2+yT2Plan)/2 - 0.18, yT2 - 0.55);
     s.addText(`▲ +${tncKPI.official.variance.toFixed(1)}%`, { x: xVar, y: yVar2, w: 1.8, h: 0.3, fontFace: FONT, fontSize: 13, bold: true, color: C.green, align: 'right', margin: 0 });
+  }
+  if (tncKPI.testReport.variance > 0) {
+    const yR2Plan = PLOT_T + (1 - (pts[lastR2Idx]?.r2sPlanPct ?? 0) / 100) * PLOT_H;
+    const yVar3 = Math.min((yR2+yR2Plan)/2 - 0.18, yR2 - 0.55);
+    s.addText(`▲ +${tncKPI.testReport.variance.toFixed(1)}%`, { x: xR2 - 2.3, y: yVar3, w: 1.8, h: 0.3, fontFace: FONT, fontSize: 13, bold: true, color: C.green, align: 'right', margin: 0 });
   }
 
   drawFooter(pres, s, '04');
