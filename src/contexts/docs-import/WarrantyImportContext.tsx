@@ -495,7 +495,57 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
 
     setIsRunning(false);
     toast({ title: 'Warranty import complete', description: `${ready.length} file(s) processed.` });
-  }, [files, isRunning, toast, user]);
+  }, [toast, user]);
+
+  const startImport = useCallback(async () => {
+    if (isRunning) return;
+    const ready = files.filter((f) => f.status === 'ready' && f.parsed && f.parsed.length > 0);
+    if (ready.length === 0) {
+      toast({ title: 'Nothing to import', description: 'Please add and parse files first.', variant: 'destructive' });
+      return;
+    }
+    const blocked = ready.filter((f) => f.validationError);
+    if (blocked.length > 0) {
+      toast({
+        title: 'Cannot start import',
+        description: blocked[0].validationError ?? 'Validation failed',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const maps = await fetchSubMasterMaps();
+      const allRows = ready.flatMap((f) => f.parsed ?? []);
+      const replaced = normalizeRowsAgainstMaster(allRows as any, maps);
+      if (replaced > 0) toast({ title: 'Subcontractor names normalized', description: `${replaced} name(s) replaced with master canonical form.` });
+      const decisions = detectEditDistanceDecisions(allRows as any, maps, 2);
+      if (decisions.length > 0) {
+        setPendingReady(ready);
+        setSimilarDecisions(decisions);
+        return;
+      }
+    } catch (e) {
+      console.warn('[warranty-import] sub master sync failed', e);
+    }
+    await executeImport(ready);
+  }, [files, isRunning, toast, executeImport]);
+
+  const setDecisionAction = useCallback((key: string, action: SimilarDecisionAction) => {
+    setSimilarDecisions((cur) => cur.map((d) => d.key === key ? { ...d, action } : d));
+  }, []);
+  const confirmSimilarDecisions = useCallback(async () => {
+    if (!pendingReady) { setSimilarDecisions([]); return; }
+    const allRows = pendingReady.flatMap((f) => f.parsed ?? []);
+    applyDecisionsInPlace(allRows as any, similarDecisions);
+    const r = pendingReady;
+    setSimilarDecisions([]);
+    setPendingReady(null);
+    await executeImport(r);
+  }, [pendingReady, similarDecisions, executeImport]);
+  const cancelSimilarDecisions = useCallback(() => {
+    setSimilarDecisions([]);
+    setPendingReady(null);
+  }, []);
 
   const value: WarrantyImportContextValue = {
     subModule: 'warranty',
@@ -504,7 +554,9 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
     rawDataPath: '/docs/warranty',
     files, isRunning, addFiles, removeFile, clearAll,
     setFileSheets, setFileDataDate, setFileExcludedHeaders, startImport,
+    similarDecisions, setDecisionAction, confirmSimilarDecisions, cancelSimilarDecisions,
   };
+
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
