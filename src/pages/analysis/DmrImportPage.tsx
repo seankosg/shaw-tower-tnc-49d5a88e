@@ -140,6 +140,7 @@ export default function DmrImportPage() {
     setExistingKeys(new Set(keys.filter(k => set.has(k))));
   }
 
+  async function uploadAndParse() {
     if (!file || !user) return;
     setParsing(true);
     try {
@@ -158,16 +159,12 @@ export default function DmrImportPage() {
       setParsed(result);
       setReportDate(result.report_date);
 
-      // Check existing keys for duplicate detection
-      const flat = flatten(result, result.report_date);
-      const keys = flat.map(r => `${r.report_date}|${r.subcontractor}|${r.workplace}`);
-      const { data: existing } = await supabase
-        .from('dmr_entries')
-        .select('report_date, subcontractor, workplace')
-        .eq('report_date', result.report_date);
-      const set = new Set((existing ?? []).map(e => `${e.report_date}|${e.subcontractor}|${e.workplace}`));
-      setExistingKeys(new Set(keys.filter(k => set.has(k))));
+      await refreshExistingKeys(result);
       toast({ title: 'Parsed', description: `${result.sections.reduce((a, s) => a + s.rows.length, 0)} companies extracted.` });
+
+      // Detect possible misspellings vs existing master entries (≤2 char edits).
+      const decisions = await detectDmrSimilar(result);
+      if (decisions.length > 0) setSimilarDecisions(decisions);
     } catch (e: any) {
       console.error(e);
       toast({ title: 'Parse failed', description: e?.message ?? String(e), variant: 'destructive' });
@@ -175,6 +172,22 @@ export default function DmrImportPage() {
       setParsing(false);
     }
   }
+
+  function setDecisionAction(key: string, action: SimilarDecisionAction) {
+    setSimilarDecisions((cur) => cur.map((d) => d.key === key ? { ...d, action } : d));
+  }
+  async function confirmSimilarDecisions() {
+    if (!parsed) { setSimilarDecisions([]); return; }
+    const next = applyDecisionsToParsed(parsed, similarDecisions);
+    setParsed(next);
+    await refreshExistingKeys(next);
+    setSimilarDecisions([]);
+  }
+  function cancelSimilarDecisions() {
+    // Treat cancel as "register new for all" — keep imported names as-is.
+    setSimilarDecisions([]);
+  }
+
 
   function updateRow(team: string, idx: number, patch: Partial<ParsedRow>) {
     if (!parsed) return;
