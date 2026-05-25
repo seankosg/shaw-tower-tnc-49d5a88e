@@ -1,39 +1,42 @@
 ## 요약
-`ProductivityTable.tsx`의 Total 섹션 최상단에 **Plan 합계 / Actual 합계** 2개 행을 추가합니다. 기존 메트릭별 Total(T&C Planned, T&C Actual, Defect Planned, Defect Actual)은 그대로 유지하고, 그 위에 표시중인 모든 항목(workplace 필터에 포함된 T&C + Defect)을 가로지르는 grand total 2행을 둡니다.
+`DmrDashboardPage.tsx`의 **Breakdown by Subcontractor × Date** 테이블에 Productivity 테이블과 동일한 방식의 sticky Total 섹션을 헤더 바로 아래에 추가합니다. 기존 하단 `Day Total` 행은 중복되므로 제거합니다.
 
 ## 변경 파일
-- `src/components/analysis/ProductivityTable.tsx`
+- `src/pages/analysis/DmrDashboardPage.tsx` (line 393~489 영역)
 
 ## 변경 내용
 
-### 1) Grand Total 행 데이터 정의 (line 217~232 영역)
-- 새로운 타입 `GrandRow = { key: 'plan'|'actual'; label: string; metrics: MetricRow[] }` 도입.
-- `grandRows` 구성:
-  - Plan: `totalMetrics` 중 key가 `tcp`, `dfp` 인 항목 (현재 토글된 workplace만 포함)
-  - Actual: `totalMetrics` 중 key가 `tca`, `dfa` 인 항목
-- 셀 값 계산:
-  - Qty(날짜별/전체) = 해당 grand 그룹에 속한 모든 `MetricRow`의 `sumQty(mr, d)` 합
-  - Man(날짜별/전체) = 중복 합산 방지를 위해 그룹의 **고유 workplace 집합** 기준으로 `sumMan(wp, d)` 합 (예: Plan 그룹에 T&C+Defect 모두 있으면 두 workplace Man 합)
-  - Nos/Man = `prod(qSum, mSum)`
-  - Average Qty/Man = `Math.floor(sum/denom)`
+### 1) Total 섹션 구조 (헤더 직하단)
+- **Grand Total 행 1개** (Productivity의 Plan/Actual grand 행과 동일한 스타일)
+  - 라벨: `Total (All)`
+  - Average · Total = `floor(grandTotal / denom)`
+  - Average · 각 workplace = `floor(Σdates colWpTotal(d, w) / denom)` (기존 Day Total 행 로직 재사용)
+  - 날짜별 Total = `dayTotalByDate.get(d)`
+  - 날짜별 workplace 셀 = `colWpTotal(d, w)`
+  - Row Total 셀 = `grandTotal`
+- **Workplace별 Total 행** (`selectedWp.length`개)
+  - 라벨: workplace 이름 (예: `T&C Total`, `Defect Total`, `Post TOP Total`)
+  - Average · Total = `floor(Σdates colWpTotal(d, w) / denom)` (자신의 wp만)
+  - Average · workplace 컬럼: 자기 컬럼에만 값, 나머지는 빈칸
+  - 날짜별 Total 컬럼 = `colWpTotal(d, w)` (해당 wp만)
+  - 날짜별 workplace 컬럼: 자기 컬럼에만 값, 나머지는 빈칸
+  - Row Total = `Σdates colWpTotal(d, w)`
 
-### 2) 렌더링 (line 287~328 영역)
-- TableBody 상단에 `grandRows.map(...)` 블록을 먼저 렌더링.
-  - 좌측 sticky 셀: `Total` 라벨을 `rowSpan = grandRows.length + totalMetrics.length` 로 병합 → 기존 per-metric Total의 rowSpan과 통합 (또는 grand 2행 + 메트릭 행으로 별도 rowSpan 사용 중 깔끔한 한 가지 채택; 시각적 일관성을 위해 단일 `Total` 셀로 병합 권장).
-  - Metric 셀 라벨: `Plan (Total)`, `Actual (Total)` — 굵게 강조, `bg-muted` 더 진하게 (`bg-muted`).
-  - 첫 번째 grand 행에 `border-t-2`, 마지막 per-metric Total 행에 기존 `border-b-2` 유지. 두 그룹 사이에는 `border-b` 분리선 추가.
-- sticky `top` 오프셋 재계산:
-  - `TOP_TOTAL_BASE = H_HEAD * 2` 시작
-  - grand 행 i: `top = TOP_TOTAL_BASE + H_HEAD * i`
-  - per-metric Total 행 j: `top = TOP_TOTAL_BASE + H_HEAD * (grandRows.length + j)`
-- 좌측 `Total` 병합 셀의 `rowSpan`을 새 총행 수(grand + per-metric)로 설정.
+### 2) 좌측 Sticky `Total` 라벨 병합
+- 첫 grand 행에 `rowSpan = 1 + selectedWp.length`인 sticky 좌측 셀 (`Subcontractor` 컬럼 자리) 표시 → 라벨 `Total`, `bg-muted`, 가운데 정렬.
 
-### 3) 필터 동작
-- `rowSubs` (Subcontractor/Team 필터 반영)와 `fWp` (Workplace 토글)는 기존 로직 그대로 사용 → 필터 = All이면 모든 항목 합산이 자동 성립.
-- Workplace 토글에서 T&C만 켠 경우 Plan/Actual grand 행은 T&C 단일 메트릭만 합산. Defect만 켠 경우도 동일.
+### 3) Sticky 처리
+- 헤더 2행: 기존 그대로 (위치 변경 없음 — 현 코드에는 `top: 0` sticky가 없으니 같은 패턴 유지). 단, **세로 sticky 적용**:
+  - 현재 컨테이너 `overflow-x-auto` → `overflow-auto` + `max-h-[70vh]`
+  - 헤더 두 행에 `sticky top: 0 / top: 32px` + 적절한 zIndex 부여 (Productivity와 동일 상수 H_HEAD=32, Z_HEAD=40, Z_HEAD_LEFT=50)
+  - Total 행들에 `sticky top` 누적 (`TOP_TOTAL_BASE = 64`, 행마다 `+H_HEAD`), Z_TOTAL=30 / Z_TOTAL_LEFT=35
+  - 좌측 sticky 컬럼들(Subcontractor, Average Total, Average WP들)은 Z_HEAD_LEFT / Z_TOTAL_LEFT 사용
+
+### 4) 하단 `Day Total` 행 제거
+- 기존 line 458~482 행은 새 Total 섹션과 동일 정보를 표시하므로 삭제.
 
 ## 검증
-- DMR Dashboard에서 필터 All 상태에서 Plan 행 Qty = T&C Planned + Defect Planned 동일 날짜 합과 일치.
-- Workplace 필터에서 T&C만 켰을 때 Plan 행이 T&C Planned 값과 정확히 같아야 함.
-- 세로 스크롤 시 헤더 2행 + Plan/Actual grand 2행 + per-metric Total 4행이 모두 sticky 유지.
-- 좌측 `Total` 라벨 셀이 모든 Total 행에 걸쳐 세로 병합되어 표시됨.
+- DMR Dashboard에서 Breakdown 테이블 진입 시 헤더 아래에 `Total (All)` + workplace별 Total 행이 표시되고, 모든 협력사 합과 일치.
+- 세로 스크롤 시 헤더 + Total 섹션 sticky 고정.
+- 가로 스크롤 시 좌측 `Total` 라벨, Average 컬럼들이 정상 sticky.
+- 필터 변경(Subcontractor / Team / Workplace) 시 Total 값이 즉시 갱신.
