@@ -153,15 +153,14 @@ function TabFilter({
 export default function DmrDashboardPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['dmr_entries_all'],
-    queryFn: async (): Promise<Row[]> => {
-      const { data, error } = await supabase
-        .from('dmr_entries')
-        .select('report_date, team, trade, subcontractor, workplace, manpower')
-        .order('report_date', { ascending: true })
-        .limit(10000);
-      if (error) throw error;
-      return (data ?? []) as Row[];
-    },
+    queryFn: (): Promise<Row[]> =>
+      fetchAllRows<Row>((from, to) =>
+        supabase
+          .from('dmr_entries')
+          .select('report_date, team, trade, subcontractor, workplace, manpower')
+          .order('report_date', { ascending: true })
+          .range(from, to),
+      ),
   });
 
   const rows = data ?? [];
