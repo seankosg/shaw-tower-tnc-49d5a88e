@@ -819,7 +819,9 @@ export default function PunchRawDataPage() {
   useEffect(() => { setRowSelection({}); }, [columnFilters, globalFilter, searchParams]);
 
   const selectedRows = useMemo(
-    () => table.getSelectedRowModel().rows.map((r) => r.original),
+    () => table.getSelectedRowModel().rows
+      .map((r) => r.original)
+      .filter((r) => !(r as any).is_summary), // Summary rows excluded from bulk operations
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rowSelection, rows],
   );
