@@ -329,6 +329,11 @@ export default function PunchDetailPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground line-clamp-1">{item.outstanding_work}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {(item as any).created_by
+                ? <>Created by: <span className="font-medium">{isOwner ? 'You' : (item as any).created_by.slice(0, 8)}</span></>
+                : <>Created by: <span className="italic">Imported / Legacy</span></>}
+            </p>
             {parent && (
               <p className="text-[11px] text-muted-foreground">
                 Parent: <Link to={`/punch/${parent.id}`} className="text-primary hover:underline">{parent.item_no ?? parent.id}</Link>
