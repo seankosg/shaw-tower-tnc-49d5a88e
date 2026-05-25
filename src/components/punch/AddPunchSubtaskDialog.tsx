@@ -126,6 +126,10 @@ export function AddPunchSubtaskDialog({
     setMainTrade(defaults?.main_trade ?? '');
     setSubTrade(defaults?.sub_trade ?? '');
     setTeam((defaults?.team ?? parentTeam ?? '') as TeamType | '');
+    setSubcontractor(defaults?.subcontractor_name ?? '');
+    setSubsub(defaults?.subsub_name ?? '');
+    setHdecPic(defaults?.hdec_pic_name ?? '');
+    setHdecEng(defaults?.hdec_eng_name ?? '');
     setPlannedStart(computeChainedStart(ns, siblings, parentPlannedStartDate));
     setStartDirty(false);
     setPlannedEnd('');
