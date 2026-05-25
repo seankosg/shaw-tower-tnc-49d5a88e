@@ -418,12 +418,8 @@ export default function DmrDashboardPage() {
             const Z_TOTAL_LEFT = 35;
 
             // Totals helpers
-            const wpAvgAll = (w: string) =>
-              Math.floor(dates.reduce((a, d) => a + colWpTotal(d, w), 0) / denom);
-            const wpSumAll = (w: string) =>
-              dates.reduce((a, d) => a + colWpTotal(d, w), 0);
             const grandAvg = Math.floor(grandTotal / denom);
-            const totalRowCount = 1 + selectedWp.length;
+
 
             return (
             <div className="max-w-full overflow-auto max-h-[70vh]">
