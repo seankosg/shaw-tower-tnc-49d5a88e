@@ -19,7 +19,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import { useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { AlertCircle, Download, Filter, Search, Upload } from 'lucide-react';
+import { AlertCircle, ChevronRight, Download, Filter, Layers, Search, Upload } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
