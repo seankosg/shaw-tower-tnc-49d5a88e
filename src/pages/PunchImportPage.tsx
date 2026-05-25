@@ -213,6 +213,7 @@ export default function PunchImportPage() {
     setPendingImportProjectId(null);
   };
 
+  const readyCount = queue.filter((it) => it.status === 'ready').length;
   const totals = queue.reduce((acc, it) => {
     if (it.result) {
       acc.inserted += it.result.inserted;
