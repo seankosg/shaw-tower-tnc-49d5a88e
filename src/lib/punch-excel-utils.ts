@@ -249,6 +249,16 @@ export async function parsePunchWorkbook(
           break;
         }
         case 'enum': {
+          if (field.field === 'subtask_stage') {
+            const stage = coerceSubtaskStage(cell);
+            if (stage === undefined) break; // blank → skip
+            if (stage === null) {
+              errors.push({ rawRowNo, reason: `Invalid Subtask Stage: "${String(cell).trim()}" (allowed: pre_engineering, physical_work, inspection)` });
+              return; // reject row
+            }
+            (values as any).subtask_stage = stage;
+            break;
+          }
           const allowed = field.field.startsWith('material_procurement')
             ? PUNCH_PROCUREMENT_STATUS
             : PUNCH_GATE_STATUS;
