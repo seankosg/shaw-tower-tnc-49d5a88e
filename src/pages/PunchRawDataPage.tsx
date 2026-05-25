@@ -238,6 +238,37 @@ function getFieldValue(row: PunchItem, field: string, originalHeader: string | n
 }
 
 function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, value: any) {
+  // Hierarchy markers on the Item No column
+  if (field === 'item_no') {
+    const r = row as any;
+    const isSummary = !!r.is_summary;
+    const isChild = !!r.parent_id;
+    const stage = r.subtask_stage as SubtaskStage | null;
+    const overrideCount = r.override_fields ? Object.keys(r.override_fields).length : 0;
+    return (
+      <span className={cn('inline-flex items-center gap-1.5 min-w-0', isChild && 'pl-4')}>
+        {isSummary ? (
+          <Layers className="h-3 w-3 flex-shrink-0 text-primary" />
+        ) : isChild ? (
+          <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+        ) : null}
+        <span className={cn('truncate', isSummary && 'font-semibold')}>{value == null || value === '' ? '—' : String(value)}</span>
+        {isChild && stage && (
+          <span className="ml-0.5 rounded border px-1 py-0 text-[8px] font-semibold text-muted-foreground">
+            {SUBTASK_STAGE_SHORT[stage]}
+          </span>
+        )}
+        {isSummary && overrideCount > 0 && (
+          <span
+            className="ml-0.5 rounded border border-amber-400 bg-amber-50 px-1 py-0 text-[8px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-200"
+            title={`${overrideCount} field${overrideCount === 1 ? '' : 's'} manually overridden`}
+          >
+            M{overrideCount}
+          </span>
+        )}
+      </span>
+    );
+  }
   switch (field) {
     case 'health_status':
       return <HealthBadge status={(value as PunchHealthStatus) ?? null} />;
@@ -259,6 +290,24 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
       return arr.length > 0 ? <span className="text-xs">{arr.join(', ')}</span> : <span className="text-muted-foreground">—</span>;
     }
   }
+  // Highlight overridden cells on summary rows
+  const r = row as any;
+  if (r.is_summary && PUNCH_OVERRIDABLE_SET.has(field) && r.override_fields && r.override_fields[field]) {
+    const inner = renderPlainCell(value, def);
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded px-1 -mx-1 bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200"
+        title="Manual override"
+      >
+        {inner}
+        <span className="text-[8px] font-bold text-amber-700 dark:text-amber-300">M</span>
+      </span>
+    );
+  }
+  return renderPlainCell(value, def);
+}
+
+function renderPlainCell(value: any, def: PunchFieldDef | null) {
   if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
   if (def?.dataType === 'date') {
     return <span className="text-xs">{formatDdMmm(String(value).slice(0, 10))}</span>;
