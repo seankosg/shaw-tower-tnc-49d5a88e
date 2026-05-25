@@ -452,7 +452,7 @@ export default function DmrDashboardPage() {
                 </TableHeader>
                 <TableBody>
                   {/* Grand Total row */}
-                  <TableRow className="border-t-2 bg-muted font-bold" style={{ height: H_HEAD }}>
+                  <TableRow className="border-t-2 bg-muted font-bold whitespace-nowrap" style={{ height: H_HEAD }}>
                     <TableCell
                       rowSpan={totalRowCount}
                       className="sticky left-0 border-r bg-muted align-middle text-center font-bold"
@@ -485,7 +485,7 @@ export default function DmrDashboardPage() {
                     const wSum = wpSumAll(wRow);
                     const isLast = wIdx === selectedWp.length - 1;
                     return (
-                      <TableRow key={`total-wp-${wRow}`} className={`${isLast ? 'border-b-2' : ''} bg-muted/70 font-bold`} style={{ height: H_HEAD }}>
+                      <TableRow key={`total-wp-${wRow}`} className={`${isLast ? 'border-b-2' : ''} bg-muted/70 font-bold whitespace-nowrap`} style={{ height: H_HEAD }}>
                         <TableCell className="sticky border-l bg-muted/70 text-right tabular-nums font-bold" style={{ top, left: leftAvgTotal, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{wAvg || ''}</TableCell>
                         {selectedWp.map((w, i) => {
                           const v = w === wRow ? wAvg : 0;

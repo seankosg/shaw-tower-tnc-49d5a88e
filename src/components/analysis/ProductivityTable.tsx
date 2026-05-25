@@ -312,7 +312,7 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
                         const isLastGrand = gIdx === grandRows.length - 1;
                         const borderCls = `${isFirst ? 'border-t-2' : ''} ${isLastGrand ? 'border-b' : ''}`;
                         return (
-                          <TableRow key={`grand-${g.key}`} className={`${borderCls} bg-muted font-bold`} style={{ height: H_HEAD }}>
+                          <TableRow key={`grand-${g.key}`} className={`${borderCls} bg-muted font-bold whitespace-nowrap`} style={{ height: H_HEAD }}>
                             {isFirst && (
                               <TableCell
                                 rowSpan={totalRowCount}
@@ -352,7 +352,7 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
                         const isLast = idx === totalMetrics.length - 1;
                         const borderCls = `${isLast ? 'border-b-2' : ''}`;
                         return (
-                          <TableRow key={`total-${mr.key}`} className={`${borderCls} bg-muted/70 font-bold`} style={{ height: H_HEAD }}>
+                          <TableRow key={`total-${mr.key}`} className={`${borderCls} bg-muted/70 font-bold whitespace-nowrap`} style={{ height: H_HEAD }}>
                             <TableCell
                               className="sticky border-r bg-muted/70 text-[11px] font-semibold"
                               style={{ top, left: W_SUB, width: W_METRIC, minWidth: W_METRIC, zIndex: Z_TOTAL_LEFT }}
