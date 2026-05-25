@@ -104,10 +104,11 @@ export function MultiSelectDropdown({
 
     const list = [...counts.entries()].map(([value, count]) => ({
       value,
-      label: labelMap.get(value) ?? value,
+      label: String(labelMap.get(value) ?? value),
       count,
     }));
     list.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+
     return [{ value: EMPTY_TOKEN, label: '(Empty)', count: emptyCount }, ...list];
   }, [facets, options, labelMap, selected]);
 
