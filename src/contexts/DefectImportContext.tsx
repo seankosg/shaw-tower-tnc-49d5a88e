@@ -523,9 +523,9 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         const subName = row.subcontractor_name?.trim();
         if (subName && !exactSubs.has(masterNameKey(subName))) {
           const key = `sub:${masterNameKey(subName)}`;
-          const match = findSimilarMasterName(subName, subMasters);
+          const match = findEditDistanceMatch(subName, subMasters, 2);
           if (match && !decisions.has(key)) {
-            decisions.set(key, { key, kind: 'subcontractor', importedName: subName, existingName: match.candidate.name, score: match.score });
+            decisions.set(key, { key, kind: 'subcontractor', importedName: subName, existingName: match.candidate.name, score: 1 - match.distance / Math.max(subName.length, match.candidate.name.length) });
           }
         }
 
@@ -534,15 +534,16 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         if (parentName && subsubName && !exactSubsubs.has(`${masterNameKey(parentName)}::${masterNameKey(subsubName)}`)) {
           const key = `subsub:${masterNameKey(parentName)}::${masterNameKey(subsubName)}`;
           const candidates = subsubMasters.filter((master) => masterNameKey(master.parentName) === masterNameKey(parentName));
-          const match = findSimilarMasterName(subsubName, candidates);
+          const match = findEditDistanceMatch(subsubName, candidates, 2);
           if (match && !decisions.has(key)) {
-            decisions.set(key, { key, kind: 'subsub', importedName: subsubName, existingName: match.candidate.name, parentName, score: match.score });
+            decisions.set(key, { key, kind: 'subsub', importedName: subsubName, existingName: match.candidate.name, parentName, score: 1 - match.distance / Math.max(subsubName.length, match.candidate.name.length) });
           }
         }
       }
     }
 
     return [...decisions.values()];
+
   };
 
   const findDuplicateSubcontractorIssueNos = (items: DefectImportFile[]) => {
