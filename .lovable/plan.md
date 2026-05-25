@@ -1,35 +1,39 @@
-## 변경 대상
-`src/components/analysis/ProductivityTable.tsx`
+## 요약
+`ProductivityTable.tsx`의 Total 섹션 최상단에 **Plan 합계 / Actual 합계** 2개 행을 추가합니다. 기존 메트릭별 Total(T&C Planned, T&C Actual, Defect Planned, Defect Actual)은 그대로 유지하고, 그 위에 표시중인 모든 항목(workplace 필터에 포함된 T&C + Defect)을 가로지르는 grand total 2행을 둡니다.
 
-## 구현 내용
+## 변경 파일
+- `src/components/analysis/ProductivityTable.tsx`
 
-### 1. Total 행 추가 (헤더 바로 아래)
-- 협력사 행들 위에 **메트릭별 Total 행**을 추가 (현재 표시 중인 메트릭이 T&C Planned / T&C Actual / Defect Planned / Defect Actual이면 그만큼 Total 행 생성).
-- `Subcontractor` 컬럼 셀에는 **"Total"** 표시(metric rows 개수만큼 `rowSpan`으로 병합).
-- 각 셀 계산식:
-  - `Qty` = 표시 중인 모든 협력사(`rowSubs`)의 해당 metric × 해당 날짜 Qty 합
-  - `Man` = 모든 협력사의 해당 날짜 × 해당 workplace(T&C/Defect) Man 합
-  - `Nos/Man` = 합산된 `Qty / Man` (`prod()` 재사용)
-  - Average(Qty/Man/Nos/Man) 컬럼도 동일하게 합산 후 평균
-- 스타일: 굵게(`font-bold`), 배경 `bg-muted`, 상하 보더 강조로 일반 데이터 행과 시각적 구분.
+## 변경 내용
 
-### 2. 세로 스크롤 컨테이너
-- 현재 `<div className="max-w-full overflow-x-auto">`를 `overflow-auto`로 바꾸고 `max-h-[70vh]`(혹은 600px) 부여하여 세로 스크롤 활성화.
-- 가로 sticky 컬럼들(Subcontractor / Metric / Average 그룹)은 기존 그대로 유지.
+### 1) Grand Total 행 데이터 정의 (line 217~232 영역)
+- 새로운 타입 `GrandRow = { key: 'plan'|'actual'; label: string; metrics: MetricRow[] }` 도입.
+- `grandRows` 구성:
+  - Plan: `totalMetrics` 중 key가 `tcp`, `dfp` 인 항목 (현재 토글된 workplace만 포함)
+  - Actual: `totalMetrics` 중 key가 `tca`, `dfa` 인 항목
+- 셀 값 계산:
+  - Qty(날짜별/전체) = 해당 grand 그룹에 속한 모든 `MetricRow`의 `sumQty(mr, d)` 합
+  - Man(날짜별/전체) = 중복 합산 방지를 위해 그룹의 **고유 workplace 집합** 기준으로 `sumMan(wp, d)` 합 (예: Plan 그룹에 T&C+Defect 모두 있으면 두 workplace Man 합)
+  - Nos/Man = `prod(qSum, mSum)`
+  - Average Qty/Man = `Math.floor(sum/denom)`
 
-### 3. Sticky 처리
-- **헤더 두 줄(`TableHeader` > `TableRow` 2개)**: `sticky top-0 z-30` 적용. 이미 좌측 sticky가 있는 셀들은 `top-0` 추가 + z-index 상향.
-  - 두 번째 헤더 행은 `top: H1`(첫 헤더 행 높이) 위치에 sticky. 헤더 높이가 가변이라 `top-[28px]` 같은 고정값 대신 두 행 모두 `top-0`이고 표시 순서로 자연스럽게 쌓이도록 `position: sticky`만 부여하면 됩니다. 실제로는 첫 행 `top:0`, 두 번째 행 `top: 32px`처럼 명시 필요 → 헤더 행 높이를 `h-8`(32px)로 고정해 안정화.
-- **Total 행들**: `sticky` + `top: 64px`(헤더 2행 합계) + `z-25`. Metric별 Total 행이 여러 개면 각 행마다 누적 top 오프셋 부여 (`top = 64 + 32 * idx`).
-- 좌측 sticky 셀(`Subcontractor`, `Metric`, `Average` 3개 셀)은 세로 sticky와 결합되도록 z-index를 `z-40` 등으로 더 높게 설정해 스크롤 시 정상 노출.
+### 2) 렌더링 (line 287~328 영역)
+- TableBody 상단에 `grandRows.map(...)` 블록을 먼저 렌더링.
+  - 좌측 sticky 셀: `Total` 라벨을 `rowSpan = grandRows.length + totalMetrics.length` 로 병합 → 기존 per-metric Total의 rowSpan과 통합 (또는 grand 2행 + 메트릭 행으로 별도 rowSpan 사용 중 깔끔한 한 가지 채택; 시각적 일관성을 위해 단일 `Total` 셀로 병합 권장).
+  - Metric 셀 라벨: `Plan (Total)`, `Actual (Total)` — 굵게 강조, `bg-muted` 더 진하게 (`bg-muted`).
+  - 첫 번째 grand 행에 `border-t-2`, 마지막 per-metric Total 행에 기존 `border-b-2` 유지. 두 그룹 사이에는 `border-b` 분리선 추가.
+- sticky `top` 오프셋 재계산:
+  - `TOP_TOTAL_BASE = H_HEAD * 2` 시작
+  - grand 행 i: `top = TOP_TOTAL_BASE + H_HEAD * i`
+  - per-metric Total 행 j: `top = TOP_TOTAL_BASE + H_HEAD * (grandRows.length + j)`
+- 좌측 `Total` 병합 셀의 `rowSpan`을 새 총행 수(grand + per-metric)로 설정.
 
-### 4. 기타
-- `rowSubs.length === 0` 등 빈 상태 처리는 기존 유지.
-- 기존 협력사 데이터 행, Average 컬럼 로직은 변경 없음.
+### 3) 필터 동작
+- `rowSubs` (Subcontractor/Team 필터 반영)와 `fWp` (Workplace 토글)는 기존 로직 그대로 사용 → 필터 = All이면 모든 항목 합산이 자동 성립.
+- Workplace 토글에서 T&C만 켠 경우 Plan/Actual grand 행은 T&C 단일 메트릭만 합산. Defect만 켠 경우도 동일.
 
 ## 검증
-- DMR Dashboard에서 다음 확인:
-  - 헤더 아래에 "Total" 행이 메트릭 수만큼 보이고 값이 모든 협력사 합과 일치
-  - 세로 스크롤 시 헤더 + Total 행이 상단 고정
-  - 가로 스크롤 시 좌측 Subcontractor/Metric/Average 컬럼이 정상 고정
-  - 모바일/좁은 뷰포트에서도 sticky가 깨지지 않음
+- DMR Dashboard에서 필터 All 상태에서 Plan 행 Qty = T&C Planned + Defect Planned 동일 날짜 합과 일치.
+- Workplace 필터에서 T&C만 켰을 때 Plan 행이 T&C Planned 값과 정확히 같아야 함.
+- 세로 스크롤 시 헤더 2행 + Plan/Actual grand 2행 + per-metric Total 4행이 모두 sticky 유지.
+- 좌측 `Total` 라벨 셀이 모든 Total 행에 걸쳐 세로 병합되어 표시됨.
