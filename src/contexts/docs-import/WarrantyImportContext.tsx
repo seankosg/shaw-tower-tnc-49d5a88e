@@ -188,22 +188,7 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
     await parseAndApply(id, target.file, target.selectedSheets, excluded);
   }, [parseAndApply]);
 
-  const startImport = useCallback(async () => {
-    if (isRunning) return;
-    const ready = files.filter((f) => f.status === 'ready' && f.parsed && f.parsed.length > 0);
-    if (ready.length === 0) {
-      toast({ title: 'Nothing to import', description: 'Please add and parse files first.', variant: 'destructive' });
-      return;
-    }
-    const blocked = ready.filter((f) => f.validationError);
-    if (blocked.length > 0) {
-      toast({
-        title: 'Cannot start import',
-        description: blocked[0].validationError ?? 'Validation failed',
-        variant: 'destructive',
-      });
-      return;
-    }
+  const executeImport = useCallback(async (ready: WarrantyImportFile[]) => {
     setIsRunning(true);
 
     let project: { id: string };
@@ -215,6 +200,7 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
       setIsRunning(false);
       return;
     }
+
 
     // Pre-load subcontractor master to map names → ids.
     const { data: subRows } = await (supabase as any)
