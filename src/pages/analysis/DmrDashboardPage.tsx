@@ -362,9 +362,6 @@ export default function DmrDashboardPage() {
         subs={subs}
       />
 
-      <div className="text-lg font-bold text-primary truncate">
-        Subcontractor: {fSubs.size === subs.length ? 'All' : Array.from(fSubs).join(', ')}
-      </div>
 
       <Card>
         <CardHeader className="pb-2">
