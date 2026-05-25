@@ -194,7 +194,7 @@ export default function DmrDashboardPage() {
   const dates = useMemo(() => Array.from(new Set(filtered.map((r) => r.report_date))).sort(), [filtered]);
   const tableDates = useMemo(() => [...dates].reverse(), [dates]);
 
-  const [chartGroupBy, setChartGroupBy] = useState<'trade' | 'workplace'>('trade');
+  const [chartGroupBy, setChartGroupBy] = useState<'trade' | 'workplace'>('workplace');
 
   // One combined chart grouped by Trade or Workplace (different colored lines)
   const selectedTrades = useMemo(() => trades.filter((t) => fTrades.has(t)), [trades, fTrades]);
