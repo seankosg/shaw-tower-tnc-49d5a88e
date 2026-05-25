@@ -85,7 +85,61 @@ export default function DmrImportPage() {
     return { ...p, sections };
   }
 
-  async function uploadAndParse() {
+  /** Detect imported subcontractor names within 2 edits of an existing master
+   *  (but not exact-case match — those are already replaced). */
+  async function detectDmrSimilar(p: ParsedDmr): Promise<SimilarMasterDecision[]> {
+    const { data: masters } = await supabase
+      .from('subcontractor_master')
+      .select('id, name, type')
+      .eq('is_active', true);
+    const subMasters = ((masters ?? []) as any[]).filter((m) => (m.type ?? 'sub') === 'sub');
+    const exact = new Set(subMasters.map((m) => masterNameKey(m.name)));
+    const seen = new Map<string, SimilarMasterDecision>();
+    for (const s of p.sections) {
+      for (const r of s.rows) {
+        const name = r.subcontractor?.trim();
+        if (!name || exact.has(masterNameKey(name))) continue;
+        const key = `sub:${masterNameKey(name)}`;
+        if (seen.has(key)) continue;
+        const match = findEditDistanceMatch(name, subMasters, 2);
+        if (match) {
+          seen.set(key, {
+            key, kind: 'subcontractor',
+            importedName: name, existingName: match.candidate.name,
+            distance: match.distance,
+          });
+        }
+      }
+    }
+    return [...seen.values()];
+  }
+
+  function applyDecisionsToParsed(p: ParsedDmr, decisions: SimilarMasterDecision[]): ParsedDmr {
+    const byKey = new Map(decisions.map((d) => [`sub:${masterNameKey(d.importedName)}`, d]));
+    return {
+      ...p,
+      sections: p.sections.map((s) => ({
+        ...s,
+        rows: s.rows.map((r) => {
+          const d = byKey.get(`sub:${masterNameKey(r.subcontractor)}`);
+          if (d?.action === 'use_existing') return { ...r, subcontractor: d.existingName };
+          return r;
+        }),
+      })),
+    };
+  }
+
+  async function refreshExistingKeys(p: ParsedDmr) {
+    const flat = flatten(p, p.report_date);
+    const keys = flat.map(r => `${r.report_date}|${r.subcontractor}|${r.workplace}`);
+    const { data: existing } = await supabase
+      .from('dmr_entries')
+      .select('report_date, subcontractor, workplace')
+      .eq('report_date', p.report_date);
+    const set = new Set((existing ?? []).map(e => `${e.report_date}|${e.subcontractor}|${e.workplace}`));
+    setExistingKeys(new Set(keys.filter(k => set.has(k))));
+  }
+
     if (!file || !user) return;
     setParsing(true);
     try {
