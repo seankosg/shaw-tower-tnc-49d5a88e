@@ -48,6 +48,26 @@ import { USER_TYPE_LABELS } from '@/types/enums';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/integrations/supabase/types';
+
+// Natural compare for punch item_no like "3", "3.1", "10", "10.2"
+function comparePunchItemNo(a: string | null | undefined, b: string | null | undefined): number {
+  const sa = String(a ?? ''); const sb = String(b ?? '');
+  const pa = sa.split('.').map((p) => { const n = Number(p); return Number.isFinite(n) ? n : p; });
+  const pb = sb.split('.').map((p) => { const n = Number(p); return Number.isFinite(n) ? n : p; });
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const x = pa[i]; const y = pb[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    if (typeof x === 'number' && typeof y === 'number') {
+      if (x !== y) return x - y;
+    } else {
+      const cmp = String(x).localeCompare(String(y));
+      if (cmp !== 0) return cmp;
+    }
+  }
+  return 0;
+}
 import {
   PUNCH_FIELDS,
   PUNCH_FIELDS_BY_NAME,
@@ -773,6 +793,53 @@ export default function PunchRawDataPage() {
     return next;
   }, [rows, searchParams]);
 
+  // ── Hierarchical default ordering ─────────────────────────────────────────
+  // When sorting is at default (item_no asc), arrange rows so each parent (Summary
+  // or standalone) is followed by its children sorted by planned_start_date.
+  const isDefaultSort = sorting.length === 0
+    || (sorting.length === 1 && sorting[0].id === 'item_no' && !sorting[0].desc);
+  const orderedRows = useMemo(() => {
+    if (!isDefaultSort) return filteredRows;
+    const byParent = new Map<string, PunchItem[]>();
+    const roots: PunchItem[] = [];
+    for (const r of filteredRows) {
+      if ((r as any).parent_id) {
+        const k = String((r as any).parent_id);
+        const arr = byParent.get(k) ?? [];
+        arr.push(r);
+        byParent.set(k, arr);
+      } else {
+        roots.push(r);
+      }
+    }
+    roots.sort((a, b) => comparePunchItemNo(a.item_no, b.item_no));
+    const childCmp = (a: PunchItem, b: PunchItem) => {
+      const da = a.planned_start_date ?? ''; const db = b.planned_start_date ?? '';
+      if (!da && !db) return comparePunchItemNo(a.item_no, b.item_no);
+      if (!da) return 1; if (!db) return -1;
+      const c = da.localeCompare(db);
+      return c !== 0 ? c : comparePunchItemNo(a.item_no, b.item_no);
+    };
+    const out: PunchItem[] = [];
+    const usedChildKeys = new Set<string>();
+    for (const p of roots) {
+      out.push(p);
+      const kids = byParent.get(String(p.id));
+      if (kids && kids.length) {
+        kids.sort(childCmp);
+        out.push(...kids);
+        usedChildKeys.add(String(p.id));
+      }
+    }
+    // Orphan children (parent filtered out) appended at the end
+    for (const [k, arr] of byParent) {
+      if (usedChildKeys.has(k)) continue;
+      arr.sort(childCmp);
+      out.push(...arr);
+    }
+    return out;
+  }, [filteredRows, isDefaultSort, sorting]);
+
   // ── Column visibility & order (driven by Field Config) ──────────────────
   const columnVisibility = useMemo<VisibilityState>(() => {
     const vis: VisibilityState = { __select: true };
@@ -790,9 +857,9 @@ export default function PunchRawDataPage() {
   }, [allFieldIds, sortFieldNames]);
 
   const table = useReactTable({
-    data: filteredRows,
+    data: orderedRows,
     columns,
-    state: { sorting: sorting.length ? sorting : DEFAULT_SORTING, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
+    state: { sorting: isDefaultSort ? [] : sorting, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,

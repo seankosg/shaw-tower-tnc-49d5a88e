@@ -5002,6 +5002,10 @@ export type Database = {
         Args: { p_summary_id: string }
         Returns: undefined
       }
+      punch_recompute_summary_dates: {
+        Args: { p_parent: string }
+        Returns: undefined
+      }
       purge_old_event_log: { Args: never; Returns: number }
       restore_insert_rows: {
         Args: { _rows: Json; _table: string }
