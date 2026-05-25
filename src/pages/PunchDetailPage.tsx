@@ -182,7 +182,11 @@ export default function PunchDetailPage() {
     if (roles.some((r) => r === 'admin' || r === 'superuser' || r === 'senior_user' || r === 'user')) return false;
     return profile.team !== item.team;
   }, [roles, profile, item]);
-  const disabled = isReadOnlyRole || isDSuperOutOfTeam;
+  const isOwner = useMemo(
+    () => !!(item as any)?.created_by && !!profile?.user_id && (item as any).created_by === profile.user_id,
+    [item, profile],
+  );
+  const disabled = (isReadOnlyRole || isDSuperOutOfTeam) && !isOwner;
 
   const reload = useCallback(async () => {
     if (!id) return;
