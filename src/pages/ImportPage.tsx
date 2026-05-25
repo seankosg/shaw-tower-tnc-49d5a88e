@@ -297,6 +297,15 @@ export default function ImportPage() {
           onApply={(excluded) => setFileExcludedHeaders(columnDialogFile.id, excluded)}
         />
       )}
+      <SimilarMasterDialog
+        open={similarDecisions.length > 0}
+        decisions={similarDecisions}
+        isRunning={isRunning}
+        onSetAction={setDecisionAction}
+        onConfirm={confirmSimilarDecisions}
+        onCancel={cancelSimilarDecisions}
+      />
     </div>
   );
 }
+
