@@ -613,28 +613,29 @@ export default function PunchDetailPage() {
         parentItemNo={item.item_no}
         parentTeam={item.team as TeamType | null}
         parentIsSummary={isSummary}
+        parentPlannedStartDate={item.planned_start_date}
         defaults={(() => {
-          // If there are existing subtasks, prefill from the one with latest planned_start_date.
-          // Otherwise, fall back to the parent (Summary) values.
-          const sortedKids = [...children]
-            .filter((c) => c.planned_start_date)
-            .sort((a, b) => (b.planned_start_date ?? '').localeCompare(a.planned_start_date ?? ''));
-          const src = sortedKids[0] ?? item;
+          // Identity/classification inheritance: use first child by item_no, fall back to parent.
+          const firstChild = [...children]
+            .filter((c) => !!c.item_no)
+            .sort((a, b) => (a.item_no ?? '').localeCompare(b.item_no ?? ''))[0];
+          const src = firstChild ?? item;
           return {
-            outstanding_work: src.outstanding_work,
             location: src.location,
             main_trade: src.main_trade,
             sub_trade: src.sub_trade,
             work_type: src.work_type,
             team: (src.team ?? null) as TeamType | null,
-            planned_start_date: src.planned_start_date,
-            planned_completion_date: src.planned_completion_date,
-            weight: src.weight == null ? null : String(src.weight),
-            remarks: src.remarks,
           };
         })()}
+        existingSubtasks={children.map((c) => ({
+          subtask_stage: (c as any).subtask_stage as SubtaskStage | null,
+          planned_completion_date: c.planned_completion_date,
+          planned_start_date: c.planned_start_date,
+        }))}
         onCreated={(newId) => navigate(`/punch/${newId}`)}
       />
+
 
     </div>
   );
