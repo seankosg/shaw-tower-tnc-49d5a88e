@@ -1,61 +1,35 @@
-## 1. 근본 원인 (확정)
+## 변경 대상
+`src/components/analysis/ProductivityTable.tsx`
 
-`src/pages/analysis/DmrDashboardPage.tsx`의 `dmr_entries` 조회가 Supabase PostgREST의 서버 측 기본 응답 캡(1000행)에 걸려 최신 일자 행이 잘립니다.
+## 구현 내용
 
-- `dmr_entries` 총 1029행 (1000 초과)
-- 쿼리: `.order('report_date', { ascending: true }).limit(10000)`
-- 클라이언트의 `.limit(10000)`은 URL 파라미터일 뿐 서버 `max_rows=1000`을 넘지 못함
-- 오름차순 정렬이라 잘리는 행은 **가장 최신 일자(2026-05-25)**의 ACU/타 협력사 행들
-- 결과: `dates` 배열에 25-May가 없어서 컬럼 자체가 안 생기고, ACU Defect 11명도 표시 누락
+### 1. Total 행 추가 (헤더 바로 아래)
+- 협력사 행들 위에 **메트릭별 Total 행**을 추가 (현재 표시 중인 메트릭이 T&C Planned / T&C Actual / Defect Planned / Defect Actual이면 그만큼 Total 행 생성).
+- `Subcontractor` 컬럼 셀에는 **"Total"** 표시(metric rows 개수만큼 `rowSpan`으로 병합).
+- 각 셀 계산식:
+  - `Qty` = 표시 중인 모든 협력사(`rowSubs`)의 해당 metric × 해당 날짜 Qty 합
+  - `Man` = 모든 협력사의 해당 날짜 × 해당 workplace(T&C/Defect) Man 합
+  - `Nos/Man` = 합산된 `Qty / Man` (`prod()` 재사용)
+  - Average(Qty/Man/Nos/Man) 컬럼도 동일하게 합산 후 평균
+- 스타일: 굵게(`font-bold`), 배경 `bg-muted`, 상하 보더 강조로 일반 데이터 행과 시각적 구분.
 
-## 2. 추가 검토 — 같은 패턴의 잠재 버그
+### 2. 세로 스크롤 컨테이너
+- 현재 `<div className="max-w-full overflow-x-auto">`를 `overflow-auto`로 바꾸고 `max-h-[70vh]`(혹은 600px) 부여하여 세로 스크롤 활성화.
+- 가로 sticky 컬럼들(Subcontractor / Metric / Average 그룹)은 기존 그대로 유지.
 
-`.limit(N)`에 큰 수를 적어 "전체 가져오기"를 시도하지만 1000행에서 잘리는 위치 (높은 우선순위순):
+### 3. Sticky 처리
+- **헤더 두 줄(`TableHeader` > `TableRow` 2개)**: `sticky top-0 z-30` 적용. 이미 좌측 sticky가 있는 셀들은 `top-0` 추가 + z-index 상향.
+  - 두 번째 헤더 행은 `top: H1`(첫 헤더 행 높이) 위치에 sticky. 헤더 높이가 가변이라 `top-[28px]` 같은 고정값 대신 두 행 모두 `top-0`이고 표시 순서로 자연스럽게 쌓이도록 `position: sticky`만 부여하면 됩니다. 실제로는 첫 행 `top:0`, 두 번째 행 `top: 32px`처럼 명시 필요 → 헤더 행 높이를 `h-8`(32px)로 고정해 안정화.
+- **Total 행들**: `sticky` + `top: 64px`(헤더 2행 합계) + `z-25`. Metric별 Total 행이 여러 개면 각 행마다 누적 top 오프셋 부여 (`top = 64 + 32 * idx`).
+- 좌측 sticky 셀(`Subcontractor`, `Metric`, `Average` 3개 셀)은 세로 sticky와 결합되도록 z-index를 `z-40` 등으로 더 높게 설정해 스크롤 시 정상 노출.
 
-| 파일 | 라인 | 테이블 | 현재 행 수 | 영향 |
-|---|---|---|---|---|
-| `pages/analysis/DmrDashboardPage.tsx` | 160 | dmr_entries | 1029 | **확인됨** — 대시보드 최신일 누락 |
-| `pages/analysis/DmrRawDataPage.tsx` | 62 | dmr_entries | 1029 | DMR Raw Data 페이지에서도 일부 누락 가능 |
-| `pages/ExportPage.tsx` | 52 | subtests | 1802 | **Subtest Export CSV가 1000행에서 잘림 — 데이터 손실** |
-| `pages/DefectDetailPage.tsx` | 126 | defect_items | 6322 | Combobox 자동완성 후보 누락(품질만 영향) |
-| `pages/docs/DocsDrawingDetailPage.tsx` | 205 | docs_drawings | 3882 | 동일 — 자동완성 후보 누락 |
-| `pages/admin/EventLogTab.tsx` | 130 | event_log | 167,106 | Event Log CSV Export가 1000행에서 잘림 |
+### 4. 기타
+- `rowSubs.length === 0` 등 빈 상태 처리는 기존 유지.
+- 기존 협력사 데이터 행, Average 컬럼 로직은 변경 없음.
 
-참고: `defect_items` 카드 캐시(`src/lib/defect-cache.ts`)와 `Import Logs` 조회(`fetchAllByUploadId`)는 이미 페이지네이션이 적용되어 안전합니다. `.limit(1/5/50/100)`처럼 의도적 상한은 모두 정상입니다.
-
-## 3. 수정 내용
-
-### 3-1. (즉시 해결) DmrDashboardPage
-`useQuery` queryFn을 `fetchAllRows`로 교체:
-```ts
-import { fetchAllRows } from '@/lib/fetch-all-rows';
-
-queryFn: async (): Promise<Row[]> =>
-  fetchAllRows<Row>((from, to) =>
-    supabase
-      .from('dmr_entries')
-      .select('report_date, team, trade, subcontractor, workplace, manpower')
-      .order('report_date', { ascending: true })
-      .range(from, to),
-  ),
-```
-
-### 3-2. 같은 패턴의 다른 5곳도 페이지네이션 적용
-모두 동일 패턴이므로 `fetchAllRows`로 교체:
-
-- `DmrRawDataPage.tsx:55-67` — `load()` 내부
-- `ExportPage.tsx:52` — `query.limit(5000)` 호출 부분 (Subtest 전체 export)
-- `DefectDetailPage.tsx:121-126` — 자동완성 풀 조회
-- `DocsDrawingDetailPage.tsx:200-205` — `poolRes` 조회
-- `admin/EventLogTab.tsx:122-138` — `exportCsv()`의 5000행 제한 export
-
-각 위치에서 기존 `.limit(N)` + 후속 `.then/await`을 `fetchAllRows`의 builder 패턴으로 바꿉니다. 정렬·필터 체인은 그대로 유지하고 마지막에 `.range(from, to)`를 붙입니다. (EventLogTab은 5000행 상한이 정책이라면 `fetchAllRows` 호출부에 카운터를 두고 5000 도달 시 break하는 방식으로 의도 유지)
-
-## 4. 검증
-
-수정 후 DMR Dashboard에서 Subcontractor=ACU 필터 시:
-- Productivity 테이블 첫 컬럼이 **25-May**로 노출
-- Defect Actual의 Man 셀에 **11** 표시
-- Daily Manpower by Trade 차트에도 25-May 데이터 포인트 추가
-
-추가로 Subtest Export, Event Log Export 결과 행 수가 실제 DB 행 수와 일치하는지 다운로드 파일로 확인합니다.
+## 검증
+- DMR Dashboard에서 다음 확인:
+  - 헤더 아래에 "Total" 행이 메트릭 수만큼 보이고 값이 모든 협력사 합과 일치
+  - 세로 스크롤 시 헤더 + Total 행이 상단 고정
+  - 가로 스크롤 시 좌측 Subcontractor/Metric/Average 컬럼이 정상 고정
+  - 모바일/좁은 뷰포트에서도 sticky가 깨지지 않음
