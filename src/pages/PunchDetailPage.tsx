@@ -205,7 +205,7 @@ export default function PunchDetailPage() {
       setParent(null);
     }
     if ((data as any).is_summary) {
-      const { data: kids } = await supabase.from('punch_items').select('*').eq('parent_id', data.id).order('subtask_stage').order('item_no');
+      const { data: kids } = await supabase.from('punch_items').select('*').eq('parent_id', data.id).order('planned_start_date', { ascending: true, nullsFirst: false }).order('item_no');
       setChildren(kids ?? []);
     } else {
       setChildren([]);
