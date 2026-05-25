@@ -30,6 +30,11 @@ interface Props {
     location?: string | null;
     main_trade?: string | null;
     work_type?: string | null;
+    team?: TeamType | null;
+    planned_start_date?: string | null;
+    planned_completion_date?: string | null;
+    weight?: string | null;
+    remarks?: string | null;
   };
   onCreated?: (newId: string) => void;
 }
@@ -37,6 +42,35 @@ interface Props {
 export function AddPunchSubtaskDialog({
   open, onOpenChange, parentId, parentItemNo, parentTeam, parentIsSummary, defaults, onCreated,
 }: Props) {
+  const { toast } = useToast();
+  const [stage, setStage] = useState<SubtaskStage>('physical_work');
+  const [outstanding, setOutstanding] = useState(defaults?.outstanding_work ?? '');
+  const [location, setLocation] = useState(defaults?.location ?? '');
+  const [workType, setWorkType] = useState(defaults?.work_type ?? '');
+  const [mainTrade, setMainTrade] = useState(defaults?.main_trade ?? '');
+  const [team, setTeam] = useState<TeamType | ''>(defaults?.team ?? parentTeam ?? '');
+  const [plannedStart, setPlannedStart] = useState(defaults?.planned_start_date ?? '');
+  const [plannedEnd, setPlannedEnd] = useState(defaults?.planned_completion_date ?? '');
+  const [weight, setWeight] = useState(defaults?.weight ?? '1');
+  const [remarks, setRemarks] = useState(defaults?.remarks ?? '');
+  const [saving, setSaving] = useState(false);
+
+  // Re-prefill when dialog opens or defaults change (e.g. after another subtask was added).
+  useEffect(() => {
+    if (!open) return;
+    setStage('physical_work');
+    setOutstanding(defaults?.outstanding_work ?? '');
+    setLocation(defaults?.location ?? '');
+    setWorkType(defaults?.work_type ?? '');
+    setMainTrade(defaults?.main_trade ?? '');
+    setTeam((defaults?.team ?? parentTeam ?? '') as TeamType | '');
+    setPlannedStart(defaults?.planned_start_date ?? '');
+    setPlannedEnd(defaults?.planned_completion_date ?? '');
+    setWeight(defaults?.weight ?? '1');
+    setRemarks(defaults?.remarks ?? '');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const { toast } = useToast();
   const [stage, setStage] = useState<SubtaskStage>('physical_work');
   const [outstanding, setOutstanding] = useState(defaults?.outstanding_work ?? '');
