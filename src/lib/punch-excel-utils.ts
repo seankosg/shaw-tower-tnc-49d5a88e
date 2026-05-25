@@ -83,6 +83,40 @@ function coerceNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Parse a Subtask-style Item No like "3_1", "3.1", "Elec-001_2" into
+ * { itemNo, parentItemNo }. Normalizes '_' separator to '.'.
+ * Returns parentItemNo=null when the value is not a subtask pattern.
+ *
+ * Pattern: <base><sep><digits>  where sep is '_' or '.', digits >= 1.
+ * Only the LAST separator is split, so "3_1_2" → parent "3_1", child ".2".
+ */
+export function parseSubtaskItemNo(raw: unknown): { itemNo: string; parentItemNo: string | null } {
+  const s = raw == null ? '' : String(raw).trim();
+  if (!s) return { itemNo: s, parentItemNo: null };
+  const m = s.match(/^(.+)[._](\d+)$/);
+  if (!m) return { itemNo: s, parentItemNo: null };
+  const base = m[1].trim();
+  const child = m[2];
+  if (!base) return { itemNo: s, parentItemNo: null };
+  return { itemNo: `${base}.${child}`, parentItemNo: base };
+}
+
+/** Coerce a Subtask Stage cell into one of the 3 enum values. Returns
+ * undefined if blank, the enum string if valid, or null if invalid. */
+const STAGE_ALIAS_MAP: Record<string, 'pre_engineering' | 'physical_work' | 'inspection'> = {
+  preengineering: 'pre_engineering', preeng: 'pre_engineering', pe: 'pre_engineering',
+  physicalwork: 'physical_work', physical: 'physical_work', pw: 'physical_work', work: 'physical_work',
+  inspection: 'inspection', inspect: 'inspection', in: 'inspection', insp: 'inspection',
+};
+export function coerceSubtaskStage(value: unknown): 'pre_engineering' | 'physical_work' | 'inspection' | undefined | null {
+  if (value == null) return undefined;
+  const s = String(value).trim();
+  if (!s) return undefined;
+  const norm = s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  return STAGE_ALIAS_MAP[norm] ?? null;
+}
+
 /** Normalize Excel header for header_mapping lookup.
  * Must match Admin's punch normalizeAlias: lowercase + strip all non-alphanumerics.
  * So "Main Cat", "main-cat", "Main_Cat" all collapse to "maincat". */
@@ -215,6 +249,16 @@ export async function parsePunchWorkbook(
           break;
         }
         case 'enum': {
+          if (field.field === 'subtask_stage') {
+            const stage = coerceSubtaskStage(cell);
+            if (stage === undefined) break; // blank → skip
+            if (stage === null) {
+              errors.push({ rawRowNo, reason: `Invalid Subtask Stage: "${String(cell).trim()}" (allowed: pre_engineering, physical_work, inspection)` });
+              return; // reject row
+            }
+            (values as any).subtask_stage = stage;
+            break;
+          }
           const allowed = field.field.startsWith('material_procurement')
             ? PUNCH_PROCUREMENT_STATUS
             : PUNCH_GATE_STATUS;
@@ -249,6 +293,15 @@ export async function parsePunchWorkbook(
     if (!values.outstanding_work) {
       errors.push({ rawRowNo, reason: 'Missing Outstanding Works' });
       return;
+    }
+    // Normalize Item No (e.g. "3_1" → "3.1") and auto-extract parent.
+    // Explicit parent_item_no column from Excel takes precedence.
+    if (values.item_no) {
+      const { itemNo, parentItemNo } = parseSubtaskItemNo(values.item_no);
+      values.item_no = itemNo;
+      if (parentItemNo && !(values as any).parent_item_no) {
+        (values as any).parent_item_no = parentItemNo;
+      }
     }
     rows.push({ rawRowNo, values, rawPayload: raw });
   });
@@ -485,10 +538,44 @@ export async function upsertPunchRows(
     const parentsToPromote = new Set<string>();
     for (const [childNo, parentNo] of parentRefByItemNo) {
       const child = idByItemNo.get(childNo);
-      const parent = idByItemNo.get(parentNo);
-      if (!child || !parent) {
-        result.errors.push({ itemNo: childNo, reason: `Parent Item No "${parentNo}" not found — link skipped` });
+      if (!child) {
+        result.errors.push({ itemNo: childNo, reason: `Child row not found after insert — skipped` });
         continue;
+      }
+      let parent = idByItemNo.get(parentNo);
+      // Auto-create empty Summary if parent row is missing.
+      if (!parent) {
+        const { data: created, error: createErr } = await supabase
+          .from('punch_items')
+          .insert({
+            project_id: opts.projectId,
+            item_no: parentNo,
+            outstanding_work: parentNo,
+            is_summary: true,
+            data_source_type: 'auto_generated',
+            source_upload_id: opts.uploadId ?? null,
+            created_by: opts.updatedBy,
+            updated_by: opts.updatedBy,
+          } as PunchInsert)
+          .select('id, item_no, is_summary, parent_id')
+          .maybeSingle();
+        if (createErr || !created) {
+          result.errors.push({ itemNo: childNo, reason: `Auto-create parent "${parentNo}" failed: ${createErr?.message ?? 'unknown'}` });
+          continue;
+        }
+        parent = { id: created.id, is_summary: created.is_summary as boolean | null, parent_id: created.parent_id as string | null };
+        idByItemNo.set(parentNo, parent);
+        result.inserted++;
+        if (opts.uploadId) {
+          pendingRowLogs.push({
+            upload_id: opts.uploadId,
+            raw_row_no: null,
+            item_no: parentNo,
+            action_taken: 'inserted',
+            reason_code: 'auto_summary',
+            reason_detail: `Auto-created parent for ${childNo}`,
+          });
+        }
       }
       if (child.id === parent.id) continue;
       if (parent.parent_id) {
