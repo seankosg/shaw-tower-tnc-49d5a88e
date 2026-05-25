@@ -99,6 +99,9 @@ export function WarrantyImportProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const [files, setFiles] = useState<WarrantyImportFile[]>([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [similarDecisions, setSimilarDecisions] = useState<SimilarMasterDecision[]>([]);
+  const [pendingReady, setPendingReady] = useState<WarrantyImportFile[] | null>(null);
+
 
   const parseAndApply = useCallback(async (id: string, file: File, sheets?: string[], excludedHeaders?: string[]) => {
     try {
