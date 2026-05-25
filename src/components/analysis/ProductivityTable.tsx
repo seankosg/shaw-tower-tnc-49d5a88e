@@ -215,33 +215,17 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
         ) : rowSubs.length === 0 || dates.length === 0 || (!showTC && !showDefect) ? (
           <div className="py-10 text-center text-sm text-muted-foreground">No data for current selection</div>
         ) : (() => {
-          // Total rows (one per active metric) summed across visible rowSubs
-          const totalMetrics: MetricRow[] = [];
-          if (showTC) {
-            totalMetrics.push({ key: 'tcp', label: 'T&C Planned', wp: 'T&C', map: tcPlanned });
-            totalMetrics.push({ key: 'tca', label: 'T&C Actual', wp: 'T&C', map: tcActual });
-          }
-          if (showDefect) {
-            totalMetrics.push({ key: 'dfp', label: 'Defect Planned', wp: 'Defect', map: defPlanned });
-            totalMetrics.push({ key: 'dfa', label: 'Defect Actual', wp: 'Defect', map: defActual });
-          }
           const denom = dates.length || 1;
-          const sumQty = (mr: MetricRow, d: string) =>
-            rowSubs.reduce((a, s) => a + getQty(mr.map, s, d), 0);
-          const sumMan = (wp: 'T&C' | 'Defect', d: string) =>
-            dmrRows.reduce((a, r) => (r.report_date === d && r.workplace === wp ? a + r.manpower : a), 0);
 
           // Sticky offset constants (px). Header rows fixed at 32px each.
           const H_HEAD = 32;
           const TOP_HEAD_1 = 0;
           const TOP_HEAD_2 = H_HEAD;
-          const TOP_TOTAL_BASE = H_HEAD * 2;
           const Z_HEAD = 40;
           const Z_HEAD_LEFT = 50;
-          const Z_TOTAL = 30;
-          const Z_TOTAL_LEFT = 35;
 
           return (
+
           <div className="max-w-full overflow-auto max-h-[70vh]">
             <Table className="text-xs">
               <TableHeader>
