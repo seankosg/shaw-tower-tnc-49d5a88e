@@ -642,17 +642,23 @@ export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
   const PLOT_L = CX + 0.75, PLOT_T = CY + 0.65;
   const PLOT_W = CW - 0.75 - 0.15, PLOT_H = CH - 0.65 - 0.65;
 
-  let lastIdx = 0, lastT1 = 0, lastT2 = 0;
+  let lastIdx = 0, lastT1 = 0, lastT2 = 0, lastR2Idx = 0, lastR2 = 0;
   pts.forEach((p, i) => {
     if (p.t1ActualPct != null) { lastIdx = i; lastT1 = p.t1ActualPct; lastT2 = p.t2ActualPct ?? 0; }
+    if (p.r2sActualPct != null) { lastR2Idx = i; lastR2 = p.r2sActualPct; }
   });
   const nPts = pts.length;
   const xDD = PLOT_L + (lastIdx / Math.max(nPts - 1, 1)) * PLOT_W;
   const yT1 = PLOT_T + (1 - lastT1 / 100) * PLOT_H;
   const yT2 = PLOT_T + (1 - lastT2 / 100) * PLOT_H;
+  const xR2 = PLOT_L + (lastR2Idx / Math.max(nPts - 1, 1)) * PLOT_W;
+  const yR2 = PLOT_T + (1 - lastR2 / 100) * PLOT_H;
 
   s.addText(`${Math.round(lastT1)}%`, { x: xDD+0.15, y: yT1-0.18, w: 0.8, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stagePreTest, margin: 0 });
   s.addText(`${Math.round(lastT2)}%`, { x: xDD+0.15, y: yT2-0.18, w: 0.8, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stageOfficial, margin: 0 });
+  if (lastR2 > 0) {
+    s.addText(`${Math.round(lastR2)}%`, { x: xR2+0.15, y: yR2-0.18, w: 0.8, h: 0.28, fontFace: FONT, fontSize: 13, bold: true, color: C.stageTestReport, margin: 0 });
+  }
 
   const yT1Plan = PLOT_T + (1 - (pts[lastIdx]?.t1PlanPct ?? 0) / 100) * PLOT_H;
   const yT2Plan = PLOT_T + (1 - (pts[lastIdx]?.t2PlanPct ?? 0) / 100) * PLOT_H;
@@ -665,6 +671,11 @@ export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
   if (tncKPI.official.variance > 0) {
     const yVar2 = Math.min((yT2+yT2Plan)/2 - 0.18, yT2 - 0.55);
     s.addText(`▲ +${tncKPI.official.variance.toFixed(1)}%`, { x: xVar, y: yVar2, w: 1.8, h: 0.3, fontFace: FONT, fontSize: 13, bold: true, color: C.green, align: 'right', margin: 0 });
+  }
+  if (tncKPI.testReport.variance > 0) {
+    const yR2Plan = PLOT_T + (1 - (pts[lastR2Idx]?.r2sPlanPct ?? 0) / 100) * PLOT_H;
+    const yVar3 = Math.min((yR2+yR2Plan)/2 - 0.18, yR2 - 0.55);
+    s.addText(`▲ +${tncKPI.testReport.variance.toFixed(1)}%`, { x: xR2 - 2.3, y: yVar3, w: 1.8, h: 0.3, fontFace: FONT, fontSize: 13, bold: true, color: C.green, align: 'right', margin: 0 });
   }
 
   drawFooter(pres, s, '04');
