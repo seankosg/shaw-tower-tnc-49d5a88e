@@ -7,6 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { findEditDistanceMatch, masterNameKey } from '@/lib/master-name-match';
+import { SimilarMasterDialog } from '@/components/import/SimilarMasterDialog';
+import type { SimilarMasterDecision, SimilarDecisionAction } from '@/lib/subcontractor-master-sync';
 
 type ParsedRow = {
   team: 'Arch' | 'Mech' | 'Elec';
