@@ -438,6 +438,15 @@ export default function DmrDashboardPage() {
                     {selectedWp.map((w, i) => (
                       <TableHead key={`avg-${w}`} className="sticky bg-muted text-right text-[11px] font-normal text-muted-foreground" style={{ top: TOP_HEAD_2, left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG, zIndex: Z_HEAD_LEFT }}>{w}</TableHead>
                     ))}
+                    {tableDates.flatMap((d) => [
+                      <TableHead key={`${d}-total`} className="sticky border-l bg-muted/50 text-right text-[11px] font-semibold" style={{ top: TOP_HEAD_2, zIndex: Z_HEAD }}>Total</TableHead>,
+                      ...selectedWp.map((w) => (
+                        <TableHead key={`${d}-${w}`} className="sticky bg-muted text-right text-[11px] font-normal text-muted-foreground" style={{ top: TOP_HEAD_2, zIndex: Z_HEAD }}>{w}</TableHead>
+                      )),
+                    ])}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {/* Grand Total row */}
                   <TableRow className="border-t-2 border-b-2 bg-muted font-bold whitespace-nowrap" style={{ height: H_HEAD }}>
                     <TableCell
