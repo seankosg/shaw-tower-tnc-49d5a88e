@@ -799,46 +799,66 @@ export default function PunchRawDataPage() {
   const isDefaultSort = sorting.length === 0
     || (sorting.length === 1 && sorting[0].id === 'item_no' && !sorting[0].desc);
   const orderedRows = useMemo(() => {
-    if (!isDefaultSort) return filteredRows;
-    const byParent = new Map<string, PunchItem[]>();
-    const roots: PunchItem[] = [];
-    for (const r of filteredRows) {
-      if ((r as any).parent_id) {
-        const k = String((r as any).parent_id);
-        const arr = byParent.get(k) ?? [];
-        arr.push(r);
-        byParent.set(k, arr);
-      } else {
-        roots.push(r);
+    if (isDefaultSort) {
+      const byParent = new Map<string, PunchItem[]>();
+      const roots: PunchItem[] = [];
+      for (const r of filteredRows) {
+        if ((r as any).parent_id) {
+          const k = String((r as any).parent_id);
+          const arr = byParent.get(k) ?? [];
+          arr.push(r);
+          byParent.set(k, arr);
+        } else {
+          roots.push(r);
+        }
       }
-    }
-    roots.sort((a, b) => comparePunchItemNo(a.item_no, b.item_no));
-    const childCmp = (a: PunchItem, b: PunchItem) => {
-      const da = a.planned_start_date ?? ''; const db = b.planned_start_date ?? '';
-      if (!da && !db) return comparePunchItemNo(a.item_no, b.item_no);
-      if (!da) return 1; if (!db) return -1;
-      const c = da.localeCompare(db);
-      return c !== 0 ? c : comparePunchItemNo(a.item_no, b.item_no);
-    };
-    const out: PunchItem[] = [];
-    const usedChildKeys = new Set<string>();
-    for (const p of roots) {
-      out.push(p);
-      const kids = byParent.get(String(p.id));
-      if (kids && kids.length) {
-        kids.sort(childCmp);
-        out.push(...kids);
-        usedChildKeys.add(String(p.id));
+      roots.sort((a, b) => comparePunchItemNo(a.item_no, b.item_no));
+      const childCmp = (a: PunchItem, b: PunchItem) => {
+        const da = a.planned_start_date ?? ''; const db = b.planned_start_date ?? '';
+        if (!da && !db) return comparePunchItemNo(a.item_no, b.item_no);
+        if (!da) return 1; if (!db) return -1;
+        const c = da.localeCompare(db);
+        return c !== 0 ? c : comparePunchItemNo(a.item_no, b.item_no);
+      };
+      const out: PunchItem[] = [];
+      const rootIds = new Set(roots.map((r) => String(r.id)));
+      for (const p of roots) {
+        out.push(p);
+        const kids = byParent.get(String(p.id));
+        if (kids && kids.length) {
+          kids.sort(childCmp);
+          out.push(...kids);
+        }
       }
+      for (const [k, arr] of byParent) {
+        if (rootIds.has(k)) continue;
+        arr.sort(childCmp);
+        out.push(...arr);
+      }
+      return out;
     }
-    // Orphan children (parent filtered out) appended at the end
-    for (const [k, arr] of byParent) {
-      if (usedChildKeys.has(k)) continue;
-      arr.sort(childCmp);
-      out.push(...arr);
-    }
-    return out;
+    // User-applied sorting → flat sort, hierarchy ignored
+    const arr = [...filteredRows];
+    arr.sort((a, b) => {
+      for (const s of sorting) {
+        const va = (a as any)[s.id];
+        const vb = (b as any)[s.id];
+        const aEmpty = va === null || va === undefined || va === '';
+        const bEmpty = vb === null || vb === undefined || vb === '';
+        if (aEmpty && bEmpty) continue;
+        if (aEmpty) return 1;
+        if (bEmpty) return -1;
+        let c: number;
+        if (s.id === 'item_no') c = comparePunchItemNo(va, vb);
+        else if (typeof va === 'number' && typeof vb === 'number') c = va - vb;
+        else c = String(va).localeCompare(String(vb));
+        if (c !== 0) return s.desc ? -c : c;
+      }
+      return 0;
+    });
+    return arr;
   }, [filteredRows, isDefaultSort, sorting]);
+
 
   // ── Column visibility & order (driven by Field Config) ──────────────────
   const columnVisibility = useMemo<VisibilityState>(() => {
@@ -859,7 +879,9 @@ export default function PunchRawDataPage() {
   const table = useReactTable({
     data: orderedRows,
     columns,
-    state: { sorting: isDefaultSort ? [] : sorting, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
+    state: { sorting, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
+    manualSorting: true,
+
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,
