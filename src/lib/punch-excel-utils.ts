@@ -466,14 +466,63 @@ export interface PunchExportOptions {
   fileName?: string;
 }
 
+/**
+ * Sort items so each Summary is immediately followed by its children
+ * (stage then item_no). Standalone rows keep their relative order.
+ */
+function sortItemsForExport(items: PunchItem[]): PunchItem[] {
+  const STAGE_ORDER: Record<string, number> = {
+    pre_engineering: 0, physical_work: 1, inspection: 2,
+  };
+  const byParent = new Map<string, PunchItem[]>();
+  const top: PunchItem[] = [];
+  for (const row of items) {
+    const pid = (row as any).parent_id as string | null;
+    if (pid) {
+      const arr = byParent.get(pid) ?? [];
+      arr.push(row);
+      byParent.set(pid, arr);
+    } else {
+      top.push(row);
+    }
+  }
+  const out: PunchItem[] = [];
+  for (const parent of top) {
+    out.push(parent);
+    const kids = byParent.get(parent.id) ?? [];
+    kids.sort((a, b) => {
+      const sa = STAGE_ORDER[(a as any).subtask_stage] ?? 99;
+      const sb = STAGE_ORDER[(b as any).subtask_stage] ?? 99;
+      if (sa !== sb) return sa - sb;
+      return String(a.item_no ?? '').localeCompare(String(b.item_no ?? ''));
+    });
+    out.push(...kids);
+  }
+  const inOut = new Set(out.map((r) => r.id));
+  for (const r of items) if (!inOut.has(r.id)) out.push(r);
+  return out;
+}
+
 export function buildPunchExportRows(
   items: PunchItem[],
   fields: PunchFieldDef[] = PUNCH_FIELDS,
 ): Array<Record<string, unknown>> {
+  const itemNoById = new Map<string, string | null>();
+  for (const row of items) itemNoById.set(row.id, row.item_no ?? null);
+
   return items.map((row) => {
     const out: Record<string, unknown> = {};
     for (const f of fields) {
-      const v = (row as any)[f.field];
+      let v: unknown;
+      if (f.field === 'parent_item_no') {
+        const pid = (row as any).parent_id as string | null;
+        v = pid ? (itemNoById.get(pid) ?? '') : '';
+      } else if (f.field === 'manual_override_fields') {
+        const ov = (row as any).override_fields;
+        v = ov && typeof ov === 'object' ? Object.keys(ov).join(', ') : '';
+      } else {
+        v = (row as any)[f.field];
+      }
       if (Array.isArray(v)) out[f.exportLabel] = v.join(', ');
       else if (typeof v === 'boolean') out[f.exportLabel] = v ? 'TRUE' : 'FALSE';
       else out[f.exportLabel] = v ?? '';
@@ -484,13 +533,14 @@ export function buildPunchExportRows(
 
 export function exportPunchWorkbook(items: PunchItem[], opts: PunchExportOptions = {}): { rowCount: number } {
   const fields = opts.fields ?? PUNCH_FIELDS;
-  const rows = buildPunchExportRows(items, fields);
+  const sorted = sortItemsForExport(items);
+  const rows = buildPunchExportRows(sorted, fields);
   const ws = XLSX.utils.json_to_sheet(rows, { header: fields.map((f) => f.exportLabel) });
 
   // Format date columns as Excel date cells
   fields.forEach((f, colIdx) => {
     if (f.dataType !== 'date') return;
-    items.forEach((row, rowIdx) => {
+    sorted.forEach((row, rowIdx) => {
       const serial = isoToExcelSerial((row as any)[f.field]);
       if (serial == null) return;
       const cellRef = XLSX.utils.encode_cell({ c: colIdx, r: rowIdx + 1 });
@@ -498,7 +548,6 @@ export function exportPunchWorkbook(items: PunchItem[], opts: PunchExportOptions
     });
   });
 
-  // Column widths
   ws['!cols'] = fields.map((f) => ({
     wch: Math.max(f.exportLabel.length + 2, f.dataType === 'text' ? 22 : 12),
   }));
@@ -506,12 +555,11 @@ export function exportPunchWorkbook(items: PunchItem[], opts: PunchExportOptions
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Punch Items');
 
-  // Info sheet
   const info = [
     ['Generated At', new Date().toISOString()],
     ['Total Rows', items.length],
     ['Field Count', fields.length],
-    ['Schema Version', 'punch-v1'],
+    ['Schema Version', 'punch-v2-hierarchy'],
   ];
   const infoWs = XLSX.utils.aoa_to_sheet(info);
   infoWs['!cols'] = [{ wch: 18 }, { wch: 40 }];
