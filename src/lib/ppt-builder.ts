@@ -620,6 +620,7 @@ export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
     { name: 'Official Test · Plan',  labels: cats, values: pts.map(p => p.t2PlanPct) },
     { name: 'Official Test · Actual',labels: cats, values: pts.map(p => p.t2ActualPct) },
     { name: 'Test Report · Plan',    labels: cats, values: pts.map(p => p.r2sPlanPct) },
+    { name: 'Test Report · Actual',  labels: cats, values: pts.map(p => p.r2sActualPct) },
   ];
 
   const CX = 0.5, CY = 1.75, CW = 12.3, CH = 4.9;
