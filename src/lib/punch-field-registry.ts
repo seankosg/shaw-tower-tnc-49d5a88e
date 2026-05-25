@@ -18,7 +18,40 @@ export type PunchFieldGroup =
   | 'schedule'
   | 'progress'
   | 'pre_engineering'
+  | 'hierarchy'
   | 'meta';
+
+export const SUBTASK_STAGES = ['pre_engineering', 'physical_work', 'inspection'] as const;
+export type SubtaskStage = (typeof SUBTASK_STAGES)[number];
+export const SUBTASK_STAGE_LABEL: Record<SubtaskStage, string> = {
+  pre_engineering: 'Pre-Engineering',
+  physical_work: 'Physical Work',
+  inspection: 'Inspection',
+};
+export const SUBTASK_STAGE_SHORT: Record<SubtaskStage, string> = {
+  pre_engineering: 'PE',
+  physical_work: 'PW',
+  inspection: 'IN',
+};
+
+/** Fields on a Summary row that can be manually overridden (locked from auto rollup). */
+export const PUNCH_OVERRIDABLE_FIELDS = [
+  'actual_progress_pct',
+  'planned_progress_pct',
+  'progress_variance_pct',
+  'planned_start_date',
+  'planned_completion_date',
+  'actual_start_date',
+  'actual_completion_date',
+  'health_status',
+  'pre_engineering_ready',
+  'material_approval_status',
+  'material_procurement_status',
+  'drawing_approval_status',
+  'mos_approval_status',
+] as const;
+export type PunchOverridableField = (typeof PUNCH_OVERRIDABLE_FIELDS)[number];
+export const PUNCH_OVERRIDABLE_SET = new Set<string>(PUNCH_OVERRIDABLE_FIELDS);
 
 export type PunchDataType = 'text' | 'date' | 'number' | 'pct' | 'enum' | 'bool';
 
