@@ -565,14 +565,28 @@ export default function PunchDetailPage() {
         parentItemNo={item.item_no}
         parentTeam={item.team as TeamType | null}
         parentIsSummary={isSummary}
-        defaults={{
-          outstanding_work: item.outstanding_work,
-          location: item.location,
-          main_trade: item.main_trade,
-          work_type: item.work_type,
-        }}
+        defaults={(() => {
+          // If there are existing subtasks, prefill from the one with latest planned_start_date.
+          // Otherwise, fall back to the parent (Summary) values.
+          const sortedKids = [...children]
+            .filter((c) => c.planned_start_date)
+            .sort((a, b) => (b.planned_start_date ?? '').localeCompare(a.planned_start_date ?? ''));
+          const src = sortedKids[0] ?? item;
+          return {
+            outstanding_work: src.outstanding_work,
+            location: src.location,
+            main_trade: src.main_trade,
+            work_type: src.work_type,
+            team: (src.team ?? null) as TeamType | null,
+            planned_start_date: src.planned_start_date,
+            planned_completion_date: src.planned_completion_date,
+            weight: src.weight == null ? null : String(src.weight),
+            remarks: src.remarks,
+          };
+        })()}
         onCreated={(newId) => navigate(`/punch/${newId}`)}
       />
+
     </div>
   );
 }
