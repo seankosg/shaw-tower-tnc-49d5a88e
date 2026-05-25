@@ -294,6 +294,15 @@ export async function parsePunchWorkbook(
       errors.push({ rawRowNo, reason: 'Missing Outstanding Works' });
       return;
     }
+    // Normalize Item No (e.g. "3_1" → "3.1") and auto-extract parent.
+    // Explicit parent_item_no column from Excel takes precedence.
+    if (values.item_no) {
+      const { itemNo, parentItemNo } = parseSubtaskItemNo(values.item_no);
+      values.item_no = itemNo;
+      if (parentItemNo && !(values as any).parent_item_no) {
+        (values as any).parent_item_no = parentItemNo;
+      }
+    }
     rows.push({ rawRowNo, values, rawPayload: raw });
   });
 
