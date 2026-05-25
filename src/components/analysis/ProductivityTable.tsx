@@ -313,15 +313,12 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
                         const borderCls = `${isFirst ? 'border-t-2' : ''} ${isLastGrand ? 'border-b' : ''}`;
                         return (
                           <TableRow key={`grand-${g.key}`} className={`${borderCls} bg-muted font-bold whitespace-nowrap`} style={{ height: H_HEAD }}>
-                            {isFirst && (
-                              <TableCell
-                                rowSpan={totalRowCount}
-                                className="sticky left-0 border-r bg-muted align-middle text-center font-bold"
-                                style={{ top: TOP_TOTAL_BASE, width: W_SUB, minWidth: W_SUB, zIndex: Z_TOTAL_LEFT }}
-                              >
-                                Total
-                              </TableCell>
-                            )}
+                            <TableCell
+                              className="sticky left-0 border-r bg-muted text-center font-bold"
+                              style={{ top, width: W_SUB, minWidth: W_SUB, zIndex: Z_TOTAL_LEFT }}
+                            >
+                              {isFirst ? 'Total' : ''}
+                            </TableCell>
                             <TableCell
                               className="sticky border-r bg-muted text-[11px] font-bold"
                               style={{ top, left: W_SUB, width: W_METRIC, minWidth: W_METRIC, zIndex: Z_TOTAL_LEFT }}
