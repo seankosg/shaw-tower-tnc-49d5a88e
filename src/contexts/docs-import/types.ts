@@ -97,6 +97,10 @@ export interface DocsImportContextValue<TRow = unknown> {
    *  Empty array means no team selected — startImport must refuse to run. */
   allowedTeams: string[];
   setAllowedTeams: (teams: string[]) => void;
+  similarDecisions: import('@/lib/subcontractor-master-sync').SimilarMasterDecision[];
+  setDecisionAction: (key: string, action: import('@/lib/subcontractor-master-sync').SimilarDecisionAction) => void;
+  confirmSimilarDecisions: () => Promise<void>;
+  cancelSimilarDecisions: () => void;
 }
 
 export interface ParsedFileResult<TRow> {
