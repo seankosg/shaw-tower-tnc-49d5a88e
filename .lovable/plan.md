@@ -1,5 +1,21 @@
+# Punch Raw Data — Summary Task / Subtask (Phase 1 진행 중)
+
+## 완료 (이번 단계)
+- Import/Export 계층 컬럼 round-trip 완료
+  - Export: `Parent Item No`, `Subtask Stage`, `Is Summary`, `Manual Override Fields` 자동 산출 + Summary→자식 정렬, 스키마 버전 `punch-v2-hierarchy`로 표기
+  - Import: `Parent Item No` 헤더 인식 → 2-pass linking (자식 `parent_id` 연결 + 부모 자동 `is_summary=true` promote), 자기참조/3단계 부모는 에러로 기록 후 스킵
+- `migrate_existing_punch_to_groups` 함수 UUID 집계 버그 수정
+- 현재 SHAW 프로젝트(168 rows) dry-run 결과: dot 패턴 item_no 없음 → 자동 그룹핑 대상 0건. UI에서 수동 "Convert to Summary & Add Subtask"로 진행 권장
+
+## 다음 단계 후보
+- Dashboard / KPI / Recovery Priority에서 Summary 처리 정책 (자식 합산 vs Summary % 사용)
+- Bulk Edit에 Override 일괄 진입/해제 액션
+- Import 시 `Manual Override = Y` 컬럼으로 명시적 Override 진입 (현재 미구현)
+
+---
 
 # Punch Raw Data — Summary Task / Subtask 도입 계획 (확정본 v2)
+
 
 ## 0. 확정된 의사결정
 1. 계층 깊이: **2단계 고정** (Summary → Subtask). 손자 금지.
