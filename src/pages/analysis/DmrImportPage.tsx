@@ -53,6 +53,34 @@ export default function DmrImportPage() {
     setPreviewUrl(f ? URL.createObjectURL(f) : null);
   }
 
+  async function normalizeSubcontractors(p: ParsedDmr): Promise<ParsedDmr> {
+    const { data: masters } = await supabase
+      .from('subcontractor_master')
+      .select('name')
+      .eq('is_active', true);
+    const map = new Map<string, string>();
+    (masters ?? []).forEach((m: any) => {
+      if (m?.name) map.set(String(m.name).trim().toLowerCase(), String(m.name));
+    });
+    let replaced = 0;
+    const sections = p.sections.map(s => ({
+      ...s,
+      rows: s.rows.map(r => {
+        const key = (r.subcontractor ?? '').trim().toLowerCase();
+        const canonical = map.get(key);
+        if (canonical && canonical !== r.subcontractor) {
+          replaced += 1;
+          return { ...r, subcontractor: canonical };
+        }
+        return r;
+      }),
+    }));
+    if (replaced > 0) {
+      toast({ title: 'Names normalized', description: `${replaced} subcontractor name(s) matched to master values.` });
+    }
+    return { ...p, sections };
+  }
+
   async function uploadAndParse() {
     if (!file || !user) return;
     setParsing(true);
@@ -68,7 +96,7 @@ export default function DmrImportPage() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      const result = data.data as ParsedDmr;
+      const result = await normalizeSubcontractors(data.data as ParsedDmr);
       setParsed(result);
       setReportDate(result.report_date);
 
