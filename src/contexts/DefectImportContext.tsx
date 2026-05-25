@@ -10,7 +10,7 @@ import { isValidDefectStatus, reconcileClosureCompletion } from '@/lib/defect-st
 import { computePlannedProgressPct } from '@/lib/defect-progress-calc';
 import { classifyDefectV2 } from '@/lib/defect-classifier';
 import { loadClassificationContextV2 } from '@/lib/defect-classifier-context';
-import { findSimilarMasterName, masterNameKey } from '@/lib/master-name-match';
+import { findEditDistanceMatch, masterNameKey } from '@/lib/master-name-match';
 import { normalizeTeamValue, type TeamType } from '@/types/enums';
 import { buildFieldLog, type PendingFieldLog } from '@/lib/import-field-log';
 import { loadVerificationRules, verifyPriority } from '@/lib/defect-priority-verifier';
