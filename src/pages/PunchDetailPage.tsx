@@ -444,22 +444,24 @@ export default function PunchDetailPage() {
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Schedule & Progress</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-2 gap-3">
+              {(() => { const dateLock = isSummary && children.length > 0; const lockNote = dateLock ? 'Auto from subtasks — edit subtask dates instead.' : undefined; return (<>
               <div>
-                <FieldLabel text="Planned Start" field="planned_start_date" summary={isSummary} overrideFields={overrideFields} onRevert={handleRevert} disabled={disabled} />
-                <Input type="date" value={merged.planned_start_date ?? ''} onChange={(e) => patch('planned_start_date', e.target.value || null)} disabled={disabled} className={cn('h-9', isSummary && overrideFields.planned_start_date && 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/30')} />
+                <FieldLabel text={dateLock ? 'Planned Start (Auto)' : 'Planned Start'} field="planned_start_date" summary={isSummary} overrideFields={overrideFields} onRevert={handleRevert} disabled={disabled || dateLock} />
+                <Input type="date" value={merged.planned_start_date ?? ''} onChange={(e) => patch('planned_start_date', e.target.value || null)} disabled={disabled || dateLock} title={lockNote} className={cn('h-9', dateLock && 'bg-muted', isSummary && overrideFields.planned_start_date && 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/30')} />
               </div>
               <div>
-                <FieldLabel text="Actual Start" field="actual_start_date" summary={isSummary} overrideFields={overrideFields} onRevert={handleRevert} disabled={disabled} />
-                <Input type="date" value={merged.actual_start_date ?? ''} onChange={(e) => patch('actual_start_date', e.target.value || null)} disabled={disabled} className={cn('h-9', isSummary && overrideFields.actual_start_date && 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/30')} />
+                <FieldLabel text={dateLock ? 'Actual Start (Auto)' : 'Actual Start'} field="actual_start_date" summary={isSummary} overrideFields={overrideFields} onRevert={handleRevert} disabled={disabled || dateLock} />
+                <Input type="date" value={merged.actual_start_date ?? ''} onChange={(e) => patch('actual_start_date', e.target.value || null)} disabled={disabled || dateLock} title={lockNote} className={cn('h-9', dateLock && 'bg-muted', isSummary && overrideFields.actual_start_date && 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/30')} />
               </div>
               <div>
-                <FieldLabel text="Planned Completion" field="planned_completion_date" summary={isSummary} overrideFields={overrideFields} onRevert={handleRevert} disabled={disabled} />
-                <Input type="date" value={merged.planned_completion_date ?? ''} onChange={(e) => patch('planned_completion_date', e.target.value || null)} disabled={disabled} className={cn('h-9', isSummary && overrideFields.planned_completion_date && 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/30')} />
+                <FieldLabel text={dateLock ? 'Planned Completion (Auto)' : 'Planned Completion'} field="planned_completion_date" summary={isSummary} overrideFields={overrideFields} onRevert={handleRevert} disabled={disabled || dateLock} />
+                <Input type="date" value={merged.planned_completion_date ?? ''} onChange={(e) => patch('planned_completion_date', e.target.value || null)} disabled={disabled || dateLock} title={lockNote} className={cn('h-9', dateLock && 'bg-muted', isSummary && overrideFields.planned_completion_date && 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/30')} />
               </div>
               <div>
-                <FieldLabel text="Actual Completion" field="actual_completion_date" summary={isSummary} overrideFields={overrideFields} onRevert={handleRevert} disabled={disabled} />
-                <Input type="date" value={merged.actual_completion_date ?? ''} onChange={(e) => patch('actual_completion_date', e.target.value || null)} disabled={disabled} className={cn('h-9', isSummary && overrideFields.actual_completion_date && 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/30')} />
+                <FieldLabel text={dateLock ? 'Actual Completion (Auto)' : 'Actual Completion'} field="actual_completion_date" summary={isSummary} overrideFields={overrideFields} onRevert={handleRevert} disabled={disabled || dateLock} />
+                <Input type="date" value={merged.actual_completion_date ?? ''} onChange={(e) => patch('actual_completion_date', e.target.value || null)} disabled={disabled || dateLock} title={lockNote} className={cn('h-9', dateLock && 'bg-muted', isSummary && overrideFields.actual_completion_date && 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/30')} />
               </div>
+              </>); })()}
               <div>
                 <FieldLabel text="Planned %" field="planned_progress_pct" summary={isSummary} overrideFields={overrideFields} onRevert={handleRevert} disabled={disabled} />
                 <Input
