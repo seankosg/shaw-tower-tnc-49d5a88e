@@ -47,6 +47,7 @@ export default function DmrImportPage() {
   const [reportDate, setReportDate] = useState('');
   const [overwrite, setOverwrite] = useState(false);
   const [existingKeys, setExistingKeys] = useState<Set<string>>(new Set());
+  const [similarDecisions, setSimilarDecisions] = useState<SimilarMasterDecision[]>([]);
 
   function onPick(f: File | null) {
     setParsed(null);
