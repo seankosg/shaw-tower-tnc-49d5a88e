@@ -433,10 +433,6 @@ export function buildDashboard(pres: pptxgen, tncKPI: TncKPI, defectKPI: DefectK
   ].forEach(r => { progressRow(col2, ry, cardW, r.label, r.pct, r.color, r.variance); ry += 0.45; });
 
   // Close Out Docs card
-  // BUILD MARKER v2: OMM uses final_actual_date (was sub2_actual_date). If you see
-  // 'OMM Draft Submitted' in the PPT, the browser is running a stale bundle —
-  // hard-refresh (Ctrl/Cmd+Shift+R) and regenerate.
-  console.info('[ppt-builder] dashboard build v2 — OMM=final_actual_date');
   const abdApvPct  = docsKPI.abd.pcts['sub1_approval_date'] ?? 0;
   const abdSubPct  = docsKPI.abd.pcts['sub1_submission_date'] ?? 0;
   const ommSubPct  = docsKPI.omm.pcts['final_actual_date'] ?? 0;
