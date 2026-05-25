@@ -1392,6 +1392,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
     const readyFiles = files.filter((file) => file.status === 'ready');
     setIsRunning(true);
     try {
+      await normalizeSubcontractorsFromMaster(readyFiles);
       const decisions = await preflightSimilarMasterDecisions(readyFiles);
       const duplicateIssueNos = findDuplicateSubcontractorIssueNos(readyFiles);
       if (duplicateIssueNos.length > 0) toast({ title: 'Same Subcontractor Issue No found in multiple imported rows', description: duplicateIssueNos.slice(0, 5).join(', '), variant: 'destructive' });
