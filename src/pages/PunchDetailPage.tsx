@@ -23,6 +23,7 @@ import {
   type SubtaskStage,
 } from '@/lib/punch-field-registry';
 import { AddPunchSubtaskDialog } from '@/components/punch/AddPunchSubtaskDialog';
+import { PunchComments } from '@/components/punch/PunchComments';
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip';
@@ -557,6 +558,24 @@ export default function PunchDetailPage() {
           </Card>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Comments</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PunchComments
+            punchId={item.id}
+            punchTeam={(item.team as string | null) ?? null}
+            hdecPicName={item.hdec_pic_name ?? null}
+            hdecEngName={item.hdec_eng_name ?? null}
+            subcontractorName={item.subcontractor_name ?? null}
+            subsubName={item.subsub_name ?? null}
+          />
+        </CardContent>
+      </Card>
+
+
 
       <AddPunchSubtaskDialog
         open={addOpen}
