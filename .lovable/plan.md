@@ -1,38 +1,34 @@
-# 목표
-Subtask 추가 시 반복되는 `type "public.team_enum" does not exist` 오류를 단순 봉합이 아니라, 재배포/복원/환경 재구성 때도 다시 나오지 않도록 근본적으로 제거합니다.
+## 목표
+`Add Subtask` 시 반복되는 에러를 근본적으로 제거합니다. 이번 작업은 **Summary 집계 로직의 잘못된 enum 생성**을 바로잡는 데만 집중합니다.
 
-# 확인된 문제
-- 현재 운영 백엔드의 `add_punch_subtask` 함수는 `public.team_type`를 사용하고 있어 현재 정의만 보면 정상입니다.
-- 하지만 저장소의 핵심 migration 파일 `20260525045831...sql` 안에는 아직 `::public.team_enum`가 남아 있습니다.
-- 즉, 어느 시점에든 이 migration 기준으로 함수가 다시 생성되거나 환경이 복원되면 잘못된 함수 정의가 다시 살아날 수 있는 구조입니다.
-- 이전에 수정한 `health_status` 오류와 같은 패턴으로, 이번에는 `team` enum 참조가 원본 migration에 남아 있어 재발성 장애를 만들고 있습니다.
+## 구현 계획
+1. **`punch_recalc_summary` 집계 규칙 수정**
+   - Summary가 자식 rows를 집계할 때 더 이상 존재하지 않는 상태값(`rejected`, `delivered`, `in_progress`)을 만들지 않도록 수정합니다.
+   - Gate 계열은 현재 enum 체계에 맞춰 `not_required / pending / approved`만 나오게 정리합니다.
+   - Procurement 계열은 `not_required / pending / partially_secured / secured`만 나오게 정리합니다.
 
-# 구현 계획
-1. **Subtask RPC 관련 DB 정의 전수 정리**
-   - `add_punch_subtask` 원본 migration의 `team_enum` 참조를 `team_type`로 수정합니다.
-   - 동일 계열의 punch 관련 함수/trigger/migration 중 enum 드리프트가 더 없는지 함께 정리합니다.
+2. **과거 migration 소스도 같이 정정**
+   - 현재 DB 함수만 고치면 나중에 재배포/복원 시 같은 문제가 다시 생길 수 있으므로, 원본 migration의 오래된 rollup 로직도 함께 수정합니다.
+   - 즉, 이번 수정은 임시 패치가 아니라 **drift 재발 방지**까지 포함합니다.
 
-2. **재발 방지용 보정 migration 추가**
-   - 현재 운영 백엔드에 `CREATE OR REPLACE FUNCTION public.add_punch_subtask(...)`를 다시 적용하는 보정 migration을 추가합니다.
-   - 필요 시 `DROP FUNCTION ...` 후 재생성 대신, 시그니처를 유지하는 범위에서 안전하게 함수 본문만 교체합니다.
-   - 이 보정 migration에는 `team_type` 강제, null 처리, 기존 권한 로직 유지가 포함됩니다.
+3. **Pre Engineering block 로직은 분리 검증**
+   - `Pre Engineering blocked`는 다음 단계 표시/준비 여부와 관련된 로직으로 보고, `Add Subtask` 실패 원인과는 분리해서 유지합니다.
+   - 이번 수정에서는 진행 차단 UI/비즈니스 규칙은 건드리지 않고, 실제 에러를 내는 Summary rollup만 고칩니다.
 
-3. **입력값 안정성 보강**
-   - 프론트의 Add Subtask payload에서 `team` 값이 빈 문자열일 때 DB cast 경로에서 불필요한 예외를 만들지 않도록 검토합니다.
-   - `sub_trade`, `planned_start_date`, `main_trade` 자동 상속 로직은 유지하면서 team 전달값만 더 안전하게 다듬습니다.
+4. **검증**
+   - DB 함수 정의 기준으로 더 이상 잘못된 enum 문자열이 생성되지 않는지 확인합니다.
+   - 관련 migration 소스에서도 동일한 잘못된 값이 남아 있지 않은지 확인합니다.
+   - 이후 `Add Subtask` 경로에서 동일한 enum 에러가 재발하지 않는지 확인합니다.
 
-4. **실제 동작 기준 검증**
-   - Summary/비-Summary parent 각각에서 Subtask 추가 경로를 점검합니다.
-   - `planned_start_date` 최신 subtask 상속, Main Trade/Sub Trade 상속, 정렬 오름차순 로직이 이번 수정으로 깨지지 않는지 함께 확인합니다.
-   - 같은 오류 문자열이 다시 발생하지 않는지 로그 기준으로 확인합니다.
+## 기술 세부사항
+- 대상 함수: `public.punch_recalc_summary`
+- 대상 소스: punch summary/subtask 관련 migration 파일
+- 수정 원칙:
+  - 존재하지 않는 enum 값 생성 금지
+  - 현재 DB enum 정의와 100% 일치
+  - UI 원인으로 오해된 `Pre Engineering blocked` 로직은 이번 범위에서 제외
 
-# 결과물
-- 잘못된 `team_enum` 참조 제거
-- 운영 백엔드 함수 보정 migration
-- 프론트 payload 안정성 보강(필요 시)
-- 재발 방지 검증 완료
-
-# 기술 메모
-- 현재 DB에 존재하는 enum은 `team_type` 뿐이며 `team_enum`는 없습니다.
-- 따라서 이번 이슈의 본질은 “현재 함수 한 군데 수정”이 아니라, “원본 migration과 운영 함수 정의의 불일치(drift)”입니다.
-- 이 drift를 없애야 이후 재배포/복원/마이그레이션 재적용 때 동일 장애가 되살아나지 않습니다.
+## 기대 결과
+- `Add Subtask` 시 Summary 재계산이 실패하지 않음
+- 동일 문제가 환경 재생성/복원 후에도 다시 유입되지 않음
+- 원인과 무관한 `Pre Engineering blocked` 때문에 시간을 낭비하지 않도록 문제 범위가 명확해짐
