@@ -14,6 +14,10 @@ import {
   type ParsedWarrantyRow,
   type WarrantyThreadInput,
 } from '@/lib/docs-warranty-import-parser';
+import {
+  applyDecisionsInPlace, detectEditDistanceDecisions, fetchSubMasterMaps, normalizeRowsAgainstMaster,
+  type SimilarDecisionAction, type SimilarMasterDecision,
+} from '@/lib/subcontractor-master-sync';
 
 export type WarrantyFileStatus = 'pending' | 'parsing' | 'ready' | 'processing' | 'done' | 'failed';
 
