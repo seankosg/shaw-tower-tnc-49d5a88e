@@ -1,103 +1,84 @@
-## 목표
-1. **Summary 자동 집계** (Planned + Actual 모두):
-   - `planned_start_date` = MIN(자식 planned_start_date)
-   - `planned_completion_date` = MAX(자식 planned_completion_date)
-   - `actual_start_date` = MIN(자식 actual_start_date) — 자식 중 하나도 시작했으면 가장 빠른 시작일
-   - `actual_completion_date` = MAX(자식 actual_completion_date), 단 **모든 자식이 actual_completion_date 를 가질 때만** 채움. 아니면 NULL. (한 자식이라도 미완료면 Summary 도 미완료)
-2. **정렬**: Summary/단독 행은 `item_no` 순, Summary 의 자식 Subtask 는 Summary 그룹 안에서 `planned_start_date` 오름차순(NULL 마지막), 동률은 `item_no`.
-3. **UI**: Summary 의 4개 날짜 필드는 읽기 전용 + "Auto" 배지.
+## 원인 분석
 
-## 변경 사항
+직전 변경에서 계층적 기본 정렬을 위해 추가한 다음 코드가 freeze 원인으로 추정됩니다.
 
-### A. DB 마이그레이션 — Summary 4개 날짜 자동 집계 트리거
-
-함수 `punch_recompute_summary_dates(p_parent uuid)`:
-```sql
-UPDATE punch_items p
-SET planned_start_date      = sub.min_ps,
-    planned_completion_date = sub.max_pc,
-    actual_start_date       = sub.min_as,
-    actual_completion_date  = CASE WHEN sub.cnt > 0 AND sub.cnt_ac = sub.cnt
-                                   THEN sub.max_ac ELSE NULL END,
-    updated_at              = now()
-FROM (
-  SELECT
-    COUNT(*)                          AS cnt,
-    COUNT(actual_completion_date)     AS cnt_ac,
-    MIN(planned_start_date)           AS min_ps,
-    MAX(planned_completion_date)      AS max_pc,
-    MIN(actual_start_date)            AS min_as,
-    MAX(actual_completion_date)       AS max_ac
-  FROM punch_items
-  WHERE parent_id = p_parent
-) sub
-WHERE p.id = p_parent AND p.is_summary = true;
+```ts
+state: { sorting: isDefaultSort ? [] : sorting, ... }
 ```
 
-트리거 `trg_punch_summary_dates` (AFTER INSERT/UPDATE/DELETE on `punch_items` FOR EACH ROW):
-- INSERT: `NEW.parent_id` 가 있으면 재계산.
-- UPDATE: `OLD.parent_id` 와 `NEW.parent_id` 각각(다르면 둘 다) 재계산. 단 변경된 컬럼이 4개 날짜/parent_id/is_summary 일 때만(가벼운 가드).
-- DELETE: `OLD.parent_id`.
-- 재귀 방지: Summary 는 `parent_id IS NULL` 이므로 Summary 자체 UPDATE 시 트리거가 다시 호출되어도 `NEW.parent_id IS NULL → no-op`.
+- 매 렌더마다 **새로운 `[]` 배열 참조**가 생성되어 react-table 내부에서 sorting state 변경으로 인식 → `getRowModel()` 재계산 → 재렌더 → 다시 새 `[]` → 잠재적 렌더 루프 / 메인 스레드 점유.
+- 결과적으로 UI는 그려지지만 클릭·스크롤·정렬 핸들러가 응답하지 못함(메인 스레드 busy).
 
-1회 백필:
-```sql
-WITH agg AS (
-  SELECT parent_id,
-         COUNT(*) cnt, COUNT(actual_completion_date) cnt_ac,
-         MIN(planned_start_date) min_ps, MAX(planned_completion_date) max_pc,
-         MIN(actual_start_date) min_as,  MAX(actual_completion_date) max_ac
-  FROM punch_items WHERE parent_id IS NOT NULL GROUP BY parent_id
-)
-UPDATE punch_items p SET
-  planned_start_date = a.min_ps,
-  planned_completion_date = a.max_pc,
-  actual_start_date  = a.min_as,
-  actual_completion_date = CASE WHEN a.cnt_ac = a.cnt THEN a.max_ac ELSE NULL END
-FROM agg a WHERE p.id = a.parent_id AND p.is_summary = true;
+또한 사용자가 item_no 헤더를 클릭해도 `state.sorting=[]` → react-table은 "새 정렬 시작"으로 처리 → `[{item_no, asc}]` 호출 → 실제 `sorting` 상태와 동일 → React가 bail-out → 정렬 동작 안 함처럼 보이는 부수 효과도 있음.
+
+## 수정 방안 (PunchRawDataPage.tsx 만 수정)
+
+react-table에 정렬 책임을 떠넘기지 않고, **데이터 메모 단계에서 한 번에 정렬**한 뒤 `manualSorting: true`로 두는 방식으로 단순화합니다. 이러면 더 이상 `state.sorting`을 가짜로 비울 필요가 없습니다.
+
+### 변경 1 — `orderedRows` useMemo 확장
+
+`isDefaultSort` 분기와 사용자 정렬 분기를 모두 처리:
+
+```ts
+const orderedRows = useMemo(() => {
+  // 1) 기본(아무 정렬 없음 또는 item_no asc) → 계층적 정렬
+  if (isDefaultSort) {
+    // (기존 로직: roots를 comparePunchItemNo, 자식은 planned_start_date asc nulls last, 고아는 끝)
+    return out;
+  }
+  // 2) 사용자가 다른 정렬을 적용 → 평탄 정렬 (계층 무시)
+  const arr = [...filteredRows];
+  arr.sort((a, b) => {
+    for (const s of sorting) {
+      const va = (a as any)[s.id];
+      const vb = (b as any)[s.id];
+      // null/undefined는 항상 끝으로
+      const aEmpty = va === null || va === undefined || va === '';
+      const bEmpty = vb === null || vb === undefined || vb === '';
+      if (aEmpty && bEmpty) continue;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+      let c: number;
+      if (s.id === 'item_no') c = comparePunchItemNo(va, vb);
+      else if (typeof va === 'number' && typeof vb === 'number') c = va - vb;
+      else c = String(va).localeCompare(String(vb));
+      if (c !== 0) return s.desc ? -c : c;
+    }
+    return 0;
+  });
+  return arr;
+}, [filteredRows, isDefaultSort, sorting]);
 ```
 
-### B. `src/pages/PunchDetailPage.tsx`
-- L208 자식 fetch: `.order('planned_start_date', { ascending: true, nullsFirst: false }).order('item_no')`.
-- Summary 행의 4개 날짜 입력란(`planned_start_date`, `planned_completion_date`, `actual_start_date`, `actual_completion_date`):
-  - `is_summary && children.length > 0` 일 때 `disabled` + "Auto from subtasks" 배지.
-  - tooltip: "Computed from child subtasks. Edit subtask dates instead."
+### 변경 2 — `useReactTable` 옵션 수정
 
-### C. `src/pages/PunchRawDataPage.tsx` — 계층적 정렬
-- `DEFAULT_SORTING = [{ id: 'item_no', desc: false }]` 유지.
-- 데이터 메모 단계에서 `sorting` 이 default(=item_no asc 단독)일 때만 다음 재배치 적용:
-  1. `parent_id IS NULL` 행을 `compareItemNo` 로 정렬.
-  2. 각 부모 뒤에 자식들을 `planned_start_date asc nulls last, item_no asc` 로 정렬해 삽입.
-  3. 고아 자식은 맨 뒤.
-- 사용자가 다른 컬럼으로 정렬하면 React Table 기본 정렬에 위임(계층 무시).
-- 구현: `data` useMemo 에서 위 알고리즘 적용해 정렬된 배열 반환. Inline 처리이므로 React Table 의 `getSortedRowModel` 에는 영향 없음(기본 정렬 키가 item_no 라 동순서 → 우리 미리 정렬이 그대로 표시됨). 안전을 위해 `enableSorting` 은 유지.
-
-### D. Field 편집 가능성(권한·잠금) 통합
-- 기존 `usePunchFieldConfig` / 인라인 편집 컴포넌트에서 위 4개 필드는 행 단위로 "summary-aggregated" 라면 disabled 처리. 헬퍼 `isSummaryAggregatedField(row, field)` 추가.
-- Raw Data 인라인 셀 편집 & 상세 페이지 모두에서 동일 헬퍼 사용.
-
-### E. 영향 없음
-- `add_punch_subtask` RPC, `item_no` 부여 — 변경 없음.
-- Item No 재번호 매김 없음.
-- Import: 트리거가 부모 날짜를 자동으로 덮어쓰므로 import 시 입력된 Summary 행의 날짜는 무시되는 결과(자식이 있으면). 이는 의도된 동작.
-
-## 동작 예시
-부모 `3` Summary, 자식 4개 — 모두 actual_completion_date 있음:
-
-| Item No | PS | PC | AS | AC |
-|---|---|---|---|---|
-| 3.1 | 06-15 | 06-20 | 06-16 | 06-22 |
-| 3.2 | 07-01 | 07-10 | 07-02 | 07-12 |
-| 3.3 | 07-20 | 07-25 | NULL | NULL |
-| 3.4 | 06-10 | 06-12 | 06-11 | 06-13 |
-
-→ Summary `3`: PS=06-10, PC=07-25, AS=06-11, AC=**NULL** (3.3 미완료).
-
-표시 순서(item_no `3` 그룹):
+```ts
+const table = useReactTable({
+  data: orderedRows,
+  columns,
+  state: { sorting, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
+  // ↑ sorting은 trick 없이 그대로 전달 (헤더 ▲/▼ 인디케이터용)
+  manualSorting: true,   // ★ 추가: react-table이 다시 정렬하지 않음
+  onSortingChange: setSorting,
+  ...
+});
 ```
-3      Summary    06-10  07-25  06-11  —
-3.4    Subtask    06-10  06-12  06-11  06-13
-3.1    Subtask    06-15  06-20  06-16  06-22
-3.2    Subtask    07-01  07-10  07-02  07-12
-3.3    Subtask    07-20  07-25  —      —
-```
+
+`getSortedRowModel()` 호출은 그대로 두어도 무방하나(manualSorting=true면 데이터 순서를 그대로 통과시킴), 깔끔히 유지합니다.
+
+### 변경 3 — (선택) 안전 가드
+
+- `orderedRows` 내부에서 `usedChildKeys` 대신 `for (const [k, arr] of byParent)`에서 `if (rootIds.has(k)) continue;` 형태로 명시화하여 가독성 향상(필수 아님).
+
+## 영향 범위
+
+- PunchRawDataPage.tsx 1 파일만 수정.
+- DB/타입/기타 페이지 변경 없음.
+- Summary 자동 집계 트리거 및 PunchDetailPage 변경은 그대로 유지.
+- 계층적 기본 정렬, 사용자 컬럼 정렬 모두 정상 동작 + freeze 해결.
+
+## 검증
+
+- 페이지 진입 시 Loading→데이터 표시 후 헤더 클릭으로 정렬 토글, 행 클릭으로 상세 진입, 가로/세로 스크롤이 모두 응답하는지 확인.
+- 기본 상태에서 부모(Summary/단독) 뒤에 자식이 `planned_start_date` 오름차순(NULL 마지막)으로 표시되는지 확인.
+- 다른 컬럼으로 정렬 시 계층 무시하고 평탄 정렬되는지 확인.
