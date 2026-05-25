@@ -466,6 +466,49 @@ export async function upsertPunchRows(
     if (error) console.warn('[punch] row log insert failed:', error.message);
   }
 
+  // --- Second pass: resolve Parent Item No → parent_id, promote parents ---
+  if (parentRefByItemNo.size > 0) {
+    const childItemNos = Array.from(parentRefByItemNo.keys());
+    const parentItemNos = Array.from(new Set(parentRefByItemNo.values()));
+    const { data: refRows } = await supabase
+      .from('punch_items')
+      .select('id, item_no, is_summary, parent_id')
+      .eq('project_id', opts.projectId)
+      .in('item_no', [...childItemNos, ...parentItemNos]);
+
+    const idByItemNo = new Map<string, { id: string; is_summary: boolean | null; parent_id: string | null }>();
+    (refRows || []).forEach((r) => {
+      if (r.item_no) idByItemNo.set(r.item_no, { id: r.id, is_summary: (r as any).is_summary, parent_id: (r as any).parent_id });
+    });
+
+    const parentsToPromote = new Set<string>();
+    for (const [childNo, parentNo] of parentRefByItemNo) {
+      const child = idByItemNo.get(childNo);
+      const parent = idByItemNo.get(parentNo);
+      if (!child || !parent) {
+        result.errors.push({ itemNo: childNo, reason: `Parent Item No "${parentNo}" not found — link skipped` });
+        continue;
+      }
+      if (child.id === parent.id) continue;
+      if (parent.parent_id) {
+        result.errors.push({ itemNo: childNo, reason: `Parent "${parentNo}" is already a subtask — only 2-level hierarchy allowed` });
+        continue;
+      }
+      const { error: linkErr } = await supabase
+        .from('punch_items')
+        .update({ parent_id: parent.id })
+        .eq('id', child.id);
+      if (linkErr) {
+        result.errors.push({ itemNo: childNo, reason: `Parent link failed: ${linkErr.message}` });
+        continue;
+      }
+      if (!parent.is_summary) parentsToPromote.add(parent.id);
+    }
+    for (const pid of parentsToPromote) {
+      await supabase.from('punch_items').update({ is_summary: true } as any).eq('id', pid);
+    }
+  }
+
   return result;
 }
 
