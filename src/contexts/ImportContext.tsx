@@ -51,6 +51,7 @@ interface ImportContextValue {
   files: ImportFileItem[];
   isRunning: boolean;
   currentIndex: number;
+  similarDecisions: SimilarMasterDecision[];
   addFiles: (files: File[]) => Promise<void>;
   removeFile: (id: string) => void;
   clearAll: () => void;
@@ -59,6 +60,9 @@ interface ImportContextValue {
   setFileTeam: (id: string, team: string) => void;
   setFileSheet: (id: string, sheetName: string) => Promise<void>;
   setFileExcludedHeaders: (id: string, excluded: string[]) => void;
+  setDecisionAction: (key: string, action: SimilarDecisionAction) => void;
+  confirmSimilarDecisions: () => Promise<void>;
+  cancelSimilarDecisions: () => void;
 }
 
 const ImportContext = createContext<ImportContextValue | null>(null);
