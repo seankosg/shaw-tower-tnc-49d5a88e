@@ -2746,6 +2746,7 @@ export type Database = {
           category3: string | null
           completion_status: string | null
           created_at: string
+          created_by: string | null
           critical_level: string | null
           custom_payload: Json
           data_date: string | null
@@ -2806,6 +2807,7 @@ export type Database = {
           category3?: string | null
           completion_status?: string | null
           created_at?: string
+          created_by?: string | null
           critical_level?: string | null
           custom_payload?: Json
           data_date?: string | null
@@ -2866,6 +2868,7 @@ export type Database = {
           category3?: string | null
           completion_status?: string | null
           created_at?: string
+          created_by?: string | null
           critical_level?: string | null
           custom_payload?: Json
           data_date?: string | null
