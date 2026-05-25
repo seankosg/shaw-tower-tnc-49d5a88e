@@ -608,8 +608,8 @@ export function buildPlanVsActual(pres: pptxgen, tncKPI: TncKPI) {
   });
 
   const headlineDefault = tncKPI.testReport.pct < 1
-    ? 'Tests are running ahead — reports have not started.'
-    : `Tests ahead of plan — Test Report at ${tncKPI.testReport.pct.toFixed(1)}%.`;
+    ? 'Tests ahead — Test Report not yet started.'
+    : `Plan vs Actual across all three streams — Test Report at ${tncKPI.testReport.pct.toFixed(1)}%.`;
   const headline = T('tnc_scurve', 'headline', headlineDefault);
   s.addText(headline, { x: 0.5, y: 0.85, w: 12.5, h: 0.8, fontFace: FONT, fontSize: 32, bold: true, color: C.textPrimary, margin: 0 });
 
