@@ -438,19 +438,9 @@ export default function DmrDashboardPage() {
                     {selectedWp.map((w, i) => (
                       <TableHead key={`avg-${w}`} className="sticky bg-muted text-right text-[11px] font-normal text-muted-foreground" style={{ top: TOP_HEAD_2, left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG, zIndex: Z_HEAD_LEFT }}>{w}</TableHead>
                     ))}
-                    {tableDates.flatMap((d) => [
-                      <TableHead key={`${d}-total`} className="sticky border-l bg-muted/50 text-right text-[11px] font-semibold" style={{ top: TOP_HEAD_2, zIndex: Z_HEAD }}>Total</TableHead>,
-                      ...selectedWp.map((w) => (
-                        <TableHead key={`${d}-${w}`} className="sticky bg-muted text-right text-[11px] font-normal text-muted-foreground" style={{ top: TOP_HEAD_2, zIndex: Z_HEAD }}>{w}</TableHead>
-                      )),
-                    ])}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
                   {/* Grand Total row */}
-                  <TableRow className="border-t-2 bg-muted font-bold whitespace-nowrap" style={{ height: H_HEAD }}>
+                  <TableRow className="border-t-2 border-b-2 bg-muted font-bold whitespace-nowrap" style={{ height: H_HEAD }}>
                     <TableCell
-                      rowSpan={totalRowCount}
                       className="sticky left-0 border-r bg-muted align-middle text-center font-bold"
                       style={{ top: TOP_TOTAL_BASE, width: W_SUB, minWidth: W_SUB, zIndex: Z_TOTAL_LEFT }}
                     >
@@ -458,7 +448,7 @@ export default function DmrDashboardPage() {
                     </TableCell>
                     <TableCell className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top: TOP_TOTAL_BASE, left: leftAvgTotal, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{grandAvg || ''}</TableCell>
                     {selectedWp.map((w, i) => {
-                      const v = wpAvgAll(w);
+                      const v = Math.floor(dates.reduce((a, d) => a + colWpTotal(d, w), 0) / denom);
                       return <TableCell key={`grand-avg-${w}`} className="sticky bg-muted text-right tabular-nums text-muted-foreground font-bold" style={{ top: TOP_TOTAL_BASE, left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{v || ''}</TableCell>;
                     })}
                     {tableDates.flatMap((d) => {
@@ -474,33 +464,6 @@ export default function DmrDashboardPage() {
                     <TableCell className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top: TOP_TOTAL_BASE, zIndex: Z_TOTAL }}>{grandTotal || ''}</TableCell>
                   </TableRow>
 
-                  {/* Per-workplace Total rows */}
-                  {selectedWp.map((wRow, wIdx) => {
-                    const top = TOP_TOTAL_BASE + H_HEAD * (1 + wIdx);
-                    const wAvg = wpAvgAll(wRow);
-                    const wSum = wpSumAll(wRow);
-                    const isLast = wIdx === selectedWp.length - 1;
-                    return (
-                      <TableRow key={`total-wp-${wRow}`} className={`${isLast ? 'border-b-2' : ''} bg-muted font-bold whitespace-nowrap`} style={{ height: H_HEAD }}>
-                        <TableCell className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top, left: leftAvgTotal, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{wAvg || ''}</TableCell>
-                        {selectedWp.map((w, i) => {
-                          const v = w === wRow ? wAvg : 0;
-                          return <TableCell key={`total-wp-${wRow}-avg-${w}`} className="sticky bg-muted text-right tabular-nums text-muted-foreground font-bold" style={{ top, left: leftAvgWp(i), width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{v || ''}</TableCell>;
-                        })}
-                        {tableDates.flatMap((d) => {
-                          const t = colWpTotal(d, wRow);
-                          return [
-                            <TableCell key={`total-wp-${wRow}-${d}-total`} className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{t || ''}</TableCell>,
-                            ...selectedWp.map((w) => {
-                              const v = w === wRow ? t : 0;
-                              return <TableCell key={`total-wp-${wRow}-${d}-${w}`} className="sticky bg-muted text-right tabular-nums text-muted-foreground font-bold" style={{ top, zIndex: Z_TOTAL }}>{v || ''}</TableCell>;
-                            }),
-                          ];
-                        })}
-                        <TableCell className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{wSum || ''}</TableCell>
-                      </TableRow>
-                    );
-                  })}
 
                   {pivotSubs.map((s) => {
                     const at = avgTotal(s);
