@@ -39,6 +39,8 @@ export function createDocsImportProvider<TRow>(
     const [files, setFiles] = useState<DocsImportFile<TRow>[]>([]);
     const [isRunning, setIsRunning] = useState(false);
     const [allowedTeams, setAllowedTeams] = useState<string[]>([]);
+    const [similarDecisions, setSimilarDecisions] = useState<SimilarMasterDecision[]>([]);
+    const [pendingReady, setPendingReady] = useState<DocsImportFile<TRow>[] | null>(null);
 
     const parseAndApply = useCallback(async (id: string, file: File, sheets?: string[], excludedHeaders?: string[]) => {
       try {
