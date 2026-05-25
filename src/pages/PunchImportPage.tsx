@@ -121,6 +121,31 @@ export default function PunchImportPage() {
     }
     const projectId = projectsData[0].id;
 
+    // Normalize subcontractor names against active masters (case-insensitive auto-replace),
+    // then detect ≤2-char edits and pause for user confirmation if any are found.
+    try {
+      const maps = await fetchSubMasterMaps();
+      const allRows = queue
+        .filter((it) => it.status === 'ready' && it.parsed)
+        .flatMap((it) => it.parsed!.rows.map((r) => r.values));
+      const replaced = normalizeRowsAgainstMaster(allRows as any, maps);
+      if (replaced > 0) toast({ title: 'Subcontractor names normalized', description: `${replaced} name(s) replaced with master canonical form.` });
+      const decisions = detectEditDistanceDecisions(allRows as any, maps, 2);
+      if (decisions.length > 0) {
+        setPendingImportProjectId(projectId);
+        setSimilarDecisions(decisions);
+        setRunning(false);
+        return;
+      }
+    } catch (e) {
+      console.warn('[punch-import] sub master sync failed', e);
+    }
+
+    await executePunchImport(projectId);
+  };
+
+  const executePunchImport = async (projectId: string) => {
+    setRunning(true);
     for (const item of queue.filter((it) => it.status === 'ready' && it.parsed)) {
       setQueue((q) => q.map((it) => it.id === item.id ? { ...it, status: 'processing' } : it));
 
@@ -170,7 +195,24 @@ export default function PunchImportPage() {
     toast({ title: 'Import complete', description: 'See per-file results below.' });
   };
 
-  const readyCount = queue.filter((it) => it.status === 'ready').length;
+  const setDecisionAction = (key: string, action: SimilarDecisionAction) => {
+    setSimilarDecisions((cur) => cur.map((d) => d.key === key ? { ...d, action } : d));
+  };
+  const confirmSimilarDecisions = async () => {
+    const allRows = queue
+      .filter((it) => it.status === 'ready' && it.parsed)
+      .flatMap((it) => it.parsed!.rows.map((r) => r.values));
+    applyDecisionsInPlace(allRows as any, similarDecisions);
+    const projectId = pendingImportProjectId;
+    setSimilarDecisions([]);
+    setPendingImportProjectId(null);
+    if (projectId) await executePunchImport(projectId);
+  };
+  const cancelSimilarDecisions = () => {
+    setSimilarDecisions([]);
+    setPendingImportProjectId(null);
+  };
+
   const totals = queue.reduce((acc, it) => {
     if (it.result) {
       acc.inserted += it.result.inserted;
