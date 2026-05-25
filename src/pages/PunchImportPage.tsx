@@ -40,6 +40,8 @@ export default function PunchImportPage() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [running, setRunning] = useState(false);
   const [columnDialogId, setColumnDialogId] = useState<string | null>(null);
+  const [similarDecisions, setSimilarDecisions] = useState<SimilarMasterDecision[]>([]);
+  const [pendingImportProjectId, setPendingImportProjectId] = useState<string | null>(null);
 
   const moduleLocked = !punch.enabled && !isAdmin;
 
