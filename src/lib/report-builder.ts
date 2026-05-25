@@ -873,6 +873,9 @@ async function computeDocsData(opts: ReportOptions): Promise<DocsReportData> {
     },
   };
   const ommData = mk(omm, OMM_COLS);
+  const ommFinalACount = omm.filter(r => r.final_response_status === 'A').length;
+  ommData.currentCounts!['final_response_status_a'] = ommFinalACount;
+  ommData.currentPcts!['final_response_status_a'] = omm.length ? Math.round((ommFinalACount / omm.length) * 1000) / 10 : 0;
   ommData.statusCounts = {
     under_review: omm.filter(r => !!r.sub2_actual_date && !r.final_response_actual_date).length,
   };
