@@ -1103,8 +1103,9 @@ export function buildDocsSnapshot(pres: pptxgen, docsKPI: DocsKPI) {
     {
       name: 'OMM', subtitle: `${docsKPI.omm.total} operation & maintenance manuals`, accent: C.stageOfficial,
       rows: [
-        { label: 'Submitted (Sub2)', val: ommSub.toFixed(1),   unit: '%', color: C.stageOfficial, isPct: true, pct: ommSub },
-        { label: 'Under Review',     val: ommUrPct.toFixed(1), unit: '%', color: C.amber,         isPct: true, pct: ommUrPct },
+        { label: 'Final Submission', val: ommFinalSub.toFixed(1), unit: '%', color: C.cyan,          isPct: true, pct: ommFinalSub },
+        { label: 'Final Response',   val: ommFinalRes.toFixed(1), unit: '%', color: C.stageOfficial, isPct: true, pct: ommFinalRes },
+        { label: 'Final Status A',   val: ommFinalA.toFixed(1),   unit: '%', color: ommFinalA < 50 ? C.amber : C.green, isPct: true, pct: ommFinalA },
       ],
     },
     {
