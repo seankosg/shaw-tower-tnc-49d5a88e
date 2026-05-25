@@ -314,6 +314,13 @@ export default function DmrDashboardPage() {
       <div className="text-[22px] font-bold text-primary truncate">
         Subcontractor: {fSubs.size === subs.length ? 'All' : Array.from(fSubs).join(', ')}
       </div>
+      <div className="text-[22px] font-bold text-red-500 truncate">
+        Today's Manpower: {(() => {
+          const latest = dates[dates.length - 1];
+          if (!latest) return 0;
+          return filtered.reduce((a, r) => a + (r.report_date === latest ? r.manpower : 0), 0);
+        })()}
+      </div>
 
       <ProductivitySummaryCards
         dmrRows={filtered}
