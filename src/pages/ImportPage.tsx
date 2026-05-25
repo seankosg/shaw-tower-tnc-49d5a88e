@@ -12,6 +12,7 @@ import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { TncColumnSelect } from '@/components/import/TncColumnSelect';
+import { SimilarMasterDialog } from '@/components/import/SimilarMasterDialog';
 
 const statusBadge: Record<FileStatus, { label: string; cls: string }> = {
   pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
