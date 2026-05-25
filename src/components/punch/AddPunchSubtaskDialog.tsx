@@ -82,21 +82,22 @@ export function AddPunchSubtaskDialog({
       return;
     }
     setSaving(true);
+    const payload = {
+      outstanding_work: outstanding,
+      location: location || null,
+      work_type: workType || null,
+      main_trade: mainTrade || null,
+      sub_trade: subTrade || null,
+      planned_start_date: plannedStart || null,
+      planned_completion_date: plannedEnd || null,
+      weight: weight || '1',
+      remarks: remarks || null,
+      ...(team ? { team } : {}),
+    };
     const { data, error } = await (supabase as any).rpc('add_punch_subtask', {
       p_parent_id: parentId,
       p_stage: stage,
-      p_payload: {
-        outstanding_work: outstanding,
-        location: location || null,
-        work_type: workType || null,
-        main_trade: mainTrade || null,
-        sub_trade: subTrade || null,
-        team: team || null,
-        planned_start_date: plannedStart || null,
-        planned_completion_date: plannedEnd || null,
-        weight: weight || '1',
-        remarks: remarks || null,
-      },
+      p_payload: payload,
     });
     setSaving(false);
     if (error) {
