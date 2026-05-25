@@ -98,6 +98,10 @@ export function AddPunchSubtaskDialog({
   const [mainTrade, setMainTrade] = useState(defaults?.main_trade ?? '');
   const [subTrade, setSubTrade] = useState(defaults?.sub_trade ?? '');
   const [team, setTeam] = useState<TeamType | ''>(defaults?.team ?? parentTeam ?? '');
+  const [subcontractor, setSubcontractor] = useState(defaults?.subcontractor_name ?? '');
+  const [subsub, setSubsub] = useState(defaults?.subsub_name ?? '');
+  const [hdecPic, setHdecPic] = useState(defaults?.hdec_pic_name ?? '');
+  const [hdecEng, setHdecEng] = useState(defaults?.hdec_eng_name ?? '');
   const [plannedStart, setPlannedStart] = useState(
     computeChainedStart(initialStage, siblings, parentPlannedStartDate),
   );
