@@ -12,6 +12,7 @@ import { ALL_TEAMS, TEAM_LABELS } from '@/types/enums';
 import { useModuleStatus } from '@/contexts/ModuleStatusContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { TncColumnSelect } from '@/components/import/TncColumnSelect';
+import { SimilarMasterDialog } from '@/components/import/SimilarMasterDialog';
 
 const statusBadge: Record<FileStatus, { label: string; cls: string }> = {
   pending: { label: 'Pending', cls: 'bg-muted text-muted-foreground' },
@@ -32,7 +33,7 @@ function formatSize(bytes: number) {
 export default function ImportPage() {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet, setFileExcludedHeaders } = useImport();
+  const { files, isRunning, addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet, setFileExcludedHeaders, similarDecisions, setDecisionAction, confirmSimilarDecisions, cancelSimilarDecisions } = useImport();
   const { tnc } = useModuleStatus();
   const { isAdmin } = useAuth();
   const [columnDialogFileId, setColumnDialogFileId] = useState<string | null>(null);
@@ -296,6 +297,15 @@ export default function ImportPage() {
           onApply={(excluded) => setFileExcludedHeaders(columnDialogFile.id, excluded)}
         />
       )}
+      <SimilarMasterDialog
+        open={similarDecisions.length > 0}
+        decisions={similarDecisions}
+        isRunning={isRunning}
+        onSetAction={setDecisionAction}
+        onConfirm={confirmSimilarDecisions}
+        onCancel={cancelSimilarDecisions}
+      />
     </div>
   );
 }
+

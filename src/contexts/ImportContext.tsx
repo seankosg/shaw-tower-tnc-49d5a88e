@@ -6,6 +6,10 @@ import { buildScheduleChangeImpact, hasScheduleChangeImpact } from '@/lib/schedu
 import { derivePlanFromT2 } from '@/lib/business-days';
 import { SUBTEST_ACTUAL_DATE_FIELDS, type SubtestActualDateField } from '@/lib/defect-date-validation';
 import { buildFieldLog, type PendingFieldLog } from '@/lib/import-field-log';
+import {
+  applyDecisionsInPlace, detectEditDistanceDecisions, fetchSubMasterMaps, normalizeRowsAgainstMaster,
+  type SimilarDecisionAction, type SimilarMasterDecision,
+} from '@/lib/subcontractor-master-sync';
 
 export type ImportType = 'legacy' | 'standard';
 export type FileStatus = 'pending' | 'parsing' | 'pending_sheet_selection' | 'ready' | 'processing' | 'done' | 'failed';
@@ -47,6 +51,7 @@ interface ImportContextValue {
   files: ImportFileItem[];
   isRunning: boolean;
   currentIndex: number;
+  similarDecisions: SimilarMasterDecision[];
   addFiles: (files: File[]) => Promise<void>;
   removeFile: (id: string) => void;
   clearAll: () => void;
@@ -55,6 +60,9 @@ interface ImportContextValue {
   setFileTeam: (id: string, team: string) => void;
   setFileSheet: (id: string, sheetName: string) => Promise<void>;
   setFileExcludedHeaders: (id: string, excluded: string[]) => void;
+  setDecisionAction: (key: string, action: SimilarDecisionAction) => void;
+  confirmSimilarDecisions: () => Promise<void>;
+  cancelSimilarDecisions: () => void;
 }
 
 const ImportContext = createContext<ImportContextValue | null>(null);
@@ -987,11 +995,11 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     return res;
   };
 
-  const startImport = async () => {
-    const queue = files.filter(f => f.status === 'ready' && (f.detectedImportType === 'standard' || (f.detectedImportType === 'legacy' && f.team)));
-    if (queue.length === 0) return;
-    setIsRunning(true);
+  const [similarDecisions, setSimilarDecisions] = useState<SimilarMasterDecision[]>([]);
+  const [pendingQueue, setPendingQueue] = useState<ImportFileItem[] | null>(null);
 
+  const runImportQueue = async (queue: ImportFileItem[]) => {
+    setIsRunning(true);
     let totals = { inserted: 0, updated: 0, skipped: 0, rejected: 0 };
 
     for (let i = 0; i < queue.length; i++) {
@@ -1020,12 +1028,54 @@ export function ImportProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const startImport = async () => {
+    const queue = files.filter(f => f.status === 'ready' && (f.detectedImportType === 'standard' || (f.detectedImportType === 'legacy' && f.team)));
+    if (queue.length === 0) return;
+
+    // Normalize subcontractor names against active masters, then ask user about ≤2-edit similar names.
+    try {
+      const maps = await fetchSubMasterMaps();
+      const allRows = queue.flatMap((f) => f.parsed ?? []);
+      const replaced = normalizeRowsAgainstMaster(allRows as any, maps);
+      if (replaced > 0) toast({ title: 'Subcontractor names normalized', description: `${replaced} name(s) replaced with master canonical form.` });
+      const decisions = detectEditDistanceDecisions(allRows as any, maps, 2);
+      if (decisions.length > 0) {
+        setPendingQueue(queue);
+        setSimilarDecisions(decisions);
+        return;
+      }
+    } catch (e) {
+      console.warn('[tnc-import] sub master sync failed', e);
+    }
+
+    await runImportQueue(queue);
+  };
+
+  const setDecisionAction = useCallback((key: string, action: SimilarDecisionAction) => {
+    setSimilarDecisions((cur) => cur.map((d) => d.key === key ? { ...d, action } : d));
+  }, []);
+  const confirmSimilarDecisions = useCallback(async () => {
+    if (!pendingQueue) { setSimilarDecisions([]); return; }
+    const allRows = pendingQueue.flatMap((f) => f.parsed ?? []);
+    applyDecisionsInPlace(allRows as any, similarDecisions);
+    const q = pendingQueue;
+    setSimilarDecisions([]);
+    setPendingQueue(null);
+    await runImportQueue(q);
+  }, [pendingQueue, similarDecisions]);
+  const cancelSimilarDecisions = useCallback(() => {
+    setSimilarDecisions([]);
+    setPendingQueue(null);
+  }, []);
+
   return (
     <ImportContext.Provider value={{
-      files, isRunning, currentIndex,
+      files, isRunning, currentIndex, similarDecisions,
       addFiles, removeFile, clearAll, startImport, setFileDataDate, setFileTeam, setFileSheet, setFileExcludedHeaders,
+      setDecisionAction, confirmSimilarDecisions, cancelSimilarDecisions,
     }}>
       {children}
     </ImportContext.Provider>
   );
 }
+

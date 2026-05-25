@@ -7,6 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { findEditDistanceMatch, masterNameKey } from '@/lib/master-name-match';
+import { SimilarMasterDialog } from '@/components/import/SimilarMasterDialog';
+import type { SimilarMasterDecision, SimilarDecisionAction } from '@/lib/subcontractor-master-sync';
 
 type ParsedRow = {
   team: 'Arch' | 'Mech' | 'Elec';
@@ -44,6 +47,7 @@ export default function DmrImportPage() {
   const [reportDate, setReportDate] = useState('');
   const [overwrite, setOverwrite] = useState(false);
   const [existingKeys, setExistingKeys] = useState<Set<string>>(new Set());
+  const [similarDecisions, setSimilarDecisions] = useState<SimilarMasterDecision[]>([]);
 
   function onPick(f: File | null) {
     setParsed(null);
@@ -81,6 +85,61 @@ export default function DmrImportPage() {
     return { ...p, sections };
   }
 
+  /** Detect imported subcontractor names within 2 edits of an existing master
+   *  (but not exact-case match — those are already replaced). */
+  async function detectDmrSimilar(p: ParsedDmr): Promise<SimilarMasterDecision[]> {
+    const { data: masters } = await supabase
+      .from('subcontractor_master')
+      .select('id, name, type')
+      .eq('is_active', true);
+    const subMasters = ((masters ?? []) as any[]).filter((m) => (m.type ?? 'sub') === 'sub');
+    const exact = new Set(subMasters.map((m) => masterNameKey(m.name)));
+    const seen = new Map<string, SimilarMasterDecision>();
+    for (const s of p.sections) {
+      for (const r of s.rows) {
+        const name = r.subcontractor?.trim();
+        if (!name || exact.has(masterNameKey(name))) continue;
+        const key = `sub:${masterNameKey(name)}`;
+        if (seen.has(key)) continue;
+        const match = findEditDistanceMatch(name, subMasters, 2);
+        if (match) {
+          seen.set(key, {
+            key, kind: 'subcontractor',
+            importedName: name, existingName: match.candidate.name,
+            distance: match.distance,
+          });
+        }
+      }
+    }
+    return [...seen.values()];
+  }
+
+  function applyDecisionsToParsed(p: ParsedDmr, decisions: SimilarMasterDecision[]): ParsedDmr {
+    const byKey = new Map(decisions.map((d) => [`sub:${masterNameKey(d.importedName)}`, d]));
+    return {
+      ...p,
+      sections: p.sections.map((s) => ({
+        ...s,
+        rows: s.rows.map((r) => {
+          const d = byKey.get(`sub:${masterNameKey(r.subcontractor)}`);
+          if (d?.action === 'use_existing') return { ...r, subcontractor: d.existingName };
+          return r;
+        }),
+      })),
+    };
+  }
+
+  async function refreshExistingKeys(p: ParsedDmr) {
+    const flat = flatten(p, p.report_date);
+    const keys = flat.map(r => `${r.report_date}|${r.subcontractor}|${r.workplace}`);
+    const { data: existing } = await supabase
+      .from('dmr_entries')
+      .select('report_date, subcontractor, workplace')
+      .eq('report_date', p.report_date);
+    const set = new Set((existing ?? []).map(e => `${e.report_date}|${e.subcontractor}|${e.workplace}`));
+    setExistingKeys(new Set(keys.filter(k => set.has(k))));
+  }
+
   async function uploadAndParse() {
     if (!file || !user) return;
     setParsing(true);
@@ -100,16 +159,12 @@ export default function DmrImportPage() {
       setParsed(result);
       setReportDate(result.report_date);
 
-      // Check existing keys for duplicate detection
-      const flat = flatten(result, result.report_date);
-      const keys = flat.map(r => `${r.report_date}|${r.subcontractor}|${r.workplace}`);
-      const { data: existing } = await supabase
-        .from('dmr_entries')
-        .select('report_date, subcontractor, workplace')
-        .eq('report_date', result.report_date);
-      const set = new Set((existing ?? []).map(e => `${e.report_date}|${e.subcontractor}|${e.workplace}`));
-      setExistingKeys(new Set(keys.filter(k => set.has(k))));
+      await refreshExistingKeys(result);
       toast({ title: 'Parsed', description: `${result.sections.reduce((a, s) => a + s.rows.length, 0)} companies extracted.` });
+
+      // Detect possible misspellings vs existing master entries (≤2 char edits).
+      const decisions = await detectDmrSimilar(result);
+      if (decisions.length > 0) setSimilarDecisions(decisions);
     } catch (e: any) {
       console.error(e);
       toast({ title: 'Parse failed', description: e?.message ?? String(e), variant: 'destructive' });
@@ -117,6 +172,22 @@ export default function DmrImportPage() {
       setParsing(false);
     }
   }
+
+  function setDecisionAction(key: string, action: SimilarDecisionAction) {
+    setSimilarDecisions((cur) => cur.map((d) => d.key === key ? { ...d, action } : d));
+  }
+  async function confirmSimilarDecisions() {
+    if (!parsed) { setSimilarDecisions([]); return; }
+    const next = applyDecisionsToParsed(parsed, similarDecisions);
+    setParsed(next);
+    await refreshExistingKeys(next);
+    setSimilarDecisions([]);
+  }
+  function cancelSimilarDecisions() {
+    // Treat cancel as "register new for all" — keep imported names as-is.
+    setSimilarDecisions([]);
+  }
+
 
   function updateRow(team: string, idx: number, patch: Partial<ParsedRow>) {
     if (!parsed) return;
@@ -325,6 +396,15 @@ export default function DmrImportPage() {
           </div>
         </div>
       )}
+      <SimilarMasterDialog
+        open={similarDecisions.length > 0}
+        decisions={similarDecisions}
+        isRunning={saving}
+        onSetAction={setDecisionAction}
+        onConfirm={confirmSimilarDecisions}
+        onCancel={cancelSimilarDecisions}
+      />
     </div>
   );
 }
+

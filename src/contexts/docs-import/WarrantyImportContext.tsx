@@ -14,6 +14,10 @@ import {
   type ParsedWarrantyRow,
   type WarrantyThreadInput,
 } from '@/lib/docs-warranty-import-parser';
+import {
+  applyDecisionsInPlace, detectEditDistanceDecisions, fetchSubMasterMaps, normalizeRowsAgainstMaster,
+  type SimilarDecisionAction, type SimilarMasterDecision,
+} from '@/lib/subcontractor-master-sync';
 
 export type WarrantyFileStatus = 'pending' | 'parsing' | 'ready' | 'processing' | 'done' | 'failed';
 
@@ -68,6 +72,10 @@ export interface WarrantyImportContextValue {
   setFileDataDate: (id: string, dataDate: string) => void;
   setFileExcludedHeaders: (id: string, excluded: string[]) => Promise<void>;
   startImport: () => Promise<void>;
+  similarDecisions: SimilarMasterDecision[];
+  setDecisionAction: (key: string, action: SimilarDecisionAction) => void;
+  confirmSimilarDecisions: () => Promise<void>;
+  cancelSimilarDecisions: () => void;
 }
 
 const Ctx = createContext<WarrantyImportContextValue | null>(null);

@@ -8,6 +8,7 @@ import { useAbdImport } from '@/contexts/docs-import/AbdImportContext';
 import { useOmmImport } from '@/contexts/docs-import/OmmImportContext';
 import { useWarrantyImport } from '@/contexts/docs-import/WarrantyImportContext';
 import { useSparePartImport } from '@/contexts/docs-import/SparePartImportContext';
+import { SimilarMasterDialog } from '@/components/import/SimilarMasterDialog';
 
 type SubKey = 'abd' | 'omm' | 'warranty' | 'spare_part';
 
@@ -170,6 +171,19 @@ export default function DocsImportPage() {
           Tip: switching tabs while an import is running is safe — progress continues in the background.
         </p>
       )}
+
+      {[abd, omm, warranty, sparePart].map((imp, idx) => (
+        <SimilarMasterDialog
+          key={idx}
+          open={imp.similarDecisions.length > 0}
+          decisions={imp.similarDecisions}
+          isRunning={imp.isRunning}
+          onSetAction={imp.setDecisionAction}
+          onConfirm={imp.confirmSimilarDecisions}
+          onCancel={imp.cancelSimilarDecisions}
+        />
+      ))}
     </div>
   );
 }
+
