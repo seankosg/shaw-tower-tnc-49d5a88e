@@ -367,6 +367,9 @@ export default function DmrDashboardPage() {
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
+              <div className="text-sm font-bold text-primary truncate">
+                Subcontractor: {fSubs.size === subs.length ? 'All' : Array.from(fSubs).join(', ')}
+              </div>
               <CardTitle className="text-sm">Daily Manpower by {chartGroupBy === 'trade' ? 'Trade' : 'Workplace'}</CardTitle>
             </div>
             <div className="inline-flex shrink-0 rounded-md border bg-background p-0.5">
