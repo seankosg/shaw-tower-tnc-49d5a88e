@@ -182,7 +182,11 @@ export default function PunchDetailPage() {
     if (roles.some((r) => r === 'admin' || r === 'superuser' || r === 'senior_user' || r === 'user')) return false;
     return profile.team !== item.team;
   }, [roles, profile, item]);
-  const disabled = isReadOnlyRole || isDSuperOutOfTeam;
+  const isOwner = useMemo(
+    () => !!(item as any)?.created_by && !!profile?.user_id && (item as any).created_by === profile.user_id,
+    [item, profile],
+  );
+  const disabled = (isReadOnlyRole || isDSuperOutOfTeam) && !isOwner;
 
   const reload = useCallback(async () => {
     if (!id) return;
@@ -325,6 +329,11 @@ export default function PunchDetailPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground line-clamp-1">{item.outstanding_work}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {(item as any).created_by
+                ? <>Created by: <span className="font-medium">{isOwner ? 'You' : (item as any).created_by.slice(0, 8)}</span></>
+                : <>Created by: <span className="italic">Imported / Legacy</span></>}
+            </p>
             {parent && (
               <p className="text-[11px] text-muted-foreground">
                 Parent: <Link to={`/punch/${parent.id}`} className="text-primary hover:underline">{parent.item_no ?? parent.id}</Link>

@@ -398,10 +398,11 @@ export async function upsertPunchRows(
         project_id: opts.projectId,
         outstanding_work: row.values.outstanding_work ?? '',
         updated_by: opts.updatedBy,
+        created_by: opts.updatedBy,
         source_upload_id: opts.uploadId ?? null,
         data_source_type: 'excel_import',
         raw_payload: row.rawPayload as any,
-      };
+      } as PunchInsert;
       const { data: inserted, error } = await supabase
         .from('punch_items')
         .insert(insert)
