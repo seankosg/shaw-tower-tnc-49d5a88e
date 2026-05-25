@@ -214,56 +214,123 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
           </div>
         ) : rowSubs.length === 0 || dates.length === 0 || (!showTC && !showDefect) ? (
           <div className="py-10 text-center text-sm text-muted-foreground">No data for current selection</div>
-        ) : (
-          <div className="max-w-full overflow-x-auto">
+        ) : (() => {
+          // Total rows (one per active metric) summed across visible rowSubs
+          const totalMetrics: MetricRow[] = [];
+          if (showTC) {
+            totalMetrics.push({ key: 'tcp', label: 'T&C Planned', wp: 'T&C', map: tcPlanned });
+            totalMetrics.push({ key: 'tca', label: 'T&C Actual', wp: 'T&C', map: tcActual });
+          }
+          if (showDefect) {
+            totalMetrics.push({ key: 'dfp', label: 'Defect Planned', wp: 'Defect', map: defPlanned });
+            totalMetrics.push({ key: 'dfa', label: 'Defect Actual', wp: 'Defect', map: defActual });
+          }
+          const denom = dates.length || 1;
+          const sumQty = (mr: MetricRow, d: string) =>
+            rowSubs.reduce((a, s) => a + getQty(mr.map, s, d), 0);
+          const sumMan = (wp: 'T&C' | 'Defect', d: string) =>
+            rowSubs.reduce((a, s) => a + getMan(s, d, wp), 0);
+
+          // Sticky offset constants (px). Header rows fixed at 32px each.
+          const H_HEAD = 32;
+          const TOP_HEAD_1 = 0;
+          const TOP_HEAD_2 = H_HEAD;
+          const TOP_TOTAL_BASE = H_HEAD * 2;
+          const Z_HEAD = 40;
+          const Z_HEAD_LEFT = 50;
+          const Z_TOTAL = 30;
+          const Z_TOTAL_LEFT = 35;
+
+          return (
+          <div className="max-w-full overflow-auto max-h-[70vh]">
             <Table className="text-xs">
               <TableHeader>
-                <TableRow>
+                <TableRow style={{ height: H_HEAD }}>
                   <TableHead
                     rowSpan={2}
-                    className="sticky left-0 z-20 border-r bg-background align-bottom"
-                    style={{ width: W_SUB, minWidth: W_SUB }}
+                    className="sticky left-0 border-r bg-background align-bottom"
+                    style={{ top: TOP_HEAD_1, width: W_SUB, minWidth: W_SUB, zIndex: Z_HEAD_LEFT }}
                   >
                     Subcontractor
                   </TableHead>
                   <TableHead
                     rowSpan={2}
-                    className="sticky z-20 border-r bg-background align-bottom"
-                    style={{ left: W_SUB, width: W_METRIC, minWidth: W_METRIC }}
+                    className="sticky border-r bg-background align-bottom"
+                    style={{ top: TOP_HEAD_1, left: W_SUB, width: W_METRIC, minWidth: W_METRIC, zIndex: Z_HEAD_LEFT }}
                   >
                     Metric
                   </TableHead>
                   <TableHead
                     colSpan={3}
-                    className="sticky z-20 border-l border-r bg-muted text-center font-medium"
-                    style={{ left: W_SUB + W_METRIC }}
+                    className="sticky border-l border-r bg-muted text-center font-medium"
+                    style={{ top: TOP_HEAD_1, left: W_SUB + W_METRIC, zIndex: Z_HEAD_LEFT }}
                   >
                     Average
                   </TableHead>
                   {dates.map((d) => (
-                    <TableHead key={d} colSpan={3} className="border-l bg-muted text-center font-medium">
+                    <TableHead key={d} colSpan={3} className="sticky border-l bg-muted text-center font-medium" style={{ top: TOP_HEAD_1, zIndex: Z_HEAD }}>
                       {fmtDate(d)}
                     </TableHead>
                   ))}
                 </TableRow>
-                <TableRow>
-                  <TableHead className="sticky z-20 border-l bg-muted text-right text-[11px] font-semibold" style={{ left: W_SUB + W_METRIC, width: W_AVG, minWidth: W_AVG }}>Qty</TableHead>
-                  <TableHead className="sticky z-20 bg-muted text-right text-[11px] font-normal text-muted-foreground" style={{ left: W_SUB + W_METRIC + W_AVG, width: W_AVG, minWidth: W_AVG }}>Man</TableHead>
-                  <TableHead className="sticky z-20 border-r bg-muted text-right text-[11px] font-semibold" style={{ left: W_SUB + W_METRIC + W_AVG * 2, width: W_AVG, minWidth: W_AVG }}>Nos/Man</TableHead>
+                <TableRow style={{ height: H_HEAD }}>
+                  <TableHead className="sticky border-l bg-muted text-right text-[11px] font-semibold" style={{ top: TOP_HEAD_2, left: W_SUB + W_METRIC, width: W_AVG, minWidth: W_AVG, zIndex: Z_HEAD_LEFT }}>Qty</TableHead>
+                  <TableHead className="sticky bg-muted text-right text-[11px] font-normal text-muted-foreground" style={{ top: TOP_HEAD_2, left: W_SUB + W_METRIC + W_AVG, width: W_AVG, minWidth: W_AVG, zIndex: Z_HEAD_LEFT }}>Man</TableHead>
+                  <TableHead className="sticky border-r bg-muted text-right text-[11px] font-semibold" style={{ top: TOP_HEAD_2, left: W_SUB + W_METRIC + W_AVG * 2, width: W_AVG, minWidth: W_AVG, zIndex: Z_HEAD_LEFT }}>Nos/Man</TableHead>
                   {dates.flatMap((d) => [
-                    <TableHead key={`${d}-q`} className="border-l text-right text-[11px] font-semibold">Qty</TableHead>,
-                    <TableHead key={`${d}-m`} className="text-right text-[11px] font-normal text-muted-foreground">Man</TableHead>,
-                    <TableHead key={`${d}-p`} className="text-right text-[11px] font-semibold">Nos/Man</TableHead>,
+                    <TableHead key={`${d}-q`} className="sticky border-l bg-muted text-right text-[11px] font-semibold" style={{ top: TOP_HEAD_2, zIndex: Z_HEAD }}>Qty</TableHead>,
+                    <TableHead key={`${d}-m`} className="sticky bg-muted text-right text-[11px] font-normal text-muted-foreground" style={{ top: TOP_HEAD_2, zIndex: Z_HEAD }}>Man</TableHead>,
+                    <TableHead key={`${d}-p`} className="sticky bg-muted text-right text-[11px] font-semibold" style={{ top: TOP_HEAD_2, zIndex: Z_HEAD }}>Nos/Man</TableHead>,
                   ])}
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {totalMetrics.map((mr, idx) => {
+                  const top = TOP_TOTAL_BASE + H_HEAD * idx;
+                  const qSum = dates.reduce((a, d) => a + sumQty(mr, d), 0);
+                  const mSum = dates.reduce((a, d) => a + sumMan(mr.wp, d), 0);
+                  const qAvg = Math.floor(qSum / denom);
+                  const mAvg = Math.floor(mSum / denom);
+                  const isFirst = idx === 0;
+                  const isLast = idx === totalMetrics.length - 1;
+                  const borderCls = `${isFirst ? 'border-t-2' : ''} ${isLast ? 'border-b-2' : ''}`;
+                  return (
+                    <TableRow key={`total-${mr.key}`} className={`${borderCls} bg-muted/70 font-bold`} style={{ height: H_HEAD }}>
+                      {isFirst && (
+                        <TableCell
+                          rowSpan={totalMetrics.length}
+                          className="sticky left-0 border-r bg-muted/80 align-middle text-center font-bold"
+                          style={{ top: TOP_TOTAL_BASE, width: W_SUB, minWidth: W_SUB, zIndex: Z_TOTAL_LEFT }}
+                        >
+                          Total
+                        </TableCell>
+                      )}
+                      <TableCell
+                        className="sticky border-r bg-muted/70 text-[11px] font-semibold"
+                        style={{ top, left: W_SUB, width: W_METRIC, minWidth: W_METRIC, zIndex: Z_TOTAL_LEFT }}
+                      >
+                        {mr.label}
+                      </TableCell>
+                      <TableCell className="sticky border-l bg-muted/70 text-right tabular-nums font-bold" style={{ top, left: W_SUB + W_METRIC, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{qAvg || ''}</TableCell>
+                      <TableCell className="sticky bg-muted/70 text-right tabular-nums text-muted-foreground font-bold" style={{ top, left: W_SUB + W_METRIC + W_AVG, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{mAvg || ''}</TableCell>
+                      <TableCell className="sticky border-r bg-muted/70 text-right tabular-nums font-bold" style={{ top, left: W_SUB + W_METRIC + W_AVG * 2, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{prod(qSum, mSum)}</TableCell>
+                      {dates.flatMap((d) => {
+                        const q = sumQty(mr, d);
+                        const man = sumMan(mr.wp, d);
+                        return [
+                          <TableCell key={`total-${mr.key}-${d}-q`} className="sticky border-l bg-muted/70 text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{q || ''}</TableCell>,
+                          <TableCell key={`total-${mr.key}-${d}-m`} className="sticky bg-muted/70 text-right tabular-nums text-muted-foreground font-bold" style={{ top, zIndex: Z_TOTAL }}>{man || ''}</TableCell>,
+                          <TableCell key={`total-${mr.key}-${d}-p`} className="sticky bg-muted/70 text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{prod(q, man)}</TableCell>,
+                        ];
+                      })}
+                    </TableRow>
+                  );
+                })}
                 {rowSubs.map((s) => {
                   const mrows = metricRowsFor(s);
                   return mrows.map((mr, idx) => {
                     const isPlanned = mr.key.endsWith('p');
                     const rowBg = isPlanned ? 'bg-muted/30' : '';
-                    const denom = dates.length || 1;
                     const qSum = dates.reduce((a, d) => a + getQty(mr.map, s, d), 0);
                     const mSum = dates.reduce((a, d) => a + getMan(s, d, mr.wp), 0);
                     const qAvg = Math.floor(qSum / denom);
@@ -304,7 +371,8 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
               </TableBody>
             </Table>
           </div>
-        )}
+          );
+        })()}
       </CardContent>
     </Card>
   );
