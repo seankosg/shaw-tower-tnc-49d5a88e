@@ -15,6 +15,10 @@ import type {
 } from '@/contexts/docs-import/types';
 import { validateDocsHeaders } from '@/lib/docs-import-validation';
 import { createMasterEnsurer, type MasterEnsurer } from '@/lib/master-autocreate';
+import {
+  applyDecisionsInPlace, detectEditDistanceDecisions, fetchSubMasterMaps, normalizeRowsAgainstMaster,
+  type SimilarDecisionAction, type SimilarMasterDecision,
+} from '@/lib/subcontractor-master-sync';
 
 interface FactoryArgs<TRow> {
   adapter: ImporterAdapter<TRow>;
