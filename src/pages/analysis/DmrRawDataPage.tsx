@@ -53,18 +53,20 @@ export default function DmrRawDataPage() {
 
   async function load() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('dmr_entries')
-      .select('id, report_date, team, trade, subcontractor, workplace, manpower')
-      .order('report_date', { ascending: false })
-      .order('team', { ascending: true })
-      .order('subcontractor', { ascending: true })
-      .order('workplace', { ascending: true })
-      .limit(1000);
-    if (error) {
-      toast({ title: 'Failed to load DMR', description: error.message, variant: 'destructive' });
-    } else {
-      setRows((data ?? []) as DmrRow[]);
+    try {
+      const data = await fetchAllRows<DmrRow>((from, to) =>
+        supabase
+          .from('dmr_entries')
+          .select('id, report_date, team, trade, subcontractor, workplace, manpower')
+          .order('report_date', { ascending: false })
+          .order('team', { ascending: true })
+          .order('subcontractor', { ascending: true })
+          .order('workplace', { ascending: true })
+          .range(from, to),
+      );
+      setRows(data);
+    } catch (err: any) {
+      toast({ title: 'Failed to load DMR', description: err?.message ?? String(err), variant: 'destructive' });
     }
     setLoading(false);
   }
