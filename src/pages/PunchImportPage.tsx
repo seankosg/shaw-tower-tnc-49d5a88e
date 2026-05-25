@@ -407,6 +407,14 @@ export default function PunchImportPage() {
           }}
         />
       )}
+      <SimilarMasterDialog
+        open={similarDecisions.length > 0}
+        decisions={similarDecisions}
+        isRunning={running}
+        onSetAction={setDecisionAction}
+        onConfirm={confirmSimilarDecisions}
+        onCancel={cancelSimilarDecisions}
+      />
     </div>
   );
 }
