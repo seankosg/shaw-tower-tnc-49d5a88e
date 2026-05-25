@@ -215,33 +215,17 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
         ) : rowSubs.length === 0 || dates.length === 0 || (!showTC && !showDefect) ? (
           <div className="py-10 text-center text-sm text-muted-foreground">No data for current selection</div>
         ) : (() => {
-          // Total rows (one per active metric) summed across visible rowSubs
-          const totalMetrics: MetricRow[] = [];
-          if (showTC) {
-            totalMetrics.push({ key: 'tcp', label: 'T&C Planned', wp: 'T&C', map: tcPlanned });
-            totalMetrics.push({ key: 'tca', label: 'T&C Actual', wp: 'T&C', map: tcActual });
-          }
-          if (showDefect) {
-            totalMetrics.push({ key: 'dfp', label: 'Defect Planned', wp: 'Defect', map: defPlanned });
-            totalMetrics.push({ key: 'dfa', label: 'Defect Actual', wp: 'Defect', map: defActual });
-          }
           const denom = dates.length || 1;
-          const sumQty = (mr: MetricRow, d: string) =>
-            rowSubs.reduce((a, s) => a + getQty(mr.map, s, d), 0);
-          const sumMan = (wp: 'T&C' | 'Defect', d: string) =>
-            dmrRows.reduce((a, r) => (r.report_date === d && r.workplace === wp ? a + r.manpower : a), 0);
 
           // Sticky offset constants (px). Header rows fixed at 32px each.
           const H_HEAD = 32;
           const TOP_HEAD_1 = 0;
           const TOP_HEAD_2 = H_HEAD;
-          const TOP_TOTAL_BASE = H_HEAD * 2;
           const Z_HEAD = 40;
           const Z_HEAD_LEFT = 50;
-          const Z_TOTAL = 30;
-          const Z_TOTAL_LEFT = 35;
 
           return (
+
           <div className="max-w-full overflow-auto max-h-[70vh]">
             <Table className="text-xs">
               <TableHeader>
@@ -285,99 +269,8 @@ export default function ProductivityTable({ dmrRows, dates, fTeams, fSubs, fWp, 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(() => {
-                  type GrandRow = { key: 'plan' | 'actual'; label: string; metrics: MetricRow[] };
-                  const grandRows: GrandRow[] = [];
-                  const plannedMetrics = totalMetrics.filter((m) => m.key.endsWith('p'));
-                  const actualMetrics = totalMetrics.filter((m) => m.key.endsWith('a'));
-                  if (plannedMetrics.length > 0) grandRows.push({ key: 'plan', label: 'Plan (Total)', metrics: plannedMetrics });
-                  if (actualMetrics.length > 0) grandRows.push({ key: 'actual', label: 'Actual (Total)', metrics: actualMetrics });
-                  const grandQty = (g: GrandRow, d: string) => g.metrics.reduce((a, mr) => a + sumQty(mr, d), 0);
-                  const grandMan = (g: GrandRow, d: string) => {
-                    const wps = new Set(g.metrics.map((m) => m.wp));
-                    let total = 0;
-                    for (const wp of wps) total += sumMan(wp, d);
-                    return total;
-                  };
-                  const totalRowCount = grandRows.length + totalMetrics.length;
-                  return (
-                    <>
-                      {grandRows.map((g, gIdx) => {
-                        const top = TOP_TOTAL_BASE + H_HEAD * gIdx;
-                        const qSum = dates.reduce((a, d) => a + grandQty(g, d), 0);
-                        const mSum = dates.reduce((a, d) => a + grandMan(g, d), 0);
-                        const qAvg = Math.floor(qSum / denom);
-                        const mAvg = Math.floor(mSum / denom);
-                        const isFirst = gIdx === 0;
-                        const isLastGrand = gIdx === grandRows.length - 1;
-                        const borderCls = `${isFirst ? 'border-t-2' : ''} ${isLastGrand ? 'border-b' : ''}`;
-                        return (
-                          <TableRow key={`grand-${g.key}`} className={`${borderCls} bg-muted font-bold whitespace-nowrap`} style={{ height: H_HEAD }}>
-                            <TableCell
-                              className="sticky left-0 border-r bg-muted text-center font-bold"
-                              style={{ top, width: W_SUB, minWidth: W_SUB, zIndex: Z_TOTAL_LEFT }}
-                            >
-                              {isFirst ? 'Total' : ''}
-                            </TableCell>
-                            <TableCell
-                              className="sticky border-r bg-muted text-[11px] font-bold"
-                              style={{ top, left: W_SUB, width: W_METRIC, minWidth: W_METRIC, zIndex: Z_TOTAL_LEFT }}
-                            >
-                              {g.label}
-                            </TableCell>
-                            <TableCell className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top, left: W_SUB + W_METRIC, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{qAvg || ''}</TableCell>
-                            <TableCell className="sticky bg-muted text-right tabular-nums text-muted-foreground font-bold" style={{ top, left: W_SUB + W_METRIC + W_AVG, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{mAvg || ''}</TableCell>
-                            <TableCell className="sticky border-r bg-muted text-right tabular-nums font-bold" style={{ top, left: W_SUB + W_METRIC + W_AVG * 2, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{prod(qSum, mSum)}</TableCell>
-                            {dates.flatMap((d) => {
-                              const q = grandQty(g, d);
-                              const man = grandMan(g, d);
-                              return [
-                                <TableCell key={`grand-${g.key}-${d}-q`} className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{q || ''}</TableCell>,
-                                <TableCell key={`grand-${g.key}-${d}-m`} className="sticky bg-muted text-right tabular-nums text-muted-foreground font-bold" style={{ top, zIndex: Z_TOTAL }}>{man || ''}</TableCell>,
-                                <TableCell key={`grand-${g.key}-${d}-p`} className="sticky bg-muted text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{prod(q, man)}</TableCell>,
-                              ];
-                            })}
-                          </TableRow>
-                        );
-                      })}
-                      {totalMetrics.map((mr, idx) => {
-                        const top = TOP_TOTAL_BASE + H_HEAD * (grandRows.length + idx);
-                        const qSum = dates.reduce((a, d) => a + sumQty(mr, d), 0);
-                        const mSum = dates.reduce((a, d) => a + sumMan(mr.wp, d), 0);
-                        const qAvg = Math.floor(qSum / denom);
-                        const mAvg = Math.floor(mSum / denom);
-                        const isLast = idx === totalMetrics.length - 1;
-                        const borderCls = `${isLast ? 'border-b-2' : ''}`;
-                        return (
-                          <TableRow key={`total-${mr.key}`} className={`${borderCls} bg-muted font-bold whitespace-nowrap`} style={{ height: H_HEAD }}>
-                            <TableCell
-                              className="sticky left-0 border-r bg-muted text-center font-bold"
-                              style={{ top, width: W_SUB, minWidth: W_SUB, zIndex: Z_TOTAL_LEFT }}
-                            />
-                            <TableCell
-                              className="sticky border-r bg-muted text-[11px] font-semibold"
-                              style={{ top, left: W_SUB, width: W_METRIC, minWidth: W_METRIC, zIndex: Z_TOTAL_LEFT }}
-                            >
-                              {mr.label}
-                            </TableCell>
-                            <TableCell className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top, left: W_SUB + W_METRIC, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{qAvg || ''}</TableCell>
-                            <TableCell className="sticky bg-muted text-right tabular-nums text-muted-foreground font-bold" style={{ top, left: W_SUB + W_METRIC + W_AVG, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{mAvg || ''}</TableCell>
-                            <TableCell className="sticky border-r bg-muted text-right tabular-nums font-bold" style={{ top, left: W_SUB + W_METRIC + W_AVG * 2, width: W_AVG, minWidth: W_AVG, zIndex: Z_TOTAL_LEFT }}>{prod(qSum, mSum)}</TableCell>
-                            {dates.flatMap((d) => {
-                              const q = sumQty(mr, d);
-                              const man = sumMan(mr.wp, d);
-                              return [
-                                <TableCell key={`total-${mr.key}-${d}-q`} className="sticky border-l bg-muted text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{q || ''}</TableCell>,
-                                <TableCell key={`total-${mr.key}-${d}-m`} className="sticky bg-muted text-right tabular-nums text-muted-foreground font-bold" style={{ top, zIndex: Z_TOTAL }}>{man || ''}</TableCell>,
-                                <TableCell key={`total-${mr.key}-${d}-p`} className="sticky bg-muted text-right tabular-nums font-bold" style={{ top, zIndex: Z_TOTAL }}>{prod(q, man)}</TableCell>,
-                              ];
-                            })}
-                          </TableRow>
-                        );
-                      })}
-                    </>
-                  );
-                })()}
+
+
 
                 {rowSubs.map((s) => {
                   const mrows = metricRowsFor(s);
