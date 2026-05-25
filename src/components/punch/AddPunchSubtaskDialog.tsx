@@ -252,6 +252,10 @@ export function AddPunchSubtaskDialog({
             <div><Label className="text-xs">Work Type</Label><Input value={workType} onChange={(e) => setWorkType(e.target.value)} className="h-9" /></div>
             <div><Label className="text-xs">Main Trade</Label><Input value={mainTrade} onChange={(e) => setMainTrade(e.target.value)} className="h-9" /></div>
             <div><Label className="text-xs">Sub Trade</Label><Input value={subTrade} onChange={(e) => setSubTrade(e.target.value)} className="h-9" /></div>
+            <div><Label className="text-xs">Subcontractor</Label><Input value={subcontractor} onChange={(e) => setSubcontractor(e.target.value)} className="h-9" /></div>
+            <div><Label className="text-xs">Subsub</Label><Input value={subsub} onChange={(e) => setSubsub(e.target.value)} className="h-9" /></div>
+            <div><Label className="text-xs">HDEC PIC</Label><Input value={hdecPic} onChange={(e) => setHdecPic(e.target.value)} className="h-9" /></div>
+            <div><Label className="text-xs">HDEC Engineer</Label><Input value={hdecEng} onChange={(e) => setHdecEng(e.target.value)} className="h-9" /></div>
             <div>
               <Label className="text-xs">Team <span className="text-muted-foreground">(can differ from parent)</span></Label>
               <Select value={team || undefined} onValueChange={(v) => setTeam(v as TeamType)}>
