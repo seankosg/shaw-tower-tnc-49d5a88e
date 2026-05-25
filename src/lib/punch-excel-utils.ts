@@ -538,10 +538,44 @@ export async function upsertPunchRows(
     const parentsToPromote = new Set<string>();
     for (const [childNo, parentNo] of parentRefByItemNo) {
       const child = idByItemNo.get(childNo);
-      const parent = idByItemNo.get(parentNo);
-      if (!child || !parent) {
-        result.errors.push({ itemNo: childNo, reason: `Parent Item No "${parentNo}" not found — link skipped` });
+      if (!child) {
+        result.errors.push({ itemNo: childNo, reason: `Child row not found after insert — skipped` });
         continue;
+      }
+      let parent = idByItemNo.get(parentNo);
+      // Auto-create empty Summary if parent row is missing.
+      if (!parent) {
+        const { data: created, error: createErr } = await supabase
+          .from('punch_items')
+          .insert({
+            project_id: opts.projectId,
+            item_no: parentNo,
+            outstanding_work: parentNo,
+            is_summary: true,
+            data_source_type: 'auto_generated',
+            source_upload_id: opts.uploadId ?? null,
+            created_by: opts.updatedBy,
+            updated_by: opts.updatedBy,
+          } as PunchInsert)
+          .select('id, item_no, is_summary, parent_id')
+          .maybeSingle();
+        if (createErr || !created) {
+          result.errors.push({ itemNo: childNo, reason: `Auto-create parent "${parentNo}" failed: ${createErr?.message ?? 'unknown'}` });
+          continue;
+        }
+        parent = { id: created.id, is_summary: created.is_summary as boolean | null, parent_id: created.parent_id as string | null };
+        idByItemNo.set(parentNo, parent);
+        result.inserted++;
+        if (opts.uploadId) {
+          pendingRowLogs.push({
+            upload_id: opts.uploadId,
+            raw_row_no: null,
+            item_no: parentNo,
+            action_taken: 'inserted',
+            reason_code: 'auto_summary',
+            reason_detail: `Auto-created parent for ${childNo}`,
+          });
+        }
       }
       if (child.id === parent.id) continue;
       if (parent.parent_id) {
