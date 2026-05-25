@@ -440,6 +440,70 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
     };
   };
 
+  /** Replace subcontractor/subsub names with the master's canonical casing
+   *  when an exact case-insensitive match exists. Mutates each item's parsed
+   *  rows in place and updates file state. Returns total replacement count. */
+  const normalizeSubcontractorsFromMaster = async (items: DefectImportFile[]): Promise<number> => {
+    const { data } = await (supabase as any)
+      .from('subcontractor_master')
+      .select('id, name, type, parent_subcontractor_id')
+      .eq('is_active', true);
+    const masters = (data ?? []) as Array<{ id: string; name: string; type: string | null; parent_subcontractor_id: string | null }>;
+
+    const subCanonical = new Map<string, string>(); // lowerName -> canonical
+    const subIdToCanonical = new Map<string, string>();
+    for (const m of masters) {
+      if ((m.type ?? 'sub') === 'sub') {
+        const key = masterNameKey(m.name);
+        if (key && !subCanonical.has(key)) subCanonical.set(key, m.name);
+        subIdToCanonical.set(m.id, m.name);
+      }
+    }
+    // subsub map keyed by "parentLowerCanonical::subsubLower" -> canonical subsub name
+    const subsubCanonical = new Map<string, string>();
+    for (const m of masters) {
+      if (m.type !== 'subsub') continue;
+      const parentName = m.parent_subcontractor_id ? subIdToCanonical.get(m.parent_subcontractor_id) ?? null : null;
+      const key = `${masterNameKey(parentName)}::${masterNameKey(m.name)}`;
+      if (!subsubCanonical.has(key)) subsubCanonical.set(key, m.name);
+    }
+
+    let replaced = 0;
+    const updatedItems = new Map<string, ParsedDefectRow[]>();
+    for (const item of items) {
+      if (!item.parsed) continue;
+      const next = item.parsed.map((row) => {
+        let { subcontractor_name, subsub_name } = row;
+        const subKey = masterNameKey(subcontractor_name);
+        if (subKey && subCanonical.has(subKey)) {
+          const canonical = subCanonical.get(subKey)!;
+          if (subcontractor_name && subcontractor_name !== canonical) {
+            subcontractor_name = canonical;
+            replaced++;
+          }
+        }
+        const parentForSubsub = subcontractor_name; // may have just been normalized
+        const subsubKey = `${masterNameKey(parentForSubsub)}::${masterNameKey(subsub_name)}`;
+        if (subsub_name && subsubCanonical.has(subsubKey)) {
+          const canonical = subsubCanonical.get(subsubKey)!;
+          if (subsub_name !== canonical) {
+            subsub_name = canonical;
+            replaced++;
+          }
+        }
+        return { ...row, subcontractor_name, subsub_name };
+      });
+      updatedItems.set(item.id, next);
+      item.parsed = next; // ensure caller's snapshot sees normalized rows
+    }
+
+    if (replaced > 0) {
+      setFiles((current) => current.map((f) => updatedItems.has(f.id) ? { ...f, parsed: updatedItems.get(f.id)! } : f));
+      toast({ title: 'Subcontractor names normalized', description: `${replaced} name(s) replaced with master canonical form.` });
+    }
+    return replaced;
+  };
+
   const preflightSimilarMasterDecisions = async (items: DefectImportFile[]) => {
     const { data } = await (supabase as any)
       .from('subcontractor_master')
