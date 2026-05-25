@@ -280,6 +280,17 @@ export async function upsertPunchRows(
   const result: PunchUpsertResult = { inserted: 0, updated: 0, skipped: 0, failed: 0, errors: [] };
   if (!rows.length) return result;
 
+  // Strip virtual hierarchy field (parent_item_no) from per-row values — it's
+  // not a DB column; we resolve it to parent_id in a second pass below.
+  const parentRefByItemNo = new Map<string, string>(); // child item_no → parent item_no
+  for (const r of rows) {
+    const pin = (r.values as any).parent_item_no;
+    if (pin && r.values.item_no) parentRefByItemNo.set(r.values.item_no, String(pin).trim());
+    delete (r.values as any).parent_item_no;
+    delete (r.values as any).manual_override_fields;
+    delete (r.values as any).is_summary; // never imported directly
+  }
+
   const itemNos = rows.map((r) => r.values.item_no).filter((v): v is string => !!v);
   const existingByItemNo = new Map<string, PunchItem>();
   if (itemNos.length) {
