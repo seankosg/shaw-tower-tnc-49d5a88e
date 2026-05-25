@@ -337,7 +337,15 @@ export async function upsertPunchRows(
   // not a DB column; we resolve it to parent_id in a second pass below.
   const parentRefByItemNo = new Map<string, string>(); // child item_no → parent item_no
   for (const r of rows) {
-    const pin = (r.values as any).parent_item_no;
+    let pin = (r.values as any).parent_item_no;
+    // Defensive: if explicit parent missing, derive from item_no (handles stale parses / external callers).
+    if (!pin && r.values.item_no) {
+      const { itemNo, parentItemNo } = parseSubtaskItemNo(r.values.item_no);
+      if (parentItemNo) {
+        r.values.item_no = itemNo; // normalize "3_1" → "3.1"
+        pin = parentItemNo;
+      }
+    }
     if (pin && r.values.item_no) parentRefByItemNo.set(r.values.item_no, String(pin).trim());
     delete (r.values as any).parent_item_no;
     delete (r.values as any).manual_override_fields;

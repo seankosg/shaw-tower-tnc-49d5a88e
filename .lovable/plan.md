@@ -1,82 +1,56 @@
-## 목적
+## 원인 분석
 
-엑셀 Punch Import에서 `3_1`, `3.1` 같은 표기를 Subtask로 자동 인식하여 Parent와 연결하고, 부모 행이 없으면 빈 Summary 행을 자동 생성한다. Stage 컬럼은 값이 있을 때만 검증/적용한다.
+**Subtask 자동 연결 로직은 이미 추가되어 있음**(`parseSubtaskItemNo` + 2nd-pass parent link, `src/lib/punch-excel-utils.ts` lines 94/297-305/523-598). 하지만 실제 import에서 `3.5`, `4.1`~`4.4`가 flat row로 들어갔습니다.
 
-## 변경 범위
+DB 확인 결과:
+- `3.1`~`3.4` (07:08~07:24 import) → `parent_id` 있음 (이전 Excel에 `Parent Item No` 열이 있었음)
+- `3.5`, `4.1`~`4.4` (07:55 import) → `parent_id` 없음 (자동 추출이 동작하지 않은 것처럼 보임)
 
-대상: `src/lib/punch-excel-utils.ts` 1개 파일만 수정 (DB 스키마/기타 컴포넌트 변경 없음).
+**근본 원인**: 파서가 **파일 선택 시점**에 동작하고 그 결과를 메모리에 저장(`item.parsed`)한 뒤, 사용자가 나중에 "Import" 버튼을 눌러도 그 캐시된 row를 사용합니다 (`PunchImportPage.tsx` line 100, 163). 사용자가 코드 배포 **이전**에 파일을 큐에 추가했다면 구버전 파서로 파싱된 row가 그대로 upsert에 전달되어 `parent_item_no`가 비어있게 됩니다.
 
-## 1. Item No 정규화 + Subtask 자동 인식
+또한 향후에도 다음 케이스에서 동일 문제가 재발할 수 있음:
+- 외부에서 만든 row 데이터를 `upsertPunchRows`에 직접 전달
+- 파서가 어떤 이유로 `parent_item_no`를 채우지 못한 경우 (예: 사용자가 Excel에 빈 Parent Item No 컬럼을 두었을 때 truthy 체크 실패)
 
-Parse 단계(`parsePunchWorkbook`, line 197-254)에서 `item_no` 값 처리 직후 다음 로직 추가:
+## 수정 방안
 
-```text
-parseSubtaskItemNo(raw):
-  - "<base><sep><child>" 패턴 매칭 (sep = "_" 또는 ".")
-    · base: 영문/숫자 혼합 허용 (예: "3", "Elec-001", "M-12")
-    · child: 숫자 1개 이상
-  - 매칭 시 → { itemNo: `${base}.${child}`, parentItemNo: base }
-  - 매칭 안 되면 → { itemNo: raw, parentItemNo: null }
-```
+`upsertPunchRows` 안에서 한 번 더 **방어적으로 자동 추출**을 수행합니다. 파서 결과에 의존하지 않고, item_no 자체에서 직접 parent를 derive.
 
-규칙:
-- `3_1` → `item_no="3.1"`, `parent_item_no="3"`
-- `3.1` → `item_no="3.1"`, `parent_item_no="3"` (그대로 + parent 자동 추출)
-- `Elec-001_2` → `item_no="Elec-001.2"`, `parent_item_no="Elec-001"`
-- 엑셀에 이미 `parent_item_no` 컬럼이 들어와 있으면 **엑셀 값 우선**, 자동 추출은 덮어쓰지 않음
+### 코드 변경 (`src/lib/punch-excel-utils.ts`)
 
-## 2. Stage 컬럼 엄격 검증
+`upsertPunchRows` 도입부 (현재 lines 336-345)에서:
 
-현재 `subtask_stage`는 enum이라 값이 매칭 안 되면 조용히 무시된다. 다음과 같이 변경:
-
-- enum 처리 분기(line 217-224)에서 `field === 'subtask_stage'`인 경우 별도 처리
-- 허용 값: `pre_engineering`, `physical_work`, `inspection` (대소문자/공백 무시, 약어 `PE`/`PW`/`IN`도 허용)
-- 빈 값/없음 → 그대로 통과 (null)
-- 매칭 실패 → row를 **reject**하고 `errors`에 `Invalid Subtask Stage: "<value>" (allowed: pre_engineering, physical_work, inspection)` 추가
-
-## 3. 빈 Summary 자동 생성
-
-`upsertPunchRows` 2nd pass(line 470-511)에서 부모를 찾지 못한 경우 현재는 "Parent not found — link skipped" 에러를 띄우는데, 이를 다음으로 변경:
-
-```text
-for (childNo, parentNo) of parentRefByItemNo:
-  parent = idByItemNo.get(parentNo)
-  if !parent:
-    // 빈 Summary 자동 INSERT
-    insert punch_items {
-      project_id, item_no: parentNo,
-      outstanding_work: parentNo,   // 최소값 (필수 컬럼)
-      is_summary: true,
-      data_source_type: 'auto_generated',
-      source_upload_id, created_by: opts.updatedBy,
-      updated_by: opts.updatedBy,
+```ts
+for (const r of rows) {
+  let pin = (r.values as any).parent_item_no;
+  // Defensive: if explicit parent missing, derive from item_no (handles stale parses).
+  if (!pin && r.values.item_no) {
+    const { itemNo, parentItemNo } = parseSubtaskItemNo(r.values.item_no);
+    if (parentItemNo) {
+      r.values.item_no = itemNo;   // normalize "3_1" → "3.1" too
+      pin = parentItemNo;
     }
-    → 새 id를 idByItemNo에 등록
-    → result.inserted++
-    → pushRowLog(null, parentNo, 'inserted', 'auto_summary', `Auto-created parent for ${childNo}`)
-  // 이후 기존대로 child.parent_id = parent.id 연결 + is_summary 승격
+  }
+  if (pin && r.values.item_no) {
+    parentRefByItemNo.set(r.values.item_no, String(pin).trim());
+  }
+  delete (r.values as any).parent_item_no;
+  delete (r.values as any).manual_override_fields;
+  delete (r.values as any).is_summary;
+}
 ```
 
-엣지 케이스:
-- 같은 부모를 여러 child가 참조 → 부모는 1번만 생성 (idByItemNo 캐시로 처리)
-- 같은 import 배치에 부모도 명시적으로 들어와 있는데 자식이 먼저 처리됐을 때 → 1st pass에서 이미 부모가 INSERT 됐으므로 2nd pass refRows 조회에 포함됨 (현재 로직 그대로)
+이러면:
+1. 파서가 이미 채운 경우: 기존 경로 유지
+2. 파서가 누락한 경우 (구 캐시 / 외부 호출): item_no에서 자동 derive
+3. `_` separator 정규화도 보장 (`3_1` → `3.1`)
 
-## 4. 검증 시나리오
+### 검증
 
-| 입력 Item No | 결과 item_no | parent | 비고 |
-|---|---|---|---|
-| `3` | `3` | (없음) | 일반 행, 자식이 생기면 자동 Summary 승격 |
-| `3_1` | `3.1` | `3` | parent `3` 없으면 자동 생성 |
-| `3.2` | `3.2` | `3` | 동일 |
-| `Elec-001_2` | `Elec-001.2` | `Elec-001` | prefix 유지 |
-| `3_1_2` | `3_1.2` | `3_1` | 마지막 segment만 분리 (그래도 parent `3_1` 자동 생성) |
-| Stage = `physical_work` | 적용 | - | OK |
-| Stage = `PW` | 적용 | - | 약어 허용 |
-| Stage = `완료` | **reject** | - | 에러 로그 |
-| Stage = 빈칸 | null | - | 통과 |
+수정 후 사용자가 동일 파일을 **다시 import**하면 (이번엔 새 코드로 파싱 + 방어 로직), `3.5`, `4.1`~`4.4`가 parent `3`, `4`에 자동 연결되고 두 parent는 `is_summary=true`로 promote됩니다.
 
-## 5. 미변경
+### 영향 범위
 
-- DB 스키마, RLS, types.ts 변경 없음
-- Detail/RawData/Export UI 변경 없음 (이미 `parent_id` / `is_summary` 기반으로 동작)
-- `add_punch_subtask` RPC 변경 없음 (수동 추가 흐름은 영향 없음)
+- 변경 파일: `src/lib/punch-excel-utils.ts` 1개 (upsertPunchRows 함수 도입부 ~7줄)
+- DB 스키마/RLS 변경 없음
+- 기존 정상 케이스는 동작 동일
