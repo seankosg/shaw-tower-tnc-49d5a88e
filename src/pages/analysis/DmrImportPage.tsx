@@ -396,6 +396,15 @@ export default function DmrImportPage() {
           </div>
         </div>
       )}
+      <SimilarMasterDialog
+        open={similarDecisions.length > 0}
+        decisions={similarDecisions}
+        isRunning={saving}
+        onSetAction={setDecisionAction}
+        onConfirm={confirmSimilarDecisions}
+        onCancel={cancelSimilarDecisions}
+      />
     </div>
   );
 }
+
