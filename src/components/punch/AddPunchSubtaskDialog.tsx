@@ -1,0 +1,162 @@
+import { useState } from 'react';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { ALL_TEAMS, type TeamType } from '@/types/enums';
+import {
+  SUBTASK_STAGES,
+  SUBTASK_STAGE_LABEL,
+  type SubtaskStage,
+} from '@/lib/punch-field-registry';
+
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  parentId: string;
+  parentItemNo: string | null;
+  parentTeam: TeamType | null;
+  parentIsSummary: boolean;
+  defaults?: {
+    outstanding_work?: string | null;
+    location?: string | null;
+    main_trade?: string | null;
+    work_type?: string | null;
+  };
+  onCreated?: (newId: string) => void;
+}
+
+export function AddPunchSubtaskDialog({
+  open, onOpenChange, parentId, parentItemNo, parentTeam, parentIsSummary, defaults, onCreated,
+}: Props) {
+  const { toast } = useToast();
+  const [stage, setStage] = useState<SubtaskStage>('physical_work');
+  const [outstanding, setOutstanding] = useState(defaults?.outstanding_work ?? '');
+  const [location, setLocation] = useState(defaults?.location ?? '');
+  const [workType, setWorkType] = useState(defaults?.work_type ?? '');
+  const [mainTrade, setMainTrade] = useState(defaults?.main_trade ?? '');
+  const [team, setTeam] = useState<TeamType | ''>(parentTeam ?? '');
+  const [plannedStart, setPlannedStart] = useState('');
+  const [plannedEnd, setPlannedEnd] = useState('');
+  const [weight, setWeight] = useState('1');
+  const [remarks, setRemarks] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit() {
+    if (!outstanding.trim()) {
+      toast({ title: 'Outstanding Works is required', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    const { data, error } = await (supabase as any).rpc('add_punch_subtask', {
+      p_parent_id: parentId,
+      p_stage: stage,
+      p_payload: {
+        outstanding_work: outstanding,
+        location: location || null,
+        work_type: workType || null,
+        main_trade: mainTrade || null,
+        team: team || null,
+        planned_start_date: plannedStart || null,
+        planned_completion_date: plannedEnd || null,
+        weight: weight || '1',
+        remarks: remarks || null,
+      },
+    });
+    setSaving(false);
+    if (error) {
+      toast({ title: 'Failed to add subtask', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({
+      title: parentIsSummary ? 'Subtask added' : 'Promoted to Summary + subtask added',
+      description: parentIsSummary
+        ? `Added to ${parentItemNo ?? 'parent'}.`
+        : `${parentItemNo ?? 'Parent'} is now a Summary. Original row preserved as first subtask.`,
+    });
+    onOpenChange(false);
+    if (data) onCreated?.(data as string);
+    // reset
+    setOutstanding(''); setLocation(''); setWorkType(''); setMainTrade('');
+    setPlannedStart(''); setPlannedEnd(''); setWeight('1'); setRemarks('');
+    setStage('physical_work');
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>
+            Add Subtask {parentItemNo && <Badge variant="outline" className="ml-2">{parentItemNo}</Badge>}
+          </DialogTitle>
+          <DialogDescription>
+            {parentIsSummary
+              ? 'Add a new subtask under this Summary item.'
+              : 'This will convert the parent into a Summary item. The original row is kept as the first Physical Work subtask.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div>
+            <Label className="text-xs font-medium">Stage *</Label>
+            <RadioGroup value={stage} onValueChange={(v) => setStage(v as SubtaskStage)} className="mt-1 grid grid-cols-3 gap-2">
+              {SUBTASK_STAGES.map((s) => (
+                <label
+                  key={s}
+                  htmlFor={`stage-${s}`}
+                  className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                >
+                  <RadioGroupItem value={s} id={`stage-${s}`} />
+                  <span>{SUBTASK_STAGE_LABEL[s]}</span>
+                </label>
+              ))}
+            </RadioGroup>
+          </div>
+
+          <div>
+            <Label className="text-xs">Outstanding Works *</Label>
+            <Textarea value={outstanding} onChange={(e) => setOutstanding(e.target.value)} rows={2} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label className="text-xs">Location</Label><Input value={location} onChange={(e) => setLocation(e.target.value)} className="h-9" /></div>
+            <div><Label className="text-xs">Work Type</Label><Input value={workType} onChange={(e) => setWorkType(e.target.value)} className="h-9" /></div>
+            <div><Label className="text-xs">Main Trade</Label><Input value={mainTrade} onChange={(e) => setMainTrade(e.target.value)} className="h-9" /></div>
+            <div>
+              <Label className="text-xs">Team <span className="text-muted-foreground">(can differ from parent)</span></Label>
+              <Select value={team || undefined} onValueChange={(v) => setTeam(v as TeamType)}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  {ALL_TEAMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label className="text-xs">Planned Start</Label><Input type="date" value={plannedStart} onChange={(e) => setPlannedStart(e.target.value)} className="h-9" /></div>
+            <div><Label className="text-xs">Planned Completion</Label><Input type="date" value={plannedEnd} onChange={(e) => setPlannedEnd(e.target.value)} className="h-9" /></div>
+            <div><Label className="text-xs">Weight</Label><Input type="number" step="0.01" value={weight} onChange={(e) => setWeight(e.target.value)} className="h-9" /></div>
+          </div>
+
+          <div>
+            <Label className="text-xs">Remarks</Label>
+            <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={saving || !outstanding.trim()}>
+            {saving ? 'Adding…' : 'Add Subtask'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

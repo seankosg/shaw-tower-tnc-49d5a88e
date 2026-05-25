@@ -2759,6 +2759,7 @@ export type Database = {
             | null
           id: string
           is_active: boolean
+          is_summary: boolean
           item_no: string | null
           level: string | null
           location: string | null
@@ -2770,6 +2771,8 @@ export type Database = {
           mos_approval_date: string | null
           mos_approval_status: Database["public"]["Enums"]["punch_gate_status"]
           outstanding_work: string
+          override_fields: Json
+          parent_id: string | null
           planned_completion_date: string | null
           planned_progress_pct: number | null
           planned_start_date: string | null
@@ -2781,9 +2784,13 @@ export type Database = {
           remarks: string | null
           row_version: number
           source_upload_id: string | null
+          stage_status: Json | null
           sub_trade: string | null
           subcontractor_name: string | null
           subsub_name: string | null
+          subtask_stage:
+            | Database["public"]["Enums"]["subtask_stage_enum"]
+            | null
           team: Database["public"]["Enums"]["team_type"] | null
           updated_at: string
           updated_by: string | null
@@ -2812,6 +2819,7 @@ export type Database = {
             | null
           id?: string
           is_active?: boolean
+          is_summary?: boolean
           item_no?: string | null
           level?: string | null
           location?: string | null
@@ -2823,6 +2831,8 @@ export type Database = {
           mos_approval_date?: string | null
           mos_approval_status?: Database["public"]["Enums"]["punch_gate_status"]
           outstanding_work: string
+          override_fields?: Json
+          parent_id?: string | null
           planned_completion_date?: string | null
           planned_progress_pct?: number | null
           planned_start_date?: string | null
@@ -2834,9 +2844,13 @@ export type Database = {
           remarks?: string | null
           row_version?: number
           source_upload_id?: string | null
+          stage_status?: Json | null
           sub_trade?: string | null
           subcontractor_name?: string | null
           subsub_name?: string | null
+          subtask_stage?:
+            | Database["public"]["Enums"]["subtask_stage_enum"]
+            | null
           team?: Database["public"]["Enums"]["team_type"] | null
           updated_at?: string
           updated_by?: string | null
@@ -2865,6 +2879,7 @@ export type Database = {
             | null
           id?: string
           is_active?: boolean
+          is_summary?: boolean
           item_no?: string | null
           level?: string | null
           location?: string | null
@@ -2876,6 +2891,8 @@ export type Database = {
           mos_approval_date?: string | null
           mos_approval_status?: Database["public"]["Enums"]["punch_gate_status"]
           outstanding_work?: string
+          override_fields?: Json
+          parent_id?: string | null
           planned_completion_date?: string | null
           planned_progress_pct?: number | null
           planned_start_date?: string | null
@@ -2887,16 +2904,28 @@ export type Database = {
           remarks?: string | null
           row_version?: number
           source_upload_id?: string | null
+          stage_status?: Json | null
           sub_trade?: string | null
           subcontractor_name?: string | null
           subsub_name?: string | null
+          subtask_stage?:
+            | Database["public"]["Enums"]["subtask_stage_enum"]
+            | null
           team?: Database["public"]["Enums"]["team_type"] | null
           updated_at?: string
           updated_by?: string | null
           weight?: number
           work_type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "punch_items_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "punch_items"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       punch_upload_batches: {
         Row: {
@@ -4756,6 +4785,14 @@ export type Database = {
         Args: { base: string; days: number }
         Returns: string
       }
+      add_punch_subtask: {
+        Args: {
+          p_parent_id: string
+          p_payload: Json
+          p_stage: Database["public"]["Enums"]["subtask_stage_enum"]
+        }
+        Returns: string
+      }
       allot_subcontractor_issue_no: {
         Args: { _count?: number; _owner_code: string; _project_id: string }
         Returns: number[]
@@ -4921,7 +4958,19 @@ export type Database = {
         Returns: boolean
       }
       is_senior_or_above: { Args: { _user_id: string }; Returns: boolean }
+      migrate_existing_punch_to_groups: {
+        Args: { p_dry_run?: boolean; p_project_id: string }
+        Returns: {
+          action: string
+          child_count: number
+          parent_item_no: string
+        }[]
+      }
       normalize_owner_code: { Args: { _value: string }; Returns: string }
+      override_summary_field: {
+        Args: { p_field: string; p_summary_id: string; p_value: Json }
+        Returns: undefined
+      }
       preview_delete_defects_cascade: {
         Args: { _ids: string[] }
         Returns: Json
@@ -4946,12 +4995,20 @@ export type Database = {
         Args: { _batch_id: string }
         Returns: Json
       }
+      punch_recalc_summary: {
+        Args: { p_summary_id: string }
+        Returns: undefined
+      }
       purge_old_event_log: { Args: never; Returns: number }
       restore_insert_rows: {
         Args: { _rows: Json; _table: string }
         Returns: number
       }
       restore_truncate_all: { Args: { _tables: string[] }; Returns: undefined }
+      revert_summary_field: {
+        Args: { p_field: string; p_summary_id: string }
+        Returns: undefined
+      }
       rollback_defect_import_batch: {
         Args: { _batch_id: string; _force?: boolean }
         Returns: Json
@@ -5020,6 +5077,7 @@ export type Database = {
         | "Under Review"
         | "Approved"
         | "Returned"
+      subtask_stage_enum: "pre_engineering" | "physical_work" | "inspection"
       tc_status: "Planned" | "WIP" | "Done" | "Hold"
       team_type: "Mech" | "Elec" | "Arch" | "Supp" | "Design"
       upload_status:
@@ -5203,6 +5261,7 @@ export const Constants = {
         "Approved",
         "Returned",
       ],
+      subtask_stage_enum: ["pre_engineering", "physical_work", "inspection"],
       tc_status: ["Planned", "WIP", "Done", "Hold"],
       team_type: ["Mech", "Elec", "Arch", "Supp", "Design"],
       upload_status: [
