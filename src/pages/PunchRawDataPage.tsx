@@ -48,6 +48,7 @@ import { USER_TYPE_LABELS } from '@/types/enums';
 import { formatDdMmm } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/integrations/supabase/types';
+import { compareItemNo } from '@/lib/item-no-sort';
 import {
   PUNCH_FIELDS,
   PUNCH_FIELDS_BY_NAME,
