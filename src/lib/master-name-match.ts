@@ -44,3 +44,47 @@ export function findSimilarMasterName<T extends { name: string }>(
     .filter((match) => match.score >= threshold)
     .sort((a, b) => b.score - a.score)[0] ?? null;
 }
+
+/** Standard Levenshtein edit distance. */
+export function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const m = a.length;
+  const n = b.length;
+  let prev = new Array<number>(n + 1);
+  let curr = new Array<number>(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
+
+/** Find the closest master name within `maxDistance` Levenshtein edits (exclusive of 0).
+ *  Compares case-insensitive trimmed forms. Returns the smallest-distance match, or null. */
+export function findEditDistanceMatch<T extends { name: string }>(
+  importedName: string,
+  candidates: T[],
+  maxDistance = 2,
+): { candidate: T; distance: number } | null {
+  const left = masterNameKey(importedName);
+  if (!left) return null;
+  let best: { candidate: T; distance: number } | null = null;
+  for (const candidate of candidates) {
+    const right = masterNameKey(candidate.name);
+    if (!right || right === left) continue;
+    if (Math.abs(right.length - left.length) > maxDistance) continue;
+    const d = levenshtein(left, right);
+    if (d <= maxDistance && (best === null || d < best.distance)) {
+      best = { candidate, distance: d };
+      if (d === 1) break;
+    }
+  }
+  return best;
+}
