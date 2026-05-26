@@ -86,6 +86,12 @@ import {
   type PunchProcurementStatus,
   type SubtaskStage,
 } from '@/lib/punch-field-registry';
+import {
+  computePunchProgressState,
+  PUNCH_PROGRESS_ICON,
+  PUNCH_PROGRESS_LABEL,
+  PUNCH_PROGRESS_COLOR,
+} from '@/lib/punch-progress-icon';
 import type { AppRole } from '@/types/enums';
 import {
   ColumnFilterDropdown,
