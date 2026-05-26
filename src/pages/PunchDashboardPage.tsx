@@ -214,15 +214,34 @@ export default function PunchDashboardPage() {
 
   return (
     <div className="space-y-4 p-4">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold">Punch (Minor O/S Work) — Dashboard</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {loading ? 'Loading…' : `${stats.total} items tracked · as of ${asOf}`}
+            {loading
+              ? 'Loading…'
+              : `${stats.total} items tracked · as of ${asOf}${
+                  picFilter === 'all'
+                    ? ''
+                    : ` · filtered by HDEC PIC: ${picFilter === PIC_EMPTY_TOKEN ? '(empty)' : picFilter}`
+                }`}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={picFilter} onValueChange={setPicFilter}>
+            <SelectTrigger className="h-8 w-[200px] text-xs">
+              <SelectValue placeholder="HDEC PIC: All" />
+            </SelectTrigger>
+            <SelectContent className="max-h-[320px]">
+              <SelectItem value="all" className="text-xs">HDEC PIC: All</SelectItem>
+              <SelectItem value={PIC_EMPTY_TOKEN} className="text-xs">(empty)</SelectItem>
+              {picOptions.map((o) => (
+                <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={() => navigate('/punch/raw-data')}>Open Raw Data</Button>
+
         </div>
       </div>
 
