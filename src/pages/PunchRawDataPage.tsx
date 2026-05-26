@@ -88,10 +88,14 @@ import {
 } from '@/lib/punch-field-registry';
 import {
   computePunchProgressState,
+  getPunchProgressTooltipLines,
   PUNCH_PROGRESS_ICON,
   PUNCH_PROGRESS_LABEL,
   PUNCH_PROGRESS_COLOR,
+  PUNCH_PROGRESS_STATES,
+  type PunchProgressState,
 } from '@/lib/punch-progress-icon';
+import { PunchProgressLegend } from '@/components/punch/PunchProgressLegend';
 import type { AppRole } from '@/types/enums';
 import {
   ColumnFilterDropdown,
