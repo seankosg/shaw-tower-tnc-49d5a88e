@@ -449,8 +449,9 @@ export default function PunchDashboardPage() {
             </TabsContent>
             <TabsContent value="14" className="m-0 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
               <ControlCell label="Due in 14d" value={stats.due14} onClick={() => go('due=next_14_days')} />
-              <ControlCell label="Planned to Start ≤14d" value={rows.filter((r) => isPlannedToStartWithin(r, 14, asOf)).length} onClick={() => go('start_due=14')} />
-              <ControlCell label="WIP Due ≤14d" value={rows.filter((r) => isWip(r) && isDueWithin(r, 14, asOf)).length} onClick={() => go('status=wip&due=next_14_days')} />
+              <ControlCell label="Planned to Start ≤14d" value={filteredRows.filter((r) => isPlannedToStartWithin(r, 14, asOf)).length} onClick={() => go('start_due=14')} />
+              <ControlCell label="WIP Due ≤14d" value={filteredRows.filter((r) => isWip(r) && isDueWithin(r, 14, asOf)).length} onClick={() => go('status=wip&due=next_14_days')} />
+
               <ControlCell label="Should Have Started" value={stats.startDelayed} tone="warning" onClick={() => go('status=start_delayed')} />
             </TabsContent>
           </Tabs>
