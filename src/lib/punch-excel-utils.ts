@@ -370,7 +370,11 @@ export async function upsertPunchRows(
     delete (r.values as any).parent_item_no;
     delete (r.values as any).manual_override_fields;
     delete (r.values as any).is_summary; // never imported directly
+    // summary_no / subtask_no are virtual (DB trigger fills them); never write directly.
+    delete (r.values as any).summary_no;
+    delete (r.values as any).subtask_no;
   }
+
 
   const itemNos = rows.map((r) => r.values.item_no).filter((v): v is string => !!v);
   const existingByItemNo = new Map<string, PunchItem>();
