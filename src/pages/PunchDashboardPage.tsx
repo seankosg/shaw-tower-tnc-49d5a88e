@@ -61,6 +61,8 @@ export default function PunchDashboardPage() {
   const [groupBy, setGroupBy] = useState<GroupBy>('team');
   const [sortKey, setSortKey] = useState<SortKey>('overdue');
   const [lookahead, setLookahead] = useState<'7' | '14'>('7');
+  const [picFilter, setPicFilter] = useState<string>('all');
+  const { hdecPicOptions } = useCommonMasters();
 
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
