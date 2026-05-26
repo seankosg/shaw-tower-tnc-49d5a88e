@@ -319,6 +319,22 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
       ) : (
         <span className="text-muted-foreground">—</span>
       );
+    case 'progress_icon': {
+      const state = computePunchProgressState(row as any);
+      const Icon = PUNCH_PROGRESS_ICON[state];
+      return (
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex items-center justify-center">
+                <Icon className={cn('h-4 w-4', PUNCH_PROGRESS_COLOR[state])} aria-label={PUNCH_PROGRESS_LABEL[state]} />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">{PUNCH_PROGRESS_LABEL[state]}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
     case 'health_status':
       return <HealthBadge status={(value as PunchHealthStatus) ?? null} />;
     case 'pre_engineering_ready':
