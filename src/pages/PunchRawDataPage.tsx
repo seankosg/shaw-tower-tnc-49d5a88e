@@ -777,7 +777,7 @@ export default function PunchRawDataPage() {
           originalHeader: orig,
         },
         cell: ({ row, getValue }) => {
-          if (field === 'item_no') {
+          if (field === 'item_no' || field === 'summary_no') {
             const r = row.original as any;
             const isSummary = !!r.is_summary;
             const id = String(row.original.id);
@@ -786,6 +786,7 @@ export default function PunchRawDataPage() {
               onToggle: isSummary ? () => toggleSummary(id) : undefined,
             });
           }
+
           if (field === 'row_type') {
             const v = String(getValue() ?? '');
             const cls = v === 'Summary'
