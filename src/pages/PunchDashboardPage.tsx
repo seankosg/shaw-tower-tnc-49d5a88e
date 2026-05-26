@@ -30,6 +30,9 @@ import {
   summarizeByCriticalLevel, CRITICAL_LEVEL_ACCENT,
   type PunchBlockerKind, type PunchDqKey, type CriticalLevelSummary,
 } from '@/lib/punch-dashboard-utils';
+import { useCommonMasters, unionWithLegacy } from '@/hooks/useCommonMasters';
+
+const PIC_EMPTY_TOKEN = '__EMPTY__';
 
 const PAGE_SIZE = 1000;
 
