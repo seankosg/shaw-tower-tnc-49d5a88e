@@ -882,8 +882,9 @@ export default function PunchRawDataPage() {
       const rootIds = new Set(roots.map((r) => String(r.id)));
       for (const p of roots) {
         out.push(p);
+        const isCollapsed = (p as any).is_summary && collapsedSummaries.has(String(p.id));
         const kids = byParent.get(String(p.id));
-        if (kids && kids.length) {
+        if (kids && kids.length && !isCollapsed) {
           kids.sort(childCmp);
           out.push(...kids);
         }
