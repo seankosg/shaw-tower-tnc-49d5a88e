@@ -86,6 +86,12 @@ import {
   type PunchProcurementStatus,
   type SubtaskStage,
 } from '@/lib/punch-field-registry';
+import {
+  computePunchProgressState,
+  PUNCH_PROGRESS_ICON,
+  PUNCH_PROGRESS_LABEL,
+  PUNCH_PROGRESS_COLOR,
+} from '@/lib/punch-progress-icon';
 import type { AppRole } from '@/types/enums';
 import {
   ColumnFilterDropdown,
@@ -313,6 +319,22 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
       ) : (
         <span className="text-muted-foreground">—</span>
       );
+    case 'progress_icon': {
+      const state = computePunchProgressState(row as any);
+      const Icon = PUNCH_PROGRESS_ICON[state];
+      return (
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex items-center justify-center">
+                <Icon className={cn('h-4 w-4', PUNCH_PROGRESS_COLOR[state])} aria-label={PUNCH_PROGRESS_LABEL[state]} />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">{PUNCH_PROGRESS_LABEL[state]}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
     case 'health_status':
       return <HealthBadge status={(value as PunchHealthStatus) ?? null} />;
     case 'pre_engineering_ready':
@@ -610,12 +632,12 @@ export default function PunchRawDataPage() {
   // ── All field ids (registry + Field Config dynamic), regardless of visibility.
   //    Visibility/order is applied via React Table state below, mirroring DefectRawDataPage.
   const allFieldIds = useMemo(() => {
-    const known = new Set([...PUNCH_FIELDS.map((f) => f.field), 'row_type']);
+    const known = new Set([...PUNCH_FIELDS.map((f) => f.field), 'row_type', 'progress_icon']);
     const dynamic = configRows
       .filter((r) => r.is_enabled && !known.has(r.field_name))
       .map((r) => r.field_name);
-    // 'row_type' is a virtual filter column (Summary / Subtask / Standalone)
-    return ['row_type', ...PUNCH_FIELDS.map((f) => f.field), ...dynamic];
+    // 'row_type' & 'progress_icon' are virtual columns (no DB column)
+    return ['row_type', 'progress_icon', ...PUNCH_FIELDS.map((f) => f.field), ...dynamic];
   }, [configRows]);
 
   // ── Option fields for multi-select filters ───────────────────────────────
@@ -723,13 +745,14 @@ export default function PunchRawDataPage() {
           )}
         </span>
       );
+      const isVirtualNoFilter = field === 'progress_icon';
       return {
         id: field,
         accessorFn,
         header: () => headerNode,
-        size: SIZE_BY_FIELD[field] ?? 130,
-        enableSorting: true,
-        enableColumnFilter: true,
+        size: isVirtualNoFilter ? 60 : (SIZE_BY_FIELD[field] ?? 130),
+        enableSorting: !isVirtualNoFilter,
+        enableColumnFilter: !isVirtualNoFilter,
         filterFn,
         meta: {
           filterType: inferred,
@@ -1181,7 +1204,7 @@ export default function PunchRawDataPage() {
         table="punch_items"
         entity="punch"
         exportColumns={columnOrder
-          .filter((id) => id !== '__select' && columnVisibility[id] !== false)
+          .filter((id) => id !== '__select' && id !== 'progress_icon' && columnVisibility[id] !== false)
           .map((id) => ({ id, label: getLabel(id) }))}
         reassignFields={[
           { field: 'subcontractor_name', label: getLabel('subcontractor_name'), options: optionFields.subcontractor_name ?? [] },
@@ -1292,7 +1315,7 @@ export default function PunchRawDataPage() {
                   : '(none)';
                 const sharedOpts = {
                   rows: sortedRows,
-                  fieldNames: columnOrder.filter((id) => id !== '__select' && columnVisibility[id] !== false),
+                  fieldNames: columnOrder.filter((id) => id !== '__select' && id !== 'progress_icon' && columnVisibility[id] !== false),
                   fieldConfig: configRows,
                   meta,
                   searchSummary: globalFilter.trim() ? `"${globalFilter.trim()}"` : '(none)',
