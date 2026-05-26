@@ -1132,6 +1132,32 @@ export default function PunchRawDataPage() {
           />
         </div>
         <span className="self-center text-sm text-muted-foreground">{filteredRowCount} records</span>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 text-xs"
+          disabled={!isDefaultSort}
+          title={isDefaultSort ? 'Expand all summary rows' : 'Clear sort to use hierarchy'}
+          onClick={() => setCollapsedSummaries(new Set())}
+        >
+          <ChevronDown className="mr-1 h-3.5 w-3.5" /> Expand all
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 text-xs"
+          disabled={!isDefaultSort}
+          title={isDefaultSort ? 'Collapse all summary rows' : 'Clear sort to use hierarchy'}
+          onClick={() => {
+            const ids = new Set<string>();
+            for (const r of filteredRows) {
+              if ((r as any).is_summary) ids.add(String(r.id));
+            }
+            setCollapsedSummaries(ids);
+          }}
+        >
+          <ChevronRight className="mr-1 h-3.5 w-3.5" /> Collapse all
+        </Button>
         {sorting.length > 0 && (
           <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setSorting(DEFAULT_SORTING)}>
             Clear sort ({sorting.length})
