@@ -141,7 +141,7 @@ const TEXT_SEARCH_FIELDS: (keyof PunchItem)[] = PUNCH_FIELDS
   .map((f) => f.field as keyof PunchItem);
 
 /** Pinned columns (always visible, fixed at left). */
-const PINNED_COLUMN_IDS = ['__select', 'item_no'];
+const PINNED_COLUMN_IDS = ['__select', 'summary_no', 'subtask_no'];
 
 /** Group label for display in Bulk-edit dialog. */
 const GROUP_LABELS: Record<string, string> = {
