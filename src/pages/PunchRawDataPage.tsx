@@ -92,6 +92,8 @@ import {
   PUNCH_PROGRESS_ICON,
   PUNCH_PROGRESS_LABEL,
   PUNCH_PROGRESS_COLOR,
+  PUNCH_PROGRESS_PIP_CLASS,
+  PUNCH_PROGRESS_GLYPH,
   PUNCH_PROGRESS_STATES,
   type PunchProgressState,
 } from '@/lib/punch-progress-icon';
