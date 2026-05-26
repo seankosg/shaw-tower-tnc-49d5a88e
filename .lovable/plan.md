@@ -1,97 +1,65 @@
 ## 목표
-Punch Raw Data의 `Item No` 컬럼을 두 개로 분리합니다.
-- **Summary No**: 부모(요약) 번호. 예) `67`
-- **Subtask No**: Summary 행은 `S`로 표시, Subtask 행은 자기 자신의 전체 값(예: `67.1`)
 
-기존 `item_no`는 호환을 위해 유지합니다(읽기/조회/dedup 인덱스가 의존).
+Punch Raw Data의 `progress_icon` 컬럼을 단일 아이콘 형태 그대로 유지하되, 다른 모듈(Subtest/Defect Raw Data)의 패턴을 차용하여 다음 3가지를 보강:
 
-## 변경 사항
+1. **Tooltip 강화** — Planned/Actual 날짜 + 진행률 표시
+2. **컬럼 헤더 필터** — Planned / WIP / Delay / Completed 다중 선택
+3. **테이블 하단 Legend** — 상태별 아이콘 의미 설명
 
-### 1) DB 마이그레이션 (1회)
-- `punch_items`에 두 컬럼 추가
-  - `summary_no text`
-  - `subtask_no text`
-- 일회 백필
-  - Summary 행 (`is_summary = true`)
-    - `summary_no = item_no`
-    - `subtask_no = 'S'`
-  - Subtask 행 (`is_summary = false`)
-    - `summary_no = parent.item_no` (parent_id JOIN, 없으면 `split_part(item_no,'.',1)`로 fallback)
-    - `subtask_no = item_no`
-- 트리거 `punch_items_sync_split_nos`
-  - INSERT/UPDATE 시 `item_no`/`is_summary`/`parent_id` 변경되면 위 규칙으로 `summary_no`/`subtask_no` 재계산
-  - 이렇게 하면 기존 코드(여전히 `item_no`만 쓰는 경로)가 깨지지 않음
-- 인덱스: `idx_punch_items_summary_no(project_id, summary_no) WHERE is_active`
+단계(pip) 분할은 하지 않음. DB/Import/Export 로직 변경 없음. UI만 수정.
 
-### 2) `punch_field_config` 가상 필드 등록
-- `summary_no`: display_name `Summary No`, sort_order 1, source_origin `system`
-- `subtask_no`: display_name `Subtask No`, sort_order 2, source_origin `system`
-- 기존 `item_no` 필드는 기본 숨김(`is_visible=false`)으로 전환(설정에서 다시 켤 수 있게 유지)
+---
 
-### 3) `src/lib/punch-field-registry.ts`
-- `summary_no`, `subtask_no` 두 필드 등록
-  - aliases: `summary_no` ← `['summaryno','summaryitemno','parentno','parent','itemno','no','sn','sno']`
-  - aliases: `subtask_no` ← `['subtaskno','subtask','subno','subitemno']`
-  - group `identity`, dataType `text`
-- 기존 `item_no` 등록은 유지(legacy), `parent_item_no`는 유지하되 import에서 우선순위 낮춤
+## 변경 파일
 
-### 4) `src/pages/PunchRawDataPage.tsx`
-- `renderCell`에 `summary_no`, `subtask_no` case 추가
-  - 값은 row 자체에서 직접 읽음(트리거가 채워줌)
-  - Summary 행 `subtask_no`는 `S` 배지 형태(muted)
-- `allFieldIds`/컬럼 빌더에 두 필드 추가, 기본 컬럼 순서에서 Item No 자리에 배치
-- 정렬: `summary_no`는 `compareItemNo` 재사용, `subtask_no`는 동일 비교(또는 자연순)
+### 1) `src/lib/punch-progress-icon.ts` (확장)
 
-### 5) Import 매핑 (`src/lib/punch-excel-utils.ts` + parser)
-신규 입력 모델: 엑셀이 다음 중 어떤 조합으로 와도 처리
-- (A) 신규 포맷: `Summary No` + `Subtask No`
-  - `subtask_no = 'S'` → Summary 행으로 처리, `item_no = summary_no`
-  - `subtask_no` ≠ `'S'` → Subtask 행, `item_no = subtask_no`, `parent_item_no = summary_no`
-- (B) 레거시 포맷: `Item No`만 존재 → 기존 `parseSubtaskItemNo` 로직 유지(점 표기 → 부모/자식 분해)
-- 우선순위: A가 있으면 A를 사용, 없으면 B로 폴백
-- dedup 키는 그대로 `item_no` 사용(트리거가 split 컬럼을 동기화)
+- 기존 `computePunchProgressState` / `PUNCH_PROGRESS_*` 상수 유지.
+- 추가 export:
+  - `PUNCH_PROGRESS_STATES: PunchProgressState[]` — `['planned','wip','delay','completed']` (필터 옵션 순서)
+  - `PUNCH_PROGRESS_BORDER: Record<PunchProgressState,string>` — 필터 칩 보더 색
+  - 헬퍼 `getPunchProgressTooltipLines(row)` — Tooltip에 표시할 라인 배열 반환:
+    - `State: <Label>`
+    - `Progress: NN%` (actual_progress_pct가 null이 아닐 때)
+    - `Planned Comp.: dd-MMM` (planned_completion_date)
+    - `Actual Start: dd-MMM` (actual_start_date)
+    - `Actual Comp.: dd-MMM` (actual_completion_date)
+    - `delay` 상태일 때만 `Overdue by N day(s)` 한 줄 추가
 
-### 6) Export
-- 기존 Item No 컬럼 자리에 두 컬럼(`Summary No`, `Subtask No`) 출력
-- Re-import 라운드트립 호환 위해 둘 다 헤더로 기록
+### 2) `src/components/punch/PunchProgressLegend.tsx` (신규)
 
-### 7) 영향 범위 / 제외
-- Dashboard/Detail 페이지 화면 표시는 이번 작업에서 그대로(필요 시 후속 작업)
-- RLS/권한 변경 없음
-- `item_no`/`parent_item_no` 의존 로직(증분 import dedup, parent 연결)은 변경 없음 — 트리거가 동기화
+- `DefectStageProgressLegend` / `StageProgressLegend` 와 동일한 시각 톤(작은 회색 텍스트 + 아이콘 칩).
+- 4개 상태(Planned / WIP / Delay / Completed)와 각각의 lucide 아이콘·색을 한 줄에 나열.
+- 우측에 `Delay = past planned completion` 한 줄 보조 설명.
 
-## 기술 디테일
+### 3) `src/pages/PunchRawDataPage.tsx`
 
-### 트리거 의사코드
-```text
-BEFORE INSERT OR UPDATE OF item_no, is_summary, parent_id
-  IF is_summary THEN
-    summary_no := item_no; subtask_no := 'S';
-  ELSE
-    summary_no := COALESCE(
-      (SELECT item_no FROM punch_items WHERE id = NEW.parent_id),
-      split_part(item_no, '.', 1)
-    );
-    subtask_no := item_no;
-  END IF;
-```
+**a. 셀 렌더링(`renderCell`의 `case 'progress_icon'`)**
+- Tooltip 내용을 단순 라벨 → `getPunchProgressTooltipLines()` 다단 표시로 교체 (Defect Tooltip 스타일과 동일하게 `space-y-0.5`, muted 보조 텍스트).
+- Subtask/Summary 행 모두 동일 렌더링 유지(현재 분기 그대로).
 
-### 백필 SQL (개념)
-```sql
-UPDATE punch_items SET summary_no = item_no, subtask_no = 'S' WHERE is_summary;
-UPDATE punch_items c SET
-  summary_no = COALESCE(p.item_no, split_part(c.item_no,'.',1)),
-  subtask_no = c.item_no
-FROM punch_items p WHERE p.id = c.parent_id AND NOT c.is_summary;
-UPDATE punch_items SET
-  summary_no = split_part(item_no,'.',1), subtask_no = item_no
-WHERE NOT is_summary AND summary_no IS NULL;
-```
+**b. 컬럼 필터(Subtest의 `StageProgressFilterDropdown` 패턴 축소판)**
+- `progress_icon` 컬럼에 `filterFn: (row, _id, value: PunchProgressState[]) => !value?.length || value.includes(computePunchProgressState(row.original))` 부여.
+- 헤더 우측에 작은 Funnel 아이콘 버튼 → Popover로 4개 상태 체크박스 + Clear 버튼.
+- 현재 `isVirtualNoFilter` 분기에서 `progress_icon`을 제외하던 로직 수정: `progress_icon`은 가상 컬럼이지만 클라이언트 사이드 필터링은 허용. (DB 쿼리에는 영향 없음 — `getFilteredRowModel`만 사용).
+- 활성 시 헤더 아이콘 강조(다른 필터와 동일 톤).
 
-## 산출물
-1. supabase migration (컬럼 추가 + 백필 + 트리거 + 인덱스)
-2. `punch_field_config` 데이터 변경(insert 툴)
-3. `src/lib/punch-field-registry.ts` 수정
-4. `src/lib/punch-excel-utils.ts` (+ 관련 parser) 매핑 로직 수정
-5. `src/pages/PunchRawDataPage.tsx` 컬럼 렌더링/순서 반영
-6. `src/lib/punch-excel-export.ts` 등 export에 두 컬럼 반영
+**c. Legend**
+- 테이블 컨테이너 하단(페이지네이션 근처 또는 footer 영역)에 `<PunchProgressLegend />` 삽입. Subtest List의 배치 패턴 참고(`<div className="ml-auto">`).
+
+---
+
+## 영향 범위 / 비변경 항목
+
+- DB·migration 없음
+- `punch-excel-utils.ts`(import), `punch-excel-export.ts`(export) 변경 없음 — `progress_icon`은 가상 컬럼.
+- 다른 페이지(Dashboard, Detail, Import) 영향 없음
+- 권한/역할 가드 변경 없음
+- 기존 `progress_icon` 컬럼 visibility / pinned 설정 유지
+
+## 검수 포인트
+
+- progress_icon 컬럼 헤더에 필터 아이콘이 보이고 4개 상태로 필터링되는지
+- Tooltip에 진행률·날짜가 정확히 나오는지(null 안전)
+- Legend가 테이블 하단에 한 줄로 표시되는지
+- Summary 행/Subtask 행 모두 동일하게 동작

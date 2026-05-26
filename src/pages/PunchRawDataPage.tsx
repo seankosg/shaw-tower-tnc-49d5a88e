@@ -88,10 +88,14 @@ import {
 } from '@/lib/punch-field-registry';
 import {
   computePunchProgressState,
+  getPunchProgressTooltipLines,
   PUNCH_PROGRESS_ICON,
   PUNCH_PROGRESS_LABEL,
   PUNCH_PROGRESS_COLOR,
+  PUNCH_PROGRESS_STATES,
+  type PunchProgressState,
 } from '@/lib/punch-progress-icon';
+import { PunchProgressLegend } from '@/components/punch/PunchProgressLegend';
 import type { AppRole } from '@/types/enums';
 import {
   ColumnFilterDropdown,
@@ -335,6 +339,7 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
     case 'progress_icon': {
       const state = computePunchProgressState(row as any);
       const Icon = PUNCH_PROGRESS_ICON[state];
+      const lines = getPunchProgressTooltipLines(row as any);
       return (
         <TooltipProvider delayDuration={150}>
           <Tooltip>
@@ -343,7 +348,16 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
                 <Icon className={cn('h-4 w-4', PUNCH_PROGRESS_COLOR[state])} aria-label={PUNCH_PROGRESS_LABEL[state]} />
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top" className="text-xs">{PUNCH_PROGRESS_LABEL[state]}</TooltipContent>
+            <TooltipContent side="right" className="text-xs">
+              <div className="space-y-0.5">
+                {lines.map((ln, i) => (
+                  <div key={i}>
+                    <span className="font-medium">{ln.label}:</span>{' '}
+                    <span className={ln.muted ? 'text-muted-foreground' : undefined}>{ln.value}</span>
+                  </div>
+                ))}
+              </div>
+            </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       );
@@ -721,7 +735,10 @@ export default function PunchRawDataPage() {
       const isDate = DATE_FIELDS.has(field);
       const isMulti = MULTI_SELECT_FIELDS.has(field);
       const isPct = PCT_FIELDS.has(field);
-      const inferred = def
+      const isProgressIcon = field === 'progress_icon';
+      const inferred = isProgressIcon
+        ? 'multi-select'
+        : def
         ? (isDate ? 'date-range' : isMulti ? 'multi-select' : isPct ? 'text' : 'text')
         : (isMulti ? 'multi-select' : inferFilterType(field, orig));
       const filterFn = inferred === 'date-range' ? dateRangeFilterFn
@@ -732,11 +749,17 @@ export default function PunchRawDataPage() {
           const rr = r as any;
           return rr.is_summary ? 'Summary' : rr.parent_id ? 'Subtask' : 'Standalone';
         }
+        if (isProgressIcon) return computePunchProgressState(r as any);
         if (field === 'pre_engineering_ready') return r.pre_engineering_ready ? 'true' : 'false';
         return getFieldValue(r, field, orig);
       };
       let dynamicOptions: { value: string; label: string }[] = optionFields[field] ?? [];
-      if (inferred === 'multi-select' && !optionFields[field]) {
+      if (isProgressIcon) {
+        dynamicOptions = PUNCH_PROGRESS_STATES.map((s) => ({
+          value: s,
+          label: PUNCH_PROGRESS_LABEL[s],
+        }));
+      } else if (inferred === 'multi-select' && !optionFields[field]) {
         dynamicOptions = [...new Set(rows.map((r) => {
           const v = accessorFn(r);
           return v == null || v === '' ? '' : String(v);
@@ -761,14 +784,13 @@ export default function PunchRawDataPage() {
           )}
         </span>
       );
-      const isVirtualNoFilter = field === 'progress_icon';
       return {
         id: field,
         accessorFn,
         header: () => headerNode,
-        size: isVirtualNoFilter ? 60 : (SIZE_BY_FIELD[field] ?? 130),
-        enableSorting: !isVirtualNoFilter,
-        enableColumnFilter: !isVirtualNoFilter,
+        size: isProgressIcon ? 60 : (SIZE_BY_FIELD[field] ?? 130),
+        enableSorting: !isProgressIcon,
+        enableColumnFilter: true,
         filterFn,
         meta: {
           filterType: inferred,
@@ -1245,6 +1267,11 @@ export default function PunchRawDataPage() {
         navigate={navigate}
         tableRef={tableRef}
       />
+
+      <div className="flex justify-end px-1">
+        <PunchProgressLegend />
+      </div>
+
 
 
       <Dialog
