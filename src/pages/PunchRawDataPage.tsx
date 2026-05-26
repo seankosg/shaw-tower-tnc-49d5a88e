@@ -259,7 +259,12 @@ function getFieldValue(row: PunchItem, field: string, originalHeader: string | n
   return null;
 }
 
-function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, value: any) {
+interface CellExtras {
+  isCollapsed?: boolean;
+  onToggle?: () => void;
+}
+
+function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, value: any, extras?: CellExtras) {
   // Hierarchy markers on the Item No column
   if (field === 'item_no') {
     const r = row as any;
@@ -267,10 +272,19 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
     const isChild = !!r.parent_id;
     const stage = r.subtask_stage as SubtaskStage | null;
     const overrideCount = r.override_fields ? Object.keys(r.override_fields).length : 0;
+    const collapsed = !!extras?.isCollapsed;
     return (
       <span className={cn('inline-flex items-center gap-1.5 min-w-0', isChild && 'pl-4')}>
         {isSummary ? (
-          <Layers className="h-3 w-3 flex-shrink-0 text-primary" />
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); extras?.onToggle?.(); }}
+            className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-primary hover:bg-muted"
+            aria-label={collapsed ? 'Expand subtasks' : 'Collapse subtasks'}
+            title={collapsed ? 'Expand subtasks' : 'Collapse subtasks'}
+          >
+            {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
         ) : isChild ? (
           <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         ) : null}
