@@ -116,8 +116,8 @@ export const PUNCH_FIELDS: PunchFieldDef[] = [
 
 
   // classification
-  { field: 'category1', exportLabel: 'Category 1', aliases: ['category1', 'cat1', 'maincategory'], group: 'classification', dataType: 'text' },
-  { field: 'category2', exportLabel: 'Category 2', aliases: ['category2', 'cat2', 'subcategory'], group: 'classification', dataType: 'text' },
+  { field: 'category1', exportLabel: 'Category 1', aliases: ['category1', 'cat1', 'maincategory', 'maincat'], group: 'classification', dataType: 'text' },
+  { field: 'category2', exportLabel: 'Category 2', aliases: ['category2', 'cat2', 'subcategory', 'subcat'], group: 'classification', dataType: 'text' },
   { field: 'category3', exportLabel: 'Category 3', aliases: ['category3', 'cat3'], group: 'classification', dataType: 'text' },
   { field: 'critical_level', exportLabel: 'Critical Level', aliases: ['criticallevel', 'priority', 'severity'], group: 'classification', dataType: 'text' },
   { field: 'work_type', exportLabel: 'Work Type', aliases: ['worktype', 'type', 'tradetype'], group: 'classification', dataType: 'text' },
@@ -139,7 +139,7 @@ export const PUNCH_FIELDS: PunchFieldDef[] = [
 
   // progress
   { field: 'planned_progress_pct', exportLabel: 'Planned %', aliases: ['plannedpct', 'plannedprogress', 'plannedprogresspct', 'targetpct'], group: 'progress', dataType: 'pct', readOnly: true },
-  { field: 'actual_progress_pct', exportLabel: 'Actual %', aliases: ['actualpct', 'actualprogress', 'actualprogresspct', 'progress'], group: 'progress', dataType: 'pct' },
+  { field: 'actual_progress_pct', exportLabel: 'Actual %', aliases: ['actualpct', 'actual', 'actualprogress', 'actualprogresspct', 'progress'], group: 'progress', dataType: 'pct' },
   { field: 'progress_variance_pct', exportLabel: 'Variance %', aliases: ['variancepct', 'variance', 'diff', 'difference'], group: 'progress', dataType: 'pct', readOnly: true },
   { field: 'health_status', exportLabel: 'Health', aliases: ['health', 'healthstatus', 'rag'], group: 'progress', dataType: 'enum', enumValues: PUNCH_HEALTH_STATUS, readOnly: true },
   { field: 'completion_status', exportLabel: 'Completion Status', aliases: ['completionstatus', 'status'], group: 'progress', dataType: 'text' },
