@@ -80,6 +80,7 @@ interface CacheState {
   byId: Map<string, CachedDefect>;
   list: CachedDefect[];
   maxUpdatedAt: string | null;
+  maxUpdatedId: string | null;
   heavyLoaded: boolean;
   initialLoaded: boolean;
   loading: boolean;
@@ -91,6 +92,7 @@ const state: CacheState = {
   byId: new Map(),
   list: [],
   maxUpdatedAt: null,
+  maxUpdatedId: null,
   heavyLoaded: false,
   initialLoaded: false,
   loading: false,
