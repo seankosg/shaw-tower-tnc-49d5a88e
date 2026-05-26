@@ -955,7 +955,7 @@ export default function PunchRawDataPage() {
         if (aEmpty) return 1;
         if (bEmpty) return -1;
         let c: number;
-        if (s.id === 'item_no') c = comparePunchItemNo(va, vb);
+        if (s.id === 'item_no' || s.id === 'summary_no' || s.id === 'subtask_no') c = comparePunchItemNo(va, vb);
         else if (typeof va === 'number' && typeof vb === 'number') c = va - vb;
         else c = String(va).localeCompare(String(vb));
         if (c !== 0) return s.desc ? -c : c;
