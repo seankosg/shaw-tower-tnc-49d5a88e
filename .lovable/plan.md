@@ -1,85 +1,38 @@
 ## 목표
 
-Punch Raw Data 페이지에서 Summary Task와 Subtask 간의 계층 작업 흐름을 강화합니다.
+Punch Raw Data 테이블에 `Stage` 컬럼을 노출하여 각 행이 Pre-Engineering / Physical Work / Inspection 중 어느 단계인지 표시합니다. Item No. 바로 옆에 배치합니다.
 
-1. Subtask의 비어있는 메타데이터 필드를 부모 Summary 값으로 채우는 일회성 마이그레이션
-2. Summary / Subtask 별도 필터
-3. Summary 행에서 자식 Subtask들을 펼침/접기
-4. 테이블 상단에 "전체 펴기 / 전체 접기" 버튼
+## 배경
 
----
+- `punch_items.subtask_stage` 컬럼은 이미 존재합니다 (enum: `pre_engineering`, `physical_work`, `inspection`).
+- `punch-field-registry.ts`에도 `subtask_stage` 필드(group: hierarchy, label: "Subtask Stage")가 등록되어 있습니다.
+- 하지만 `punch_field_config` 테이블에는 아직 노출 설정이 없어 Raw Data에 보이지 않습니다.
+- 현재 데이터: Summary 76건 NULL, Subtask 416건 중 1건만 `physical_work`, 나머지 NULL. Summary는 사양상 계속 NULL 유지.
 
-## 1. 일회성 마이그레이션 (DB)
+## 변경 사항
 
-`punch_items`에서 `parent_id IS NOT NULL`(=Subtask)이고 해당 필드가 `NULL` 또는 빈 문자열인 경우, 부모 Summary 행의 값으로 채웁니다.
+### 1. DB: `punch_field_config`에 `subtask_stage` 행 추가 (마이그레이션)
 
-대상 필드 (스케줄/진척/게이트 상태는 Subtask 고유이므로 제외):
+- `field_name = 'subtask_stage'`
+- `display_name = 'Stage'` (사용자 요청 라벨)
+- `sort_order = 15` (item_no=10, outstanding_work=30 사이)
+- `is_enabled = true`, `is_required = false`
+- `source_origin = 'system'`
+- `original_header = 'Stage'`
+- `visible_to_roles`, `editable_to_roles` = NULL (기존 기본값과 동일)
 
-- classification: `category1`, `category2`, `category3`, `critical_level`, `work_type`, `main_trade`, `sub_trade`
-- identity: `location`, `level`
-- people: `team`, `subcontractor_name`, `subsub_name`, `hdec_pic_name`, `hdec_eng_name`
-- meta: `remarks`
+### 2. Registry 라벨 조정 (`src/lib/punch-field-registry.ts`)
 
-조건 요약: `UPDATE punch_items child SET <field> = parent.<field> FROM punch_items parent WHERE child.parent_id = parent.id AND parent.is_summary AND (child.<field> IS NULL OR child.<field> = '')`
+`subtask_stage`의 `exportLabel`을 `"Subtask Stage"` → `"Stage"`로 변경하여 export/import 라운드트립과 UI 라벨을 일치시킵니다. 기존 별칭(`subtaskstage`, `stage`, `substage`)은 그대로 유지되어 이전 export 파일의 import에도 영향 없음.
 
-영향 받는 행 예상치(현재 Subtask 416건 중): subcontractor ~361, location ~360, team ~358 등.
+### 3. Raw Data 페이지 셀 렌더링 (`src/pages/PunchRawDataPage.tsx`)
 
-`updated_at` 트리거는 그대로 동작하므로 클라이언트 캐시는 다음 incremental refresh로 자동 동기화됩니다.
+- `subtask_stage` 컬럼의 셀에 `SUBTASK_STAGE_LABEL` 매핑을 적용하여 enum 코드 대신 사람이 읽을 수 있는 라벨("Pre-Engineering", "Physical Work", "Inspection")로 표시.
+- NULL 값은 빈칸 (Summary 행은 항상 빈칸으로 표시).
+- 정렬 순서는 `punch_field_config.sort_order=15`로 자동으로 Item No 옆에 위치.
 
----
+## 영향 없음
 
-## 2. Summary / Subtask 필터
-
-Field Registry의 `is_summary` 컬럼을 이미 노출 가능합니다. 표시 라벨을 사람이 읽을 수 있도록 변환:
-
-- `is_summary = true` → "Summary"
-- `parent_id IS NOT NULL` → "Subtask"
-- 나머지 → "Standalone"
-
-구현:
-
-- 가상 컬럼 `row_type` (display only) 추가 → 값은 위 3가지
-- `ColumnFilterDropdown`의 multi-select로 동작
-- "Active column filters" 칩에도 자연스럽게 표시
-- 기존 `is_summary` 컬럼은 그대로 두되 기본 숨김 처리
-
----
-
-## 3. Summary 펼침/접기
-
-상태: 페이지 레벨 `Set<string>` (collapsed summary IDs) — `useState`로 관리.
-
-- Summary 행의 Item No 셀 좌측 아이콘을 클릭 가능한 토글 버튼으로 변경
-  - 펼침: `ChevronDown` / 접힘: `ChevronRight` (기존 `Layers` 아이콘은 제거하거나 토글과 병기)
-  - `e.stopPropagation()`으로 행 클릭(상세 이동) 차단
-- `orderedRows` 계산 단계에서, 부모가 `collapsed` 집합에 있으면 그 자식 Subtask들을 결과에서 제거
-- 정렬이 기본 정렬이 아닐 때(사용자가 컬럼 정렬 적용 시)에는 계층 구조가 의미 없으므로 토글/버튼을 비활성화하거나 숨김
-- 행이 숨겨질 때 `rowSelection`은 그대로 유지 (다시 펼치면 복원)
-
-상태는 페이지 메모리에만 — 새로고침/페이지 이탈 시 리셋(localStorage 저장은 불필요, 단순화).
-
----
-
-## 4. 전체 펴기 / 전체 접기 버튼
-
-위치: 검색 바와 같은 줄 (1065~1084 라인 영역), `filteredRowCount` 표기 옆.
-
-```
-[Search] [N records] [Expand all] [Collapse all] [Clear sort]
-```
-
-- "Collapse all": 현재 보이는 Summary 모두 collapsed에 추가
-- "Expand all": collapsed 집합 비우기
-- 기본 정렬이 아니면 disabled
-
----
-
-## 기술 정리
-
-- DB 변경: `supabase--migration` (UPDATE만, 스키마 변경 없음). 마이그레이션 도구로 실행하므로 사용자 승인 후 자동 수행.
-- 코드 변경:
-  - `src/pages/PunchRawDataPage.tsx`: `collapsedSummaries` 상태, `orderedRows` 필터링, 토글 핸들러, 상단 버튼, row_type 가상 컬럼/필터
-  - `src/lib/punch-field-registry.ts`: (선택) `row_type` 가상 필드 정의 추가 또는 페이지 내부에서만 처리
-- Field Config 마이그레이션 없음 (가상 컬럼만 추가)
-
-마이그레이션 도구는 본 플랜 승인 후 첫 단계로 호출합니다.
+- 입력/수정 로직, 마이그레이션(데이터 변경), 권한 정책은 변경하지 않습니다.
+- Summary 행의 `subtask_stage`는 NULL 유지(사양).
+- Detail 페이지의 stage 선택 UI는 이미 존재하므로 별도 수정 불필요.
