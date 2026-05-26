@@ -61,6 +61,25 @@ export const PUNCH_PROGRESS_COLOR: Record<PunchProgressState, string> = {
   completed: 'text-emerald-600 dark:text-emerald-400',
 };
 
+/**
+ * Pip badge styling (Defect Raw Data와 동일한 디자인 시스템).
+ * Use with a span sized h-4 w-4 rounded-full border, glyph centered inside.
+ */
+export const PUNCH_PROGRESS_PIP_CLASS: Record<PunchProgressState, string> = {
+  planned: 'bg-transparent border-muted-foreground/40 text-muted-foreground/60',
+  wip: 'bg-amber-400 border-amber-500 text-white',
+  delay: 'bg-destructive border-destructive text-destructive-foreground',
+  completed: 'bg-success border-success text-success-foreground',
+};
+
+export const PUNCH_PROGRESS_GLYPH: Record<PunchProgressState, string> = {
+  planned: '○',
+  wip: '◐',
+  delay: '⊘',
+  completed: '●',
+};
+
+
 export interface PunchProgressTooltipLine {
   label: string;
   value: string;
