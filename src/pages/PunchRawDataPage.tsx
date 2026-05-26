@@ -916,7 +916,7 @@ export default function PunchRawDataPage() {
       return 0;
     });
     return arr;
-  }, [filteredRows, isDefaultSort, sorting]);
+  }, [filteredRows, isDefaultSort, sorting, collapsedSummaries]);
 
 
   // ── Column visibility & order (driven by Field Config) ──────────────────
