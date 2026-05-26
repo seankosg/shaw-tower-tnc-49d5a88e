@@ -104,39 +104,52 @@ export default function PunchDashboardPage() {
 
   const asOf = new Date().toISOString().slice(0, 10);
 
+  const picOptions = useMemo(
+    () => unionWithLegacy(hdecPicOptions, rows.map((r) => r.hdec_pic_name)),
+    [hdecPicOptions, rows],
+  );
+
+  const filteredRows = useMemo(() => {
+    if (picFilter === 'all') return rows;
+    if (picFilter === PIC_EMPTY_TOKEN) {
+      return rows.filter((r) => !String(r.hdec_pic_name ?? '').trim());
+    }
+    return rows.filter((r) => String(r.hdec_pic_name ?? '').trim() === picFilter);
+  }, [rows, picFilter]);
+
   const stats = useMemo(() => {
-    const total = rows.length;
-    const completed = rows.filter(isCompleted).length;
-    const wip = rows.filter(isWip).length;
-    const notStarted = rows.filter(isNotStarted).length;
-    const blocked = rows.filter(isBlockedByPreEng).length;
-    const overdue = rows.filter((r) => isCompletionOverdue(r, asOf)).length;
-    const startDelayed = rows.filter((r) => isStartDelayed(r, asOf)).length;
-    const critical = rows.filter((r) => isCriticalDelay(r, asOf)).length;
-    const behind = rows.filter(isBehindSchedule).length;
-    const inDelay = rows.filter((r) =>
+    const total = filteredRows.length;
+    const completed = filteredRows.filter(isCompleted).length;
+    const wip = filteredRows.filter(isWip).length;
+    const notStarted = filteredRows.filter(isNotStarted).length;
+    const blocked = filteredRows.filter(isBlockedByPreEng).length;
+    const overdue = filteredRows.filter((r) => isCompletionOverdue(r, asOf)).length;
+    const startDelayed = filteredRows.filter((r) => isStartDelayed(r, asOf)).length;
+    const critical = filteredRows.filter((r) => isCriticalDelay(r, asOf)).length;
+    const behind = filteredRows.filter(isBehindSchedule).length;
+    const inDelay = filteredRows.filter((r) =>
       isStartDelayed(r, asOf) || isCompletionOverdue(r, asOf) || isBehindSchedule(r)
     ).length;
-    const actuallyStarted = rows.filter((r) => !!r.actual_start_date).length;
-    const plannedStartedByToday = rows.filter((r) =>
+    const actuallyStarted = filteredRows.filter((r) => !!r.actual_start_date).length;
+    const plannedStartedByToday = filteredRows.filter((r) =>
       !!r.planned_start_date && r.planned_start_date <= asOf
     ).length;
-    const dueThisWeek = rows.filter((r) => isDueWithin(r, 7, asOf)).length;
-    const due14 = rows.filter((r) => isDueWithin(r, 14, asOf)).length;
-    const startThisWeek = rows.filter((r) => isPlannedToStartWithin(r, 7, asOf)).length;
-    const wipDueSoon = rows.filter((r) => isWip(r) && isDueWithin(r, 7, asOf)).length;
-    const readyButNotStarted = rows.filter(isReadyButNotStarted).length;
+    const dueThisWeek = filteredRows.filter((r) => isDueWithin(r, 7, asOf)).length;
+    const due14 = filteredRows.filter((r) => isDueWithin(r, 14, asOf)).length;
+    const startThisWeek = filteredRows.filter((r) => isPlannedToStartWithin(r, 7, asOf)).length;
+    const wipDueSoon = filteredRows.filter((r) => isWip(r) && isDueWithin(r, 7, asOf)).length;
+    const readyButNotStarted = filteredRows.filter(isReadyButNotStarted).length;
 
-    const w = weightedProgress(rows);
-    const avg = simpleAverageProgress(rows);
+    const w = weightedProgress(filteredRows);
+    const avg = simpleAverageProgress(filteredRows);
 
     const health: Record<PunchHealthStatus, number> = { ahead: 0, on_track: 0, behind: 0, critical: 0 };
-    rows.forEach((r) => { if (r.health_status) health[r.health_status]++; });
+    filteredRows.forEach((r) => { if (r.health_status) health[r.health_status]++; });
 
     const blockerCounts: Record<PunchBlockerKind | 'multiple', number> = {
       material_approval: 0, material_procurement: 0, drawing_approval: 0, mos_approval: 0, multiple: 0,
     };
-    rows.forEach((r) => {
+    filteredRows.forEach((r) => {
       const bs = blockersFor(r);
       if (bs.length === 1) blockerCounts[bs[0]]++;
       else if (bs.length > 1) blockerCounts.multiple++;
@@ -148,7 +161,7 @@ export default function PunchDashboardPage() {
       drawing_approval: { approved: 0, pending: 0, not_required: 0 },
       mos_approval: { approved: 0, pending: 0, not_required: 0 },
     };
-    rows.forEach((r) => {
+    filteredRows.forEach((r) => {
       (gates.material_approval as any)[r.material_approval_status]++;
       (gates.material_procurement as any)[r.material_procurement_status]++;
       (gates.drawing_approval as any)[r.drawing_approval_status]++;
@@ -161,10 +174,10 @@ export default function PunchDashboardPage() {
       dueThisWeek, due14, startThisWeek, wipDueSoon, readyButNotStarted,
       w, avg, health, blockerCounts, gates,
     };
-  }, [rows, asOf]);
+  }, [filteredRows, asOf]);
 
   const matrix = useMemo(() => {
-    const m = groupProgressMatrix(rows, (r) => String((r as any)[groupBy] ?? ''), asOf);
+    const m = groupProgressMatrix(filteredRows, (r) => String((r as any)[groupBy] ?? ''), asOf);
     const sorted = [...m].sort((a, b) => {
       switch (sortKey) {
         case 'critical': return b.critical - a.critical;
@@ -175,23 +188,29 @@ export default function PunchDashboardPage() {
       }
     });
     return sorted;
-  }, [rows, groupBy, sortKey, asOf]);
+  }, [filteredRows, groupBy, sortKey, asOf]);
 
   const recovery = useMemo(() => {
-    return [...rows]
+    return [...filteredRows]
       .filter((r) => !isCompleted(r))
       .map((r) => ({ r, score: recoveryPriorityScore(r, asOf) }))
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 25);
-  }, [rows, asOf]);
+  }, [filteredRows, asOf]);
 
-  const dqCounts = useMemo(() => computePunchDqCounts(rows), [rows]);
-  const criticalLevelSummary = useMemo(() => summarizeByCriticalLevel(rows), [rows]);
-  const topSubcons = useMemo(() => topDelayingParties(rows, (r) => r.subcontractor_name ?? '', 5, asOf), [rows, asOf]);
-  const topPics = useMemo(() => topDelayingParties(rows, (r) => r.hdec_pic_name ?? '', 5, asOf), [rows, asOf]);
+  const dqCounts = useMemo(() => computePunchDqCounts(filteredRows), [filteredRows]);
+  const criticalLevelSummary = useMemo(() => summarizeByCriticalLevel(filteredRows), [filteredRows]);
+  const topSubcons = useMemo(() => topDelayingParties(filteredRows, (r) => r.subcontractor_name ?? '', 5, asOf), [filteredRows, asOf]);
+  const topPics = useMemo(() => topDelayingParties(filteredRows, (r) => r.hdec_pic_name ?? '', 5, asOf), [filteredRows, asOf]);
 
-  const go = (qs: string) => navigate(`/punch/raw-data?${qs}`);
+  const go = (qs: string) => {
+    const params = new URLSearchParams(qs);
+    if (picFilter !== 'all') params.set('hdecPic', picFilter);
+    navigate(`/punch/raw-data?${params.toString()}`);
+  };
+
+
 
   return (
     <div className="space-y-4 p-4">
