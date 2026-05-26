@@ -19,7 +19,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import { useFrozenColumnCount } from '@/hooks/useAppSettings';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { AlertCircle, ChevronRight, Download, Filter, Layers, Search, Upload } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronRight, Download, Filter, Search, Upload } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -124,6 +124,8 @@ const MULTI_SELECT_FIELDS = new Set<string>([
   'team', 'work_type', 'main_trade', 'sub_trade', 'category1', 'category2', 'category3',
   'critical_level', 'level', 'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'hdec_eng_name',
   'completion_status',
+  // virtual columns
+  'row_type',
 ]);
 
 /** Free-text searchable fields — derived from registry text dataType minus pure-id/numeric ones. */
@@ -257,7 +259,12 @@ function getFieldValue(row: PunchItem, field: string, originalHeader: string | n
   return null;
 }
 
-function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, value: any) {
+interface CellExtras {
+  isCollapsed?: boolean;
+  onToggle?: () => void;
+}
+
+function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, value: any, extras?: CellExtras) {
   // Hierarchy markers on the Item No column
   if (field === 'item_no') {
     const r = row as any;
@@ -265,10 +272,19 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
     const isChild = !!r.parent_id;
     const stage = r.subtask_stage as SubtaskStage | null;
     const overrideCount = r.override_fields ? Object.keys(r.override_fields).length : 0;
+    const collapsed = !!extras?.isCollapsed;
     return (
       <span className={cn('inline-flex items-center gap-1.5 min-w-0', isChild && 'pl-4')}>
         {isSummary ? (
-          <Layers className="h-3 w-3 flex-shrink-0 text-primary" />
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); extras?.onToggle?.(); }}
+            className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-primary hover:bg-muted"
+            aria-label={collapsed ? 'Expand subtasks' : 'Collapse subtasks'}
+            title={collapsed ? 'Expand subtasks' : 'Collapse subtasks'}
+          >
+            {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
         ) : isChild ? (
           <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         ) : null}
@@ -378,6 +394,7 @@ const SIZE_BY_FIELD: Record<string, number> = {
   mos_approval_status: 140,
   weight: 70,
   remarks: 200,
+  row_type: 110,
 };
 
 function uniqueOptions(rows: PunchItem[], field: string) {
@@ -414,6 +431,14 @@ export default function PunchRawDataPage() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [collapsedSummaries, setCollapsedSummaries] = useState<Set<string>>(() => new Set());
+  const toggleSummary = useCallback((id: string) => {
+    setCollapsedSummaries((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
 
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportMode, setExportMode] = useState<'single' | 'per-subcon'>('single');
@@ -578,18 +603,25 @@ export default function PunchRawDataPage() {
   // ── All field ids (registry + Field Config dynamic), regardless of visibility.
   //    Visibility/order is applied via React Table state below, mirroring DefectRawDataPage.
   const allFieldIds = useMemo(() => {
-    const known = new Set(PUNCH_FIELDS.map((f) => f.field));
+    const known = new Set([...PUNCH_FIELDS.map((f) => f.field), 'row_type']);
     const dynamic = configRows
       .filter((r) => r.is_enabled && !known.has(r.field_name))
       .map((r) => r.field_name);
-    return [...PUNCH_FIELDS.map((f) => f.field), ...dynamic];
+    // 'row_type' is a virtual filter column (Summary / Subtask / Standalone)
+    return ['row_type', ...PUNCH_FIELDS.map((f) => f.field), ...dynamic];
   }, [configRows]);
 
   // ── Option fields for multi-select filters ───────────────────────────────
   const optionFields = useMemo(() => {
     const out: Record<string, { value: string; label: string }[]> = {};
     for (const f of MULTI_SELECT_FIELDS) {
-      if (f === 'health_status') {
+      if (f === 'row_type') {
+        out[f] = [
+          { value: 'Summary', label: 'Summary' },
+          { value: 'Subtask', label: 'Subtask' },
+          { value: 'Standalone', label: 'Standalone' },
+        ];
+      } else if (f === 'health_status') {
         out[f] = PUNCH_HEALTH_STATUS.map((v) => ({ value: v, label: PUNCH_HEALTH_LABEL[v] }));
       } else if (f === 'pre_engineering_ready') {
         out[f] = [
@@ -646,11 +678,15 @@ export default function PunchRawDataPage() {
       const isPct = PCT_FIELDS.has(field);
       const inferred = def
         ? (isDate ? 'date-range' : isMulti ? 'multi-select' : isPct ? 'text' : 'text')
-        : inferFilterType(field, orig);
+        : (isMulti ? 'multi-select' : inferFilterType(field, orig));
       const filterFn = inferred === 'date-range' ? dateRangeFilterFn
         : inferred === 'multi-select' ? multiSelectFilterFn
         : textFilterFn;
       const accessorFn = (r: PunchItem) => {
+        if (field === 'row_type') {
+          const rr = r as any;
+          return rr.is_summary ? 'Summary' : rr.parent_id ? 'Subtask' : 'Standalone';
+        }
         if (field === 'pre_engineering_ready') return r.pre_engineering_ready ? 'true' : 'false';
         return getFieldValue(r, field, orig);
       };
@@ -663,11 +699,11 @@ export default function PunchRawDataPage() {
           .sort((a, b) => a.localeCompare(b))
           .map((v) => ({ value: v, label: v }));
       }
-      const label = getLabel(field);
+      const label = field === 'row_type' ? 'Row Type' : getLabel(field);
       const headerNode = (
         <span className="inline-flex items-center gap-1">
           <span className="truncate">{label}</span>
-          {origin && origin !== 'system' && (
+          {origin && origin !== 'system' && field !== 'row_type' && (
             <span
               title={orig ? `Source: ${origin} · Original header: ${orig}` : `Source: ${origin}`}
               className={cn(
@@ -694,12 +730,34 @@ export default function PunchRawDataPage() {
           headerLabel: label,
           originalHeader: orig,
         },
-        cell: ({ row, getValue }) => renderCell(row.original, field, def, getValue()),
+        cell: ({ row, getValue }) => {
+          if (field === 'item_no') {
+            const r = row.original as any;
+            const isSummary = !!r.is_summary;
+            const id = String(row.original.id);
+            return renderCell(row.original, field, def, getValue(), {
+              isCollapsed: isSummary && collapsedSummaries.has(id),
+              onToggle: isSummary ? () => toggleSummary(id) : undefined,
+            });
+          }
+          if (field === 'row_type') {
+            const v = String(getValue() ?? '');
+            const cls = v === 'Summary'
+              ? 'border-primary/40 bg-primary/10 text-primary'
+              : v === 'Subtask'
+                ? 'border-muted-foreground/30 bg-muted/40 text-muted-foreground'
+                : 'border-border bg-background text-foreground';
+            return (
+              <Badge variant="outline" className={cn('px-1.5 py-0 text-[10px] font-medium', cls)}>{v || '—'}</Badge>
+            );
+          }
+          return renderCell(row.original, field, def, getValue());
+        },
       } as ColumnDef<PunchItem>;
     });
 
     return [selectColumn, ...dataColumns];
-  }, [allFieldIds, getLabel, getOriginalHeader, getSourceOrigin, optionFields, rows]);
+  }, [allFieldIds, getLabel, getOriginalHeader, getSourceOrigin, optionFields, rows, collapsedSummaries, toggleSummary]);
 
   // URL → derived row filtering (status/due/blocker/pre_eng/start_due)
   const filteredRows = useMemo(() => {
@@ -824,8 +882,9 @@ export default function PunchRawDataPage() {
       const rootIds = new Set(roots.map((r) => String(r.id)));
       for (const p of roots) {
         out.push(p);
+        const isCollapsed = (p as any).is_summary && collapsedSummaries.has(String(p.id));
         const kids = byParent.get(String(p.id));
-        if (kids && kids.length) {
+        if (kids && kids.length && !isCollapsed) {
           kids.sort(childCmp);
           out.push(...kids);
         }
@@ -857,7 +916,7 @@ export default function PunchRawDataPage() {
       return 0;
     });
     return arr;
-  }, [filteredRows, isDefaultSort, sorting]);
+  }, [filteredRows, isDefaultSort, sorting, collapsedSummaries]);
 
 
   // ── Column visibility & order (driven by Field Config) ──────────────────
@@ -1073,6 +1132,32 @@ export default function PunchRawDataPage() {
           />
         </div>
         <span className="self-center text-sm text-muted-foreground">{filteredRowCount} records</span>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 text-xs"
+          disabled={!isDefaultSort}
+          title={isDefaultSort ? 'Expand all summary rows' : 'Clear sort to use hierarchy'}
+          onClick={() => setCollapsedSummaries(new Set())}
+        >
+          <ChevronDown className="mr-1 h-3.5 w-3.5" /> Expand all
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 text-xs"
+          disabled={!isDefaultSort}
+          title={isDefaultSort ? 'Collapse all summary rows' : 'Clear sort to use hierarchy'}
+          onClick={() => {
+            const ids = new Set<string>();
+            for (const r of filteredRows) {
+              if ((r as any).is_summary) ids.add(String(r.id));
+            }
+            setCollapsedSummaries(ids);
+          }}
+        >
+          <ChevronRight className="mr-1 h-3.5 w-3.5" /> Collapse all
+        </Button>
         {sorting.length > 0 && (
           <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => setSorting(DEFAULT_SORTING)}>
             Clear sort ({sorting.length})
