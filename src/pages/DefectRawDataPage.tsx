@@ -435,7 +435,8 @@ export default function DefectRawDataPage() {
   };
 
   const reload = useCallback(async () => {
-    refreshDefectCache();
+    // Hard reload to recover from any cache drift (e.g., paginated ties).
+    await reloadDefectCache();
   }, []);
 
   // Load comment summary once for all defects, then patch incrementally on Realtime events.
