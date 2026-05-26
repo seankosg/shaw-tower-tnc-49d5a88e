@@ -678,11 +678,15 @@ export default function PunchRawDataPage() {
       const isPct = PCT_FIELDS.has(field);
       const inferred = def
         ? (isDate ? 'date-range' : isMulti ? 'multi-select' : isPct ? 'text' : 'text')
-        : inferFilterType(field, orig);
+        : (isMulti ? 'multi-select' : inferFilterType(field, orig));
       const filterFn = inferred === 'date-range' ? dateRangeFilterFn
         : inferred === 'multi-select' ? multiSelectFilterFn
         : textFilterFn;
       const accessorFn = (r: PunchItem) => {
+        if (field === 'row_type') {
+          const rr = r as any;
+          return rr.is_summary ? 'Summary' : rr.parent_id ? 'Subtask' : 'Standalone';
+        }
         if (field === 'pre_engineering_ready') return r.pre_engineering_ready ? 'true' : 'false';
         return getFieldValue(r, field, orig);
       };
@@ -695,11 +699,11 @@ export default function PunchRawDataPage() {
           .sort((a, b) => a.localeCompare(b))
           .map((v) => ({ value: v, label: v }));
       }
-      const label = getLabel(field);
+      const label = field === 'row_type' ? 'Row Type' : getLabel(field);
       const headerNode = (
         <span className="inline-flex items-center gap-1">
           <span className="truncate">{label}</span>
-          {origin && origin !== 'system' && (
+          {origin && origin !== 'system' && field !== 'row_type' && (
             <span
               title={orig ? `Source: ${origin} · Original header: ${orig}` : `Source: ${origin}`}
               className={cn(
@@ -726,12 +730,34 @@ export default function PunchRawDataPage() {
           headerLabel: label,
           originalHeader: orig,
         },
-        cell: ({ row, getValue }) => renderCell(row.original, field, def, getValue()),
+        cell: ({ row, getValue }) => {
+          if (field === 'item_no') {
+            const r = row.original as any;
+            const isSummary = !!r.is_summary;
+            const id = String(row.original.id);
+            return renderCell(row.original, field, def, getValue(), {
+              isCollapsed: isSummary && collapsedSummaries.has(id),
+              onToggle: isSummary ? () => toggleSummary(id) : undefined,
+            });
+          }
+          if (field === 'row_type') {
+            const v = String(getValue() ?? '');
+            const cls = v === 'Summary'
+              ? 'border-primary/40 bg-primary/10 text-primary'
+              : v === 'Subtask'
+                ? 'border-muted-foreground/30 bg-muted/40 text-muted-foreground'
+                : 'border-border bg-background text-foreground';
+            return (
+              <Badge variant="outline" className={cn('px-1.5 py-0 text-[10px] font-medium', cls)}>{v || '—'}</Badge>
+            );
+          }
+          return renderCell(row.original, field, def, getValue());
+        },
       } as ColumnDef<PunchItem>;
     });
 
     return [selectColumn, ...dataColumns];
-  }, [allFieldIds, getLabel, getOriginalHeader, getSourceOrigin, optionFields, rows]);
+  }, [allFieldIds, getLabel, getOriginalHeader, getSourceOrigin, optionFields, rows, collapsedSummaries, toggleSummary]);
 
   // URL → derived row filtering (status/due/blocker/pre_eng/start_due)
   const filteredRows = useMemo(() => {
