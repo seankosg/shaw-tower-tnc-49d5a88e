@@ -20,7 +20,7 @@ import { Download, Filter, MessageSquare, Search, Upload, X } from 'lucide-react
 import { META_FIELD_NAMES, type CommentSummary, EMPTY_SUMMARY, isMetaField } from '@/lib/meta-fields';
 import { MetaCell } from '@/components/raw-data/MetaCell';
 import { supabase } from '@/integrations/supabase/client';
-import { useDefectCache, refreshDefectCache, patchDefectCacheLocal } from '@/lib/defect-cache';
+import { useDefectCache, refreshDefectCache, reloadDefectCache, patchDefectCacheLocal } from '@/lib/defect-cache';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -435,7 +435,8 @@ export default function DefectRawDataPage() {
   };
 
   const reload = useCallback(async () => {
-    refreshDefectCache();
+    // Hard reload to recover from any cache drift (e.g., paginated ties).
+    await reloadDefectCache();
   }, []);
 
   // Load comment summary once for all defects, then patch incrementally on Realtime events.
