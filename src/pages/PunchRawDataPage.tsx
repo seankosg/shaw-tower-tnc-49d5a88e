@@ -615,7 +615,13 @@ export default function PunchRawDataPage() {
   const optionFields = useMemo(() => {
     const out: Record<string, { value: string; label: string }[]> = {};
     for (const f of MULTI_SELECT_FIELDS) {
-      if (f === 'health_status') {
+      if (f === 'row_type') {
+        out[f] = [
+          { value: 'Summary', label: 'Summary' },
+          { value: 'Subtask', label: 'Subtask' },
+          { value: 'Standalone', label: 'Standalone' },
+        ];
+      } else if (f === 'health_status') {
         out[f] = PUNCH_HEALTH_STATUS.map((v) => ({ value: v, label: PUNCH_HEALTH_LABEL[v] }));
       } else if (f === 'pre_engineering_ready') {
         out[f] = [
