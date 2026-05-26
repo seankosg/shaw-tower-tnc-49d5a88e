@@ -79,6 +79,7 @@ import {
   PUNCH_PROCUREMENT_STATUS,
   PUNCH_OVERRIDABLE_SET,
   SUBTASK_STAGE_SHORT,
+  SUBTASK_STAGE_LABEL,
   type PunchFieldDef,
   type PunchGateStatus,
   type PunchHealthStatus,
