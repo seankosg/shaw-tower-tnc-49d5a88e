@@ -114,10 +114,17 @@ function rebuildList() {
   state.list = arr;
 }
 
-function trackUpdated(rows: { updated_at?: string | null }[]) {
+function trackUpdated(rows: { updated_at?: string | null; id?: string | null }[]) {
   for (const r of rows) {
     const u = r.updated_at ?? null;
-    if (u && (!state.maxUpdatedAt || u > state.maxUpdatedAt)) state.maxUpdatedAt = u;
+    if (!u) continue;
+    if (!state.maxUpdatedAt || u > state.maxUpdatedAt) {
+      state.maxUpdatedAt = u;
+      state.maxUpdatedId = r.id ?? null;
+    } else if (u === state.maxUpdatedAt && r.id && (!state.maxUpdatedId || r.id > state.maxUpdatedId)) {
+      // Advance the tiebreaker so subsequent incremental fetches skip already-seen ties.
+      state.maxUpdatedId = r.id;
+    }
   }
 }
 
