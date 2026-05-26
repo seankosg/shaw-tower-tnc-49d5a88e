@@ -745,13 +745,14 @@ export default function PunchRawDataPage() {
           )}
         </span>
       );
+      const isVirtualNoFilter = field === 'progress_icon';
       return {
         id: field,
         accessorFn,
         header: () => headerNode,
-        size: SIZE_BY_FIELD[field] ?? 130,
-        enableSorting: true,
-        enableColumnFilter: true,
+        size: isVirtualNoFilter ? 60 : (SIZE_BY_FIELD[field] ?? 130),
+        enableSorting: !isVirtualNoFilter,
+        enableColumnFilter: !isVirtualNoFilter,
         filterFn,
         meta: {
           filterType: inferred,
