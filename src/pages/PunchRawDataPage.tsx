@@ -394,6 +394,7 @@ const SIZE_BY_FIELD: Record<string, number> = {
   mos_approval_status: 140,
   weight: 70,
   remarks: 200,
+  row_type: 110,
 };
 
 function uniqueOptions(rows: PunchItem[], field: string) {
