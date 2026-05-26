@@ -30,6 +30,9 @@ import {
   summarizeByCriticalLevel, CRITICAL_LEVEL_ACCENT,
   type PunchBlockerKind, type PunchDqKey, type CriticalLevelSummary,
 } from '@/lib/punch-dashboard-utils';
+import { useCommonMasters, unionWithLegacy } from '@/hooks/useCommonMasters';
+
+const PIC_EMPTY_TOKEN = '__EMPTY__';
 
 const PAGE_SIZE = 1000;
 
@@ -58,6 +61,8 @@ export default function PunchDashboardPage() {
   const [groupBy, setGroupBy] = useState<GroupBy>('team');
   const [sortKey, setSortKey] = useState<SortKey>('overdue');
   const [lookahead, setLookahead] = useState<'7' | '14'>('7');
+  const [picFilter, setPicFilter] = useState<string>('all');
+  const { hdecPicOptions } = useCommonMasters();
 
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
@@ -99,39 +104,52 @@ export default function PunchDashboardPage() {
 
   const asOf = new Date().toISOString().slice(0, 10);
 
+  const picOptions = useMemo(
+    () => unionWithLegacy(hdecPicOptions, rows.map((r) => r.hdec_pic_name)),
+    [hdecPicOptions, rows],
+  );
+
+  const filteredRows = useMemo(() => {
+    if (picFilter === 'all') return rows;
+    if (picFilter === PIC_EMPTY_TOKEN) {
+      return rows.filter((r) => !String(r.hdec_pic_name ?? '').trim());
+    }
+    return rows.filter((r) => String(r.hdec_pic_name ?? '').trim() === picFilter);
+  }, [rows, picFilter]);
+
   const stats = useMemo(() => {
-    const total = rows.length;
-    const completed = rows.filter(isCompleted).length;
-    const wip = rows.filter(isWip).length;
-    const notStarted = rows.filter(isNotStarted).length;
-    const blocked = rows.filter(isBlockedByPreEng).length;
-    const overdue = rows.filter((r) => isCompletionOverdue(r, asOf)).length;
-    const startDelayed = rows.filter((r) => isStartDelayed(r, asOf)).length;
-    const critical = rows.filter((r) => isCriticalDelay(r, asOf)).length;
-    const behind = rows.filter(isBehindSchedule).length;
-    const inDelay = rows.filter((r) =>
+    const total = filteredRows.length;
+    const completed = filteredRows.filter(isCompleted).length;
+    const wip = filteredRows.filter(isWip).length;
+    const notStarted = filteredRows.filter(isNotStarted).length;
+    const blocked = filteredRows.filter(isBlockedByPreEng).length;
+    const overdue = filteredRows.filter((r) => isCompletionOverdue(r, asOf)).length;
+    const startDelayed = filteredRows.filter((r) => isStartDelayed(r, asOf)).length;
+    const critical = filteredRows.filter((r) => isCriticalDelay(r, asOf)).length;
+    const behind = filteredRows.filter(isBehindSchedule).length;
+    const inDelay = filteredRows.filter((r) =>
       isStartDelayed(r, asOf) || isCompletionOverdue(r, asOf) || isBehindSchedule(r)
     ).length;
-    const actuallyStarted = rows.filter((r) => !!r.actual_start_date).length;
-    const plannedStartedByToday = rows.filter((r) =>
+    const actuallyStarted = filteredRows.filter((r) => !!r.actual_start_date).length;
+    const plannedStartedByToday = filteredRows.filter((r) =>
       !!r.planned_start_date && r.planned_start_date <= asOf
     ).length;
-    const dueThisWeek = rows.filter((r) => isDueWithin(r, 7, asOf)).length;
-    const due14 = rows.filter((r) => isDueWithin(r, 14, asOf)).length;
-    const startThisWeek = rows.filter((r) => isPlannedToStartWithin(r, 7, asOf)).length;
-    const wipDueSoon = rows.filter((r) => isWip(r) && isDueWithin(r, 7, asOf)).length;
-    const readyButNotStarted = rows.filter(isReadyButNotStarted).length;
+    const dueThisWeek = filteredRows.filter((r) => isDueWithin(r, 7, asOf)).length;
+    const due14 = filteredRows.filter((r) => isDueWithin(r, 14, asOf)).length;
+    const startThisWeek = filteredRows.filter((r) => isPlannedToStartWithin(r, 7, asOf)).length;
+    const wipDueSoon = filteredRows.filter((r) => isWip(r) && isDueWithin(r, 7, asOf)).length;
+    const readyButNotStarted = filteredRows.filter(isReadyButNotStarted).length;
 
-    const w = weightedProgress(rows);
-    const avg = simpleAverageProgress(rows);
+    const w = weightedProgress(filteredRows);
+    const avg = simpleAverageProgress(filteredRows);
 
     const health: Record<PunchHealthStatus, number> = { ahead: 0, on_track: 0, behind: 0, critical: 0 };
-    rows.forEach((r) => { if (r.health_status) health[r.health_status]++; });
+    filteredRows.forEach((r) => { if (r.health_status) health[r.health_status]++; });
 
     const blockerCounts: Record<PunchBlockerKind | 'multiple', number> = {
       material_approval: 0, material_procurement: 0, drawing_approval: 0, mos_approval: 0, multiple: 0,
     };
-    rows.forEach((r) => {
+    filteredRows.forEach((r) => {
       const bs = blockersFor(r);
       if (bs.length === 1) blockerCounts[bs[0]]++;
       else if (bs.length > 1) blockerCounts.multiple++;
@@ -143,7 +161,7 @@ export default function PunchDashboardPage() {
       drawing_approval: { approved: 0, pending: 0, not_required: 0 },
       mos_approval: { approved: 0, pending: 0, not_required: 0 },
     };
-    rows.forEach((r) => {
+    filteredRows.forEach((r) => {
       (gates.material_approval as any)[r.material_approval_status]++;
       (gates.material_procurement as any)[r.material_procurement_status]++;
       (gates.drawing_approval as any)[r.drawing_approval_status]++;
@@ -156,10 +174,10 @@ export default function PunchDashboardPage() {
       dueThisWeek, due14, startThisWeek, wipDueSoon, readyButNotStarted,
       w, avg, health, blockerCounts, gates,
     };
-  }, [rows, asOf]);
+  }, [filteredRows, asOf]);
 
   const matrix = useMemo(() => {
-    const m = groupProgressMatrix(rows, (r) => String((r as any)[groupBy] ?? ''), asOf);
+    const m = groupProgressMatrix(filteredRows, (r) => String((r as any)[groupBy] ?? ''), asOf);
     const sorted = [...m].sort((a, b) => {
       switch (sortKey) {
         case 'critical': return b.critical - a.critical;
@@ -170,35 +188,60 @@ export default function PunchDashboardPage() {
       }
     });
     return sorted;
-  }, [rows, groupBy, sortKey, asOf]);
+  }, [filteredRows, groupBy, sortKey, asOf]);
 
   const recovery = useMemo(() => {
-    return [...rows]
+    return [...filteredRows]
       .filter((r) => !isCompleted(r))
       .map((r) => ({ r, score: recoveryPriorityScore(r, asOf) }))
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 25);
-  }, [rows, asOf]);
+  }, [filteredRows, asOf]);
 
-  const dqCounts = useMemo(() => computePunchDqCounts(rows), [rows]);
-  const criticalLevelSummary = useMemo(() => summarizeByCriticalLevel(rows), [rows]);
-  const topSubcons = useMemo(() => topDelayingParties(rows, (r) => r.subcontractor_name ?? '', 5, asOf), [rows, asOf]);
-  const topPics = useMemo(() => topDelayingParties(rows, (r) => r.hdec_pic_name ?? '', 5, asOf), [rows, asOf]);
+  const dqCounts = useMemo(() => computePunchDqCounts(filteredRows), [filteredRows]);
+  const criticalLevelSummary = useMemo(() => summarizeByCriticalLevel(filteredRows), [filteredRows]);
+  const topSubcons = useMemo(() => topDelayingParties(filteredRows, (r) => r.subcontractor_name ?? '', 5, asOf), [filteredRows, asOf]);
+  const topPics = useMemo(() => topDelayingParties(filteredRows, (r) => r.hdec_pic_name ?? '', 5, asOf), [filteredRows, asOf]);
 
-  const go = (qs: string) => navigate(`/punch/raw-data?${qs}`);
+  const go = (qs: string) => {
+    const params = new URLSearchParams(qs);
+    if (picFilter !== 'all') params.set('hdecPic', picFilter);
+    navigate(`/punch/raw-data?${params.toString()}`);
+  };
+
+
 
   return (
     <div className="space-y-4 p-4">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold">Punch (Minor O/S Work) — Dashboard</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {loading ? 'Loading…' : `${stats.total} items tracked · as of ${asOf}`}
+            {loading
+              ? 'Loading…'
+              : `${stats.total} items tracked · as of ${asOf}${
+                  picFilter === 'all'
+                    ? ''
+                    : ` · filtered by HDEC PIC: ${picFilter === PIC_EMPTY_TOKEN ? '(empty)' : picFilter}`
+                }`}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={picFilter} onValueChange={setPicFilter}>
+            <SelectTrigger className="h-8 w-[200px] text-xs">
+              <SelectValue placeholder="HDEC PIC: All" />
+            </SelectTrigger>
+            <SelectContent className="max-h-[320px]">
+              <SelectItem value="all" className="text-xs">HDEC PIC: All</SelectItem>
+              <SelectItem value={PIC_EMPTY_TOKEN} className="text-xs">(empty)</SelectItem>
+              {picOptions.map((o) => (
+                <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={() => navigate('/punch/raw-data')}>Open Raw Data</Button>
+
         </div>
       </div>
 
@@ -406,8 +449,9 @@ export default function PunchDashboardPage() {
             </TabsContent>
             <TabsContent value="14" className="m-0 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
               <ControlCell label="Due in 14d" value={stats.due14} onClick={() => go('due=next_14_days')} />
-              <ControlCell label="Planned to Start ≤14d" value={rows.filter((r) => isPlannedToStartWithin(r, 14, asOf)).length} onClick={() => go('start_due=14')} />
-              <ControlCell label="WIP Due ≤14d" value={rows.filter((r) => isWip(r) && isDueWithin(r, 14, asOf)).length} onClick={() => go('status=wip&due=next_14_days')} />
+              <ControlCell label="Planned to Start ≤14d" value={filteredRows.filter((r) => isPlannedToStartWithin(r, 14, asOf)).length} onClick={() => go('start_due=14')} />
+              <ControlCell label="WIP Due ≤14d" value={filteredRows.filter((r) => isWip(r) && isDueWithin(r, 14, asOf)).length} onClick={() => go('status=wip&due=next_14_days')} />
+
               <ControlCell label="Should Have Started" value={stats.startDelayed} tone="warning" onClick={() => go('status=start_delayed')} />
             </TabsContent>
           </Tabs>
