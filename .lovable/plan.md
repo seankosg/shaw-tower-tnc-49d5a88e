@@ -1,84 +1,85 @@
-## 원인 분석
+## 목표
 
-직전 변경에서 계층적 기본 정렬을 위해 추가한 다음 코드가 freeze 원인으로 추정됩니다.
+Punch Raw Data 페이지에서 Summary Task와 Subtask 간의 계층 작업 흐름을 강화합니다.
 
-```ts
-state: { sorting: isDefaultSort ? [] : sorting, ... }
+1. Subtask의 비어있는 메타데이터 필드를 부모 Summary 값으로 채우는 일회성 마이그레이션
+2. Summary / Subtask 별도 필터
+3. Summary 행에서 자식 Subtask들을 펼침/접기
+4. 테이블 상단에 "전체 펴기 / 전체 접기" 버튼
+
+---
+
+## 1. 일회성 마이그레이션 (DB)
+
+`punch_items`에서 `parent_id IS NOT NULL`(=Subtask)이고 해당 필드가 `NULL` 또는 빈 문자열인 경우, 부모 Summary 행의 값으로 채웁니다.
+
+대상 필드 (스케줄/진척/게이트 상태는 Subtask 고유이므로 제외):
+
+- classification: `category1`, `category2`, `category3`, `critical_level`, `work_type`, `main_trade`, `sub_trade`
+- identity: `location`, `level`
+- people: `team`, `subcontractor_name`, `subsub_name`, `hdec_pic_name`, `hdec_eng_name`
+- meta: `remarks`
+
+조건 요약: `UPDATE punch_items child SET <field> = parent.<field> FROM punch_items parent WHERE child.parent_id = parent.id AND parent.is_summary AND (child.<field> IS NULL OR child.<field> = '')`
+
+영향 받는 행 예상치(현재 Subtask 416건 중): subcontractor ~361, location ~360, team ~358 등.
+
+`updated_at` 트리거는 그대로 동작하므로 클라이언트 캐시는 다음 incremental refresh로 자동 동기화됩니다.
+
+---
+
+## 2. Summary / Subtask 필터
+
+Field Registry의 `is_summary` 컬럼을 이미 노출 가능합니다. 표시 라벨을 사람이 읽을 수 있도록 변환:
+
+- `is_summary = true` → "Summary"
+- `parent_id IS NOT NULL` → "Subtask"
+- 나머지 → "Standalone"
+
+구현:
+
+- 가상 컬럼 `row_type` (display only) 추가 → 값은 위 3가지
+- `ColumnFilterDropdown`의 multi-select로 동작
+- "Active column filters" 칩에도 자연스럽게 표시
+- 기존 `is_summary` 컬럼은 그대로 두되 기본 숨김 처리
+
+---
+
+## 3. Summary 펼침/접기
+
+상태: 페이지 레벨 `Set<string>` (collapsed summary IDs) — `useState`로 관리.
+
+- Summary 행의 Item No 셀 좌측 아이콘을 클릭 가능한 토글 버튼으로 변경
+  - 펼침: `ChevronDown` / 접힘: `ChevronRight` (기존 `Layers` 아이콘은 제거하거나 토글과 병기)
+  - `e.stopPropagation()`으로 행 클릭(상세 이동) 차단
+- `orderedRows` 계산 단계에서, 부모가 `collapsed` 집합에 있으면 그 자식 Subtask들을 결과에서 제거
+- 정렬이 기본 정렬이 아닐 때(사용자가 컬럼 정렬 적용 시)에는 계층 구조가 의미 없으므로 토글/버튼을 비활성화하거나 숨김
+- 행이 숨겨질 때 `rowSelection`은 그대로 유지 (다시 펼치면 복원)
+
+상태는 페이지 메모리에만 — 새로고침/페이지 이탈 시 리셋(localStorage 저장은 불필요, 단순화).
+
+---
+
+## 4. 전체 펴기 / 전체 접기 버튼
+
+위치: 검색 바와 같은 줄 (1065~1084 라인 영역), `filteredRowCount` 표기 옆.
+
+```
+[Search] [N records] [Expand all] [Collapse all] [Clear sort]
 ```
 
-- 매 렌더마다 **새로운 `[]` 배열 참조**가 생성되어 react-table 내부에서 sorting state 변경으로 인식 → `getRowModel()` 재계산 → 재렌더 → 다시 새 `[]` → 잠재적 렌더 루프 / 메인 스레드 점유.
-- 결과적으로 UI는 그려지지만 클릭·스크롤·정렬 핸들러가 응답하지 못함(메인 스레드 busy).
+- "Collapse all": 현재 보이는 Summary 모두 collapsed에 추가
+- "Expand all": collapsed 집합 비우기
+- 기본 정렬이 아니면 disabled
 
-또한 사용자가 item_no 헤더를 클릭해도 `state.sorting=[]` → react-table은 "새 정렬 시작"으로 처리 → `[{item_no, asc}]` 호출 → 실제 `sorting` 상태와 동일 → React가 bail-out → 정렬 동작 안 함처럼 보이는 부수 효과도 있음.
+---
 
-## 수정 방안 (PunchRawDataPage.tsx 만 수정)
+## 기술 정리
 
-react-table에 정렬 책임을 떠넘기지 않고, **데이터 메모 단계에서 한 번에 정렬**한 뒤 `manualSorting: true`로 두는 방식으로 단순화합니다. 이러면 더 이상 `state.sorting`을 가짜로 비울 필요가 없습니다.
+- DB 변경: `supabase--migration` (UPDATE만, 스키마 변경 없음). 마이그레이션 도구로 실행하므로 사용자 승인 후 자동 수행.
+- 코드 변경:
+  - `src/pages/PunchRawDataPage.tsx`: `collapsedSummaries` 상태, `orderedRows` 필터링, 토글 핸들러, 상단 버튼, row_type 가상 컬럼/필터
+  - `src/lib/punch-field-registry.ts`: (선택) `row_type` 가상 필드 정의 추가 또는 페이지 내부에서만 처리
+- Field Config 마이그레이션 없음 (가상 컬럼만 추가)
 
-### 변경 1 — `orderedRows` useMemo 확장
-
-`isDefaultSort` 분기와 사용자 정렬 분기를 모두 처리:
-
-```ts
-const orderedRows = useMemo(() => {
-  // 1) 기본(아무 정렬 없음 또는 item_no asc) → 계층적 정렬
-  if (isDefaultSort) {
-    // (기존 로직: roots를 comparePunchItemNo, 자식은 planned_start_date asc nulls last, 고아는 끝)
-    return out;
-  }
-  // 2) 사용자가 다른 정렬을 적용 → 평탄 정렬 (계층 무시)
-  const arr = [...filteredRows];
-  arr.sort((a, b) => {
-    for (const s of sorting) {
-      const va = (a as any)[s.id];
-      const vb = (b as any)[s.id];
-      // null/undefined는 항상 끝으로
-      const aEmpty = va === null || va === undefined || va === '';
-      const bEmpty = vb === null || vb === undefined || vb === '';
-      if (aEmpty && bEmpty) continue;
-      if (aEmpty) return 1;
-      if (bEmpty) return -1;
-      let c: number;
-      if (s.id === 'item_no') c = comparePunchItemNo(va, vb);
-      else if (typeof va === 'number' && typeof vb === 'number') c = va - vb;
-      else c = String(va).localeCompare(String(vb));
-      if (c !== 0) return s.desc ? -c : c;
-    }
-    return 0;
-  });
-  return arr;
-}, [filteredRows, isDefaultSort, sorting]);
-```
-
-### 변경 2 — `useReactTable` 옵션 수정
-
-```ts
-const table = useReactTable({
-  data: orderedRows,
-  columns,
-  state: { sorting, globalFilter, columnFilters, columnSizing, columnVisibility, columnOrder, rowSelection },
-  // ↑ sorting은 trick 없이 그대로 전달 (헤더 ▲/▼ 인디케이터용)
-  manualSorting: true,   // ★ 추가: react-table이 다시 정렬하지 않음
-  onSortingChange: setSorting,
-  ...
-});
-```
-
-`getSortedRowModel()` 호출은 그대로 두어도 무방하나(manualSorting=true면 데이터 순서를 그대로 통과시킴), 깔끔히 유지합니다.
-
-### 변경 3 — (선택) 안전 가드
-
-- `orderedRows` 내부에서 `usedChildKeys` 대신 `for (const [k, arr] of byParent)`에서 `if (rootIds.has(k)) continue;` 형태로 명시화하여 가독성 향상(필수 아님).
-
-## 영향 범위
-
-- PunchRawDataPage.tsx 1 파일만 수정.
-- DB/타입/기타 페이지 변경 없음.
-- Summary 자동 집계 트리거 및 PunchDetailPage 변경은 그대로 유지.
-- 계층적 기본 정렬, 사용자 컬럼 정렬 모두 정상 동작 + freeze 해결.
-
-## 검증
-
-- 페이지 진입 시 Loading→데이터 표시 후 헤더 클릭으로 정렬 토글, 행 클릭으로 상세 진입, 가로/세로 스크롤이 모두 응답하는지 확인.
-- 기본 상태에서 부모(Summary/단독) 뒤에 자식이 `planned_start_date` 오름차순(NULL 마지막)으로 표시되는지 확인.
-- 다른 컬럼으로 정렬 시 계층 무시하고 평탄 정렬되는지 확인.
+마이그레이션 도구는 본 플랜 승인 후 첫 단계로 호출합니다.
