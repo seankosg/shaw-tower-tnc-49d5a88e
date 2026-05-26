@@ -272,8 +272,8 @@ interface CellExtras {
 }
 
 function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, value: any, extras?: CellExtras) {
-  // Hierarchy markers on the Item No column
-  if (field === 'item_no') {
+  // Summary No — primary identifier column with hierarchy toggle/indent
+  if (field === 'summary_no' || field === 'item_no') {
     const r = row as any;
     const isSummary = !!r.is_summary;
     const isChild = !!r.parent_id;
@@ -296,12 +296,12 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
           <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         ) : null}
         <span className={cn('truncate', isSummary && 'font-semibold')}>{value == null || value === '' ? '—' : String(value)}</span>
-        {isChild && stage && (
+        {isChild && stage && field === 'summary_no' && (
           <span className="ml-0.5 rounded border px-1 py-0 text-[8px] font-semibold text-muted-foreground">
             {SUBTASK_STAGE_SHORT[stage]}
           </span>
         )}
-        {isSummary && overrideCount > 0 && (
+        {isSummary && overrideCount > 0 && field === 'summary_no' && (
           <span
             className="ml-0.5 rounded border border-amber-400 bg-amber-50 px-1 py-0 text-[8px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-200"
             title={`${overrideCount} field${overrideCount === 1 ? '' : 's'} manually overridden`}
@@ -312,6 +312,19 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
       </span>
     );
   }
+  // Subtask No — show "S" badge on summary rows, value on subtask rows
+  if (field === 'subtask_no') {
+    const r = row as any;
+    if (r.is_summary) {
+      return (
+        <span className="inline-flex items-center rounded border border-primary/40 bg-primary/10 px-1.5 py-0 text-[10px] font-semibold text-primary">
+          S
+        </span>
+      );
+    }
+    return <span className="text-xs">{value == null || value === '' ? '—' : String(value)}</span>;
+  }
+
   switch (field) {
     case 'subtask_stage':
       return value ? (
