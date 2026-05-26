@@ -111,7 +111,7 @@ type PunchItem = Database['public']['Tables']['punch_items']['Row'];
 
 const PAGE_SIZE = 1000;
 const ZIP_THRESHOLD = 7;
-const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
+const DEFAULT_SORTING: SortingState = [{ id: 'summary_no', desc: false }];
 
 const DATE_FIELDS = new Set(
   PUNCH_FIELDS.filter((f) => f.dataType === 'date').map((f) => f.field),
@@ -141,7 +141,7 @@ const TEXT_SEARCH_FIELDS: (keyof PunchItem)[] = PUNCH_FIELDS
   .map((f) => f.field as keyof PunchItem);
 
 /** Pinned columns (always visible, fixed at left). */
-const PINNED_COLUMN_IDS = ['__select', 'item_no'];
+const PINNED_COLUMN_IDS = ['__select', 'summary_no', 'subtask_no'];
 
 /** Group label for display in Bulk-edit dialog. */
 const GROUP_LABELS: Record<string, string> = {
@@ -272,8 +272,8 @@ interface CellExtras {
 }
 
 function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, value: any, extras?: CellExtras) {
-  // Hierarchy markers on the Item No column
-  if (field === 'item_no') {
+  // Summary No — primary identifier column with hierarchy toggle/indent
+  if (field === 'summary_no' || field === 'item_no') {
     const r = row as any;
     const isSummary = !!r.is_summary;
     const isChild = !!r.parent_id;
@@ -296,12 +296,12 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
           <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         ) : null}
         <span className={cn('truncate', isSummary && 'font-semibold')}>{value == null || value === '' ? '—' : String(value)}</span>
-        {isChild && stage && (
+        {isChild && stage && field === 'summary_no' && (
           <span className="ml-0.5 rounded border px-1 py-0 text-[8px] font-semibold text-muted-foreground">
             {SUBTASK_STAGE_SHORT[stage]}
           </span>
         )}
-        {isSummary && overrideCount > 0 && (
+        {isSummary && overrideCount > 0 && field === 'summary_no' && (
           <span
             className="ml-0.5 rounded border border-amber-400 bg-amber-50 px-1 py-0 text-[8px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-200"
             title={`${overrideCount} field${overrideCount === 1 ? '' : 's'} manually overridden`}
@@ -312,6 +312,19 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
       </span>
     );
   }
+  // Subtask No — show "S" badge on summary rows, value on subtask rows
+  if (field === 'subtask_no') {
+    const r = row as any;
+    if (r.is_summary) {
+      return (
+        <span className="inline-flex items-center rounded border border-primary/40 bg-primary/10 px-1.5 py-0 text-[10px] font-semibold text-primary">
+          S
+        </span>
+      );
+    }
+    return <span className="text-xs">{value == null || value === '' ? '—' : String(value)}</span>;
+  }
+
   switch (field) {
     case 'subtask_stage':
       return value ? (
@@ -390,7 +403,10 @@ function renderPlainCell(value: any, def: PunchFieldDef | null) {
 }
 
 const SIZE_BY_FIELD: Record<string, number> = {
+  summary_no: 110,
+  subtask_no: 90,
   item_no: 110,
+
   outstanding_work: 280,
   location: 130,
   level: 80,
@@ -761,7 +777,7 @@ export default function PunchRawDataPage() {
           originalHeader: orig,
         },
         cell: ({ row, getValue }) => {
-          if (field === 'item_no') {
+          if (field === 'item_no' || field === 'summary_no') {
             const r = row.original as any;
             const isSummary = !!r.is_summary;
             const id = String(row.original.id);
@@ -770,6 +786,7 @@ export default function PunchRawDataPage() {
               onToggle: isSummary ? () => toggleSummary(id) : undefined,
             });
           }
+
           if (field === 'row_type') {
             const v = String(getValue() ?? '');
             const cls = v === 'Summary'
@@ -885,7 +902,7 @@ export default function PunchRawDataPage() {
   // When sorting is at default (item_no asc), arrange rows so each parent (Summary
   // or standalone) is followed by its children sorted by planned_start_date.
   const isDefaultSort = sorting.length === 0
-    || (sorting.length === 1 && sorting[0].id === 'item_no' && !sorting[0].desc);
+    || (sorting.length === 1 && (sorting[0].id === 'summary_no' || sorting[0].id === 'item_no') && !sorting[0].desc);
   const orderedRows = useMemo(() => {
     if (isDefaultSort) {
       const byParent = new Map<string, PunchItem[]>();
@@ -938,7 +955,7 @@ export default function PunchRawDataPage() {
         if (aEmpty) return 1;
         if (bEmpty) return -1;
         let c: number;
-        if (s.id === 'item_no') c = comparePunchItemNo(va, vb);
+        if (s.id === 'item_no' || s.id === 'summary_no' || s.id === 'subtask_no') c = comparePunchItemNo(va, vb);
         else if (typeof va === 'number' && typeof vb === 'number') c = va - vb;
         else c = String(va).localeCompare(String(vb));
         if (c !== 0) return s.desc ? -c : c;
@@ -953,8 +970,11 @@ export default function PunchRawDataPage() {
   const columnVisibility = useMemo<VisibilityState>(() => {
     const vis: VisibilityState = { __select: true };
     for (const id of allFieldIds) {
-      // item_no is pinned-always-visible (primary identifier)
-      if (id === 'item_no') { vis[id] = true; continue; }
+      // summary_no / subtask_no are pinned-always-visible (primary identifiers)
+      if (id === 'summary_no' || id === 'subtask_no') { vis[id] = true; continue; }
+      // legacy item_no: hide by default (user can re-enable in Field Config)
+      if (id === 'item_no') { vis[id] = isFieldVisible(id, roles ?? []); continue; }
+
       vis[id] = isFieldVisible(id, roles ?? []);
     }
     return vis;

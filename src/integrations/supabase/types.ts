@@ -2789,9 +2789,11 @@ export type Database = {
           sub_trade: string | null
           subcontractor_name: string | null
           subsub_name: string | null
+          subtask_no: string | null
           subtask_stage:
             | Database["public"]["Enums"]["subtask_stage_enum"]
             | null
+          summary_no: string | null
           team: Database["public"]["Enums"]["team_type"] | null
           updated_at: string
           updated_by: string | null
@@ -2850,9 +2852,11 @@ export type Database = {
           sub_trade?: string | null
           subcontractor_name?: string | null
           subsub_name?: string | null
+          subtask_no?: string | null
           subtask_stage?:
             | Database["public"]["Enums"]["subtask_stage_enum"]
             | null
+          summary_no?: string | null
           team?: Database["public"]["Enums"]["team_type"] | null
           updated_at?: string
           updated_by?: string | null
@@ -2911,9 +2915,11 @@ export type Database = {
           sub_trade?: string | null
           subcontractor_name?: string | null
           subsub_name?: string | null
+          subtask_no?: string | null
           subtask_stage?:
             | Database["public"]["Enums"]["subtask_stage_enum"]
             | null
+          summary_no?: string | null
           team?: Database["public"]["Enums"]["team_type"] | null
           updated_at?: string
           updated_by?: string | null
