@@ -294,7 +294,26 @@ export async function parsePunchWorkbook(
       errors.push({ rawRowNo, reason: 'Missing Outstanding Works' });
       return;
     }
-    // Normalize Item No (e.g. "3_1" → "3.1") and auto-extract parent.
+    // NEW: Summary No + Subtask No two-column input takes precedence over Item No.
+    const sumNo = (values as any).summary_no ? String((values as any).summary_no).trim() : '';
+    const subNo = (values as any).subtask_no ? String((values as any).subtask_no).trim() : '';
+    if (sumNo || subNo) {
+      const isSummaryMarker = subNo && subNo.toUpperCase() === 'S';
+      if (isSummaryMarker) {
+        // Summary row
+        if (sumNo) values.item_no = sumNo;
+      } else if (subNo) {
+        // Subtask row
+        values.item_no = subNo;
+        if (sumNo && !(values as any).parent_item_no) (values as any).parent_item_no = sumNo;
+      } else if (sumNo) {
+        // Only Summary No provided, no Subtask No → treat as summary row
+        values.item_no = sumNo;
+      }
+      delete (values as any).summary_no;
+      delete (values as any).subtask_no;
+    }
+    // Normalize Item No (e.g. "3_1" → "3.1") and auto-extract parent (legacy fallback).
     // Explicit parent_item_no column from Excel takes precedence.
     if (values.item_no) {
       const { itemNo, parentItemNo } = parseSubtaskItemNo(values.item_no);
@@ -303,6 +322,7 @@ export async function parsePunchWorkbook(
         (values as any).parent_item_no = parentItemNo;
       }
     }
+
     rows.push({ rawRowNo, values, rawPayload: raw });
   });
 
