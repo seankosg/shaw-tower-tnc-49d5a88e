@@ -151,6 +151,7 @@ async function fetchSlimAll() {
       .select(SLIM_SELECT)
       .eq('is_active', true)
       .order('updated_at', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throw error;
     const rows = (data ?? []) as any[];
