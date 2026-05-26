@@ -124,6 +124,8 @@ const MULTI_SELECT_FIELDS = new Set<string>([
   'team', 'work_type', 'main_trade', 'sub_trade', 'category1', 'category2', 'category3',
   'critical_level', 'level', 'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'hdec_eng_name',
   'completion_status',
+  // virtual columns
+  'row_type',
 ]);
 
 /** Free-text searchable fields — derived from registry text dataType minus pure-id/numeric ones. */
