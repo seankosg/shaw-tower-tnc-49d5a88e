@@ -1204,7 +1204,7 @@ export default function PunchRawDataPage() {
         table="punch_items"
         entity="punch"
         exportColumns={columnOrder
-          .filter((id) => id !== '__select' && columnVisibility[id] !== false)
+          .filter((id) => id !== '__select' && id !== 'progress_icon' && columnVisibility[id] !== false)
           .map((id) => ({ id, label: getLabel(id) }))}
         reassignFields={[
           { field: 'subcontractor_name', label: getLabel('subcontractor_name'), options: optionFields.subcontractor_name ?? [] },
