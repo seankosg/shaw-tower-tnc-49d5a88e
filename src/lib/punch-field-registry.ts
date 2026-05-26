@@ -107,10 +107,13 @@ export const PUNCH_HEALTH_LABEL: Record<PunchHealthStatus, string> = {
 
 export const PUNCH_FIELDS: PunchFieldDef[] = [
   // identity
+  { field: 'summary_no', exportLabel: 'Summary No', aliases: ['summaryno', 'summaryitemno', 'parentno', 'parent'], group: 'identity', dataType: 'text' },
+  { field: 'subtask_no', exportLabel: 'Subtask No', aliases: ['subtaskno', 'subno', 'subitemno', 'subtaskitemno'], group: 'identity', dataType: 'text' },
   { field: 'item_no', exportLabel: 'Item No', aliases: ['itemno', 'item', 'no', 'sn', 'sno'], group: 'identity', dataType: 'text' },
   { field: 'outstanding_work', exportLabel: 'Outstanding Works', aliases: ['outstandingworks', 'outstandingwork', 'outsandingworks', 'outsandingwork', 'workdescription', 'description', 'punchitem'], group: 'identity', dataType: 'text', required: true },
   { field: 'location', exportLabel: 'Location', aliases: ['location', 'area', 'place'], group: 'identity', dataType: 'text' },
   { field: 'level', exportLabel: 'Level', aliases: ['level', 'floor', 'floorlevel'], group: 'identity', dataType: 'text' },
+
 
   // classification
   { field: 'category1', exportLabel: 'Category 1', aliases: ['category1', 'cat1', 'maincategory'], group: 'classification', dataType: 'text' },
