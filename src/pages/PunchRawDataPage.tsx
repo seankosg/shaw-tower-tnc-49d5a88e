@@ -1315,7 +1315,7 @@ export default function PunchRawDataPage() {
                   : '(none)';
                 const sharedOpts = {
                   rows: sortedRows,
-                  fieldNames: columnOrder.filter((id) => id !== '__select' && columnVisibility[id] !== false),
+                  fieldNames: columnOrder.filter((id) => id !== '__select' && id !== 'progress_icon' && columnVisibility[id] !== false),
                   fieldConfig: configRows,
                   meta,
                   searchSummary: globalFilter.trim() ? `"${globalFilter.trim()}"` : '(none)',
