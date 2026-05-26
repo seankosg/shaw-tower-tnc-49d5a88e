@@ -902,7 +902,7 @@ export default function PunchRawDataPage() {
   // When sorting is at default (item_no asc), arrange rows so each parent (Summary
   // or standalone) is followed by its children sorted by planned_start_date.
   const isDefaultSort = sorting.length === 0
-    || (sorting.length === 1 && sorting[0].id === 'item_no' && !sorting[0].desc);
+    || (sorting.length === 1 && (sorting[0].id === 'summary_no' || sorting[0].id === 'item_no') && !sorting[0].desc);
   const orderedRows = useMemo(() => {
     if (isDefaultSort) {
       const byParent = new Map<string, PunchItem[]>();
