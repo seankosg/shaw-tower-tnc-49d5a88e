@@ -1,56 +1,34 @@
 ## 목표
 
-Punch Dashboard 헤더에 **HDEC PIC 필터 드롭다운**을 추가하고, 선택값에 따라 **최상단 Tier 서머리 카드(Tier 1·Tier 2 + Status Mix + Summary of Work + 이후 모든 집계)** 가 함께 갱신되도록 한다.
+Punch Raw Data의 `progress_icon` 컬럼은 **현재의 단일 상태(Planned / WIP / Delay / Completed) 구조를 그대로 유지**하되, 시각 표현만 Defect Raw Data의 **Pip 배지 디자인**으로 교체합니다.
 
-`rows` 한 군데를 필터링해 전체 `useMemo` 체인이 자동 반영되도록 구현(부분 필터는 카드 간 숫자 불일치를 유발하므로 글로벌 적용).
+## 시각 변경 (Before → After)
 
----
+- **Before**: Lucide 아이콘 단일 글리프 (`Circle`, `PlayCircle`, `AlertTriangle`, `CheckCircle2`) + `text-blue-600` / `text-rose-600` 등 직접 색상 클래스
+- **After**: Defect의 `Pip`와 동일한 **원형 배지 1개** (h-4 w-4, border, 글리프 내부 표시)
+  - `completed` → done 스타일: `bg-success border-success text-success-foreground`, 글리프 `●`
+  - `wip` → wip 스타일: `bg-amber-400 border-amber-500 text-white`, 글리프 `◐`
+  - `delay` → hold 스타일: `bg-destructive border-destructive text-destructive-foreground`, 글리프 `⊘`
+  - `planned` → planned 스타일: `bg-transparent border-muted-foreground/40 text-muted-foreground/60`, 글리프 `○`
 
-## 구현 계획 (`src/pages/PunchDashboardPage.tsx`)
+## 수정 파일
 
-### 1) 마스터 옵션 로드
-- `useCommonMasters()` 훅의 `hdecPicOptions` 사용 (Docs/Subtest와 동일 소스: `hdec_pic_master` 테이블).
-- 데이터에 존재하지만 마스터에 없는 PIC도 표시하기 위해 `unionWithLegacy(hdecPicOptions, rows.map(r => r.hdec_pic_name))` 적용.
+**`src/lib/punch-progress-icon.ts`**
+- `PUNCH_PROGRESS_ICON`, `PUNCH_PROGRESS_COLOR` 매핑을 Pip 배지용 클래스 맵으로 대체 (또는 신규 export `PUNCH_PROGRESS_PIP_CLASS`, `PUNCH_PROGRESS_GLYPH` 추가)
+- `computePunchProgressState`, `getPunchProgressTooltipLines`, `PUNCH_PROGRESS_LABEL`, `PUNCH_PROGRESS_STATES` 등 로직·상태값·툴팁은 **변경 없음**
 
-### 2) 필터 상태
-```ts
-const [picFilter, setPicFilter] = useState<string>('all'); // 'all' | '__empty__' | <pic name>
-```
-- `'__empty__'` 옵션은 HDEC PIC가 비어있는 행만 필터링.
+**`src/pages/PunchRawDataPage.tsx` (`progress_icon` cell 약 339~360 줄)**
+- 기존 `<Icon className=... />` 렌더링을 Defect `Pip` 와 동일한 `<span className="inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] font-bold leading-none border ...">{glyph}</span>` 구조로 교체
+- Tooltip 내용·트리거·정렬·필터 동작 모두 유지
+- 컬럼 size 60 유지
 
-### 3) 필터 적용
-```ts
-const filteredRows = useMemo(() => {
-  if (picFilter === 'all') return rows;
-  if (picFilter === '__empty__') return rows.filter(r => !String(r.hdec_pic_name ?? '').trim());
-  return rows.filter(r => (r.hdec_pic_name ?? '') === picFilter);
-}, [rows, picFilter]);
-```
-- 기존의 모든 `useMemo`(`stats`, `matrix`, `recovery`, `dqCounts`, `criticalLevelSummary`, `topSubcons`, `topPics`)의 의존성을 `rows` → `filteredRows`로 변경.
+**`src/components/punch/PunchProgressLegend.tsx`**
+- 4개 상태(Planned / WIP / Delay / Completed) Legend 항목의 아이콘 표시를 동일한 Pip 배지로 교체
+- 텍스트 라벨·"Delay = past planned completion" 부가설명은 유지
 
-### 4) 헤더 UI
-- 우측 상단 버튼 영역(`Open Raw Data` 옆)에 `Select` 추가:
-  - placeholder: `HDEC PIC: All`
-  - 옵션: `All` / `(empty)` / 각 PIC명
-  - 폭 `w-[200px]`, 높이 `h-8`, `text-xs` 스타일로 헤더 톤에 맞춤.
-- 부제 텍스트(`{stats.total} items tracked · as of {asOf}`)에 필터가 활성화된 경우 `· filtered by HDEC PIC: <name>` 추가.
+## 변경하지 않는 것
 
-### 5) 드릴스루 연동
-- `go(qs)` 헬퍼를 수정해 PIC 필터가 활성화되면 `&hdecPic=<encoded name>`을 자동 부착.
-- 이미 Punch Raw Data는 `?hdecPic=` 파라미터를 처리(라인 606)하므로 별도 수정 불필요.
-- `'__empty__'`는 raw-data에서 EMPTY_TOKEN으로 전달(`hdecPic=__empty__`).
-
-### 6) 영향 범위
-- DB / 마이그레이션: 없음
-- 다른 페이지: 없음
-- 기존 카드/카운트 의미: 동일 (입력 데이터셋만 좁아짐)
-
----
-
-## 검수 포인트
-
-1. 헤더 드롭다운에 활성 마스터 + 기존 데이터 PIC 합집합이 정렬되어 표시
-2. 특정 PIC 선택 시 Tier 1(Completed·Planned·Actual·In Delay), Tier 2(Pre-Eng Blocked·Start Overdue·Completion Overdue·Behind), Status Mix, Summary of Work, Lookahead, Pre-Eng Gates까지 모두 해당 PIC 행만으로 재계산
-3. 카드 클릭 시 Raw Data로 이동하면 기존 필터 + `hdecPic=<선택값>`이 모두 적용됨
-4. `(empty)` 선택 시 HDEC PIC 미지정 행만 집계
-5. `All` 선택 시 기존 동작과 100% 동일
+- 단계 구성(단일 상태) 그대로 유지 — Start/Completion 분해 없음
+- 상태 분류 로직(`computePunchProgressState`) 변경 없음
+- DB, 컬럼 정의, 필터, 정렬, Tooltip 내용 변경 없음
+- 다른 페이지(Dashboard, Detail) 영향 없음
