@@ -970,8 +970,11 @@ export default function PunchRawDataPage() {
   const columnVisibility = useMemo<VisibilityState>(() => {
     const vis: VisibilityState = { __select: true };
     for (const id of allFieldIds) {
-      // item_no is pinned-always-visible (primary identifier)
-      if (id === 'item_no') { vis[id] = true; continue; }
+      // summary_no / subtask_no are pinned-always-visible (primary identifiers)
+      if (id === 'summary_no' || id === 'subtask_no') { vis[id] = true; continue; }
+      // legacy item_no: hide by default (user can re-enable in Field Config)
+      if (id === 'item_no') { vis[id] = isFieldVisible(id, roles ?? []); continue; }
+
       vis[id] = isFieldVisible(id, roles ?? []);
     }
     return vis;
