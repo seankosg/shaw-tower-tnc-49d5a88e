@@ -1,34 +1,43 @@
-## 목표
+## 분석
 
-Punch Raw Data의 `progress_icon` 컬럼은 **현재의 단일 상태(Planned / WIP / Delay / Completed) 구조를 그대로 유지**하되, 시각 표현만 Defect Raw Data의 **Pip 배지 디자인**으로 교체합니다.
+업로드 파일 `SHAW_Punch_20260526_1823.xlsx`의 헤더 44개를 현재 `PUNCH_FIELDS` 레지스트리의 alias 인덱스에 대조한 결과, **3개 헤더만이 매핑 실패**합니다 (나머지는 정상 매핑).
 
-## 시각 변경 (Before → After)
+| Excel 헤더 | 정규화 | 현재 매칭 | 대상 필드 | 문제 |
+|---|---|---|---|---|
+| **Main Cat** | `maincat` | ❌ 없음 | `category1` | alias에 `maincategory`만 있고 `maincat` 없음 |
+| **Sub Cat** | `subcat` | ❌ 없음 | `category2` | alias에 `subcategory`만 있고 `subcat` 없음 |
+| **Actual %** | `actual` | ❌ 없음 | `actual_progress_pct` | alias에 `actualpct`만 있고 `actual` 없음 (현재 importable 컬럼) |
 
-- **Before**: Lucide 아이콘 단일 글리프 (`Circle`, `PlayCircle`, `AlertTriangle`, `CheckCircle2`) + `text-blue-600` / `text-rose-600` 등 직접 색상 클래스
-- **After**: Defect의 `Pip`와 동일한 **원형 배지 1개** (h-4 w-4, border, 글리프 내부 표시)
-  - `completed` → done 스타일: `bg-success border-success text-success-foreground`, 글리프 `●`
-  - `wip` → wip 스타일: `bg-amber-400 border-amber-500 text-white`, 글리프 `◐`
-  - `delay` → hold 스타일: `bg-destructive border-destructive text-destructive-foreground`, 글리프 `⊘`
-  - `planned` → planned 스타일: `bg-transparent border-muted-foreground/40 text-muted-foreground/60`, 글리프 `○`
+그 외 가능성 있는 문제 검토 결과:
+- "Planned %" / "Variance %" / "Health" / "Pre-Eng Ready" / "Pre-Eng Blockers" / "Is Summary" / "Manual Override Fields" / "row_type" → 모두 `readOnly` 또는 매칭됨 → 무해
+- "0.0%" 같은 백분율 문자열 → `coerceNumber`가 이미 `%` 제거 처리 → 무해
+- "Subtask No"="S" (Summary marker) → 기존 파서 로직(`isSummaryMarker`)이 이미 처리 → 무해
+- 헤더가 8행에 위치(상단 7행은 메타데이터) → `parsePunchWorkbook`이 첫 20행을 스캔해 best-match 헤더 자동 감지 → 무해
+- "Parent Item No" → `parentitemno` alias로 정상 매칭
+- 모든 날짜·gate·team 값 → 기존 coercer 처리 가능
 
-## 수정 파일
+## 수정 사항
 
-**`src/lib/punch-progress-icon.ts`**
-- `PUNCH_PROGRESS_ICON`, `PUNCH_PROGRESS_COLOR` 매핑을 Pip 배지용 클래스 맵으로 대체 (또는 신규 export `PUNCH_PROGRESS_PIP_CLASS`, `PUNCH_PROGRESS_GLYPH` 추가)
-- `computePunchProgressState`, `getPunchProgressTooltipLines`, `PUNCH_PROGRESS_LABEL`, `PUNCH_PROGRESS_STATES` 등 로직·상태값·툴팁은 **변경 없음**
+**`src/lib/punch-field-registry.ts`** — 누락된 alias 3개 추가:
 
-**`src/pages/PunchRawDataPage.tsx` (`progress_icon` cell 약 339~360 줄)**
-- 기존 `<Icon className=... />` 렌더링을 Defect `Pip` 와 동일한 `<span className="inline-flex items-center justify-center h-4 w-4 rounded-full text-[10px] font-bold leading-none border ...">{glyph}</span>` 구조로 교체
-- Tooltip 내용·트리거·정렬·필터 동작 모두 유지
-- 컬럼 size 60 유지
+```ts
+// line 119 (category1)
+aliases: ['category1', 'cat1', 'maincategory', 'maincat'],
 
-**`src/components/punch/PunchProgressLegend.tsx`**
-- 4개 상태(Planned / WIP / Delay / Completed) Legend 항목의 아이콘 표시를 동일한 Pip 배지로 교체
-- 텍스트 라벨·"Delay = past planned completion" 부가설명은 유지
+// line 120 (category2)
+aliases: ['category2', 'cat2', 'subcategory', 'subcat'],
+
+// line 142 (actual_progress_pct)
+aliases: ['actualpct', 'actual', 'actualprogress', 'actualprogresspct', 'progress'],
+```
 
 ## 변경하지 않는 것
 
-- 단계 구성(단일 상태) 그대로 유지 — Start/Completion 분해 없음
-- 상태 분류 로직(`computePunchProgressState`) 변경 없음
-- DB, 컬럼 정의, 필터, 정렬, Tooltip 내용 변경 없음
-- 다른 페이지(Dashboard, Detail) 영향 없음
+- `parsePunchWorkbook` 자체 로직 변경 없음 (자동 헤더 감지·readOnly skip·summary marker 처리 모두 이미 동작)
+- DB 스키마, 마이그레이션 없음
+- Admin Header Mappings(DB) 변경 없음 — 코드 alias만 보강
+- 다른 모듈(Defect/Docs) 영향 없음
+
+## 검증
+
+빌드 후 동일 파일을 Punch Import 페이지에서 시험 업로드하여 Column Select 다이얼로그에서 Main Cat / Sub Cat / Actual % 3개 헤더가 각각 Category 1 / Category 2 / Actual % 필드에 자동 매칭되는지 확인합니다.
