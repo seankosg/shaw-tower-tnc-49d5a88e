@@ -181,22 +181,34 @@ async function fetchHeavyAll() {
 
 async function fetchIncremental() {
   if (!state.maxUpdatedAt) return;
-  // Fetch rows changed since last seen updated_at (slim + heavy if heavy is loaded).
+  // Fetch rows changed since last seen (updated_at, id) — using gte + client-side
+  // filtering of already-seen ties avoids OFFSET pagination dropping rows that
+  // share the same updated_at timestamp (a common bulk-import pattern).
   const cols = state.heavyLoaded
     ? `${SLIM_SELECT}, ${HEAVY_COLUMNS.join(', ')}`
     : SLIM_SELECT;
   const pageSize = 1000;
   let from = 0;
+  const cursorAt = state.maxUpdatedAt;
+  const cursorId = state.maxUpdatedId;
   while (true) {
     const { data, error } = await (supabase as any)
       .from('defect_items')
       .select(cols)
-      .gt('updated_at', state.maxUpdatedAt)
+      .gte('updated_at', cursorAt)
       .order('updated_at', { ascending: true })
+      .order('id', { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throw error;
-    const rows = (data ?? []) as any[];
-    if (rows.length === 0) break;
+    const rawRows = (data ?? []) as any[];
+    if (rawRows.length === 0) break;
+
+    // Filter out rows we've already processed (same updated_at and id <= cursor).
+    const rows = rawRows.filter((r) => {
+      if (!cursorId) return true;
+      if (r.updated_at !== cursorAt) return true;
+      return String(r.id) > cursorId;
+    });
 
     // Drop deactivated rows.
     for (const r of rows) {
@@ -204,11 +216,11 @@ async function fetchIncremental() {
     }
     const active = rows.filter((r) => r.is_active);
     if (active.length) mergeRows(active);
-    else {
+    else if (rows.length) {
       trackUpdated(rows);
       rebuildList();
     }
-    if (rows.length < pageSize) break;
+    if (rawRows.length < pageSize) break;
     from += pageSize;
   }
 }
