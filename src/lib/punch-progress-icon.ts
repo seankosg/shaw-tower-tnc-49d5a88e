@@ -8,6 +8,7 @@
  *   4. Planned  — otherwise
  */
 import { AlertTriangle, CheckCircle2, Circle, PlayCircle, type LucideIcon } from 'lucide-react';
+import { formatDdMmm } from '@/lib/format';
 
 export type PunchProgressState = 'planned' | 'wip' | 'delay' | 'completed';
 
@@ -15,8 +16,11 @@ export interface PunchProgressInput {
   actual_progress_pct?: number | null;
   actual_start_date?: string | null;
   actual_completion_date?: string | null;
+  planned_start_date?: string | null;
   planned_completion_date?: string | null;
 }
+
+export const PUNCH_PROGRESS_STATES: PunchProgressState[] = ['planned', 'wip', 'delay', 'completed'];
 
 export function computePunchProgressState(
   row: PunchProgressInput,
@@ -56,3 +60,58 @@ export const PUNCH_PROGRESS_COLOR: Record<PunchProgressState, string> = {
   delay: 'text-rose-600 dark:text-rose-400',
   completed: 'text-emerald-600 dark:text-emerald-400',
 };
+
+export interface PunchProgressTooltipLine {
+  label: string;
+  value: string;
+  muted?: boolean;
+}
+
+function daysBetween(fromIso: string, toIso: string): number {
+  const a = Date.UTC(
+    Number(fromIso.slice(0, 4)),
+    Number(fromIso.slice(5, 7)) - 1,
+    Number(fromIso.slice(8, 10)),
+  );
+  const b = Date.UTC(
+    Number(toIso.slice(0, 4)),
+    Number(toIso.slice(5, 7)) - 1,
+    Number(toIso.slice(8, 10)),
+  );
+  return Math.round((b - a) / 86_400_000);
+}
+
+export function getPunchProgressTooltipLines(
+  row: PunchProgressInput,
+  asOf?: string | Date | null,
+): PunchProgressTooltipLine[] {
+  const state = computePunchProgressState(row, asOf);
+  const today = asOf
+    ? typeof asOf === 'string' ? asOf.slice(0, 10) : asOf.toISOString().slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+  const lines: PunchProgressTooltipLine[] = [
+    { label: 'State', value: PUNCH_PROGRESS_LABEL[state] },
+  ];
+  if (row.actual_progress_pct != null && row.actual_progress_pct !== undefined) {
+    lines.push({ label: 'Progress', value: `${Math.round(Number(row.actual_progress_pct))}%` });
+  }
+  if (row.planned_start_date) {
+    lines.push({ label: 'Planned Start', value: formatDdMmm(row.planned_start_date), muted: true });
+  }
+  if (row.actual_start_date) {
+    lines.push({ label: 'Actual Start', value: formatDdMmm(row.actual_start_date) });
+  }
+  if (row.planned_completion_date) {
+    lines.push({ label: 'Planned Comp.', value: formatDdMmm(row.planned_completion_date), muted: true });
+  }
+  if (row.actual_completion_date) {
+    lines.push({ label: 'Actual Comp.', value: formatDdMmm(row.actual_completion_date) });
+  }
+  if (state === 'delay' && row.planned_completion_date) {
+    const days = daysBetween(row.planned_completion_date.slice(0, 10), today);
+    if (days > 0) {
+      lines.push({ label: 'Overdue by', value: `${days} day${days === 1 ? '' : 's'}` });
+    }
+  }
+  return lines;
+}
