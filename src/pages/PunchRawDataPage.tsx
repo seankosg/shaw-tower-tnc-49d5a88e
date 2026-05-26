@@ -111,7 +111,7 @@ type PunchItem = Database['public']['Tables']['punch_items']['Row'];
 
 const PAGE_SIZE = 1000;
 const ZIP_THRESHOLD = 7;
-const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
+const DEFAULT_SORTING: SortingState = [{ id: 'summary_no', desc: false }];
 
 const DATE_FIELDS = new Set(
   PUNCH_FIELDS.filter((f) => f.dataType === 'date').map((f) => f.field),
