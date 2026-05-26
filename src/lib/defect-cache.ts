@@ -338,9 +338,16 @@ export function invalidateDefectCache() {
   state.byId.clear();
   state.list = [];
   state.maxUpdatedAt = null;
+  state.maxUpdatedId = null;
   state.heavyLoaded = false;
   state.initialLoaded = false;
   emit();
+}
+
+/** Hard reset + immediate full reload. Use to recover from any cache drift. */
+export async function reloadDefectCache(opts: { withHeavy?: boolean } = {}) {
+  invalidateDefectCache();
+  await ensureDefectCache(opts);
 }
 
 /**
