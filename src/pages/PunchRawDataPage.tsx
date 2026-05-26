@@ -339,6 +339,7 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
     case 'progress_icon': {
       const state = computePunchProgressState(row as any);
       const Icon = PUNCH_PROGRESS_ICON[state];
+      const lines = getPunchProgressTooltipLines(row as any);
       return (
         <TooltipProvider delayDuration={150}>
           <Tooltip>
@@ -347,7 +348,16 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
                 <Icon className={cn('h-4 w-4', PUNCH_PROGRESS_COLOR[state])} aria-label={PUNCH_PROGRESS_LABEL[state]} />
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top" className="text-xs">{PUNCH_PROGRESS_LABEL[state]}</TooltipContent>
+            <TooltipContent side="right" className="text-xs">
+              <div className="space-y-0.5">
+                {lines.map((ln, i) => (
+                  <div key={i}>
+                    <span className="font-medium">{ln.label}:</span>{' '}
+                    <span className={ln.muted ? 'text-muted-foreground' : undefined}>{ln.value}</span>
+                  </div>
+                ))}
+              </div>
+            </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       );
