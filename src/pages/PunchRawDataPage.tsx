@@ -1268,6 +1268,11 @@ export default function PunchRawDataPage() {
         tableRef={tableRef}
       />
 
+      <div className="flex justify-end px-1">
+        <PunchProgressLegend />
+      </div>
+
+
 
       <Dialog
         open={exportDialogOpen}
