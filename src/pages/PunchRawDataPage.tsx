@@ -632,12 +632,12 @@ export default function PunchRawDataPage() {
   // ── All field ids (registry + Field Config dynamic), regardless of visibility.
   //    Visibility/order is applied via React Table state below, mirroring DefectRawDataPage.
   const allFieldIds = useMemo(() => {
-    const known = new Set([...PUNCH_FIELDS.map((f) => f.field), 'row_type']);
+    const known = new Set([...PUNCH_FIELDS.map((f) => f.field), 'row_type', 'progress_icon']);
     const dynamic = configRows
       .filter((r) => r.is_enabled && !known.has(r.field_name))
       .map((r) => r.field_name);
-    // 'row_type' is a virtual filter column (Summary / Subtask / Standalone)
-    return ['row_type', ...PUNCH_FIELDS.map((f) => f.field), ...dynamic];
+    // 'row_type' & 'progress_icon' are virtual columns (no DB column)
+    return ['row_type', 'progress_icon', ...PUNCH_FIELDS.map((f) => f.field), ...dynamic];
   }, [configRows]);
 
   // ── Option fields for multi-select filters ───────────────────────────────
