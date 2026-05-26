@@ -362,6 +362,19 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
         </TooltipProvider>
       );
     }
+    case 'completion_status': {
+      const r = row as any;
+      const effective = (value && String(value)) || (r.actual_completion_date ? 'Done' : '');
+      if (!effective) return <span className="text-muted-foreground">—</span>;
+      if (effective === 'Done') {
+        return (
+          <span className="inline-flex items-center rounded border border-border bg-muted px-1.5 py-0 text-[10px] font-medium text-muted-foreground">
+            Done
+          </span>
+        );
+      }
+      return <span className="text-xs">{effective}</span>;
+    }
     case 'health_status':
       return <HealthBadge status={(value as PunchHealthStatus) ?? null} />;
     case 'pre_engineering_ready':
