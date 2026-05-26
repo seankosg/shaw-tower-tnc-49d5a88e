@@ -403,7 +403,10 @@ function renderPlainCell(value: any, def: PunchFieldDef | null) {
 }
 
 const SIZE_BY_FIELD: Record<string, number> = {
+  summary_no: 110,
+  subtask_no: 90,
   item_no: 110,
+
   outstanding_work: 280,
   location: 130,
   level: 80,
