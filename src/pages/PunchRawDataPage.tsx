@@ -307,6 +307,12 @@ function renderCell(row: PunchItem, field: string, def: PunchFieldDef | null, va
     );
   }
   switch (field) {
+    case 'subtask_stage':
+      return value ? (
+        <span className="text-xs">{SUBTASK_STAGE_LABEL[value as SubtaskStage] ?? String(value)}</span>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
     case 'health_status':
       return <HealthBadge status={(value as PunchHealthStatus) ?? null} />;
     case 'pre_engineering_ready':
