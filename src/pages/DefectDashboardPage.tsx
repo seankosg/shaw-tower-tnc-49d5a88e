@@ -693,13 +693,16 @@ export default function DefectDashboardPage() {
                         <button
                           type="button"
                           title="Export to Excel"
-                          onClick={() => exportHdecCatBReasons({
-                            reasons: sorted,
-                            meta: {
-                              userName: profile?.name || profile?.login_id || 'Unknown',
-                              userType: (profile as any)?.user_type ?? '',
-                            },
-                          })}
+                          onClick={async () => {
+                            const { exportHdecCatBReasons } = await import('@/lib/defect-cat-b-reason-export');
+                            exportHdecCatBReasons({
+                              reasons: sorted,
+                              meta: {
+                                userName: profile?.name || profile?.login_id || 'Unknown',
+                                userType: (profile as any)?.user_type ?? '',
+                              },
+                            });
+                          }}
                           className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/60 hover:text-foreground transition"
                         >
                           <Download className="h-3 w-3" />
