@@ -378,13 +378,13 @@ export async function ensureDefectCache(opts: { withHeavy?: boolean } = {}) {
         state.loading = false;
         emit();
       }
-      // Heavy load runs in background; do not await unless caller asks.
+      // Heavy load runs in background only when the caller opts in. The
+      // Dashboard does not need description/remarks/comments/payload columns,
+      // so skipping this saves a full second pass over all rows + memory.
       if (opts.withHeavy && !state.heavyLoaded) {
         fetchHeavyAll().catch(() => undefined);
-      } else {
-        // Default: still kick off heavy in background so columns fill in.
-        fetchHeavyAll().catch(() => undefined);
       }
+
     }
   } else {
     // Background refresh (incremental).

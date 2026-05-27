@@ -174,6 +174,38 @@ export function maxDelayDays(item: DefectForDashboard, asOfDate: string): number
 
 export type DefectPlanMode = 'baseline' | 'remaining';
 
+function emptyMetrics(): DefectPlanActualMetrics {
+  return { cumPlan: 0, cumActual: 0, dataDatePlan: 0, dataDateActual: 0, dataDateDelay: 0, todayPlan: 0, todayActual: 0, todayDelay: 0 };
+}
+
+/**
+ * Accumulate a single item's contribution into a metrics bucket for one stage.
+ * Inlined helpers (no isStageDone function call) and uses precomputed done flag.
+ */
+function accumStage(
+  m: DefectPlanActualMetrics,
+  plan: string | null,
+  actual: string | null,
+  done: boolean,
+  today: string,
+  dataDate: string,
+  planMode: DefectPlanMode,
+): void {
+  const countPlan = planMode === 'baseline' || !done;
+  if (plan && countPlan && plan <= dataDate) m.cumPlan++;
+  if (actual && actual <= dataDate) m.cumActual++;
+  if (plan === dataDate) {
+    if (countPlan) m.dataDatePlan++;
+    if (!done) m.dataDateDelay++;
+  }
+  if (actual === dataDate) m.dataDateActual++;
+  if (plan === today) {
+    if (countPlan) m.todayPlan++;
+    if (!done) m.todayDelay++;
+  }
+  if (actual === today) m.todayActual++;
+}
+
 function calcMetrics(
   items: DefectForDashboard[],
   stage: DefectDashboardStage,
@@ -181,27 +213,29 @@ function calcMetrics(
   dataDate: string,
   planMode: DefectPlanMode = 'baseline',
 ): DefectPlanActualMetrics {
-  let cumPlan = 0, cumActual = 0, dataDatePlan = 0, dataDateActual = 0, dataDateDelay = 0, todayPlan = 0, todayActual = 0, todayDelay = 0;
+  const m = emptyMetrics();
   for (const item of items) {
     const plan = getStagePlanDate(item, stage);
     const actual = getStageActualDate(item, stage);
     const done = isStageDone(item, stage);
-    // Remaining mode drops plans for stages already done as of the respective reference date.
-    const countCumPlan = planMode === 'baseline' || !done;
-    const countDataDatePlan = planMode === 'baseline' || !done;
-    const countTodayPlan = planMode === 'baseline' || !done;
-    if (plan && plan <= dataDate && countCumPlan) cumPlan++;
-    if (actual && actual <= dataDate) cumActual++;
-    if (plan === dataDate && countDataDatePlan) dataDatePlan++;
-    if (actual === dataDate) dataDateActual++;
-    if (plan === dataDate && !done) dataDateDelay++;
-    if (plan === today && countTodayPlan) todayPlan++;
-    if (actual === today) todayActual++;
-    if (plan === today && !done) todayDelay++;
+    accumStage(m, plan, actual, done, today, dataDate, planMode);
   }
-  return { cumPlan, cumActual, dataDatePlan, dataDateActual, dataDateDelay, todayPlan, todayActual, todayDelay };
+  return m;
 }
 
+interface GroupAccum {
+  key: string;
+  rows: number;
+  completion: DefectPlanActualMetrics;
+  closure: DefectPlanActualMetrics;
+}
+
+/**
+ * Single-pass, O(N) aggregator. Replaces the previous implementation that
+ * built per-group arrays via array-spread (O(N²)) then re-iterated for each
+ * stage. Walks every item once, accumulating completion and closure metrics
+ * directly into the group bucket.
+ */
 export function aggregateDefectPlanActualByGroup(
   items: DefectForDashboard[],
   today: string,
@@ -210,22 +244,42 @@ export function aggregateDefectPlanActualByGroup(
   groupLabel: (key: string) => string,
   planMode: DefectPlanMode = 'baseline',
 ): DefectPlanActualRow[] {
-  const buckets = new Map<string, DefectForDashboard[]>();
+  const buckets = new Map<string, GroupAccum>();
   for (const item of items) {
     const key = groupKey(item) || NONE_LABEL;
-    buckets.set(key, [...(buckets.get(key) ?? []), item]);
+    let g = buckets.get(key);
+    if (!g) {
+      g = { key, rows: 0, completion: emptyMetrics(), closure: emptyMetrics() };
+      buckets.set(key, g);
+    }
+    g.rows++;
+    // Completion stage
+    const cPlan = item.planned_completion_date;
+    const cActual = item.actual_completion_date;
+    const cDone = isStageDone(item, 'completion');
+    accumStage(g.completion, cPlan, cActual, cDone, today, dataDate, planMode);
+    // Closure stage
+    const zPlan = item.planned_closure_date;
+    const zActual = item.actual_closure_date;
+    const zDone = isStageDone(item, 'closure');
+    accumStage(g.closure, zPlan, zActual, zDone, today, dataDate, planMode);
   }
-  return [...buckets.entries()].map(([key, rows]) => ({
-    key,
-    label: groupLabel(key),
-    totalDefects: rows.length,
-    completion: calcMetrics(rows, 'completion', today, dataDate, planMode),
-    closure: calcMetrics(rows, 'closure', today, dataDate, planMode),
-  })).sort((a, b) => {
+  const out: DefectPlanActualRow[] = [];
+  for (const g of buckets.values()) {
+    out.push({
+      key: g.key,
+      label: groupLabel(g.key),
+      totalDefects: g.rows,
+      completion: g.completion,
+      closure: g.closure,
+    });
+  }
+  out.sort((a, b) => {
     const va = (a.completion.cumActual - a.completion.cumPlan) + (a.closure.cumActual - a.closure.cumPlan);
     const vb = (b.completion.cumActual - b.completion.cumPlan) + (b.closure.cumActual - b.closure.cumPlan);
     return va - vb || a.label.localeCompare(b.label);
   });
+  return out;
 }
 
 /** Difference metrics = completion − closure (검측 대기 적체 지표) */

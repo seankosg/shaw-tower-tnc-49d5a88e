@@ -3,9 +3,9 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { exportHdecCatBReasons } from '@/lib/defect-cat-b-reason-export';
-import { exportDefectSCurveToExcel } from '@/lib/scurve-excel-export';
-import { exportCapturedByToExcel } from '@/lib/defect-captured-by-export';
+// Excel exporters are dynamically imported inside their handlers below to
+// keep them out of the Dashboard's initial JS bundle.
+
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, AlertOctagon, AlertTriangle, CalendarIcon, CheckCircle2, ChevronDown, ChevronRight, Clock, Download, Filter, ListChecks, ShieldCheck, TrendingUp } from 'lucide-react';
 import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ReferenceLine, XAxis, YAxis } from 'recharts';
@@ -44,7 +44,7 @@ import {
   isActualComplete,
   isAtRisk,
   isClosureComplete,
-  isOverdue,
+  // isOverdue replaced by inline per-stage flags in the single-pass KPI reducer.
   isStageDelayedAsOf,
   maxDelayDays,
   todayIso,
@@ -216,80 +216,121 @@ export default function DefectDashboardPage() {
   );
 
   const kpis = useMemo(() => {
-    const total = filteredItems.length;
-    const actualDone = filteredItems.filter(isActualComplete).length;
-    const closureDone = filteredItems.filter(isClosureComplete).length;
+    const CAT_A = 'Cat A - Major Defect (Before SC)';
+    const CAT_B = 'Cat B - Minor Defect';
+    const bucketInit = () => ({ total: 0, completion: 0, closure: 0, overdue: 0 });
+    const totalB = bucketInit();
+    const catAB = bucketInit();
+    const catBB = bucketInit();
+    const noCatB = bucketInit();
+    let total = 0, actualDone = 0, closureDone = 0;
+    let overdueCount = 0, atRiskCount = 0;
+    let startOverdue = 0, completionOverdue = 0, closureOverdue = 0;
+    let inDisputeCount = 0;
+    let llCatADispute = 0, hdecCatADispute = 0, diffCount = 0;
+    const hdecCatBReasonMap = new Map<string, number>();
+
+    for (const item of filteredItems as any[]) {
+      total++;
+      const aDone = isActualComplete(item);
+      const cDone = isClosureComplete(item);
+      if (aDone) actualDone++;
+      if (cDone) closureDone++;
+      const sOver = isStageDelayedAsOf(item, 'start', dataDate);
+      const cOver = isStageDelayedAsOf(item, 'completion', dataDate);
+      const zOver = isStageDelayedAsOf(item, 'closure', dataDate);
+      if (sOver) startOverdue++;
+      if (cOver) completionOverdue++;
+      if (zOver) closureOverdue++;
+      if (sOver || cOver || zOver) overdueCount++;
+      if (!sOver && !cOver && !zOver && isAtRisk(item, today, atRiskDays)) atRiskCount++;
+      if (item.closure_status === 'InD') inDisputeCount++;
+
+      // priority buckets
+      const pri = item.priority;
+      const bkt = pri === CAT_A ? catAB : pri === CAT_B ? catBB : !pri ? noCatB : null;
+      const accumBucket = (b: typeof totalB) => {
+        b.total++;
+        if (aDone) b.completion++;
+        if (cDone) b.closure++;
+        if (cOver) b.overdue++;
+      };
+      accumBucket(totalB);
+      if (bkt) accumBucket(bkt);
+
+      // dispute (closure not done)
+      if (!cDone) {
+        const ll = pri === CAT_A;
+        const hd = item.hdec_verification === CAT_A;
+        if (ll) llCatADispute++;
+        if (hd) hdecCatADispute++;
+        if (ll !== hd) diffCount++;
+        if (item.hdec_verification === CAT_B) {
+          const raw = item.hdec_reason;
+          const key = (raw == null ? '' : String(raw).trim()) || '__EMPTY__';
+          hdecCatBReasonMap.set(key, (hdecCatBReasonMap.get(key) ?? 0) + 1);
+        }
+      }
+    }
+
+    const finalize = (b: typeof totalB) => ({
+      total: b.total,
+      completion: b.completion,
+      closure: b.closure,
+      completionPct: b.total ? Math.round((b.completion / b.total) * 1000) / 10 : 0,
+      closurePct: b.total ? Math.round((b.closure / b.total) * 1000) / 10 : 0,
+      overdue: b.overdue,
+    });
+
     const completionPct = total ? Math.round((actualDone / total) * 1000) / 10 : 0;
     const overallProgressPct = total ? Math.round((closureDone / total) * 1000) / 10 : 0;
     const difference = actualDone - closureDone;
-    const overdueCount = filteredItems.filter((item) => isOverdue(item, dataDate)).length;
-    const atRiskCount = filteredItems.filter((item) => isAtRisk(item, today, atRiskDays)).length;
-    const startOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'start', dataDate)).length;
-    const completionOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'completion', dataDate)).length;
-    const closureOverdue = filteredItems.filter((item) => isStageDelayedAsOf(item, 'closure', dataDate)).length;
-    const inDisputeCount = filteredItems.filter((item) => item.closure_status === 'InD').length;
-
-    // Priority 분류별 집계 (Cat A / Cat B / No Cat / Total)
-    const CAT_A = 'Cat A - Major Defect (Before SC)';
-    const CAT_B = 'Cat B - Minor Defect';
-    const bucketize = (rows: typeof filteredItems) => {
-      const t = rows.length;
-      const c = rows.filter(isActualComplete).length;
-      const z = rows.filter(isClosureComplete).length;
-      const od = rows.filter((i) => isStageDelayedAsOf(i, 'completion', dataDate)).length;
-      return {
-        total: t,
-        completion: c,
-        closure: z,
-        completionPct: t ? Math.round((c / t) * 1000) / 10 : 0,
-        closurePct: t ? Math.round((z / t) * 1000) / 10 : 0,
-        overdue: od,
-      };
-    };
-    const catA = filteredItems.filter((i) => (i as any).priority === CAT_A);
-    const catB = filteredItems.filter((i) => (i as any).priority === CAT_B);
-    const noCat = filteredItems.filter((i) => !(i as any).priority);
-    const byPriority = {
-      total: bucketize(filteredItems),
-      catA: bucketize(catA),
-      catB: bucketize(catB),
-      noCat: bucketize(noCat),
-    };
-
-    // Dispute summary: rows whose closure is not yet 'Done'.
-    const notDone = (i: any) => i.closure_status !== 'Done';
-    const llCatADispute = filteredItems.filter((i) => (i as any).priority === CAT_A && notDone(i)).length;
-    const hdecCatADispute = filteredItems.filter((i) => (i as any).hdec_verification === CAT_A && notDone(i)).length;
-    const hdecCatBReasonMap = new Map<string, number>();
-    for (const i of filteredItems) {
-      if (!notDone(i)) continue;
-      if ((i as any).hdec_verification !== CAT_B) continue;
-      const raw = (i as any).hdec_reason;
-      const key = (raw == null ? '' : String(raw).trim()) || '__EMPTY__';
-      hdecCatBReasonMap.set(key, (hdecCatBReasonMap.get(key) ?? 0) + 1);
-    }
     const hdecCatBReasons = Array.from(hdecCatBReasonMap.entries())
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-    // Difference: outstanding rows where LL Cat A classification differs from HDEC (XOR).
-    const diffCount = filteredItems.filter((i) => {
-      if (!notDone(i)) return false;
-      const ll = (i as any).priority === CAT_A;
-      const hd = (i as any).hdec_verification === CAT_A;
-      return ll !== hd;
-    }).length;
-    const dispute = { llCatA: llCatADispute, hdecCatA: hdecCatADispute, diff: diffCount, hdecCatBReasons };
 
-    return { total, actualDone, closureDone, difference, completionPct, overallProgressPct, overdueCount, atRiskCount, startOverdue, completionOverdue, closureOverdue, inDisputeCount, byPriority, dispute };
+    return {
+      total, actualDone, closureDone, difference,
+      completionPct, overallProgressPct,
+      overdueCount, atRiskCount,
+      startOverdue, completionOverdue, closureOverdue, inDisputeCount,
+      byPriority: { total: finalize(totalB), catA: finalize(catAB), catB: finalize(catBB), noCat: finalize(noCatB) },
+      dispute: { llCatA: llCatADispute, hdecCatA: hdecCatADispute, diff: diffCount, hdecCatBReasons },
+    };
   }, [filteredItems, today, dataDate, atRiskDays]);
 
 
-  const bySubTrade = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.sub_trade ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
-  const bySubcon = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.subcontractor_name ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
-  const bySubsub = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.subsub_name ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
-  const byHdec = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.hdec_pic_name ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
-  const byHdecEng = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => (i as any).hdec_eng_name ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
-  const byTeam = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.team ?? NONE_LABEL, k => k === NONE_LABEL ? k : (TEAM_LABELS[k as keyof typeof TEAM_LABELS] ?? k), planMode), [filteredItems, today, dataDate, planMode]);
-  const byWorkType = useMemo(() => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => (i as any).work_type ?? NONE_LABEL, k => k, planMode), [filteredItems, today, dataDate, planMode]);
+  // Compute only the breakdown that's currently visible — was previously all 7 tabs.
+  // Each aggregate is O(N); computing 7 of them per filter change was the dominant cost.
+  const TAB_TO_GROUP: Record<string, { groupKey: (i: any) => string; groupLabel?: (k: string) => string } | null> = {
+    subTrade: { groupKey: i => i.sub_trade ?? NONE_LABEL },
+    subcon: { groupKey: i => i.subcontractor_name ?? NONE_LABEL },
+    subsub: { groupKey: i => i.subsub_name ?? NONE_LABEL },
+    hdec: { groupKey: i => i.hdec_pic_name ?? NONE_LABEL },
+    hdecEng: { groupKey: i => i.hdec_eng_name ?? NONE_LABEL },
+    team: { groupKey: i => i.team ?? NONE_LABEL, groupLabel: k => k === NONE_LABEL ? k : (TEAM_LABELS[k as keyof typeof TEAM_LABELS] ?? k) },
+    workType: { groupKey: i => i.work_type ?? NONE_LABEL },
+  };
+
+  // Sub Trade is ALWAYS needed (for filter chips / dropdown options) even when another tab is active.
+  const bySubTrade = useMemo(
+    () => aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, i => i.sub_trade ?? NONE_LABEL, k => k, planMode),
+    [filteredItems, today, dataDate, planMode],
+  );
+  const activeBreakdown = useMemo(() => {
+    if (breakdownTab === 'subTrade') return null; // use bySubTrade
+    const def = TAB_TO_GROUP[breakdownTab];
+    if (!def) return null;
+    return aggregateDefectPlanActualByGroup(filteredItems, today, dataDate, def.groupKey, def.groupLabel ?? (k => k), planMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredItems, today, dataDate, planMode, breakdownTab]);
+  // Backwards-compatible names used in the JSX below — only the active one carries data.
+  const EMPTY_ROWS: DefectPlanActualRow[] = [];
+  const bySubcon = breakdownTab === 'subcon' ? (activeBreakdown ?? EMPTY_ROWS) : EMPTY_ROWS;
+  const bySubsub = breakdownTab === 'subsub' ? (activeBreakdown ?? EMPTY_ROWS) : EMPTY_ROWS;
+  const byHdec = breakdownTab === 'hdec' ? (activeBreakdown ?? EMPTY_ROWS) : EMPTY_ROWS;
+  const byHdecEng = breakdownTab === 'hdecEng' ? (activeBreakdown ?? EMPTY_ROWS) : EMPTY_ROWS;
+  const byTeam = breakdownTab === 'team' ? (activeBreakdown ?? EMPTY_ROWS) : EMPTY_ROWS;
+  const byWorkType = breakdownTab === 'workType' ? (activeBreakdown ?? EMPTY_ROWS) : EMPTY_ROWS;
   const subTradeFilterOptions = useMemo(() => Array.from(new Set(bySubTrade.map(row => row.label))).sort((a, b) => a.localeCompare(b)), [bySubTrade]);
   const filteredBySubTrade = useMemo(() => {
     const text = subTradeTextFilter.trim().toLowerCase();
@@ -325,16 +366,24 @@ export default function DefectDashboardPage() {
     return filteredItems.filter(it => scurveGroupValues.includes(getDefectGroupKey(it, scurveGroup)));
   }, [filteredItems, scurveGroup, scurveGroupValues]);
 
-  const scurve: DefectSCurveResult = useMemo(() => buildDefectSCurve(scurveItems, {
-    granularity: scurveBucket,
-    startDate: scurveStart,
-    endDate: scurveEnd,
-    today,
-    stage: scurveStage === 'all' ? 'completion' : scurveStage,
-    groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
-    planMode,
-  }), [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup, planMode]);
+  // Only build the S-Curve when the section is open. Saves a full pass over
+  // all items + bucket map allocation on every filter change.
+  const EMPTY_SCURVE: DefectSCurveResult = { buckets: [], bucketLabels: [], todayIndex: -1, total: { key: '__total__', label: 'Total', plan: [], actual: [], variance: [] }, groups: [], stage: 'completion' as DefectScheduleStage };
+  const scurve: DefectSCurveResult = useMemo(() => {
+    if (!scurveOpen) return EMPTY_SCURVE;
+    return buildDefectSCurve(scurveItems, {
+      granularity: scurveBucket,
+      startDate: scurveStart,
+      endDate: scurveEnd,
+      today,
+      stage: scurveStage === 'all' ? 'completion' : scurveStage,
+      groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
+      planMode,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scurveOpen, scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup, planMode]);
   const scurveAll: DefectSCurveAllResult | null = useMemo(() => {
+    if (!scurveOpen) return null;
     if (scurveStage !== 'all') return null;
     return buildDefectSCurveAllStages(scurveItems, {
       granularity: scurveBucket,
@@ -344,7 +393,8 @@ export default function DefectDashboardPage() {
       groupBy: scurveGroup === SCURVE_GROUP_NONE ? null : scurveGroup,
       planMode,
     });
-  }, [scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup, planMode]);
+  }, [scurveOpen, scurveItems, scurveBucket, scurveStart, scurveEnd, today, scurveStage, scurveGroup, planMode]);
+
 
   const handleSCurveExport = async () => {
     const hasData = scurveStage === 'all' ? (scurveAll?.buckets.length ?? 0) > 0 : scurve.buckets.length > 0;
@@ -360,6 +410,7 @@ export default function DefectDashboardPage() {
         ['Plan mode', planMode === 'remaining' ? 'Remaining' : 'Baseline'],
       ];
       if (scurveGroupValues.length > 0) filters.push(['Group values', scurveGroupValues.join(', ')]);
+      const { exportDefectSCurveToExcel } = await import('@/lib/scurve-excel-export');
       const { rowCount, fileName } = await exportDefectSCurveToExcel({
         stage: scurveStage,
         single: scurveStage === 'all' ? undefined : scurve,
@@ -642,13 +693,16 @@ export default function DefectDashboardPage() {
                         <button
                           type="button"
                           title="Export to Excel"
-                          onClick={() => exportHdecCatBReasons({
-                            reasons: sorted,
-                            meta: {
-                              userName: profile?.name || profile?.login_id || 'Unknown',
-                              userType: (profile as any)?.user_type ?? '',
-                            },
-                          })}
+                          onClick={async () => {
+                            const { exportHdecCatBReasons } = await import('@/lib/defect-cat-b-reason-export');
+                            exportHdecCatBReasons({
+                              reasons: sorted,
+                              meta: {
+                                userName: profile?.name || profile?.login_id || 'Unknown',
+                                userType: (profile as any)?.user_type ?? '',
+                              },
+                            });
+                          }}
                           className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/60 hover:text-foreground transition"
                         >
                           <Download className="h-3 w-3" />
@@ -1254,7 +1308,8 @@ function CapturedByStatsSection({
   const filtersActive = nameFilter.length > 0 || activeTab !== 'All';
 
   const { profile } = useAuth();
-  const handleExport = () => {
+  const handleExport = async () => {
+    const { exportCapturedByToExcel } = await import('@/lib/defect-captured-by-export');
     exportCapturedByToExcel({
       rows: visibleRows.map((r) => ({
         name: r.name,

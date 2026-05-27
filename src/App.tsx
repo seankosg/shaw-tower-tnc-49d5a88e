@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -26,7 +27,9 @@ import ScheduleRevisionPage from "./pages/ScheduleRevisionPage";
 import AdminPage from "./pages/AdminPage";
 import AdminClassificationPage from "./pages/AdminClassificationPage";
 import AdminReportPage from "./pages/admin/AdminReportPage";
-import DefectDashboardPage from "./pages/DefectDashboardPage";
+// DefectDashboardPage is the heaviest single page (recharts + ~2.3k LoC).
+// Lazy-load it so the initial app bundle stays small and other pages render faster.
+const DefectDashboardPage = lazy(() => import("./pages/DefectDashboardPage"));
 import DefectProgressPage from "./pages/DefectProgressPage";
 import DefectSimulationPage from "./pages/DefectSimulationPage";
 import TncSimulationPage from "./pages/TncSimulationPage";
@@ -125,7 +128,7 @@ const App = () => (
                 <Route path="/tc/quick-update" element={<MobileUpdatePage />} />
                 <Route path="/tc/simulation" element={<TncSimulationPage />} />
                 <Route path="/subtests/:id" element={<SubtestDetail />} />
-                <Route path="/defects/dashboard" element={<DefectDashboardPage />} />
+                <Route path="/defects/dashboard" element={<Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading defect dashboard…</div>}><DefectDashboardPage /></Suspense>} />
                 <Route path="/defects/progress" element={<DefectProgressPage />} />
                 <Route path="/defects/simulation" element={<DefectSimulationPage />} />
                 <Route path="/defects/schedule-revision" element={<DefectScheduleRevisionPage />} />

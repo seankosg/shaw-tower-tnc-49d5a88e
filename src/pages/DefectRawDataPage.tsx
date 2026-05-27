@@ -401,7 +401,7 @@ export default function DefectRawDataPage() {
   const { dataDate } = useLatestDataDate();
   const storageKey = user?.id ? `defect-raw-data-state:${user.id}` : 'defect-raw-data-state:anon';
   const { isFieldVisible, getLabel, sortFieldNames, fields: fieldConfigRows, getSourceOrigin } = useDefectFieldConfig();
-  const { items: cachedItems, initialLoaded } = useDefectCache();
+  const { items: cachedItems, initialLoaded } = useDefectCache({ withHeavy: true });
   const items = cachedItems as DefectRawRow[];
   const loading = !initialLoaded;
   const [stateLoaded, setStateLoaded] = useState(false);
