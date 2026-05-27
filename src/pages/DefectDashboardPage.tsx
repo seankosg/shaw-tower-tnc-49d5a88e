@@ -1308,7 +1308,8 @@ function CapturedByStatsSection({
   const filtersActive = nameFilter.length > 0 || activeTab !== 'All';
 
   const { profile } = useAuth();
-  const handleExport = () => {
+  const handleExport = async () => {
+    const { exportCapturedByToExcel } = await import('@/lib/defect-captured-by-export');
     exportCapturedByToExcel({
       rows: visibleRows.map((r) => ({
         name: r.name,
