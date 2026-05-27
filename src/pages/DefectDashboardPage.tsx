@@ -3,9 +3,9 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { AutoRefreshControl } from '@/components/dashboard/AutoRefreshControl';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { exportHdecCatBReasons } from '@/lib/defect-cat-b-reason-export';
-import { exportDefectSCurveToExcel } from '@/lib/scurve-excel-export';
-import { exportCapturedByToExcel } from '@/lib/defect-captured-by-export';
+// Excel exporters are dynamically imported inside their handlers below to
+// keep them out of the Dashboard's initial JS bundle.
+
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, AlertOctagon, AlertTriangle, CalendarIcon, CheckCircle2, ChevronDown, ChevronRight, Clock, Download, Filter, ListChecks, ShieldCheck, TrendingUp } from 'lucide-react';
 import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ReferenceLine, XAxis, YAxis } from 'recharts';
