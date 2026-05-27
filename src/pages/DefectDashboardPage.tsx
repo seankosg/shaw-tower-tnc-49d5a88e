@@ -446,8 +446,8 @@ export default function DefectDashboardPage() {
     }
   };
   const topOverdue = useMemo(() => filteredItems.map(item => ({ item, delay: maxDelayDays(item, dataDate) })).filter(row => row.delay > 0 && !isClosureComplete(row.item)).sort((a, b) => b.delay - a.delay).slice(0, 10), [filteredItems, dataDate]);
-  const actualPie = useMemo(() => buildActualPie(filteredItems), [filteredItems]);
-  const closurePie = useMemo(() => buildClosurePie(filteredItems), [filteredItems]);
+  // Note: actualPie/closurePie removed — dead code (computed but never rendered).
+  // buildActualPie/buildClosurePie/PieBlock retained at bottom for potential reuse.
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
