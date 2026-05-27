@@ -44,7 +44,7 @@ import {
   isActualComplete,
   isAtRisk,
   isClosureComplete,
-  isOverdue,
+  // isOverdue replaced by inline per-stage flags in the single-pass KPI reducer.
   isStageDelayedAsOf,
   maxDelayDays,
   todayIso,
