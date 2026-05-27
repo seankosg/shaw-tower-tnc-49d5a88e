@@ -117,7 +117,20 @@ export default function DefectDashboardPage() {
     return raw.split(',').map(s => s.trim()).filter(Boolean);
   });
   const [breakdownTab, setBreakdownTab] = useState(searchParams.get('tab') || 'subcon');
-  const [catDisputeOpen, setCatDisputeOpen] = useState(true);
+  const [catDisputeOpen, setCatDisputeOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('defect-dashboard.catDispute.open') === '1';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('defect-dashboard.catDispute.open', catDisputeOpen ? '1' : '0'); } catch {}
+  }, [catDisputeOpen]);
+  const [capturedByOpen, setCapturedByOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('defect-dashboard.capturedBy.open') === '1';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('defect-dashboard.capturedBy.open', capturedByOpen ? '1' : '0'); } catch {}
+  }, [capturedByOpen]);
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>((searchParams.get('bucket') as 'day' | 'week') || 'day');
   const [scurveOpen, setScurveOpen] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -433,8 +446,8 @@ export default function DefectDashboardPage() {
     }
   };
   const topOverdue = useMemo(() => filteredItems.map(item => ({ item, delay: maxDelayDays(item, dataDate) })).filter(row => row.delay > 0 && !isClosureComplete(row.item)).sort((a, b) => b.delay - a.delay).slice(0, 10), [filteredItems, dataDate]);
-  const actualPie = useMemo(() => buildActualPie(filteredItems), [filteredItems]);
-  const closurePie = useMemo(() => buildClosurePie(filteredItems), [filteredItems]);
+  // Note: actualPie/closurePie removed — dead code (computed but never rendered).
+  // buildActualPie/buildClosurePie/PieBlock retained at bottom for potential reuse.
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
@@ -793,25 +806,45 @@ export default function DefectDashboardPage() {
 
 
       {!roles.includes('guest') && (
-        <CapturedByStatsSection
-          items={filteredItems}
-          kpis={kpis}
-          onCardClick={(name) => goRaw({ capturedBy: name === 'Unknown' ? '__EMPTY__' : name })}
-          onMetricClick={(name, metric) => {
-            const params: Record<string, string> = { capturedBy: name === 'Unknown' ? '__EMPTY__' : name };
-            if (metric === 'completed') params.actualComplete = 'true';
-            else if (metric === 'closed') params.closureComplete = 'true';
-            else if (metric === 'dispute') params.closureStatus = 'InD';
-            else if (metric === 'priTotal') params.notClosureDone = 'true';
-            else if (metric === 'priCatA') { params.priority = 'Cat A - Major Defect (Before SC)'; params.notClosureDone = 'true'; }
-            else if (metric === 'priCatB') { params.priority = 'Cat B - Minor Defect'; params.notClosureDone = 'true'; }
-            else if (metric === 'priNoCat') { params.priority = '__EMPTY__'; params.notClosureDone = 'true'; }
-            goRaw(params);
-          }}
-          onGroupClick={(group) => goRaw({ capturedByGroup: group })}
-          showDebug={roles.includes('admin') || roles.includes('superuser')}
-        />
+        <section className="rounded-md border bg-card">
+          <button
+            type="button"
+            onClick={() => setCapturedByOpen((v) => !v)}
+            aria-expanded={capturedByOpen}
+            aria-label="Toggle Captured By Stats"
+            className="flex w-full items-center gap-2 px-4 py-3 text-left hover:opacity-80"
+          >
+            {capturedByOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <span className="text-base font-semibold">Captured By Stats</span>
+            {!capturedByOpen && (
+              <span className="ml-2 text-[11px] text-muted-foreground">Click to expand</span>
+            )}
+          </button>
+          {capturedByOpen && (
+            <div className="border-t p-4">
+              <CapturedByStatsSection
+                items={filteredItems}
+                kpis={kpis}
+                onCardClick={(name) => goRaw({ capturedBy: name === 'Unknown' ? '__EMPTY__' : name })}
+                onMetricClick={(name, metric) => {
+                  const params: Record<string, string> = { capturedBy: name === 'Unknown' ? '__EMPTY__' : name };
+                  if (metric === 'completed') params.actualComplete = 'true';
+                  else if (metric === 'closed') params.closureComplete = 'true';
+                  else if (metric === 'dispute') params.closureStatus = 'InD';
+                  else if (metric === 'priTotal') params.notClosureDone = 'true';
+                  else if (metric === 'priCatA') { params.priority = 'Cat A - Major Defect (Before SC)'; params.notClosureDone = 'true'; }
+                  else if (metric === 'priCatB') { params.priority = 'Cat B - Minor Defect'; params.notClosureDone = 'true'; }
+                  else if (metric === 'priNoCat') { params.priority = '__EMPTY__'; params.notClosureDone = 'true'; }
+                  goRaw(params);
+                }}
+                onGroupClick={(group) => goRaw({ capturedByGroup: group })}
+                showDebug={roles.includes('admin') || roles.includes('superuser')}
+              />
+            </div>
+          )}
+        </section>
       )}
+
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2 gap-2 flex-wrap">
