@@ -128,7 +128,7 @@ const App = () => (
                 <Route path="/tc/quick-update" element={<MobileUpdatePage />} />
                 <Route path="/tc/simulation" element={<TncSimulationPage />} />
                 <Route path="/subtests/:id" element={<SubtestDetail />} />
-                <Route path="/defects/dashboard" element={<DefectDashboardPage />} />
+                <Route path="/defects/dashboard" element={<Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading defect dashboard…</div>}><DefectDashboardPage /></Suspense>} />
                 <Route path="/defects/progress" element={<DefectProgressPage />} />
                 <Route path="/defects/simulation" element={<DefectSimulationPage />} />
                 <Route path="/defects/schedule-revision" element={<DefectScheduleRevisionPage />} />
