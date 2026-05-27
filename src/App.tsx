@@ -27,7 +27,9 @@ import ScheduleRevisionPage from "./pages/ScheduleRevisionPage";
 import AdminPage from "./pages/AdminPage";
 import AdminClassificationPage from "./pages/AdminClassificationPage";
 import AdminReportPage from "./pages/admin/AdminReportPage";
-import DefectDashboardPage from "./pages/DefectDashboardPage";
+// DefectDashboardPage is the heaviest single page (recharts + ~2.3k LoC).
+// Lazy-load it so the initial app bundle stays small and other pages render faster.
+const DefectDashboardPage = lazy(() => import("./pages/DefectDashboardPage"));
 import DefectProgressPage from "./pages/DefectProgressPage";
 import DefectSimulationPage from "./pages/DefectSimulationPage";
 import TncSimulationPage from "./pages/TncSimulationPage";
