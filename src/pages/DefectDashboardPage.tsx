@@ -410,6 +410,7 @@ export default function DefectDashboardPage() {
         ['Plan mode', planMode === 'remaining' ? 'Remaining' : 'Baseline'],
       ];
       if (scurveGroupValues.length > 0) filters.push(['Group values', scurveGroupValues.join(', ')]);
+      const { exportDefectSCurveToExcel } = await import('@/lib/scurve-excel-export');
       const { rowCount, fileName } = await exportDefectSCurveToExcel({
         stage: scurveStage,
         single: scurveStage === 'all' ? undefined : scurve,
