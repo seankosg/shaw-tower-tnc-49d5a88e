@@ -117,7 +117,20 @@ export default function DefectDashboardPage() {
     return raw.split(',').map(s => s.trim()).filter(Boolean);
   });
   const [breakdownTab, setBreakdownTab] = useState(searchParams.get('tab') || 'subcon');
-  const [catDisputeOpen, setCatDisputeOpen] = useState(true);
+  const [catDisputeOpen, setCatDisputeOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('defect-dashboard.catDispute.open') === '1';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('defect-dashboard.catDispute.open', catDisputeOpen ? '1' : '0'); } catch {}
+  }, [catDisputeOpen]);
+  const [capturedByOpen, setCapturedByOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('defect-dashboard.capturedBy.open') === '1';
+  });
+  useEffect(() => {
+    try { localStorage.setItem('defect-dashboard.capturedBy.open', capturedByOpen ? '1' : '0'); } catch {}
+  }, [capturedByOpen]);
   const [scurveBucket, setScurveBucket] = useState<'day' | 'week'>((searchParams.get('bucket') as 'day' | 'week') || 'day');
   const [scurveOpen, setScurveOpen] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
