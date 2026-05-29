@@ -6,13 +6,7 @@
  */
 import type pptxgen from 'pptxgenjs';
 import { resolvePath, fmtValue, type KpiBag, type SlideBlock, type SlideSpec } from '@/lib/custom-slide-spec';
-
-const SLIDE_W = 13.33;
-const SLIDE_H = 7.5;
-const BODY_X = 0.5;
-const BODY_Y = 1.0;
-const BODY_W = 12.33;
-const BODY_H = 5.9;
+import { SLIDE_W, SLIDE_H, layoutBlocks } from '@/lib/custom-slide-layout';
 
 function num(v: unknown): number {
   if (typeof v === 'number' && Number.isFinite(v)) return v;
@@ -279,63 +273,6 @@ function renderBlock(ctx: RenderCtx, b: SlideBlock, frame: { x: number; y: numbe
   }
 }
 
-/**
- * Auto-stack blocks that don't have explicit coordinates.
- * Splits remaining body height equally among unpositioned blocks.
- */
-function layoutBlocks(spec: SlideSpec): { block: SlideBlock; frame: { x: number; y: number; w: number; h: number } }[] {
-  const out: { block: SlideBlock; frame: { x: number; y: number; w: number; h: number } }[] = [];
-  const unpositioned: SlideBlock[] = [];
-  for (const b of spec.blocks) {
-    if (b.x != null && b.y != null && b.w != null && b.h != null) {
-      out.push({ block: b, frame: { x: b.x, y: b.y, w: b.w, h: b.h } });
-    } else {
-      unpositioned.push(b);
-    }
-  }
-  if (unpositioned.length === 0) return out;
-
-  if (spec.layout === 'two-column' && unpositioned.length >= 2) {
-    const gap = 0.2;
-    const colW = (BODY_W - gap) / 2;
-    const half = Math.ceil(unpositioned.length / 2);
-    const left = unpositioned.slice(0, half);
-    const right = unpositioned.slice(half);
-    const stack = (list: SlideBlock[], cx: number) => {
-      const eachH = BODY_H / list.length;
-      list.forEach((b, i) => {
-        out.push({ block: b, frame: { x: cx, y: BODY_Y + i * eachH, w: colW, h: eachH - 0.15 } });
-      });
-    };
-    stack(left, BODY_X);
-    stack(right, BODY_X + colW + gap);
-    return out;
-  }
-
-  if (spec.layout === 'three-column' && unpositioned.length >= 3) {
-    const gap = 0.2;
-    const colW = (BODY_W - 2 * gap) / 3;
-    const per = Math.ceil(unpositioned.length / 3);
-    for (let c = 0; c < 3; c++) {
-      const col = unpositioned.slice(c * per, (c + 1) * per);
-      const eachH = BODY_H / Math.max(1, col.length);
-      col.forEach((b, i) => {
-        out.push({
-          block: b,
-          frame: { x: BODY_X + c * (colW + gap), y: BODY_Y + i * eachH, w: colW, h: eachH - 0.15 },
-        });
-      });
-    }
-    return out;
-  }
-
-  // single column auto-stack
-  const eachH = BODY_H / unpositioned.length;
-  unpositioned.forEach((b, i) => {
-    out.push({ block: b, frame: { x: BODY_X, y: BODY_Y + i * eachH, w: BODY_W, h: eachH - 0.15 } });
-  });
-  return out;
-}
 
 export interface RenderCustomSlideArgs {
   pres: pptxgen;

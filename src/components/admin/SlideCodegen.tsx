@@ -31,6 +31,8 @@ import {
   type SlideCodegenResult,
   type SlideDataSource,
 } from '@/lib/slide-codegen';
+import SlideSpecPreview from '@/components/admin/SlideSpecPreview';
+import type { KpiBag } from '@/lib/custom-slide-spec';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -92,6 +94,36 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [drafts, setDrafts] = useState<CustomSlide[]>([]);
   const [draftsLoading, setDraftsLoading] = useState(false);
+  const [kpis, setKpis] = useState<KpiBag | null>(null);
+  const [kpisLoading, setKpisLoading] = useState(false);
+
+  const loadKpiBag = useCallback(async (force = false) => {
+    if (kpis && !force) return;
+    setKpisLoading(true);
+    try {
+      const [{ buildReport }, { loadKPIs }] = await Promise.all([
+        import('@/lib/report-builder'),
+        import('@/lib/ppt-builder'),
+      ]);
+      const { data } = await buildReport({
+        modules: ['tnc', 'defect', 'docs', 'punch'],
+        sections: ['dashboard', 'progress', 'simulation', 'snapshots'],
+        snapshotDates: [],
+      });
+      const { tncKPI, defectKPI, docsKPI, punchKPI } = loadKPIs(data);
+      setKpis({ tnc: tncKPI, defect: defectKPI, docs: docsKPI, punch: punchKPI, data, meta: data.meta });
+    } catch (e) {
+      console.error('[SlideCodegen] KPI load failed:', e);
+      toast({
+        title: '데이터 로딩 실패',
+        description: e instanceof Error ? e.message : 'Unknown',
+        variant: 'destructive',
+      });
+    } finally {
+      setKpisLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kpis]);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +154,15 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
   useEffect(() => {
     if (canGen) void reloadDrafts();
   }, [canGen, reloadDrafts]);
+
+  // Lazy-load KPI bag once the user enters the preview stage so the slide
+  // renders with real project data. Cached for the component lifetime.
+  useEffect(() => {
+    if (stage === 'preview' && !kpis && !kpisLoading) {
+      void loadKpiBag();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage]);
 
   const orderedSlides = useMemo(
     () => DEFAULT_SLIDE_ORDER.map((k, i) => ({ key: k, number: i + 1, label: SLIDE_REGISTRY[k]?.label ?? k })),
@@ -373,6 +414,23 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
           <div className="rounded-md border border-dashed bg-muted/30 p-2 text-xs text-muted-foreground">
             이 미리보기는 Draft 상태입니다. <b>"Report에 추가하기"</b> 를 누르기 전까지는
             Slide Composer 와 PPT Export 에 표시되지 않습니다.
+          </div>
+
+          {/* Actual rendered slide */}
+          <div className="relative">
+            <SlideSpecPreview spec={result.spec} kpis={kpis} loading={kpisLoading} />
+            <div className="absolute top-2 right-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-7 px-2 text-[11px] gap-1"
+                onClick={() => void loadKpiBag(true)}
+                disabled={kpisLoading}
+              >
+                {kpisLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                Refresh data
+              </Button>
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 text-sm">
