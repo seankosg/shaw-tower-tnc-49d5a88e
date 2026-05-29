@@ -180,13 +180,15 @@ Deno.serve(async (req) => {
   // Internal continuation calls use service-role bearer; we trust those.
   const isInternalServiceCall = internalHeader && authHeader?.includes(serviceKey);
 
-  // Schedule cron uses service-role too (no internal header). Allow when caller
-  // bears the service role key. Otherwise require an admin JWT.
-  const isCronCall = !internalHeader && !body?.folder && body?.mode !== "manual" && authHeader?.includes(serviceKey);
+  // Auto/cron calls have no manual mode and no folder; allow without admin
+  // check (cron may use anon key under `verify_jwt = false`). They only trigger
+  // a backup, which is gated separately by `schedule.enabled`.
+  const isAutoInitCall = !internalHeader && !body?.folder && body?.mode !== "manual";
 
   let triggeredBy: string | null = null;
 
-  if (!isInternalServiceCall && !isCronCall) {
+  // Only manual runs require an admin JWT.
+  if (!isInternalServiceCall && !isAutoInitCall) {
     const gate = await isAdminCaller(supabaseUrl, anonKey, serviceKey, authHeader);
     if (!gate.ok) {
       return new Response(JSON.stringify({ error: gate.message }), {
@@ -195,6 +197,7 @@ Deno.serve(async (req) => {
     }
     triggeredBy = gate.userId;
   }
+
 
   try {
     // === INITIALIZE NEW RUN ===
