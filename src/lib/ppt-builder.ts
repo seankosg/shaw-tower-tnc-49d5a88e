@@ -273,6 +273,7 @@ export function loadKPIs(rd: ReportData): { tncKPI?: TncKPI; defectKPI?: DefectK
     requiredPace:       defect.requiredPace!,
     snapshots:          defect.snapshots   ?? [],
     scurve:             defect.scurve      ?? [],
+    dailyIssuance:      defect.dailyIssuance ?? [],
     actionPlanTriggers: defect.actionPlanTriggers ?? [],
   } : undefined;
 
