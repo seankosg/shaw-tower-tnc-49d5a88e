@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,13 +15,19 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  Check, ChevronDown, Loader2, RotateCcw, Sparkles, UploadCloud, Wand2,
+  Check, ChevronDown, Eye, FileText, Loader2, RotateCcw, Sparkles, Trash2, UploadCloud, Wand2,
 } from 'lucide-react';
 import { SLIDE_REGISTRY, DEFAULT_SLIDE_ORDER } from '@/lib/slide-registry';
-import { fetchCustomSlides } from '@/lib/custom-slides-cache';
 import {
-  addSlideToReport,
+  fetchCustomSlides,
+  fetchMyDrafts,
+  deleteCustomSlide,
+  type CustomSlide,
+} from '@/lib/custom-slides-cache';
+import {
   generateSlideSpec,
+  promoteDraftToReport,
+  saveSlideDraft,
   type SlideCodegenResult,
   type SlideDataSource,
 } from '@/lib/slide-codegen';
@@ -59,6 +65,16 @@ function StepBadge({ n, label, state }: { n: number; label: string; state: 'pend
   );
 }
 
+function formatWhen(iso?: string) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString();
+  } catch {
+    return '';
+  }
+}
+
 export default function SlideCodegen({ embedded = false, onAdded }: Props) {
   const { toast } = useToast();
   const [canGen, setCanGen] = useState(false);
@@ -71,8 +87,11 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
   const [generating, setGenerating] = useState(false);
   const [adding, setAdding] = useState(false);
   const [result, setResult] = useState<SlideCodegenResult | null>(null);
+  const [draftId, setDraftId] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>('describe');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [drafts, setDrafts] = useState<CustomSlide[]>([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +108,20 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  const reloadDrafts = useCallback(async () => {
+    setDraftsLoading(true);
+    try {
+      const list = await fetchMyDrafts();
+      setDrafts(list);
+    } finally {
+      setDraftsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (canGen) void reloadDrafts();
+  }, [canGen, reloadDrafts]);
 
   const orderedSlides = useMemo(
     () => DEFAULT_SLIDE_ORDER.map((k, i) => ({ key: k, number: i + 1, label: SLIDE_REGISTRY[k]?.label ?? k })),
@@ -113,9 +146,20 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
         description: description.trim(),
         existingKeys,
       });
+      // Persist as draft immediately so the preview survives navigation.
+      const draft = await saveSlideDraft({
+        spec: res.spec,
+        suggestedKey: res.suggestedKey,
+        suggestedLabel: res.suggestedLabel,
+      });
       setResult(res);
+      setDraftId(draft.id);
       setStage('preview');
-      toast({ title: '미리보기가 준비되었습니다' });
+      void reloadDrafts();
+      toast({
+        title: '미리보기가 Draft로 저장되었습니다',
+        description: '메뉴를 이동해도 아래 Draft 목록에서 다시 열 수 있습니다.',
+      });
     } catch (e) {
       toast({
         title: '생성 실패',
@@ -128,16 +172,13 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
   };
 
   const onAddToReport = async () => {
-    if (!result) return;
+    if (!result || !draftId) return;
     setAdding(true);
     try {
-      await addSlideToReport({
-        spec: result.spec,
-        suggestedKey: result.suggestedKey,
-        suggestedLabel: result.suggestedLabel,
-      });
+      await promoteDraftToReport(draftId);
       setStage('added');
       toast({ title: '슬라이드가 Report에 추가되었습니다' });
+      void reloadDrafts();
       if (onAdded) await onAdded();
     } catch (e) {
       toast({
@@ -152,7 +193,43 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
 
   const onStartOver = () => {
     setResult(null);
+    setDraftId(null);
     setStage('describe');
+  };
+
+  const onOpenDraft = (d: CustomSlide) => {
+    setResult({
+      spec: d.spec,
+      suggestedKey: d.key,
+      suggestedLabel: d.label,
+      summary: '',
+    });
+    setDraftId(d.id);
+    setStage('preview');
+  };
+
+  const onDeleteDraft = async (d: CustomSlide) => {
+    if (!confirm(`Draft "${d.label}" 를 삭제할까요?`)) return;
+    try {
+      await deleteCustomSlide(d.id);
+      if (draftId === d.id) onStartOver();
+      void reloadDrafts();
+      toast({ title: 'Draft 삭제됨' });
+    } catch (e) {
+      toast({
+        title: '삭제 실패',
+        description: e instanceof Error ? e.message : 'Unknown',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const onDiscardCurrentDraft = async () => {
+    if (draftId) {
+      try { await deleteCustomSlide(draftId); } catch { /* ignore */ }
+      void reloadDrafts();
+    }
+    onStartOver();
   };
 
   const body = (
@@ -160,6 +237,42 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
       {!canGen && (
         <div className="rounded-md border border-dashed bg-muted/30 p-2 text-xs text-muted-foreground">
           D.Super User 이상만 새 슬라이드를 만들 수 있습니다.
+        </div>
+      )}
+
+      {/* My Drafts */}
+      {canGen && drafts.length > 0 && (
+        <div className="space-y-2 rounded-md border bg-muted/10 p-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+            <FileText className="h-3.5 w-3.5" />
+            My Drafts ({drafts.length})
+            {draftsLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+          </div>
+          <div className="space-y-1.5">
+            {drafts.map((d) => (
+              <div
+                key={d.id}
+                className={cn(
+                  'flex items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-sm',
+                  draftId === d.id && 'border-primary/60 bg-primary/5',
+                )}
+              >
+                <Badge variant="outline" className="text-[10px]">DRAFT</Badge>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{d.label}</div>
+                  <div className="text-[11px] text-muted-foreground truncate">
+                    {d.spec.layout} · {d.spec.blocks.length} blocks · {formatWhen(d.created_at)}
+                  </div>
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => onOpenDraft(d)} title="미리보기 열기">
+                  <Eye className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => onDeleteDraft(d)} title="삭제">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -247,11 +360,19 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
       {/* STEP 2 — Preview */}
       {stage === 'preview' && result && (
         <div className="space-y-3 rounded-md border p-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold">2. 미리보기 — 이렇게 만들어졌습니다</div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="text-sm font-semibold">2. 미리보기 — 이렇게 만들어졌습니다</div>
+              <Badge variant="outline" className="text-[10px]">DRAFT</Badge>
+            </div>
             <Button size="sm" variant="ghost" onClick={onStartOver}>
-              <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> 다시 만들기
+              <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> 새로 만들기
             </Button>
+          </div>
+
+          <div className="rounded-md border border-dashed bg-muted/30 p-2 text-xs text-muted-foreground">
+            이 미리보기는 Draft 상태입니다. <b>"Report에 추가하기"</b> 를 누르기 전까지는
+            Slide Composer 와 PPT Export 에 표시되지 않습니다.
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 text-sm">
@@ -289,10 +410,10 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onStartOver} disabled={adding}>
-              마음에 안 들어요
+            <Button variant="outline" onClick={onDiscardCurrentDraft} disabled={adding}>
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Draft 버리기
             </Button>
-            <Button onClick={onAddToReport} disabled={!canGen || adding}>
+            <Button onClick={onAddToReport} disabled={!canGen || adding || !draftId}>
               {adding ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <UploadCloud className="h-4 w-4 mr-1.5" />}
               Report에 추가하기
             </Button>

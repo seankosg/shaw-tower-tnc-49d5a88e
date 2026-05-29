@@ -1,65 +1,50 @@
-# Defect Dashboard 보조 섹션 lazy 계산화
+# New Slide Generator — Draft 자동 저장
 
-## 배경
+## 문제
+미리보기(Step 2)까지 만든 슬라이드는 컴포넌트 state에만 존재. 다른 메뉴 탭으로 이동하면 unmount되며 사라짐. 사용자가 "Report에 추가하기"를 누르기 전까지 휘발성이라 불편.
 
-이전 작업에서 S-Curve(`scurveOpen`)와 Breakdown 활성 탭만 계산하도록 정리했지만, 아래 3개 보조 분석 블록은 **항상 무조건 계산·렌더**되고 있어 최초 로딩 비용에 그대로 포함됩니다.
+## 목표
+- 미리보기 생성 즉시 DB에 **Draft** 로 저장
+- Draft는 Slide Composer 목록·Export PPT에 **노출되지 않음**
+- "Report에 추가하기" 버튼을 누르면 Draft → **활성** 상태로 전환되어 노출 시작
+- New Slide Generator 화면에 진입하면 **내가 만든 Draft 목록**을 보여주고, 이어서 확정/삭제 가능
 
-| 섹션 | 현재 상태 | 최초 로딩 비용 |
-|---|---|---|
-| Distribution Pies (Actual/Closure 도넛) | `actualPie`, `closurePie` `useMemo` 항상 실행 (`filteredItems` O(N) 2회 + PieChart 2개 렌더) | 중 |
-| HDEC's Basis of Cat B (Reason Distribution) | `Collapsible`로 감싸져 있지만 `open=true` 기본값. Cat B reason 집계 + bar chart 항상 계산·렌더 | 중~상 |
-| Captured By Stats Section | `Collapsible` 래퍼 자체가 없음. `CapturedByStatsSection` 내부 집계 항상 실행 | 상 |
+## 변경 사항
 
-## 변경 내용
+### 1. DB 마이그레이션 (`custom_slides`)
+- `status` 컬럼 추가: `text not null default 'active'`, 값 `'draft' | 'active'`
+- 체크 제약 또는 enum 대신 단순 text + check (가벼움)
+- 인덱스: `idx_custom_slides_status` (status 부분 필터링용)
+- 기존 행은 모두 `'active'`로 백필 (default로 자동)
 
-### A. 공통 패턴
+### 2. 백엔드 로직
+- `fetchCustomSlides()` → 기본은 **active만** 반환 (Composer/Export/슬라이드 목록이 영향 안 받음)
+- `fetchCustomSlides({ includeDrafts: true })` 옵션 추가 → Generator에서 사용
+- `fetchDrafts(userId)` 헬퍼: 내가 만든 draft만 조회
+- `insertCustomSlide({status})` 파라미터 지원
+- `promoteDraftToActive(id)` 신규: status='active'로 업데이트 후 `appendSlideKey` 호출
+- `slide-config.ts` `reconcile()`: draft 키는 활성 슬라이드 목록 후보에서 제외 (active 슬라이드만 customKeys에 포함)
 
-각 섹션에 `open` state 추가(기본 `false`) + localStorage 영속화(사용자가 한 번 펼치면 다음 진입에도 유지). 무거운 `useMemo`/자식 컴포넌트는 `open === true`일 때만 계산·마운트.
+### 3. UI — `SlideCodegen.tsx`
+- **Step 1 (Describe)** 위에 "내 Draft" 섹션 추가
+  - 마운트 시 본인이 만든 draft 목록 로드 (없으면 섹션 숨김)
+  - 각 행: label · 생성일시 · `[Preview] [확정] [삭제]` 버튼
+  - Preview 클릭 시 Step 2로 복원
+- **Step 2 진입 시점 변경**: `onGenerate` 성공 직후 `insertCustomSlide({status:'draft'})` 호출 → 결과 id 보관
+  - 토스트: "미리보기가 Draft로 저장되었습니다 (메뉴 이동해도 유지)"
+- **"Report에 추가하기"** → `promoteDraftToActive(draftId)` 호출 (insert가 아닌 update + appendSlideKey)
+- **"마음에 안 들어요"** → draft 행 삭제 + state 초기화
+- **"다시 만들기"** → 새 description으로 generate 시 기존 draft를 update 또는 삭제 후 재생성 (단순화: 매번 새 draft 생성, 사용자가 목록에서 정리)
 
-```text
-const [xOpen, setXOpen] = useState<boolean>(() => {
-  try { return localStorage.getItem('defect-dashboard.x.open') === '1'; } catch { return false; }
-});
-useEffect(() => {
-  try { localStorage.setItem('defect-dashboard.x.open', xOpen ? '1' : '0'); } catch {}
-}, [xOpen]);
-```
+### 4. 안내 문구
+- Step 2 상단에 "이 미리보기는 Draft 상태입니다. 확정 전까지는 Slide Composer/PPT Export에 표시되지 않습니다." 배지
 
-### B. Distribution Pies (Actual/Closure)
+## 영향 범위
+- 파일: `src/lib/custom-slides-cache.ts`, `src/lib/slide-codegen.ts`, `src/lib/slide-config.ts`, `src/components/admin/SlideCodegen.tsx`
+- 마이그레이션 1건 (custom_slides에 status 컬럼 추가)
+- 기존 활성 슬라이드 동작·표시 변동 없음 (default 'active')
 
-- `actualPie`/`closurePie` `useMemo`에 `if (!pieOpen) return EMPTY;` 가드 추가.
-- 렌더 부분을 `Collapsible`로 래핑, 헤더만 항상 표시(`Distribution` 제목 + chevron). 펼치면 첫 1회 계산 후 메모 캐시.
-
-### C. HDEC's Basis of Cat B
-
-- 기존 `catDisputeOpen` 초기값을 `true` → **`false`(localStorage 우선)** 로 변경.
-- IIFE 내부의 sorted/top/rest/chartTop 계산이 이미 `CollapsibleContent` 내부에 있으므로 collapse 시 자동 스킵됨. 추가 가드 불필요.
-
-### D. Captured By Stats Section
-
-- `CapturedByStatsSection` 호출을 `Collapsible`로 감싼다(헤더: "Captured By Stats" + chevron, 기본 접힘).
-- `<CollapsibleContent>` 내부에 자식을 두면 closed 상태에선 React가 마운트하지 않아 내부 모든 `useMemo`/집계가 실행되지 않음 — 별도 prop 변경 불필요.
-
-### E. 표시·기능 동등성
-
-- 펼친 상태의 UI/숫자/클릭 동작 100% 동일.
-- 접힌 상태에서는 헤더만 노출. 한 번 펼치면 localStorage에 기억돼 다음 진입 시 자동 펼침.
-- KPI 카드, Cat A/B 요약 카드, Plan vs Actual Summary, Breakdown 탭, S-Curve(기존 정책 유지)는 손대지 않음.
-
-## 예상 효과 (N=5,000 기준)
-
-- 최초 진입 시 **PieChart 2개 + Cat B distribution + Captured By 전체 블록** 렌더·계산 생략.
-- recharts PieChart 인스턴스 2개 마운트 회피 → 메인 스레드 ~수십~수백 ms 절약(저사양 PC에서 체감 큼).
-- Captured By 내부 집계가 가장 큼(보고자별 그룹 + 멀티 메트릭) — 제거 시 필터 변경 응답도 함께 빨라짐.
-- 사용자가 평소 보는 사람만 펼치고 보면 일상 사용 시 비용도 영구히 감소.
-
-## 변경 파일
-
-- `src/pages/DefectDashboardPage.tsx` — 위 A~D 적용 (단일 파일)
-
-## 비기능
-
-- 회귀: 기존 `src/test/defect-dashboard-utils.test.ts` 통과 유지(계산 로직 자체는 미변경).
-- 디자인: 헤더 chevron 패턴은 기존 S-Curve / Cat Dispute 토글과 동일한 시각 언어 사용.
-
-승인 시 단일 파일 수정으로 진행합니다.
+## 기대 효과
+- 미리보기 후 메뉴 이동해도 복원 가능
+- 확정 단계가 명시적으로 분리되어 "실수로 Report에 들어감" 위험 없음
+- 여러 시안을 동시에 만들어두고 비교 후 확정하는 워크플로우 가능
