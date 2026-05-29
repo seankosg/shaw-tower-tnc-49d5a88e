@@ -697,25 +697,34 @@ export function buildForecast(pres: pptxgen, tncKPI: TncKPI) {
   const snaps = tncKPI.snapshots;
   const milestones = snaps.map(sn => fmtDateShort(sn.date));
 
-  const chartData = [
-    { name: 'Pre-Test',      labels: milestones, values: snaps.map(sn => sn.t1.planPct) },
-    { name: 'Official Test', labels: milestones, values: snaps.map(sn => sn.t2.planPct) },
-    { name: 'Test Report',   labels: milestones, values: snaps.map(sn => sn.r2s.planPct) },
-  ];
+  if (milestones.length === 0) {
+    s.addText('No snapshot dates selected — add dates in Report Generator to populate this chart.', {
+      x: 0.5, y: 3.2, w: 12.3, h: 0.6, fontFace: FONT, fontSize: 16, italic: true, color: C.textMuted, align: 'center',
+    });
+  } else {
+    const chartData = [
+      { name: 'Pre-Test · Plan',           labels: milestones, values: snaps.map(sn => sn.t1.planPct) },
+      { name: 'Pre-Test · Predicted',      labels: milestones, values: snaps.map(sn => sn.t1.predictedPct) },
+      { name: 'Official Test · Plan',      labels: milestones, values: snaps.map(sn => sn.t2.planPct) },
+      { name: 'Official Test · Predicted', labels: milestones, values: snaps.map(sn => sn.t2.predictedPct) },
+      { name: 'Test Report · Plan',        labels: milestones, values: snaps.map(sn => sn.r2s.planPct) },
+      { name: 'Test Report · Predicted',   labels: milestones, values: snaps.map(sn => sn.r2s.predictedPct) },
+    ];
 
-  s.addChart('bar' as pptxgen.CHART_NAME, chartData, {
-    x: 0.5, y: 1.8, w: 12.3, h: 4.2,
-    barDir: 'col', barGrouping: 'clustered', barOverlapPct: -25, barGapWidthPct: 200,
-    chartColors: [C.stagePreTest, C.stageOfficial, C.stageTestReport],
-    chartArea: { fill: { color: C.bgBody } }, plotArea: { fill: { color: C.bgBody } },
-    catAxisLabelColor: C.textSecondary, valAxisLabelColor: C.textMuted,
-    catAxisLabelFontSize: 16, valAxisLabelFontSize: 10,
-    valGridLine: { color: C.cardBorder, size: 0.5 }, catGridLine: { style: 'none' } as pptxgen.OptsChartGridLine,
-    valAxisMaxVal: 100, valAxisMinVal: 0, valAxisLabelFormatCode: '0"%"',
-    showLegend: true, legendPos: 't', legendColor: C.textSecondary, legendFontSize: 12,
-    showValue: true, dataLabelColor: C.textPrimary, dataLabelFontSize: 12, dataLabelFontBold: true,
-    dataLabelFormatCode: '0"%"', dataLabelPosition: 'outEnd',
-  });
+    s.addChart('bar' as pptxgen.CHART_NAME, chartData, {
+      x: 0.5, y: 1.8, w: 12.3, h: 4.2,
+      barDir: 'col', barGrouping: 'clustered', barOverlapPct: -25, barGapWidthPct: 100,
+      chartColors: [C.stagePreTest, C.stagePreTestLight, C.stageOfficial, C.stageOfficialLight, C.stageTestReport, C.stageTestReportLight],
+      chartArea: { fill: { color: C.bgBody } }, plotArea: { fill: { color: C.bgBody } },
+      catAxisLabelColor: C.textSecondary, valAxisLabelColor: C.textMuted,
+      catAxisLabelFontSize: 14, valAxisLabelFontSize: 10,
+      valGridLine: { color: C.cardBorder, size: 0.5 }, catGridLine: { style: 'none' } as pptxgen.OptsChartGridLine,
+      valAxisMaxVal: 100, valAxisMinVal: 0, valAxisLabelFormatCode: '0"%"',
+      showLegend: true, legendPos: 't', legendColor: C.textSecondary, legendFontSize: 11,
+      showValue: true, dataLabelColor: C.textPrimary, dataLabelFontSize: 9, dataLabelFontBold: true,
+      dataLabelFormatCode: '0"%"', dataLabelPosition: 'outEnd',
+    });
+  }
 
   // Required pace strip
   const rp = tncKPI.requiredPace;
