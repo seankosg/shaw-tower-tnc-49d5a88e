@@ -225,6 +225,9 @@ export default function ReportTab() {
               <Input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="h-8 w-40" />
               <Button size="sm" variant="outline" onClick={addDate}><Plus className="h-3 w-3 mr-1" />Add</Button>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Used by slides #5 (T&amp;C Forecast) and #9 (Defect Forecast). Each date becomes a milestone column showing both <b>Plan%</b> and simulation <b>Predicted%</b>. Dates near or after Project Completion may saturate Plan% at 100% — in that case the Predicted bars carry the contrast.
+            </p>
           </div>
 
           {/* PC date */}
