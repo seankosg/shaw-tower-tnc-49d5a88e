@@ -109,6 +109,7 @@ interface DefectKPI {
   requiredPace:       NonNullable<DefectReportData['requiredPace']>;
   snapshots:          NonNullable<DefectReportData['snapshots']>;
   scurve:             NonNullable<DefectReportData['scurve']>;
+  dailyIssuance:      NonNullable<DefectReportData['dailyIssuance']>;
   actionPlanTriggers: NonNullable<DefectReportData['actionPlanTriggers']>;
 }
 
