@@ -124,6 +124,7 @@ export type Database = {
           key: string
           label: string
           spec: Json
+          status: string
           updated_at: string
         }
         Insert: {
@@ -133,6 +134,7 @@ export type Database = {
           key: string
           label: string
           spec: Json
+          status?: string
           updated_at?: string
         }
         Update: {
@@ -142,6 +144,7 @@ export type Database = {
           key?: string
           label?: string
           spec?: Json
+          status?: string
           updated_at?: string
         }
         Relationships: []
