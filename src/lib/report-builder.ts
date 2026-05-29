@@ -124,6 +124,8 @@ export interface DefectReportData {
   requiredPace?: { daysRemaining: number; completionRemaining: number; closureRemaining: number; completionPerDay: number; closurePerDay: number };
   snapshots?: DefectSnapshotEntry[];
   scurve?: DefectScurvePoint[];
+  /** Daily defect issuance time series, oldest → newest. `count` = newly created defects that day; `cumulative` = running total. */
+  dailyIssuance?: Array<{ date: string; count: number; cumulative: number }>;
   actionPlanTriggers?: Array<{
     stage: 'completion' | 'closure';
     status: 'CRITICAL' | 'AT_RISK';
