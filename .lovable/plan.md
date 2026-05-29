@@ -1,50 +1,46 @@
-# New Slide Generator — Draft 자동 저장
+# New Slide Generator — Preview 창에 실제 슬라이드 렌더
 
 ## 문제
-미리보기(Step 2)까지 만든 슬라이드는 컴포넌트 state에만 존재. 다른 메뉴 탭으로 이동하면 unmount되며 사라짐. 사용자가 "Report에 추가하기"를 누르기 전까지 휘발성이라 불편.
+현재 Step 2 미리보기는 레이아웃 이름과 블록 배지(`kpi-card`, `bar-chart` 등)만 표시. 사용자는 실제로 어떻게 보일지 알 수 없어 "Report에 추가" 전에 검증 불가.
 
 ## 목표
-- 미리보기 생성 즉시 DB에 **Draft** 로 저장
-- Draft는 Slide Composer 목록·Export PPT에 **노출되지 않음**
-- "Report에 추가하기" 버튼을 누르면 Draft → **활성** 상태로 전환되어 노출 시작
-- New Slide Generator 화면에 진입하면 **내가 만든 Draft 목록**을 보여주고, 이어서 확정/삭제 가능
+Step 2 미리보기 패널에 **실제 데이터로 채워진 슬라이드를 1280×720 HTML 으로 렌더**해서 보여준다. PPT Export 결과와 시각적으로 동일한 레이아웃·수치.
 
 ## 변경 사항
 
-### 1. DB 마이그레이션 (`custom_slides`)
-- `status` 컬럼 추가: `text not null default 'active'`, 값 `'draft' | 'active'`
-- 체크 제약 또는 enum 대신 단순 text + check (가벼움)
-- 인덱스: `idx_custom_slides_status` (status 부분 필터링용)
-- 기존 행은 모두 `'active'`로 백필 (default로 자동)
+### 1. 신규: `src/components/admin/SlideSpecPreview.tsx`
+- Props: `spec: SlideSpec`, `kpis: KpiBag | null`, `loading?: boolean`
+- 고정 1280×720 캔버스를 `transform: scale()` 으로 부모 폭에 맞춰 축소 (16:9 유지)
+- `custom-slide-renderer.ts` 와 동일한 색상/폰트 토큰 사용 (PPT 와 동일한 다크 네이비 배경)
+- `layoutBlocks()` 와 동일한 자동 배치 로직 (1열/2열/3열, 좌표 기반) → 별도 헬퍼로 추출 후 공유
+- 블록별 HTML 렌더:
+  - `kpi-card` / `bar-row` / `metric-grid` / `text-block` / `bullet-list` / `simple-table` → 순수 HTML+Tailwind
+  - `bar-chart` / `line-chart` / `stacked-bar` / `pie-chart` → recharts 사용 (`ResponsiveContainer` + 적절한 컴포넌트)
+- 데이터가 `null` 일 때는 모든 값을 `—` 로 표시 (구조 미리보기)
+- 렌더 에러는 블록 안에 빨간 안내 텍스트로 표시 (PPT 렌더와 동일 fallback 정책)
 
-### 2. 백엔드 로직
-- `fetchCustomSlides()` → 기본은 **active만** 반환 (Composer/Export/슬라이드 목록이 영향 안 받음)
-- `fetchCustomSlides({ includeDrafts: true })` 옵션 추가 → Generator에서 사용
-- `fetchDrafts(userId)` 헬퍼: 내가 만든 draft만 조회
-- `insertCustomSlide({status})` 파라미터 지원
-- `promoteDraftToActive(id)` 신규: status='active'로 업데이트 후 `appendSlideKey` 호출
-- `slide-config.ts` `reconcile()`: draft 키는 활성 슬라이드 목록 후보에서 제외 (active 슬라이드만 customKeys에 포함)
+### 2. 공유 헬퍼 추출: `src/lib/custom-slide-layout.ts`
+- `layoutBlocks(spec)` 와 캔버스 상수 (`SLIDE_W`, `SLIDE_H`, `BODY_X/Y/W/H`) 를 분리
+- `custom-slide-renderer.ts` 도 새 모듈에서 import 하도록 수정 (중복 방지)
 
-### 3. UI — `SlideCodegen.tsx`
-- **Step 1 (Describe)** 위에 "내 Draft" 섹션 추가
-  - 마운트 시 본인이 만든 draft 목록 로드 (없으면 섹션 숨김)
-  - 각 행: label · 생성일시 · `[Preview] [확정] [삭제]` 버튼
-  - Preview 클릭 시 Step 2로 복원
-- **Step 2 진입 시점 변경**: `onGenerate` 성공 직후 `insertCustomSlide({status:'draft'})` 호출 → 결과 id 보관
-  - 토스트: "미리보기가 Draft로 저장되었습니다 (메뉴 이동해도 유지)"
-- **"Report에 추가하기"** → `promoteDraftToActive(draftId)` 호출 (insert가 아닌 update + appendSlideKey)
-- **"마음에 안 들어요"** → draft 행 삭제 + state 초기화
-- **"다시 만들기"** → 새 description으로 generate 시 기존 draft를 update 또는 삭제 후 재생성 (단순화: 매번 새 draft 생성, 사용자가 목록에서 정리)
+### 3. KPI 데이터 로딩 — `SlideCodegen.tsx`
+- Step 2 진입 시 (또는 draft 열람 시) `buildReport` + `loadKPIs` 를 호출해 `kpiBag` 구성
+- 옵션: `modules: spec` 에 선언된 dataSources, `sections` 는 KPI 산출에 필요한 최소값으로 고정 (`{ snapshot:true, scurve:true, forecast:true, actionPlan:true }`)
+- 호출은 컴포넌트 안에서 lazy import (`await import('@/lib/report-builder')`) 로 페이지 진입 비용 분산
+- 로딩 중에는 미리보기 캔버스에 스피너 + "Loading project data…" 표시, 그 동안에도 블록 구조는 placeholder 로 즉시 표출
+- 데이터는 컴포넌트 unmount 까지 캐시 (한 번만 빌드)
 
-### 4. 안내 문구
-- Step 2 상단에 "이 미리보기는 Draft 상태입니다. 확정 전까지는 Slide Composer/PPT Export에 표시되지 않습니다." 배지
+### 4. UI 배치 — `SlideCodegen.tsx` Step 2
+- 기존 메타 카드 위쪽에 `<SlideSpecPreview>` 신규 영역 (border + bg-muted/20)
+- 우측 상단 작은 "Refresh data" 아이콘 버튼 → KPI 재빌드
+- "AI 요약" 과 "레이아웃/블록 배지" 카드는 미리보기 하단으로 이동 (보조 정보)
 
 ## 영향 범위
-- 파일: `src/lib/custom-slides-cache.ts`, `src/lib/slide-codegen.ts`, `src/lib/slide-config.ts`, `src/components/admin/SlideCodegen.tsx`
-- 마이그레이션 1건 (custom_slides에 status 컬럼 추가)
-- 기존 활성 슬라이드 동작·표시 변동 없음 (default 'active')
+- 신규: `src/components/admin/SlideSpecPreview.tsx`, `src/lib/custom-slide-layout.ts`
+- 수정: `src/lib/custom-slide-renderer.ts` (헬퍼 import 만), `src/components/admin/SlideCodegen.tsx`
+- DB / PPT Export 동작 변동 없음
+- recharts 는 이미 프로젝트에 포함됨 → 신규 의존성 없음
 
 ## 기대 효과
-- 미리보기 후 메뉴 이동해도 복원 가능
-- 확정 단계가 명시적으로 분리되어 "실수로 Report에 들어감" 위험 없음
-- 여러 시안을 동시에 만들어두고 비교 후 확정하는 워크플로우 가능
+- 사용자가 "Report에 추가" 전 실제 결과 확인 가능 → 잘못된 spec 으로 인한 재작업 감소
+- Draft 목록에서 열어볼 때도 즉시 시각화 → 비교/선택이 직관적
