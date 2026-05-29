@@ -10,7 +10,10 @@ const BUCKET = "db-backups";
 
 // Per-page rows. Each page becomes its own file on disk so memory stays bounded
 // regardless of table size.
-const PAGE_SIZE = Number(Deno.env.get("SNAPSHOT_PAGE_SIZE") ?? 5000);
+// IMPORTANT: PostgREST hard-caps SELECT * at 1000 rows by default, so any larger
+// PAGE_SIZE silently returns only 1000 rows and the loop wrongly treats it as
+// end-of-table. Keep this at 1000 unless the project's `db.max_rows` is raised.
+const PAGE_SIZE = Number(Deno.env.get("SNAPSHOT_PAGE_SIZE") ?? 1000);
 
 // Soft elapsed-time budget per invocation. When exceeded we persist progress and
 // re-trigger to continue. Keep well under the platform's hard 150s wall-clock.
