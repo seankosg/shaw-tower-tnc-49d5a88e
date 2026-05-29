@@ -203,7 +203,7 @@ Deno.serve(async (req) => {
     // === INITIALIZE NEW RUN ===
     if (!body?.folder) {
       // Honor enabled flag for auto runs.
-      if (isCronCall) {
+      if (isAutoInitCall) {
         const { data: sched } = await adminClient
           .from("app_settings").select("value").eq("key", "backup_schedule").maybeSingle();
         const enabled = (sched?.value as any)?.enabled ?? true;
