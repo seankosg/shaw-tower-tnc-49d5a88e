@@ -2632,6 +2632,37 @@ function InlineNameEdit({ value, onSave }: { value: string; onSave: (v: string) 
 }
 
 /* ═══════ Tab: Backup & Restore ═══════ */
+type BackupRunLog = {
+  id: string;
+  snapshot_type: string;
+  status: string;
+  folder: string | null;
+  message: string | null;
+  total_rows: number | null;
+  total_tables: number | null;
+  started_at: string;
+  updated_at?: string;
+  finished_at: string | null;
+};
+type BackupStatus = {
+  schedule: { enabled: boolean; hour_sgt: number; minute: number };
+  last_success: BackupRunLog | null;
+  last_run: BackupRunLog | null;
+};
+
+function fmtRelative(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const t = new Date(iso).getTime();
+  const ms = Date.now() - t;
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 48) return `${hr}h ago`;
+  return `${Math.floor(hr / 24)}d ago`;
+}
+
 function BackupTab() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -2643,6 +2674,10 @@ function BackupTab() {
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
+  const [status, setStatus] = useState<BackupStatus | null>(null);
+  const [pendingRunId, setPendingRunId] = useState<string | null>(null);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+
   const load = async () => {
     setLoading(true);
     const { data } = await supabase.from('database_snapshots' as any)
@@ -2652,7 +2687,42 @@ function BackupTab() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  const loadStatus = async () => {
+    const { data, error } = await supabase.rpc('get_backup_status' as any);
+    if (!error && data) setStatus(data as unknown as BackupStatus);
+  };
+
+  useEffect(() => { load(); loadStatus(); }, []);
+
+  // Poll status while a run is in progress.
+  useEffect(() => {
+    if (!pendingRunId) return;
+    const interval = setInterval(async () => {
+      await loadStatus();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [pendingRunId]);
+
+  // Detect transition success/failed for the pending run.
+  useEffect(() => {
+    if (!pendingRunId || !status?.last_run) return;
+    if (status.last_run.id !== pendingRunId) return;
+    if (status.last_run.status === 'success') {
+      toast({
+        title: 'Snapshot created',
+        description: `${(status.last_run.total_rows ?? 0).toLocaleString()} rows across ${status.last_run.total_tables ?? 0} tables`,
+      });
+      setPendingRunId(null);
+      load();
+    } else if (status.last_run.status === 'failed') {
+      toast({
+        title: 'Snapshot failed',
+        description: status.last_run.message || 'Unknown error — see Backup Status card',
+        variant: 'destructive',
+      });
+      setPendingRunId(null);
+    }
+  }, [status, pendingRunId]);
 
   const createSnapshot = async () => {
     setSaving(true);
@@ -2663,15 +2733,30 @@ function BackupTab() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       toast({
-        title: 'Snapshot created',
-        description: `${data.total_rows?.toLocaleString?.() ?? data.total_rows} rows across ${Object.keys(data.manifest || {}).length} tables`,
+        title: 'Backup started',
+        description: 'Running in the background; this card will refresh when complete (1–3 min for large databases).',
       });
       setNote('');
-      load();
+      if (data?.run_log_id) {
+        setPendingRunId(data.run_log_id);
+      }
+      await loadStatus();
     } catch (e: any) {
-      toast({ title: 'Failed to create snapshot', description: e.message, variant: 'destructive' });
+      toast({ title: 'Failed to start snapshot', description: e.message, variant: 'destructive' });
     }
     setSaving(false);
+  };
+
+  const toggleSchedule = async (enabled: boolean) => {
+    setScheduleSaving(true);
+    const { error } = await supabase.rpc('set_backup_enabled' as any, { _enabled: enabled });
+    if (error) {
+      toast({ title: 'Schedule update failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: enabled ? 'Auto backup enabled' : 'Auto backup paused' });
+      await loadStatus();
+    }
+    setScheduleSaving(false);
   };
 
   const restoreSnapshot = async (id: string) => {
@@ -2710,8 +2795,92 @@ function BackupTab() {
     setConfirmDelete(null);
   };
 
+  // Schedule card derived values
+  const schedule = status?.schedule;
+  const lastSuccess = status?.last_success;
+  const lastRun = status?.last_run;
+  const hoursSinceLastSuccess = lastSuccess
+    ? (Date.now() - new Date(lastSuccess.started_at).getTime()) / 36e5
+    : Infinity;
+  const overdue = (schedule?.enabled ?? true) && hoursSinceLastSuccess > 26;
+
+  const statusBadge = (s?: string | null) => {
+    if (s === 'success') return <Badge variant="secondary" className="text-xs">Success</Badge>;
+    if (s === 'failed') return <Badge variant="destructive" className="text-xs">Failed</Badge>;
+    if (s === 'running') return <Badge className="text-xs">Running</Badge>;
+    return <Badge variant="outline" className="text-xs">—</Badge>;
+  };
+
   return (
     <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center justify-between">
+            <span>Backup Status & Schedule</span>
+            <Button size="sm" variant="ghost" onClick={loadStatus}>Refresh</Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">Daily auto backup</div>
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={schedule?.enabled ?? true}
+                  disabled={scheduleSaving}
+                  onCheckedChange={toggleSchedule}
+                />
+                <span className="text-sm">
+                  {schedule
+                    ? `${String(schedule.hour_sgt).padStart(2,'0')}:${String(schedule.minute).padStart(2,'0')} SGT daily`
+                    : 'Loading…'}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Toggle pauses the daily run. To change the time, contact the admin team.
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">Last successful backup</div>
+              <div className="text-sm">
+                {lastSuccess
+                  ? <>
+                      {fmtRelative(lastSuccess.started_at)}
+                      {' · '}
+                      <span className="text-muted-foreground">
+                        {(lastSuccess.total_rows ?? 0).toLocaleString()} rows / {lastSuccess.total_tables ?? 0} tables
+                      </span>
+                    </>
+                  : <span className="text-muted-foreground">Never</span>}
+              </div>
+              {overdue && (
+                <Badge variant="destructive" className="text-xs gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  No successful backup in the last 26h
+                </Badge>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">Most recent run</div>
+              <div className="flex items-center gap-2 text-sm">
+                {statusBadge(lastRun?.status)}
+                <span>{lastRun ? fmtRelative(lastRun.started_at) : '—'}</span>
+                {lastRun?.snapshot_type && (
+                  <Badge variant="outline" className="text-xs capitalize">{lastRun.snapshot_type}</Badge>
+                )}
+              </div>
+              {lastRun?.message && (
+                <p className="text-xs text-muted-foreground truncate" title={lastRun.message}>
+                  {lastRun.message}
+                </p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Create Snapshot</CardTitle>
@@ -2722,14 +2891,13 @@ function BackupTab() {
               <label className="text-sm text-muted-foreground">Note (optional)</label>
               <Input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Before weekly import" />
             </div>
-            <Button onClick={createSnapshot} disabled={saving || restoring}>
-              {saving ? 'Saving...' : 'Save Current Data'}
+            <Button onClick={createSnapshot} disabled={saving || restoring || !!pendingRunId}>
+              {saving ? 'Starting…' : pendingRunId ? 'In progress…' : 'Save Current Data'}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Saves a full backup of all business tables (Subtests, Defect, Docs, Warranty, masters, permissions, audit logs) to both the database and Storage. You can restore it later to roll back the entire system.
+            Saves a full backup of all business tables to both the database and Storage. Large databases run in chunks and may take 1–3 minutes; the status card above updates automatically.
           </p>
-
         </CardContent>
       </Card>
 
@@ -2815,3 +2983,4 @@ function BackupTab() {
     </div>
   );
 }
+
