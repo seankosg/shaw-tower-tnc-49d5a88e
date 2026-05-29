@@ -114,6 +114,7 @@ Single values (numbers):
 Arrays (for charts/tables; use with labelsPath/valuesPath/rowsPath + field names):
 - tnc.scurve            (items have: weekLabel, plannedPct, actualPct)
 - defect.scurve         (items have: weekLabel, plannedPct, actualPct)
+- defect.dailyIssuance  (items have: date 'YYYY-MM-DD', count, cumulative — daily new defect count + running total for the whole project; AI may window/slice client-side or just chart all points)
 - defect.actionPlanTriggers (items have: status, name, ...)
 - punch.latestItems     (items have: itemNo, description, status, completionDate)
 - punch.completionDateBreakdown.monthlyBeyondSc  (items have: month, count)
