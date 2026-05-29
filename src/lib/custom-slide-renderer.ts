@@ -6,13 +6,7 @@
  */
 import type pptxgen from 'pptxgenjs';
 import { resolvePath, fmtValue, type KpiBag, type SlideBlock, type SlideSpec } from '@/lib/custom-slide-spec';
-
-const SLIDE_W = 13.33;
-const SLIDE_H = 7.5;
-const BODY_X = 0.5;
-const BODY_Y = 1.0;
-const BODY_W = 12.33;
-const BODY_H = 5.9;
+import { SLIDE_W, SLIDE_H, layoutBlocks } from '@/lib/custom-slide-layout';
 
 function num(v: unknown): number {
   if (typeof v === 'number' && Number.isFinite(v)) return v;
