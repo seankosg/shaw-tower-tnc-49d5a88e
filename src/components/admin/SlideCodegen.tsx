@@ -94,6 +94,36 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [drafts, setDrafts] = useState<CustomSlide[]>([]);
   const [draftsLoading, setDraftsLoading] = useState(false);
+  const [kpis, setKpis] = useState<KpiBag | null>(null);
+  const [kpisLoading, setKpisLoading] = useState(false);
+
+  const loadKpiBag = useCallback(async (force = false) => {
+    if (kpis && !force) return;
+    setKpisLoading(true);
+    try {
+      const [{ buildReport }, { loadKPIs }] = await Promise.all([
+        import('@/lib/report-builder'),
+        import('@/lib/ppt-builder'),
+      ]);
+      const { data } = await buildReport({
+        modules: ['tnc', 'defect', 'docs', 'punch'],
+        sections: ['dashboard', 'progress', 'simulation', 'snapshots'],
+        snapshotDates: [],
+      });
+      const { tncKPI, defectKPI, docsKPI, punchKPI } = loadKPIs(data);
+      setKpis({ tnc: tncKPI, defect: defectKPI, docs: docsKPI, punch: punchKPI, data, meta: data.meta });
+    } catch (e) {
+      console.error('[SlideCodegen] KPI load failed:', e);
+      toast({
+        title: '데이터 로딩 실패',
+        description: e instanceof Error ? e.message : 'Unknown',
+        variant: 'destructive',
+      });
+    } finally {
+      setKpisLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kpis]);
 
   useEffect(() => {
     let cancelled = false;
