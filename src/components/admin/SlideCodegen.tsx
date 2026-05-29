@@ -416,6 +416,23 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
             Slide Composer 와 PPT Export 에 표시되지 않습니다.
           </div>
 
+          {/* Actual rendered slide */}
+          <div className="relative">
+            <SlideSpecPreview spec={result.spec} kpis={kpis} loading={kpisLoading} />
+            <div className="absolute top-2 right-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-7 px-2 text-[11px] gap-1"
+                onClick={() => void loadKpiBag(true)}
+                disabled={kpisLoading}
+              >
+                {kpisLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                Refresh data
+              </Button>
+            </div>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2 text-sm">
             <div>
               <div className="text-xs text-muted-foreground">슬라이드 이름</div>
