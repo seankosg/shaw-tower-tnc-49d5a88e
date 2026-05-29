@@ -31,6 +31,8 @@ import {
   type SlideCodegenResult,
   type SlideDataSource,
 } from '@/lib/slide-codegen';
+import SlideSpecPreview from '@/components/admin/SlideSpecPreview';
+import type { KpiBag } from '@/lib/custom-slide-spec';
 import { cn } from '@/lib/utils';
 
 interface Props {
