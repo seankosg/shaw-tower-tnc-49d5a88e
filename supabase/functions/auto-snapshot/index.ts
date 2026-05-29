@@ -360,11 +360,27 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
       }
 
       if (pageRows.length === 0) {
-        // Finished this table.
+        // Finished this table — no more rows beyond cursor_offset.
         if (progress.cursor_parts === 0) {
           // Empty table: still write an empty file so restore is uniform.
           await uploadPart(client, progress.folder, table, 0, [], true);
           progress.manifest[table] = { rows: 0, parts: 1 };
+        } else if (progress.cursor_parts === 1) {
+          // Single-part table: promote part_000 to legacy single-file name for
+          // restore back-compat. Re-download the part to re-upload as <table>.json,
+          // then drop the part file.
+          const partPath = `${progress.folder}/${table}__part_000.json`;
+          try {
+            const { data: dl, error: dlErr } = await client.storage.from(BUCKET).download(partPath);
+            if (!dlErr && dl) {
+              const rows = JSON.parse(await dl.text());
+              await uploadPart(client, progress.folder, table, 0, rows, true);
+              await client.storage.from(BUCKET).remove([partPath]).catch(() => {});
+            }
+          } catch (e) {
+            console.warn(`promote ${table} single-file failed:`, (e as Error).message);
+          }
+          progress.manifest[table] = { rows: progress.cursor_offset, parts: 1 };
         } else {
           progress.manifest[table] = { rows: progress.cursor_offset, parts: progress.cursor_parts };
         }
@@ -375,13 +391,8 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
         continue;
       }
 
-      // Determine path: if this is the only page so far AND it's a short page,
-      // we still want to use the legacy single-file naming. But we can't know
-      // yet whether more pages follow. Strategy: always start with part-style
-      // naming; promote to single-file at the end if parts == 1.
-      // Simpler: always write part files; in the manifest finalize step, if a
-      // table ended with exactly 1 part, rename by re-uploading to the legacy
-      // name and deleting the part file.
+      // Write this page as a part file. Promotion to legacy single-file name
+      // happens at end-of-table (empty-page branch above) when parts == 1.
       await uploadPart(client, progress.folder, table, progress.cursor_parts, pageRows, false);
 
       progress.cursor_parts += 1;
@@ -389,26 +400,6 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
 
       // Save progress every page so a crash doesn't lose work.
       await saveProgress(client, progress);
-
-      if (pageRows.length < PAGE_SIZE) {
-        // End of table.
-        progress.manifest[table] = { rows: progress.cursor_offset, parts: progress.cursor_parts };
-
-        // Promote to legacy single-file name when parts == 1 for restore back-compat.
-        if (progress.cursor_parts === 1) {
-          const partPath = `${progress.folder}/${table}__part_000.json`;
-          const singlePath = `${progress.folder}/${table}.json`;
-          // Re-upload as single file then drop the part.
-          await uploadPart(client, progress.folder, table, 0, pageRows, true);
-          await client.storage.from(BUCKET).remove([partPath]).catch(() => {});
-          progress.manifest[table] = { rows: pageRows.length, parts: 1 };
-        }
-
-        progress.cursor_table += 1;
-        progress.cursor_offset = 0;
-        progress.cursor_parts = 0;
-        await saveProgress(client, progress);
-      }
     }
 
     // === FINALIZE ===
