@@ -191,6 +191,7 @@ export const DATA_PATH_CATALOG: { path: string; kind: 'number' | 'array' | 'obje
   { path: 'defect.completion.pct',        kind: 'number', note: 'Defect completion %' },
   { path: 'defect.closure.pct',           kind: 'number', note: 'Defect closure %' },
   { path: 'defect.scurve',                kind: 'array',  note: 'Weekly array' },
+  { path: 'defect.dailyIssuance',         kind: 'array',  note: 'Daily issuance time series {date, count, cumulative} — full project range, oldest→newest' },
   { path: 'docs.abd.total',               kind: 'number', note: 'ABD total' },
   { path: 'docs.omm.total',               kind: 'number', note: 'OMM total' },
   { path: 'docs.warranty.total',          kind: 'number', note: 'Warranty total' },

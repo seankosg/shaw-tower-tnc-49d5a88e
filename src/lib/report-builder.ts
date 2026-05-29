@@ -124,6 +124,8 @@ export interface DefectReportData {
   requiredPace?: { daysRemaining: number; completionRemaining: number; closureRemaining: number; completionPerDay: number; closurePerDay: number };
   snapshots?: DefectSnapshotEntry[];
   scurve?: DefectScurvePoint[];
+  /** Daily defect issuance time series, oldest → newest. `count` = newly created defects that day; `cumulative` = running total. */
+  dailyIssuance?: Array<{ date: string; count: number; cumulative: number }>;
   actionPlanTriggers?: Array<{
     stage: 'completion' | 'closure';
     status: 'CRITICAL' | 'AT_RISK';
@@ -484,6 +486,22 @@ function computeDefectData(rows: DefectItem[], opts: ReportOptions, dataDate: st
     data.snapshots = opts.snapshotDates.map(d => {
       const r = simulateAllDefectStages(rows, d, { mode, dataDate }, stages);
       return { date: d, start: toSimSnap(r.start), completion: toSimSnap(r.completion), closure: toSimSnap(r.closure) };
+    });
+  }
+  // Daily issuance time series (based on created_at, falling back to actual_start_date).
+  {
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+      const raw = ((r as { created_at?: string | null }).created_at ?? r.actual_start_date ?? '').slice(0, 10);
+      if (!raw) continue;
+      counts.set(raw, (counts.get(raw) ?? 0) + 1);
+    }
+    const dates = Array.from(counts.keys()).sort();
+    let cum = 0;
+    data.dailyIssuance = dates.map(d => {
+      const c = counts.get(d) ?? 0;
+      cum += c;
+      return { date: d, count: c, cumulative: cum };
     });
   }
   {

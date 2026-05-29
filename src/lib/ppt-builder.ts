@@ -109,6 +109,7 @@ interface DefectKPI {
   requiredPace:       NonNullable<DefectReportData['requiredPace']>;
   snapshots:          NonNullable<DefectReportData['snapshots']>;
   scurve:             NonNullable<DefectReportData['scurve']>;
+  dailyIssuance:      NonNullable<DefectReportData['dailyIssuance']>;
   actionPlanTriggers: NonNullable<DefectReportData['actionPlanTriggers']>;
 }
 
@@ -272,6 +273,7 @@ export function loadKPIs(rd: ReportData): { tncKPI?: TncKPI; defectKPI?: DefectK
     requiredPace:       defect.requiredPace!,
     snapshots:          defect.snapshots   ?? [],
     scurve:             defect.scurve      ?? [],
+    dailyIssuance:      defect.dailyIssuance ?? [],
     actionPlanTriggers: defect.actionPlanTriggers ?? [],
   } : undefined;
 
