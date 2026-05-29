@@ -35,6 +35,48 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_run_log: {
+        Row: {
+          finished_at: string | null
+          folder: string | null
+          id: string
+          message: string | null
+          snapshot_type: string
+          started_at: string
+          status: string
+          total_rows: number | null
+          total_tables: number | null
+          triggered_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          finished_at?: string | null
+          folder?: string | null
+          id?: string
+          message?: string | null
+          snapshot_type: string
+          started_at?: string
+          status: string
+          total_rows?: number | null
+          total_tables?: number | null
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          finished_at?: string | null
+          folder?: string | null
+          id?: string
+          message?: string | null
+          snapshot_type?: string
+          started_at?: string
+          status?: string
+          total_rows?: number | null
+          total_tables?: number | null
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       code_file_versions: {
         Row: {
           change_summary_ko: string | null
@@ -4891,6 +4933,7 @@ export type Database = {
       delete_docs_import_batch: { Args: { _batch_id: string }; Returns: Json }
       delete_subtests_cascade: { Args: { _ids: string[] }; Returns: Json }
       delete_warranty_cascade: { Args: { _ids: string[] }; Returns: Json }
+      get_backup_status: { Args: never; Returns: Json }
       get_defect_comment_summary: {
         Args: { _defect_ids: string[] }
         Returns: {
@@ -5041,6 +5084,7 @@ export type Database = {
         Args: { _batch_id: string; _force?: boolean }
         Returns: Json
       }
+      set_backup_enabled: { Args: { _enabled: boolean }; Returns: Json }
       suggest_owner_code: { Args: { _name: string }; Returns: string }
       sync_all_subcontractor_counters: {
         Args: { _project_id: string }

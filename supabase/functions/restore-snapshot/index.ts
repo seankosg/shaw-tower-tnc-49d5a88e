@@ -63,14 +63,20 @@ Deno.serve(async (req) => {
     const result: Record<string, number> = {};
     const errors: Array<{ table: string; error: string }> = [];
 
-    // v3: storage_path points to manifest.json in folder; per-table files alongside
-    const isV3 = (snapshot.backup_version === 3) ||
+    // v3/v4: storage_path points to manifest.json in folder; per-table files alongside.
+    // v4 may store manifest entries as { rows, parts } and split tables into part files.
+    const isV3Plus = ((snapshot.backup_version ?? 0) >= 3) ||
       (typeof snapshot.storage_path === "string" && snapshot.storage_path.endsWith("/manifest.json"));
 
-    if (isV3 && snapshot.storage_path) {
+    if (isV3Plus && snapshot.storage_path) {
       const folder = snapshot.storage_path.replace(/\/manifest\.json$/, "");
-      const manifestObj = (snapshot.manifest ?? {}) as Record<string, number>;
-      const presentTables = BACKUP_TABLES.filter((t) => (manifestObj[t] ?? 0) >= 0);
+      const manifestObj = (snapshot.manifest ?? {}) as Record<string, number | { rows: number; parts: number }>;
+      const entryRows = (e: number | { rows: number; parts: number } | undefined): number =>
+        typeof e === "number" ? e : (e?.rows ?? 0);
+      const entryParts = (e: number | { rows: number; parts: number } | undefined): number =>
+        typeof e === "number" ? 1 : (e?.parts ?? 1);
+
+      const presentTables = BACKUP_TABLES.filter((t) => entryRows(manifestObj[t]) >= 0 && (manifestObj[t] !== undefined));
 
       // Truncate all (reverse for child-first safety)
       const { error: trErr } = await adminClient.rpc("restore_truncate_all", {
@@ -83,29 +89,43 @@ Deno.serve(async (req) => {
       }
 
       for (const t of BACKUP_TABLES) {
-        if ((manifestObj[t] ?? 0) === 0) { result[t] = 0; continue; }
-        const path = `${folder}/${t}.json`;
-        const { data: dl, error: dlErr } = await adminClient.storage.from(bucket).download(path);
-        if (dlErr) { errors.push({ table: t, error: `download: ${dlErr.message}` }); continue; }
-        let rows: any[] = [];
-        try { rows = JSON.parse(await dl.text()); } catch (e) {
-          errors.push({ table: t, error: `parse: ${(e as Error).message}` }); continue;
-        }
+        const entry = manifestObj[t];
+        if (entry === undefined) { result[t] = 0; continue; }
+        const totalRows = entryRows(entry);
+        const parts = entryParts(entry);
+        if (totalRows === 0) { result[t] = 0; continue; }
+
+        // Build list of file paths to download in order.
+        const paths: string[] = parts === 1
+          ? [`${folder}/${t}.json`]
+          : Array.from({ length: parts }, (_, i) => `${folder}/${t}__part_${String(i).padStart(3, "0")}.json`);
+
         let inserted = 0;
-        for (let i = 0; i < rows.length; i += 500) {
-          const batch = rows.slice(i, i + 500);
-          const { data, error } = await adminClient.rpc("restore_insert_rows", { _table: t, _rows: batch });
-          if (error) { errors.push({ table: t, error: error.message }); break; }
-          inserted += (data as number) ?? batch.length;
+        let failed = false;
+        for (const path of paths) {
+          if (failed) break;
+          const { data: dl, error: dlErr } = await adminClient.storage.from(bucket).download(path);
+          if (dlErr) { errors.push({ table: t, error: `download ${path}: ${dlErr.message}` }); failed = true; break; }
+          let rows: any[] = [];
+          try { rows = JSON.parse(await dl.text()); } catch (e) {
+            errors.push({ table: t, error: `parse ${path}: ${(e as Error).message}` }); failed = true; break;
+          }
+          for (let i = 0; i < rows.length; i += 500) {
+            const batch = rows.slice(i, i + 500);
+            const { data, error } = await adminClient.rpc("restore_insert_rows", { _table: t, _rows: batch });
+            if (error) { errors.push({ table: t, error: error.message }); failed = true; break; }
+            inserted += (data as number) ?? batch.length;
+          }
         }
         result[t] = inserted;
       }
 
       return new Response(
-        JSON.stringify({ success: errors.length === 0, version: 3, restored: result, errors }),
+        JSON.stringify({ success: errors.length === 0, version: snapshot.backup_version ?? 3, restored: result, errors }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
 
     // v2 / v1 fallback (single JSON or legacy subtests-only)
     let tables: Record<string, any[]> | null = null;
