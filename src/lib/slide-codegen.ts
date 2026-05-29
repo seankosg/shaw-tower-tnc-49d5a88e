@@ -1,6 +1,10 @@
 import { supabase } from '@/integrations/supabase/client';
 import { SlideSpecSchema, type SlideSpec } from '@/lib/custom-slide-spec';
-import { insertCustomSlide } from '@/lib/custom-slides-cache';
+import {
+  insertCustomSlide,
+  promoteDraftToActive as promoteDraftToActiveRow,
+  type CustomSlide,
+} from '@/lib/custom-slides-cache';
 import { appendSlideKey } from '@/lib/slide-config';
 
 export type SlideDataSource = 'tnc' | 'defect' | 'docs' | 'punch';
@@ -35,9 +39,32 @@ export async function generateSlideSpec(input: SlideCodegenInput): Promise<Slide
 }
 
 /**
- * Persist a generated SlideSpec to `custom_slides` and append the key to
- * the global slide config so it shows up in Slide Composer and PPT exports
- * immediately — no code change, no redeploy.
+ * Save the preview as a DRAFT immediately after generation so the user can
+ * leave the page and come back to it. Draft rows are NOT exposed in Composer
+ * or PPT Export until promoted via `promoteDraftToReport`.
+ */
+export async function saveSlideDraft(params: {
+  spec: SlideSpec;
+  suggestedKey: string;
+  suggestedLabel: string;
+}): Promise<CustomSlide> {
+  return insertCustomSlide({
+    key: params.suggestedKey,
+    label: params.suggestedLabel,
+    spec: params.spec,
+    status: 'draft',
+  });
+}
+
+/** Promote an existing draft row to active and register its key. */
+export async function promoteDraftToReport(draftId: string): Promise<void> {
+  const row = await promoteDraftToActiveRow(draftId);
+  await appendSlideKey(row.key);
+}
+
+/**
+ * Legacy one-shot: insert as active and register. Kept for callers that don't
+ * use the draft flow.
  */
 export async function addSlideToReport(params: {
   spec: SlideSpec;
@@ -48,6 +75,7 @@ export async function addSlideToReport(params: {
     key: params.suggestedKey,
     label: params.suggestedLabel,
     spec: params.spec,
+    status: 'active',
   });
   await appendSlideKey(params.suggestedKey);
 }
