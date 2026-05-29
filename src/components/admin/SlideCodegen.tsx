@@ -155,6 +155,15 @@ export default function SlideCodegen({ embedded = false, onAdded }: Props) {
     if (canGen) void reloadDrafts();
   }, [canGen, reloadDrafts]);
 
+  // Lazy-load KPI bag once the user enters the preview stage so the slide
+  // renders with real project data. Cached for the component lifetime.
+  useEffect(() => {
+    if (stage === 'preview' && !kpis && !kpisLoading) {
+      void loadKpiBag();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage]);
+
   const orderedSlides = useMemo(
     () => DEFAULT_SLIDE_ORDER.map((k, i) => ({ key: k, number: i + 1, label: SLIDE_REGISTRY[k]?.label ?? k })),
     [],
