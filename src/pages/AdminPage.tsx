@@ -2643,7 +2643,12 @@ type BackupRunLog = {
   started_at: string;
   updated_at?: string;
   finished_at: string | null;
+  auth_users_backed_up?: number | null;
+  storage_objects_backed_up?: number | null;
+  storage_bytes_backed_up?: number | null;
+  integrity_report?: any;
 };
+
 type BackupStatus = {
   schedule: { enabled: boolean; hour_sgt: number; minute: number };
   last_success: BackupRunLog | null;
