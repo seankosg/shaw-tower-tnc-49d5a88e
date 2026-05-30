@@ -2643,7 +2643,12 @@ type BackupRunLog = {
   started_at: string;
   updated_at?: string;
   finished_at: string | null;
+  auth_users_backed_up?: number | null;
+  storage_objects_backed_up?: number | null;
+  storage_bytes_backed_up?: number | null;
+  integrity_report?: any;
 };
+
 type BackupStatus = {
   schedule: { enabled: boolean; hour_sgt: number; minute: number };
   last_success: BackupRunLog | null;
@@ -2707,10 +2712,13 @@ function BackupTab() {
   useEffect(() => {
     if (!pendingRunId || !status?.last_run) return;
     if (status.last_run.id !== pendingRunId) return;
-    if (status.last_run.status === 'success') {
+    if (status.last_run.status === 'success' || status.last_run.status === 'success_with_warnings') {
+      const lr = status.last_run;
+      const warn = lr.status === 'success_with_warnings';
       toast({
-        title: 'Snapshot created',
-        description: `${(status.last_run.total_rows ?? 0).toLocaleString()} rows across ${status.last_run.total_tables ?? 0} tables`,
+        title: warn ? 'Snapshot completed with warnings' : 'Snapshot created',
+        description: `${(lr.total_rows ?? 0).toLocaleString()} rows / ${lr.auth_users_backed_up ?? 0} users / ${lr.storage_objects_backed_up ?? 0} objects`,
+        variant: warn ? 'destructive' : 'default',
       });
       setPendingRunId(null);
       load();
@@ -2723,6 +2731,7 @@ function BackupTab() {
       setPendingRunId(null);
     }
   }, [status, pendingRunId]);
+
 
   const createSnapshot = async () => {
     setSaving(true);
@@ -2772,11 +2781,18 @@ function BackupTab() {
         ? Object.values(restored as Record<string, number>).reduce((a, b) => a + b, 0)
         : restored;
       const errCount = (data?.errors || []).length;
+      const authR = data?.restored_auth_users ?? 0;
+      const stoR = data?.restored_storage_objects ?? 0;
+      const ig = data?.integrity_report;
+      const mismatch = (ig?.tables_mismatch?.length ?? 0)
+        + (ig && ig.auth_expected !== ig.auth_actual ? 1 : 0)
+        + (ig && ig.storage_expected !== ig.storage_actual ? 1 : 0);
       toast({
-        title: errCount ? 'Restore finished with errors' : 'Restore complete',
-        description: `${total?.toLocaleString?.() ?? total} rows restored${errCount ? ` · ${errCount} table errors` : ''}${data?.legacy_v1 ? ' (legacy snapshot — subtests only)' : ''}`,
-        variant: errCount ? 'destructive' : 'default',
+        title: errCount ? 'Restore finished with errors' : (mismatch ? 'Restore complete (integrity warnings)' : 'Restore complete'),
+        description: `${total?.toLocaleString?.() ?? total} rows · ${authR} users · ${stoR} objects${errCount ? ` · ${errCount} errors` : ''}${mismatch ? ` · ${mismatch} mismatches` : ''}${data?.legacy_v1 ? ' (legacy snapshot — subtests only)' : ''}`,
+        variant: errCount || mismatch ? 'destructive' : 'default',
       });
+
     } catch (e: any) {
       toast({ title: 'Restore failed', description: e.message, variant: 'destructive' });
     }
@@ -2806,10 +2822,12 @@ function BackupTab() {
 
   const statusBadge = (s?: string | null) => {
     if (s === 'success') return <Badge variant="secondary" className="text-xs">Success</Badge>;
+    if (s === 'success_with_warnings') return <Badge variant="outline" className="text-xs border-amber-500 text-amber-700">Success (warnings)</Badge>;
     if (s === 'failed') return <Badge variant="destructive" className="text-xs">Failed</Badge>;
     if (s === 'running') return <Badge className="text-xs">Running</Badge>;
     return <Badge variant="outline" className="text-xs">—</Badge>;
   };
+
 
   return (
     <div className="space-y-4">
@@ -2854,6 +2872,14 @@ function BackupTab() {
                     </>
                   : <span className="text-muted-foreground">Never</span>}
               </div>
+              {lastSuccess && (
+                <div className="text-xs text-muted-foreground">
+                  {lastSuccess.auth_users_backed_up ?? 0} auth users · {lastSuccess.storage_objects_backed_up ?? 0} storage objects
+                  {typeof lastSuccess.storage_bytes_backed_up === 'number' && lastSuccess.storage_bytes_backed_up > 0
+                    ? ` (${(lastSuccess.storage_bytes_backed_up / 1024 / 1024).toFixed(1)} MB)`
+                    : ''}
+                </div>
+              )}
               {overdue && (
                 <Badge variant="destructive" className="text-xs gap-1">
                   <AlertTriangle className="h-3 w-3" />
@@ -2876,7 +2902,26 @@ function BackupTab() {
                   {lastRun.message}
                 </p>
               )}
+              {lastRun?.integrity_report && (
+                <details className="text-xs text-muted-foreground">
+                  <summary className="cursor-pointer hover:text-foreground">Integrity report</summary>
+                  <div className="mt-1 space-y-0.5 pl-2">
+                    <div>Tables checked: {lastRun.integrity_report.tables_checked ?? 0}</div>
+                    {(lastRun.integrity_report.tables_mismatch ?? []).length > 0 && (
+                      <div className="text-amber-700">
+                        Mismatches: {lastRun.integrity_report.tables_mismatch.map((m: any) => `${m.table}(${m.actual}/${m.manifest})`).join(', ')}
+                      </div>
+                    )}
+                    <div>
+                      Auth users: backed up {lastRun.integrity_report.auth_users_backed_up ?? lastRun.auth_users_backed_up ?? 0}
+                      {lastRun.integrity_report.auth_users_actual !== undefined && ` / actual ${lastRun.integrity_report.auth_users_actual}`}
+                    </div>
+                    <div>Storage sampled: {lastRun.integrity_report.storage_sampled ?? 0}, missing: {(lastRun.integrity_report.storage_missing ?? []).length}</div>
+                  </div>
+                </details>
+              )}
             </div>
+
           </div>
         </CardContent>
       </Card>
@@ -2956,8 +3001,11 @@ function BackupTab() {
             <AlertDialogTitle>Restore Snapshot?</AlertDialogTitle>
             <AlertDialogDescription>
               This will WIPE all current data across every backed-up table (Subtests, Defect, Docs, Warranty, masters, permissions, audit logs) and replace it with the snapshot.
+              Auth users (login accounts, password hashes) and Storage objects (photos, attachments) included in the snapshot will also be restored.
+              A pre-restore safety backup is created automatically before any data is truncated.
               This action cannot be undone. Legacy snapshots created before the full-backup upgrade will only restore the Subtests table.
             </AlertDialogDescription>
+
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
