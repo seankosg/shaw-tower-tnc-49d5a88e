@@ -2872,6 +2872,14 @@ function BackupTab() {
                     </>
                   : <span className="text-muted-foreground">Never</span>}
               </div>
+              {lastSuccess && (
+                <div className="text-xs text-muted-foreground">
+                  {lastSuccess.auth_users_backed_up ?? 0} auth users · {lastSuccess.storage_objects_backed_up ?? 0} storage objects
+                  {typeof lastSuccess.storage_bytes_backed_up === 'number' && lastSuccess.storage_bytes_backed_up > 0
+                    ? ` (${(lastSuccess.storage_bytes_backed_up / 1024 / 1024).toFixed(1)} MB)`
+                    : ''}
+                </div>
+              )}
               {overdue && (
                 <Badge variant="destructive" className="text-xs gap-1">
                   <AlertTriangle className="h-3 w-3" />
@@ -2894,7 +2902,26 @@ function BackupTab() {
                   {lastRun.message}
                 </p>
               )}
+              {lastRun?.integrity_report && (
+                <details className="text-xs text-muted-foreground">
+                  <summary className="cursor-pointer hover:text-foreground">Integrity report</summary>
+                  <div className="mt-1 space-y-0.5 pl-2">
+                    <div>Tables checked: {lastRun.integrity_report.tables_checked ?? 0}</div>
+                    {(lastRun.integrity_report.tables_mismatch ?? []).length > 0 && (
+                      <div className="text-amber-700">
+                        Mismatches: {lastRun.integrity_report.tables_mismatch.map((m: any) => `${m.table}(${m.actual}/${m.manifest})`).join(', ')}
+                      </div>
+                    )}
+                    <div>
+                      Auth users: backed up {lastRun.integrity_report.auth_users_backed_up ?? lastRun.auth_users_backed_up ?? 0}
+                      {lastRun.integrity_report.auth_users_actual !== undefined && ` / actual ${lastRun.integrity_report.auth_users_actual}`}
+                    </div>
+                    <div>Storage sampled: {lastRun.integrity_report.storage_sampled ?? 0}, missing: {(lastRun.integrity_report.storage_missing ?? []).length}</div>
+                  </div>
+                </details>
+              )}
             </div>
+
           </div>
         </CardContent>
       </Card>
