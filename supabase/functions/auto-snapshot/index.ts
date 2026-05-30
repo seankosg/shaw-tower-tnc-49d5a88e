@@ -264,11 +264,16 @@ Deno.serve(async (req) => {
         started_at: new Date().toISOString(),
         triggered_by: triggeredBy,
         run_log_id: runRow?.id ?? null,
+        stage: "tables",
         cursor_table: 0,
         cursor_offset: 0,
         cursor_parts: 0,
         manifest: {},
+        storage_objects_done: 0,
+        storage_bytes_done: 0,
+        storage_manifest: [],
       };
+
       await saveProgress(adminClient, progress);
 
       // Start processing in the same invocation; will self-trigger if time runs short.
