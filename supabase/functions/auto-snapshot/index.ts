@@ -47,6 +47,8 @@ async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
 
 type ManifestEntry = { rows: number; parts: number };
 
+type Stage = "tables" | "auth" | "storage" | "verify" | "done";
+
 type Progress = {
   snapshot_type: "auto" | "manual";
   note: string;
@@ -55,6 +57,8 @@ type Progress = {
   started_at: string;
   triggered_by: string | null;
   run_log_id: string | null;
+  /** Current pipeline stage. */
+  stage?: Stage;
   /** Index into BACKUP_TABLES of the next/current table to process. */
   cursor_table: number;
   /** Offset within current table (rows already dumped to part files). */
@@ -63,7 +67,19 @@ type Progress = {
   cursor_parts: number;
   /** Per-table accumulated results. */
   manifest: Record<string, ManifestEntry>;
+  /** Auth users dump result. */
+  auth_users_count?: number;
+  /** Storage backup state. */
+  storage_buckets?: string[];
+  storage_cursor_bucket?: number;
+  storage_cursor_offset?: number; // offset within current bucket's object list
+  storage_objects_done?: number;
+  storage_bytes_done?: number;
+  storage_manifest?: Array<{ bucket: string; name: string; size: number; mimetype?: string | null }>;
+  /** Integrity report. */
+  integrity_report?: unknown;
 };
+
 
 async function loadProgress(client: any, folder: string): Promise<Progress> {
   const { data, error } = await client.storage.from(BUCKET).download(`${folder}/_progress.json`);
