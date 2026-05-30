@@ -147,12 +147,25 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { snapshot_id, skip_safety_backup } = body as { snapshot_id?: string; skip_safety_backup?: boolean };
+    const {
+      snapshot_id,
+      skip_safety_backup,
+      skip_auth_restore,
+      skip_storage_restore,
+      overwrite_existing_users,
+    } = body as {
+      snapshot_id?: string;
+      skip_safety_backup?: boolean;
+      skip_auth_restore?: boolean;
+      skip_storage_restore?: boolean;
+      overwrite_existing_users?: boolean;
+    };
     if (!snapshot_id) {
       return new Response(JSON.stringify({ error: "snapshot_id required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     const { data: snapshot, error: snapErr } = await adminClient
       .from("database_snapshots")
