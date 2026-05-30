@@ -329,107 +329,288 @@ Deno.serve(async (req) => {
   }
 });
 
+// Storage buckets to mirror (everything except our own backup bucket).
+const SYSTEM_BUCKETS = new Set<string>([BUCKET]);
+// Max storage objects copied per single invocation chunk before checking time budget.
+const STORAGE_OBJS_PER_PAGE = Number(Deno.env.get("SNAPSHOT_STORAGE_PAGE") ?? 25);
+
 /**
- * Drive the snapshot forward from the current cursor. Either completes the
- * snapshot or saves progress and self-triggers when the soft time limit is hit.
+ * Drive the snapshot forward through stages: tables → auth → storage → verify → done.
+ * Self-triggers when the soft time limit is hit.
  */
 async function processWork(client: any, progress: Progress, startedAt: number): Promise<void> {
+  // Back-compat: default older progress files without stage.
+  if (!progress.stage) progress.stage = "tables";
+
+  const overBudget = () => Date.now() - startedAt > SOFT_TIME_LIMIT_MS;
+  const bail = async (msg: string) => {
+    await saveProgress(client, progress);
+    await logRunUpdate(client, progress.run_log_id, { message: msg });
+    selfTrigger(progress.folder);
+  };
+
   try {
-    while (progress.cursor_table < BACKUP_TABLES.length) {
-      // Bail out and resume in next invocation if we've used the budget.
-      if (Date.now() - startedAt > SOFT_TIME_LIMIT_MS) {
-        await saveProgress(client, progress);
-        await logRunUpdate(client, progress.run_log_id, {
-          message: `In progress: ${progress.cursor_table}/${BACKUP_TABLES.length} tables, resuming`,
-        });
-        selfTrigger(progress.folder);
-        return;
-      }
-
-      const table = BACKUP_TABLES[progress.cursor_table];
-
-      // Skip table that finished in a previous invocation.
-      if (progress.manifest[table]) {
-        progress.cursor_table += 1;
-        progress.cursor_offset = 0;
-        progress.cursor_parts = 0;
-        continue;
-      }
-
-      const single = progress.cursor_offset === 0; // optimistic — we'll see if more pages come
-
-      // Fetch one page from the current offset.
-      const from = progress.cursor_offset;
-      const to = from + PAGE_SIZE - 1;
-      let pageRows: any[] = [];
-      try {
-        const res = await withRetry(`select ${table} @${from}`, async () => {
-          const r = await client.from(table).select("*").range(from, to);
-          if (r.error) throw new Error(r.error.message);
-          return r;
-        });
-        pageRows = res.data ?? [];
-      } catch (e) {
-        // Table doesn't exist or fatal SELECT error — record and skip.
-        console.error(`select failed for ${table}:`, (e as Error).message);
-        progress.manifest[table] = { rows: progress.cursor_offset, parts: progress.cursor_parts };
-        progress.cursor_table += 1;
-        progress.cursor_offset = 0;
-        progress.cursor_parts = 0;
-        await saveProgress(client, progress);
-        continue;
-      }
-
-      if (pageRows.length === 0) {
-        // Finished this table — no more rows beyond cursor_offset.
-        if (progress.cursor_parts === 0) {
-          // Empty table: still write an empty file so restore is uniform.
-          await uploadPart(client, progress.folder, table, 0, [], true);
-          progress.manifest[table] = { rows: 0, parts: 1 };
-        } else if (progress.cursor_parts === 1) {
-          // Single-part table: promote part_000 to legacy single-file name for
-          // restore back-compat. Re-download the part to re-upload as <table>.json,
-          // then drop the part file.
-          const partPath = `${progress.folder}/${table}__part_000.json`;
-          try {
-            const { data: dl, error: dlErr } = await client.storage.from(BUCKET).download(partPath);
-            if (!dlErr && dl) {
-              const rows = JSON.parse(await dl.text());
-              await uploadPart(client, progress.folder, table, 0, rows, true);
-              await client.storage.from(BUCKET).remove([partPath]).catch(() => {});
-            }
-          } catch (e) {
-            console.warn(`promote ${table} single-file failed:`, (e as Error).message);
-          }
-          progress.manifest[table] = { rows: progress.cursor_offset, parts: 1 };
-        } else {
-          progress.manifest[table] = { rows: progress.cursor_offset, parts: progress.cursor_parts };
+    // ───────────────────────────── STAGE: TABLES ─────────────────────────────
+    if (progress.stage === "tables") {
+      while (progress.cursor_table < BACKUP_TABLES.length) {
+        if (overBudget()) {
+          await bail(`In progress: ${progress.cursor_table}/${BACKUP_TABLES.length} tables, resuming`);
+          return;
         }
-        progress.cursor_table += 1;
-        progress.cursor_offset = 0;
-        progress.cursor_parts = 0;
+        const table = BACKUP_TABLES[progress.cursor_table];
+        if (progress.manifest[table]) {
+          progress.cursor_table += 1;
+          progress.cursor_offset = 0;
+          progress.cursor_parts = 0;
+          continue;
+        }
+        const from = progress.cursor_offset;
+        const to = from + PAGE_SIZE - 1;
+        let pageRows: any[] = [];
+        try {
+          const res = await withRetry(`select ${table} @${from}`, async () => {
+            const r = await client.from(table).select("*").range(from, to);
+            if (r.error) throw new Error(r.error.message);
+            return r;
+          });
+          pageRows = res.data ?? [];
+        } catch (e) {
+          console.error(`select failed for ${table}:`, (e as Error).message);
+          progress.manifest[table] = { rows: progress.cursor_offset, parts: progress.cursor_parts };
+          progress.cursor_table += 1;
+          progress.cursor_offset = 0;
+          progress.cursor_parts = 0;
+          await saveProgress(client, progress);
+          continue;
+        }
+
+        if (pageRows.length === 0) {
+          if (progress.cursor_parts === 0) {
+            await uploadPart(client, progress.folder, table, 0, [], true);
+            progress.manifest[table] = { rows: 0, parts: 1 };
+          } else if (progress.cursor_parts === 1) {
+            const partPath = `${progress.folder}/${table}__part_000.json`;
+            try {
+              const { data: dl, error: dlErr } = await client.storage.from(BUCKET).download(partPath);
+              if (!dlErr && dl) {
+                const rows = JSON.parse(await dl.text());
+                await uploadPart(client, progress.folder, table, 0, rows, true);
+                await client.storage.from(BUCKET).remove([partPath]).catch(() => {});
+              }
+            } catch (e) {
+              console.warn(`promote ${table} single-file failed:`, (e as Error).message);
+            }
+            progress.manifest[table] = { rows: progress.cursor_offset, parts: 1 };
+          } else {
+            progress.manifest[table] = { rows: progress.cursor_offset, parts: progress.cursor_parts };
+          }
+          progress.cursor_table += 1;
+          progress.cursor_offset = 0;
+          progress.cursor_parts = 0;
+          await saveProgress(client, progress);
+          continue;
+        }
+
+        await uploadPart(client, progress.folder, table, progress.cursor_parts, pageRows, false);
+        progress.cursor_parts += 1;
+        progress.cursor_offset += pageRows.length;
         await saveProgress(client, progress);
-        continue;
+      }
+      // Tables done → advance.
+      progress.stage = "auth";
+      await saveProgress(client, progress);
+      await logRunUpdate(client, progress.run_log_id, {
+        message: `Tables done: ${Object.keys(progress.manifest).length}/${BACKUP_TABLES.length}; dumping auth.users`,
+      });
+    }
+
+    // ───────────────────────────── STAGE: AUTH ───────────────────────────────
+    if (progress.stage === "auth") {
+      if (overBudget()) { await bail(`Resuming at auth stage`); return; }
+      const { data: rows, error } = await client.rpc("dump_auth_users_with_hash");
+      if (error) {
+        console.error("auth dump failed:", error.message);
+        progress.auth_users_count = 0;
+      } else {
+        const list = Array.isArray(rows) ? rows : [];
+        const path = `${progress.folder}/__auth_users.json`;
+        await withRetry("upload auth users", async () => {
+          const { error: upErr } = await client.storage.from(BUCKET).upload(
+            path,
+            new Blob([JSON.stringify(list)], { type: "application/json" }),
+            { contentType: "application/json", upsert: true },
+          );
+          if (upErr) throw new Error(upErr.message);
+        });
+        progress.auth_users_count = list.length;
+      }
+      progress.stage = "storage";
+      await saveProgress(client, progress);
+      await logRunUpdate(client, progress.run_log_id, {
+        message: `Auth dumped (${progress.auth_users_count ?? 0} users); copying storage objects`,
+      });
+    }
+
+    // ───────────────────────────── STAGE: STORAGE ────────────────────────────
+    if (progress.stage === "storage") {
+      // Initialize bucket list once.
+      if (!progress.storage_buckets) {
+        const { data: bkts, error } = await client.storage.listBuckets();
+        if (error) throw new Error(`listBuckets: ${error.message}`);
+        progress.storage_buckets = (bkts ?? [])
+          .map((b: any) => b.name as string)
+          .filter((n: string) => !SYSTEM_BUCKETS.has(n));
+        progress.storage_cursor_bucket = 0;
+        progress.storage_cursor_offset = 0;
+        progress.storage_manifest = progress.storage_manifest ?? [];
+        await saveProgress(client, progress);
       }
 
-      // Write this page as a part file. Promotion to legacy single-file name
-      // happens at end-of-table (empty-page branch above) when parts == 1.
-      await uploadPart(client, progress.folder, table, progress.cursor_parts, pageRows, false);
+      while ((progress.storage_cursor_bucket ?? 0) < progress.storage_buckets!.length) {
+        if (overBudget()) {
+          await bail(`Storage in progress: bucket ${progress.storage_cursor_bucket}/${progress.storage_buckets!.length}, ${progress.storage_objects_done} objects copied`);
+          return;
+        }
+        const bucket = progress.storage_buckets![progress.storage_cursor_bucket!];
+        const from = progress.storage_cursor_offset ?? 0;
+        const to = from + STORAGE_OBJS_PER_PAGE - 1;
+        // Use storage.objects via service role to list all rows in this bucket.
+        const { data: objs, error } = await client
+          .schema("storage")
+          .from("objects")
+          .select("name, metadata")
+          .eq("bucket_id", bucket)
+          .order("name")
+          .range(from, to);
+        if (error) {
+          console.error(`list storage ${bucket} @${from}:`, error.message);
+          // Move to next bucket on listing failure.
+          progress.storage_cursor_bucket = (progress.storage_cursor_bucket ?? 0) + 1;
+          progress.storage_cursor_offset = 0;
+          await saveProgress(client, progress);
+          continue;
+        }
+        const rows = (objs ?? []) as Array<{ name: string; metadata: any }>;
+        if (rows.length === 0) {
+          progress.storage_cursor_bucket = (progress.storage_cursor_bucket ?? 0) + 1;
+          progress.storage_cursor_offset = 0;
+          await saveProgress(client, progress);
+          continue;
+        }
 
-      progress.cursor_parts += 1;
-      progress.cursor_offset += pageRows.length;
+        for (const row of rows) {
+          if (overBudget()) {
+            await saveProgress(client, progress);
+            await bail(`Storage copy budget hit at ${bucket}/${row.name}`);
+            return;
+          }
+          const size = Number(row?.metadata?.size ?? 0);
+          const mimetype = row?.metadata?.mimetype ?? null;
+          try {
+            const { data: dl, error: dlErr } = await client.storage.from(bucket).download(row.name);
+            if (dlErr) throw new Error(dlErr.message);
+            const dest = `${progress.folder}/__storage/${bucket}/${row.name}`;
+            const { error: upErr } = await client.storage.from(BUCKET).upload(
+              dest, dl, { contentType: mimetype ?? "application/octet-stream", upsert: true },
+            );
+            if (upErr) throw new Error(upErr.message);
+            progress.storage_manifest!.push({ bucket, name: row.name, size, mimetype });
+            progress.storage_objects_done = (progress.storage_objects_done ?? 0) + 1;
+            progress.storage_bytes_done = (progress.storage_bytes_done ?? 0) + size;
+          } catch (e) {
+            console.warn(`copy ${bucket}/${row.name} failed:`, (e as Error).message);
+          }
+          progress.storage_cursor_offset = (progress.storage_cursor_offset ?? 0) + 1;
+        }
+        await saveProgress(client, progress);
+      }
 
-      // Save progress every page so a crash doesn't lose work.
+      // Upload the storage manifest once all buckets done.
+      const sPath = `${progress.folder}/__storage_manifest.json`;
+      await withRetry("upload storage manifest", async () => {
+        const { error } = await client.storage.from(BUCKET).upload(
+          sPath,
+          new Blob([JSON.stringify({
+            version: 1,
+            buckets: progress.storage_buckets,
+            objects_count: progress.storage_objects_done ?? 0,
+            bytes: progress.storage_bytes_done ?? 0,
+            entries: progress.storage_manifest ?? [],
+          })], { type: "application/json" }),
+          { contentType: "application/json", upsert: true },
+        );
+        if (error) throw new Error(error.message);
+      });
+
+      progress.stage = "verify";
+      await saveProgress(client, progress);
+      await logRunUpdate(client, progress.run_log_id, {
+        message: `Storage copied (${progress.storage_objects_done ?? 0} objects); verifying integrity`,
+      });
+    }
+
+    // ───────────────────────────── STAGE: VERIFY ─────────────────────────────
+    if (progress.stage === "verify") {
+      const report: any = {
+        tables_checked: 0,
+        tables_mismatch: [] as Array<{ table: string; manifest: number; actual: number }>,
+        storage_sampled: 0,
+        storage_missing: [] as string[],
+        auth_users_ok: true,
+      };
+      for (const t of Object.keys(progress.manifest)) {
+        if (overBudget()) { await bail("Resuming verification"); return; }
+        const expected = progress.manifest[t]?.rows ?? 0;
+        const { count, error } = await client.from(t).select("*", { count: "exact", head: true });
+        if (error) continue;
+        report.tables_checked += 1;
+        const actual = count ?? 0;
+        // Backup is non-transactional; actual ≥ expected is acceptable (writes during backup).
+        if (actual < expected) {
+          report.tables_mismatch.push({ table: t, manifest: expected, actual });
+        }
+      }
+      // Storage sample (up to 20 entries)
+      const entries = (progress.storage_manifest ?? []);
+      const sample = entries.length <= 20 ? entries : entries
+        .filter((_, i) => i % Math.ceil(entries.length / 20) === 0).slice(0, 20);
+      for (const e of sample) {
+        report.storage_sampled += 1;
+        try {
+          const dest = `${progress.folder}/__storage/${e.bucket}/${e.name}`;
+          const { data, error } = await client.storage.from(BUCKET).list(
+            dest.split("/").slice(0, -1).join("/"),
+            { search: dest.split("/").pop()! },
+          );
+          if (error || !data || data.length === 0) report.storage_missing.push(`${e.bucket}/${e.name}`);
+        } catch { report.storage_missing.push(`${e.bucket}/${e.name}`); }
+      }
+      // Auth users count
+      try {
+        const { data: cnt } = await client.rpc("count_auth_users");
+        const actual = typeof cnt === "number" ? cnt : Number(cnt ?? 0);
+        report.auth_users_actual = actual;
+        report.auth_users_backed_up = progress.auth_users_count ?? 0;
+        if (actual !== (progress.auth_users_count ?? 0)) report.auth_users_ok = false;
+      } catch { /* ignore */ }
+
+      progress.integrity_report = report;
+      progress.stage = "done";
       await saveProgress(client, progress);
     }
 
-    // === FINALIZE ===
+    // ───────────────────────────── FINALIZE ──────────────────────────────────
     const manifestPayload = {
-      version: 4,
+      version: 5,
       generated_at: new Date().toISOString(),
       snapshot_type: progress.snapshot_type,
       tables: BACKUP_TABLES,
       manifest: progress.manifest,
+      auth_users_count: progress.auth_users_count ?? 0,
+      storage_objects_count: progress.storage_objects_done ?? 0,
+      storage_bytes: progress.storage_bytes_done ?? 0,
+      storage_buckets: progress.storage_buckets ?? [],
+      integrity_report: progress.integrity_report ?? null,
     };
     const manifestPath = `${progress.folder}/manifest.json`;
     await withRetry("upload manifest", async () => {
@@ -455,25 +636,37 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
       note: progress.note,
       storage_path: manifestPath,
       manifest: progress.manifest,
-      backup_version: 4,
+      backup_version: 5,
     });
     if (insErr) throw new Error(`db insert: ${insErr.message}`);
 
     await client.storage.from(BUCKET).remove([`${progress.folder}/_progress.json`]).catch(() => {});
 
+    const report: any = progress.integrity_report ?? {};
+    const hasWarnings = (report.tables_mismatch?.length ?? 0) > 0
+      || (report.storage_missing?.length ?? 0) > 0
+      || report.auth_users_ok === false;
+
     await logRunUpdate(client, progress.run_log_id, {
-      status: "success",
-      message: `Completed: ${totalRows.toLocaleString()} rows across ${totalTables} tables`,
+      status: hasWarnings ? "success_with_warnings" : "success",
+      message: hasWarnings
+        ? `Completed with warnings: ${totalRows.toLocaleString()} rows, ${progress.auth_users_count ?? 0} users, ${progress.storage_objects_done ?? 0} objects`
+        : `Completed: ${totalRows.toLocaleString()} rows / ${progress.auth_users_count ?? 0} users / ${progress.storage_objects_done ?? 0} objects`,
       total_rows: totalRows,
       total_tables: totalTables,
+      auth_users_backed_up: progress.auth_users_count ?? 0,
+      storage_objects_backed_up: progress.storage_objects_done ?? 0,
+      storage_bytes_backed_up: progress.storage_bytes_done ?? 0,
+      integrity_report: progress.integrity_report ?? null,
       finished_at: new Date().toISOString(),
     });
   } catch (e) {
     console.error("processWork error:", e);
     await logRunUpdate(client, progress.run_log_id, {
       status: "failed",
-      message: `Failed at table index ${progress.cursor_table} (${BACKUP_TABLES[progress.cursor_table] ?? "?"}): ${(e as Error).message}`,
+      message: `Failed at stage ${progress.stage} (table index ${progress.cursor_table}, ${BACKUP_TABLES[progress.cursor_table] ?? "?"}): ${(e as Error).message}`,
       finished_at: new Date().toISOString(),
     });
   }
 }
+
