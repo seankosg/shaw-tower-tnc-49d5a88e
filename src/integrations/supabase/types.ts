@@ -37,39 +37,51 @@ export type Database = {
       }
       backup_run_log: {
         Row: {
+          auth_users_backed_up: number | null
           finished_at: string | null
           folder: string | null
           id: string
+          integrity_report: Json | null
           message: string | null
           snapshot_type: string
           started_at: string
           status: string
+          storage_bytes_backed_up: number | null
+          storage_objects_backed_up: number | null
           total_rows: number | null
           total_tables: number | null
           triggered_by: string | null
           updated_at: string
         }
         Insert: {
+          auth_users_backed_up?: number | null
           finished_at?: string | null
           folder?: string | null
           id?: string
+          integrity_report?: Json | null
           message?: string | null
           snapshot_type: string
           started_at?: string
           status: string
+          storage_bytes_backed_up?: number | null
+          storage_objects_backed_up?: number | null
           total_rows?: number | null
           total_tables?: number | null
           triggered_by?: string | null
           updated_at?: string
         }
         Update: {
+          auth_users_backed_up?: number | null
           finished_at?: string | null
           folder?: string | null
           id?: string
+          integrity_report?: Json | null
           message?: string | null
           snapshot_type?: string
           started_at?: string
           status?: string
+          storage_bytes_backed_up?: number | null
+          storage_objects_backed_up?: number | null
           total_rows?: number | null
           total_tables?: number | null
           triggered_by?: string | null
@@ -3079,9 +3091,12 @@ export type Database = {
           errors: Json | null
           finished_at: string | null
           id: string
+          integrity_report: Json | null
           message: string | null
           pre_restore_backup_run_id: string | null
           pre_restore_snapshot_id: string | null
+          restored_auth_users: number | null
+          restored_storage_objects: number | null
           restored_tables: Json | null
           snapshot_id: string | null
           started_at: string
@@ -3095,9 +3110,12 @@ export type Database = {
           errors?: Json | null
           finished_at?: string | null
           id?: string
+          integrity_report?: Json | null
           message?: string | null
           pre_restore_backup_run_id?: string | null
           pre_restore_snapshot_id?: string | null
+          restored_auth_users?: number | null
+          restored_storage_objects?: number | null
           restored_tables?: Json | null
           snapshot_id?: string | null
           started_at?: string
@@ -3111,9 +3129,12 @@ export type Database = {
           errors?: Json | null
           finished_at?: string | null
           id?: string
+          integrity_report?: Json | null
           message?: string | null
           pre_restore_backup_run_id?: string | null
           pre_restore_snapshot_id?: string | null
+          restored_auth_users?: number | null
+          restored_storage_objects?: number | null
           restored_tables?: Json | null
           snapshot_id?: string | null
           started_at?: string
@@ -4968,6 +4989,7 @@ export type Database = {
           status: string
         }[]
       }
+      count_auth_users: { Args: never; Returns: number }
       create_omm_resubmission: {
         Args: { p_parent_id: string; p_stage: string }
         Returns: string
@@ -4984,6 +5006,7 @@ export type Database = {
       delete_docs_import_batch: { Args: { _batch_id: string }; Returns: Json }
       delete_subtests_cascade: { Args: { _ids: string[] }; Returns: Json }
       delete_warranty_cascade: { Args: { _ids: string[] }; Returns: Json }
+      dump_auth_users_with_hash: { Args: never; Returns: Json[] }
       get_backup_status: { Args: never; Returns: Json }
       get_defect_comment_summary: {
         Args: { _defect_ids: string[] }
@@ -5110,6 +5133,10 @@ export type Database = {
         Returns: undefined
       }
       purge_old_event_log: { Args: never; Returns: number }
+      restore_auth_user: {
+        Args: { _overwrite?: boolean; _payload: Json }
+        Returns: string
+      }
       restore_insert_rows: {
         Args: { _rows: Json; _table: string }
         Returns: number
