@@ -2822,10 +2822,12 @@ function BackupTab() {
 
   const statusBadge = (s?: string | null) => {
     if (s === 'success') return <Badge variant="secondary" className="text-xs">Success</Badge>;
+    if (s === 'success_with_warnings') return <Badge variant="outline" className="text-xs border-amber-500 text-amber-700">Success (warnings)</Badge>;
     if (s === 'failed') return <Badge variant="destructive" className="text-xs">Failed</Badge>;
     if (s === 'running') return <Badge className="text-xs">Running</Badge>;
     return <Badge variant="outline" className="text-xs">—</Badge>;
   };
+
 
   return (
     <div className="space-y-4">
