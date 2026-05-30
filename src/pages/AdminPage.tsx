@@ -2781,11 +2781,18 @@ function BackupTab() {
         ? Object.values(restored as Record<string, number>).reduce((a, b) => a + b, 0)
         : restored;
       const errCount = (data?.errors || []).length;
+      const authR = data?.restored_auth_users ?? 0;
+      const stoR = data?.restored_storage_objects ?? 0;
+      const ig = data?.integrity_report;
+      const mismatch = (ig?.tables_mismatch?.length ?? 0)
+        + (ig && ig.auth_expected !== ig.auth_actual ? 1 : 0)
+        + (ig && ig.storage_expected !== ig.storage_actual ? 1 : 0);
       toast({
-        title: errCount ? 'Restore finished with errors' : 'Restore complete',
-        description: `${total?.toLocaleString?.() ?? total} rows restored${errCount ? ` · ${errCount} table errors` : ''}${data?.legacy_v1 ? ' (legacy snapshot — subtests only)' : ''}`,
-        variant: errCount ? 'destructive' : 'default',
+        title: errCount ? 'Restore finished with errors' : (mismatch ? 'Restore complete (integrity warnings)' : 'Restore complete'),
+        description: `${total?.toLocaleString?.() ?? total} rows · ${authR} users · ${stoR} objects${errCount ? ` · ${errCount} errors` : ''}${mismatch ? ` · ${mismatch} mismatches` : ''}${data?.legacy_v1 ? ' (legacy snapshot — subtests only)' : ''}`,
+        variant: errCount || mismatch ? 'destructive' : 'default',
       });
+
     } catch (e: any) {
       toast({ title: 'Restore failed', description: e.message, variant: 'destructive' });
     }
