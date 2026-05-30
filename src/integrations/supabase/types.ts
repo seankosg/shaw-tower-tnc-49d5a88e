@@ -3074,6 +3074,57 @@ export type Database = {
         }
         Relationships: []
       }
+      restore_run_log: {
+        Row: {
+          errors: Json | null
+          finished_at: string | null
+          id: string
+          message: string | null
+          pre_restore_backup_run_id: string | null
+          pre_restore_snapshot_id: string | null
+          restored_tables: Json | null
+          snapshot_id: string | null
+          started_at: string
+          status: string
+          total_rows: number | null
+          total_tables: number | null
+          triggered_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          errors?: Json | null
+          finished_at?: string | null
+          id?: string
+          message?: string | null
+          pre_restore_backup_run_id?: string | null
+          pre_restore_snapshot_id?: string | null
+          restored_tables?: Json | null
+          snapshot_id?: string | null
+          started_at?: string
+          status?: string
+          total_rows?: number | null
+          total_tables?: number | null
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          errors?: Json | null
+          finished_at?: string | null
+          id?: string
+          message?: string | null
+          pre_restore_backup_run_id?: string | null
+          pre_restore_snapshot_id?: string | null
+          restored_tables?: Json | null
+          snapshot_id?: string | null
+          started_at?: string
+          status?: string
+          total_rows?: number | null
+          total_tables?: number | null
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sc_no_history: {
         Row: {
           changed_at: string
