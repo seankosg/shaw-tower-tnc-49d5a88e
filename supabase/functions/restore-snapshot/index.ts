@@ -286,29 +286,139 @@ Deno.serve(async (req) => {
       }
 
       const totalRestored = Object.values(result).reduce((a, b) => a + b, 0);
+
+      // ── Restore auth.users ──────────────────────────────────────────────
+      let authRestored = 0;
+      let authErrors: Array<{ id?: string; error: string }> = [];
+      if (!skip_auth_restore) {
+        await updateRunLog({ status: "restore_in_progress", message: "Restoring auth.users" });
+        try {
+          const authPath = `${folder}/__auth_users.json`;
+          const { data: dl, error: dlErr } = await adminClient.storage.from(bucket).download(authPath);
+          if (dlErr) {
+            authErrors.push({ error: `auth_users.json missing: ${dlErr.message}` });
+          } else {
+            const users = JSON.parse(await dl.text()) as any[];
+            for (const u of users) {
+              const { data, error } = await adminClient.rpc("restore_auth_user", {
+                _payload: u, _overwrite: !!overwrite_existing_users,
+              });
+              if (error) authErrors.push({ id: u?.id, error: error.message });
+              else if (data === "inserted" || data === "updated") authRestored += 1;
+            }
+          }
+        } catch (e) {
+          authErrors.push({ error: (e as Error).message });
+        }
+      }
+
+      // ── Restore storage objects ─────────────────────────────────────────
+      let storageRestored = 0;
+      const storageErrors: Array<{ path: string; error: string }> = [];
+      if (!skip_storage_restore) {
+        await updateRunLog({
+          status: "restore_in_progress",
+          message: `Auth restored (${authRestored}); restoring storage objects`,
+        });
+        try {
+          const smPath = `${folder}/__storage_manifest.json`;
+          const { data: dl, error: dlErr } = await adminClient.storage.from(bucket).download(smPath);
+          if (!dlErr && dl) {
+            const sm = JSON.parse(await dl.text());
+            const entries = (sm?.entries ?? []) as Array<{ bucket: string; name: string; mimetype?: string | null }>;
+            for (const e of entries) {
+              try {
+                const src = `${folder}/__storage/${e.bucket}/${e.name}`;
+                const { data: file, error: fErr } = await adminClient.storage.from(bucket).download(src);
+                if (fErr) { storageErrors.push({ path: src, error: fErr.message }); continue; }
+                const { error: upErr } = await adminClient.storage.from(e.bucket).upload(
+                  e.name, file, { contentType: e.mimetype ?? "application/octet-stream", upsert: true },
+                );
+                if (upErr) { storageErrors.push({ path: `${e.bucket}/${e.name}`, error: upErr.message }); continue; }
+                storageRestored += 1;
+              } catch (err) {
+                storageErrors.push({ path: `${e.bucket}/${e.name}`, error: (err as Error).message });
+              }
+            }
+          }
+        } catch (e) {
+          storageErrors.push({ path: "manifest", error: (e as Error).message });
+        }
+      }
+
+      // ── Integrity verification ──────────────────────────────────────────
+      const integrity: any = {
+        tables_checked: 0,
+        tables_mismatch: [] as Array<{ table: string; expected: number; actual: number }>,
+        auth_expected: 0,
+        auth_actual: 0,
+        storage_expected: 0,
+        storage_actual: storageRestored,
+      };
+      for (const t of Object.keys(result)) {
+        const expected = entryRows(manifestObj[t]);
+        const { count } = await adminClient.from(t).select("*", { count: "exact", head: true });
+        integrity.tables_checked += 1;
+        const actual = count ?? 0;
+        if (actual !== expected) integrity.tables_mismatch.push({ table: t, expected, actual });
+      }
+      try {
+        const { data: cnt } = await adminClient.rpc("count_auth_users");
+        integrity.auth_actual = typeof cnt === "number" ? cnt : Number(cnt ?? 0);
+      } catch { /* ignore */ }
+      integrity.auth_expected = (snapshot.manifest as any)?.__auth_users_count
+        ?? (await (async () => {
+          try {
+            const { data: dl } = await adminClient.storage.from(bucket).download(`${folder}/__auth_users.json`);
+            if (!dl) return 0;
+            return (JSON.parse(await dl.text()) as any[]).length;
+          } catch { return 0; }
+        })());
+      try {
+        const { data: dl } = await adminClient.storage.from(bucket).download(`${folder}/__storage_manifest.json`);
+        if (dl) integrity.storage_expected = (JSON.parse(await dl.text())?.entries ?? []).length;
+      } catch { /* ignore */ }
+
+      const allErrors = [
+        ...errors,
+        ...authErrors.map((e) => ({ table: "auth.users", error: `${e.id ?? ""} ${e.error}` })),
+        ...storageErrors.map((e) => ({ table: `storage:${e.path}`, error: e.error })),
+      ];
+      const hasMismatch = integrity.tables_mismatch.length > 0
+        || integrity.auth_expected !== integrity.auth_actual
+        || integrity.storage_expected !== integrity.storage_actual;
+
       await updateRunLog({
-        status: errors.length === 0 ? "success" : "completed_with_errors",
-        message: errors.length === 0
-          ? `Restored ${totalRestored.toLocaleString()} rows across ${Object.keys(result).length} tables`
-          : `Restored with ${errors.length} error(s)`,
+        status: allErrors.length === 0 && !hasMismatch
+          ? "success"
+          : (allErrors.length === 0 ? "success_with_warnings" : "completed_with_errors"),
+        message: `Restored ${totalRestored.toLocaleString()} rows / ${authRestored} users / ${storageRestored} objects`
+          + (hasMismatch ? " (integrity warnings)" : ""),
         total_tables: Object.keys(result).length,
         total_rows: totalRestored,
         restored_tables: result,
-        errors: errors.length ? errors : null,
+        restored_auth_users: authRestored,
+        restored_storage_objects: storageRestored,
+        integrity_report: integrity,
+        errors: allErrors.length ? allErrors : null,
         finished_at: new Date().toISOString(),
       });
 
       return new Response(
         JSON.stringify({
-          success: errors.length === 0,
+          success: allErrors.length === 0 && !hasMismatch,
           version: snapshot.backup_version ?? 3,
           restored: result,
-          errors,
+          restored_auth_users: authRestored,
+          restored_storage_objects: storageRestored,
+          integrity_report: integrity,
+          errors: allErrors,
           restore_run_id: restoreRunId,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
 
     // ── v2 / v1 fallback ──────────────────────────────────────────────────
     let tables: Record<string, any[]> | null = null;
