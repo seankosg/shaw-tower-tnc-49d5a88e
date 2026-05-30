@@ -2712,10 +2712,13 @@ function BackupTab() {
   useEffect(() => {
     if (!pendingRunId || !status?.last_run) return;
     if (status.last_run.id !== pendingRunId) return;
-    if (status.last_run.status === 'success') {
+    if (status.last_run.status === 'success' || status.last_run.status === 'success_with_warnings') {
+      const lr = status.last_run;
+      const warn = lr.status === 'success_with_warnings';
       toast({
-        title: 'Snapshot created',
-        description: `${(status.last_run.total_rows ?? 0).toLocaleString()} rows across ${status.last_run.total_tables ?? 0} tables`,
+        title: warn ? 'Snapshot completed with warnings' : 'Snapshot created',
+        description: `${(lr.total_rows ?? 0).toLocaleString()} rows / ${lr.auth_users_backed_up ?? 0} users / ${lr.storage_objects_backed_up ?? 0} objects`,
+        variant: warn ? 'destructive' : 'default',
       });
       setPendingRunId(null);
       load();
@@ -2728,6 +2731,7 @@ function BackupTab() {
       setPendingRunId(null);
     }
   }, [status, pendingRunId]);
+
 
   const createSnapshot = async () => {
     setSaving(true);
