@@ -3001,8 +3001,11 @@ function BackupTab() {
             <AlertDialogTitle>Restore Snapshot?</AlertDialogTitle>
             <AlertDialogDescription>
               This will WIPE all current data across every backed-up table (Subtests, Defect, Docs, Warranty, masters, permissions, audit logs) and replace it with the snapshot.
+              Auth users (login accounts, password hashes) and Storage objects (photos, attachments) included in the snapshot will also be restored.
+              A pre-restore safety backup is created automatically before any data is truncated.
               This action cannot be undone. Legacy snapshots created before the full-backup upgrade will only restore the Subtests table.
             </AlertDialogDescription>
+
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
