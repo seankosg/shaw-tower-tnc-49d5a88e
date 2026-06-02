@@ -2649,11 +2649,40 @@ type BackupRunLog = {
   integrity_report?: any;
 };
 
+type BackupSchedule = {
+  enabled: boolean;
+  hour_sgt: number;
+  minute: number;
+  frequency?: 'daily' | 'weekly';
+  weekday?: number; // 0=Sun..6=Sat (SGT)
+};
+
 type BackupStatus = {
-  schedule: { enabled: boolean; hour_sgt: number; minute: number };
+  schedule: BackupSchedule;
   last_success: BackupRunLog | null;
   last_run: BackupRunLog | null;
 };
+
+type BackupNotificationCfg = {
+  on_success: boolean;
+  on_warning: boolean;
+  on_failure: boolean;
+  in_app: boolean;
+  webhook_url: string | null;
+};
+
+type BackupNotificationRow = {
+  id: string;
+  level: 'info' | 'success' | 'warning' | 'error';
+  title: string;
+  message: string | null;
+  webhook_status: string | null;
+  webhook_error: string | null;
+  created_at: string;
+};
+
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 
 function fmtRelative(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -2682,6 +2711,99 @@ function BackupTab() {
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const [pendingRunId, setPendingRunId] = useState<string | null>(null);
   const [scheduleSaving, setScheduleSaving] = useState(false);
+
+  const [notifCfg, setNotifCfg] = useState<BackupNotificationCfg>({
+    on_success: true, on_warning: true, on_failure: true, in_app: true, webhook_url: null,
+  });
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifWebhookDraft, setNotifWebhookDraft] = useState('');
+  const [notifLog, setNotifLog] = useState<BackupNotificationRow[]>([]);
+
+  const loadNotificationCfg = async () => {
+    const { data } = await supabase.from('app_settings').select('value').eq('key', 'backup_notifications').maybeSingle();
+    if (data?.value) {
+      const v = data.value as Partial<BackupNotificationCfg>;
+      const merged: BackupNotificationCfg = {
+        on_success: v.on_success ?? true,
+        on_warning: v.on_warning ?? true,
+        on_failure: v.on_failure ?? true,
+        in_app: v.in_app ?? true,
+        webhook_url: (v.webhook_url ?? null) as string | null,
+      };
+      setNotifCfg(merged);
+      setNotifWebhookDraft(merged.webhook_url ?? '');
+    }
+  };
+
+  const loadNotificationLog = async () => {
+    const { data } = await supabase
+      .from('backup_notifications' as any)
+      .select('id, level, title, message, webhook_status, webhook_error, created_at')
+      .order('created_at', { ascending: false })
+      .limit(25);
+    setNotifLog((data as any) || []);
+  };
+
+  const saveNotificationCfg = async (next: BackupNotificationCfg) => {
+    setNotifSaving(true);
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ key: 'backup_notifications', value: next as never, updated_at: new Date().toISOString() });
+    if (error) {
+      toast({ title: 'Notification settings failed', description: error.message, variant: 'destructive' });
+    } else {
+      setNotifCfg(next);
+      toast({ title: 'Notification settings saved' });
+    }
+    setNotifSaving(false);
+  };
+
+  const saveSchedule = async (patch: Partial<BackupSchedule>) => {
+    const current = status?.schedule ?? { enabled: true, hour_sgt: 23, minute: 50, frequency: 'daily' as const, weekday: 1 };
+    const next = { ...current, ...patch };
+    setScheduleSaving(true);
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ key: 'backup_schedule', value: next as never, updated_at: new Date().toISOString() });
+    if (error) {
+      toast({ title: 'Schedule update failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Schedule updated' });
+      await loadStatus();
+    }
+    setScheduleSaving(false);
+  };
+
+  const testWebhook = async () => {
+    const url = (notifWebhookDraft || notifCfg.webhook_url || '').trim();
+    if (!url) {
+      toast({ title: 'No webhook URL', variant: 'destructive' });
+      return;
+    }
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: '✅ [Backup] Test notification from SHAW T&C admin panel.' }),
+      });
+      toast({
+        title: r.ok ? 'Webhook OK' : `Webhook returned ${r.status}`,
+        variant: r.ok ? 'default' : 'destructive',
+      });
+    } catch (e: any) {
+      toast({ title: 'Webhook failed', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const deleteNotification = async (id: string) => {
+    const { error } = await supabase.from('backup_notifications' as any).delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
+    } else {
+      loadNotificationLog();
+    }
+  };
+
 
   const load = async () => {
     setLoading(true);
@@ -2718,7 +2840,7 @@ function BackupTab() {
     if (!error && data) setStatus(data as unknown as BackupStatus);
   };
 
-  useEffect(() => { load(); loadStatus(); }, []);
+  useEffect(() => { load(); loadStatus(); loadNotificationCfg(); loadNotificationLog(); }, []);
 
   // Poll status while a run is in progress.
   useEffect(() => {
@@ -2861,24 +2983,48 @@ function BackupTab() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">Daily auto backup</div>
-              <div className="flex items-center gap-3">
+            <div className="space-y-2">
+              <div className="text-xs text-muted-foreground">Auto backup schedule</div>
+              <div className="flex items-center gap-2">
                 <Switch
                   checked={schedule?.enabled ?? true}
                   disabled={scheduleSaving}
-                  onCheckedChange={toggleSchedule}
+                  onCheckedChange={(v) => saveSchedule({ enabled: v })}
                 />
-                <span className="text-sm">
-                  {schedule
-                    ? `${String(schedule.hour_sgt).padStart(2,'0')}:${String(schedule.minute).padStart(2,'0')} SGT daily`
-                    : 'Loading…'}
-                </span>
+                <Select
+                  value={schedule?.frequency ?? 'daily'}
+                  onValueChange={(v) => saveSchedule({ frequency: v as 'daily' | 'weekly' })}
+                  disabled={scheduleSaving || !(schedule?.enabled ?? true)}
+                >
+                  <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                  </SelectContent>
+                </Select>
+                {schedule?.frequency === 'weekly' && (
+                  <Select
+                    value={String(schedule?.weekday ?? 1)}
+                    onValueChange={(v) => saveSchedule({ weekday: Number(v) })}
+                    disabled={scheduleSaving}
+                  >
+                    <SelectTrigger className="h-8 w-[90px] text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {WEEKDAY_LABELS.map((label, i) => (
+                        <SelectItem key={i} value={String(i)}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Toggle pauses the daily run. To change the time, contact the admin team.
-              </p>
+              <div className="text-xs text-muted-foreground">
+                Runs at {String(schedule?.hour_sgt ?? 23).padStart(2,'0')}:{String(schedule?.minute ?? 50).padStart(2,'0')} SGT
+                {schedule?.frequency === 'weekly'
+                  ? ` every ${WEEKDAY_LABELS[schedule?.weekday ?? 1]}.`
+                  : ' daily.'}
+              </div>
             </div>
+
 
             <div className="space-y-1">
               <div className="text-xs text-muted-foreground">Last successful backup</div>
@@ -2966,6 +3112,123 @@ function BackupTab() {
           </p>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Notifications</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <label className="flex items-center justify-between gap-3 rounded-md border p-3">
+              <div>
+                <div className="text-sm font-medium">On success</div>
+                <div className="text-xs text-muted-foreground">Notify when a backup completes cleanly</div>
+              </div>
+              <Switch
+                checked={notifCfg.on_success}
+                disabled={notifSaving}
+                onCheckedChange={(v) => saveNotificationCfg({ ...notifCfg, on_success: v })}
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 rounded-md border p-3">
+              <div>
+                <div className="text-sm font-medium">On warning</div>
+                <div className="text-xs text-muted-foreground">Notify when integrity warnings appear</div>
+              </div>
+              <Switch
+                checked={notifCfg.on_warning}
+                disabled={notifSaving}
+                onCheckedChange={(v) => saveNotificationCfg({ ...notifCfg, on_warning: v })}
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 rounded-md border p-3">
+              <div>
+                <div className="text-sm font-medium">On failure</div>
+                <div className="text-xs text-muted-foreground">Notify when a backup run fails</div>
+              </div>
+              <Switch
+                checked={notifCfg.on_failure}
+                disabled={notifSaving}
+                onCheckedChange={(v) => saveNotificationCfg({ ...notifCfg, on_failure: v })}
+              />
+            </label>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={notifCfg.in_app}
+              disabled={notifSaving}
+              onCheckedChange={(v) => saveNotificationCfg({ ...notifCfg, in_app: v })}
+            />
+            <span className="text-sm">In-app notification log (this page)</span>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Webhook URL (Slack / Teams / Discord compatible)</label>
+            <div className="flex gap-2">
+              <Input
+                value={notifWebhookDraft}
+                onChange={(e) => setNotifWebhookDraft(e.target.value)}
+                placeholder="https://hooks.slack.com/services/…"
+              />
+              <Button
+                variant="outline"
+                onClick={() => saveNotificationCfg({ ...notifCfg, webhook_url: notifWebhookDraft.trim() || null })}
+                disabled={notifSaving || notifWebhookDraft === (notifCfg.webhook_url ?? '')}
+              >
+                Save
+              </Button>
+              <Button variant="outline" onClick={testWebhook} disabled={!notifWebhookDraft.trim()}>
+                Test
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Receives a JSON POST <code className="text-[10px]">{`{ text: "…" }`}</code> for each backup event matching your toggles above. Leave blank to disable.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center justify-between">
+            <span>Recent Notifications</span>
+            <Button size="sm" variant="ghost" onClick={loadNotificationLog}>Refresh</Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {notifLog.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No notifications yet.</p>
+          ) : (
+            <div className="space-y-2 max-h-[360px] overflow-auto">
+              {notifLog.map((n) => (
+                <div key={n.id} className="flex items-start justify-between gap-3 rounded-md border p-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={n.level === 'error' ? 'destructive' : n.level === 'warning' ? 'outline' : 'secondary'}
+                        className={`text-xs ${n.level === 'warning' ? 'border-amber-500 text-amber-700' : ''}`}
+                      >
+                        {n.level}
+                      </Badge>
+                      <span className="text-sm font-medium truncate" title={n.title}>{n.title}</span>
+                    </div>
+                    {n.message && <p className="text-xs text-muted-foreground mt-1 break-words">{n.message}</p>}
+                    <div className="text-[11px] text-muted-foreground mt-1">
+                      {new Date(n.created_at).toLocaleString()}
+                      {n.webhook_status && ` · webhook ${n.webhook_status}`}
+                      {n.webhook_error && ` · ${n.webhook_error}`}
+                    </div>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => deleteNotification(n.id)}>×</Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+
 
       <Card>
         <CardHeader>

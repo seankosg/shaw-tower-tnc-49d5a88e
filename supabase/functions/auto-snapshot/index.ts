@@ -142,6 +142,94 @@ async function logRunUpdate(client: any, runLogId: string | null, patch: Record<
   }
 }
 
+/** Get SGT weekday 0(Sun)..6(Sat). */
+function sgtWeekday(d = new Date()): number {
+  const sgt = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+  return sgt.getUTCDay();
+}
+
+/**
+ * Decide whether an auto run should proceed today based on schedule.
+ * Returns null if allowed, or a skip reason string.
+ */
+function shouldSkipAuto(schedule: any): string | null {
+  if (!schedule) return null;
+  if (schedule.enabled === false) return "schedule disabled";
+  const freq = (schedule.frequency ?? "daily") as string;
+  if (freq === "weekly") {
+    const want = Number(schedule.weekday ?? 1);
+    const today = sgtWeekday();
+    if (today !== want) return `weekly schedule (today=${today}, target=${want})`;
+  }
+  return null;
+}
+
+/** Send post-run notification: insert log row + optional webhook POST. */
+async function sendBackupNotification(
+  client: any,
+  opts: {
+    runLogId: string | null;
+    status: "success" | "success_with_warnings" | "failed";
+    title: string;
+    message: string;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  try {
+    const { data: cfgRow } = await client
+      .from("app_settings").select("value").eq("key", "backup_notifications").maybeSingle();
+    const cfg = (cfgRow?.value ?? {}) as any;
+
+    const triggerKey =
+      opts.status === "success" ? "on_success"
+      : opts.status === "success_with_warnings" ? "on_warning"
+      : "on_failure";
+    const shouldNotify = cfg?.[triggerKey] !== false; // default on
+    if (!shouldNotify) return;
+
+    const level = opts.status === "failed" ? "error"
+      : opts.status === "success_with_warnings" ? "warning"
+      : "success";
+
+    // Webhook (Slack-compatible payload).
+    let webhookStatus: string | null = null;
+    let webhookError: string | null = null;
+    const webhook = (cfg?.webhook_url ?? "").toString().trim();
+    if (webhook) {
+      try {
+        const emoji = level === "error" ? "🛑" : level === "warning" ? "⚠️" : "✅";
+        const r = await fetch(webhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: `${emoji} *${opts.title}*\n${opts.message}`,
+          }),
+        });
+        webhookStatus = `${r.status}`;
+        if (!r.ok) webhookError = (await r.text().catch(() => "")).slice(0, 500);
+      } catch (e) {
+        webhookError = (e as Error).message;
+      }
+    }
+
+    if (cfg?.in_app !== false) {
+      await client.from("backup_notifications").insert({
+        run_log_id: opts.runLogId,
+        level,
+        title: opts.title,
+        message: opts.message,
+        webhook_status: webhookStatus,
+        webhook_error: webhookError,
+        metadata: opts.metadata ?? null,
+      });
+    }
+  } catch (e) {
+    console.warn("sendBackupNotification failed:", (e as Error).message);
+  }
+}
+
+
+
 function buildSelfTriggerHeaders(): HeadersInit {
   return {
     "Content-Type": "application/json",
@@ -229,18 +317,19 @@ Deno.serve(async (req) => {
   try {
     // === INITIALIZE NEW RUN ===
     if (!body?.folder) {
-      // Honor enabled flag for auto runs.
+      // Honor enabled flag + frequency for auto runs.
       if (isAutoInitCall) {
         const { data: sched } = await adminClient
           .from("app_settings").select("value").eq("key", "backup_schedule").maybeSingle();
-        const enabled = (sched?.value as any)?.enabled ?? true;
-        if (!enabled) {
+        const skipReason = shouldSkipAuto(sched?.value);
+        if (skipReason) {
           return new Response(
-            JSON.stringify({ success: true, status: "skipped", reason: "schedule disabled" }),
+            JSON.stringify({ success: true, status: "skipped", reason: skipReason }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
       }
+
 
       const snapshot_type: "auto" | "manual" = body?.mode === "manual" ? "manual" : "auto";
       const note = snapshot_type === "manual"
@@ -739,11 +828,14 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
       || (report.storage_missing?.length ?? 0) > 0
       || report.auth_users_ok === false;
 
+    const finalStatus: "success" | "success_with_warnings" = hasWarnings ? "success_with_warnings" : "success";
+    const completionMsg = hasWarnings
+      ? `Completed with warnings: ${totalRows.toLocaleString()} rows, ${progress.auth_users_count ?? 0} users, ${progress.storage_objects_done ?? 0} objects`
+      : `Completed: ${totalRows.toLocaleString()} rows / ${progress.auth_users_count ?? 0} users / ${progress.storage_objects_done ?? 0} objects`;
+
     await logRunUpdate(client, progress.run_log_id, {
-      status: hasWarnings ? "success_with_warnings" : "success",
-      message: hasWarnings
-        ? `Completed with warnings: ${totalRows.toLocaleString()} rows, ${progress.auth_users_count ?? 0} users, ${progress.storage_objects_done ?? 0} objects`
-        : `Completed: ${totalRows.toLocaleString()} rows / ${progress.auth_users_count ?? 0} users / ${progress.storage_objects_done ?? 0} objects`,
+      status: finalStatus,
+      message: completionMsg,
       total_rows: totalRows,
       total_tables: totalTables,
       auth_users_backed_up: progress.auth_users_count ?? 0,
@@ -752,13 +844,36 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
       integrity_report: progress.integrity_report ?? null,
       finished_at: new Date().toISOString(),
     });
+
+    await sendBackupNotification(client, {
+      runLogId: progress.run_log_id,
+      status: finalStatus,
+      title: `[${progress.snapshot_type === "auto" ? "Auto" : "Manual"} Backup] ${finalStatus === "success" ? "Success" : "Completed with warnings"} — ${progress.name}`,
+      message: completionMsg,
+      metadata: {
+        folder: progress.folder,
+        rows: totalRows,
+        tables: totalTables,
+        auth_users: progress.auth_users_count ?? 0,
+        storage_objects: progress.storage_objects_done ?? 0,
+      },
+    });
   } catch (e) {
     console.error("processWork error:", e);
+    const failMsg = `Failed at stage ${progress.stage} (table index ${progress.cursor_table}, ${BACKUP_TABLES[progress.cursor_table] ?? "?"}): ${(e as Error).message}`;
     await logRunUpdate(client, progress.run_log_id, {
       status: "failed",
-      message: `Failed at stage ${progress.stage} (table index ${progress.cursor_table}, ${BACKUP_TABLES[progress.cursor_table] ?? "?"}): ${(e as Error).message}`,
+      message: failMsg,
       finished_at: new Date().toISOString(),
+    });
+    await sendBackupNotification(client, {
+      runLogId: progress.run_log_id,
+      status: "failed",
+      title: `[${progress.snapshot_type === "auto" ? "Auto" : "Manual"} Backup] FAILED — ${progress.name}`,
+      message: failMsg,
+      metadata: { folder: progress.folder, stage: progress.stage },
     });
   }
 }
+
 

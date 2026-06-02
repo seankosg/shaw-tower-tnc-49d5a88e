@@ -35,6 +35,50 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_notifications: {
+        Row: {
+          created_at: string
+          id: string
+          level: string
+          message: string | null
+          metadata: Json | null
+          run_log_id: string | null
+          title: string
+          webhook_error: string | null
+          webhook_status: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          level: string
+          message?: string | null
+          metadata?: Json | null
+          run_log_id?: string | null
+          title: string
+          webhook_error?: string | null
+          webhook_status?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          level?: string
+          message?: string | null
+          metadata?: Json | null
+          run_log_id?: string | null
+          title?: string
+          webhook_error?: string | null
+          webhook_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backup_notifications_run_log_id_fkey"
+            columns: ["run_log_id"]
+            isOneToOne: false
+            referencedRelation: "backup_run_log"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       backup_run_log: {
         Row: {
           auth_users_backed_up: number | null
