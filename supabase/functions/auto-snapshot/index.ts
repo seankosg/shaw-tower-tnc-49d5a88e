@@ -463,12 +463,69 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
         });
         progress.auth_users_count = list.length;
       }
+      progress.stage = "schema";
+      await saveProgress(client, progress);
+      await logRunUpdate(client, progress.run_log_id, {
+        message: `Auth dumped (${progress.auth_users_count ?? 0} users); exporting schema DDL`,
+      });
+    }
+
+    // ───────────────────────────── STAGE: SCHEMA DDL ─────────────────────────
+    if (progress.stage === "schema") {
+      if (overBudget()) { await bail(`Resuming at schema stage`); return; }
+      try {
+        const { data: ddl, error } = await client.rpc("export_schema_ddl");
+        if (error) throw new Error(error.message);
+        const ddlText: string = typeof ddl === "string" ? ddl : String(ddl ?? "");
+        const path = `${progress.folder}/__schema.sql`;
+        await withRetry("upload schema.sql", async () => {
+          const { error: upErr } = await client.storage.from(BUCKET).upload(
+            path,
+            new Blob([ddlText], { type: "application/sql" }),
+            { contentType: "application/sql", upsert: true },
+          );
+          if (upErr) throw new Error(upErr.message);
+        });
+        progress.schema_ddl_bytes = new TextEncoder().encode(ddlText).length;
+      } catch (e) {
+        console.error("schema DDL export failed:", (e as Error).message);
+        progress.schema_ddl_bytes = 0;
+      }
+      progress.stage = "identities";
+      await saveProgress(client, progress);
+      await logRunUpdate(client, progress.run_log_id, {
+        message: `Schema DDL exported (${progress.schema_ddl_bytes ?? 0} bytes); dumping auth.identities`,
+      });
+    }
+
+    // ───────────────────────────── STAGE: AUTH IDENTITIES ────────────────────
+    if (progress.stage === "identities") {
+      if (overBudget()) { await bail(`Resuming at identities stage`); return; }
+      try {
+        const { data: rows, error } = await client.rpc("dump_auth_identities");
+        if (error) throw new Error(error.message);
+        const list = Array.isArray(rows) ? rows : [];
+        const path = `${progress.folder}/__auth_identities.json`;
+        await withRetry("upload auth identities", async () => {
+          const { error: upErr } = await client.storage.from(BUCKET).upload(
+            path,
+            new Blob([JSON.stringify(list)], { type: "application/json" }),
+            { contentType: "application/json", upsert: true },
+          );
+          if (upErr) throw new Error(upErr.message);
+        });
+        progress.auth_identities_count = list.length;
+      } catch (e) {
+        console.error("auth.identities dump failed:", (e as Error).message);
+        progress.auth_identities_count = 0;
+      }
       progress.stage = "storage";
       await saveProgress(client, progress);
       await logRunUpdate(client, progress.run_log_id, {
-        message: `Auth dumped (${progress.auth_users_count ?? 0} users); copying storage objects`,
+        message: `Identities dumped (${progress.auth_identities_count ?? 0}); copying storage objects`,
       });
     }
+
 
     // ───────────────────────────── STAGE: STORAGE ────────────────────────────
     if (progress.stage === "storage") {
