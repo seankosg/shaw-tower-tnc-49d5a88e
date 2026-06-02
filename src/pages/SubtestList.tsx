@@ -646,6 +646,8 @@ export default function SubtestList() {
     'r1_status', 'r2_status',
     // schedule-cell drill-downs
     'date_from', 'date_to', 'date_field', 'stage', 'cell_status', 'as_of', 'status',
+    // stage "remaining" (not done) drill-down — used by Dashboard Tier-2 stage cards
+    'stage_remaining',
   ];
 
   useEffect(() => {
