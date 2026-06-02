@@ -2989,18 +2989,30 @@ function BackupTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {snapshots.map(s => (
+                {snapshots.map(s => {
+                  const isV6 = (s.backup_version ?? 0) >= 6;
+                  return (
                   <TableRow key={s.id}>
                     <TableCell className="text-xs">{formatDateTimeDdMmmYyyy(s.created_at)}</TableCell>
                     <TableCell>
                       <Badge variant={s.snapshot_type === 'auto' ? 'secondary' : 'outline'} className="text-xs">
                         {s.snapshot_type === 'auto' ? 'Auto' : 'Manual'}
                       </Badge>
+                      {isV6 && (
+                        <Badge variant="outline" className="text-[10px] ml-1" title="Includes schema DDL, auth.identities, consistency markers">
+                          v6 full
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm">{s.snapshot_name}</TableCell>
                     <TableCell className="text-right text-sm">{s.row_count?.toLocaleString()}</TableCell>
                     <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{s.note || '—'}</TableCell>
                     <TableCell className="text-right space-x-2">
+                      {isV6 && (
+                        <Button size="sm" variant="ghost" onClick={() => downloadSchemaSql(s)} title="Download schema.sql (DDL for new-project recovery)">
+                          schema.sql
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => setConfirmRestore(s.id)} disabled={restoring}>
                         Restore
                       </Button>
@@ -3009,7 +3021,9 @@ function BackupTab() {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
+
               </TableBody>
             </Table>
           )}
