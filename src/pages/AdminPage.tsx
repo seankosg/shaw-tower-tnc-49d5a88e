@@ -2649,11 +2649,40 @@ type BackupRunLog = {
   integrity_report?: any;
 };
 
+type BackupSchedule = {
+  enabled: boolean;
+  hour_sgt: number;
+  minute: number;
+  frequency?: 'daily' | 'weekly';
+  weekday?: number; // 0=Sun..6=Sat (SGT)
+};
+
 type BackupStatus = {
-  schedule: { enabled: boolean; hour_sgt: number; minute: number };
+  schedule: BackupSchedule;
   last_success: BackupRunLog | null;
   last_run: BackupRunLog | null;
 };
+
+type BackupNotificationCfg = {
+  on_success: boolean;
+  on_warning: boolean;
+  on_failure: boolean;
+  in_app: boolean;
+  webhook_url: string | null;
+};
+
+type BackupNotificationRow = {
+  id: string;
+  level: 'info' | 'success' | 'warning' | 'error';
+  title: string;
+  message: string | null;
+  webhook_status: string | null;
+  webhook_error: string | null;
+  created_at: string;
+};
+
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 
 function fmtRelative(iso: string | null | undefined): string {
   if (!iso) return '—';
