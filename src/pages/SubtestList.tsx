@@ -1612,6 +1612,7 @@ export default function SubtestList() {
       r1_delay_on: 'R1 Delay =', r2_delay_on: 'R2 Delay =',
       r1_actual_unplanned_on: 'R1 Unplanned =', r2_actual_unplanned_on: 'R2 Unplanned =',
       stage: 'Stage', cell_status: 'Cell Status',
+      stage_remaining: 'Stage Remaining',
     };
     for (const [k, lbl] of Object.entries(map)) {
       if (isScheduleCell && (k === 'stage' || k === 'cell_status')) continue;
