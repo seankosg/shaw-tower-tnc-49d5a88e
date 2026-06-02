@@ -646,6 +646,8 @@ export default function SubtestList() {
     'r1_status', 'r2_status',
     // schedule-cell drill-downs
     'date_from', 'date_to', 'date_field', 'stage', 'cell_status', 'as_of', 'status',
+    // stage "remaining" (not done) drill-down — used by Dashboard Tier-2 stage cards
+    'stage_remaining',
   ];
 
   useEffect(() => {
@@ -1343,6 +1345,8 @@ export default function SubtestList() {
   // completion has not been reached by <asof>.
   const urlRemainingStage = searchParams.get('remaining_stage') as StageKey | null;
   const urlRemainingAsOf = searchParams.get('remaining_asof');
+  // Dashboard Tier-2 stage cards drill-down: items where the given stage is not Done.
+  const urlStageRemaining = searchParams.get('stage_remaining') as StageKey | null;
   const localToday = todayIso();
   const delayAsOfDate = urlAsOf || dataDate || localToday;
 
@@ -1466,6 +1470,9 @@ export default function SubtestList() {
         if (completedByAsof) return false;
       }
 
+      // Dashboard Tier-2 stage card drill-down: stage not Done
+      if (urlStageRemaining && isStageDone(r, urlStageRemaining)) return false;
+
       return true;
     });
   }, [data, urlStatusFilter, urlAtRiskDays, urlScope,
@@ -1478,7 +1485,7 @@ export default function SubtestList() {
       urlR1DelayAsOf, urlR2DelayAsOf, urlR1DelayOn, urlR2DelayOn,
       urlR1ActualUnplannedOn, urlR2ActualUnplannedOn,
       urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, delayAsOfDate, localToday,
-      urlRemainingStage, urlRemainingAsOf]);
+      urlRemainingStage, urlRemainingAsOf, urlStageRemaining]);
 
   const columnIdToFieldName: Record<string, string> = {
     system_code: 'system',
@@ -1605,6 +1612,7 @@ export default function SubtestList() {
       r1_delay_on: 'R1 Delay =', r2_delay_on: 'R2 Delay =',
       r1_actual_unplanned_on: 'R1 Unplanned =', r2_actual_unplanned_on: 'R2 Unplanned =',
       stage: 'Stage', cell_status: 'Cell Status',
+      stage_remaining: 'Stage Remaining',
     };
     for (const [k, lbl] of Object.entries(map)) {
       if (isScheduleCell && (k === 'stage' || k === 'cell_status')) continue;

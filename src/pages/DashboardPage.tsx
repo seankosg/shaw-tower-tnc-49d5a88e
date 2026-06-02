@@ -419,12 +419,13 @@ export default function DashboardPage() {
       </div>
 
       {/* ─── Tier 2: Stage Cards (Pred / T1 / T2 / R1 / R2) ─── */}
+      {/* Card body → Remaining (stage not Done). OD chip → Overdue as-of Data Date. */}
       <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
-        <StageCard stage="Predecessor" total={kpis.total} done={kpis.predDone} remaining={kpis.total - kpis.predDone} pct={kpis.predPct} overdue={kpis.predOverdue} onClick={() => goSubtests({ pred_delay_asof: dataDate })} />
-        <StageCard stage="T1" total={kpis.total} done={kpis.t1Done} remaining={kpis.total - kpis.t1Done} pct={kpis.t1Pct} overdue={kpis.t1Overdue} onClick={() => goSubtests({ t1_delay_asof: dataDate })} />
-        <StageCard stage="T2" total={kpis.total} done={kpis.t2Done} remaining={kpis.total - kpis.t2Done} pct={kpis.t2Pct} overdue={kpis.t2Overdue} onClick={() => goSubtests({ t2_delay_asof: dataDate })} />
-        <StageCard stage="R1S" total={kpis.total} done={kpis.r1Done} remaining={kpis.total - kpis.r1Done} pct={kpis.r1Pct} overdue={kpis.r1Overdue} onClick={() => goSubtests({ r1_delay_asof: dataDate })} />
-        <StageCard stage="R2S" total={kpis.total} done={kpis.r2Done} remaining={kpis.total - kpis.r2Done} pct={kpis.r2Pct} overdue={kpis.r2Overdue} onClick={() => goSubtests({ r2_delay_asof: dataDate })} />
+        <StageCard stage="Predecessor" total={kpis.total} done={kpis.predDone} remaining={kpis.total - kpis.predDone} pct={kpis.predPct} overdue={kpis.predOverdue} onClick={() => goSubtests({ stage_remaining: 'pred' })} onOverdueClick={() => goSubtests({ pred_delay_asof: dataDate })} />
+        <StageCard stage="T1" total={kpis.total} done={kpis.t1Done} remaining={kpis.total - kpis.t1Done} pct={kpis.t1Pct} overdue={kpis.t1Overdue} onClick={() => goSubtests({ stage_remaining: 't1' })} onOverdueClick={() => goSubtests({ t1_delay_asof: dataDate })} />
+        <StageCard stage="T2" total={kpis.total} done={kpis.t2Done} remaining={kpis.total - kpis.t2Done} pct={kpis.t2Pct} overdue={kpis.t2Overdue} onClick={() => goSubtests({ stage_remaining: 't2' })} onOverdueClick={() => goSubtests({ t2_delay_asof: dataDate })} />
+        <StageCard stage="R1S" total={kpis.total} done={kpis.r1Done} remaining={kpis.total - kpis.r1Done} pct={kpis.r1Pct} overdue={kpis.r1Overdue} onClick={() => goSubtests({ stage_remaining: 'r1' })} onOverdueClick={() => goSubtests({ r1_delay_asof: dataDate })} />
+        <StageCard stage="R2S" total={kpis.total} done={kpis.r2Done} remaining={kpis.total - kpis.r2Done} pct={kpis.r2Pct} overdue={kpis.r2Overdue} onClick={() => goSubtests({ stage_remaining: 'r2s' })} onOverdueClick={() => goSubtests({ r2_delay_asof: dataDate })} />
       </div>
 
 
@@ -782,7 +783,7 @@ function ClickNum({ value, onClick, hideZero = false }: { value: number; onClick
   );
 }
 function StageCard({
-  stage, total, done, remaining, pct, overdue, onClick,
+  stage, total, done, remaining, pct, overdue, onClick, onOverdueClick,
 }: {
   stage: string;
   total: number;
@@ -791,6 +792,7 @@ function StageCard({
   pct: number;
   overdue: number;
   onClick?: () => void;
+  onOverdueClick?: () => void;
 }) {
   return (
     <Card
@@ -801,10 +803,15 @@ function StageCard({
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-foreground">{stage}</p>
           {overdue > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onOverdueClick?.(); }}
+              title="Show overdue items"
+              className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors"
+            >
               <AlertTriangle className="h-3 w-3" />
               {overdue} OD
-            </span>
+            </button>
           )}
         </div>
         <div className="grid grid-cols-3 gap-2 text-center">
