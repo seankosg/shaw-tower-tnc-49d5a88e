@@ -2983,24 +2983,48 @@ function BackupTab() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">Daily auto backup</div>
-              <div className="flex items-center gap-3">
+            <div className="space-y-2">
+              <div className="text-xs text-muted-foreground">Auto backup schedule</div>
+              <div className="flex items-center gap-2">
                 <Switch
                   checked={schedule?.enabled ?? true}
                   disabled={scheduleSaving}
-                  onCheckedChange={toggleSchedule}
+                  onCheckedChange={(v) => saveSchedule({ enabled: v })}
                 />
-                <span className="text-sm">
-                  {schedule
-                    ? `${String(schedule.hour_sgt).padStart(2,'0')}:${String(schedule.minute).padStart(2,'0')} SGT daily`
-                    : 'Loading…'}
-                </span>
+                <Select
+                  value={schedule?.frequency ?? 'daily'}
+                  onValueChange={(v) => saveSchedule({ frequency: v as 'daily' | 'weekly' })}
+                  disabled={scheduleSaving || !(schedule?.enabled ?? true)}
+                >
+                  <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                  </SelectContent>
+                </Select>
+                {schedule?.frequency === 'weekly' && (
+                  <Select
+                    value={String(schedule?.weekday ?? 1)}
+                    onValueChange={(v) => saveSchedule({ weekday: Number(v) })}
+                    disabled={scheduleSaving}
+                  >
+                    <SelectTrigger className="h-8 w-[90px] text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {WEEKDAY_LABELS.map((label, i) => (
+                        <SelectItem key={i} value={String(i)}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Toggle pauses the daily run. To change the time, contact the admin team.
-              </p>
+              <div className="text-xs text-muted-foreground">
+                Runs at {String(schedule?.hour_sgt ?? 23).padStart(2,'0')}:{String(schedule?.minute ?? 50).padStart(2,'0')} SGT
+                {schedule?.frequency === 'weekly'
+                  ? ` every ${WEEKDAY_LABELS[schedule?.weekday ?? 1]}.`
+                  : ' daily.'}
+              </div>
             </div>
+
 
             <div className="space-y-1">
               <div className="text-xs text-muted-foreground">Last successful backup</div>
