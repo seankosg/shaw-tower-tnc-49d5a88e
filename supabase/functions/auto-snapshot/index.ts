@@ -317,18 +317,19 @@ Deno.serve(async (req) => {
   try {
     // === INITIALIZE NEW RUN ===
     if (!body?.folder) {
-      // Honor enabled flag for auto runs.
+      // Honor enabled flag + frequency for auto runs.
       if (isAutoInitCall) {
         const { data: sched } = await adminClient
           .from("app_settings").select("value").eq("key", "backup_schedule").maybeSingle();
-        const enabled = (sched?.value as any)?.enabled ?? true;
-        if (!enabled) {
+        const skipReason = shouldSkipAuto(sched?.value);
+        if (skipReason) {
           return new Response(
-            JSON.stringify({ success: true, status: "skipped", reason: "schedule disabled" }),
+            JSON.stringify({ success: true, status: "skipped", reason: skipReason }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
       }
+
 
       const snapshot_type: "auto" | "manual" = body?.mode === "manual" ? "manual" : "auto";
       const note = snapshot_type === "manual"
