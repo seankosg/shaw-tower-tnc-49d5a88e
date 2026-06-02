@@ -142,6 +142,94 @@ async function logRunUpdate(client: any, runLogId: string | null, patch: Record<
   }
 }
 
+/** Get SGT weekday 0(Sun)..6(Sat). */
+function sgtWeekday(d = new Date()): number {
+  const sgt = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+  return sgt.getUTCDay();
+}
+
+/**
+ * Decide whether an auto run should proceed today based on schedule.
+ * Returns null if allowed, or a skip reason string.
+ */
+function shouldSkipAuto(schedule: any): string | null {
+  if (!schedule) return null;
+  if (schedule.enabled === false) return "schedule disabled";
+  const freq = (schedule.frequency ?? "daily") as string;
+  if (freq === "weekly") {
+    const want = Number(schedule.weekday ?? 1);
+    const today = sgtWeekday();
+    if (today !== want) return `weekly schedule (today=${today}, target=${want})`;
+  }
+  return null;
+}
+
+/** Send post-run notification: insert log row + optional webhook POST. */
+async function sendBackupNotification(
+  client: any,
+  opts: {
+    runLogId: string | null;
+    status: "success" | "success_with_warnings" | "failed";
+    title: string;
+    message: string;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  try {
+    const { data: cfgRow } = await client
+      .from("app_settings").select("value").eq("key", "backup_notifications").maybeSingle();
+    const cfg = (cfgRow?.value ?? {}) as any;
+
+    const triggerKey =
+      opts.status === "success" ? "on_success"
+      : opts.status === "success_with_warnings" ? "on_warning"
+      : "on_failure";
+    const shouldNotify = cfg?.[triggerKey] !== false; // default on
+    if (!shouldNotify) return;
+
+    const level = opts.status === "failed" ? "error"
+      : opts.status === "success_with_warnings" ? "warning"
+      : "success";
+
+    // Webhook (Slack-compatible payload).
+    let webhookStatus: string | null = null;
+    let webhookError: string | null = null;
+    const webhook = (cfg?.webhook_url ?? "").toString().trim();
+    if (webhook) {
+      try {
+        const emoji = level === "error" ? "🛑" : level === "warning" ? "⚠️" : "✅";
+        const r = await fetch(webhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: `${emoji} *${opts.title}*\n${opts.message}`,
+          }),
+        });
+        webhookStatus = `${r.status}`;
+        if (!r.ok) webhookError = (await r.text().catch(() => "")).slice(0, 500);
+      } catch (e) {
+        webhookError = (e as Error).message;
+      }
+    }
+
+    if (cfg?.in_app !== false) {
+      await client.from("backup_notifications").insert({
+        run_log_id: opts.runLogId,
+        level,
+        title: opts.title,
+        message: opts.message,
+        webhook_status: webhookStatus,
+        webhook_error: webhookError,
+        metadata: opts.metadata ?? null,
+      });
+    }
+  } catch (e) {
+    console.warn("sendBackupNotification failed:", (e as Error).message);
+  }
+}
+
+
+
 function buildSelfTriggerHeaders(): HeadersInit {
   return {
     "Content-Type": "application/json",
