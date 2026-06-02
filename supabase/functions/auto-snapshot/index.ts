@@ -264,6 +264,15 @@ Deno.serve(async (req) => {
         triggered_by: triggeredBy,
       }).select("id").single();
 
+      // Capture start consistency marker (txid + snapshot id + timestamp).
+      let startMarker: unknown = null;
+      try {
+        const { data: m } = await adminClient.rpc("backup_consistency_marker");
+        startMarker = m ?? null;
+      } catch (e) {
+        console.warn("consistency marker (start) failed:", (e as Error).message);
+      }
+
       const progress: Progress = {
         snapshot_type,
         note,
@@ -277,12 +286,14 @@ Deno.serve(async (req) => {
         cursor_offset: 0,
         cursor_parts: 0,
         manifest: {},
+        consistency_start: startMarker,
         storage_objects_done: 0,
         storage_bytes_done: 0,
         storage_manifest: [],
       };
 
       await saveProgress(adminClient, progress);
+
 
       // Start processing in the same invocation; will self-trigger if time runs short.
       // deno-lint-ignore no-explicit-any
