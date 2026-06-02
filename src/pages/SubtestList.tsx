@@ -1470,6 +1470,9 @@ export default function SubtestList() {
         if (completedByAsof) return false;
       }
 
+      // Dashboard Tier-2 stage card drill-down: stage not Done
+      if (urlStageRemaining && isStageDone(r, urlStageRemaining)) return false;
+
       return true;
     });
   }, [data, urlStatusFilter, urlAtRiskDays, urlScope,
