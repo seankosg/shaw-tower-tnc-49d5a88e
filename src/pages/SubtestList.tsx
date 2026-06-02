@@ -1485,7 +1485,7 @@ export default function SubtestList() {
       urlR1DelayAsOf, urlR2DelayAsOf, urlR1DelayOn, urlR2DelayOn,
       urlR1ActualUnplannedOn, urlR2ActualUnplannedOn,
       urlDateFrom, urlDateTo, urlDateField, urlStage, urlCellStatus, delayAsOfDate, localToday,
-      urlRemainingStage, urlRemainingAsOf]);
+      urlRemainingStage, urlRemainingAsOf, urlStageRemaining]);
 
   const columnIdToFieldName: Record<string, string> = {
     system_code: 'system',
