@@ -828,11 +828,14 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
       || (report.storage_missing?.length ?? 0) > 0
       || report.auth_users_ok === false;
 
+    const finalStatus: "success" | "success_with_warnings" = hasWarnings ? "success_with_warnings" : "success";
+    const completionMsg = hasWarnings
+      ? `Completed with warnings: ${totalRows.toLocaleString()} rows, ${progress.auth_users_count ?? 0} users, ${progress.storage_objects_done ?? 0} objects`
+      : `Completed: ${totalRows.toLocaleString()} rows / ${progress.auth_users_count ?? 0} users / ${progress.storage_objects_done ?? 0} objects`;
+
     await logRunUpdate(client, progress.run_log_id, {
-      status: hasWarnings ? "success_with_warnings" : "success",
-      message: hasWarnings
-        ? `Completed with warnings: ${totalRows.toLocaleString()} rows, ${progress.auth_users_count ?? 0} users, ${progress.storage_objects_done ?? 0} objects`
-        : `Completed: ${totalRows.toLocaleString()} rows / ${progress.auth_users_count ?? 0} users / ${progress.storage_objects_done ?? 0} objects`,
+      status: finalStatus,
+      message: completionMsg,
       total_rows: totalRows,
       total_tables: totalTables,
       auth_users_backed_up: progress.auth_users_count ?? 0,
@@ -841,13 +844,36 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
       integrity_report: progress.integrity_report ?? null,
       finished_at: new Date().toISOString(),
     });
+
+    await sendBackupNotification(client, {
+      runLogId: progress.run_log_id,
+      status: finalStatus,
+      title: `[${progress.snapshot_type === "auto" ? "Auto" : "Manual"} Backup] ${finalStatus === "success" ? "Success" : "Completed with warnings"} — ${progress.name}`,
+      message: completionMsg,
+      metadata: {
+        folder: progress.folder,
+        rows: totalRows,
+        tables: totalTables,
+        auth_users: progress.auth_users_count ?? 0,
+        storage_objects: progress.storage_objects_done ?? 0,
+      },
+    });
   } catch (e) {
     console.error("processWork error:", e);
+    const failMsg = `Failed at stage ${progress.stage} (table index ${progress.cursor_table}, ${BACKUP_TABLES[progress.cursor_table] ?? "?"}): ${(e as Error).message}`;
     await logRunUpdate(client, progress.run_log_id, {
       status: "failed",
-      message: `Failed at stage ${progress.stage} (table index ${progress.cursor_table}, ${BACKUP_TABLES[progress.cursor_table] ?? "?"}): ${(e as Error).message}`,
+      message: failMsg,
       finished_at: new Date().toISOString(),
+    });
+    await sendBackupNotification(client, {
+      runLogId: progress.run_log_id,
+      status: "failed",
+      title: `[${progress.snapshot_type === "auto" ? "Auto" : "Manual"} Backup] FAILED — ${progress.name}`,
+      message: failMsg,
+      metadata: { folder: progress.folder, stage: progress.stage },
     });
   }
 }
+
 
