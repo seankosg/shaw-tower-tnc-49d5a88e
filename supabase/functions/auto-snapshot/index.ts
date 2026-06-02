@@ -47,7 +47,7 @@ async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
 
 type ManifestEntry = { rows: number; parts: number };
 
-type Stage = "tables" | "auth" | "storage" | "verify" | "done";
+type Stage = "tables" | "auth" | "schema" | "identities" | "storage" | "verify" | "done";
 
 type Progress = {
   snapshot_type: "auto" | "manual";
@@ -69,6 +69,13 @@ type Progress = {
   manifest: Record<string, ManifestEntry>;
   /** Auth users dump result. */
   auth_users_count?: number;
+  /** auth.identities dump result. */
+  auth_identities_count?: number;
+  /** Schema DDL dump result. */
+  schema_ddl_bytes?: number;
+  /** Consistency markers (start/end txid + snapshot id + timestamps). */
+  consistency_start?: unknown;
+  consistency_end?: unknown;
   /** Storage backup state. */
   storage_buckets?: string[];
   storage_cursor_bucket?: number;
@@ -79,6 +86,7 @@ type Progress = {
   /** Integrity report. */
   integrity_report?: unknown;
 };
+
 
 
 async function loadProgress(client: any, folder: string): Promise<Progress> {
