@@ -2692,6 +2692,27 @@ function BackupTab() {
     setLoading(false);
   };
 
+  const downloadSchemaSql = async (snapshot: any) => {
+    try {
+      const folder = (snapshot.storage_path || '').replace(/\/manifest\.json$/, '');
+      if (!folder) throw new Error('No storage path');
+      const { data, error } = await supabase.storage.from('db-backups').download(`${folder}/__schema.sql`);
+      if (error) throw error;
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${snapshot.snapshot_name.replace(/[^\w.-]+/g, '_')}__schema.sql`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast({ title: 'Schema DDL not available', description: e.message || 'This snapshot has no schema dump (pre-v6 backup).', variant: 'destructive' });
+    }
+  };
+
+
+
   const loadStatus = async () => {
     const { data, error } = await supabase.rpc('get_backup_status' as any);
     if (!error && data) setStatus(data as unknown as BackupStatus);
