@@ -2840,7 +2840,7 @@ function BackupTab() {
     if (!error && data) setStatus(data as unknown as BackupStatus);
   };
 
-  useEffect(() => { load(); loadStatus(); }, []);
+  useEffect(() => { load(); loadStatus(); loadNotificationCfg(); loadNotificationLog(); }, []);
 
   // Poll status while a run is in progress.
   useEffect(() => {
