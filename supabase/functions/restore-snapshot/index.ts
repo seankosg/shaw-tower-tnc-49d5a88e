@@ -410,6 +410,7 @@ Deno.serve(async (req) => {
       const allErrors = [
         ...errors,
         ...authErrors.map((e) => ({ table: "auth.users", error: `${e.id ?? ""} ${e.error}` })),
+        ...identityErrors.map((e) => ({ table: "auth.identities", error: `${e.id ?? ""} ${e.error}` })),
         ...storageErrors.map((e) => ({ table: `storage:${e.path}`, error: e.error })),
       ];
       const hasMismatch = integrity.tables_mismatch.length > 0
@@ -420,14 +421,14 @@ Deno.serve(async (req) => {
         status: allErrors.length === 0 && !hasMismatch
           ? "success"
           : (allErrors.length === 0 ? "success_with_warnings" : "completed_with_errors"),
-        message: `Restored ${totalRestored.toLocaleString()} rows / ${authRestored} users / ${storageRestored} objects`
+        message: `Restored ${totalRestored.toLocaleString()} rows / ${authRestored} users / ${identitiesRestored} identities / ${storageRestored} objects`
           + (hasMismatch ? " (integrity warnings)" : ""),
         total_tables: Object.keys(result).length,
         total_rows: totalRestored,
         restored_tables: result,
         restored_auth_users: authRestored,
         restored_storage_objects: storageRestored,
-        integrity_report: integrity,
+        integrity_report: { ...integrity, identities_restored: identitiesRestored },
         errors: allErrors.length ? allErrors : null,
         finished_at: new Date().toISOString(),
       });
@@ -438,6 +439,7 @@ Deno.serve(async (req) => {
           version: snapshot.backup_version ?? 3,
           restored: result,
           restored_auth_users: authRestored,
+          restored_auth_identities: identitiesRestored,
           restored_storage_objects: storageRestored,
           integrity_report: integrity,
           errors: allErrors,
@@ -446,6 +448,7 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
 
 
     // ── v2 / v1 fallback ──────────────────────────────────────────────────
