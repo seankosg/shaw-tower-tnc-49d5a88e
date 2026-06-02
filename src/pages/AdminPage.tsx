@@ -2712,6 +2712,99 @@ function BackupTab() {
   const [pendingRunId, setPendingRunId] = useState<string | null>(null);
   const [scheduleSaving, setScheduleSaving] = useState(false);
 
+  const [notifCfg, setNotifCfg] = useState<BackupNotificationCfg>({
+    on_success: true, on_warning: true, on_failure: true, in_app: true, webhook_url: null,
+  });
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifWebhookDraft, setNotifWebhookDraft] = useState('');
+  const [notifLog, setNotifLog] = useState<BackupNotificationRow[]>([]);
+
+  const loadNotificationCfg = async () => {
+    const { data } = await supabase.from('app_settings').select('value').eq('key', 'backup_notifications').maybeSingle();
+    if (data?.value) {
+      const v = data.value as Partial<BackupNotificationCfg>;
+      const merged: BackupNotificationCfg = {
+        on_success: v.on_success ?? true,
+        on_warning: v.on_warning ?? true,
+        on_failure: v.on_failure ?? true,
+        in_app: v.in_app ?? true,
+        webhook_url: (v.webhook_url ?? null) as string | null,
+      };
+      setNotifCfg(merged);
+      setNotifWebhookDraft(merged.webhook_url ?? '');
+    }
+  };
+
+  const loadNotificationLog = async () => {
+    const { data } = await supabase
+      .from('backup_notifications' as any)
+      .select('id, level, title, message, webhook_status, webhook_error, created_at')
+      .order('created_at', { ascending: false })
+      .limit(25);
+    setNotifLog((data as any) || []);
+  };
+
+  const saveNotificationCfg = async (next: BackupNotificationCfg) => {
+    setNotifSaving(true);
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ key: 'backup_notifications', value: next as never, updated_at: new Date().toISOString() });
+    if (error) {
+      toast({ title: 'Notification settings failed', description: error.message, variant: 'destructive' });
+    } else {
+      setNotifCfg(next);
+      toast({ title: 'Notification settings saved' });
+    }
+    setNotifSaving(false);
+  };
+
+  const saveSchedule = async (patch: Partial<BackupSchedule>) => {
+    const current = status?.schedule ?? { enabled: true, hour_sgt: 23, minute: 50, frequency: 'daily' as const, weekday: 1 };
+    const next = { ...current, ...patch };
+    setScheduleSaving(true);
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ key: 'backup_schedule', value: next as never, updated_at: new Date().toISOString() });
+    if (error) {
+      toast({ title: 'Schedule update failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Schedule updated' });
+      await loadStatus();
+    }
+    setScheduleSaving(false);
+  };
+
+  const testWebhook = async () => {
+    const url = (notifWebhookDraft || notifCfg.webhook_url || '').trim();
+    if (!url) {
+      toast({ title: 'No webhook URL', variant: 'destructive' });
+      return;
+    }
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: '✅ [Backup] Test notification from SHAW T&C admin panel.' }),
+      });
+      toast({
+        title: r.ok ? 'Webhook OK' : `Webhook returned ${r.status}`,
+        variant: r.ok ? 'default' : 'destructive',
+      });
+    } catch (e: any) {
+      toast({ title: 'Webhook failed', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const deleteNotification = async (id: string) => {
+    const { error } = await supabase.from('backup_notifications' as any).delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
+    } else {
+      loadNotificationLog();
+    }
+  };
+
+
   const load = async () => {
     setLoading(true);
     const { data } = await supabase.from('database_snapshots' as any)
