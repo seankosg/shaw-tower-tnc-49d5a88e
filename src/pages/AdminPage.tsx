@@ -2692,6 +2692,27 @@ function BackupTab() {
     setLoading(false);
   };
 
+  const downloadSchemaSql = async (snapshot: any) => {
+    try {
+      const folder = (snapshot.storage_path || '').replace(/\/manifest\.json$/, '');
+      if (!folder) throw new Error('No storage path');
+      const { data, error } = await supabase.storage.from('db-backups').download(`${folder}/__schema.sql`);
+      if (error) throw error;
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${snapshot.snapshot_name.replace(/[^\w.-]+/g, '_')}__schema.sql`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast({ title: 'Schema DDL not available', description: e.message || 'This snapshot has no schema dump (pre-v6 backup).', variant: 'destructive' });
+    }
+  };
+
+
+
   const loadStatus = async () => {
     const { data, error } = await supabase.rpc('get_backup_status' as any);
     if (!error && data) setStatus(data as unknown as BackupStatus);
@@ -2968,18 +2989,30 @@ function BackupTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {snapshots.map(s => (
+                {snapshots.map(s => {
+                  const isV6 = (s.backup_version ?? 0) >= 6;
+                  return (
                   <TableRow key={s.id}>
                     <TableCell className="text-xs">{formatDateTimeDdMmmYyyy(s.created_at)}</TableCell>
                     <TableCell>
                       <Badge variant={s.snapshot_type === 'auto' ? 'secondary' : 'outline'} className="text-xs">
                         {s.snapshot_type === 'auto' ? 'Auto' : 'Manual'}
                       </Badge>
+                      {isV6 && (
+                        <Badge variant="outline" className="text-[10px] ml-1" title="Includes schema DDL, auth.identities, consistency markers">
+                          v6 full
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm">{s.snapshot_name}</TableCell>
                     <TableCell className="text-right text-sm">{s.row_count?.toLocaleString()}</TableCell>
                     <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{s.note || '—'}</TableCell>
                     <TableCell className="text-right space-x-2">
+                      {isV6 && (
+                        <Button size="sm" variant="ghost" onClick={() => downloadSchemaSql(s)} title="Download schema.sql (DDL for new-project recovery)">
+                          schema.sql
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => setConfirmRestore(s.id)} disabled={restoring}>
                         Restore
                       </Button>
@@ -2988,7 +3021,9 @@ function BackupTab() {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
+
               </TableBody>
             </Table>
           )}

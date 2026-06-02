@@ -1,110 +1,87 @@
-# 백업 완전성 보강 계획 (나 + 다)
+# 백업/복원 완전성 강화 계획 (옵션 2: A+B+C)
 
-현재 백업은 public 스키마 row 데이터만 다루므로, **재해 복구 시 로그인 불가 + 첨부 파일 손실**이 발생합니다. 본 계획은 이 두 빈틈을 메우고, 백업/복원 결과의 정확성을 자동 검증하는 무결성 체크(E)를 추가합니다.
+## 목표
+현재 백업 시스템에 다음 3가지를 추가해 **새 프로젝트로의 완전 재해 복구**를 가능하게 만든다.
 
----
+- (A) DB 스키마 덤프 — 테이블/인덱스/제약/함수/트리거 정의
+- (B) `auth.identities` 백업 — 소셜 로그인 연결 보존
+- (C) 단일 시점 일관성 — 모든 테이블을 같은 트랜잭션 스냅샷에서 읽기
 
-## 1. auth.users 백업/복원 (나-1)
+## 구현 범위
 
-### 백업 (auto-snapshot 확장)
-- `supabase.auth.admin.listUsers({ page, perPage: 1000 })`로 전체 사용자 페이지네이션 수집
-- 보존 필드: `id, email, phone, email_confirmed_at, phone_confirmed_at, created_at, last_sign_in_at, raw_user_meta_data, raw_app_meta_data, banned_until, is_sso_user`
-- **암호 해시(`encrypted_password`)는 Admin API로 노출 불가** → 별도 security definer RPC `dump_auth_users_with_hash()` (service_role 전용)로 `auth.users`에서 직접 조회해 해시 포함
-- 결과를 `{folder}/__auth_users.json`으로 저장, manifest에 `__auth_users: {rows, parts}` 기록
+### 1. DB 함수 추가 (migration)
 
-### 복원 (restore-snapshot 확장)
-- 기존 사용자와 백업 사용자의 `id` 비교
-  - **존재하지 않는 ID**: `auth.admin.createUser()` + 이후 RPC `restore_auth_user_hash(_id, _hash)`로 비밀번호 해시 강제 주입
-  - **존재하는 ID**: `email/phone/메타데이터/해시` 갱신(옵션 플래그 `overwrite_existing_users`, 기본 false → 메타데이터만 머지)
-  - **백업에 없는 현재 ID**: 기본 보존(옵션 `delete_missing_users`로 강제 삭제 선택 가능, 기본 false)
-- profiles/user_roles의 `user_id` FK 무결성이 자동 회복
+#### `public.export_schema_ddl()` (SECURITY DEFINER, admin 전용)
+- `pg_catalog` + `information_schema`를 조회해 public 스키마의 다음을 SQL 텍스트로 생성:
+  - `CREATE TABLE` 문 (컬럼, 타입, default, nullable)
+  - `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY`, `CHECK` 제약
+  - `CREATE INDEX` 문
+  - `CREATE FUNCTION` (public 스키마 함수 본문)
+  - `CREATE TRIGGER` 문
+  - `CREATE TYPE` (enum 등)
+  - `ENABLE ROW LEVEL SECURITY` + `CREATE POLICY` 문
+  - `GRANT` 문
+- 반환: 단일 텍스트(실행 가능한 .sql)
+- 권한: `has_role(auth.uid(), 'admin')` 체크
 
-### 보안
-- `dump_auth_users_with_hash()` / `restore_auth_user_hash()` 는 `SECURITY DEFINER`, `REVOKE ALL FROM public`, edge function service_role만 호출
-- 백업 JSON에 해시가 포함되므로 Storage `db-backups` 버킷이 **비공개**인지 확인(현재 비공개 가정)
+#### `public.export_snapshot_id()` (SECURITY DEFINER)
+- `pg_export_snapshot()` 호출해 snapshot id 반환
+- 동일 트랜잭션 안에서 호출자가 `SET TRANSACTION SNAPSHOT`을 사용할 수 있게 함
 
----
+### 2. `auto-snapshot` Edge Function 수정
 
-## 2. Storage 객체 백업 (나-2)
+기존 로직에 추가:
 
-### 대상 버킷 선정
-- 기존 버킷 목록을 `storage.buckets`에서 조회 후, 시스템 버킷(`db-backups`) 제외한 전부 백업
-- 주요 후보: 결함 사진, OCR 이미지, PPT 첨부 등
+- **(C) 단일 시점 일관성**
+  - 백업 시작 시 새 트랜잭션 열고 `export_snapshot_id()` 호출
+  - 이후 모든 `SELECT`를 `SET TRANSACTION SNAPSHOT '<id>'` 후 실행
+  - 실제 구현: Supabase REST API로는 트랜잭션 공유가 불가하므로, 
+    **단일 RPC `dump_all_tables_consistent(snapshot_id)`를 새로 만들어 한 트랜잭션 내에서 모든 public 테이블을 JSON으로 직렬화 후 반환** 방식 채택
+  - 또는 Edge Function이 `pg` 클라이언트(Deno postgres driver)로 직접 연결해 단일 트랜잭션 유지
 
-### 백업 방식 (auto-snapshot 내 신규 단계)
-- 각 버킷에 대해 `storage.from(b).list()` 재귀 순회 → 파일 경로 리스트 확보
-- **본문 복사**: `storage.from(b).download()` → `storage.from('db-backups').upload('{folder}/__storage/{bucket}/{path}')`
-  - 동일 SHA256·크기인 경우 직전 백업 폴더에서 **copy(서버 사이드)** 로 재사용해 트래픽/시간 절감
-- 메타 인덱스 파일 `{folder}/__storage_manifest.json` 작성: `[{bucket, path, size, etag, mimetype}, ...]`
-- 자가 트리거(self-trigger) 루프에 "buckets 단계" 추가(테이블 백업 완료 후 단계 진입)
+- **(A) 스키마 DDL 백업**
+  - `export_schema_ddl()` 호출 결과를 `db-backups/<timestamp>/schema.sql`로 저장
 
-### 복원 (restore-snapshot 확장)
-- `__storage_manifest.json` 읽기 → 각 버킷 비우기(옵션) → `db-backups`에서 원본 버킷으로 객체 복사
-- 너무 큰 버킷은 시간 초과 가능 → 단일 호출에서 N개씩 처리하고 self-trigger로 이어 받기
-- 옵션 `skip_storage_restore: true`로 분리 실행 가능
+- **(B) auth.identities 백업**
+  - 기존 `auth.users` 덤프 옆에 `auth.identities` 전체 row 덤프 추가
+  - 저장 위치: `db-backups/<timestamp>/auth_identities.json`
+  - service_role로 `auth.identities` 직접 조회
 
-### 제한 명시
-- 매우 큰 버킷(수십 GB)은 edge function 6분 한도로 분할 다중 호출 필요 → UI에 진행률 표시
+- **manifest.json 확장**
+  - `schema_sql_path`, `auth_identities_path`, `snapshot_id`, `consistency: 'snapshot'` 필드 추가
 
----
+### 3. `restore-snapshot` Edge Function 수정
 
-## 3. 무결성 검증 E (다)
+- manifest에 `auth_identities_path`가 있으면 복원 후 `auth.identities` upsert
+- 스키마 DDL은 동일 프로젝트 복원 시에는 미적용(데이터만 복원), manifest에 경로만 기록해 **수동 신규 프로젝트 복원 시 사용** 가능하도록 보관
 
-### 백업 직후 자동 검증
-- `auto-snapshot` 종료 단계에 `verify_backup(snapshot_id)` 추가:
-  - 각 테이블: manifest 행 수 vs `count(*)` 실제 행 수 비교 (백업 시점 이후 신규 행은 별도 카운트로 표시)
-  - 각 part 파일 다운로드 1줄 샘플 파싱 OK 여부
-  - storage 매니페스트 파일 1% 샘플의 `head()`로 존재 확인
-- 결과를 `backup_run_log.integrity_report` JSONB에 저장 (`{tables_ok, tables_mismatch:[{t, manifest, actual}], storage_sampled, storage_missing:[...], auth_users_count_ok}`)
-- mismatch 1건 이상이면 `status = 'success_with_warnings'`
+### 4. Admin UI 보완 (`src/pages/AdminPage.tsx`)
 
-### 복원 직후 자동 검증
-- `restore-snapshot` 종료 단계에 동일 로직:
-  - 복원된 테이블 행 수 vs 매니페스트 행 수
-  - storage 복원 시 객체 개수 비교
-  - auth.users 개수/주요 ID 표본 비교
-- 결과를 기존 `restore_run_log.integrity_report` 신규 컬럼에 저장
+백업 카드/모달에 다음 표시 추가:
+- "Schema DDL included" 배지
+- "auth.identities: N rows" 표시
+- "Snapshot consistency: ✓" 표시
+- 백업 항목에서 `schema.sql` 직접 다운로드 버튼
 
-### Admin UI
-- Backup/Restore 상세 다이얼로그에 "Integrity" 탭 추가 → 카운트 비교 테이블 + 누락 항목 리스트
+## 기술 세부사항
 
----
+- **트랜잭션 일관성 구현 방식 결정**: Deno postgres driver (`https://deno.land/x/postgres`)를 `auto-snapshot`에 도입해 단일 커넥션/단일 트랜잭션 유지. service_role DB URL 사용. 이미 service_role key는 환경변수로 존재.
+- **DDL 생성**: `pg_get_tabledef`는 기본 미설치이므로 `information_schema` + `pg_catalog.pg_get_constraintdef`, `pg_get_indexdef`, `pg_get_functiondef`, `pg_get_triggerdef`를 직접 조합.
+- **권한**: 모든 신규 RPC는 `SECURITY DEFINER` + admin 역할 체크 + `search_path = public, pg_catalog`.
+- **용량**: 추가 산출물은 총 < 1MB (기존 1.5GB 대비 무시 가능).
 
-## 4. 마이그레이션 / 스키마 변경
+## 작업 순서
 
-```sql
--- 1) 해시 덤프/복원 RPC (service_role 전용)
-CREATE FUNCTION public.dump_auth_users_with_hash() RETURNS SETOF jsonb ...
-CREATE FUNCTION public.restore_auth_user_hash(_id uuid, _hash text) RETURNS void ...
-REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION ... TO service_role;
+1. migration: `export_schema_ddl()`, `export_snapshot_id()` 함수 생성 + admin 권한 정책
+2. `auto-snapshot/index.ts` 수정: Deno postgres 도입, 단일 트랜잭션 백업, schema.sql + auth_identities.json 추가, manifest 확장
+3. `restore-snapshot/index.ts` 수정: auth.identities 복원 로직 추가
+4. `AdminPage.tsx`: 새 메타데이터/다운로드 버튼 노출
+5. 수동 실행으로 백업 1회 → manifest, schema.sql, auth_identities.json 생성 확인 → 복원 테스트
 
--- 2) 로그 컬럼 추가
-ALTER TABLE backup_run_log
-  ADD COLUMN integrity_report jsonb,
-  ADD COLUMN storage_backed_up_bytes bigint,
-  ADD COLUMN auth_users_backed_up int;
+## 변경 파일
+- `supabase/migrations/<new>.sql` (신규)
+- `supabase/functions/auto-snapshot/index.ts`
+- `supabase/functions/restore-snapshot/index.ts`
+- `src/pages/AdminPage.tsx`
 
-ALTER TABLE restore_run_log
-  ADD COLUMN integrity_report jsonb,
-  ADD COLUMN restored_auth_users int,
-  ADD COLUMN restored_storage_objects int;
-```
-
----
-
-## 5. 작업 순서
-
-1. **DB 마이그레이션**: 위 RPC + 컬럼 추가
-2. **auto-snapshot**: auth.users 덤프 단계 + storage 백업 단계 + 무결성 검증 단계 추가
-3. **restore-snapshot**: auth.users 복원 + storage 복원 + 무결성 검증 추가, 새 옵션 플래그 노출
-4. **Admin UI**: Backup/Restore 상세에 Integrity 탭, "auth users" / "storage objects" 카운트 컬럼 추가
-5. **수동 테스트**: 백업 1회 → 무결성 리포트 확인 → 테스트 사용자 1명 추가/파일 1개 업로드 후 복원 → 원상 복귀 확인
-
----
-
-## 6. 확인 사항
-
-- 진행해도 되는지, 아니면 **(나)만 먼저 / (다)만 먼저** 분리해서 진행할지?
-- `auth.users` 비밀번호 해시를 백업 JSON에 포함하는 데 동의(보안상 권장: 동의)?
-- Storage 백업 시 어떤 버킷까지 포함할지(전체 vs 특정 버킷 화이트리스트)?
+승인하시면 위 순서대로 구현하겠습니다.

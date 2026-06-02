@@ -4923,6 +4923,7 @@ export type Database = {
         Args: { _count?: number; _owner_code: string; _project_id: string }
         Returns: number[]
       }
+      backup_consistency_marker: { Args: never; Returns: Json }
       bump_subcontractor_issue_counter: {
         Args: { _owner_code: string; _project_id: string; _used_seq: number }
         Returns: number
@@ -5006,7 +5007,9 @@ export type Database = {
       delete_docs_import_batch: { Args: { _batch_id: string }; Returns: Json }
       delete_subtests_cascade: { Args: { _ids: string[] }; Returns: Json }
       delete_warranty_cascade: { Args: { _ids: string[] }; Returns: Json }
+      dump_auth_identities: { Args: never; Returns: Json[] }
       dump_auth_users_with_hash: { Args: never; Returns: Json[] }
+      export_schema_ddl: { Args: never; Returns: string }
       get_backup_status: { Args: never; Returns: Json }
       get_defect_comment_summary: {
         Args: { _defect_ids: string[] }
@@ -5133,6 +5136,10 @@ export type Database = {
         Returns: undefined
       }
       purge_old_event_log: { Args: never; Returns: number }
+      restore_auth_identity: {
+        Args: { _overwrite?: boolean; _payload: Json }
+        Returns: string
+      }
       restore_auth_user: {
         Args: { _overwrite?: boolean; _payload: Json }
         Returns: string

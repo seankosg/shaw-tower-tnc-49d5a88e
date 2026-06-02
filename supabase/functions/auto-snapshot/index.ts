@@ -47,7 +47,7 @@ async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
 
 type ManifestEntry = { rows: number; parts: number };
 
-type Stage = "tables" | "auth" | "storage" | "verify" | "done";
+type Stage = "tables" | "auth" | "schema" | "identities" | "storage" | "verify" | "done";
 
 type Progress = {
   snapshot_type: "auto" | "manual";
@@ -69,6 +69,13 @@ type Progress = {
   manifest: Record<string, ManifestEntry>;
   /** Auth users dump result. */
   auth_users_count?: number;
+  /** auth.identities dump result. */
+  auth_identities_count?: number;
+  /** Schema DDL dump result. */
+  schema_ddl_bytes?: number;
+  /** Consistency markers (start/end txid + snapshot id + timestamps). */
+  consistency_start?: unknown;
+  consistency_end?: unknown;
   /** Storage backup state. */
   storage_buckets?: string[];
   storage_cursor_bucket?: number;
@@ -79,6 +86,7 @@ type Progress = {
   /** Integrity report. */
   integrity_report?: unknown;
 };
+
 
 
 async function loadProgress(client: any, folder: string): Promise<Progress> {
@@ -256,6 +264,15 @@ Deno.serve(async (req) => {
         triggered_by: triggeredBy,
       }).select("id").single();
 
+      // Capture start consistency marker (txid + snapshot id + timestamp).
+      let startMarker: unknown = null;
+      try {
+        const { data: m } = await adminClient.rpc("backup_consistency_marker");
+        startMarker = m ?? null;
+      } catch (e) {
+        console.warn("consistency marker (start) failed:", (e as Error).message);
+      }
+
       const progress: Progress = {
         snapshot_type,
         note,
@@ -269,12 +286,14 @@ Deno.serve(async (req) => {
         cursor_offset: 0,
         cursor_parts: 0,
         manifest: {},
+        consistency_start: startMarker,
         storage_objects_done: 0,
         storage_bytes_done: 0,
         storage_manifest: [],
       };
 
       await saveProgress(adminClient, progress);
+
 
       // Start processing in the same invocation; will self-trigger if time runs short.
       // deno-lint-ignore no-explicit-any
@@ -444,12 +463,69 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
         });
         progress.auth_users_count = list.length;
       }
+      progress.stage = "schema";
+      await saveProgress(client, progress);
+      await logRunUpdate(client, progress.run_log_id, {
+        message: `Auth dumped (${progress.auth_users_count ?? 0} users); exporting schema DDL`,
+      });
+    }
+
+    // ───────────────────────────── STAGE: SCHEMA DDL ─────────────────────────
+    if (progress.stage === "schema") {
+      if (overBudget()) { await bail(`Resuming at schema stage`); return; }
+      try {
+        const { data: ddl, error } = await client.rpc("export_schema_ddl");
+        if (error) throw new Error(error.message);
+        const ddlText: string = typeof ddl === "string" ? ddl : String(ddl ?? "");
+        const path = `${progress.folder}/__schema.sql`;
+        await withRetry("upload schema.sql", async () => {
+          const { error: upErr } = await client.storage.from(BUCKET).upload(
+            path,
+            new Blob([ddlText], { type: "application/sql" }),
+            { contentType: "application/sql", upsert: true },
+          );
+          if (upErr) throw new Error(upErr.message);
+        });
+        progress.schema_ddl_bytes = new TextEncoder().encode(ddlText).length;
+      } catch (e) {
+        console.error("schema DDL export failed:", (e as Error).message);
+        progress.schema_ddl_bytes = 0;
+      }
+      progress.stage = "identities";
+      await saveProgress(client, progress);
+      await logRunUpdate(client, progress.run_log_id, {
+        message: `Schema DDL exported (${progress.schema_ddl_bytes ?? 0} bytes); dumping auth.identities`,
+      });
+    }
+
+    // ───────────────────────────── STAGE: AUTH IDENTITIES ────────────────────
+    if (progress.stage === "identities") {
+      if (overBudget()) { await bail(`Resuming at identities stage`); return; }
+      try {
+        const { data: rows, error } = await client.rpc("dump_auth_identities");
+        if (error) throw new Error(error.message);
+        const list = Array.isArray(rows) ? rows : [];
+        const path = `${progress.folder}/__auth_identities.json`;
+        await withRetry("upload auth identities", async () => {
+          const { error: upErr } = await client.storage.from(BUCKET).upload(
+            path,
+            new Blob([JSON.stringify(list)], { type: "application/json" }),
+            { contentType: "application/json", upsert: true },
+          );
+          if (upErr) throw new Error(upErr.message);
+        });
+        progress.auth_identities_count = list.length;
+      } catch (e) {
+        console.error("auth.identities dump failed:", (e as Error).message);
+        progress.auth_identities_count = 0;
+      }
       progress.stage = "storage";
       await saveProgress(client, progress);
       await logRunUpdate(client, progress.run_log_id, {
-        message: `Auth dumped (${progress.auth_users_count ?? 0} users); copying storage objects`,
+        message: `Identities dumped (${progress.auth_identities_count ?? 0}); copying storage objects`,
       });
     }
+
 
     // ───────────────────────────── STAGE: STORAGE ────────────────────────────
     if (progress.stage === "storage") {
@@ -600,18 +676,34 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
     }
 
     // ───────────────────────────── FINALIZE ──────────────────────────────────
+    // Capture end consistency marker for drift diagnostics.
+    try {
+      const { data: m } = await client.rpc("backup_consistency_marker");
+      progress.consistency_end = m ?? null;
+    } catch { /* non-fatal */ }
+
     const manifestPayload = {
-      version: 5,
+      version: 6,
       generated_at: new Date().toISOString(),
       snapshot_type: progress.snapshot_type,
       tables: BACKUP_TABLES,
       manifest: progress.manifest,
       auth_users_count: progress.auth_users_count ?? 0,
+      auth_identities_count: progress.auth_identities_count ?? 0,
+      schema_ddl_path: (progress.schema_ddl_bytes ?? 0) > 0 ? "__schema.sql" : null,
+      schema_ddl_bytes: progress.schema_ddl_bytes ?? 0,
+      auth_identities_path: progress.auth_identities_count !== undefined ? "__auth_identities.json" : null,
       storage_objects_count: progress.storage_objects_done ?? 0,
       storage_bytes: progress.storage_bytes_done ?? 0,
       storage_buckets: progress.storage_buckets ?? [],
       integrity_report: progress.integrity_report ?? null,
+      consistency: {
+        start: progress.consistency_start ?? null,
+        end: progress.consistency_end ?? null,
+        note: "Backup spans multiple invocations; markers are diagnostic, not transactional.",
+      },
     };
+
     const manifestPath = `${progress.folder}/manifest.json`;
     await withRetry("upload manifest", async () => {
       const { error } = await client.storage.from(BUCKET).upload(
@@ -636,7 +728,7 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
       note: progress.note,
       storage_path: manifestPath,
       manifest: progress.manifest,
-      backup_version: 5,
+      backup_version: 6,
     });
     if (insErr) throw new Error(`db insert: ${insErr.message}`);
 
