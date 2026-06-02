@@ -1345,6 +1345,8 @@ export default function SubtestList() {
   // completion has not been reached by <asof>.
   const urlRemainingStage = searchParams.get('remaining_stage') as StageKey | null;
   const urlRemainingAsOf = searchParams.get('remaining_asof');
+  // Dashboard Tier-2 stage cards drill-down: items where the given stage is not Done.
+  const urlStageRemaining = searchParams.get('stage_remaining') as StageKey | null;
   const localToday = todayIso();
   const delayAsOfDate = urlAsOf || dataDate || localToday;
 
