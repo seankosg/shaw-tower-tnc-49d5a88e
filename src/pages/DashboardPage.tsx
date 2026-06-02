@@ -783,7 +783,7 @@ function ClickNum({ value, onClick, hideZero = false }: { value: number; onClick
   );
 }
 function StageCard({
-  stage, total, done, remaining, pct, overdue, onClick,
+  stage, total, done, remaining, pct, overdue, onClick, onOverdueClick,
 }: {
   stage: string;
   total: number;
@@ -792,6 +792,7 @@ function StageCard({
   pct: number;
   overdue: number;
   onClick?: () => void;
+  onOverdueClick?: () => void;
 }) {
   return (
     <Card
@@ -802,10 +803,15 @@ function StageCard({
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-foreground">{stage}</p>
           {overdue > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onOverdueClick?.(); }}
+              title="Show overdue items"
+              className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors"
+            >
               <AlertTriangle className="h-3 w-3" />
               {overdue} OD
-            </span>
+            </button>
           )}
         </div>
         <div className="grid grid-cols-3 gap-2 text-center">
