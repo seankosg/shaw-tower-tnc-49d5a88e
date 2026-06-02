@@ -728,7 +728,7 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
       note: progress.note,
       storage_path: manifestPath,
       manifest: progress.manifest,
-      backup_version: 5,
+      backup_version: 6,
     });
     if (insErr) throw new Error(`db insert: ${insErr.message}`);
 
