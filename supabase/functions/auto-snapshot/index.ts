@@ -676,18 +676,34 @@ async function processWork(client: any, progress: Progress, startedAt: number): 
     }
 
     // ───────────────────────────── FINALIZE ──────────────────────────────────
+    // Capture end consistency marker for drift diagnostics.
+    try {
+      const { data: m } = await client.rpc("backup_consistency_marker");
+      progress.consistency_end = m ?? null;
+    } catch { /* non-fatal */ }
+
     const manifestPayload = {
-      version: 5,
+      version: 6,
       generated_at: new Date().toISOString(),
       snapshot_type: progress.snapshot_type,
       tables: BACKUP_TABLES,
       manifest: progress.manifest,
       auth_users_count: progress.auth_users_count ?? 0,
+      auth_identities_count: progress.auth_identities_count ?? 0,
+      schema_ddl_path: (progress.schema_ddl_bytes ?? 0) > 0 ? "__schema.sql" : null,
+      schema_ddl_bytes: progress.schema_ddl_bytes ?? 0,
+      auth_identities_path: progress.auth_identities_count !== undefined ? "__auth_identities.json" : null,
       storage_objects_count: progress.storage_objects_done ?? 0,
       storage_bytes: progress.storage_bytes_done ?? 0,
       storage_buckets: progress.storage_buckets ?? [],
       integrity_report: progress.integrity_report ?? null,
+      consistency: {
+        start: progress.consistency_start ?? null,
+        end: progress.consistency_end ?? null,
+        note: "Backup spans multiple invocations; markers are diagnostic, not transactional.",
+      },
     };
+
     const manifestPath = `${progress.folder}/manifest.json`;
     await withRetry("upload manifest", async () => {
       const { error } = await client.storage.from(BUCKET).upload(
