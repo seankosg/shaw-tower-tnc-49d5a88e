@@ -3115,6 +3115,123 @@ function BackupTab() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">Notifications</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <label className="flex items-center justify-between gap-3 rounded-md border p-3">
+              <div>
+                <div className="text-sm font-medium">On success</div>
+                <div className="text-xs text-muted-foreground">Notify when a backup completes cleanly</div>
+              </div>
+              <Switch
+                checked={notifCfg.on_success}
+                disabled={notifSaving}
+                onCheckedChange={(v) => saveNotificationCfg({ ...notifCfg, on_success: v })}
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 rounded-md border p-3">
+              <div>
+                <div className="text-sm font-medium">On warning</div>
+                <div className="text-xs text-muted-foreground">Notify when integrity warnings appear</div>
+              </div>
+              <Switch
+                checked={notifCfg.on_warning}
+                disabled={notifSaving}
+                onCheckedChange={(v) => saveNotificationCfg({ ...notifCfg, on_warning: v })}
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 rounded-md border p-3">
+              <div>
+                <div className="text-sm font-medium">On failure</div>
+                <div className="text-xs text-muted-foreground">Notify when a backup run fails</div>
+              </div>
+              <Switch
+                checked={notifCfg.on_failure}
+                disabled={notifSaving}
+                onCheckedChange={(v) => saveNotificationCfg({ ...notifCfg, on_failure: v })}
+              />
+            </label>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={notifCfg.in_app}
+              disabled={notifSaving}
+              onCheckedChange={(v) => saveNotificationCfg({ ...notifCfg, in_app: v })}
+            />
+            <span className="text-sm">In-app notification log (this page)</span>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Webhook URL (Slack / Teams / Discord compatible)</label>
+            <div className="flex gap-2">
+              <Input
+                value={notifWebhookDraft}
+                onChange={(e) => setNotifWebhookDraft(e.target.value)}
+                placeholder="https://hooks.slack.com/services/…"
+              />
+              <Button
+                variant="outline"
+                onClick={() => saveNotificationCfg({ ...notifCfg, webhook_url: notifWebhookDraft.trim() || null })}
+                disabled={notifSaving || notifWebhookDraft === (notifCfg.webhook_url ?? '')}
+              >
+                Save
+              </Button>
+              <Button variant="outline" onClick={testWebhook} disabled={!notifWebhookDraft.trim()}>
+                Test
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Receives a JSON POST <code className="text-[10px]">{`{ text: "…" }`}</code> for each backup event matching your toggles above. Leave blank to disable.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center justify-between">
+            <span>Recent Notifications</span>
+            <Button size="sm" variant="ghost" onClick={loadNotificationLog}>Refresh</Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {notifLog.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No notifications yet.</p>
+          ) : (
+            <div className="space-y-2 max-h-[360px] overflow-auto">
+              {notifLog.map((n) => (
+                <div key={n.id} className="flex items-start justify-between gap-3 rounded-md border p-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={n.level === 'error' ? 'destructive' : n.level === 'warning' ? 'outline' : 'secondary'}
+                        className={`text-xs ${n.level === 'warning' ? 'border-amber-500 text-amber-700' : ''}`}
+                      >
+                        {n.level}
+                      </Badge>
+                      <span className="text-sm font-medium truncate" title={n.title}>{n.title}</span>
+                    </div>
+                    {n.message && <p className="text-xs text-muted-foreground mt-1 break-words">{n.message}</p>}
+                    <div className="text-[11px] text-muted-foreground mt-1">
+                      {new Date(n.created_at).toLocaleString()}
+                      {n.webhook_status && ` · webhook ${n.webhook_status}`}
+                      {n.webhook_error && ` · ${n.webhook_error}`}
+                    </div>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => deleteNotification(n.id)}>×</Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">Saved Snapshots</CardTitle>
         </CardHeader>
         <CardContent>
