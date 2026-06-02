@@ -312,6 +312,34 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ── Restore auth.identities (after users, before storage) ───────────
+      let identitiesRestored = 0;
+      const identityErrors: Array<{ id?: string; error: string }> = [];
+      if (!skip_auth_restore) {
+        try {
+          const idPath = `${folder}/__auth_identities.json`;
+          const { data: dl, error: dlErr } = await adminClient.storage.from(bucket).download(idPath);
+          if (dlErr) {
+            // Older backups (v5 and earlier) don't include identities; not an error
+            if (!dlErr.message?.toLowerCase().includes("not found")) {
+              identityErrors.push({ error: `auth_identities.json: ${dlErr.message}` });
+            }
+          } else {
+            const ids = JSON.parse(await dl.text()) as any[];
+            for (const idRow of ids) {
+              const { data, error } = await adminClient.rpc("restore_auth_identity", {
+                _payload: idRow, _overwrite: !!overwrite_existing_users,
+              });
+              if (error) identityErrors.push({ id: idRow?.id, error: error.message });
+              else if (data === "inserted" || data === "updated") identitiesRestored += 1;
+            }
+          }
+        } catch (e) {
+          identityErrors.push({ error: (e as Error).message });
+        }
+      }
+
+
       // ── Restore storage objects ─────────────────────────────────────────
       let storageRestored = 0;
       const storageErrors: Array<{ path: string; error: string }> = [];
