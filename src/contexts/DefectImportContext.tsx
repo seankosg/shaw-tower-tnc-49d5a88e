@@ -35,7 +35,9 @@ const PRESERVE_BLANK_FIELDS = [
   'actual_progress_pct',
   'remarks', 'hdec_comments', 'aconex_comments',
   'hdec_verification', 'hdec_reason',
+  'priority_locked', 'hdec_verification_locked',
 ] as const;
+
 
 function isBlankValue(v: unknown): boolean {
   if (v === null || v === undefined) return true;
