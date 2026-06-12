@@ -920,6 +920,7 @@ export type Database = {
           hdec_pic_name: string | null
           hdec_reason: string | null
           hdec_verification: string | null
+          hdec_verification_locked: boolean
           id: string
           is_active: boolean
           is_critical: boolean
@@ -930,6 +931,7 @@ export type Database = {
           planned_progress_pct: number | null
           planned_start_date: string | null
           priority: string | null
+          priority_locked: boolean
           project_id: string
           raw_payload: Json
           remarks: string | null
@@ -975,6 +977,7 @@ export type Database = {
           hdec_pic_name?: string | null
           hdec_reason?: string | null
           hdec_verification?: string | null
+          hdec_verification_locked?: boolean
           id?: string
           is_active?: boolean
           is_critical?: boolean
@@ -985,6 +988,7 @@ export type Database = {
           planned_progress_pct?: number | null
           planned_start_date?: string | null
           priority?: string | null
+          priority_locked?: boolean
           project_id: string
           raw_payload?: Json
           remarks?: string | null
@@ -1030,6 +1034,7 @@ export type Database = {
           hdec_pic_name?: string | null
           hdec_reason?: string | null
           hdec_verification?: string | null
+          hdec_verification_locked?: boolean
           id?: string
           is_active?: boolean
           is_critical?: boolean
@@ -1040,6 +1045,7 @@ export type Database = {
           planned_progress_pct?: number | null
           planned_start_date?: string | null
           priority?: string | null
+          priority_locked?: boolean
           project_id?: string
           raw_payload?: Json
           remarks?: string | null
