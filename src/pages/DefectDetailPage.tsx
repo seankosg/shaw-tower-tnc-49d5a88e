@@ -552,11 +552,48 @@ export default function DefectDetailPage() {
         <ReadonlyField label="Difference" value={progressDifference == null ? null : formatPct(progressDifference)} />
         <SelectField label="Completion Status" value={form.completion_status} options={statusOptionsList} disabled={!canEdit} onChange={(v) => updateField('completion_status', v)} />
         <SelectField label="Closure Status" value={form.closure_status} options={statusOptionsList} disabled={!canEdit} onChange={(v) => updateField('closure_status', v)} />
-        <ReadonlyField label="HDEC's Verification" value={(record as any).hdec_verification ?? null} />
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-xs font-medium text-muted-foreground">Priority</label>
+            {(form as any).priority_locked ? (
+              <button type="button" disabled={!canEdit} onClick={() => updateField('priority_locked' as any, false)} className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning disabled:opacity-60">Locked — Unlock</button>
+            ) : (
+              <span className="inline-flex items-center rounded-full border border-muted-foreground/30 bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Auto</span>
+            )}
+          </div>
+          <Select value={(form.priority ?? '') === '' ? '__none__' : String(form.priority)} onValueChange={(v) => updateField('priority' as any, v === '__none__' ? null : v)} disabled={!canEdit}>
+            <SelectTrigger className={`h-9 ${!canEdit ? 'bg-muted text-foreground' : ''}`}><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent className="bg-popover">
+              <SelectItem value="__none__">— None —</SelectItem>
+              <SelectItem value="Cat A - Major Defect (Before SC)">Cat A - Major Defect (Before SC)</SelectItem>
+              <SelectItem value="Cat B - Minor Defect">Cat B - Minor Defect</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-xs font-medium text-muted-foreground">HDEC's Verification</label>
+            {(form as any).hdec_verification_locked ? (
+              <button type="button" disabled={!canEdit} onClick={() => updateField('hdec_verification_locked' as any, false)} className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning disabled:opacity-60">Locked — Unlock</button>
+            ) : (
+              <span className="inline-flex items-center rounded-full border border-muted-foreground/30 bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Auto</span>
+            )}
+          </div>
+          <Select value={((form as any).hdec_verification ?? '') === '' ? '__none__' : String((form as any).hdec_verification)} onValueChange={(v) => updateField('hdec_verification' as any, v === '__none__' ? null : v)} disabled={!canEdit}>
+            <SelectTrigger className={`h-9 ${!canEdit ? 'bg-muted text-foreground' : ''}`}><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent className="bg-popover">
+              <SelectItem value="__none__">— None —</SelectItem>
+              <SelectItem value="Cat A - Major Defect (Before SC)">Cat A - Major Defect (Before SC)</SelectItem>
+              <SelectItem value="Cat B - Minor Defect">Cat B - Minor Defect</SelectItem>
+              <SelectItem value="Review Needed">Review Needed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="md:col-span-2 space-y-1">
           <label className="text-xs font-medium text-muted-foreground">HDEC's Reason</label>
-          <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm min-h-[2.25rem]">{String((record as any).hdec_reason ?? '—')}</div>
+          <Textarea value={String((form as any).hdec_reason ?? '')} disabled={!canEdit} onChange={(e) => updateField('hdec_reason' as any, e.target.value)} />
         </div>
+
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Description</label><Textarea value={String(form.description ?? '')} disabled={!canEdit} onChange={(e) => updateField('description', e.target.value)} /></div>
         <div className="md:col-span-3 space-y-1"><label className="text-xs font-medium text-muted-foreground">Remarks</label><Textarea value={String(form.remarks ?? '')} disabled={!canEdit} onChange={(e) => updateField('remarks', e.target.value)} /></div>
       </CardContent></Card>
