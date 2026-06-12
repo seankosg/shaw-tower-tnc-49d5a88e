@@ -985,7 +985,9 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
           });
         }
       }
+      } // end else (not locked)
       // ───────────────────────────────────────────────────────────────────
+
 
       // Policy: when actual_completion_date is explicitly present (Excel or pre-existing DB)
       // but actual_start_date is missing in BOTH Excel and DB, impute start = completion.
