@@ -303,12 +303,29 @@ export default function DefectDetailPage() {
       description: form.description || null,
       remarks: form.remarks || null,
       hdec_eng_name: form.hdec_eng_name || null,
+      priority: (form as any).priority ?? null,
+      hdec_verification: (form as any).hdec_verification ?? null,
+      hdec_reason: (form as any).hdec_reason ?? null,
       classification_source: 'manual',
       classified_at: new Date().toISOString(),
       updated_by: user.id,
       data_source_type: 'app_direct_input',
       row_version: record.row_version + 1,
     };
+    // Lock flags: auto-set true when the corresponding field actually changed by user.
+    // Respect explicit unlock (user clicked Unlock badge → form value becomes false).
+    const priorityChanged = String((record as any).priority ?? '') !== String((form as any).priority ?? '');
+    const verificationChanged = String((record as any).hdec_verification ?? '') !== String((form as any).hdec_verification ?? '')
+      || String((record as any).hdec_reason ?? '') !== String((form as any).hdec_reason ?? '');
+    const nextPriorityLock = (form as any).priority_locked === false
+      ? false
+      : (priorityChanged ? true : ((record as any).priority_locked ?? false));
+    const nextVerificationLock = (form as any).hdec_verification_locked === false
+      ? false
+      : (verificationChanged ? true : ((record as any).hdec_verification_locked ?? false));
+    payload.priority_locked = nextPriorityLock;
+    payload.hdec_verification_locked = nextVerificationLock;
+
     // Auto-recompute statuses ONLY when status-affecting inputs (dates / actual progress) actually changed.
     // Otherwise keep the existing DB values to avoid silently overwriting closure_status to "Planned"
     // when the user edited an unrelated field (description, remarks, trade, etc.).
