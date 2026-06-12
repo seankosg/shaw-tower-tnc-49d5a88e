@@ -205,7 +205,9 @@ export default function DefectDetailPage() {
       'planned_progress_pct', 'actual_progress_pct', 'completion_status', 'closure_status',
       'description', 'remarks',
       'subcontractor_name', 'subsub_name', 'hdec_pic_name', 'hdec_eng_name', 'team',
+      'priority', 'hdec_verification', 'hdec_reason',
     ] as const;
+
 
     const changes = editableFields
       .filter((field) => canEditResponsibility || (!DEFECT_RESPONSIBILITY_FIELDS.includes(field as any) && field !== 'team'))
