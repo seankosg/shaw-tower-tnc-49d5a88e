@@ -1,87 +1,47 @@
-# 백업/복원 완전성 강화 계획 (옵션 2: A+B+C)
 
-## 목표
-현재 백업 시스템에 다음 3가지를 추가해 **새 프로젝트로의 완전 재해 복구**를 가능하게 만든다.
+## 목적
+Defect Detail 페이지에서 **Priority**, **HDEC's Verification**, **HDEC's Reason** 값을 수정 가능하게 만들고, 수동 수정된 값은 이후 import / 자동 분류 backfill에서 덮어쓰지 않도록 보존(잠금)한다.
 
-- (A) DB 스키마 덤프 — 테이블/인덱스/제약/함수/트리거 정의
-- (B) `auth.identities` 백업 — 소셜 로그인 연결 보존
-- (C) 단일 시점 일관성 — 모든 테이블을 같은 트랜잭션 스냅샷에서 읽기
+## 변경 사항
 
-## 구현 범위
+### 1. DB 스키마 (migration)
+`defect_items` 테이블에 잠금 플래그 2개 추가:
+- `priority_locked boolean NOT NULL DEFAULT false` — 사용자가 Priority를 수동 변경한 경우 true
+- `hdec_verification_locked boolean NOT NULL DEFAULT false` — 사용자가 HDEC's Verification 또는 Reason을 수동 변경한 경우 true
 
-### 1. DB 함수 추가 (migration)
+별도 RLS 변경 없음(기존 정책 사용).
 
-#### `public.export_schema_ddl()` (SECURITY DEFINER, admin 전용)
-- `pg_catalog` + `information_schema`를 조회해 public 스키마의 다음을 SQL 텍스트로 생성:
-  - `CREATE TABLE` 문 (컬럼, 타입, default, nullable)
-  - `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY`, `CHECK` 제약
-  - `CREATE INDEX` 문
-  - `CREATE FUNCTION` (public 스키마 함수 본문)
-  - `CREATE TRIGGER` 문
-  - `CREATE TYPE` (enum 등)
-  - `ENABLE ROW LEVEL SECURITY` + `CREATE POLICY` 문
-  - `GRANT` 문
-- 반환: 단일 텍스트(실행 가능한 .sql)
-- 권한: `has_role(auth.uid(), 'admin')` 체크
+### 2. Detail 페이지 UI (`src/pages/DefectDetailPage.tsx`)
+- **Priority**: 현재 표시되지 않음 → `SelectField` 추가 (Classification 그룹). 옵션은 기존 Priority 마스터/유니크 값에서 가져옴.
+- **HDEC's Verification**: `ReadonlyField` → `SelectField`로 교체. 옵션: `Cat A - Major Defect (Before SC)` / `Cat B - Minor Defect` / `Review Needed` / (빈 값).
+- **HDEC's Reason**: 회색 박스 표시 → `Textarea`로 교체.
+- 세 필드 옆에 **잠금 상태 뱃지**(🔒 Locked / Auto) 표시. 잠금 해제 버튼 제공 → 다음 import/backfill 때 다시 자동 분류되도록.
+- 사용자가 값을 변경하면 저장 시점에 해당 `*_locked` 플래그를 자동으로 true 세팅.
+- 권한: 기존 `canEdit` 사용. `useDefectFieldConfig`의 `isFieldEditable` 게이트도 적용 (admin은 항상 통과).
 
-#### `public.export_snapshot_id()` (SECURITY DEFINER)
-- `pg_export_snapshot()` 호출해 snapshot id 반환
-- 동일 트랜잭션 안에서 호출자가 `SET TRANSACTION SNAPSHOT`을 사용할 수 있게 함
+### 3. Import 로직 (`src/contexts/DefectImportContext.tsx`)
+- Priority 적용 직전: `existing.priority_locked === true`면 import 값 무시하고 `existing.priority` 유지 + import_field_log에 `skipped_locked` 기록.
+- HDEC's Verification 분류 블록(라인 890~):
+  - `existing.hdec_verification_locked === true`면 `verifyPriority` 자체를 호출하지 않고 `existing` 값 유지, `priority_verification_locked` 로그 추가.
+- 잠금 플래그 자체는 import에서 절대 변경하지 않음(보존).
 
-### 2. `auto-snapshot` Edge Function 수정
+### 4. Backfill Edge Function (`supabase/functions/defect-priority-verification-backfill/index.ts`)
+- CLEAR pass / SET pass 모두 `hdec_verification_locked = false` 조건 추가.
+- 응답에 `locked_skipped` 카운터 추가.
 
-기존 로직에 추가:
+### 5. 표시 동기화
+- `src/lib/defect-cache.ts`, `src/contexts/DefectImportContext.tsx`의 컬럼 화이트리스트에 두 잠금 컬럼 포함시켜 Detail이 최신 상태를 받도록 보장.
+- Raw Data 테이블에는 컬럼 추가하지 않음(요구 범위 외).
 
-- **(C) 단일 시점 일관성**
-  - 백업 시작 시 새 트랜잭션 열고 `export_snapshot_id()` 호출
-  - 이후 모든 `SELECT`를 `SET TRANSACTION SNAPSHOT '<id>'` 후 실행
-  - 실제 구현: Supabase REST API로는 트랜잭션 공유가 불가하므로, 
-    **단일 RPC `dump_all_tables_consistent(snapshot_id)`를 새로 만들어 한 트랜잭션 내에서 모든 public 테이블을 JSON으로 직렬화 후 반환** 방식 채택
-  - 또는 Edge Function이 `pg` 클라이언트(Deno postgres driver)로 직접 연결해 단일 트랜잭션 유지
+## 기술 메모
+- 자동 분류 트리거(import)와 수동 잠금이 충돌하지 않도록, 잠금 체크가 항상 분류 로직보다 먼저 실행.
+- Backfill에서 잠금 해제 후 재실행하면 자동 규칙으로 다시 채워짐.
+- 잠금 해제 버튼 클릭 시 즉시 DB UPDATE (값은 그대로 두고 플래그만 false).
+- 마이그레이션 후 `src/integrations/supabase/types.ts` 자동 재생성되므로 코드 수정은 그 이후 진행.
 
-- **(A) 스키마 DDL 백업**
-  - `export_schema_ddl()` 호출 결과를 `db-backups/<timestamp>/schema.sql`로 저장
-
-- **(B) auth.identities 백업**
-  - 기존 `auth.users` 덤프 옆에 `auth.identities` 전체 row 덤프 추가
-  - 저장 위치: `db-backups/<timestamp>/auth_identities.json`
-  - service_role로 `auth.identities` 직접 조회
-
-- **manifest.json 확장**
-  - `schema_sql_path`, `auth_identities_path`, `snapshot_id`, `consistency: 'snapshot'` 필드 추가
-
-### 3. `restore-snapshot` Edge Function 수정
-
-- manifest에 `auth_identities_path`가 있으면 복원 후 `auth.identities` upsert
-- 스키마 DDL은 동일 프로젝트 복원 시에는 미적용(데이터만 복원), manifest에 경로만 기록해 **수동 신규 프로젝트 복원 시 사용** 가능하도록 보관
-
-### 4. Admin UI 보완 (`src/pages/AdminPage.tsx`)
-
-백업 카드/모달에 다음 표시 추가:
-- "Schema DDL included" 배지
-- "auth.identities: N rows" 표시
-- "Snapshot consistency: ✓" 표시
-- 백업 항목에서 `schema.sql` 직접 다운로드 버튼
-
-## 기술 세부사항
-
-- **트랜잭션 일관성 구현 방식 결정**: Deno postgres driver (`https://deno.land/x/postgres`)를 `auto-snapshot`에 도입해 단일 커넥션/단일 트랜잭션 유지. service_role DB URL 사용. 이미 service_role key는 환경변수로 존재.
-- **DDL 생성**: `pg_get_tabledef`는 기본 미설치이므로 `information_schema` + `pg_catalog.pg_get_constraintdef`, `pg_get_indexdef`, `pg_get_functiondef`, `pg_get_triggerdef`를 직접 조합.
-- **권한**: 모든 신규 RPC는 `SECURITY DEFINER` + admin 역할 체크 + `search_path = public, pg_catalog`.
-- **용량**: 추가 산출물은 총 < 1MB (기존 1.5GB 대비 무시 가능).
-
-## 작업 순서
-
-1. migration: `export_schema_ddl()`, `export_snapshot_id()` 함수 생성 + admin 권한 정책
-2. `auto-snapshot/index.ts` 수정: Deno postgres 도입, 단일 트랜잭션 백업, schema.sql + auth_identities.json 추가, manifest 확장
-3. `restore-snapshot/index.ts` 수정: auth.identities 복원 로직 추가
-4. `AdminPage.tsx`: 새 메타데이터/다운로드 버튼 노출
-5. 수동 실행으로 백업 1회 → manifest, schema.sql, auth_identities.json 생성 확인 → 복원 테스트
-
-## 변경 파일
+## 영향받는 파일
 - `supabase/migrations/<new>.sql` (신규)
-- `supabase/functions/auto-snapshot/index.ts`
-- `supabase/functions/restore-snapshot/index.ts`
-- `src/pages/AdminPage.tsx`
-
-승인하시면 위 순서대로 구현하겠습니다.
+- `src/pages/DefectDetailPage.tsx`
+- `src/contexts/DefectImportContext.tsx`
+- `src/lib/defect-cache.ts`
+- `supabase/functions/defect-priority-verification-backfill/index.ts`

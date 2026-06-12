@@ -139,6 +139,7 @@ Deno.serve(async (req) => {
       let q = admin.from('defect_items').select('id')
         .neq('priority', CAT_A)
         .not('hdec_verification', 'is', null)
+        .eq('hdec_verification_locked', false)
         .range(from, to);
       if (projectId) q = q.eq('project_id', projectId);
       return q;
@@ -166,16 +167,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── SET pass: eligible Cat A rows
+    // ── SET pass: eligible Cat A rows (skip rows locked by manual edit)
     const candidates = await fetchAll<any>((from, to) => {
       let q = admin.from('defect_items')
         .select('id, description, closure_status, status, hdec_verification, hdec_reason')
         .eq('priority', CAT_A)
         .eq('is_active', true)
+        .eq('hdec_verification_locked', false)
         .range(from, to);
       if (projectId) q = q.eq('project_id', projectId);
       return q;
     });
+
 
 
     let setCount = 0;

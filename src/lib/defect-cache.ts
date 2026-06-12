@@ -57,7 +57,10 @@ const SLIM_COLUMNS = [
   'closure_status',
   'hdec_verification',
   'hdec_reason',
+  'priority_locked',
+  'hdec_verification_locked',
   'work_type',
+
   'classification_source',
   'classified_at',
   'source_upload_id',
