@@ -888,7 +888,33 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
       // Apply blank-preservation for general data fields (description, dates, PIC, etc.)
       preserveExistingForBlank(row, existing);
 
+      // Manual-lock override: if user locked Priority on Detail page, keep existing.
+      if (existing?.priority_locked === true) {
+        const incoming = row.priority ?? null;
+        if (incoming !== (existing.priority ?? null)) {
+          fl(row.rawRowNo, 'priority', 'skipped_empty', {
+            applied: existing.priority ?? null,
+            previous: incoming,
+            code: 'priority_locked',
+            detail: 'Priority is locked by manual edit — import value ignored.',
+          });
+        }
+        row.priority = existing.priority ?? null;
+      }
+
       // ── HDEC Priority Verification ─────────────────────────────────────
+      // Manual lock takes precedence: if user locked HDEC's Verification on Detail page,
+      // keep existing verification/reason and skip the classifier entirely.
+      if (existing?.hdec_verification_locked === true) {
+        row.hdec_verification = existing.hdec_verification ?? null;
+        row.hdec_reason = existing.hdec_reason ?? null;
+        fl(row.rawRowNo, 'hdec_verification', 'skipped_empty', {
+          applied: existing.hdec_verification ?? null,
+          previous: existing.hdec_verification ?? null,
+          code: 'priority_verification_locked',
+          detail: 'HDEC verification is locked by manual edit — auto-classification skipped.',
+        });
+      } else {
       // Runs ONLY when row.priority === "Cat A - Major Defect (Before SC)" AND
       // (existing.closure_status !== "Done") AND (row.status !== "Closed").
       // Description fallback to existing DB value already applied via preserveExistingForBlank.
@@ -920,6 +946,7 @@ export function DefectImportProvider({ children }: { children: ReactNode }) {
         },
         verificationRules,
       );
+
       if (verifyOutcome.action === 'set') {
         row.hdec_verification = verifyOutcome.verification;
         row.hdec_reason = verifyOutcome.reason;
