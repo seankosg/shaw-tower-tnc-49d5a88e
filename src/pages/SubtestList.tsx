@@ -574,7 +574,7 @@ const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
 export default function SubtestList() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, profile, roles } = useAuth();
+  const { user, profile, roles, isAdmin } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const storageKey = user?.id ? `subtest-list-state:${user.id}` : 'subtest-list-state:anon';
