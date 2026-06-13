@@ -395,7 +395,7 @@ function ColumnFilterDropdown({ column }: { column: any }) {
 export default function DefectRawDataPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, profile, roles } = useAuth();
+  const { user, profile, roles, isAdmin } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const { dataDate } = useLatestDataDate();
