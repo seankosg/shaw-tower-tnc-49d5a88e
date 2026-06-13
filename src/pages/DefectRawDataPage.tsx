@@ -1354,6 +1354,13 @@ export default function DefectRawDataPage() {
         <div className="ml-auto"><DefectStageProgressLegend /></div>
       </div>
 
+      <CriticalBulkBar
+        isAdmin={isAdmin}
+        selectedRows={selectedRows as Array<{ id: string; is_critical?: boolean | null }>}
+        pending={criticalPending}
+        setPending={setCriticalPending}
+      />
+
       <BulkEditBar
         selectedRows={selectedRows}
         fields={bulkFields}
