@@ -1752,6 +1752,13 @@ export default function SubtestList() {
         <div className="ml-auto"><StageProgressLegend /></div>
       </div>
 
+      <CriticalBulkBar
+        isAdmin={isAdmin}
+        selectedRows={selectedRows as Array<{ id: string; is_critical?: boolean | null }>}
+        pending={criticalPending}
+        setPending={setCriticalPending}
+      />
+
       <BulkEditBar
         selectedRows={selectedRows}
         fields={bulkFields}
