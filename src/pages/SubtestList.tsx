@@ -48,6 +48,7 @@ import {
 import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import { CriticalPendingBar } from '@/components/raw-data/CriticalPendingBar';
+import { CriticalBulkBar } from '@/components/raw-data/CriticalBulkBar';
 import type { BulkEditableField } from '@/lib/bulk-edit';
 import { META_FIELD_NAMES, type CommentSummary, EMPTY_SUMMARY, isMetaField } from '@/lib/meta-fields';
 import { MetaCell } from '@/components/raw-data/MetaCell';
@@ -574,7 +575,7 @@ const DEFAULT_SORTING: SortingState = [{ id: 'item_no', desc: false }];
 export default function SubtestList() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, profile, roles } = useAuth();
+  const { user, profile, roles, isAdmin } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const storageKey = user?.id ? `subtest-list-state:${user.id}` : 'subtest-list-state:anon';
@@ -1750,6 +1751,13 @@ export default function SubtestList() {
         )}
         <div className="ml-auto"><StageProgressLegend /></div>
       </div>
+
+      <CriticalBulkBar
+        isAdmin={isAdmin}
+        selectedRows={selectedRows as Array<{ id: string; is_critical?: boolean | null }>}
+        pending={criticalPending}
+        setPending={setCriticalPending}
+      />
 
       <BulkEditBar
         selectedRows={selectedRows}

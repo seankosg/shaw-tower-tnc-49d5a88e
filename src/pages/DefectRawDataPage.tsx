@@ -49,6 +49,7 @@ import { Label } from '@/components/ui/label';
 import { BulkEditBar } from '@/components/raw-data/BulkEditBar';
 import { TopHorizontalScrollbar } from '@/components/raw-data/TopHorizontalScrollbar';
 import { CriticalPendingBar } from '@/components/raw-data/CriticalPendingBar';
+import { CriticalBulkBar } from '@/components/raw-data/CriticalBulkBar';
 import type { BulkEditableField } from '@/lib/bulk-edit';
 import { buildColumnFilterChips } from '@/lib/filter-chip-utils';
 import { inferFilterType } from '@/lib/field-filter-type';
@@ -395,7 +396,7 @@ function ColumnFilterDropdown({ column }: { column: any }) {
 export default function DefectRawDataPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, profile, roles } = useAuth();
+  const { user, profile, roles, isAdmin } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const { dataDate } = useLatestDataDate();
@@ -1352,6 +1353,13 @@ export default function DefectRawDataPage() {
         </span>
         <div className="ml-auto"><DefectStageProgressLegend /></div>
       </div>
+
+      <CriticalBulkBar
+        isAdmin={isAdmin}
+        selectedRows={selectedRows as Array<{ id: string; is_critical?: boolean | null }>}
+        pending={criticalPending}
+        setPending={setCriticalPending}
+      />
 
       <BulkEditBar
         selectedRows={selectedRows}
