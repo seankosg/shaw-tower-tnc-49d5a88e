@@ -470,7 +470,7 @@ export default function DefectDashboardPage() {
     setSearchParams(next, { replace: true });
   }, [teamFilter, breakdownTab, scurveBucket, scurveStart, scurveEnd, scurveStage, scurveGroup, scurveGroupValues, subTradeTextFilter, selectedSubTradeFilters, planMode]);
 
-  const goRaw = (params: Record<string, string>) => navigate(`/defects/raw-data?${new URLSearchParams({ source: 'dashboard', ...params }).toString()}`);
+  const goRaw = (params: Record<string, string>) => navigate(`/defects/raw-data?${new URLSearchParams({ source: 'dashboard', csc: cscTab, ...params }).toString()}`);
   const handleBreakdownExport = () => {
     const { rows, header } = breakdownDataMap[breakdownTab] ?? breakdownDataMap.subcon;
     if (!rows.length) return toast({ title: 'No data to export', variant: 'destructive' });
@@ -486,6 +486,19 @@ export default function DefectDashboardPage() {
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold text-foreground">Defect Executive Dashboard</h1>
           <DDayBadge targetDate={PROJECT_COMPLETION_DDAY} />
+          <Tabs
+            value={cscTab}
+            onValueChange={(v) => {
+              const next = new URLSearchParams(searchParams);
+              if (v === 'post') next.set('csc', 'post'); else next.delete('csc');
+              setSearchParams(next, { replace: true });
+            }}
+          >
+            <TabsList className="h-8">
+              <TabsTrigger value="pre" className="h-7 px-3 text-xs">Pre CSC</TabsTrigger>
+              <TabsTrigger value="post" className="h-7 px-3 text-xs">Post CSC</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
         <div className="flex items-center gap-3">
           <ToggleGroup type="multiple" value={teamFilter} onValueChange={setTeamFilter} className="gap-1 flex-wrap">
