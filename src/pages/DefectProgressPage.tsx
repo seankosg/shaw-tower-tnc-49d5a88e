@@ -87,6 +87,7 @@ export default function DefectProgressPage() {
   const [pickedField, setPickedField] = useState<'planned' | 'actual'>((searchParams.get('picked_field') as 'planned' | 'actual') || 'planned');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [planMode, setPlanMode] = usePlanMode();
+  const [cscTab, setCscTab] = useState<'pre' | 'post'>(() => (searchParams.get('csc') === 'post' ? 'post' : 'pre'));
 
   // URL → planMode (URL has priority on mount; subsequent changes propagate URL ↔ store)
   useEffect(() => {
@@ -118,11 +119,16 @@ export default function DefectProgressPage() {
     setOrDelete('picked', pickedDate ? format(pickedDate, 'yyyy-MM-dd') : '', format(new Date(), 'yyyy-MM-dd'));
     setOrDelete('picked_field', pickedField, 'planned');
     setOrDelete('plan_mode', planMode, 'remaining');
+    setOrDelete('csc', cscTab === 'post' ? 'post' : '', '');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, planMode, searchParams, setSearchParams]);
+  }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, planMode, cscTab, searchParams, setSearchParams]);
 
   const { items: cachedItems, initialLoaded } = useDefectCache();
-  const items = cachedItems as unknown as DefectItem[];
+  const allItems = cachedItems as unknown as DefectItem[];
+  const items = useMemo(
+    () => allItems.filter(d => cscTab === 'post' ? (d as any).is_post_csc === true : (d as any).is_post_csc !== true),
+    [allItems, cscTab],
+  );
   const loading = !initialLoaded;
 
   const { dataDate, source: dataDateSource } = useLatestDataDate();
@@ -310,7 +316,7 @@ export default function DefectProgressPage() {
         },
         sourceLabel: 'Defect Progress → Filtered rows',
         filterSummary: filterParts.join(' · '),
-        fileStem: 'SHAW_Defects_Progress',
+        fileStem: `SHAW_Defects_Progress_${cscTab === 'post' ? 'PostCSC' : 'PreCSC'}`,
       });
       toast({ title: 'Export complete', description: `${rowCount} rows → ${fileName}` });
     } catch (err) {
@@ -343,6 +349,15 @@ export default function DefectProgressPage() {
           </Button>
         </div>
       </div>
+
+      {/* CSC Tabs */}
+      <Tabs value={cscTab} onValueChange={(v) => setCscTab(v as 'pre' | 'post')}>
+        <TabsList>
+          <TabsTrigger value="pre">Pre CSC</TabsTrigger>
+          <TabsTrigger value="post">Post CSC</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
 
       {/* Toolbar */}
       <Card>
