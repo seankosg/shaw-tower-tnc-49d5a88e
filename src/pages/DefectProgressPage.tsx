@@ -350,6 +350,15 @@ export default function DefectProgressPage() {
         </div>
       </div>
 
+      {/* CSC Tabs */}
+      <Tabs value={cscTab} onValueChange={(v) => setCscTab(v as 'pre' | 'post')}>
+        <TabsList>
+          <TabsTrigger value="pre">Pre CSC</TabsTrigger>
+          <TabsTrigger value="post">Post CSC</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+
       {/* Toolbar */}
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3 p-3">
