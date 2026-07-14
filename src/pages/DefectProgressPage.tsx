@@ -87,6 +87,7 @@ export default function DefectProgressPage() {
   const [pickedField, setPickedField] = useState<'planned' | 'actual'>((searchParams.get('picked_field') as 'planned' | 'actual') || 'planned');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [planMode, setPlanMode] = usePlanMode();
+  const [cscTab, setCscTab] = useState<'pre' | 'post'>(() => (searchParams.get('csc') === 'post' ? 'post' : 'pre'));
 
   // URL → planMode (URL has priority on mount; subsequent changes propagate URL ↔ store)
   useEffect(() => {
