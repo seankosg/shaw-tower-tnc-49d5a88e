@@ -107,7 +107,11 @@ export default function DefectDashboardPage() {
   const { profile, roles } = useAuth();
   const scurveChartRef = useRef<HTMLDivElement | null>(null);
   const { items: cachedItems, initialLoaded } = useDefectCache();
-  const items = cachedItems as unknown as DefectForDashboard[];
+  const cscTab = (searchParams.get('csc') === 'post' ? 'post' : 'pre') as 'pre' | 'post';
+  const items = useMemo(
+    () => (cachedItems as unknown as DefectForDashboard[]).filter((it: any) => (cscTab === 'post' ? it.is_post_csc === true : it.is_post_csc !== true)),
+    [cachedItems, cscTab],
+  );
   const loading = !initialLoaded;
   useMainScrollRestoration(!loading);
   const [dataDate, setDataDate] = useState(todayIso());
