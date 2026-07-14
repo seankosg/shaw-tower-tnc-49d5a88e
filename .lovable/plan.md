@@ -1,47 +1,84 @@
-
 ## 목적
-Defect Detail 페이지에서 **Priority**, **HDEC's Verification**, **HDEC's Reason** 값을 수정 가능하게 만들고, 수동 수정된 값은 이후 import / 자동 분류 backfill에서 덮어쓰지 않도록 보존(잠금)한다.
+Defect Management에서 각 행의 `created_at` 값이 **2026-06-26 이상**인 항목을 별도의 **Post CSC** 세트로 분리 표시. Dashboard / Raw Data 페이지에 `Pre CSC` / `Post CSC` 탭을 추가하고, 이후 신규 import는 각 row의 `created_at`로 자동 라우팅된다. 마스터·필드설정·RLS·Critical Issue Board는 두 세트가 공유.
 
-## 변경 사항
+## 설계 개요
 
-### 1. DB 스키마 (migration)
-`defect_items` 테이블에 잠금 플래그 2개 추가:
-- `priority_locked boolean NOT NULL DEFAULT false` — 사용자가 Priority를 수동 변경한 경우 true
-- `hdec_verification_locked boolean NOT NULL DEFAULT false` — 사용자가 HDEC's Verification 또는 Reason을 수동 변경한 경우 true
+### 판정 방식
+- `defect_items`에 `is_post_csc boolean NOT NULL DEFAULT false` 컬럼 추가.
+- 판정 기준: **row의 `created_at` >= '2026-06-26' (SGT, Asia/Singapore)**.
+- 생성/업데이트 시 DB 트리거로 자동 세팅 → 앱 코드가 실수로 비워둬도 항상 일관.
+- 컬럼에 인덱스(`is_post_csc, is_active`) 추가.
 
-별도 RLS 변경 없음(기존 정책 사용).
+```text
+row.created_at ──▶ trigger ──▶ is_post_csc
+                                    │
+     ┌──────────────────────────────┼──────────────────────────────┐
+     ▼                              ▼                              ▼
+ Pre CSC 탭                     공유(마스터/RLS/필드)             Post CSC 탭
+ (Dashboard/Raw Data)                                           (Dashboard/Raw Data)
+```
 
-### 2. Detail 페이지 UI (`src/pages/DefectDetailPage.tsx`)
-- **Priority**: 현재 표시되지 않음 → `SelectField` 추가 (Classification 그룹). 옵션은 기존 Priority 마스터/유니크 값에서 가져옴.
-- **HDEC's Verification**: `ReadonlyField` → `SelectField`로 교체. 옵션: `Cat A - Major Defect (Before SC)` / `Cat B - Minor Defect` / `Review Needed` / (빈 값).
-- **HDEC's Reason**: 회색 박스 표시 → `Textarea`로 교체.
-- 세 필드 옆에 **잠금 상태 뱃지**(🔒 Locked / Auto) 표시. 잠금 해제 버튼 제공 → 다음 import/backfill 때 다시 자동 분류되도록.
-- 사용자가 값을 변경하면 저장 시점에 해당 `*_locked` 플래그를 자동으로 true 세팅.
-- 권한: 기존 `canEdit` 사용. `useDefectFieldConfig`의 `isFieldEditable` 게이트도 적용 (admin은 항상 통과).
+### 1회 마이그레이션
+- 기존 defect_items 중 `created_at >= 2026-06-26 SGT` 인 행에 `is_post_csc = true` 세팅.
+- 마이그레이션 결과 카운트를 반환하여 확인.
 
-### 3. Import 로직 (`src/contexts/DefectImportContext.tsx`)
-- Priority 적용 직전: `existing.priority_locked === true`면 import 값 무시하고 `existing.priority` 유지 + import_field_log에 `skipped_locked` 기록.
-- HDEC's Verification 분류 블록(라인 890~):
-  - `existing.hdec_verification_locked === true`면 `verifyPriority` 자체를 호출하지 않고 `existing` 값 유지, `priority_verification_locked` 로그 추가.
-- 잠금 플래그 자체는 import에서 절대 변경하지 않음(보존).
+### Import 라우팅
+- `DefectImportContext`에서 upsert payload에 `is_post_csc`를 계산해 포함(각 row의 최종 created_at 기준). 신규 row는 자동 라우팅. 기존 row는 트리거가 재계산.
+- Pre/Post CSC 어느 탭에서 import 하든 동일 로직(파일 안에 두 시기가 섞여도 자동 분류).
 
-### 4. Backfill Edge Function (`supabase/functions/defect-priority-verification-backfill/index.ts`)
-- CLEAR pass / SET pass 모두 `hdec_verification_locked = false` 조건 추가.
-- 응답에 `locked_skipped` 카운터 추가.
+### UI 변경
+- **DefectDashboardPage / DefectRawDataPage** 상단에 `Pre CSC | Post CSC` Tabs 추가.
+  - URL 쿼리 `?csc=pre|post` 로 상태 보존, 기본값 `pre`.
+  - 선택 탭 값을 컨텍스트/prop 으로 하위 필터에 주입 → 두 탭 모두 동일 컴포넌트를 재사용하고 데이터만 서브셋으로 필터.
+- 캐시 (`src/lib/defect-cache.ts`) SLIM_COLUMNS 화이트리스트에 `is_post_csc` 추가.
+- 대시보드 집계 함수 및 Raw Data 필터는 선택된 탭 값에 따라 `is_post_csc` 로 필터.
+- Detail 페이지에는 뱃지(`Pre CSC` / `Post CSC`)만 표시(전환 UI 없음, 자동 계산).
 
-### 5. 표시 동기화
-- `src/lib/defect-cache.ts`, `src/contexts/DefectImportContext.tsx`의 컬럼 화이트리스트에 두 잠금 컬럼 포함시켜 Detail이 최신 상태를 받도록 보장.
-- Raw Data 테이블에는 컬럼 추가하지 않음(요구 범위 외).
+### 공유 유지
+- **Critical Issue Board**: 두 탭 데이터를 통합 표시(변경 없음). 필요 시 향후 필터 추가 가능.
+- **마스터 / 필드 설정 / Custom Fields / RLS**: 그대로 공유. 별도 테이블/정책 만들지 않음.
+- **Import Batch / 감사 로그 / Comments / 잠금 플래그**: 기존 그대로 상속.
 
 ## 기술 메모
-- 자동 분류 트리거(import)와 수동 잠금이 충돌하지 않도록, 잠금 체크가 항상 분류 로직보다 먼저 실행.
-- Backfill에서 잠금 해제 후 재실행하면 자동 규칙으로 다시 채워짐.
-- 잠금 해제 버튼 클릭 시 즉시 DB UPDATE (값은 그대로 두고 플래그만 false).
-- 마이그레이션 후 `src/integrations/supabase/types.ts` 자동 재생성되므로 코드 수정은 그 이후 진행.
 
-## 영향받는 파일
-- `supabase/migrations/<new>.sql` (신규)
-- `src/pages/DefectDetailPage.tsx`
-- `src/contexts/DefectImportContext.tsx`
-- `src/lib/defect-cache.ts`
-- `supabase/functions/defect-priority-verification-backfill/index.ts`
+### Migration SQL 개요
+```sql
+ALTER TABLE public.defect_items
+  ADD COLUMN is_post_csc boolean NOT NULL DEFAULT false;
+
+CREATE OR REPLACE FUNCTION public.set_defect_post_csc()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.is_post_csc := (
+    (NEW.created_at AT TIME ZONE 'Asia/Singapore')::date >= DATE '2026-06-26'
+  );
+  RETURN NEW;
+END; $$;
+
+CREATE TRIGGER trg_defect_set_post_csc
+BEFORE INSERT OR UPDATE OF created_at ON public.defect_items
+FOR EACH ROW EXECUTE FUNCTION public.set_defect_post_csc();
+
+-- 1회 backfill
+UPDATE public.defect_items
+SET is_post_csc = true
+WHERE (created_at AT TIME ZONE 'Asia/Singapore')::date >= DATE '2026-06-26';
+
+CREATE INDEX IF NOT EXISTS idx_defect_items_post_csc
+  ON public.defect_items (is_post_csc, is_active);
+```
+
+### 영향 파일
+- `supabase/migrations/<new>.sql`
+- `src/lib/defect-cache.ts` (SLIM_COLUMNS)
+- `src/lib/defect-utils.ts` (DefectItem 인터페이스)
+- `src/pages/DefectDashboardPage.tsx` (탭 + 필터 주입)
+- `src/pages/DefectRawDataPage.tsx` (탭 + 필터 주입)
+- `src/pages/DefectDetailPage.tsx` (뱃지)
+- `src/contexts/DefectImportContext.tsx` (payload에 is_post_csc 포함 — 안전망, 실제로는 트리거가 결정)
+- 대시보드 집계 유틸이 items 배열을 파라미터로 받는 구조이므로 별도 수정 불필요(상위에서 사전 필터).
+
+### 비대상(현 요청 범위 밖)
+- 별도 RLS/권한 분기 없음.
+- Critical Issue Board 탭 분리 없음(공유 유지).
+- Reports/PPT 슬라이드 분리 없음(추후 요청 시).
