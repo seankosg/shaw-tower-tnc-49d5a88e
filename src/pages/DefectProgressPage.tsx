@@ -124,7 +124,11 @@ export default function DefectProgressPage() {
   }, [groupBy, bucket, stageFilter, isAllStages, asOfMode, teamFilter, rangeDays, hidePast, showRiskPanel, pickedDate, pickedField, planMode, cscTab, searchParams, setSearchParams]);
 
   const { items: cachedItems, initialLoaded } = useDefectCache();
-  const items = cachedItems as unknown as DefectItem[];
+  const allItems = cachedItems as unknown as DefectItem[];
+  const items = useMemo(
+    () => allItems.filter(d => cscTab === 'post' ? (d as any).is_post_csc === true : (d as any).is_post_csc !== true),
+    [allItems, cscTab],
+  );
   const loading = !initialLoaded;
 
   const { dataDate, source: dataDateSource } = useLatestDataDate();
