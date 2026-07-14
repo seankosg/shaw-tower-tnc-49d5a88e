@@ -924,6 +924,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_critical: boolean
+          is_post_csc: boolean
           issue_no: string
           main_trade: string | null
           planned_closure_date: string | null
@@ -981,6 +982,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_critical?: boolean
+          is_post_csc?: boolean
           issue_no: string
           main_trade?: string | null
           planned_closure_date?: string | null
@@ -1038,6 +1040,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_critical?: boolean
+          is_post_csc?: boolean
           issue_no?: string
           main_trade?: string | null
           planned_closure_date?: string | null
