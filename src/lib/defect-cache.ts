@@ -74,6 +74,7 @@ const SLIM_COLUMNS = [
   'critical_marked_at',
   'critical_marked_by',
   'critical_marked_by_name',
+  'is_post_csc',
 ] as const;
 
 const SLIM_SELECT = SLIM_COLUMNS.join(', ');
