@@ -27,6 +27,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DefectStatusBadge } from '@/components/defects/DefectStatusBadge';
 import { type DefectItem, formatPct, isOverdueDefect } from '@/lib/defect-utils';
 import { isStageDelayedAsOf, isActualComplete, isClosureComplete, isAtRisk, isStageDone as isDefectStageDone } from '@/lib/defect-dashboard-utils';
@@ -403,7 +404,11 @@ export default function DefectRawDataPage() {
   const storageKey = user?.id ? `defect-raw-data-state:${user.id}` : 'defect-raw-data-state:anon';
   const { isFieldVisible, getLabel, sortFieldNames, fields: fieldConfigRows, getSourceOrigin } = useDefectFieldConfig();
   const { items: cachedItems, initialLoaded } = useDefectCache({ withHeavy: true });
-  const items = cachedItems as DefectRawRow[];
+  const cscTab = (searchParams.get('csc') === 'post' ? 'post' : 'pre') as 'pre' | 'post';
+  const items = useMemo(
+    () => (cachedItems as DefectRawRow[]).filter((it: any) => (cscTab === 'post' ? it.is_post_csc === true : it.is_post_csc !== true)),
+    [cachedItems, cscTab],
+  );
   const loading = !initialLoaded;
   const [stateLoaded, setStateLoaded] = useState(false);
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
@@ -1277,13 +1282,24 @@ export default function DefectRawDataPage() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Defect Raw Data</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight">Defect Raw Data</h1>
+            <Tabs
+              value={cscTab}
+              onValueChange={(v) => {
+                const next = new URLSearchParams(searchParams);
+                if (v === 'post') next.set('csc', 'post'); else next.delete('csc');
+                setSearchParams(next, { replace: true });
+              }}
+            >
+              <TabsList className="h-8">
+                <TabsTrigger value="pre" className="h-7 px-3 text-xs">Pre CSC</TabsTrigger>
+                <TabsTrigger value="post" className="h-7 px-3 text-xs">Post CSC</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
           <p className="text-sm text-muted-foreground">Issue No and subcontractor issue tracking data.</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate('/defects/import')}>
-            <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
-          </Button>
           <Button
             variant="outline"
             size="sm"
