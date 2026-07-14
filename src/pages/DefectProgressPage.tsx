@@ -316,7 +316,7 @@ export default function DefectProgressPage() {
         },
         sourceLabel: 'Defect Progress → Filtered rows',
         filterSummary: filterParts.join(' · '),
-        fileStem: 'SHAW_Defects_Progress',
+        fileStem: `SHAW_Defects_Progress_${cscTab === 'post' ? 'PostCSC' : 'PreCSC'}`,
       });
       toast({ title: 'Export complete', description: `${rowCount} rows → ${fileName}` });
     } catch (err) {
