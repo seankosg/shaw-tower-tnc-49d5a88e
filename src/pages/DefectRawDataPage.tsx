@@ -1300,6 +1300,10 @@ export default function DefectRawDataPage() {
           </div>
           <p className="text-sm text-muted-foreground">Issue No and subcontractor issue tracking data.</p>
         </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate('/defects/import')}>
+            <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
+          </Button>
           <Button
             variant="outline"
             size="sm"
