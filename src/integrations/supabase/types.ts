@@ -5189,6 +5189,7 @@ export type Database = {
         Returns: undefined
       }
       purge_old_event_log: { Args: never; Returns: number }
+      purge_old_logs: { Args: never; Returns: Json }
       restore_auth_identity: {
         Args: { _overwrite?: boolean; _payload: Json }
         Returns: string
